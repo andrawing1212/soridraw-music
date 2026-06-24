@@ -86,6 +86,85 @@ export const getKeywordMeta = (idOrLabel: string) => {
   return allItems.find(i => i.id === idOrLabel || i.label === idOrLabel);
 };
 
+const pickPrimaryGenreValue = (value: any): string => {
+  if (Array.isArray(value)) {
+    const first = value.find((item) => String(item || '').trim());
+    return pickPrimaryGenreValue(first || '');
+  }
+
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  const bracketMatch = text.match(/^\[([^\]]+)\]/);
+  const genreText = bracketMatch?.[1] || text;
+  const first = genreText
+    .split(/\s*(?:,|·|\+)\s*/)
+    .map((part) => part.trim())
+    .find(Boolean);
+
+  return first || genreText;
+};
+
+export const normalizeDisplayGenreLabel = (label: string): string => {
+  const normalized = String(label || '')
+    .replace(/^\[|\]$/g, '')
+    .replace(/\bRnb\b/gi, 'R&B')
+    .replace(/\bR\s*&\s*B\b/gi, 'R&B')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (/^Contemporary R&B$/i.test(normalized)) return 'R&B';
+  return normalized;
+};
+
+const normalizeGenreKeywordLabel = (label: string): string => {
+  return String(label || '')
+    .replace(/^\[|\]$/g, '')
+    .replace(/\bRnb\b/gi, 'R&B')
+    .replace(/\bR\s*&\s*B\b/gi, 'R&B')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const stripGenreDescription = (value: string): string => {
+  const text = normalizeGenreKeywordLabel(value)
+    .replace(/^genre\s*[:：-]\s*/i, '')
+    .trim();
+
+  if (!text) return '';
+
+  const primary = text
+    .split(/\s*(?:,|·|\+)\s*/)
+    .map((part) => part.trim())
+    .find(Boolean) || text;
+
+  return primary
+    .replace(/\s+(?:with|featuring|feat\.?|blended with|mixed with)\s+.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const extractPromptGenreText = (song: Partial<SongResult> | any): string => {
+  const promptText = String(song?.prompt || song?.finalPrompt || song?.generatedPrompt || '').trim();
+  if (!promptText) return '';
+
+  const genreLineMatch = promptText.match(/^\s*\[Genre\]\s*([^\n\r]+)/im);
+  if (genreLineMatch?.[1]) {
+    return stripGenreDescription(genreLineMatch[1]);
+  }
+
+  const inlineMatch = promptText.match(/\[Genre\]\s*([^\n\r]+)/i);
+  return inlineMatch?.[1] ? stripGenreDescription(inlineMatch[1]) : '';
+};
+
+const resolvePromptGenreItem = (song: Partial<SongResult> | any): DisplayKeywordItem[] => {
+  const promptGenre = extractPromptGenreText(song);
+  if (!promptGenre) return [];
+
+  const label = normalizeGenreKeywordLabel(getKeywordLabel(promptGenre) || promptGenre);
+  return label ? [{ id: `prompt-genre-${label}`, label, description: 'Prompt Genre' }] : [];
+};
+
 
 const resolveSituationDisplayItem = (ak: any): DisplayKeywordItem[] => {
   const summary = ak?.situationSummary || ak?.situation?.summary;
@@ -108,24 +187,24 @@ const resolveSituationDisplayItem = (ak: any): DisplayKeywordItem[] => {
  * Resolves all keywords for display, following the Home screen logic.
  */
 export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): DisplayKeywordSection[] => {
-  if (!song?.appliedKeywords) return [];
-  const ak = song.appliedKeywords;
-  const rk = song.randomKeywords ?? [];
+  const ak = song?.appliedKeywords ?? {};
+  const rk = song?.randomKeywords ?? [];
+  const selectedGenreItems = ((ak.subGenre?.length > 0) ? ak.subGenre : (ak.genre ?? [])).map((kw: string) => {
+    const meta = getKeywordMeta(kw);
+    return {
+      id: kw,
+      label: normalizeGenreKeywordLabel(meta?.label ?? kw),
+      description: meta?.description,
+      isRandom: rk.includes(meta?.label) || rk.includes(kw)
+    };
+  });
 
   const sections: DisplayKeywordSection[] = [
     {
       key: 'genre',
       title: 'genre',
       accent: 'default',
-      items: ((ak.subGenre?.length > 0) ? ak.subGenre : (ak.genre ?? [])).map((kw: string) => {
-        const meta = getKeywordMeta(kw);
-        return {
-          id: kw,
-          label: meta?.label ?? kw,
-          description: meta?.description,
-          isRandom: rk.includes(meta?.label) || rk.includes(kw)
-        };
-      })
+      items: selectedGenreItems.length > 0 ? selectedGenreItems : resolvePromptGenreItem(song)
     },
     {
       key: 'situation',
@@ -201,42 +280,50 @@ export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): Disp
 export const getResolvedGenre = (song: Partial<SongResult> | any): string => {
   if (!song) return 'Song';
 
-  const raw =
-    song.subGenre ||
-    song.midGenre ||
-    song.genre ||
-    song.appliedKeywords?.subGenre?.[0] ||
-    song.appliedKeywords?.subGenreIds?.[0] ||
-    song.appliedKeywords?.midGenre?.[0] ||
-    song.appliedKeywords?.midGenreIds?.[0] ||
-    song.appliedKeywords?.genre?.[0] ||
-    '';
+  const rawCandidates = [
+    song.subGenre,
+    song.midGenre,
+    song.genre,
+    song.appliedKeywords?.subGenre?.[0],
+    song.appliedKeywords?.subGenreIds?.[0],
+    song.appliedKeywords?.midGenre?.[0],
+    song.appliedKeywords?.midGenreIds?.[0],
+    song.appliedKeywords?.genre?.[0],
+    extractPromptGenreText(song),
+  ];
+
+  const raw = rawCandidates
+    .map((value) => stripGenreDescription(pickPrimaryGenreValue(value)))
+    .find((value) => Boolean(value));
 
   if (!raw) {
     // Final fallback from title string if keywords are missing (legacy)
     const titleMatch = song.title?.match(/^\[([^\]]+)\]/);
-    if (titleMatch?.[1]) return titleMatch[1];
+    if (titleMatch?.[1]) {
+      const fallbackGenre = pickPrimaryGenreValue(titleMatch[1]);
+      return normalizeDisplayGenreLabel(getKeywordLabel(fallbackGenre) || fallbackGenre) || 'Song';
+    }
     return 'Song';
   }
 
   const label = getKeywordLabel(raw);
-  return label || 'Song';
+  return normalizeDisplayGenreLabel(label || raw) || 'Song';
 };
 
 /**
  * Formats a given raw title into a standard display string.
- * Result: [Genre] 'Title'
+ * Result: [Genre] Title
  */
 export const formatDisplayTitle = (genre: string, rawTitle: string | undefined): string => {
-  if (!rawTitle) return genre ? `[${genre}] 'Untitled'` : `'Untitled'`;
+  if (!rawTitle) return genre ? `[${genre}] Untitled` : 'Untitled';
   
   let cleaned = rawTitle.replace(/^\[[^\]]+\]\s*/, '').trim();
   cleaned = cleaned.replace(/^['"]+|['"]+$/g, '').trim();
   
   if (!cleaned) cleaned = 'Untitled';
   
-  if (genre) return `[${genre}] '${cleaned}'`;
-  return `'${cleaned}'`;
+  if (genre) return `[${genre}] ${cleaned}`;
+  return cleaned;
 };
 
 /**
@@ -246,7 +333,7 @@ export const formatDisplayTitle = (genre: string, rawTitle: string | undefined):
 export const getSubGenre = getResolvedGenre;
 
 /**
- * Formats: "[장르] '한글제목'"
+ * Formats: "[장르] 한글제목"
  */
 export const formatKoreanTitle = (song: Partial<SongResult> | any): string => {
   const genre = getSubGenre(song);
@@ -255,7 +342,7 @@ export const formatKoreanTitle = (song: Partial<SongResult> | any): string => {
 };
 
 /**
- * Formats: "[장르] '영어제목'"
+ * Formats: "[장르] 영어제목"
  */
 export const formatEnglishTitle = (song: Partial<SongResult> | any): string => {
   const genre = getSubGenre(song);
@@ -264,7 +351,7 @@ export const formatEnglishTitle = (song: Partial<SongResult> | any): string => {
 };
 
 /**
- * Formats: "[장르] '한글제목 | 영어제목'"
+ * Formats: "[장르] 한글제목 | 영어제목"
  */
 export const formatInlineTitle = (song: Partial<SongResult> | any): string => {
   const genre = getSubGenre(song);
@@ -275,7 +362,7 @@ export const formatInlineTitle = (song: Partial<SongResult> | any): string => {
   const en = rawEn?.replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]+|['"]+$/g, '').trim();
   
   if (ko && en && ko !== en) {
-    return `[${genre}] '${ko} | ${en}'`;
+    return `[${genre}] ${ko} | ${en}`;
   }
   return formatDisplayTitle(genre, ko || en || song.title);
 };

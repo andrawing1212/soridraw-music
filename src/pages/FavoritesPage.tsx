@@ -326,6 +326,15 @@ const getAppliedKeywordChipClass = (typeOrKey: string, isRandom = false) => {
 };
 
 function getSongGenreValues(song: any): string[] {
+  const detailGenreSection = resolveKeywordsForDisplay(song).find((section) => section.key === 'genre');
+  const detailGenreValues = (detailGenreSection?.items ?? [])
+    .map((item) => String(item.label || '').trim())
+    .filter(Boolean);
+
+  if (detailGenreValues.length > 0) {
+    return detailGenreValues;
+  }
+
   return song?.appliedKeywords?.genre ?? [];
 }
 
@@ -854,7 +863,7 @@ export default function FavoritesPage({
       .trim();
   };
 
-  const quoteTitlePart = (value: any): string => `'${cleanTitlePart(value) || 'Untitled'}'`;
+  const formatPlainTitlePart = (value: any): string => cleanTitlePart(value) || 'Untitled';
 
   const getCombinedFavoriteTitle = (song: any): string => {
     const genre = getDisplaySubGenre(song);
@@ -864,20 +873,20 @@ export default function FavoritesPage({
     const foreign = cleanTitlePart(english);
 
     if (ko && foreign && ko !== foreign) {
-      return `${genreLabel}${quoteTitlePart(ko)} | ${quoteTitlePart(foreign)}`;
+      return `${genreLabel}${formatPlainTitlePart(ko)} | ${formatPlainTitlePart(foreign)}`;
     }
 
-    return `${genreLabel}${quoteTitlePart(ko || foreign || 'Untitled')}`;
+    return `${genreLabel}${formatPlainTitlePart(ko || foreign || 'Untitled')}`;
   };
 
   const getFavoriteKoreanTitle = (song: any): string => {
     const { korean, english } = getNormalizedTitles(song);
-    return quoteTitlePart(korean || english || 'Untitled');
+    return formatPlainTitlePart(korean || english || 'Untitled');
   };
 
   const getFavoriteEnglishTitle = (song: any): string => {
     const { korean, english } = getNormalizedTitles(song);
-    return quoteTitlePart(english || korean || 'Untitled');
+    return formatPlainTitlePart(english || korean || 'Untitled');
   };
 
   // 1. 보관함 목록 카드 제목 렌더 (1줄 형식)
@@ -955,16 +964,38 @@ export default function FavoritesPage({
 
         {/* 우측 복사 버튼 그룹 - 세로 1열 고정 */}
         <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10">
-          <DetailActionCopyBtn text={koLine} type="title-ko" label="KO" />
+          <DetailActionCopyBtn text={getFavoriteTitleCopyWithGenre(song, 'ko')} type="title-ko" label="KO" />
           {enLine && enLine !== koLine && (
-            <DetailActionCopyBtn text={enLine} type="title-en" label="EN" />
+            <DetailActionCopyBtn text={getFavoriteTitleCopyWithGenre(song, 'en')} type="title-en" label="EN" />
           )}
         </div>
       </div>
     );
   };
       const getCombinedFavoriteCopyText = (song: any): string => {
-        return getCombinedFavoriteTitle(song);
+        const { korean, english } = getNormalizedTitles(song);
+        const ko = cleanTitlePart(korean);
+        const foreign = cleanTitlePart(english);
+
+        if (ko && foreign && ko !== foreign) {
+          return `${ko} | ${foreign}`;
+        }
+
+        const fallback = cleanTitlePart(ko || foreign || song?.title || 'Untitled');
+        if (fallback.includes('|') || fallback.includes('│')) {
+          const parts = fallback.split(/[|│]/).map(cleanTitlePart).filter(Boolean);
+          if (parts.length >= 2) return `${parts[0]} | ${parts[1]}`;
+          if (parts.length === 1) return parts[0];
+        }
+
+        return fallback || 'Untitled';
+      };
+
+      const getFavoriteTitleCopyWithGenre = (song: any, language: 'ko' | 'en'): string => {
+        const genre = getDisplaySubGenre(song);
+        const genreLabel = genre ? `[${genre}] ` : '';
+        const title = language === 'ko' ? getFavoriteKoreanTitle(song) : getFavoriteEnglishTitle(song);
+        return `${genreLabel}${title}`.trim();
       };
       
   const isModified = selectedSong && (
@@ -3181,7 +3212,7 @@ export default function FavoritesPage({
       song.appliedKeywords.tempo ? `[Tempo] ${song.appliedKeywords.tempo}` : ''
     ].filter((line) => !line.endsWith('] ')).join('\n');
 
-    const songTitleCopy = getCombinedFavoriteTitle(song);
+    const songTitleCopy = getCombinedFavoriteCopyText(song);
 
     const text = `
 ${keywords}
@@ -4085,8 +4116,8 @@ ${song.prompt}
   };
 
   const renderFavoriteKeywordChips = (song: any) => {
-    const entries = [
-      ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value })),
+    const entries: Array<{ type: string; value: string; displayLabel?: string }> = [
+      ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value, displayLabel: value })),
       ...getSongMoodValues(song).map((value: string) => ({ type: 'mood', value })),
       ...getSongThemeValues(song).map((value: string) => ({ type: 'theme', value })),
       ...(getSongSituationSummary(song) ? [{ type: 'situation', value: getSongSituationSummary(song) }] : []),
@@ -4116,7 +4147,7 @@ ${song.prompt}
           }}
           className="text-[9px] px-2 py-0.5 rounded-md whitespace-nowrap cursor-pointer border border-black/20 bg-white/[0.075] text-white/58 transition-colors hover:text-white/78"
         >
-          #{meta?.labelKo || entry.value}
+          #{entry.displayLabel || meta?.labelKo || entry.value}
         </span>
       );
     });
@@ -4884,9 +4915,11 @@ ${song.prompt}
               const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
               const mobileGenreLabel = getDisplaySubGenre(song);
               const mobileTitles = getNormalizedTitles(song);
-              const mobileTitleText = mobileTitles.korean && mobileTitles.english
-                ? `${mobileTitles.korean} | ${mobileTitles.english}`
-                : mobileTitles.korean || mobileTitles.english || 'Untitled';
+              const mobileTitleKo = cleanTitlePart(mobileTitles.korean);
+              const mobileTitleEn = cleanTitlePart(mobileTitles.english);
+              const mobileTitleText = mobileTitleKo && mobileTitleEn
+                ? `${mobileTitleKo} | ${mobileTitleEn}`
+                : mobileTitleKo || mobileTitleEn || 'Untitled';
               const musicNoteListCreator = (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote' || isMusicNoteSharedView || isSharedMusicNoteItem(song))
                 ? getMusicNoteCreatorNickname(song)
                 : '';
@@ -5962,9 +5995,9 @@ ${song.prompt}
                       )}
                       <button
                         onClick={() => copyToClipboard(getCombinedFavoriteCopyText(selectedSong), 'title-all')}
-                        onMouseEnter={() => onHover({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 통합 제목을 복사합니다.' })}
+                        onMouseEnter={() => onHover({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 제목만 복사합니다.' })}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-                        onTouchStart={() => onLongPressStart({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 통합 제목을 복사합니다.' })}
+                        onTouchStart={() => onLongPressStart({ id: 'detail-title-copy', label: '제목 복사', description: '한글/외국어 제목만 복사합니다.' })}
                         onTouchEnd={onLongPressEnd}
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-3 text-[12px] font-semibold text-white/72 transition-all hover:text-[#FF8B84]"
                       >

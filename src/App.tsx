@@ -7716,7 +7716,7 @@ const saveRecentSong = async (newSong: any) => {
       result.appliedKeywords.tempo ? `[Tempo] ${result.appliedKeywords.tempo}` : ''
     ].filter(Boolean).join('\n');
 
-    const songTitleCopy = formatUnifiedTitle(result);
+    const songTitleCopy = formatTitleWithoutGenre(result);
 
     const text = `
 ${keywords}
@@ -7795,28 +7795,38 @@ ${normalizePromptForDisplay(result.prompt)}
       .trim();
   };
 
-  const formatUnifiedTitle = (song: SongResult | null = result): string => {
-    if (!song) return "[Song] 'Untitled'";
-    const genre = getResolvedGenre(song) || getSubGenre(song) || 'Song';
+  const getPlainTitleParts = (song: SongResult | null = result): { korean: string; foreign: string; fallback: string } => {
+    if (!song) return { korean: '', foreign: '', fallback: 'Untitled' };
     const titleMap = getTitleLanguageMap(song);
-    const koTitle = stripDisplayTitlePart(titleMap.ko || song.koreanTitle || '');
-    const foreignTitle = stripDisplayTitlePart(
+    const korean = stripDisplayTitlePart(titleMap.ko || song.koreanTitle || '');
+    const foreign = stripDisplayTitlePart(
       Object.entries(titleMap).find(([lang, value]) => lang !== 'ko' && String(value).trim())?.[1] ||
       song.englishTitle ||
       ''
     );
+    const fallback = stripDisplayTitlePart(korean || foreign || song.title || 'Untitled');
+    return { korean, foreign, fallback };
+  };
 
-    if (koTitle && foreignTitle && koTitle !== foreignTitle) {
-      return `[${genre}] '${koTitle}' | '${foreignTitle}'`;
+  const formatTitleWithoutGenre = (song: SongResult | null = result): string => {
+    const { korean, foreign, fallback } = getPlainTitleParts(song);
+
+    if (korean && foreign && korean !== foreign) {
+      return `${korean} | ${foreign}`;
     }
 
-    const fallback = stripDisplayTitlePart(koTitle || foreignTitle || song.title || 'Untitled');
     if (fallback.includes('|') || fallback.includes('│')) {
       const parts = fallback.split(/[|│]/).map(stripDisplayTitlePart).filter(Boolean);
-      if (parts.length >= 2) return `[${genre}] '${parts[0]}' | '${parts[1]}'`;
-      if (parts.length === 1) return `[${genre}] '${parts[0]}'`;
+      if (parts.length >= 2) return `${parts[0]} | ${parts[1]}`;
+      if (parts.length === 1) return parts[0];
     }
-    return `[${genre}] '${fallback || 'Untitled'}'`;
+
+    return fallback || 'Untitled';
+  };
+
+  const formatUnifiedTitle = (song: SongResult | null = result): string => {
+    const genre = song ? (getResolvedGenre(song) || getSubGenre(song) || 'Song') : 'Song';
+    return `[${genre}] ${formatTitleWithoutGenre(song)}`;
   };
 
   const getGeneratedLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
@@ -8258,7 +8268,7 @@ ${normalizePromptForDisplay(result.prompt)}
     const rawTitle = getTitleByLanguage(song, lang);
     if (!rawTitle) return '';
     const plainTitle = stripDisplayTitlePart(rawTitle);
-    return plainTitle ? `'${plainTitle}'` : '';
+    return plainTitle || '';
   };
 
   const getTitleOnlyEntriesForDisplay = (song: SongResult): Array<{ lang: LanguageCode; line: string }> => {
@@ -8277,9 +8287,9 @@ ${normalizePromptForDisplay(result.prompt)}
 
     if (entries.length > 0) return entries.slice(0, 2);
 
-    if (song.koreanTitle) return [{ lang: 'ko', line: `'${stripDisplayTitlePart(song.koreanTitle)}'` }];
-    if (song.englishTitle) return [{ lang: 'en', line: `'${stripDisplayTitlePart(song.englishTitle)}'` }];
-    return [{ lang: 'ko', line: `'${stripDisplayTitlePart(song.title || 'Untitled')}'` }];
+    if (song.koreanTitle) return [{ lang: 'ko', line: stripDisplayTitlePart(song.koreanTitle) }];
+    if (song.englishTitle) return [{ lang: 'en', line: stripDisplayTitlePart(song.englishTitle) }];
+    return [{ lang: 'ko', line: stripDisplayTitlePart(song.title || 'Untitled') }];
   };
 
   const getTitleLinesForDisplay = (song: SongResult): string[] => {
@@ -10557,14 +10567,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            const text = formatUnifiedTitle(result);
+                            const text = formatTitleWithoutGenre(result);
                             copyToClipboard(text, 'title');
                           }}
                           onMouseEnter={() =>
                             setHoveredItem({
                               id: 'copy-title',
                               label: '전체 제목 복사',
-                              description: '장르를 포함한 전체 제목을 복사합니다.',
+                              description: '한글/외국어 제목만 복사합니다.',
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
@@ -10604,14 +10614,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        const text = formatUnifiedTitle(result);
+                        const text = formatTitleWithoutGenre(result);
                         copyToClipboard(text, 'title');
                       }}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'copy-title-mobile',
                           label: '전체 제목 복사',
-                          description: '장르를 포함한 전체 제목을 복사합니다.',
+                          description: '한글/외국어 제목만 복사합니다.',
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}

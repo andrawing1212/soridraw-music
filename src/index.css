@@ -648,21 +648,41 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 }
 
-/* SORIDRAW_389_STUDIO_MENU_CARD_SHADOW_STRONG
-   스튜디오 페이지의 전체 메뉴 카드 경계가 한눈에 보이도록
-   상단 선택 카드와 스토리보드/보컬/섹션구조/템포 카드 그림자를 모두 진하게 맞춘다. */
-.dark .studio-tone-down {
-  --shadow-md: 0 18px 50px rgba(0, 0, 0, 0.52), 0 7px 18px rgba(0, 0, 0, 0.34);
+/* SORIDRAW_392_STUDIO_MENU_CARD_SHADOW_RESET
+   이전 그림자 보정에서 섞인 중복 규칙을 정리하고,
+   스튜디오 메뉴 카드/명령창에 같은 기준의 하단 그림자만 적용한다.
+   카드 자체가 항상 그림자보다 위에 보이도록 z-index를 강제로 띄우지 않는다. */
+.studio-tone-down {
+  --soridraw-studio-card-shadow: 0 22px 36px -18px rgba(0, 0, 0, 0.86), 0 10px 18px -14px rgba(0, 0, 0, 0.72);
+  --soridraw-studio-card-shadow-hover: 0 24px 40px -18px rgba(0, 0, 0, 0.88), 0 12px 20px -14px rgba(0, 0, 0, 0.76);
+  --shadow-md: var(--soridraw-studio-card-shadow);
+  --shadow-lg: var(--soridraw-studio-card-shadow);
+  isolation: isolate;
 }
 
-.dark .studio-tone-down :where(
-  .soridraw-expand-card,
-  [data-expand-section],
-  .shadow-card,
-  [class*="shadow-[var(--shadow-md)]"]
-) {
-  box-shadow:
-    0 20px 56px rgba(0, 0, 0, 0.54),
-    0 8px 22px rgba(0, 0, 0, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.016) !important;
+.studio-tone-down .soridraw-studio-menu-card {
+  position: relative !important;
+  z-index: auto !important;
+  overflow: visible;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+}
+
+.studio-tone-down .soridraw-studio-menu-card:hover {
+  box-shadow: var(--soridraw-studio-card-shadow-hover) !important;
+}
+
+/* 명령창은 wrapper가 투명하므로 실제 보이는 입력창에 같은 그림자 기준을 적용한다. */
+.studio-tone-down .soridraw-studio-command-card {
+  position: relative !important;
+  z-index: auto !important;
+  box-shadow: none !important;
+}
+
+.studio-tone-down .soridraw-studio-command-card textarea {
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+}
+
+.studio-tone-down .soridraw-studio-command-card textarea:hover,
+.studio-tone-down .soridraw-studio-command-card:focus-within textarea {
+  box-shadow: var(--soridraw-studio-card-shadow-hover) !important;
 }

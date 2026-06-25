@@ -9936,7 +9936,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="md:col-span-2 rounded-[26px] bg-[var(--card-bg)] shadow-card overflow-hidden relative z-[20]">
+            <div className="soridraw-studio-menu-card md:col-span-2 rounded-[26px] bg-[var(--card-bg)] shadow-card overflow-hidden relative">
               <div className="p-5 md:p-6 flex items-center justify-between gap-4">
                 <button
                   type="button"
@@ -10266,7 +10266,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
         {/* Search & Actions */}
         <div className="space-y-1 md:space-y-1">
-          <div className="relative group">
+          <div className="relative group soridraw-studio-command-card">
             <div className="absolute top-6 left-4 pointer-events-none z-10">
               <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
             </div>
@@ -12516,7 +12516,7 @@ function GenreCategorySection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group shadow-[var(--shadow-md)]">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -12921,7 +12921,7 @@ function CycleSection({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -13605,7 +13605,7 @@ function CategorySection({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -15203,7 +15203,7 @@ function SongStructureIntegratedControl({
 
   return (
     <>
-      <div className="bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12 overflow-visible">
+      <div className="soridraw-studio-menu-card bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative pb-12 overflow-visible">
         <div className="relative mb-4 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
@@ -17569,7 +17569,7 @@ function VocalControl({
   });
 
   return (
-    <div className="bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
+    <div className="soridraw-studio-menu-card bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full shadow-[var(--shadow-md)] relative overflow-visible">
       <div className="relative mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 
@@ -18249,7 +18249,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
 
   return (
     <div className={cn(
-      "bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all shadow-[var(--shadow-md)]"
+      "soridraw-studio-menu-card bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all shadow-[var(--shadow-md)]"
     )}>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">

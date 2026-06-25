@@ -647,3 +647,10 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     animation: none;
   }
 }
+
+/* SORIDRAW_388_STUDIO_TOP_CARD_SHADOW_SOFTEN
+   장르/스타일/사운드/분위기/주제 선택 카드의 검은 그림자만 낮춰
+   스토리보드 이후 카드처럼 차분한 경계감으로 맞춘다. */
+.dark .studio-tone-down .soridraw-expand-card {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.012) !important;
+}

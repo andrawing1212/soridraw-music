@@ -829,3 +829,21 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   filter: none !important;
   transform: none !important;
 }
+
+/* SORIDRAW_405_SECTION_CUSTOM_MOBILE_FLASH_FIX
+   Mobile section-custom popup should appear without fade/scale repaint.
+   This prevents the outside studio buttons from briefly flashing while the backdrop mounts. */
+@media (max-width: 767px) {
+  .studio-section-custom-modal-backdrop,
+  .studio-section-custom-modal-panel {
+    animation: none !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+
+  .studio-section-custom-modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.54) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

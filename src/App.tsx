@@ -9148,7 +9148,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
   const floatingActionBarVariants = {
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: 10 }
+    // Modal opening on mobile can repaint bright buttons during the exit fade.
+    // Hide the floating action bar immediately when a modal blocks it.
+    exit: { opacity: 0, y: 10, transition: { duration: 0 } }
   };
 
   const smoothActionPanelTransition = {
@@ -10408,7 +10410,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     type="button"
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
+                    exit={{ opacity: 0, y: 8, transition: { duration: 0 } }}
                     transition={smoothActionPanelTransition}
                     drag={isActionDragMobile ? "x" : false}
                     dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
@@ -15359,10 +15361,11 @@ function SongStructureIntegratedControl({
       <AnimatePresence>
         {isCustomModalOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 overscroll-none"
+            transition={{ duration: 0 }}
+            className="studio-section-custom-modal-backdrop fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 overscroll-none"
             onPointerDown={(e) => {
               customModalBackdropMouseDownRef.current = e.target === e.currentTarget;
             }}
@@ -15379,11 +15382,11 @@ function SongStructureIntegratedControl({
             }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={false}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
-              className="w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl overflow-hidden flex flex-col"
+              exit={{ opacity: 0, scale: 0.98, y: 10 }}
+              transition={{ duration: 0 }}
+              className="studio-section-custom-modal-panel w-full max-w-4xl h-[86vh] rounded-3xl bg-[var(--card-bg)] border border-[var(--modal-soft-border)] shadow-2xl overflow-hidden flex flex-col"
               onClick={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}

@@ -654,7 +654,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
    카드형 메뉴는 pseudo surface를 유지하되, absolute 자식은 position을 건드리지 않는다.
    명령창은 카드와 구조가 다르므로 pseudo surface에서 제외하고 실제 보이는 textarea에만 단일 그림자를 적용한다. */
 .studio-tone-down {
-  --soridraw-studio-card-bg: #1a1a1a;
+  --soridraw-studio-card-bg: #202020;
   --soridraw-studio-card-shadow: 0 18px 34px -18px rgba(0, 0, 0, 0.86), 0 10px 20px -15px rgba(0, 0, 0, 0.72);
   --shadow-md: var(--soridraw-studio-card-shadow);
   --shadow-lg: var(--soridraw-studio-card-shadow);
@@ -749,7 +749,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   position: absolute !important;
   inset: 0 !important;
   border-radius: inherit !important;
-  background: var(--soridraw-studio-card-bg, #1a1a1a) !important;
+  background: var(--soridraw-studio-card-bg, #202020) !important;
   box-shadow: var(--soridraw-studio-card-shadow) !important;
   filter: none !important;
   transform: none !important;
@@ -816,7 +816,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 .dark .studio-tone-down .soridraw-studio-command-card textarea:hover,
 .dark .studio-tone-down .soridraw-studio-command-card textarea:focus,
 .dark .studio-tone-down .soridraw-studio-command-card:focus-within textarea {
-  background-color: rgba(255, 255, 255, 0.16) !important;
+  background-color: rgba(255, 255, 255, 0.18) !important;
   box-shadow: var(--soridraw-studio-card-shadow) !important;
   filter: none !important;
   transform: none !important;

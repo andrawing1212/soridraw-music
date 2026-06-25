@@ -1004,7 +1004,7 @@ export default function GenreHierarchySelector({
         {directInput && !isDirectInputEditing && (
           <button
             type="button"
-            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+            onPointerDown={(event) => { event.stopPropagation(); }}
             onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
             onMouseEnter={() => onHover({ id: 'direct-genre', label: 'Direct input', labelKo: '직접 입력', description: '장르 키워드를 직접 입력합니다.' } as CategoryItem)}
             onMouseLeave={() => onHover(null)}

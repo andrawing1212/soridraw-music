@@ -11016,7 +11016,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#e8a94a] text-[#24170b] hover:bg-[#f0b45a] transition-all shadow-sm text-[13px] sm:text-[14px] font-black border border-[#f0c079]/30 active:scale-95"
+                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#F4A900] text-[#18110A] hover:bg-[#F7B31A] transition-all shadow-[0_12px_28px_rgba(244,169,0,0.18)] text-[13px] sm:text-[14px] font-black border border-[#F4A900] active:scale-95"
                     >
                       <RefreshCw className="w-[17px] h-[17px] sm:w-[18px] sm:h-[18px]" />
                       <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>

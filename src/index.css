@@ -648,41 +648,152 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 }
 
-/* SORIDRAW_392_STUDIO_MENU_CARD_SHADOW_RESET
-   이전 그림자 보정에서 섞인 중복 규칙을 정리하고,
-   스튜디오 메뉴 카드/명령창에 같은 기준의 하단 그림자만 적용한다.
-   카드 자체가 항상 그림자보다 위에 보이도록 z-index를 강제로 띄우지 않는다. */
+/* SORIDRAW_397_STUDIO_COMMAND_SHADOW_LAYOUT_FIX
+   396에서 command wrapper까지 pseudo surface 방식을 적용하면서
+   wrapper의 직접 자식 absolute 요소(Search/placeholder/button)가 relative로 바뀌어 명령창 배치가 깨졌다.
+   카드형 메뉴는 pseudo surface를 유지하되, absolute 자식은 position을 건드리지 않는다.
+   명령창은 카드와 구조가 다르므로 pseudo surface에서 제외하고 실제 보이는 textarea에만 단일 그림자를 적용한다. */
 .studio-tone-down {
-  --soridraw-studio-card-shadow: 0 22px 36px -18px rgba(0, 0, 0, 0.86), 0 10px 18px -14px rgba(0, 0, 0, 0.72);
-  --soridraw-studio-card-shadow-hover: 0 24px 40px -18px rgba(0, 0, 0, 0.88), 0 12px 20px -14px rgba(0, 0, 0, 0.76);
+  --soridraw-studio-card-bg: #1a1a1a;
+  --soridraw-studio-card-shadow: 0 18px 34px -18px rgba(0, 0, 0, 0.86), 0 10px 20px -15px rgba(0, 0, 0, 0.72);
   --shadow-md: var(--soridraw-studio-card-shadow);
   --shadow-lg: var(--soridraw-studio-card-shadow);
   isolation: isolate;
 }
 
-.studio-tone-down .soridraw-studio-menu-card {
+.studio-tone-down .soridraw-studio-shadow-surface,
+.studio-tone-down .soridraw-studio-shadow-surface:hover,
+.studio-tone-down .soridraw-studio-shadow-surface:focus-within {
   position: relative !important;
   z-index: auto !important;
-  overflow: visible;
-  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
 }
 
-.studio-tone-down .soridraw-studio-menu-card:hover {
-  box-shadow: var(--soridraw-studio-card-shadow-hover) !important;
+.studio-tone-down .soridraw-studio-shadow-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--soridraw-studio-card-bg);
+  box-shadow: var(--soridraw-studio-card-shadow);
+  pointer-events: none;
+  z-index: 0;
 }
 
-/* 명령창은 wrapper가 투명하므로 실제 보이는 입력창에 같은 그림자 기준을 적용한다. */
+/* absolute로 배치된 아이콘/버튼/placeholder는 position을 절대 바꾸지 않는다. */
+.studio-tone-down .soridraw-studio-shadow-surface > :not(.absolute) {
+  position: relative;
+  z-index: 1;
+}
+
+.studio-tone-down .soridraw-studio-shadow-surface > .absolute {
+  z-index: 20;
+}
+
+/* 원형 펼침 버튼은 카드 밖에 걸쳐 있으므로 기존 위치/레이어를 유지한다. */
+.studio-tone-down .soridraw-studio-shadow-surface > .section-expand-button {
+  z-index: 20;
+}
+
+
+/* 명령창은 pseudo surface를 쓰지 않는다. 실제 보이는 textarea에만 단일 그림자를 적용해 이중 그림자/배치 틀어짐을 막는다. */
 .studio-tone-down .soridraw-studio-command-card {
   position: relative !important;
-  z-index: auto !important;
+  background: transparent !important;
   box-shadow: none !important;
+  filter: none !important;
 }
 
-.studio-tone-down .soridraw-studio-command-card textarea {
-  box-shadow: var(--soridraw-studio-card-shadow) !important;
+.studio-tone-down .soridraw-studio-command-card::before {
+  content: none !important;
+  display: none !important;
 }
 
+.studio-tone-down .soridraw-studio-command-card textarea,
 .studio-tone-down .soridraw-studio-command-card textarea:hover,
 .studio-tone-down .soridraw-studio-command-card:focus-within textarea {
-  box-shadow: var(--soridraw-studio-card-shadow-hover) !important;
+  position: relative !important;
+  z-index: 1 !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+}
+
+/* SORIDRAW_398_STUDIO_HOVER_SHADOW_OFF_FIX
+   Fix the real cause: broad Studio border rules and textarea shadows were still overriding
+   the base state, so lower cards only matched on hover. Use one surface shadow with no hover
+   change, and keep the command box as a normal wrapper shadow to avoid double shadows. */
+.dark .studio-tone-down {
+  --soridraw-studio-card-shadow: 0 18px 34px -18px rgba(0, 0, 0, 0.86), 0 10px 20px -15px rgba(0, 0, 0, 0.72);
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:hover,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:focus-within {
+  position: relative !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface::before,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:hover::before,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:focus-within::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  background: var(--soridraw-studio-card-bg, #1a1a1a) !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+  transform: none !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface > :not(.absolute) {
+  position: relative;
+  z-index: 1;
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface > .absolute,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface > .section-expand-button {
+  z-index: 20;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card,
+.dark .studio-tone-down .soridraw-studio-command-card:hover,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within {
+  position: relative !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border-radius: 1rem !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card::before,
+.dark .studio-tone-down .soridraw-studio-command-card:hover::before,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within::before {
+  content: none !important;
+  display: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card textarea,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:hover,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within textarea,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:focus {
+  position: relative !important;
+  z-index: 1 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
 }

@@ -733,7 +733,7 @@ export default function GenreHierarchySelector({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group shadow-[var(--shadow-md)]">
+    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">

@@ -4941,7 +4941,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-[var(--bg-secondary)] border border-black/20 outline-none focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
+                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
               />
               {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
                 <div className="absolute inset-0 flex items-center pl-11 pr-4 pointer-events-none overflow-hidden">

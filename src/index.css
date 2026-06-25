@@ -648,9 +648,21 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 }
 
-/* SORIDRAW_388_STUDIO_TOP_CARD_SHADOW_SOFTEN
-   장르/스타일/사운드/분위기/주제 선택 카드의 검은 그림자만 낮춰
-   스토리보드 이후 카드처럼 차분한 경계감으로 맞춘다. */
-.dark .studio-tone-down .soridraw-expand-card {
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.012) !important;
+/* SORIDRAW_389_STUDIO_MENU_CARD_SHADOW_STRONG
+   스튜디오 페이지의 전체 메뉴 카드 경계가 한눈에 보이도록
+   상단 선택 카드와 스토리보드/보컬/섹션구조/템포 카드 그림자를 모두 진하게 맞춘다. */
+.dark .studio-tone-down {
+  --shadow-md: 0 18px 50px rgba(0, 0, 0, 0.52), 0 7px 18px rgba(0, 0, 0, 0.34);
+}
+
+.dark .studio-tone-down :where(
+  .soridraw-expand-card,
+  [data-expand-section],
+  .shadow-card,
+  [class*="shadow-[var(--shadow-md)]"]
+) {
+  box-shadow:
+    0 20px 56px rgba(0, 0, 0, 0.54),
+    0 8px 22px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.016) !important;
 }

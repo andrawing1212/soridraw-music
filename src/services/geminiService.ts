@@ -395,8 +395,11 @@ interface GenerateSongParams {
   includeLyrics?: boolean;
   instrumentalBgmMode?: boolean;
   lyricLanguages?: LanguageCode[];
+  customGenreInput?: string;
   customThemeInput?: string;
   customMoodInput?: string;
+  customStyleInput?: string;
+  customSoundInput?: string;
   geminiApiKey?: string;
   generationIndex?: number;
   generationCount?: number;
@@ -2749,19 +2752,34 @@ VOCAL RULE (STRICT):
 `.trim();
 }
 
+function decodeSoridrawCustomKeyword(value: unknown): string {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^__custom_(?:genre|style|sound|mood|theme)__:(.*)$/);
+  if (!match) return raw;
+  try {
+    return decodeURIComponent(match[1] || '').trim();
+  } catch {
+    return String(match[1] || '').trim();
+  }
+}
+
+function normalizeSoridrawCustomKeywordList(values: unknown[] = []): string[] {
+  return values.map(decodeSoridrawCustomKeyword).filter(Boolean);
+}
+
 function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
   const first = args[0];
 
   if (typeof first === "object" && first !== null && !Array.isArray(first)) {
     return {
-      genre: first.genre ?? null,
-      subGenre: first.subGenre ?? [],
-      moods: first.moods ?? [],
-      themes: first.themes ?? [],
+      genre: first.genre ? decodeSoridrawCustomKeyword(first.genre) : null,
+      subGenre: normalizeSoridrawCustomKeywordList(first.subGenre ?? []),
+      moods: normalizeSoridrawCustomKeywordList(first.moods ?? []),
+      themes: normalizeSoridrawCustomKeywordList(first.themes ?? []),
       situation: first.situation,
-      styles: first.styles ?? [],
-      instrumentSounds: first.instrumentSounds ?? [],
-      pointSounds: (first as any).pointSounds ?? [],
+      styles: normalizeSoridrawCustomKeywordList(first.styles ?? []),
+      instrumentSounds: normalizeSoridrawCustomKeywordList(first.instrumentSounds ?? []),
+      pointSounds: normalizeSoridrawCustomKeywordList((first as any).pointSounds ?? []),
       userInput: first.userInput ?? "",
       songPrompt: first.songPrompt,
       lyricsLength: first.lyricsLength ?? "normal",
@@ -2783,6 +2801,11 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
         (first as any).includeLyrics ?? !(first.isNoLyrics ?? false),
       instrumentalBgmMode: Boolean((first as any).instrumentalBgmMode),
       lyricLanguages: ((first as any).lyricLanguages ?? ["ko"]) as LanguageCode[],
+      customGenreInput: String((first as any).customGenreInput || '').trim(),
+      customThemeInput: String((first as any).customThemeInput || '').trim(),
+      customMoodInput: String((first as any).customMoodInput || '').trim(),
+      customStyleInput: String((first as any).customStyleInput || '').trim(),
+      customSoundInput: String((first as any).customSoundInput || '').trim(),
       geminiApiKey: String((first as any).geminiApiKey || '').trim(),
     };
   }
@@ -6156,8 +6179,11 @@ function pickCreativeVariationSeed(
       ...(params.moods || []),
       ...(params.themes || []),
       params.userInput || '',
+      params.customGenreInput || '',
       params.customThemeInput || '',
       params.customMoodInput || '',
+      params.customStyleInput || '',
+      params.customSoundInput || '',
       hasSituation(params.situation) ? JSON.stringify(params.situation) : '',
     ].join('|');
     const offset = stableVariationHash(signature) % pool.length;
@@ -7572,6 +7598,13 @@ function buildFiveLineGenreValue(params: GenerateSongParams): string {
     return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(freeGenre));
   }
 
+  const directGenrePhrase = buildDirectGenreProductionPhrase(params);
+  if (directGenrePhrase) {
+    const concept = deriveGenreMoodConceptTag(params);
+    const value = renderMoodFusionGenreValue(directGenrePhrase, [], concept && !/magical/i.test(concept) ? concept : '');
+    return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(value || directGenrePhrase));
+  }
+
   const selectedGenres = getSelectedFusionGenres(params);
   const mainLabels = selectedGenres.map((genre) => compactGenreToken(genre.label)).filter(NON_EMPTY);
   const base = getSpecificSelectedGenreBase(params, mainLabels);
@@ -7768,10 +7801,14 @@ function buildFiveLineInstrumentsValue(params: GenerateSongParams, detailLayer: 
   const genreStyleItems = getStyleItemsByPromptRole(params.styles ?? [], 'genre')
     .filter((item) => !isEraTextureStyleItem(item));
   const items: string[] = [];
-  const directlySelected = compactSoundPromptsByCategory(params.instrumentSounds ?? [])
-    .flatMap((item) => item.split(',').map((part) => part.trim()))
-    .map((item) => normalizeInstrumentPromptForGenre(item, params))
-    .filter(NON_EMPTY);
+  const directSoundCues = getDirectSoundInstrumentCues(params);
+  const directlySelected = [
+    ...directSoundCues,
+    ...compactSoundPromptsByCategory(params.instrumentSounds ?? [])
+      .flatMap((item) => item.split(',').map((part) => part.trim()))
+      .map((item) => normalizeInstrumentPromptForGenre(item, params))
+      .filter(NON_EMPTY),
+  ];
 
   // Directly selected sound/instrument keywords are the user's actual sound palette.
   // Genre DNA may only fill missing musical slots; it must not flood the line or
@@ -9042,12 +9079,16 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
   // buildSelectedVocalPerformancePhrase(). Do not append raw style values again.
   const interpreted = buildThemeMoodInterpretation(params);
   const moodVocalCue = mergeCompactCue(interpreted.vocalCue, getEraTextureVocalCues(params), 2);
+  const directStyleVocalCue = getDirectStyleVocalCue(params);
   const cleaned = situationActive
     ? sanitizeVocalDirection(base)
     : sanitizeNonSituationVocalPrompt(sanitizeVocalDirection(base));
-  const withMood = moodVocalCue
-    ? cleanupPromptTail(`${cleaned} with ${moodVocalCue}`)
+  const withDirectStyle = directStyleVocalCue
+    ? cleanupPromptTail(`${cleaned} with ${directStyleVocalCue}`)
     : cleaned;
+  const withMood = moodVocalCue
+    ? cleanupPromptTail(`${withDirectStyle} with ${moodVocalCue}`)
+    : withDirectStyle;
   const interpretedForSolo = buildSoloInterpretiveVocalLine(withMood, params, interpreted);
   const compacted = compactFiveLineVocalsValue(
     applyIntentToVocalLine(normalizeVocalPromptEmotion(interpretedForSolo, params), params),
@@ -9405,6 +9446,8 @@ function buildFiveLineArrangementValue(
   const styleArrangement = situationActive
     ? ""
     : joinPromptPhrase(getStylePromptValuesByRole(params.styles ?? [], 'arrangement', 'style').slice(0, 2), 'and');
+  const directStyleArrangement = getDirectStyleArrangementCue(params);
+  const directGenreArrangement = getDirectGenreArrangementCue(params);
   const pointSoundArrangement = buildPointSoundArrangementPhrase(params.pointSounds ?? []);
   const customFlow =
     params.songStructure === "custom" && (params.customStructure ?? []).length > 0
@@ -9419,8 +9462,10 @@ function buildFiveLineArrangementValue(
     situationArrangement,
     directStoryArrangement,
     directDirectorArrangement,
+    directGenreArrangement,
     genreDNA,
     styleArrangement,
+    directStyleArrangement,
     !situationActive ? scenePlan.arrangementCues.join(', ') : '',
     reinterpretationLayer.arrangementLens,
     interpretedArrangement,
@@ -9739,6 +9784,166 @@ function normalizeDirectInputText(value: unknown): string {
     .replace(/\s+/g, " ")
     .replace(/^#+\s*/, "")
     .trim();
+}
+
+function normalizeDirectProductionText(value: unknown): string {
+  return normalizeDirectInputText(decodeSoridrawCustomKeyword(value));
+}
+
+function getDirectGenreInputText(params: GenerateSongParams): string {
+  const values = [
+    params.customGenreInput,
+    ...(params.subGenre ?? []).filter((value) => isLikelyDirectUserText(decodeSoridrawCustomKeyword(value))),
+    params.genre && isLikelyDirectUserText(decodeSoridrawCustomKeyword(params.genre)) ? params.genre : '',
+  ]
+    .map(normalizeDirectProductionText)
+    .filter(Boolean);
+  return Array.from(new Set(values)).join(' / ');
+}
+
+function getDirectStyleInputText(params: GenerateSongParams): string {
+  const values = [
+    params.customStyleInput,
+    ...(params.styles ?? []).filter((value) => isLikelyDirectUserText(decodeSoridrawCustomKeyword(value))),
+  ]
+    .map(normalizeDirectProductionText)
+    .filter(Boolean);
+  return Array.from(new Set(values)).join(' / ');
+}
+
+function getDirectSoundInputText(params: GenerateSongParams): string {
+  const values = [
+    params.customSoundInput,
+    ...(params.instrumentSounds ?? []).filter((value) => isLikelyDirectUserText(decodeSoridrawCustomKeyword(value))),
+  ]
+    .map(normalizeDirectProductionText)
+    .filter(Boolean);
+  return Array.from(new Set(values)).join(' / ');
+}
+
+function translateKoreanMusicDirection(value: string): string {
+  let text = normalizeDirectProductionText(value);
+  if (!text) return '';
+
+  const replacements: Array<[RegExp, string]> = [
+    [/808\s*베이스/gi, '808 bass'],
+    [/에이트오에이트\s*베이스/gi, '808 bass'],
+    [/태평소/g, 'taepyeongso'],
+    [/대금/g, 'daegeum flute'],
+    [/피리/g, 'piri reed'],
+    [/해금/g, 'haegeum'],
+    [/가야금/g, 'gayageum'],
+    [/거문고/g, 'geomungo'],
+    [/장구/g, 'janggu rhythm'],
+    [/북/g, 'buk drum'],
+    [/판소리/g, 'pansori'],
+    [/국악/g, 'Korean gugak'],
+    [/퓨전/g, 'fusion'],
+    [/다크\s*트랩|다크트랩/gi, 'dark trap'],
+    [/트랩/gi, 'trap'],
+    [/락\s*발라드|록\s*발라드/gi, 'rock ballad'],
+    [/시티\s*팝/gi, 'city pop'],
+    [/묵직한\s*보컬/g, 'weighty vocal delivery'],
+    [/무거운\s*보컬/g, 'heavy vocal delivery'],
+    [/빠르고\s*중독적인\s*리듬/g, 'fast addictive rhythm'],
+    [/중독적인\s*리듬/g, 'addictive rhythm'],
+    [/빠른\s*리듬/g, 'fast rhythm'],
+    [/빠르고/g, 'fast and'],
+  ];
+
+  replacements.forEach(([pattern, replacement]) => {
+    text = text.replace(pattern, replacement);
+  });
+
+  return text
+    .replace(/([A-Za-z0-9])\s*(?:와|과)\s*([A-Za-z0-9])/g, '$1 and $2')
+    .replace(/\s*(?:및|그리고)\s*/g, ' and ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function splitDirectMusicParts(value: string): string[] {
+  return normalizeDirectProductionText(value)
+    .split(/\s*(?:,|\/|·|\+|와|과|및|그리고|and)\s*/i)
+    .map((part) => translateKoreanMusicDirection(part).trim())
+    .filter(Boolean);
+}
+
+function buildDirectGenreProductionPhrase(params: GenerateSongParams): string {
+  const raw = getDirectGenreInputText(params);
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  if (/국악/.test(raw) && /판소리/.test(raw) && /다크\s*트랩|다크트랩|dark\s*trap/.test(lower)) return 'Korean gugak fusion pansori with dark trap';
+  if (/국악/.test(raw) && /판소리/.test(raw)) return 'Korean gugak fusion pansori';
+  if (/판소리/.test(raw) && /다크\s*트랩|다크트랩|dark\s*trap/.test(lower)) return 'pansori fusion with dark trap';
+  if (/국악/.test(raw) && /다크\s*트랩|다크트랩|dark\s*trap/.test(lower)) return 'Korean gugak fusion with dark trap';
+  const parts = splitDirectMusicParts(raw);
+  if (parts.length >= 2) return cleanupPromptTail(`${parts[0]} with ${parts.slice(1).join(' and ')}`);
+  return cleanupPromptTail(translateKoreanMusicDirection(raw));
+}
+
+function getDirectSoundInstrumentCues(params: GenerateSongParams): string[] {
+  const raw = getDirectSoundInputText(params);
+  if (!raw) return [];
+  return splitDirectMusicParts(raw)
+    .map((part) => normalizeInstrumentPromptForGenre(part, params))
+    .filter(NON_EMPTY)
+    .slice(0, 5);
+}
+
+function getDirectStyleVocalCue(params: GenerateSongParams): string {
+  const raw = getDirectStyleInputText(params);
+  if (!raw) return '';
+  if (/묵직|무거|heavy|weighty|deep/.test(raw)) return 'weighty vocal delivery';
+  if (/보컬|vocal/i.test(raw)) return cleanupPromptTail(translateKoreanMusicDirection(raw));
+  return '';
+}
+
+function getDirectStyleArrangementCue(params: GenerateSongParams): string {
+  const raw = getDirectStyleInputText(params);
+  if (!raw) return '';
+  const parts: string[] = [];
+  if (/빠르|fast|quick/.test(raw) && /중독|addictive|hook|리듬|rhythm/.test(raw)) parts.push('fast addictive rhythmic drive');
+  else if (/중독|addictive|hook/.test(raw)) parts.push('addictive hook-driven rhythm');
+  else if (/빠르|fast|quick/.test(raw)) parts.push('fast rhythmic movement');
+  else if (/리듬|rhythm|groove/.test(raw)) parts.push(cleanupPromptTail(translateKoreanMusicDirection(raw)));
+  return cleanupPromptTail(parts.join(', '));
+}
+
+function getDirectGenreArrangementCue(params: GenerateSongParams): string {
+  const raw = getDirectGenreInputText(params);
+  if (!raw) return '';
+  const parts: string[] = [];
+  if (/다크\s*트랩|다크트랩|dark\s*trap/i.test(raw)) parts.push('dark trap bounce');
+  if (/판소리|pansori/i.test(raw)) parts.push('pansori call-and-release phrasing');
+  return cleanupPromptTail(parts.join(', '));
+}
+
+function buildDirectGenreStyleSoundLockInstruction(params: GenerateSongParams): string {
+  const directGenre = getDirectGenreInputText(params);
+  const directStyle = getDirectStyleInputText(params);
+  const directSound = getDirectSoundInputText(params);
+  if (!directGenre && !directStyle && !directSound) return '';
+
+  const lines: string[] = ['DIRECT GENRE / STYLE / SOUND INPUT LOCK (MANDATORY):'];
+  if (directGenre) {
+    lines.push(`- Direct genre input: ${directGenre}`);
+    lines.push(`- Put the direct genre input primarily in [Genre]. Keep its main identities. Do not reduce it to only one generic genre. Interpreted English target: ${buildDirectGenreProductionPhrase(params) || translateKoreanMusicDirection(directGenre)}.`);
+  }
+  if (directStyle) {
+    lines.push(`- Direct style input: ${directStyle}`);
+    const vocalCue = getDirectStyleVocalCue(params);
+    const arrangementCue = getDirectStyleArrangementCue(params);
+    lines.push(`- Put vocal-related style words in [Vocals]${vocalCue ? ` (${vocalCue})` : ''}, and rhythm/hook/movement words in [Arrangement]${arrangementCue ? ` (${arrangementCue})` : ''}. Do not hide this inside [Atmosphere].`);
+  }
+  if (directSound) {
+    lines.push(`- Direct sound input: ${directSound}`);
+    const soundCues = getDirectSoundInstrumentCues(params);
+    lines.push(`- Put direct sound input as protected [Instruments] anchors${soundCues.length ? `: ${soundCues.join(', ')}` : ''}. These exact instruments/sound sources must remain visible in the final [Instruments] line.`);
+  }
+  lines.push('- Direct genre/style/sound inputs are production directions, not lyric topics. Reflect them in the 5-line music prompt, not as story words unless the user explicitly made them the theme.');
+  return lines.join('\n');
 }
 
 function isLikelyDirectUserText(value: unknown): boolean {
@@ -17515,7 +17720,10 @@ export async function generateSong(
   const instrumentSoundPromptCores = getInstrumentSoundPromptCores(
     params.instrumentSounds ?? [],
   );
-  const selectedSoundAnchorCues = compactSoundPromptsByCategory(params.instrumentSounds ?? []);
+  const selectedSoundAnchorCues = Array.from(new Set([
+    ...getDirectSoundInstrumentCues(params),
+    ...compactSoundPromptsByCategory(params.instrumentSounds ?? []),
+  ].filter(Boolean)));
   const styleSoundTextureCues = getSelectedStyleSoundTextureCues(params);
   const themePrompt = buildThemePrompt(params.themes ?? []);
   const themeSentence = buildThemeSentence(params.themes ?? []);
@@ -17546,6 +17754,7 @@ export async function generateSong(
     const safeMood = interpretMoodGenreModifier(params);
     const safeGenre = attachGenreAccents(compactGenreToken(safeMain), [safeEra, safeMood].filter(Boolean));
     const safeInstruments = cleanupPromptTail(dedupeInstrumentSemantic([
+      ...getDirectSoundInstrumentCues(params),
       ...getSelectedGenrePromptSoundCues(params),
       ...getEraTextureInstrumentCues(params),
       ...getCompactPointSoundPrompts(params.pointSounds ?? []),
@@ -17760,6 +17969,9 @@ ROLE OF USER INPUT:
 - When the user writes 공부/독서실/도서관/study/library, preserve that as a quiet focus/study-room scene and background-friendly listening context.
 - If explicit UI selections exist, combine them with the note. When they conflict, prefer the user's clearly written natural-language direction unless a custom song structure is explicitly selected.
 - Explicit Genre, Style, Sound, Mood, and Situation selections are locked source materials. Do not drop them from the final concept; compress them instead.
+
+${buildDirectGenreStyleSoundLockInstruction(params)}
+
 - Same selected keywords must NOT create the same song every time. Treat the selections as a reusable palette, not a fixed template.
 - If the user mentions a song length, slow/fast tempo, short/long lyrics, verse/chorus/bridge, rap/no rap, or vocal formation, reflect that in the final song direction.
 - If custom song structure mode is selected, keep the custom section order fixed, but still apply the note to mood, sound, theme, vocal expression, and section energy.

@@ -26,11 +26,29 @@ export interface DisplayKeywordSection {
   accent: 'default' | 'violet' | 'sky';
 }
 
+const CUSTOM_KEYWORD_PREFIX_RE = /^__custom_(?:genre|style|sound|mood|theme)__:(.*)$/;
+
+const decodeSoridrawCustomKeyword = (value: unknown): string => {
+  const raw = String(value || '').trim();
+  const match = raw.match(CUSTOM_KEYWORD_PREFIX_RE);
+  if (!match) return raw;
+  try {
+    return decodeURIComponent(match[1] || '').trim();
+  } catch {
+    return String(match[1] || '').trim();
+  }
+};
+
+const isSoridrawCustomKeyword = (value: unknown): boolean => CUSTOM_KEYWORD_PREFIX_RE.test(String(value || '').trim());
+
 /**
  * Resolves a label from a raw ID or label string using metadata.
  */
 export const getKeywordLabel = (idOrLabel: string): string => {
   if (!idOrLabel) return '';
+
+  const decodedCustom = decodeSoridrawCustomKeyword(idOrLabel);
+  if (decodedCustom && decodedCustom !== idOrLabel) return decodedCustom;
 
   // 1. Check GENRE_HIERARCHY (recursive search for main and sub genres)
   for (const group of GENRE_HIERARCHY) {
@@ -92,7 +110,7 @@ const pickPrimaryGenreValue = (value: any): string => {
     return pickPrimaryGenreValue(first || '');
   }
 
-  const text = String(value || '').trim();
+  const text = decodeSoridrawCustomKeyword(value);
   if (!text) return '';
 
   const bracketMatch = text.match(/^\[([^\]]+)\]/);
@@ -190,12 +208,13 @@ export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): Disp
   const ak = song?.appliedKeywords ?? {};
   const rk = song?.randomKeywords ?? [];
   const selectedGenreItems = ((ak.subGenre?.length > 0) ? ak.subGenre : (ak.genre ?? [])).map((kw: string) => {
-    const meta = getKeywordMeta(kw);
+    const decoded = decodeSoridrawCustomKeyword(kw);
+    const meta = getKeywordMeta(decoded);
     return {
       id: kw,
-      label: normalizeGenreKeywordLabel(meta?.label ?? kw),
+      label: normalizeGenreKeywordLabel(meta?.label ?? decoded),
       description: meta?.description,
-      isRandom: rk.includes(meta?.label) || rk.includes(kw)
+      isRandom: rk.includes(meta?.label) || rk.includes(kw) || rk.includes(decoded)
     };
   });
 
@@ -231,12 +250,13 @@ export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): Disp
       title: 'style',
       accent: 'violet',
       items: (ak.style ?? []).map((kw: string) => {
-        const meta = STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[kw] ?? kw];
+        const decoded = decodeSoridrawCustomKeyword(kw);
+        const meta = STYLE_VARIANT_LOOKUP[STYLE_LABEL_TO_ID[decoded] ?? decoded];
         return {
           id: kw,
-          label: meta?.label ?? kw,
+          label: meta?.label ?? decoded,
           description: meta?.description,
-          isRandom: rk.includes(meta?.label) || rk.includes(kw)
+          isRandom: rk.includes(meta?.label) || rk.includes(kw) || rk.includes(decoded)
         };
       })
     },
@@ -259,12 +279,13 @@ export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): Disp
       title: 'sound / texture',
       accent: 'sky',
       items: (ak.instrumentSound ?? []).map((kw: string) => {
-        const meta = SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[kw] ?? kw];
+        const decoded = decodeSoridrawCustomKeyword(kw);
+        const meta = SOUND_VARIANT_LOOKUP[SOUND_LABEL_TO_ID[decoded] ?? decoded];
         return {
           id: kw,
-          label: meta?.label ?? kw,
+          label: meta?.label ?? decoded,
           description: meta?.description,
-          isRandom: rk.includes(meta?.label) || rk.includes(kw)
+          isRandom: rk.includes(meta?.label) || rk.includes(kw) || rk.includes(decoded)
         };
       })
     }
@@ -280,7 +301,14 @@ export const resolveKeywordsForDisplay = (song: Partial<SongResult> | any): Disp
 export const getResolvedGenre = (song: Partial<SongResult> | any): string => {
   if (!song) return 'Song';
 
-  const rawCandidates = [
+  const hasCustomGenreInput = Boolean(
+    String(song.appliedKeywords?.customGenreInput || '').trim() ||
+    isSoridrawCustomKeyword(song.genre) ||
+    (Array.isArray(song.subGenre) && song.subGenre.some(isSoridrawCustomKeyword)) ||
+    (Array.isArray(song.appliedKeywords?.subGenre) && song.appliedKeywords.subGenre.some(isSoridrawCustomKeyword))
+  );
+
+  const defaultCandidates = [
     song.subGenre,
     song.midGenre,
     song.genre,
@@ -291,6 +319,17 @@ export const getResolvedGenre = (song: Partial<SongResult> | any): string => {
     song.appliedKeywords?.genre?.[0],
     extractPromptGenreText(song),
   ];
+
+  const rawCandidates = hasCustomGenreInput
+    ? [
+        extractPromptGenreText(song),
+        song.appliedKeywords?.customGenreInput,
+        song.subGenre,
+        song.genre,
+        song.appliedKeywords?.subGenre?.[0],
+        song.appliedKeywords?.genre?.[0],
+      ]
+    : defaultCandidates;
 
   const raw = rawCandidates
     .map((value) => stripGenreDescription(pickPrimaryGenreValue(value)))

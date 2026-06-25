@@ -10,6 +10,7 @@ import {
   Info,
   Lock,
   Unlock,
+  Edit2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
@@ -130,6 +131,11 @@ interface Props {
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
   onModalStateChange?: (isOpen: boolean) => void;
+  directInput?: {
+    selectedText?: string;
+    onApply: (value: string) => void;
+    onCancelSelected?: () => void;
+  };
 }
 
 const DEFAULT_GROUP_DESCRIPTION =
@@ -253,11 +259,14 @@ export default function GenreHierarchySelector({
   onHeightChange,
   forcedHeight,
   onModalStateChange,
+  directInput,
 }: Props) {
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("main");
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
+  const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
+  const [directInputDraft, setDirectInputDraft] = useState(directInput?.selectedText || '');
   const [hoveredModalItem, setHoveredModalItem] = useState<{
     label: string;
     description: string;
@@ -478,10 +487,40 @@ export default function GenreHierarchySelector({
   };
 
   const selectedDisplayLabels = useMemo(() => {
+    const directText = String(directInput?.selectedText || '').trim();
     const ids = Array.from(new Set([...committedGenre, ...committedSubGenre]));
-    return ids.map(resolveGenreDisplayLabel).filter(Boolean);
-  }, [committedGenre, committedSubGenre, groups]);
+    const labels = ids
+      .filter((id) => !String(id || '').startsWith('__custom_genre__:'))
+      .map(resolveGenreDisplayLabel)
+      .filter(Boolean);
+    return directText ? Array.from(new Set([directText, ...labels])) : labels;
+  }, [committedGenre, committedSubGenre, groups, directInput?.selectedText]);
   const isExpandSummaryActive = isExpanded;
+
+  useEffect(() => {
+    if (!isDirectInputEditing) setDirectInputDraft(directInput?.selectedText || '');
+  }, [directInput?.selectedText, isDirectInputEditing]);
+
+  const openDirectInput = () => {
+    setDirectInputDraft(directInput?.selectedText || '');
+    setIsDirectInputEditing(true);
+  };
+
+  const applyDirectInput = () => {
+    const trimmed = directInputDraft.trim();
+    if (!trimmed) {
+      directInput?.onCancelSelected?.();
+      setIsDirectInputEditing(false);
+      return;
+    }
+    directInput?.onApply(trimmed);
+    setIsDirectInputEditing(false);
+  };
+
+  const cancelDirectInput = () => {
+    setDirectInputDraft(directInput?.selectedText || '');
+    setIsDirectInputEditing(false);
+  };
 
   const buildModalTooltip = (item: {
     label: string;
@@ -893,12 +932,15 @@ export default function GenreHierarchySelector({
 
       <div
         data-expanded={isExpanded ? "true" : "false"}
-        role={onToggleExpand ? "button" : undefined}
-        tabIndex={onToggleExpand ? 0 : undefined}
-        aria-pressed={onToggleExpand ? isExpanded : undefined}
-        onClick={(event) => onToggleExpand && handleExpandableToggle(event, isExpanded, onToggleExpand)}
+        role={isDirectInputEditing ? undefined : (onToggleExpand ? "button" : undefined)}
+        tabIndex={isDirectInputEditing ? undefined : (onToggleExpand ? 0 : undefined)}
+        aria-pressed={isDirectInputEditing ? undefined : (onToggleExpand ? isExpanded : undefined)}
+        onClick={(event) => {
+          if (isDirectInputEditing) return;
+          onToggleExpand && handleExpandableToggle(event, isExpanded, onToggleExpand);
+        }}
         onKeyDown={(event) => {
-          if (!onToggleExpand) return;
+          if (isDirectInputEditing || !onToggleExpand) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             onToggleExpand();
@@ -906,12 +948,12 @@ export default function GenreHierarchySelector({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
+          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
-          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[rgb(var(--soridraw-menu-amber-rgb)/0.30)]", genreAccent.summaryHover),
-          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[rgb(var(--soridraw-menu-amber-rgb)/0.30)]"
+          !isDirectInputEditing && onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-[rgb(var(--soridraw-menu-amber-rgb)/0.30)]", genreAccent.summaryHover),
+          !isDirectInputEditing && onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-[rgb(var(--soridraw-menu-amber-rgb)/0.30)]"
         )}
         style={{
           '--soridraw-summary-border': genreAccent.summaryBorder,
@@ -920,14 +962,57 @@ export default function GenreHierarchySelector({
         } as React.CSSProperties}
         title={onToggleExpand ? (isExpanded ? "접기" : "펼치기") : undefined}
       >
-        {selectedDisplayLabels.length > 0 ? (
-          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.text)}>
+        {isDirectInputEditing && directInput ? (
+          <div className="flex items-center gap-2 w-full">
+            <input
+              value={directInputDraft}
+              onChange={(event) => setDirectInputDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyDirectInput();
+                if (event.key === 'Escape') cancelDirectInput();
+              }}
+              autoFocus
+              placeholder="장르 직접 입력"
+              className={cn("flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-semibold text-center", genreAccent.text, "placeholder:text-white/20")}
+            />
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); applyDirectInput(); }}
+              className={cn("shrink-0 w-8 h-8 bg-transparent border-0 transition-colors flex items-center justify-center", genreAccent.text)}
+              aria-label="직접입력 적용"
+            >
+              <Check className="w-[18px] h-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); cancelDirectInput(); }}
+              className="shrink-0 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-red-400 transition-colors flex items-center justify-center"
+              aria-label="직접입력 취소"
+            >
+              <X className="w-[18px] h-[18px]" />
+            </button>
+          </div>
+        ) : selectedDisplayLabels.length > 0 ? (
+          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.text)}>
             {selectedDisplayLabels.join(" · ")}
           </p>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", genreAccent.softText)}>
+          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.softText)}>
             장르를 선택하세요.
           </p>
+        )}
+        {directInput && !isDirectInputEditing && (
+          <button
+            type="button"
+            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+            onMouseEnter={() => onHover({ id: 'direct-genre', label: 'Direct input', labelKo: '직접 입력', description: '장르 키워드를 직접 입력합니다.' } as CategoryItem)}
+            onMouseLeave={() => onHover(null)}
+            className="soridraw-direct-input-button absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
+            aria-label="장르 직접 입력"
+          >
+            <Edit2 className="w-[22px] h-[22px]" />
+          </button>
         )}
       </div>
 

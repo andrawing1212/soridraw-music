@@ -324,8 +324,11 @@ export interface AppliedKeywords {
   instrumentSound?: string[];
   pointSound?: string | string[];
   pointSounds?: string[];
+  customGenreInput?: string;
   customMoodInput?: string;
   customThemeInput?: string;
+  customStyleInput?: string;
+  customSoundInput?: string;
   tempo?: string;
   tempoConfig?: TempoConfig | null;
   vocalType?: string;
@@ -366,8 +369,11 @@ export interface GenerateSongParams {
   styles: string[];
   instrumentSounds: string[];
   pointSounds?: string[];
+  customGenreInput?: string;
   customMoodInput?: string;
   customThemeInput?: string;
+  customStyleInput?: string;
+  customSoundInput?: string;
   tempo: string;
   vocal: VocalConfig;
   userInput?: string;

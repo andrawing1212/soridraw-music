@@ -87,6 +87,9 @@ const isDocumentFullscreenActive = () => {
 
 const SORIDRAW_CLOSE_STUDIO_MODALS_EVENT = 'soridraw:close-studio-modals';
 
+const CUSTOM_GENRE_PREFIX = '__custom_genre__:';
+const CUSTOM_STYLE_PREFIX = '__custom_style__:';
+const CUSTOM_SOUND_PREFIX = '__custom_sound__:';
 const CUSTOM_MOOD_PREFIX = '__custom_mood__:';
 const CUSTOM_THEME_PREFIX = '__custom_theme__:';
 
@@ -101,8 +104,14 @@ const getCustomKeywordText = (id: string, prefix: string) => {
   }
 };
 
+const isCustomGenreKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX) !== null;
+const isCustomStyleKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX) !== null;
+const isCustomSoundKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX) !== null;
 const isCustomMoodKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX) !== null;
 const isCustomThemeKeyword = (id: string) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX) !== null;
+const getGenreKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX) || GENRES.find((item) => item.id === id)?.labelKo || GENRES.find((item) => item.id === id)?.label || id;
+const getStyleKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX) || id;
+const getSoundKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX) || id;
 const getMoodKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX) || MOODS.find((item) => item.id === id)?.labelKo || MOODS.find((item) => item.id === id)?.label || id;
 const getThemeKeywordLabel = (id: string) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX) || THEMES.find((item) => item.id === id)?.labelKo || THEMES.find((item) => item.id === id)?.label || id;
 
@@ -2159,10 +2168,16 @@ function buildCycleLookup<T extends { variants: readonly { id: string }[] }>(cyc
 const SOUND_TEXTURE_CYCLE_LOOKUP = buildCycleLookup(SOUND_TEXTURE_CYCLES);
 
 function getCycleVariantLabel(cycles: readonly { id: string; title: string; variants: readonly { id: string; label: string }[] }[], selectedIds: string[]) {
-  return cycles
+  const labels = cycles
     .map((cycle) => cycle.variants.find((variant) => selectedIds.includes(variant.id)))
     .filter(Boolean)
     .map((variant) => variant!.label);
+
+  const customLabels = selectedIds
+    .map((id) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX) || getCustomKeywordText(id, CUSTOM_SOUND_PREFIX))
+    .filter(Boolean) as string[];
+
+  return Array.from(new Set([...labels, ...customLabels]));
 }
 
 const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
@@ -2171,7 +2186,7 @@ const mapLabelsToIds = (labels: string[], category: CategoryItem[]) => {
     if (!raw) return null;
 
     // Preserve direct-input pseudo IDs as-is.
-    if (isCustomMoodKeyword(raw) || isCustomThemeKeyword(raw)) {
+    if (isCustomGenreKeyword(raw) || isCustomStyleKeyword(raw) || isCustomSoundKeyword(raw) || isCustomMoodKeyword(raw) || isCustomThemeKeyword(raw)) {
       return raw;
     }
 
@@ -2244,6 +2259,8 @@ function resolveSoundTextureIds(labelsOrIds: string[] = []) {
 
 function getStyleVariantLabelById(id: string) {
   if (isSeparatorKeywordId(id)) return '';
+  const customLabel = getCustomKeywordText(id, CUSTOM_STYLE_PREFIX);
+  if (customLabel) return customLabel;
   const variant = STYLE_VARIANT_LOOKUP[id];
   if ((variant as any)?.kind === 'separator') return '';
   return variant?.labelKo || variant?.label || id;
@@ -2251,6 +2268,8 @@ function getStyleVariantLabelById(id: string) {
 
 function getSoundVariantLabelById(id: string) {
   if (isSeparatorKeywordId(id)) return '';
+  const customLabel = getCustomKeywordText(id, CUSTOM_SOUND_PREFIX);
+  if (customLabel) return customLabel;
   const variant = SOUND_VARIANT_LOOKUP[id];
   if ((variant as any)?.kind === 'separator') return '';
   return variant?.labelKo || variant?.label || id;
@@ -5741,20 +5760,27 @@ const toggleCycleVariantSelection = (
 
     // 중분류는 더 이상 별도 상태로 복원하지 않는다.
     // 저장된 genre/subGenre 라벨을 모두 실제 선택 가능한 장르 ID로 풀어서 subGenre 슬롯에만 복원한다.
+    const explicitCustomGenreInput = String((appliedKeywords as any).customGenreInput || '').trim();
     const restoredGenreIds = Array.from(new Set([
       ...((appliedKeywords.subGenre ?? []) as string[]),
       ...((appliedKeywords.genre ?? []) as string[]),
     ]
-      .map(resolveSelectableGenreId)
+      .map((value) => {
+        const raw = String(value || '').trim();
+        if (isCustomGenreKeyword(raw)) return raw;
+        return resolveSelectableGenreId(raw);
+      })
       .filter(Boolean) as string[]));
 
     setSelectedGenres([]);
-    setSubGenre(limitFusionGenreIds(restoredGenreIds));
+    setSubGenre(explicitCustomGenreInput ? [makeCustomKeywordId(CUSTOM_GENRE_PREFIX, explicitCustomGenreInput)] : limitFusionGenreIds(restoredGenreIds));
 
     const rawMoodValues = Array.isArray(appliedKeywords.mood) ? appliedKeywords.mood : [];
     const rawThemeValues = Array.isArray(appliedKeywords.theme) ? appliedKeywords.theme : [];
     const explicitCustomMoodInput = String((appliedKeywords as any).customMoodInput || '').trim();
     const explicitCustomThemeInput = String((appliedKeywords as any).customThemeInput || '').trim();
+    const explicitCustomStyleInput = String((appliedKeywords as any).customStyleInput || '').trim();
+    const explicitCustomSoundInput = String((appliedKeywords as any).customSoundInput || '').trim();
 
     const moodIds = Array.from(new Set(mapLabelsToIds(rawMoodValues, MOODS)));
     const themeIds = Array.from(new Set(mapLabelsToIds(rawThemeValues, THEMES)));
@@ -5788,8 +5814,12 @@ const toggleCycleVariantSelection = (
     } else {
       setSituation(createEmptySituation());
     }
-    const styleIds = resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
-    const rawInstrumentSoundIds = resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
+    const styleIds = explicitCustomStyleInput
+      ? [makeCustomKeywordId(CUSTOM_STYLE_PREFIX, explicitCustomStyleInput)]
+      : resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
+    const rawInstrumentSoundIds = explicitCustomSoundInput
+      ? [makeCustomKeywordId(CUSTOM_SOUND_PREFIX, explicitCustomSoundInput)]
+      : resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
 
     // SORIDRAW_RECOMMENDED_SOUND_COMBO_NEXT_APPLY_FIX: 다음곡 적용 시 추천조합으로 자동 선택된 실제 악기들을 UI 강조 상태까지 복원
     const restoreRecommendedSoundComboFromAppliedKeywords = (ids: string[]) => {
@@ -6272,6 +6302,9 @@ const toggleCycleVariantSelection = (
     }
 
     const removeDirectCustomKeyword = (values: string[]) => {
+      if (category === 'genre') return values.filter((value) => !isCustomGenreKeyword(value));
+      if (category === 'style') return values.filter((value) => !isCustomStyleKeyword(value));
+      if (category === 'sound') return values.filter((value) => !isCustomSoundKeyword(value));
       if (category === 'mood') return values.filter((value) => !isCustomMoodKeyword(value));
       if (category === 'theme') return values.filter((value) => !isCustomThemeKeyword(value));
       return values;
@@ -6319,6 +6352,52 @@ const toggleCycleVariantSelection = (
     }
   };
 
+  const applyDirectGenreInput = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setIsGenreRandomized(false);
+    setSelectedGenres([]);
+    setSubGenre([makeCustomKeywordId(CUSTOM_GENRE_PREFIX, trimmed)]);
+    setHoveredItem({
+      id: 'custom-genre-direct-input',
+      label: trimmed,
+      labelKo: trimmed,
+      description: '직접 입력한 장르 방향입니다.',
+      _ts: Date.now(),
+    });
+  };
+
+  const applyDirectStyleInput = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    setIsStyleRandomized(false);
+    setSelectedStyles([makeCustomKeywordId(CUSTOM_STYLE_PREFIX, trimmed)]);
+    setHoveredItem({
+      id: 'custom-style-direct-input',
+      label: trimmed,
+      labelKo: trimmed,
+      description: '직접 입력한 스타일 키워드입니다.',
+      _ts: Date.now(),
+    });
+  };
+
+  const applyDirectSoundInput = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    recommendedSoundComboAppliedIdsRef.current = {};
+    setIsSoundTextureRandomized(false);
+    setSelectedInstrumentSounds([makeCustomKeywordId(CUSTOM_SOUND_PREFIX, trimmed)]);
+    setSelectedPointSounds([]);
+    setIsPointSoundMode(false);
+    setHoveredItem({
+      id: 'custom-sound-direct-input',
+      label: trimmed,
+      labelKo: trimmed,
+      description: '직접 입력한 사운드 키워드입니다.',
+      _ts: Date.now(),
+    });
+  };
+
   const applyDirectMoodInput = (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -6345,6 +6424,19 @@ const toggleCycleVariantSelection = (
       description: '직접 입력한 주제 키워드입니다.',
       _ts: Date.now(),
     });
+  };
+
+  const clearDirectGenreInput = () => {
+    setSelectedGenres((prev) => prev.filter((id) => !isCustomGenreKeyword(id)));
+    setSubGenre((prev) => prev.filter((id) => !isCustomGenreKeyword(id)));
+  };
+
+  const clearDirectStyleInput = () => {
+    setSelectedStyles((prev) => prev.filter((id) => !isCustomStyleKeyword(id)));
+  };
+
+  const clearDirectSoundInput = () => {
+    setSelectedInstrumentSounds((prev) => prev.filter((id) => !isCustomSoundKeyword(id)));
   };
 
   const clearDirectMoodInput = () => {
@@ -7138,8 +7230,11 @@ const saveRecentSong = async (newSong: any) => {
       const effectiveStyleIds = Array.from(new Set(finalStyles ?? []));
       const styleLabels = getCycleVariantLabel(STYLE_CYCLES, effectiveStyleIds);
       const themeLabels = finalThemes.map(getThemeKeywordLabel);
+      const customGenreInput = finalGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || undefined;
       const customMoodInput = finalMoods.map((id) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX)).find(Boolean) || undefined;
       const customThemeInput = finalThemes.map((id) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX)).find(Boolean) || undefined;
+      const customStyleInput = finalStyles.map((id) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX)).find(Boolean) || undefined;
+      const customSoundInput = finalInstrumentSounds.map((id) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX)).find(Boolean) || undefined;
       const soundTextureLabels = getCycleVariantLabel(SOUND_TEXTURE_CYCLES, finalInstrumentSounds);
       const hasBalladStyle = effectiveStyleIds.some((id) => ['ballad', 'classic-ballad'].includes(id));
 
@@ -7148,7 +7243,7 @@ const saveRecentSong = async (newSong: any) => {
           if (citypopMode === 1) return ["City Pop", "80s Japanese Pop", "Funk", "Groovy", "Retro"];
           if (citypopMode === 2) return ["Modern City Pop", "Nu-Disco", "Synth-pop", "Smooth"];
         }
-        return [GENRES.find(g => g.id === id)?.label || id];
+        return [getCustomKeywordText(id, CUSTOM_GENRE_PREFIX) || GENRES.find(g => g.id === id)?.label || id];
       });
 
       const getRecommendedVocalTone = (m: number, f: number, genres: string[], subGenres: string[]) => {
@@ -7215,11 +7310,12 @@ const saveRecentSong = async (newSong: any) => {
             .flatMap((group) => group.children)
             .flatMap((main) => main.children)
             .find((item) => item.id === id);
-          return matched?.label || id;
+          return getCustomKeywordText(id, CUSTOM_GENRE_PREFIX) || matched?.label || id;
         });
 
-        const genreStr = [...genreLabels, ...subGenreLabels].length > 0
-          ? [...genreLabels, ...subGenreLabels].join(', ')
+        const promptGenreLabels = Array.from(new Set([...genreLabels, ...subGenreLabels].filter(Boolean)));
+        const genreStr = promptGenreLabels.length > 0
+          ? promptGenreLabels.join(', ')
           : hasFreeTextDirectorNote
             ? 'Free-text director note defines the main genre and style'
             : 'Pop';
@@ -7473,7 +7569,7 @@ const saveRecentSong = async (newSong: any) => {
         .filter(Boolean);
 
       const payload = {
-        genre: finalGenres[0] ?? selectedGenres[0] ?? subGenre[0] ?? null,
+        genre: customGenreInput || finalGenres[0] || selectedGenres[0] || subGenre[0] || null,
         subGenre: finalGenres,
         isKpopSelected: [...selectedGenres, ...subGenre].includes('kpop'),
         moods: finalMoods.map(getMoodKeywordLabel),
@@ -7482,8 +7578,11 @@ const saveRecentSong = async (newSong: any) => {
         styles: finalStyles,
         instrumentSounds: finalInstrumentSounds,
         pointSounds: finalPointSounds,
+        customGenreInput,
         customMoodInput,
         customThemeInput,
+        customStyleInput,
+        customSoundInput,
         userInput,
         songPrompt,
         lyricsLength,
@@ -7618,8 +7717,11 @@ const saveRecentSong = async (newSong: any) => {
             situationSummary: buildSituationSummary(situation),
             vocal: payload.vocal,
             pointSounds: finalPointSounds,
+            customGenreInput,
             customMoodInput,
             customThemeInput,
+            customStyleInput,
+            customSoundInput,
             vocalType: formation || 'Default',
             rapEnabled: requestedRapEnabled,
             isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
@@ -8474,6 +8576,8 @@ ${normalizePromptForDisplay(result.prompt)}
 
   // --- Genre Display Logic ---
   const resolveGenreChipLabel = (id: string): string => {
+    const customLabel = getCustomKeywordText(id, CUSTOM_GENRE_PREFIX);
+    if (customLabel) return customLabel;
     for (const group of GENRE_HIERARCHY) {
       for (const main of group.children) {
         if (main.id === id) return main.labelKo || main.label;
@@ -9781,6 +9885,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onHeightChange={setGenreHeight}
                 forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
+                directInput={{
+                  selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
+                  onApply: applyDirectGenreInput,
+                  onCancelSelected: clearDirectGenreInput,
+                }}
               />
           <CycleSection 
             title="Style" 
@@ -9790,8 +9899,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
             onCycleToggle={(cycleId, variantId) => {
-              if (variantId) toggleCycleVariantSelection(variantId, selectedStyles, setSelectedStyles);
-              else cycleFamilySelection(cycleId, selectedStyles, setSelectedStyles, STYLE_CYCLES);
+              const baseStyles = selectedStyles.filter((id) => !isCustomStyleKeyword(id));
+              if (variantId) toggleCycleVariantSelection(variantId, baseStyles, setSelectedStyles);
+              else cycleFamilySelection(cycleId, baseStyles, setSelectedStyles, STYLE_CYCLES);
             }}
             onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
             onRandom={() => randomizeCategory('style')}
@@ -9806,6 +9916,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             onHeightChange={setStyleHeight}
             forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('style', isOpen); }}
+            directInput={{
+              selectedText: selectedStyles.map((id) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX)).find(Boolean) || '',
+              onApply: applyDirectStyleInput,
+              onCancelSelected: clearDirectStyleInput,
+            }}
           />
           <CycleSection 
             title="Sound/Texture" 
@@ -9818,22 +9933,24 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             isPointSelectionMode={false}
             highlightedVariantIds={recommendedComboAppliedSoundIds}
             onCycleToggle={(cycleId, variantId) => {
+              const baseInstrumentSounds = selectedInstrumentSounds.filter((id) => !isCustomSoundKeyword(id));
               if (variantId) {
                 const isRecommendedCombo = !!getRecommendedSoundComboVariant(variantId);
                 if (isRecommendedCombo) {
-                  if (selectedInstrumentSounds.includes(variantId)) {
+                  if (baseInstrumentSounds.includes(variantId)) {
                     clearRecommendedSoundCombo(variantId);
                     return;
                   }
+                  setSelectedInstrumentSounds(baseInstrumentSounds);
                   if (applyRecommendedSoundCombo(variantId)) return;
                 }
                 setSelectedPointSounds((prev) => prev.filter((id) => id !== variantId));
-                toggleCycleVariantSelection(variantId, selectedInstrumentSounds, setSelectedInstrumentSounds);
+                toggleCycleVariantSelection(variantId, baseInstrumentSounds, setSelectedInstrumentSounds);
               }
-              else cycleFamilySelection(cycleId, selectedInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
+              else cycleFamilySelection(cycleId, baseInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
             }}
             onOtherModeVariantToggle={(variantId) => {
-              setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId));
+              setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId && !isCustomSoundKeyword(id)));
               const combo = getRecommendedSoundComboVariant(variantId);
               if (combo) {
                 recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
@@ -9861,6 +9978,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             onHeightChange={setSoundHeight}
             forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
             onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('sound', isOpen); }}
+            directInput={{
+              selectedText: selectedInstrumentSounds.map((id) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX)).find(Boolean) || '',
+              onApply: applyDirectSoundInput,
+              onCancelSelected: clearDirectSoundInput,
+            }}
           />
         </div>
 
@@ -12060,12 +12182,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           -webkit-tap-highlight-color: transparent;
         }
 
-        button:not(:disabled):active,
+        button:not(:disabled):not(.soridraw-direct-input-button):active,
         a[href]:active,
-        [role="button"]:active {
+        [role="button"]:not(.soridraw-direct-input-button):active {
           scale: 0.965;
           translate: 0 2px;
           filter: brightness(0.94);
+        }
+
+        .soridraw-direct-input-button {
+          touch-action: manipulation;
+        }
+
+        .soridraw-direct-input-button:active {
+          scale: 1 !important;
+          translate: 0 0 !important;
+          filter: none !important;
         }
 
         [data-expand-section] {
@@ -12840,6 +12972,11 @@ interface CycleSectionProps {
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
   onModalStateChange?: (isOpen: boolean) => void;
+  directInput?: {
+    selectedText?: string;
+    onApply: (value: string) => void;
+    onCancelSelected?: () => void;
+  };
 }
 
 function CycleSection({ 
@@ -12869,13 +13006,16 @@ function CycleSection({
   onToggleExpand,
   onHeightChange,
   forcedHeight,
-  onModalStateChange
+  onModalStateChange,
+  directInput
 }: CycleSectionProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(64);
+  const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
+  const [directInputDraft, setDirectInputDraft] = useState(directInput?.selectedText || '');
 
-  useStableContentHeight(contentRef, setContentHeight, [cycles, selected, pointSelected, isPointSelectionMode], onHeightChange);
+  useStableContentHeight(contentRef, setContentHeight, [cycles, selected, pointSelected, isPointSelectionMode, directInput?.selectedText], onHeightChange);
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
 
@@ -12897,8 +13037,16 @@ function CycleSection({
     const allVariants = cycles.flatMap((cycle) => cycle.variants).filter((variant) => variant.kind !== 'separator');
     const variantMap = new Map(allVariants.map((variant) => [variant.id, variant]));
     return [
-      ...selected.map((id) => ({ id, mode: 'normal' as const, label: variantMap.get(id)?.labelKo || variantMap.get(id)?.label || '' })),
-      ...pointSelected.map((id) => ({ id, mode: 'point' as const, label: variantMap.get(id)?.labelKo || variantMap.get(id)?.label || '' })),
+      ...selected.map((id) => ({
+        id,
+        mode: 'normal' as const,
+        label: variantMap.get(id)?.labelKo || variantMap.get(id)?.label || getCustomKeywordText(id, CUSTOM_STYLE_PREFIX) || getCustomKeywordText(id, CUSTOM_SOUND_PREFIX) || ''
+      })),
+      ...pointSelected.map((id) => ({
+        id,
+        mode: 'point' as const,
+        label: variantMap.get(id)?.labelKo || variantMap.get(id)?.label || getCustomKeywordText(id, CUSTOM_SOUND_PREFIX) || ''
+      })),
     ].filter((item) => item.label);
   }, [cycles, selected, pointSelected]);
   const selectedDisplayTextLength = selectedDisplayItems.reduce((sum, item) => sum + item.label.length + (item.mode === 'point' ? 5 : 2), 0);
@@ -12921,6 +13069,31 @@ function CycleSection({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const sectionAccent = getStudioSectionAccent(titleKo || title);
   const isExpandSummaryActive = isExpanded;
+
+  useEffect(() => {
+    if (!isDirectInputEditing) setDirectInputDraft(directInput?.selectedText || '');
+  }, [directInput?.selectedText, isDirectInputEditing]);
+
+  const openDirectInput = () => {
+    setDirectInputDraft(directInput?.selectedText || '');
+    setIsDirectInputEditing(true);
+  };
+
+  const applyDirectInput = () => {
+    const trimmed = directInputDraft.trim();
+    if (!trimmed) {
+      directInput?.onCancelSelected?.();
+      setIsDirectInputEditing(false);
+      return;
+    }
+    directInput?.onApply(trimmed);
+    setIsDirectInputEditing(false);
+  };
+
+  const cancelDirectInput = () => {
+    setDirectInputDraft(directInput?.selectedText || '');
+    setIsDirectInputEditing(false);
+  };
 
   return (
     <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
@@ -13081,12 +13254,15 @@ function CycleSection({
 
       <div 
         data-expanded={isExpanded ? 'true' : 'false'}
-        role={onToggleExpand ? 'button' : undefined}
-        tabIndex={onToggleExpand ? 0 : undefined}
-        aria-pressed={onToggleExpand ? isExpanded : undefined}
-        onClick={(event) => onToggleExpand && handleExpandableToggle(event, isExpanded, onToggleExpand)}
+        role={isDirectInputEditing ? undefined : (onToggleExpand ? 'button' : undefined)}
+        tabIndex={isDirectInputEditing ? undefined : (onToggleExpand ? 0 : undefined)}
+        aria-pressed={isDirectInputEditing ? undefined : (onToggleExpand ? isExpanded : undefined)}
+        onClick={(event) => {
+          if (isDirectInputEditing) return;
+          onToggleExpand && handleExpandableToggle(event, isExpanded, onToggleExpand);
+        }}
         onKeyDown={(event) => {
-          if (!onToggleExpand) return;
+          if (isDirectInputEditing || !onToggleExpand) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             onToggleExpand();
@@ -13094,12 +13270,12 @@ function CycleSection({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all",
+          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
-          onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15", sectionAccent.summaryHover),
-          onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
+          !isDirectInputEditing && onToggleExpand && !isExpandSummaryActive && cn("cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15", sectionAccent.summaryHover),
+          !isDirectInputEditing && onToggleExpand && isExpandSummaryActive && "cursor-pointer focus:outline-none focus:ring-1 focus:ring-white/15"
         )}
         style={{
           '--soridraw-summary-border': sectionAccent.summaryBorder,
@@ -13108,8 +13284,38 @@ function CycleSection({
         } as React.CSSProperties}
         title={onToggleExpand ? (isExpanded ? '접기' : '펼치기') : undefined}
       >
-        {selectedDisplayItems.length > 0 ? (
-          <div className={cn("w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass)}>
+        {isDirectInputEditing && directInput ? (
+          <div className="flex items-center gap-2 w-full">
+            <input
+              value={directInputDraft}
+              onChange={(event) => setDirectInputDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') applyDirectInput();
+                if (event.key === 'Escape') cancelDirectInput();
+              }}
+              autoFocus
+              placeholder={`${titleKo || title} 직접 입력`}
+              className={cn("flex-1 min-w-0 bg-transparent border-none outline-none text-sm font-semibold text-center", sectionAccent.text, "placeholder:text-white/20")}
+            />
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); applyDirectInput(); }}
+              className={cn("shrink-0 w-8 h-8 bg-transparent border-0 transition-colors flex items-center justify-center", sectionAccent.text)}
+              aria-label="직접입력 적용"
+            >
+              <Check className="w-[18px] h-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); cancelDirectInput(); }}
+              className="shrink-0 w-8 h-8 bg-transparent border-0 text-[var(--text-secondary)] hover:text-red-400 transition-colors flex items-center justify-center"
+              aria-label="직접입력 취소"
+            >
+              <X className="w-[18px] h-[18px]" />
+            </button>
+          </div>
+        ) : selectedDisplayItems.length > 0 ? (
+          <div className={cn("w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass, directInput ? "pr-10" : "")}>
             {selectedDisplayItems.map((item, index) => (
               <span key={`${item.mode}-${item.id}`} className={cn("soridraw-selected-summary", sectionAccent.text)}>
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
@@ -13117,9 +13323,22 @@ function CycleSection({
             ))}
           </div>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", isPointSelectionMode ? "text-[#F0A3C9]/45" : sectionAccent.softText)}>
+          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", isPointSelectionMode ? "text-[#F0A3C9]/45" : sectionAccent.softText)}>
             {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
           </p>
+        )}
+        {directInput && !isDirectInputEditing && (
+          <button
+            type="button"
+            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+            onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
+            onMouseLeave={() => onHover(null)}
+            className="soridraw-direct-input-button absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
+            aria-label={`${titleKo || title} 직접 입력`}
+          >
+            <Edit2 className="w-[22px] h-[22px]" />
+          </button>
         )}
       </div>
 
@@ -13955,10 +14174,11 @@ function CategorySection({
         {directInput && !isDirectInputEditing && (
           <button
             type="button"
-            onClick={(event) => { event.stopPropagation(); openDirectInput(); }}
+            onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+            onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
             onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
             onMouseLeave={() => onHover(null)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
+            className="soridraw-direct-input-button absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
             aria-label={`${titleKo || title} 직접 입력`}
           >
             <Edit2 className="w-[22px] h-[22px]" />
@@ -17816,7 +18036,7 @@ function VocalControl({
                           onClick={() => handleRemoveMember(idx)}
                           onMouseEnter={() => onHover({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: vocalMode === 'solo' ? '선택한 솔로 보컬을 해제합니다.' : '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
                           onMouseLeave={() => onHover(null)}
-                          className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-0 group-hover/member:opacity-100"
+                          className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100"
                         >
                           <X className="w-[18px] h-[18px]" />
                         </button>

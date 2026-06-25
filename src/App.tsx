@@ -10310,8 +10310,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 className={cn(
                   "flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
                   isLyricMode 
-                    ? "bg-brand-orange text-white border-brand-orange shadow-brand-orange/20" 
-                    : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-brand-orange/70"
+                    ? "bg-[#F4A900] text-[#18110A] border-[#F4A900] hover:bg-[#F7B31A] hover:border-[#F7B31A]" 
+                    : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-[#F4A900]/80"
                 )}
               >
                 <Languages className="w-[18px] h-[18px]" />
@@ -10333,7 +10333,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <div className="h-px bg-btn-border w-full" />
                   <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-brand-orange" />
+                      <Sparkles className="w-3.5 h-3.5 text-[#F4A900]" />
                       <p className="text-[12px] font-medium text-[var(--text-secondary)]">
                         이 아래 내용은 가사 초안으로 우선 반영됩니다.
                       </p>
@@ -10347,7 +10347,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           className={cn(
                             "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'assist' 
-                              ? "bg-brand-orange text-white shadow-sm" 
+                              ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                           )}
                         >
@@ -10358,7 +10358,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           className={cn(
                             "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'preserve' 
-                              ? "bg-brand-orange text-white shadow-sm" 
+                              ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                           )}
                         >
@@ -10387,7 +10387,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
                       }}
                       placeholder="여기에 적은 가사초안을 기초로 Ai가 보정하여 재창작됩니다.(작사를 직접 하고싶다면 '원문유지'를 이용하세요.)"
-                      className="w-full bg-[var(--bg-secondary)] border border-btn-border rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/30 focus:border-brand-orange/30 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-[var(--text-secondary)]/30 shadow-inner"
+                      className="w-full bg-[rgba(255,255,255,0.055)] border border-white/10 rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#F4A900]/25 focus:border-[#F4A900]/35 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-white/35"
                     />
                   </div>
                 </div>

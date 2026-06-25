@@ -797,3 +797,35 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   filter: none !important;
   transform: none !important;
 }
+
+/* SORIDRAW_399_COMMAND_SINGLE_SURFACE_FIX
+   명령창 이중 surface 제거: wrapper 그림자는 끄고, 실제 보이는 textarea 한 곳에만 기본 그림자를 고정한다.
+   hover/focus 때 그림자가 더 진해지지 않도록 동일 값으로 잠근다. */
+.dark .studio-tone-down .soridraw-studio-command-card,
+.dark .studio-tone-down .soridraw-studio-command-card:hover,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card textarea,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:hover,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:focus,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within textarea {
+  background-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card button,
+.dark .studio-tone-down .soridraw-studio-command-card button:hover,
+.dark .studio-tone-down .soridraw-studio-command-card button:focus {
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}

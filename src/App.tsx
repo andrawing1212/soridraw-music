@@ -10544,10 +10544,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <motion.button
                     key="action-buttons-collapsed-toggle"
                     type="button"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8, transition: { duration: 0 } }}
-                    transition={smoothActionPanelTransition}
+                    initial={{ opacity: 0, y: 8, scale: 1 }}
+                    animate={{ opacity: 1, y: 0, scale: [1, 1.06, 1, 1.025, 1] }}
+                    exit={{ opacity: 0, y: 8, scale: 1, transition: { duration: 0 } }}
+                    transition={{
+                      opacity: smoothActionPanelTransition,
+                      y: smoothActionPanelTransition,
+                      scale: {
+                        duration: 2.35,
+                        times: [0, 0.38, 0.56, 0.76, 1],
+                        ease: [0.33, 1, 0.68, 1],
+                        repeat: Infinity,
+                        repeatDelay: 0.18,
+                      },
+                    }}
                     drag={isActionDragMobile ? "x" : false}
                     dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
                     dragElastic={0.12}
@@ -10563,8 +10573,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     aria-label="생성 버튼 펼치기"
                     className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
                   >
-                                        <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
-                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
+                                        <span className="relative flex h-9 w-9 items-center justify-center">
+                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" />
                     </span>
                     <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-white/35" />
                   </motion.button>

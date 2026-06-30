@@ -5704,6 +5704,20 @@ const toggleCycleVariantSelection = (
     return randomItem?.id ?? null;
   }, [hierarchyLeafGenreItems]);
 
+  const pickRandomLeafGenreIds = useCallback((maxCount = MAX_FUSION_GENRES): string[] => {
+    const randomPool = hierarchyLeafGenreItems.filter((item: any) => !isInstrumentalBgmGenreId(item?.id));
+    if (randomPool.length === 0) return [];
+
+    const safeMaxCount = Math.max(1, Math.min(maxCount, MAX_FUSION_GENRES, randomPool.length));
+    const randomCount = Math.floor(Math.random() * safeMaxCount) + 1;
+
+    return [...randomPool]
+      .sort(() => 0.5 - Math.random())
+      .slice(0, randomCount)
+      .map((item: any) => item.id)
+      .filter(Boolean);
+  }, [hierarchyLeafGenreItems]);
+
   const applyKeywordsToNext = useCallback((rawAppliedKeywords: SongResult['appliedKeywords']) => {
     const appliedKeywords = (rawAppliedKeywords && typeof rawAppliedKeywords === 'object' && ('appliedKeywords' in rawAppliedKeywords))
       ? ((rawAppliedKeywords as any).appliedKeywords || {})
@@ -6875,11 +6889,11 @@ const toggleCycleVariantSelection = (
       return result;
     };
 
-    // 1. Genre Selection: pick only one real leaf genre.
+    // 1. Genre Selection: pick up to two real leaf genres.
     // Locked menus keep their current values and are excluded from global random selection.
-    const randomLeafGenreId = pickRandomLeafGenreId();
+    const randomLeafGenreIds = pickRandomLeafGenreIds(MAX_FUSION_GENRES);
     let g: string[] = isMenuLocked('genre') ? selectedGenres : [];
-    let sg: string[] = isMenuLocked('genre') ? subGenre : (randomLeafGenreId ? [randomLeafGenreId] : []);
+    let sg: string[] = isMenuLocked('genre') ? subGenre : limitFusionGenreIds(randomLeafGenreIds);
 
     // 2. Other categories with their limits
     // Limits: Style 3, Sound 3, Mood 5, Theme 4
@@ -9278,19 +9292,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <button
           onClick={() => {
             applyRandom();
-            setActionButtonHint({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' });
+            setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' });
           }}
-          onMouseEnter={() => setActionButtonHint({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
+          onMouseEnter={() => setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Ramdom all', description: '키워드를 무작위로 조합합니다.' })}
+          onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
           className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFBB22] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           <Dices className="w-5 h-5 text-[#FFBB22] group-hover:rotate-180 transition-transform duration-500" />
-          <span className="hidden md:block font-bold text-[#FFBB22]">랜덤 선택</span>
+          <span className="hidden md:block font-bold text-[#FFBB22]">무작위</span>
         </button>
       </div>
 
@@ -9870,10 +9884,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     showToast('장르 메뉴가 잠겨 있습니다.');
                     return;
                   }
-                  const randomLeafGenreId = pickRandomLeafGenreId();
-                  if (!randomLeafGenreId) return;
+                  const randomLeafGenreIds = pickRandomLeafGenreIds(MAX_FUSION_GENRES);
+                  if (randomLeafGenreIds.length === 0) return;
                   setSelectedGenres([]);
-                  setSubGenre([randomLeafGenreId]);
+                  setSubGenre(limitFusionGenreIds(randomLeafGenreIds));
                   setIsGenreRandomized(true);
                 }}
                 isLocked={menuLocks.genre}
@@ -10547,7 +10561,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-16 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
+                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-28 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-white/10">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-white transition-transform group-hover:translate-x-1" />
@@ -12697,12 +12711,12 @@ function GenreCategorySection({
         <div className="flex items-center gap-2">
           <button
             onClick={onRandom}
-            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random', labelKo: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
+            onMouseEnter={() => onHover({ id: 'genre-random', label: 'Random', labelKo: '랜덤 선택', description: '세부 장르를 최대 2개까지 무작위로 선택합니다.' })}
             onMouseLeave={() => {
               onHover(null);
               onLongPressEnd();
             }}
-            onTouchStart={() => onLongPressStart({ id: 'genre-random', label: 'Random', labelKo: '랜덤 선택', description: '세부 장르 1개를 무작위로 선택합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'genre-random', label: 'Random', labelKo: '랜덤 선택', description: '세부 장르를 최대 2개까지 무작위로 선택합니다.' })}
             onTouchEnd={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all",
@@ -12729,7 +12743,7 @@ function GenreCategorySection({
                 : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
             )}
           >
-            <RotateCcw className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -12823,7 +12837,7 @@ function GenreCategorySection({
           </p>
         ) : (
           <p className="text-xs text-[var(--text-secondary)]">
-            대분류를 누른 뒤 팝업에서 세부 장르 1개를 선택하세요.
+            대분류를 누른 뒤 팝업에서 세부 장르를 최대 2개까지 선택하세요.
           </p>
         )}
       </div>
@@ -13163,7 +13177,7 @@ function CycleSection({
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -13927,7 +13941,7 @@ function CategorySection({
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -15465,7 +15479,7 @@ function SongStructureIntegratedControl({
                   : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
           <AnimatePresence>
@@ -17835,7 +17849,7 @@ function VocalControl({
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
           >
-            <RotateCcw className="w-4 h-4" />
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
 
@@ -18559,7 +18573,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -18595,7 +18609,7 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
                   : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
               )}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>

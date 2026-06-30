@@ -762,9 +762,13 @@ export default function FavoritesPage({
   const [sunoUrlInputs, setSunoUrlInputs] = useState<[string, string]>(['', '']);
   const [sunoUrlMainIndex, setSunoUrlMainIndex] = useState<0 | 1>(0);
   const [sunoUrlError, setSunoUrlError] = useState('');
+  const [sunoUrlSaveStatus, setSunoUrlSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const sunoUrlSaveResetTimerRef = useRef<number | null>(null);
   const [detailSunoUrlInputs, setDetailSunoUrlInputs] = useState<[string, string]>(['', '']);
   const [detailSunoUrlMainIndex, setDetailSunoUrlMainIndex] = useState<0 | 1>(0);
   const [detailSunoUrlError, setDetailSunoUrlError] = useState('');
+  const [detailSunoUrlSaveStatus, setDetailSunoUrlSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const detailSunoUrlSaveResetTimerRef = useRef<number | null>(null);
   const detailScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const detailSunoUrlSectionRef = useRef<HTMLElement | null>(null);
   const pendingDetailSunoUrlScrollRef = useRef(false);
@@ -1859,6 +1863,8 @@ export default function FavoritesPage({
     setSelectedSong(song);
     setSunoUrlEditorSong(null);
     setSunoUrlError('');
+    setSunoUrlSaveStatus('idle');
+    setDetailSunoUrlSaveStatus('idle');
     setActiveFavoriteMenuId(null);
 
     if (selectedSong?.id === song?.id) {
@@ -1868,10 +1874,39 @@ export default function FavoritesPage({
   };
 
   const closeFavoriteSunoUrlEditor = () => {
+    if (sunoUrlSaveResetTimerRef.current) {
+      window.clearTimeout(sunoUrlSaveResetTimerRef.current);
+      sunoUrlSaveResetTimerRef.current = null;
+    }
     setSunoUrlEditorSong(null);
     setSunoUrlInputs(['', '']);
     setSunoUrlMainIndex(0);
     setSunoUrlError('');
+    setSunoUrlSaveStatus('idle');
+  };
+
+  const clearFavoriteSunoSaveTimer = (source: 'modal' | 'detail') => {
+    const ref = source === 'detail' ? detailSunoUrlSaveResetTimerRef : sunoUrlSaveResetTimerRef;
+    if (ref.current) {
+      window.clearTimeout(ref.current);
+      ref.current = null;
+    }
+  };
+
+  const setFavoriteSunoSaveStatus = (source: 'modal' | 'detail', status: 'idle' | 'saving' | 'saved') => {
+    clearFavoriteSunoSaveTimer(source);
+    if (source === 'detail') setDetailSunoUrlSaveStatus(status);
+    else setSunoUrlSaveStatus(status);
+  };
+
+  const resetFavoriteSunoSaveStatusSoon = (source: 'modal' | 'detail') => {
+    clearFavoriteSunoSaveTimer(source);
+    const ref = source === 'detail' ? detailSunoUrlSaveResetTimerRef : sunoUrlSaveResetTimerRef;
+    ref.current = window.setTimeout(() => {
+      if (source === 'detail') setDetailSunoUrlSaveStatus('idle');
+      else setSunoUrlSaveStatus('idle');
+      ref.current = null;
+    }, 1600);
   };
 
   const saveFavoriteSunoShareUrls = async (song: any, rawUrls: [string, string], requestedMainIndex: 0 | 1, source: 'modal' | 'detail' = 'modal') => {
@@ -1923,57 +1958,73 @@ export default function FavoritesPage({
       return;
     }
 
-    const mainSlotIndex = normalizedSlots[requestedMainIndex] ? requestedMainIndex : filled[0].index;
-    const existingLinks = getFavoriteSunoLinks(song);
-    const now = Date.now();
+    setFavoriteSunoSaveStatus(source, 'saving');
+    if (source === 'detail') setDetailSunoUrlError('');
+    else setSunoUrlError('');
 
-    const links: FavoriteSunoLink[] = [];
-    for (const item of filled) {
-      const existing = existingLinks.find(link => link.url === item.url);
-      const metadata = await fetchFavoriteSunoShareMetadata(item.url);
+    try {
+      const mainSlotIndex = normalizedSlots[requestedMainIndex] ? requestedMainIndex : filled[0].index;
+      const existingLinks = getFavoriteSunoLinks(song);
+      const now = Date.now();
 
-      links.push({
-        url: item.url,
-        title: metadata?.title || existing?.title || null,
-        coverUrl: metadata?.coverUrl || existing?.coverUrl || null,
-        durationSeconds: metadata?.durationSeconds ?? existing?.durationSeconds ?? null,
-        durationText: metadata?.durationText || existing?.durationText || null,
-        rank: item.index === mainSlotIndex ? 1 : 2,
-        updatedAt: now,
-        fetchedAt: now,
-      });
+      const links: FavoriteSunoLink[] = [];
+      for (const item of filled) {
+        const existing = existingLinks.find(link => link.url === item.url);
+        const metadata = await fetchFavoriteSunoShareMetadata(item.url);
+
+        links.push({
+          url: item.url,
+          title: metadata?.title || existing?.title || null,
+          coverUrl: metadata?.coverUrl || existing?.coverUrl || null,
+          durationSeconds: metadata?.durationSeconds ?? existing?.durationSeconds ?? null,
+          durationText: metadata?.durationText || existing?.durationText || null,
+          rank: item.index === mainSlotIndex ? 1 : 2,
+          updatedAt: now,
+          fetchedAt: now,
+        });
+      }
+
+      const rawMainIndex = links.findIndex(link => link.rank === 1);
+      const mainIndex = (rawMainIndex === 1 ? 1 : 0) as 0 | 1;
+      const mainLink = links[mainIndex] || links[0];
+
+      const updates = {
+        sunoLinks: links,
+        mainSunoIndex: mainIndex,
+        sunoLinkCount: links.length,
+        sunoShareUrl: mainLink?.url || null,
+        sunoShareUrlUpdatedAt: now,
+        sunoCoverUrl: mainLink?.coverUrl || null,
+        sunoTitle: mainLink?.title || null,
+        sunoDurationSeconds: mainLink?.durationSeconds || null,
+        sunoDurationText: mainLink?.durationText || null,
+        sunoCoverFetchedAt: now,
+      };
+
+      await updateFavorite(song.id, updates);
+
+      const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
+      if (selectedSong?.id === song.id) {
+        setSelectedSong(nextSong);
+        const nextState = buildFavoriteSunoEditorState(nextSong);
+        setDetailSunoUrlInputs(nextState.inputs);
+        setDetailSunoUrlMainIndex(nextState.mainIndex);
+        setDetailSunoUrlError('');
+      }
+
+      setFavoriteSunoSaveStatus(source, 'saved');
+      resetFavoriteSunoSaveStatusSoon(source);
+      if (source === 'modal') {
+        window.setTimeout(() => closeFavoriteSunoUrlEditor(), 900);
+      }
+      showFavoriteToast(links.length > 1 ? '수노 URL 2곡을 연결했습니다.' : '수노 URL을 연결했습니다.');
+    } catch (error) {
+      console.error('[Suno URL] save failed', error);
+      const message = '수노 URL 저장에 실패했습니다.';
+      if (source === 'detail') setDetailSunoUrlError(message);
+      else setSunoUrlError(message);
+      setFavoriteSunoSaveStatus(source, 'idle');
     }
-
-    const rawMainIndex = links.findIndex(link => link.rank === 1);
-    const mainIndex = (rawMainIndex === 1 ? 1 : 0) as 0 | 1;
-    const mainLink = links[mainIndex] || links[0];
-
-    const updates = {
-      sunoLinks: links,
-      mainSunoIndex: mainIndex,
-      sunoLinkCount: links.length,
-      sunoShareUrl: mainLink?.url || null,
-      sunoShareUrlUpdatedAt: now,
-      sunoCoverUrl: mainLink?.coverUrl || null,
-      sunoTitle: mainLink?.title || null,
-      sunoDurationSeconds: mainLink?.durationSeconds || null,
-      sunoDurationText: mainLink?.durationText || null,
-      sunoCoverFetchedAt: now,
-    };
-
-    await updateFavorite(song.id, updates);
-
-    const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
-    if (selectedSong?.id === song.id) {
-      setSelectedSong(nextSong);
-      const nextState = buildFavoriteSunoEditorState(nextSong);
-      setDetailSunoUrlInputs(nextState.inputs);
-      setDetailSunoUrlMainIndex(nextState.mainIndex);
-      setDetailSunoUrlError('');
-    }
-
-    if (source === 'modal') closeFavoriteSunoUrlEditor();
-    showFavoriteToast(links.length > 1 ? '수노 URL 2곡을 연결했습니다.' : '수노 URL을 연결했습니다.');
   };
 
   const saveFavoriteSunoShareUrl = async (song: any, rawUrl: string, source: 'modal' | 'detail' = 'modal') => {
@@ -1982,27 +2033,40 @@ export default function FavoritesPage({
 
   const removeFavoriteSunoShareUrl = async (song: any, source: 'modal' | 'detail' = 'modal') => {
     if (!song?.id) return;
-    const updates = {
-      sunoLinks: [],
-      mainSunoIndex: 0,
-      sunoLinkCount: 0,
-      sunoShareUrl: null,
-      sunoShareUrlUpdatedAt: Date.now(),
-      sunoCoverUrl: null,
-      sunoTitle: null,
-      sunoDurationSeconds: null,
-      sunoDurationText: null,
-      sunoCoverFetchedAt: null,
-    };
-    await updateFavorite(song.id, updates);
-    if (selectedSong?.id === song.id) {
-      setSelectedSong({ ...(selectedSong || {}), ...updates });
-      setDetailSunoUrlInputs(['', '']);
-      setDetailSunoUrlMainIndex(0);
-      setDetailSunoUrlError('');
+    setFavoriteSunoSaveStatus(source, 'saving');
+    try {
+      const updates = {
+        sunoLinks: [],
+        mainSunoIndex: 0,
+        sunoLinkCount: 0,
+        sunoShareUrl: null,
+        sunoShareUrlUpdatedAt: Date.now(),
+        sunoCoverUrl: null,
+        sunoTitle: null,
+        sunoDurationSeconds: null,
+        sunoDurationText: null,
+        sunoCoverFetchedAt: null,
+      };
+      await updateFavorite(song.id, updates);
+      if (selectedSong?.id === song.id) {
+        setSelectedSong({ ...(selectedSong || {}), ...updates });
+        setDetailSunoUrlInputs(['', '']);
+        setDetailSunoUrlMainIndex(0);
+        setDetailSunoUrlError('');
+      }
+      setFavoriteSunoSaveStatus(source, 'saved');
+      resetFavoriteSunoSaveStatusSoon(source);
+      if (source === 'modal') {
+        window.setTimeout(() => closeFavoriteSunoUrlEditor(), 900);
+      }
+      showFavoriteToast('수노 URL 연결을 제거했습니다.');
+    } catch (error) {
+      console.error('[Suno URL] remove failed', error);
+      const message = '수노 URL 연결 제거에 실패했습니다.';
+      if (source === 'detail') setDetailSunoUrlError(message);
+      else setSunoUrlError(message);
+      setFavoriteSunoSaveStatus(source, 'idle');
     }
-    if (source === 'modal') closeFavoriteSunoUrlEditor();
-    showFavoriteToast('수노 URL 연결을 제거했습니다.');
   };
 
   const COLOR_SYNC_USAGE_KEY = 'soridraw.colorSyncUsage.v1';
@@ -5811,6 +5875,7 @@ ${song.prompt}
                         next[index] = event.target.value;
                         setSunoUrlInputs(next);
                         setSunoUrlError('');
+                        setSunoUrlSaveStatus('idle');
                         if (!event.target.value.trim() && sunoUrlMainIndex === index) setSunoUrlMainIndex(index === 0 ? 1 : 0);
                       }}
                       placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
@@ -5826,7 +5891,10 @@ ${song.prompt}
                   <button type="button" onClick={() => removeFavoriteSunoShareUrl(sunoUrlEditorSong)} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/60 transition-all hover:text-red-300"><Trash2 className="h-4 w-4" />전체 제거</button>
                 )}
                 <button type="button" onClick={closeFavoriteSunoUrlEditor} className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] px-4 text-sm font-semibold text-white/70 transition-all hover:text-white">취소</button>
-                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={!sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35"><Check className="h-4 w-4" />저장</button>
+                <button type="button" onClick={() => saveFavoriteSunoShareUrls(sunoUrlEditorSong, sunoUrlInputs, sunoUrlMainIndex)} disabled={sunoUrlSaveStatus === 'saving' || !sunoUrlInputs.some(value => value.trim())} className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_24px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
+                  {sunoUrlSaveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  {sunoUrlSaveStatus === 'saving' ? '저장 중...' : sunoUrlSaveStatus === 'saved' ? '저장 완료' : '저장'}
+                </button>
               </div>
             </motion.div>
           </motion.div>
@@ -6336,6 +6404,7 @@ ${song.prompt}
                             next[index] = event.target.value;
                             setDetailSunoUrlInputs(next);
                             setDetailSunoUrlError('');
+                            setDetailSunoUrlSaveStatus('idle');
                             if (!event.target.value.trim() && detailSunoUrlMainIndex === index) setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
                           }}
                           placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
@@ -6343,9 +6412,9 @@ ${song.prompt}
                         />
                       </div>
                     ))}
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim())} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
-                      <Check className="h-4 w-4" />
-                      저장
+                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={detailSunoUrlSaveStatus === 'saving' || (!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim()))} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
+                      {detailSunoUrlSaveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {detailSunoUrlSaveStatus === 'saving' ? '저장 중...' : detailSunoUrlSaveStatus === 'saved' ? '저장 완료' : '저장'}
                     </button>
                   </div>
                   {detailSunoUrlError ? (

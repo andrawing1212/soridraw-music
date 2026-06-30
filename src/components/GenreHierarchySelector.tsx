@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { CategoryItem, GenreGroupItem } from "../types";
 import { GENRE_HIERARCHY, GENRES } from "../constants";
 import {
-  RotateCcw,
+  Trash2,
   Dices,
   X,
   Check,
@@ -841,7 +841,7 @@ export default function GenreHierarchySelector({
                   id: "genre-random",
                   label: "Random Selection",
                   labelKo: "랜덤 선택",
-                  description: "장르를 무작위로 선택합니다.",
+                  description: "세부 장르를 최대 2개까지 무작위로 선택합니다.",
                   _ts: Date.now(),
                 })
               }
@@ -876,7 +876,7 @@ export default function GenreHierarchySelector({
               )}
               title="초기화"
             >
-              <RotateCcw className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>

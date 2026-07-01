@@ -495,6 +495,120 @@ export default function GenreHierarchySelector({
       .filter(Boolean);
     return directText ? Array.from(new Set([directText, ...labels])) : labels;
   }, [committedGenre, committedSubGenre, groups, directInput?.selectedText]);
+
+  const selectionRoleLabels = selectedDisplayLabels.map((label, index) =>
+    index === 0 ? `메인 ${label}` : `서브 ${label}`
+  );
+
+  const getSelectionOrderIndex = (id: string, ids = committedSubGenre) => {
+    const index = normalizeSelectionList(ids).indexOf(id);
+    return index >= 0 ? index + 1 : null;
+  };
+
+  const getGroupSelectionOrderIndex = (group: GroupItem, ids = committedSubGenre) => {
+    const normalizedIds = normalizeSelectionList(ids);
+    for (const main of group.children) {
+      const directIndex = normalizedIds.indexOf(main.id);
+      if (directIndex >= 0) return directIndex + 1;
+      for (const sub of main.children) {
+        const subIndex = normalizedIds.indexOf(sub.id);
+        if (subIndex >= 0) return subIndex + 1;
+      }
+    }
+    return null;
+  };
+
+  const getMainSelectionOrderIndex = (main: MainGenreItem, ids = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre) => {
+    const indexes = getMainSelectionOrderIndexes(main, ids);
+    return indexes[0] ?? null;
+  };
+
+  const getMainSelectionOrderIndexes = (main: MainGenreItem, ids = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre) => {
+    const normalizedIds = normalizeSelectionList(ids);
+    return normalizedIds
+      .map((id, index) => {
+        const belongsToMain = id === main.id || main.children.some((sub) => sub.id === id);
+        return belongsToMain ? index + 1 : null;
+      })
+      .filter((index): index is number => Boolean(index));
+  };
+
+  const getGroupSelectionOrderIndexes = (group: GroupItem, ids = committedSubGenre) => {
+    const normalizedIds = normalizeSelectionList(ids);
+    return normalizedIds
+      .map((id, index) => {
+        const belongsToGroup = group.children.some((main) =>
+          id === main.id || main.children.some((sub) => sub.id === id),
+        );
+        return belongsToGroup ? index + 1 : null;
+      })
+      .filter((index): index is number => Boolean(index));
+  };
+
+  const renderOrderBadge = (orderIndex: number, side: "left" | "right") => {
+    const isMain = orderIndex === 1;
+    const backgroundColor = isMain ? '#050505' : '#FFBB22';
+    const textColor = isMain ? '#FFBB22' : '#050505';
+    const badgeClass = isMain ? 'soridraw-count-badge-main' : 'soridraw-count-badge-point';
+
+    return (
+      <span
+        key={`${side}-${orderIndex}`}
+        className={cn(
+          badgeClass,
+          "absolute top-1.5 z-20 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border px-1.5 text-[11px] font-black leading-none shadow-[0_3px_9px_rgba(0,0,0,0.32)] pointer-events-none select-none",
+          side === "right" ? "right-1.5" : "left-1.5"
+        )}
+        style={{
+          backgroundColor,
+          borderColor: isMain ? 'rgba(255, 187, 34, 0.38)' : 'rgba(5, 5, 5, 0.42)',
+          color: textColor,
+          fontWeight: 950,
+          lineHeight: 1,
+          ['--soridraw-badge-accent' as string]: '#FFBB22',
+        } as React.CSSProperties}
+        title={isMain ? "메인 장르" : "서브 장르"}
+        aria-label={isMain ? "메인 장르" : "서브 장르"}
+      >
+        <span
+          aria-hidden="true"
+          className="block font-black leading-none"
+          style={{
+            color: textColor,
+            fontWeight: 950,
+            lineHeight: 1,
+            textShadow: 'none',
+            WebkitTextStroke: '0',
+          }}
+        >
+          {orderIndex}
+        </span>
+      </span>
+    );
+  };
+
+  const renderSelectionOrderBadge = (orderIndex: number | null) => {
+    if (!orderIndex) return null;
+    return renderOrderBadge(orderIndex, "right");
+  };
+
+  const renderCategoryOrderBadges = (orderIndexes: number[]) => {
+    const uniqueIndexes = Array.from(new Set(orderIndexes))
+      .filter((orderIndex) => orderIndex === 1 || orderIndex === 2)
+      .sort((a, b) => a - b);
+
+    if (uniqueIndexes.length === 0) return null;
+
+    const hasMainAndSub = uniqueIndexes.includes(1) && uniqueIndexes.includes(2);
+
+    return (
+      <>
+        {uniqueIndexes.includes(2) && renderOrderBadge(2, hasMainAndSub ? "left" : "right")}
+        {uniqueIndexes.includes(1) && renderOrderBadge(1, "right")}
+      </>
+    );
+  };
+
   const isExpandSummaryActive = isExpanded;
 
   useEffect(() => {
@@ -773,6 +887,28 @@ export default function GenreHierarchySelector({
 
   return (
     <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+      <style>{`
+        .soridraw-genre-desc-track {
+          display: inline-flex;
+          min-width: max-content;
+          max-width: none;
+          gap: 2rem;
+          white-space: nowrap;
+          transform: translateX(0);
+        }
+        .soridraw-genre-desc-copy {
+          display: inline-block;
+          white-space: nowrap;
+        }
+        .soridraw-genre-main-card:hover .soridraw-genre-desc-track,
+        .soridraw-genre-main-card:focus-within .soridraw-genre-desc-track {
+          animation: soridrawGenreDescMarquee 8s linear infinite;
+        }
+        @keyframes soridrawGenreDescMarquee {
+          0%, 15% { transform: translateX(0); }
+          85%, 100% { transform: translateX(calc(-50% - 1rem)); }
+        }
+      `}</style>
       <div className="flex-1">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -841,7 +977,7 @@ export default function GenreHierarchySelector({
                   id: "genre-random",
                   label: "Random Selection",
                   labelKo: "랜덤 선택",
-                  description: "세부 장르를 최대 2개까지 무작위로 선택합니다.",
+                  description: "세부 장르를 1개 또는 2개 무작위로 선택합니다.",
                   _ts: Date.now(),
                 })
               }
@@ -897,6 +1033,7 @@ export default function GenreHierarchySelector({
                 committedSubGenre.includes(main.id) ||
                 main.children.some((sub) => committedSubGenre.includes(sub.id)),
               );
+              const groupOrderIndexes = getGroupSelectionOrderIndexes(group);
               return (
                 <button
                   key={group.id}
@@ -914,12 +1051,13 @@ export default function GenreHierarchySelector({
                   }
                   onMouseLeave={() => onHover(null)}
                   className={cn(
-                    "min-h-[58px] rounded-2xl border px-4 py-2.5 text-left transition-all flex items-center justify-center shadow-btn",
+                    "relative min-h-[58px] rounded-2xl border px-4 py-2.5 text-left transition-all flex items-center justify-center shadow-btn",
                     hasSelectedMain
                       ? genreAccent.selected
                       : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                   )}
                 >
+                  {renderCategoryOrderBadges(groupOrderIndexes)}
                   <span className="text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
@@ -994,7 +1132,7 @@ export default function GenreHierarchySelector({
           </div>
         ) : selectedDisplayLabels.length > 0 ? (
           <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.text)}>
-            {selectedDisplayLabels.join(" · ")}
+            {selectionRoleLabels.join(" · ")}
           </p>
         ) : (
           <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.softText)}>
@@ -1096,7 +1234,7 @@ export default function GenreHierarchySelector({
                 <div className="min-w-0 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   {pendingSubIds.length > 0 ? (
                     <span className="text-[var(--soridraw-menu-amber-soft)] truncate">
-                      {pendingSubIds.map(resolveGenreDisplayLabel).join(" · ")}
+                      {pendingSubIds.map((id, index) => `${index === 0 ? '메인' : '서브'} ${resolveGenreDisplayLabel(id)}`).join(" · ")}
                     </span>
                   ) : (
                     <span className="text-[var(--text-secondary)]">미선택</span>
@@ -1114,15 +1252,21 @@ export default function GenreHierarchySelector({
                 {modalStep === "main" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                     {activeGroup.children.map((main) => {
+                      const mainOrderIndexes = getMainSelectionOrderIndexes(main);
+                      const activeModalIds = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre;
                       const isActiveVisual =
                         committedGenre.includes(main.id) ||
-                        committedSubGenre.includes(main.id) ||
-                        main.children.some((sub) => committedSubGenre.includes(sub.id));
+                        activeModalIds.includes(main.id) ||
+                        main.children.some((sub) => activeModalIds.includes(sub.id));
+
+                      const mainDescription = main.descriptionKo ||
+                        main.description ||
+                        DEFAULT_MAIN_DESCRIPTION;
 
                       return (
                         <div
                           key={main.id}
-                          className="group/card relative"
+                          className="group/card soridraw-genre-main-card relative"
                           onMouseEnter={() =>
                             setHoveredModalItem({
                               label: main.labelKo || main.label,
@@ -1137,28 +1281,30 @@ export default function GenreHierarchySelector({
                           <button
                             onClick={() => handleMainClick(main)}
                             className={cn(
-                              "w-full min-h-[82px] rounded-2xl border p-4 md:p-5 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.01] active:scale-[0.99]",
+                              "relative w-full min-h-[82px] rounded-2xl border p-4 md:p-5 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.01] active:scale-[0.99]",
                               isActiveVisual
                                 ? genreAccent.selected
                                 : "bg-btn-bg border-btn-border hover:bg-btn-hover hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] text-[var(--text-primary)] shadow-btn",
                             )}
                             title="세부 장르 열기"
                           >
+                            {renderCategoryOrderBadges(mainOrderIndexes)}
                             <div className="w-full min-w-0">
                               <div className="font-bold text-[20px] md:text-[22px] tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
                               <div
                                 className={cn(
-                                  "text-[14px] md:text-[15px] truncate w-full break-keep mt-1",
+                                  "soridraw-genre-desc-window w-full mt-1 overflow-hidden",
                                   isActiveVisual
                                     ? "text-[rgb(23_23_23/0.75)] font-black"
                                     : "text-[var(--text-secondary)]",
                                 )}
                               >
-                                {main.descriptionKo ||
-                                  main.description ||
-                                  DEFAULT_MAIN_DESCRIPTION}
+                                <span className="soridraw-genre-desc-track text-[14px] md:text-[15px] break-keep">
+                                  <span className="soridraw-genre-desc-copy">{mainDescription}</span>
+                                  <span className="soridraw-genre-desc-copy" aria-hidden="true">{mainDescription}</span>
+                                </span>
                               </div>
                             </div>
                           </button>
@@ -1172,6 +1318,7 @@ export default function GenreHierarchySelector({
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                     {activeMain.children.map((item) => {
                       const isActiveVisual = pendingSubIds.includes(item.id);
+                      const itemOrderIndex = getSelectionOrderIndex(item.id, pendingSubIds);
 
                       return (
                         <button
@@ -1188,13 +1335,14 @@ export default function GenreHierarchySelector({
                           }
                           onMouseLeave={() => setHoveredModalItem(null)}
                           className={cn(
-                            "px-4 py-4 md:px-5 md:py-5 rounded-2xl font-bold text-sm md:text-base transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] md:min-h-[72px] hover:scale-[1.01] active:scale-[0.99] break-keep",
+                            "relative px-4 py-4 md:px-5 md:py-5 rounded-2xl font-bold text-sm md:text-base transition-all duration-200 border text-center flex items-center justify-center min-h-[64px] md:min-h-[72px] hover:scale-[1.01] active:scale-[0.99] break-keep",
                             isActiveVisual && "font-black soridraw-selected-strong",
                             isActiveVisual
                               ? genreAccent.selected
                               : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] shadow-btn",
                           )}
                         >
+                          {renderSelectionOrderBadge(itemOrderIndex)}
                           {item.labelKo || item.label}
                         </button>
                       );

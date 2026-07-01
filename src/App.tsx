@@ -857,9 +857,9 @@ const buildStoryboardSummary = (situation?: SituationConfig | null) => {
   const relation = [situation?.targetA, situation?.targetB].filter(Boolean).join(' vs ');
   const world = String(situation?.description || situation?.summary || '').trim();
   const storyBits = [
-    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyDialogueBalance'), '티키타카', '독백'),
-    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyRealityScale'), '리얼리즘', '드라마틱'),
-    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyPlayfulSincere'), '위트', '진심'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyDialogueBalance'), '대화', '혼잣말'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyRealityScale'), '현실적', '비현실적'),
+    storyboardAxisSummary(getStoryboardSliderValue(situation, 'storyPlayfulSincere'), '장난', '진심'),
   ].filter((item) => item !== '중간');
   const parts = [relation, world ? world.slice(0, 28) : '', ...storyBits.slice(0, 2)]
     .map((item) => String(item || '').trim())
@@ -10247,8 +10247,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <p className="text-sm font-black text-[#FF9B92] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="story" />
-                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["잔잔", "울컥", "폭발"]} accent="story" />
-                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="story" />
+                              <StoryboardSlider label="감정" left="절제" right="표출" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["절제", "중간", "표출"]} accent="story" />
+                              <StoryboardSlider label="화법" left="직설" right="은유" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="story" />
                               <input
                                 value={draftSituation.speakerAExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
@@ -10262,8 +10262,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <p className="text-sm font-black text-[#FFD36A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
                               <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} accent="characterB" statusLabels={["존댓말", "반존대", "반말"]} />
-                              <StoryboardSlider label="감정" left="잔잔" right="폭발" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["잔잔", "울컥", "폭발"]} />
-                              <StoryboardSlider label="화법" left="돌직구" right="변화구" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} accent="characterB" statusLabels={["직설", "혼합", "은유"]} />
+                              <StoryboardSlider label="감정" left="절제" right="표출" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["절제", "중간", "표출"]} />
+                              <StoryboardSlider label="화법" left="직설" right="은유" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} accent="characterB" statusLabels={["직설", "혼합", "은유"]} />
                               <input
                                 value={draftSituation.speakerBExtra || ''}
                                 onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
@@ -10297,9 +10297,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <StoryboardSlider label="대화" left="티키타카" right="독백" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["티키타카", "반반", "독백"]} />
-                            <StoryboardSlider label="전개" left="리얼리즘" right="드라마틱" value={getStoryboardSliderValue(draftSituation, 'storyRealityScale')} onChange={(v) => updateDraftSituationField('storyRealityScale', v)} description="현실과 비현실의 비중을 조절해요." statusLabels={["리얼리즘", "시트콤", "드라마틱"]} />
-                            <StoryboardSlider label="감정" left="위트" right="진심" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["위트", "츤데레", "진심"]} />
+                            <StoryboardSlider label="대화" left="대화" right="혼잣말" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["대화", "반반", "혼잣말"]} />
+                            <StoryboardSlider label="전개" left="현실적" right="비현실적" value={getStoryboardSliderValue(draftSituation, 'storyRealityScale')} onChange={(v) => updateDraftSituationField('storyRealityScale', v)} description="현실과 비현실의 비중을 조절해요." statusLabels={["현실적", "반반", "비현실적"]} />
+                            <StoryboardSlider label="감정" left="장난" right="진심" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["장난", "반반", "진심"]} />
                           </div>
                         </section>
                       </div>
@@ -10545,14 +10545,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     key="action-buttons-collapsed-toggle"
                     type="button"
                     initial={{ opacity: 0, y: 8, scale: 1 }}
-                    animate={{ opacity: 1, y: 0, scale: [1, 1.06, 1, 1.025, 1] }}
+                    animate={{ opacity: 1, y: 0, scale: [1, 1.1, 0.995, 1.045, 1] }}
                     exit={{ opacity: 0, y: 8, scale: 1, transition: { duration: 0 } }}
                     transition={{
                       opacity: smoothActionPanelTransition,
                       y: smoothActionPanelTransition,
                       scale: {
-                        duration: 2.35,
-                        times: [0, 0.38, 0.56, 0.76, 1],
+                        duration: 2.05,
+                        times: [0, 0.32, 0.52, 0.74, 1],
                         ease: [0.33, 1, 0.68, 1],
                         repeat: Infinity,
                         repeatDelay: 0.18,
@@ -10571,12 +10571,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06]"
+                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center">
-                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" />
+                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
                     </span>
-                    <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-white/35" />
+                    <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-[#171717]/70" />
                   </motion.button>
                 ) : (
                   <motion.div

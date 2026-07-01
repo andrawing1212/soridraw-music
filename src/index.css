@@ -395,7 +395,23 @@ body::-webkit-scrollbar-thumb:hover {
   text-shadow: 0 0 0 transparent !important;
 }
 
+.soridraw-selected-strong .soridraw-count-badge-main > span,
+.soridraw-count-badge-main > span {
+  color: var(--soridraw-badge-accent, #FFBB22) !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
 .soridraw-selected-strong .soridraw-count-badge-point {
+  color: #050505 !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+.soridraw-selected-strong .soridraw-count-badge-point > span,
+.soridraw-count-badge-point > span {
   color: #050505 !important;
   font-weight: 950 !important;
   -webkit-text-stroke: 0 !important;

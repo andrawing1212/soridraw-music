@@ -6758,15 +6758,25 @@ function compactSituationRoleCue(
   // The previous rich compression let Gemini re-summarize this line, so the final
   // prompt could lose either the storyboard or the vocal character. Keep this
   // extraction deterministic and only compact the number of cue bits.
+  const roleBitLimit = characterPrompt ? Math.min(2, Math.max(1, maxBits)) : maxBits;
   const roleBits = compactMultiVocalCueBits(
     [roleDirection, fallbackTone].filter(Boolean).join(', '),
-    characterPrompt ? 2 : maxBits,
+    roleBitLimit,
   );
+  const characterBitLimit = characterPrompt
+    ? Math.max(1, maxBits - roleBits.length)
+    : 0;
   const characterBits = characterPrompt
-    ? compactMultiVocalCueBits(characterPrompt, Math.max(4, maxBits))
+    ? compactMultiVocalCueBits(characterPrompt, characterBitLimit)
     : [];
+  // Adaptive compression only happens inside each Vocal A/B/C cue.
+  // Storyboard-only mode keeps richer story delivery.
+  // Storyboard + vocal character uses a smaller per-character budget.
+  // Storyboard + vocal character + Style > Vocal Line uses the tightest
+  // per-character budget so the shared vocal-line cue can coexist without
+  // making [Vocals] too long. Never remove the `as {story role}` anchor.
   const cueBits = Array.from(new Set([...roleBits, ...characterBits]))
-    .slice(0, characterPrompt ? Math.max(maxBits, 6) : maxBits);
+    .slice(0, maxBits);
   const genderText = gender === 'female' ? 'female' : gender === 'male' ? 'male' : '';
   const roleText = /rap|래/i.test(`${fallbackTone} ${member?.roles?.join(' ') || ''}`) ? 'rap' : 'vocal';
   const vocalType = [genderText, roleText].filter(Boolean).join(' ');
@@ -6801,6 +6811,14 @@ function buildStoryboardPrioritySituationVocalSplit(
         ? 'Female'
         : 'Mixed-gender';
 
+  const styleLine = buildMultiVocalExpressionLine(params);
+  const hasVocalLineStyle = Boolean(styleLine);
+  const perCharacterCueBudget = hasCharacter
+    ? hasVocalLineStyle
+      ? 3
+      : 4
+    : 5;
+
   const items = roleEntries.slice(0, 2).map((entry, index) => {
     const matchedIndex = matchedIndexes[index] >= 0 ? matchedIndexes[index] : index;
     const member = params.vocal?.members?.[matchedIndex];
@@ -6812,13 +6830,12 @@ function buildStoryboardPrioritySituationVocalSplit(
       : '';
     const roleText = storyboardRole || memberRole;
     const roleLabel = roleText ? formatVocalRoleLabel(roleText) : '';
-    const cue = compactSituationRoleCue(params, entry.role, index, matchedIndex, hasCharacter ? 7 : 5)
+    const cue = compactSituationRoleCue(params, entry.role, index, matchedIndex, perCharacterCueBudget)
       .replace(/^(?:male|female)\s+(?:rap|vocal)\s+as\s+/i, 'as ')
       .replace(/^(?:rap|vocal)\s+as\s+/i, 'as ');
     return cleanupPromptTail(`${[formatVocalPartLabel(index), genderLabel, roleLabel].filter(Boolean).join(' ')} — ${cue}`);
   }).filter(Boolean);
 
-  const styleLine = buildMultiVocalExpressionLine(params);
   const specialVoiceToneParts = getSelectedSpecialVoiceToneCues(params);
   const specialVoiceCue = specialVoiceToneParts.length
     ? `shared voice-tone color with ${joinPromptPhrase(specialVoiceToneParts, 'and')}`

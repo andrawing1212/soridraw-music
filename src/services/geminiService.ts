@@ -3663,6 +3663,25 @@ function formatVocalPartLabel(index: number): string {
   return `Vocal ${index + 1}`;
 }
 
+
+function hasSituationRolePair(params: GenerateSongParams): boolean {
+  const situation = params.situation;
+  if (!hasSituation(situation)) return false;
+  const targetA = String(situation?.targetA || '').trim();
+  const targetB = String(situation?.targetB || '').trim();
+  if (targetA && targetB) return true;
+  const speakers = Array.isArray(situation?.speakers) ? situation!.speakers! : [];
+  return speakers
+    .slice(0, 2)
+    .filter((speaker: any) => String(speaker?.role || speaker?.id || '').trim())
+    .length >= 2;
+}
+
+function shouldBridgeStoryboardAndVocals(params: GenerateSongParams): boolean {
+  if (!hasSituationRolePair(params)) return false;
+  return hasStoryboardVoiceIdentity(params) || getVocalModeInfo(params.vocal).isMulti || hasAnyVocalCharacterMember(params);
+}
+
 function buildSelectedMultiVocalRolePrompt(params: GenerateSongParams): string {
   const info = getVocalModeInfo(params.vocal);
   if (!info.isMulti) return '';
@@ -3702,7 +3721,7 @@ function buildSelectedMultiVocalRolePrompt(params: GenerateSongParams): string {
 }
 
 function forceSelectedMultiVocalsInPrompt(prompt: string, params: GenerateSongParams): string {
-  if (hasStoryboardVoiceIdentity(params)) {
+  if (shouldBridgeStoryboardAndVocals(params)) {
     const storyboardVocals = buildSituationVocals(params);
     if (!storyboardVocals) return prompt;
     const normalizedPrompt = normalizeProductionPromptSectionBreaks(prompt);
@@ -6761,7 +6780,7 @@ function buildStoryboardPrioritySituationVocalSplit(
   roleEntries: SituationRoleEntry[],
   ownershipRule: string,
 ): string {
-  if (!hasStoryboardVoiceIdentity(params) || roleEntries.length < 2) return '';
+  if (!shouldBridgeStoryboardAndVocals(params) || roleEntries.length < 2) return '';
 
   const matchedIndexes = getMatchedMemberIndexes(params, roleEntries);
   const total = Math.max(2, roleEntries.length);
@@ -13634,7 +13653,7 @@ function buildSituationVocals(params: GenerateSongParams): string {
   // When storyboard voice identity is set, the storyboard owns singer count/gender.
   // The Vocal menu can still add tone/technique details, but it must not collapse
   // two storyboard characters back into a default solo vocal.
-  const storyboardVoicePriority = hasStoryboardVoiceIdentity(params);
+  const storyboardVoicePriority = shouldBridgeStoryboardAndVocals(params);
   if (info.isSolo && !(storyboardVoicePriority && roleEntries.length >= 2)) {
     const perspective =
       targetA && targetB

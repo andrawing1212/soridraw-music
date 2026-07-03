@@ -326,6 +326,7 @@ function withObjectParticle(text: string): string {
 }
 
 const STYLE_SUBGENRE_GROUP_IDS = new Set([
+  "hybrid",
   "fusion-genre",
   "rhythm-bounce",
   "rap-beat-texture",

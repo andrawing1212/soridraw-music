@@ -863,3 +863,43 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     -webkit-backdrop-filter: none !important;
   }
 }
+
+/* SORIDRAW_440_BADGE_CLICK_CLEAR_FIX
+   장르/스타일/사운드 선택 숫자 배지 전용.
+   PC hover 때 숫자를 X로 바꾸고, 모바일에서는 탭으로 해당 버튼 선택만 해제한다. */
+.soridraw-clearable-badge {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.soridraw-clearable-badge .soridraw-badge-x {
+  display: none;
+}
+
+.soridraw-clearable-badge:hover .soridraw-badge-number,
+.soridraw-clearable-badge:focus-visible .soridraw-badge-number {
+  display: none !important;
+}
+
+.soridraw-clearable-badge:hover .soridraw-badge-x,
+.soridraw-clearable-badge:focus-visible .soridraw-badge-x {
+  display: block !important;
+}
+
+/* SORIDRAW_441_BADGE_BLACK_X_VISIBILITY_FIX
+   검정 원 배지 hover/focus 상태에서 X 아이콘이 선택 버튼의 강제 svg 색상에 묻히지 않도록 고정한다. */
+.soridraw-count-badge-main .soridraw-badge-x,
+.soridraw-selected-strong .soridraw-count-badge-main .soridraw-badge-x,
+.soridraw-count-badge-main:hover .soridraw-badge-x,
+.soridraw-count-badge-main:focus-visible .soridraw-badge-x {
+  color: var(--soridraw-badge-accent, #FFBB22) !important;
+  stroke: var(--soridraw-badge-accent, #FFBB22) !important;
+}
+
+.soridraw-count-badge-point .soridraw-badge-x,
+.soridraw-selected-strong .soridraw-count-badge-point .soridraw-badge-x,
+.soridraw-count-badge-point:hover .soridraw-badge-x,
+.soridraw-count-badge-point:focus-visible .soridraw-badge-x {
+  color: #050505 !important;
+  stroke: #050505 !important;
+}

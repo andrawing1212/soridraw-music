@@ -496,9 +496,10 @@ export default function GenreHierarchySelector({
     return directText ? Array.from(new Set([directText, ...labels])) : labels;
   }, [committedGenre, committedSubGenre, groups, directInput?.selectedText]);
 
-  const selectionRoleLabels = selectedDisplayLabels.map((label, index) =>
-    index === 0 ? `메인 ${label}` : `서브 ${label}`
-  );
+  const selectionRoleEntries = selectedDisplayLabels.map((label, index) => ({
+    role: index === 0 ? '메인' : '서브',
+    label,
+  }));
 
   const getSelectionOrderIndex = (id: string, ids = committedSubGenre) => {
     const index = normalizeSelectionList(ids).indexOf(id);
@@ -524,28 +525,75 @@ export default function GenreHierarchySelector({
   };
 
   const getMainSelectionOrderIndexes = (main: MainGenreItem, ids = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre) => {
+    return getMainSelectionOrderEntries(main, ids).map((entry) => entry.orderIndex);
+  };
+
+  const getMainSelectionOrderEntries = (main: MainGenreItem, ids = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre) => {
     const normalizedIds = normalizeSelectionList(ids);
     return normalizedIds
       .map((id, index) => {
         const belongsToMain = id === main.id || main.children.some((sub) => sub.id === id);
-        return belongsToMain ? index + 1 : null;
+        return belongsToMain ? { id, orderIndex: index + 1 } : null;
       })
-      .filter((index): index is number => Boolean(index));
+      .filter((entry): entry is { id: string; orderIndex: number } => Boolean(entry));
   };
 
   const getGroupSelectionOrderIndexes = (group: GroupItem, ids = committedSubGenre) => {
+    return getGroupSelectionOrderEntries(group, ids).map((entry) => entry.orderIndex);
+  };
+
+  const getGroupSelectionOrderEntries = (group: GroupItem, ids = committedSubGenre) => {
     const normalizedIds = normalizeSelectionList(ids);
     return normalizedIds
       .map((id, index) => {
         const belongsToGroup = group.children.some((main) =>
           id === main.id || main.children.some((sub) => sub.id === id),
         );
-        return belongsToGroup ? index + 1 : null;
+        return belongsToGroup ? { id, orderIndex: index + 1 } : null;
       })
-      .filter((index): index is number => Boolean(index));
+      .filter((entry): entry is { id: string; orderIndex: number } => Boolean(entry));
   };
 
-  const renderOrderBadge = (orderIndex: number, side: "left" | "right") => {
+  const clearCommittedGenreIds = (ids: string[], event: React.MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const removeSet = new Set(ids);
+    if (removeSet.size === 0) return;
+
+    const nextSubGenre = normalizeSelectionList(committedSubGenre).filter((id) => !removeSet.has(id));
+    if (onCommitSelectionList) {
+      onCommitSelectionList(nextSubGenre);
+    } else {
+      ids.forEach((id) => {
+        if (committedSubGenre.includes(id)) onSelectSubGenre(id);
+      });
+    }
+
+    ids.forEach((id) => {
+      if (committedGenre.includes(id)) onSelectGenre(id);
+    });
+  };
+
+  const clearPendingGenreIds = (ids: string[], event: React.MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const removeSet = new Set(ids);
+    if (removeSet.size === 0) return;
+
+    setPendingSubIds((prev) => {
+      const next = normalizeSelectionList(prev).filter((id) => !removeSet.has(id));
+      updateModalDirty(next);
+      return next;
+    });
+  };
+
+  const renderOrderBadge = (
+    orderIndex: number,
+    side: "left" | "right",
+    onClear?: (event: React.MouseEvent<HTMLElement>) => void
+  ) => {
     const isMain = orderIndex === 1;
     const backgroundColor = isMain ? '#050505' : '#FFBB22';
     const textColor = isMain ? '#FFBB22' : '#050505';
@@ -554,9 +602,22 @@ export default function GenreHierarchySelector({
     return (
       <span
         key={`${side}-${orderIndex}`}
+        role={onClear ? "button" : undefined}
+        tabIndex={onClear ? 0 : undefined}
+        onClick={onClear}
+        onKeyDown={(event) => {
+          if (!onClear) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            onClear(event as unknown as React.MouseEvent<HTMLElement>);
+          }
+        }}
         className={cn(
           badgeClass,
-          "absolute top-1.5 z-20 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border px-1.5 text-[11px] font-black leading-none shadow-[0_3px_9px_rgba(0,0,0,0.32)] pointer-events-none select-none",
+          onClear && "soridraw-clearable-badge cursor-pointer pointer-events-auto",
+          !onClear && "pointer-events-none",
+          "absolute top-1.5 z-20 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border px-1.5 text-[11px] font-black leading-none shadow-[0_3px_9px_rgba(0,0,0,0.32)] select-none",
           side === "right" ? "right-1.5" : "left-1.5"
         )}
         style={{
@@ -567,12 +628,12 @@ export default function GenreHierarchySelector({
           lineHeight: 1,
           ['--soridraw-badge-accent' as string]: '#FFBB22',
         } as React.CSSProperties}
-        title={isMain ? "메인 장르" : "서브 장르"}
-        aria-label={isMain ? "메인 장르" : "서브 장르"}
+        title={onClear ? "이 버튼의 선택 해제" : isMain ? "메인 장르" : "서브 장르"}
+        aria-label={onClear ? "이 버튼의 선택 해제" : isMain ? "메인 장르" : "서브 장르"}
       >
         <span
           aria-hidden="true"
-          className="block font-black leading-none"
+          className="soridraw-badge-number block font-black leading-none"
           style={{
             color: textColor,
             fontWeight: 950,
@@ -583,17 +644,25 @@ export default function GenreHierarchySelector({
         >
           {orderIndex}
         </span>
+        {onClear && (
+          <X
+            aria-hidden="true"
+            className="soridraw-badge-x hidden h-3.5 w-3.5"
+            strokeWidth={3}
+            style={{ color: textColor }}
+          />
+        )}
       </span>
     );
   };
 
-  const renderSelectionOrderBadge = (orderIndex: number | null) => {
+  const renderSelectionOrderBadge = (orderIndex: number | null, onClear?: (event: React.MouseEvent<HTMLElement>) => void) => {
     if (!orderIndex) return null;
-    return renderOrderBadge(orderIndex, "right");
+    return renderOrderBadge(orderIndex, "right", onClear);
   };
 
-  const renderCategoryOrderBadges = (orderIndexes: number[]) => {
-    const uniqueIndexes = Array.from(new Set(orderIndexes))
+  const renderCategoryOrderBadges = (entries: Array<{ id: string; orderIndex: number }>, onClear?: (event: React.MouseEvent<HTMLElement>) => void) => {
+    const uniqueIndexes = Array.from(new Set(entries.map((entry) => entry.orderIndex)))
       .filter((orderIndex) => orderIndex === 1 || orderIndex === 2)
       .sort((a, b) => a - b);
 
@@ -603,8 +672,8 @@ export default function GenreHierarchySelector({
 
     return (
       <>
-        {uniqueIndexes.includes(2) && renderOrderBadge(2, hasMainAndSub ? "left" : "right")}
-        {uniqueIndexes.includes(1) && renderOrderBadge(1, "right")}
+        {uniqueIndexes.includes(2) && renderOrderBadge(2, hasMainAndSub ? "left" : "right", onClear)}
+        {uniqueIndexes.includes(1) && renderOrderBadge(1, "right", onClear)}
       </>
     );
   };
@@ -1033,7 +1102,8 @@ export default function GenreHierarchySelector({
                 committedSubGenre.includes(main.id) ||
                 main.children.some((sub) => committedSubGenre.includes(sub.id)),
               );
-              const groupOrderIndexes = getGroupSelectionOrderIndexes(group);
+              const groupOrderEntries = getGroupSelectionOrderEntries(group);
+              const groupSelectedIds = groupOrderEntries.map((entry) => entry.id);
               return (
                 <button
                   key={group.id}
@@ -1057,7 +1127,7 @@ export default function GenreHierarchySelector({
                       : "bg-btn-bg border-[var(--keyword-button-border)] text-[var(--text-primary)] hover:bg-btn-hover",
                   )}
                 >
-                  {renderCategoryOrderBadges(groupOrderIndexes)}
+                  {renderCategoryOrderBadges(groupOrderEntries, (event) => clearCommittedGenreIds(groupSelectedIds, event))}
                   <span className="text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
@@ -1131,9 +1201,21 @@ export default function GenreHierarchySelector({
             </button>
           </div>
         ) : selectedDisplayLabels.length > 0 ? (
-          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.text)}>
-            {selectionRoleLabels.join(" · ")}
-          </p>
+          <div className={cn("soridraw-selected-summary flex min-w-0 w-full items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap text-[15px] font-black leading-tight", directInput ? "pr-10" : "")}>
+            {selectionRoleEntries.map((item, index) => (
+              <React.Fragment key={`${item.role}-${item.label}-${index}`}>
+                {index > 0 && (
+                  <span className="shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
+                )}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
+                    {item.role}
+                  </span>
+                  <span className={cn("min-w-0 truncate", genreAccent.text)}>{item.label}</span>
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
         ) : (
           <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.softText)}>
             장르를 선택하세요.
@@ -1233,9 +1315,25 @@ export default function GenreHierarchySelector({
                 </span>
                 <div className="min-w-0 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
                   {pendingSubIds.length > 0 ? (
-                    <span className="text-[var(--soridraw-menu-amber-soft)] truncate">
-                      {pendingSubIds.map((id, index) => `${index === 0 ? '메인' : '서브'} ${resolveGenreDisplayLabel(id)}`).join(" · ")}
-                    </span>
+                    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                      {pendingSubIds.map((id, index) => {
+                        const role = index === 0 ? '메인' : '서브';
+                        const label = resolveGenreDisplayLabel(id);
+                        return (
+                          <React.Fragment key={`${role}-${id}-${index}`}>
+                            {index > 0 && (
+                              <span className="shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
+                            )}
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
+                                {role}
+                              </span>
+                              <span className="min-w-0 truncate text-[var(--soridraw-menu-amber-soft)]">{label}</span>
+                            </span>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <span className="text-[var(--text-secondary)]">미선택</span>
                   )}
@@ -1252,8 +1350,9 @@ export default function GenreHierarchySelector({
                 {modalStep === "main" && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                     {activeGroup.children.map((main) => {
-                      const mainOrderIndexes = getMainSelectionOrderIndexes(main);
                       const activeModalIds = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre;
+                      const mainOrderEntries = getMainSelectionOrderEntries(main, activeModalIds);
+                      const mainSelectedIds = mainOrderEntries.map((entry) => entry.id);
                       const isActiveVisual =
                         committedGenre.includes(main.id) ||
                         activeModalIds.includes(main.id) ||
@@ -1288,7 +1387,7 @@ export default function GenreHierarchySelector({
                             )}
                             title="세부 장르 열기"
                           >
-                            {renderCategoryOrderBadges(mainOrderIndexes)}
+                            {renderCategoryOrderBadges(mainOrderEntries, (event) => clearPendingGenreIds(mainSelectedIds, event))}
                             <div className="w-full min-w-0">
                               <div className="font-bold text-[20px] md:text-[22px] tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
@@ -1342,7 +1441,7 @@ export default function GenreHierarchySelector({
                               : "bg-btn-bg text-[var(--text-primary)] border-btn-border hover:bg-btn-hover hover:border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] shadow-btn",
                           )}
                         >
-                          {renderSelectionOrderBadge(itemOrderIndex)}
+                          {renderSelectionOrderBadge(itemOrderIndex, (event) => clearPendingGenreIds([item.id], event))}
                           {item.labelKo || item.label}
                         </button>
                       );

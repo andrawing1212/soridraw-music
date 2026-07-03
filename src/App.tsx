@@ -802,9 +802,11 @@ const snapStoryboardSliderValue = (value: number) => STORYBOARD_SLIDER_STOPS.red
 ), STORYBOARD_SLIDER_DEFAULT);
 const getStoryboardSliderStage = (value: number) => STORYBOARD_SLIDER_STOPS.findIndex((stop) => stop === snapStoryboardSliderValue(value));
 const STORYBOARD_SLIDER_FIELDS = [
+  'characterAAge',
   'characterAPoliteness',
   'characterAIntensity',
   'characterADelivery',
+  'characterBAge',
   'characterBPoliteness',
   'characterBIntensity',
   'characterBDelivery',
@@ -813,7 +815,36 @@ const STORYBOARD_SLIDER_FIELDS = [
   'storyPlayfulSincere',
 ] as const;
 
+const STORYBOARD_GENDER_FIELDS = [
+  'characterAGender',
+  'characterBGender',
+] as const;
+
+const STORYBOARD_VOCAL_ROLE_FIELDS = [
+  'characterAVocalRole',
+  'characterBVocalRole',
+] as const;
+
 type StoryboardSliderField = typeof STORYBOARD_SLIDER_FIELDS[number];
+type StoryboardGenderField = typeof STORYBOARD_GENDER_FIELDS[number];
+type StoryboardVocalRoleField = typeof STORYBOARD_VOCAL_ROLE_FIELDS[number];
+type StoryboardGenderValue = 'male' | 'female';
+type StoryboardVocalRoleValue = 'auto' | 'main' | 'lead' | 'sub' | 'rapper';
+
+const normalizeStoryboardGenderValue = (value: unknown): StoryboardGenderValue | undefined => {
+  if (value === 'male' || value === 'female') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const snapped = snapStoryboardSliderValue(value);
+    if (snapped < STORYBOARD_SLIDER_DEFAULT) return 'female';
+    if (snapped > STORYBOARD_SLIDER_DEFAULT) return 'male';
+  }
+  return undefined;
+};
+
+const normalizeStoryboardVocalRoleValue = (value: unknown): StoryboardVocalRoleValue => {
+  if (value === 'main' || value === 'lead' || value === 'sub' || value === 'rapper') return value;
+  return 'auto';
+};
 
 const sanitizeStoryboardSituation = (value?: SituationConfig | null): SituationConfig => {
   const base = { ...(value || {}) } as SituationConfig & Record<string, any>;
@@ -821,6 +852,22 @@ const sanitizeStoryboardSituation = (value?: SituationConfig | null): SituationC
     const current = base[key];
     if (typeof current === 'string' && !current.trim()) delete base[key];
     if (Array.isArray(current) && current.length === 0) delete base[key];
+  });
+  STORYBOARD_GENDER_FIELDS.forEach((field) => {
+    const normalized = normalizeStoryboardGenderValue(base[field]);
+    if (normalized) {
+      base[field] = normalized;
+    } else {
+      delete base[field];
+    }
+  });
+  STORYBOARD_VOCAL_ROLE_FIELDS.forEach((field) => {
+    const normalized = normalizeStoryboardVocalRoleValue(base[field]);
+    if (normalized === 'auto') {
+      delete base[field];
+    } else {
+      base[field] = normalized;
+    }
   });
   STORYBOARD_SLIDER_FIELDS.forEach((field) => {
     const raw = base[field];
@@ -839,6 +886,14 @@ const serializeStoryboardSituation = (value?: SituationConfig | null) => JSON.st
 const getStoryboardSliderValue = (value: SituationConfig | null | undefined, field: StoryboardSliderField) => {
   const raw = (value as any)?.[field];
   return typeof raw === 'number' ? snapStoryboardSliderValue(raw) : STORYBOARD_SLIDER_DEFAULT;
+};
+
+const getStoryboardGenderValue = (value: SituationConfig | null | undefined, field: StoryboardGenderField) => {
+  return normalizeStoryboardGenderValue((value as any)?.[field]);
+};
+
+const getStoryboardVocalRoleValue = (value: SituationConfig | null | undefined, field: StoryboardVocalRoleField) => {
+  return normalizeStoryboardVocalRoleValue((value as any)?.[field]);
 };
 
 const storyboardAxisSummary = (value: number, left: string, right: string) => {
@@ -1629,6 +1684,129 @@ const StoryboardSlider = ({ label, left, right, value, onChange, description, st
   );
 };
 
+
+type StoryboardGenderButtonsProps = {
+  label: string;
+  value?: StoryboardGenderValue;
+  onChange: (value?: StoryboardGenderValue) => void;
+  accent?: 'story' | 'characterB';
+};
+
+const StoryboardGenderButtons = ({ label, value, onChange, accent = 'story' }: StoryboardGenderButtonsProps) => {
+  const accentStyle = accent === 'characterB'
+    ? {
+        text: 'text-[#FFD36A]',
+        dot: 'bg-[#FFBB22] shadow-[0_0_8px_rgba(255,187,34,0.36)]',
+        badge: 'border-black/20 text-[#FFD36A]',
+        selected: 'bg-[#FFBB22]/82 border-[#FFBB22]/70 text-[#171717] shadow-[0_8px_22px_rgba(255,187,34,0.18)]',
+      }
+    : {
+        text: 'text-[#FF9B92]',
+        dot: 'bg-[#E45F59] shadow-[0_0_8px_rgba(228,95,89,0.36)]',
+        badge: 'border-black/20 text-[#FF9B92]',
+        selected: 'bg-[#E45F59]/82 border-[#E45F59]/70 text-[#171717] shadow-[0_8px_22px_rgba(228,95,89,0.18)]',
+      };
+  const status = value === 'male' ? '남자' : value === 'female' ? '여자' : '기본값';
+  const options: Array<{ value: StoryboardGenderValue; label: string }> = [
+    { value: 'male', label: '남자' },
+    { value: 'female', label: '여자' },
+  ];
+  return (
+    <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
+      <div className="flex items-center justify-between gap-3">
+        <p className={cn("inline-flex items-center gap-2 text-base md:text-[17px] font-black", accentStyle.text)}>
+          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", accentStyle.dot)} />
+          <span>{label}</span>
+        </p>
+        <span className={cn("rounded-full border bg-transparent px-3 py-1 text-xs font-black shrink-0", accentStyle.badge)}>{status}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(selected ? undefined : option.value)}
+              className={cn(
+                "h-11 rounded-xl border text-sm font-black transition-all",
+                selected
+                  ? accentStyle.selected
+                  : "bg-[var(--input-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
+type StoryboardVocalRoleButtonsProps = {
+  label: string;
+  value: StoryboardVocalRoleValue;
+  onChange: (value: StoryboardVocalRoleValue) => void;
+  accent?: 'story' | 'characterB';
+};
+
+const StoryboardVocalRoleButtons = ({ label, value, onChange, accent = 'story' }: StoryboardVocalRoleButtonsProps) => {
+  const accentStyle = accent === 'characterB'
+    ? {
+        text: 'text-[#FFD36A]',
+        dot: 'bg-[#FFBB22] shadow-[0_0_8px_rgba(255,187,34,0.36)]',
+        badge: 'border-black/20 text-[#FFD36A]',
+        selected: 'bg-[#FFBB22]/82 border-[#FFBB22]/70 text-[#171717] shadow-[0_8px_22px_rgba(255,187,34,0.18)]',
+      }
+    : {
+        text: 'text-[#FF9B92]',
+        dot: 'bg-[#E45F59] shadow-[0_0_8px_rgba(228,95,89,0.36)]',
+        badge: 'border-black/20 text-[#FF9B92]',
+        selected: 'bg-[#E45F59]/82 border-[#E45F59]/70 text-[#171717] shadow-[0_8px_22px_rgba(228,95,89,0.18)]',
+      };
+  const options: Array<{ value: StoryboardVocalRoleValue; label: string }> = [
+    { value: 'auto', label: '자동' },
+    { value: 'main', label: '메인' },
+    { value: 'lead', label: '리드' },
+    { value: 'sub', label: '서브' },
+    { value: 'rapper', label: '래퍼' },
+  ];
+  const status = options.find((option) => option.value === value)?.label || '자동';
+  return (
+    <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
+      <div className="flex items-center justify-between gap-3">
+        <p className={cn("inline-flex items-center gap-2 text-base md:text-[17px] font-black", accentStyle.text)}>
+          <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", accentStyle.dot)} />
+          <span>{label}</span>
+        </p>
+        <span className={cn("rounded-full border bg-transparent px-3 py-1 text-xs font-black shrink-0", accentStyle.badge)}>{status}</span>
+      </div>
+      <div className="grid grid-cols-5 gap-1.5">
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "h-10 rounded-xl border text-xs font-black transition-all md:text-[13px]",
+                selected
+                  ? accentStyle.selected
+                  : "bg-[var(--input-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+              )}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const hasActiveSituation = (situation?: SituationConfig | null) => {
   if (!situation) return false;
   return Boolean(
@@ -1647,6 +1825,8 @@ const hasActiveSituation = (situation?: SituationConfig | null) => {
     situation.speakerBAttitude ||
     situation.speakerAExtra ||
     situation.speakerBExtra ||
+    STORYBOARD_GENDER_FIELDS.some((field) => Boolean(normalizeStoryboardGenderValue((situation as any)[field]))) ||
+    STORYBOARD_VOCAL_ROLE_FIELDS.some((field) => normalizeStoryboardVocalRoleValue((situation as any)[field]) !== 'auto') ||
     STORYBOARD_SLIDER_FIELDS.some((field) => {
       const raw = (situation as any)[field];
       return raw !== undefined && raw !== null && raw !== '' && Number(raw) !== STORYBOARD_SLIDER_DEFAULT;
@@ -2243,6 +2423,26 @@ function isSeparatorKeywordId(value: unknown): boolean {
 
 function isSelectableKeywordItem(item: any): boolean {
   return Boolean(item && item.kind !== 'separator' && !isSeparatorKeywordId(item.id));
+}
+
+const MAX_RANDOM_HYBRID_STYLES = 2;
+const HYBRID_STYLE_ID_SET = new Set(
+  ((STYLE_CYCLES.find((cycle: any) => cycle.id === 'hybrid')?.variants ?? []) as any[])
+    .filter(isSelectableKeywordItem)
+    .map((item: any) => String(item.id))
+);
+
+function isHybridStyleId(id: string): boolean {
+  return HYBRID_STYLE_ID_SET.has(String(id));
+}
+
+function limitRandomHybridStyleIds(ids: string[] = [], maxCount: number = MAX_RANDOM_HYBRID_STYLES): string[] {
+  let hybridCount = 0;
+  return ids.filter((id) => {
+    if (!isHybridStyleId(id)) return true;
+    hybridCount += 1;
+    return hybridCount <= maxCount;
+  });
 }
 
 function filterSelectableIds(values: string[] = []) {
@@ -6021,7 +6221,9 @@ const toggleCycleVariantSelection = (
       pickedIds = picked.map(p => p.id);
     }
     
-    const final = [...result, ...pickedIds];
+    const final = category === 'style'
+      ? limitRandomHybridStyleIds([...result, ...pickedIds])
+      : [...result, ...pickedIds];
     
     if (category === 'genre') {
       setSelectedGenres([]);
@@ -6557,7 +6759,7 @@ const toggleCycleVariantSelection = (
     storyboardModalHistoryPushedRef.current = false;
   };
 
-  const updateDraftSituationField = (field: keyof SituationConfig | StoryboardSliderField, value: string | boolean | string[] | number) => {
+  const updateDraftSituationField = (field: keyof SituationConfig | StoryboardSliderField | StoryboardVocalRoleField, value: string | boolean | string[] | number) => {
     setDraftSituation(prev => {
       const next = { ...prev, [field]: value } as SituationConfig;
       return { ...next, enabled: hasActiveSituation({ ...next, enabled: false }) };
@@ -6897,7 +7099,9 @@ const toggleCycleVariantSelection = (
 
     // 2. Other categories with their limits
     // Limits: Style 3, Sound 3, Mood 5, Theme 4
-    let s = isMenuLocked('style') ? selectedStyles : getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3);
+    let s = isMenuLocked('style')
+      ? selectedStyles
+      : limitRandomHybridStyleIds(getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3));
     let snd = isMenuLocked('sound') ? selectedInstrumentSounds : getRandomForCategory(INSTRUMENT_SOUNDS.filter(isSelectableKeywordItem), pinnedInstrumentSounds, 3);
     let m = isMenuLocked('mood') ? selectedMoods : getRandomForCategory(MOODS, [], 5);
     let t = isMenuLocked('theme') ? selectedThemes : getRandomForCategory(THEMES, [], 4);
@@ -7178,11 +7382,18 @@ const saveRecentSong = async (newSong: any) => {
         const count = Math.floor(Math.random() * 11) + 5; // 5-15
         const picked = allItems.sort(() => 0.5 - Math.random()).slice(0, count);
 
+        let randomHybridStyleCount = 0;
         picked.forEach(p => {
           if (p.cat === 'genre') finalGenres.push(p.id);
           if (p.cat === 'mood') finalMoods.push(p.id);
           if (p.cat === 'theme') finalThemes.push(p.id);
-          if (p.cat === 'style') finalStyles.push(p.id);
+          if (p.cat === 'style') {
+            if (isHybridStyleId(p.id)) {
+              randomHybridStyleCount += 1;
+              if (randomHybridStyleCount > MAX_RANDOM_HYBRID_STYLES) return;
+            }
+            finalStyles.push(p.id);
+          }
           if (p.cat === 'sound') finalInstrumentSounds.push(p.id);
           randomKeywords.push(p.label);
         });
@@ -9909,7 +10120,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             title="Style" 
             titleKo="스타일"
             description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
-            descriptionKo="하이브리드 장르를 위해 선택하세요. 선택한 스타일에 따라 곡의 전개와 리듬감이 달라지며, 굳이 선택 안하고 기본 장르만으로도 좋은 곡을 만들수 있습니다 "
+            descriptionKo="선택한 장르 위에 하이브리드, 시대감, 보컬 표현, 공간감, 후렴, 전환, 리듬 같은 개성을 더합니다."
             cycles={STYLE_CYCLES}
             selected={selectedStyles}
             onCycleToggle={(cycleId, variantId) => {
@@ -10218,7 +10429,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
+                            <div className="space-y-3.5">
                               <label className="block text-xs font-black text-[#FF9B92] mb-2">캐릭터 A</label>
                               <input
                                 value={draftSituation.targetA || ''}
@@ -10226,8 +10437,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 placeholder="예: 저승사자, 엄마, 상사"
                                 className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                               />
+                              <StoryboardVocalRoleButtons label="노래 역할" value={getStoryboardVocalRoleValue(draftSituation, 'characterAVocalRole')} onChange={(v) => updateDraftSituationField('characterAVocalRole', v === 'auto' ? '' : v)} accent="story" />
+                              <StoryboardGenderButtons label="성별" value={getStoryboardGenderValue(draftSituation, 'characterAGender')} onChange={(v) => updateDraftSituationField('characterAGender', v || '')} accent="story" />
+                              <StoryboardSlider label="연령" left="어림" right="연륜" value={getStoryboardSliderValue(draftSituation, 'characterAAge')} onChange={(v) => updateDraftSituationField('characterAAge', v)} statusLabels={["어림", "중간", "연륜"]} accent="story" />
                             </div>
-                            <div>
+                            <div className="space-y-3.5">
                               <label className="block text-xs font-black text-[#FFD36A] mb-2">캐릭터 B</label>
                               <input
                                 value={draftSituation.targetB || ''}
@@ -10235,6 +10449,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 placeholder="예: 귀신, 아들, 직원"
                                 className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
                               />
+                              <StoryboardVocalRoleButtons label="노래 역할" value={getStoryboardVocalRoleValue(draftSituation, 'characterBVocalRole')} onChange={(v) => updateDraftSituationField('characterBVocalRole', v === 'auto' ? '' : v)} accent="characterB" />
+                              <StoryboardGenderButtons label="성별" value={getStoryboardGenderValue(draftSituation, 'characterBGender')} onChange={(v) => updateDraftSituationField('characterBGender', v || '')} accent="characterB" />
+                              <StoryboardSlider label="연령" left="어림" right="연륜" value={getStoryboardSliderValue(draftSituation, 'characterBAge')} onChange={(v) => updateDraftSituationField('characterBAge', v)} accent="characterB" statusLabels={["어림", "중간", "연륜"]} />
                             </div>
                           </div>
                         </section>
@@ -10684,8 +10901,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#cd8c31]/30 shadow-[0_-1px_0_rgba(205,140,49,0.16)] transition-all duration-300 relative",
-                isGenerating && "opacity-40 pointer-events-none blur-[1px]"
+                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#cd8c31]/30 shadow-[0_-1px_0_rgba(205,140,49,0.16)] transition-all duration-300 relative"
               )}
             >
 
@@ -12960,6 +13176,8 @@ interface CycleSectionProps {
     id: string; 
     title: string; 
     titleKo?: string;
+    description?: string;
+    descriptionKo?: string;
     variants: readonly { 
       id: string; 
       kind?: 'separator';
@@ -13210,6 +13428,14 @@ function CycleSection({
               const selectedCountInCycle = selectedVariants.length;
               const pointSelectedCountInCycle = pointSelectedVariants.length;
               const hasHighlightedSelectedVariant = selectedVariants.some((variant) => highlightedVariantIdSet.has(variant.id));
+              const clearCycleSelections = (event: React.MouseEvent<HTMLElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectedVariants.forEach((variant) => onCycleToggle(cycle.id, variant.id));
+                if (onOtherModeVariantToggle) {
+                  pointSelectedVariants.forEach((variant) => onOtherModeVariantToggle(variant.id));
+                }
+              };
 
               const baseVariant = cycle.variants.find((variant) => variant.kind !== 'separator') ?? cycle.variants[0];
               const hoverItem: CategoryItem = activeVariant
@@ -13253,20 +13479,44 @@ function CycleSection({
                   </span>
                   {selectedCountInCycle > 0 && (
                     <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={clearCycleSelections}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          clearCycleSelections(event as unknown as React.MouseEvent<HTMLElement>);
+                        }
+                      }}
                       className={cn(
-                        "soridraw-count-badge-main absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none",
+                        "soridraw-clearable-badge soridraw-count-badge-main absolute top-1.5 right-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none cursor-pointer pointer-events-auto",
                         hasHighlightedSelectedVariant
                           ? "bg-[#050505]/92 border-black/55"
                           : sectionAccent.badge
                       )}
                       style={{ '--soridraw-badge-accent': hasHighlightedSelectedVariant ? '#38BDF8' : sectionAccent.badgeAccent } as React.CSSProperties}
+                      title="이 버튼의 선택 해제"
+                      aria-label="이 버튼의 선택 해제"
                     >
-                      {selectedCountInCycle}
+                      <span className="soridraw-badge-number">{selectedCountInCycle}</span>
+                      <X aria-hidden="true" className="soridraw-badge-x hidden h-3.5 w-3.5" strokeWidth={3} />
                     </span>
                   )}
                   {pointSelectedCountInCycle > 0 && (
-                    <span className={cn("soridraw-count-badge-point absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none pointer-events-none", sectionAccent.pointBadge)}>
-                      {pointSelectedCountInCycle}
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={clearCycleSelections}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          clearCycleSelections(event as unknown as React.MouseEvent<HTMLElement>);
+                        }
+                      }}
+                      className={cn("soridraw-clearable-badge soridraw-count-badge-point absolute top-1.5 left-1.5 z-30 min-w-[20px] h-[20px] px-1 rounded-full border shadow-[0_2px_8px_rgba(0,0,0,0.22)] flex items-center justify-center text-[10.5px] font-black leading-none cursor-pointer pointer-events-auto", sectionAccent.pointBadge)}
+                      title="이 버튼의 선택 해제"
+                      aria-label="이 버튼의 선택 해제"
+                    >
+                      <span className="soridraw-badge-number">{pointSelectedCountInCycle}</span>
+                      <X aria-hidden="true" className="soridraw-badge-x hidden h-3.5 w-3.5" strokeWidth={3} />
                     </span>
                   )}
                 </button>
@@ -13409,6 +13659,8 @@ function CycleKeywordPopup({
     id: string;
     title: string;
     titleKo?: string;
+    description?: string;
+    descriptionKo?: string;
     variants: readonly {
       id: string;
       kind?: 'separator';
@@ -13567,6 +13819,8 @@ function CycleKeywordPopup({
   const selectedOutsideCycleCount = selected.filter((id) => !cycleVariantIds.includes(id)).length;
   const localTotalSelectedCount = selectedOutsideCycleCount + localSelected.length;
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
+  const cycleDescriptionText = cycle.descriptionKo || cycle.description || '';
+  const selectedCountText = localSelected.length > 0 ? ` (${localSelected.length})` : '';
 
   useEffect(() => {
     onHover(null);
@@ -13608,10 +13862,9 @@ function CycleKeywordPopup({
             <div className="min-w-0">
               <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", sectionAccent.text)}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
-              <p className="text-xs text-[var(--text-secondary)] mt-1">
-                {Number.isFinite(maxSelectableCount) ? `최대 ${maxSelectableCount}개까지 선택 가능 · 현재 ${localTotalSelectedCount}/${maxSelectableCount}` : '필요한 키워드를 선택하세요'}
-                {localSelected.length > 0 ? ` (${localSelected.length})` : ''}
-              </p>
+              <div className="text-xs text-[var(--text-secondary)] mt-1 leading-snug">
+                {cycleDescriptionText && <p>{cycleDescriptionText}{selectedCountText}</p>}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {(localSelected.length > 0 || localOtherSelected.length > 0) && (

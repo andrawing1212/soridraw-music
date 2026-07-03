@@ -36,6 +36,8 @@ export interface SoundStyleCycle {
   id: string;
   title: string;
   titleKo?: string;
+  description?: string;
+  descriptionKo?: string;
   variants: SoundStyleItem[];
 }
 
@@ -43,6 +45,8 @@ export interface InstrumentSoundCycle {
   id: string;
   title: string;
   titleKo?: string;
+  description?: string;
+  descriptionKo?: string;
   variants: InstrumentSoundItem[];
 }
 
@@ -197,9 +201,15 @@ export interface SituationConfig {
   speakerBExtra?: string;
   attitudeA?: string;
   attitudeB?: string;
+  characterAGender?: 'male' | 'female' | number;
+  characterAVocalRole?: 'auto' | 'main' | 'lead' | 'sub' | 'rapper';
+  characterAAge?: number;
   characterAPoliteness?: number;
   characterAIntensity?: number;
   characterADelivery?: number;
+  characterBGender?: 'male' | 'female' | number;
+  characterBVocalRole?: 'auto' | 'main' | 'lead' | 'sub' | 'rapper';
+  characterBAge?: number;
   characterBPoliteness?: number;
   characterBIntensity?: number;
   characterBDelivery?: number;

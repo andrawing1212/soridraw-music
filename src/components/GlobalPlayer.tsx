@@ -138,7 +138,7 @@ function normalizeLyricLines(lyrics: string): string[] {
 
 function isLyricSectionLine(line: string): boolean {
   // Section labels must not be treated as singable lyric lines.
-  // Supports [Verse 1], [Chorus / Drop], (Verse 1), and minor spacing/case variations.
+  // Supports [Verse 1], [Chorus], (Verse 1), and minor spacing/case variations.
   const normalized = line.trim().toLowerCase();
   if (/^[\[(]\s*(intro|verse|pre[-\s]?chorus|chorus|hook|drop|bridge|rap|rap verse|breakdown|instrumental|solo|final chorus|outro)[^\])]*[\])]$/.test(normalized)) {
     return true;

@@ -52,7 +52,7 @@ export interface InstrumentSoundCycle {
 
 export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
-export type SongStructure = '1' | '2' | '3' | 'custom';
+export type SongStructure = '1' | '2' | '3' | 'custom'; // 1=자동, 2=기본랜덤, 3=변칙랜덤, custom=직접선택
 
 export type VocalMode = 'solo' | 'duo' | 'group'; // 'duo' is kept for legacy saved data; UI now uses solo/group.
 
@@ -231,7 +231,7 @@ export interface TempoConfig {
 
 export type CustomSectionType = 
   | 'Intro' | 'Verse 1' | 'Verse 2' | 'Pre-Chorus' | 'Chorus' | 'Hook' | 'Drop' 
-  | 'Bridge' | 'Breakdown' | 'Instrumental' | 'Solo' | 'Rap Verse' | 'Final Chorus' | 'Outro'
+  | 'Bridge' | 'Breakdown' | 'Instrumental' | 'Rap Verse' | 'Outro' | 'Refrain' | 'Interlude'
   | 'Theme A' | 'Theme B' | 'Build-up' | 'Main Theme' | 'Climax' | 'Break' | 'Stop';
 
 

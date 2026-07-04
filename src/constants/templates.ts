@@ -49,7 +49,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
       { id: '4', section: 'Chorus', tags: ['Explosive', 'Catchy Hook', 'Full Band'] },
       { id: '5', section: 'Verse 2', tags: ['Rhythmic', 'Minimal'] },
       { id: '6', section: 'Pre-Chorus', tags: ['Rising Energy'] },
-      { id: '7', section: 'Final Chorus', tags: ['Grand Finale', 'High Energy'] },
+      { id: '7', section: 'Chorus', tags: ['Grand Finale', 'High Energy'] },
       { id: '8', section: 'Outro', tags: ['Fading Synth', 'Cheerful'] }
     ],
     lyricMode: 'assist',
@@ -78,7 +78,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
       { id: '3', section: 'Chorus', tags: ['Dreamy', 'Lush Pads', 'Groovy'] },
       { id: '4', section: 'Verse 2', tags: ['Mellow', 'Funk Guitar'] },
       { id: '5', section: 'Bridge', tags: ['Atmospheric Solo', 'Nostalgic'] },
-      { id: '6', section: 'Final Chorus', tags: ['Full Groove', 'Sparkling Synths'] },
+      { id: '6', section: 'Chorus', tags: ['Full Groove', 'Sparkling Synths'] },
       { id: '7', section: 'Outro', tags: ['Slow Fade', 'City Lights vibe'] }
     ],
     lyricMode: 'assist',
@@ -108,7 +108,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
       { id: '4', section: 'Chorus', tags: ['Powerful', 'Full Strings', 'Heartbreaking'] },
       { id: '5', section: 'Verse 2', tags: ['Deepening Emotion', 'Cello'] },
       { id: '6', section: 'Bridge', tags: ['Climax', 'High Note', 'Orchestral'] },
-      { id: '7', section: 'Final Chorus', tags: ['Grand Emotion', 'Fading out'] },
+      { id: '7', section: 'Chorus', tags: ['Grand Emotion', 'Fading out'] },
       { id: '8', section: 'Outro', tags: ['Lonely Piano', 'Silence'] }
     ],
     lyricMode: 'preserve',
@@ -168,7 +168,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
       { id: '4', section: 'Verse 2', tags: ['Intimate', 'Whistling'] },
       { id: '5', section: 'Chorus', tags: ['Fuller Sound', 'Warmth'] },
       { id: '6', section: 'Bridge', tags: ['Reflective', 'Solo Guitar'] },
-      { id: '7', section: 'Final Chorus', tags: ['Uplifting', 'Peaceful'] },
+      { id: '7', section: 'Chorus', tags: ['Uplifting', 'Peaceful'] },
       { id: '8', section: 'Outro', tags: ['Simple Chords', 'Fading'] }
     ],
     lyricMode: 'assist',
@@ -198,7 +198,7 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
       { id: '4', section: 'Chorus', tags: ['Epic', 'Heroic', 'Full Strings'] },
       { id: '5', section: 'Verse 2', tags: ['Determined', 'Brass accents'] },
       { id: '6', section: 'Bridge', tags: ['Sudden Change', 'Emotional Peak', 'Choir'] },
-      { id: '7', section: 'Final Chorus', tags: ['Maximum Scale', 'Triumphant'] },
+      { id: '7', section: 'Chorus', tags: ['Maximum Scale', 'Triumphant'] },
       { id: '8', section: 'Outro', tags: ['Lingering Strings', 'Hopeful'] }
     ],
     lyricMode: 'assist',

@@ -1635,7 +1635,7 @@ export const BASE_PROMPTS = [
 ];
 
 export const BASIC_STRUCTURE =
-  'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro';
+  'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Chorus → Outro';
 
 export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
@@ -3099,21 +3099,21 @@ export const SECTION_META: Record<string, { tier: TagTier, descriptionKo?: strin
     tier: 'basic',
     descriptionKo: "보컬 없이 악기 연주만으로 구성된 구간입니다."
   },
-  'Solo': { 
-    tier: 'basic',
-    descriptionKo: "특정 악기의 독주가 강조되는 구간입니다."
-  },
   'Rap Verse': { 
     tier: 'basic',
     descriptionKo: "랩으로 구성된 전개 구간입니다."
   },
-  'Final Chorus': { 
-    tier: 'basic',
-    descriptionKo: "곡의 대미를 장식하는 마지막 후렴구입니다."
-  },
   'Outro': { 
     tier: 'basic', 
     descriptionKo: "곡을 마무리하는 구간. 감정을 정리하고 자연스럽게 끝맺습니다." 
+  },
+  'Refrain': {
+    tier: 'basic',
+    descriptionKo: "곡 중간이나 끝에서 같은 가사와 멜로디가 귀에 쏙 박히도록 반복되는 짧은 후렴구입니다."
+  },
+  'Interlude': {
+    tier: 'basic',
+    descriptionKo: "보컬 없이 악기 연주만으로 이어지는 간주 구간입니다. 가사가 들어가면 안 됩니다."
   },
   'Theme A': { 
     tier: 'basic',
@@ -3292,17 +3292,6 @@ export const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
     "Hook Emphasis"
   ],
 
-  'Final Chorus': [
-    "High Energy",
-    "Explosive",
-    "Full Arrangement",
-    "Peak Section",
-    "Anthemic",
-    "Wide Impact",
-    "Powerful Delivery",
-    "Hook Emphasis"
-  ],
-
   'Hook': [
     "High Energy",
     "Explosive",
@@ -3378,6 +3367,23 @@ export const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
     "Minimal Ending",
     "Calm Closure",
     "Loop-friendly Ending"
+  ],
+
+  'Refrain': [
+    "Hook Emphasis",
+    "Anthemic",
+    "Soft Ending",
+    "Echo Finish",
+    "Calm Closure",
+    "Loop-friendly Ending"
+  ],
+  'Interlude': [
+    "Instrumental Opening",
+    "Minimal Reset",
+    "Transition Focused",
+    "Energy Drop",
+    "Echo Finish",
+    "Calm Closure"
   ],
   'Theme A': [
     "Low Energy", "Story Focused", "Rhythmic Flow", "Sparse Arrangement", "Groove Driven", "Laid-back", "Steady Pace", "Subtle Build"

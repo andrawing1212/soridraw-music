@@ -532,15 +532,19 @@ function getFavoriteStructureText(song: any): string {
   }
 
   if (song.appliedKeywords.songStructure === '1') {
-    return 'Intro → Verse 1 → Chorus / Drop → Outro';
+    return '추천';
   }
 
   if (song.appliedKeywords.songStructure === '2') {
-    return 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro';
+    return '안정형';
+  }
+
+  if (song.appliedKeywords.songStructure === '3') {
+    return '실험형';
   }
 
   if (song.appliedKeywords.songStructure) {
-    return 'Intro → Verse 1 → Pre-Chorus → Chorus / Drop → Verse 2 → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro';
+    return '구조 정보 있음';
   }
 
   return '구조 정보 없음';
@@ -560,7 +564,7 @@ function inferForeignLyricTargetLanguage(text: string): string {
 }
 
 function buildLyricContentOnlyTranslationTarget(targetLanguage: string): string {
-  return `${targetLanguage}. Translate only the actual lyric content. Keep any section header line exactly unchanged, including bracketed or parenthesized labels such as [Intro], [Verse 1], [Chorus / Drop], (Intro), (Verse 1), and similar song-structure markers. Do not translate, rewrite, remove, or add section headers. Preserve all line breaks.`;
+  return `${targetLanguage}. Translate only the actual lyric content. Keep any section header line exactly unchanged, including bracketed or parenthesized labels such as [Intro], [Verse 1], [Chorus], (Intro), (Verse 1), and similar song-structure markers. Do not translate, rewrite, remove, or add section headers. Preserve all line breaks.`;
 }
 
 type FavoriteSunoLink = {

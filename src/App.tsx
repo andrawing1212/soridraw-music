@@ -289,6 +289,7 @@ const normalizeSectionName = (section: string): string => {
   const normalized = String(section || '').trim();
   if (/^Verse\s*\d+$/i.test(normalized)) return 'Verse';
   if (/^Rap\s*Verse$/i.test(normalized)) return 'Rap Section';
+  if (/^Final\s*Chorus$/i.test(normalized)) return 'Chorus';
   return normalized;
 };
 
@@ -1861,10 +1862,10 @@ const SECTION_SHORT_DESCRIPTION: Record<string, string> = {
   'Bridge': '흐름 전환 구간',
   'Breakdown': '에너지 낮춤',
   'Instrumental': '악기 연주 구간',
-  'Solo': '악기 독주 구간',
   'Rap Verse': '랩 전개 구간',
-  'Final Chorus': '마지막 후렴',
   'Outro': '마무리 구간',
+  'Refrain': '짧은 반복구',
+  'Interlude': '보컬 없는 간주',
   'Theme A': '첫 번째 테마',
   'Theme B': '두 번째 테마',
   'Build-up': '에너지 고조',
@@ -5009,6 +5010,7 @@ function App() {
   const [minBPM, setMinBPM] = useState(90);
   const [maxBPM, setMaxBPM] = useState(110);
   const [userInput, setUserInput] = useState('');
+  const commandInputRef = useRef<HTMLTextAreaElement | null>(null);
   const [isLyricMode, setIsLyricMode] = useState(false);
   const [lyricDraft, setLyricDraft] = useState('');
   const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
@@ -7649,16 +7651,16 @@ const saveRecentSong = async (newSong: any) => {
             return 'Default adaptive structure: choose a polished rap/hook variation such as Intro → Rap Section → Hook → Rap Section → Break → Hook → Bridge → Final Hook → Outro; keep the Hook memorable, let Rap Sections carry denser detail, and close with a clear final payoff.';
           }
           if (hasDanceFlow) {
-            return 'Default adaptive structure: choose a polished hook/drop variation such as Intro → Hook → Verse A → Pre-Chorus → Chorus / Drop → Break → Verse B → Chorus / Drop → Bridge → Final Chorus / Drop → Outro; keep the flow popular and stable while using Break or Drop as a refined twist.';
+            return 'Default adaptive structure: choose a polished hook/drop variation such as Intro → Hook → Verse A → Pre-Chorus → Chorus → Break → Verse B → Chorus → Bridge → Chorus → Outro; keep the flow popular and stable while using Break or Drop as a refined twist.';
           }
           if (hasBandFlow) {
-            return 'Default adaptive structure: choose a polished band-build variation such as Intro → Verse A → Build-up → Chorus → Verse B → Chorus → Bridge → Final Chorus → Outro; keep the chorus singable, let the build-up raise pressure, and use the Bridge as the emotional turn.';
+            return 'Default adaptive structure: choose a polished band-build variation such as Intro → Verse A → Build-up → Chorus → Verse B → Chorus → Bridge → Chorus → Outro; keep the chorus singable, let the build-up raise pressure, and use the Bridge as the emotional turn.';
           }
           if (hasCinematicFlow) {
             return 'Default adaptive structure: choose a cinematic variation such as Intro → Theme A → Verse A → Theme B → Chorus → Instrumental → Bridge → Climax → Outro; keep it experimental but still finish with a clear climax and outro.';
           }
           if (hasBreathingFlow) {
-            return 'Default adaptive structure: choose a spacious emotional variation such as Intro → Verse A → Pre-Chorus → Chorus → Instrumental → Verse B → Bridge → Final Chorus → Outro; leave room for breath, image, and melodic payoff.';
+            return 'Default adaptive structure: choose a spacious emotional variation such as Intro → Verse A → Pre-Chorus → Chorus → Instrumental → Verse B → Bridge → Chorus → Outro; leave room for breath, image, and melodic payoff.';
           }
           return 'Default adaptive structure: choose one stable modern-pop variation with a small twist, using Hook, Break, Drop, Instrumental, or Bridge only where it supports the story; never end after Stop, Break, or Instrumental.';
         };
@@ -7749,7 +7751,9 @@ const saveRecentSong = async (newSong: any) => {
             ? `Custom structure: ${formatStoredCustomStructureText(customStructure)}`
             : songStructure === '1'
               ? buildAdaptiveDefaultStructureGuide()
-              : `Base structure: ${songStructure === '2' ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro' : 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'}`,
+              : songStructure === '2'
+                ? 'Stable genre-standard structure with fresh section cues'
+                : 'Experimental structure with genre-aware variation and fresh section cues',
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
@@ -10595,6 +10599,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   .filter(([tag, label]) => Boolean(tag && label))
               )}
               vocalSectionTags={vocalSectionTagOptions}
+              selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
             />
           </div>
         </div>
@@ -10627,6 +10632,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </div>
             
               <textarea
+                ref={commandInputRef}
                 value={userInput}
                 onChange={(e) => {
                   setUserInput(e.target.value);
@@ -10637,7 +10643,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   setIsInputFocused(true);
                 }}
                 onBlur={() => setIsInputFocused(false)}
-                className="w-full bg-[rgba(255,255,255,0.16)] border border-white/20 rounded-2xl py-5 pl-12 pr-40 md:pr-48 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/60 focus:border-brand-orange/60 transition-all duration-300 text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative placeholder:text-white/60 scroll-smooth hover:border-white/30"
+                className="w-full bg-[rgba(255,255,255,0.16)] border border-white/20 rounded-2xl py-5 pl-12 pr-52 md:pr-60 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/60 focus:border-brand-orange/60 transition-all duration-300 text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative placeholder:text-white/60 scroll-smooth hover:border-white/30"
                 rows={1}
                 placeholder=""
               />
@@ -10649,12 +10655,31 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   animate={{ opacity: isInputFocused ? 0.78 : 0.92, y: 0, filter: 'blur(0px)' }}
                   exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
                   transition={{ duration: 0.35, ease: 'easeOut' }}
-                  className="pointer-events-none absolute left-12 right-40 md:right-48 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
+                  className="pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
                 >
                   {commandPlaceholderExamples[commandPlaceholderIndex]}
                 </motion.div>
               )}
             </AnimatePresence>
+            {userInput && (
+              <button
+                type="button"
+                aria-label="명령창 내용 삭제"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setUserInput('');
+                  window.requestAnimationFrame(() => {
+                    if (commandInputRef.current) {
+                      commandInputRef.current.style.height = 'auto';
+                      commandInputRef.current.focus();
+                    }
+                  });
+                }}
+                className="absolute right-36 md:right-40 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/12 border border-white/15 text-white/70 hover:text-white hover:bg-white/20 hover:border-white/25 transition-all flex items-center justify-center shadow-[0_8px_22px_rgba(0,0,0,0.22)]"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            )}
 
             {/* Direct Lyrics Toggle Button */}
             <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
@@ -11475,11 +11500,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             {result.appliedKeywords.songStructure === 'custom' 
                               ? formatStoredCustomStructureText(result.appliedKeywords.customStructure ?? [])
                               : result.appliedKeywords.songStructure === '1'
-                                ? '기본 자유 전개'
+                                ? '추천'
                                 : result.appliedKeywords.songStructure === '2'
-                                  ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro'
+                                  ? '안정형'
                                   : result.appliedKeywords.songStructure === '3'
-                                    ? 'Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro'
+                                    ? '실험형'
                                     : ''
                             }
                           </span>
@@ -14485,6 +14510,7 @@ interface SongStructureIntegratedControlProps {
   pointSoundTags?: string[];
   pointSoundTagLabels?: Record<string, string>;
   vocalSectionTags?: VocalSectionTagOption[];
+  selectedGenreIds?: string[];
   onModalStateChange?: (isOpen: boolean) => void;
 }
 
@@ -14507,6 +14533,7 @@ function SongStructureIntegratedControl({
   pointSoundTags = [],
   pointSoundTagLabels = {},
   vocalSectionTags = [],
+  selectedGenreIds = [],
   onModalStateChange
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
@@ -15292,20 +15319,53 @@ function SongStructureIntegratedControl({
     }).join(' → ');
   }
 
+  const getStableStructureGuide = useCallback(() => {
+    const text = (selectedGenreIds ?? []).join(' ').toLowerCase();
+    const hasVocalGenreSignal = /new[-_\s]?jack|r&b|rnb|soul|slow[-_\s]?jam|city[-_\s]?r&b|pop|k[-_\s]?pop|j[-_\s]?pop|city[-_\s]?pop|idol|dance[-_\s]?pop|synth[-_\s]?pop|electropop|y2k|hyperpop|hip[-_\s]?hop|trap|drill|boom[-_\s]?bap|rap|phonk|g[-_\s]?funk|jersey|rock|metal|punk|shoegaze|shoegazing|emo|math[-_\s]?rock|post[-_\s]?punk|band|visual|anime[-_\s]?rock|jazz|bossa|folk|country|bluegrass|singer|acoustic|ballad|trot|7080|enka|gugak|pansori|world|reggae|afro|latin|flamenco|celtic|balkan/.test(text);
+    const hasDedicatedInstrumentalSignal = /instrumental|bgm|ambient|minimalism|nature|healing|piano[-_\s]?solo|string[-_\s]?ensemble|cafe/.test(text);
+    if (hasDedicatedInstrumentalSignal && !hasVocalGenreSignal) {
+      return 'Intro → Instrumental → Interlude → Instrumental → Outro';
+    }
+    if (/edm|house|techno|trance|dubstep|drum[-_\s]?bass|future[-_\s]?bass|hardstyle|breakbeat|garage|synthwave|darkwave|glitch|electro|club|eurobeat/.test(text)) {
+      return 'Intro → Build-Up → Drop → Verse → Build-Up → Drop → Break → Drop → Bridge → Outro';
+    }
+    if (/hip[-_\s]?hop|trap|drill|boom[-_\s]?bap|rap|phonk|g[-_\s]?funk|jersey/.test(text)) {
+      return 'Intro → Verse → Refrain → Verse → Rap Section → Refrain → Chorus → Bridge → Chorus → Outro';
+    }
+    if (/new[-_\s]?jack|r&b|rnb|soul|slow[-_\s]?jam|city[-_\s]?r&b|pop|k[-_\s]?pop|j[-_\s]?pop|city[-_\s]?pop|idol|dance[-_\s]?pop|synth[-_\s]?pop|electropop|y2k|hyperpop/.test(text)) {
+      return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Chorus → Outro';
+    }
+    if (/rock|metal|punk|shoegaze|shoegazing|emo|math[-_\s]?rock|post[-_\s]?punk|band|visual|anime[-_\s]?rock/.test(text)) {
+      return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Instrumental → Bridge → Chorus → Outro';
+    }
+    if (/jazz|bossa|folk|country|bluegrass|singer|acoustic|ballad/.test(text)) {
+      return 'Intro → Verse → Verse → Refrain → Interlude → Verse → Bridge → Refrain → Outro';
+    }
+    if (/trot|7080|enka|gugak|pansori|world|reggae|afro|latin|flamenco|celtic|balkan/.test(text)) {
+      return 'Intro → Verse → Chorus → Interlude → Verse → Chorus → Bridge → Chorus → Outro';
+    }
+    if (/classical|orchestra|opera|cinematic|score|theme|fantasy|trailer|battle|horror|sci[-_\s]?fi|chiptune/.test(text)) {
+      return 'Intro → Verse → Chorus → Interlude → Bridge → Instrumental → Chorus → Outro';
+    }
+    return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Chorus → Outro';
+  }, [selectedGenreIds]);
+
+  const stableStructureGuide = getStableStructureGuide();
+  const customGuideText = (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '';
 
   const structureOptions = [
-    { id: '1', label: '기본', description: '장르에 따른 안정적인 기본 섹션을 랜덤으로 적용합니다. 가장 대중적이지만 가끔 실험적인 구조가 나올 수 있습니다.' },
-    { id: '2', label: '1', description: '일반적인 기본 섹션 구성. 추천 2~4분' },
-    { id: '3', label: '2', description: '브릿지와 반복이 확장된 섹션 구성. 추천 4~6분' },
-    { id: 'custom', label: '커스텀', description: (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · 구성에 따라 길이가 달라집니다.' },
+    { id: '1', label: '추천', description: '곡의 장르와 분위기에 맞게 가장 추천하는 구조로 적용됩니다.' },
+    { id: '2', label: '안정형', description: `장르에 맞는 정석 구조로 안정적으로 구성됩니다.\n${stableStructureGuide}` },
+    { id: '3', label: '실험형', description: '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다.' },
+    { id: 'custom', label: '커스텀', description: customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.' },
   ] as const;
 
   const handleSelectStructure = (optionId: SongStructure) => {
     const optionDescriptions: Record<SongStructure, string> = {
-      '1': '장르에 따른 안정적인 기본 섹션을 랜덤으로 적용합니다. 가장 대중적이지만 가끔 실험적인 구조가 나올 수 있습니다.',
-      '2': '가장 일반적인 기본 섹션 구성 · 추천 길이 2~4분',
-      '3': '브릿지와 반복이 확장된 섹션 구성 · 추천 길이 4~6분',
-      'custom': (customStructure ?? []).length > 0 ? `직접 지정한 섹션 적용 · ${formatStructureText(customStructure)}` : '직접 섹션을 지정하는 모드 · Pro부터 사용할 수 있습니다.',
+      '1': '곡의 장르와 분위기에 맞게 가장 추천하는 구조로 적용됩니다.',
+      '2': `장르에 맞는 정석 구조로 안정적으로 구성됩니다.\n${stableStructureGuide}`,
+      '3': '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다.',
+      'custom': customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.',
     };
 
     if (optionId === 'custom' && userTier === 'free') {
@@ -15332,9 +15392,10 @@ function SongStructureIntegratedControl({
 
     onSongStructureChange(optionId);
 
+    const selectedOption = structureOptions.find((opt) => opt.id === optionId);
     onHover({
       id: `song-structure-${optionId}`,
-      label: `섹션 ${optionId}`,
+      label: `섹션 ${selectedOption?.label ?? optionId}`,
       description: optionDescriptions[optionId],
       _ts: Date.now(),
     });
@@ -15838,15 +15899,13 @@ function SongStructureIntegratedControl({
                 {/* Structure Guide - Always Visible */}
                 <div className="mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFBB22]/5">
                   <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
-                    {songStructure === 'custom' ? '현재 커스텀 섹션' : songStructure === '1' ? '기본 섹션 상세 가이드' : `섹션 ${songStructure === '2' ? '1' : '2'} 상세 가이드`}
+                    {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words">
-                    {songStructure === '1' && "장르에 따른 안정적인 기본 섹션을 랜덤으로 적용합니다. 가장 대중적이지만 가끔 실험적인 구조가 나올 수 있습니다."}
-                    {songStructure === '2' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Final Chorus / Drop → Outro"}
-                    {songStructure === '3' && "Intro → Verse → Pre-Chorus → Chorus / Drop → Verse → Pre-Chorus → Chorus / Drop → Bridge → Instrumental / Break → Final Chorus / Drop → Outro"}
-                    {songStructure === 'custom' && (
-                      (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '직접 섹션을 지정하는 모드입니다.'
-                    )}
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words whitespace-pre-line">
+                    {songStructure === '1' && '곡의 장르와 분위기에 맞게 가장 추천하는 구조로 적용됩니다.'}
+                    {songStructure === '2' && `장르에 맞는 정석 구조로 안정적으로 구성됩니다.\n${stableStructureGuide}`}
+                    {songStructure === '3' && '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다.'}
+                    {songStructure === 'custom' && (customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.')}
                   </p>
                 </div>
               </div>
@@ -16676,7 +16735,7 @@ function TagEditModal({
   const tagModalBackdropMouseDownRef = useRef(false);
   const customTagEditorBackdropMouseDownRef = useRef(false);
   const customSectionDef = customSections.find((item) => item.label === section);
-  const isInstrumental = section === 'Instrumental' || section === 'Solo' || Boolean(customSectionDef?.isInstrumental);
+  const isInstrumental = section === 'Instrumental' || section === 'Interlude' || section === 'Solo' || Boolean(customSectionDef?.isInstrumental);
   const pointSoundTagSet = useMemo(() => new Set(pointSoundTags), [pointSoundTags]);
   const vocalSectionTagMap = useMemo(() => new Map(vocalSectionTags.map((item) => [item.tag, item])), [vocalSectionTags]);
   const vocalSectionTagSet = useMemo(() => new Set(vocalSectionTags.map((item) => item.tag)), [vocalSectionTags]);
@@ -16707,7 +16766,7 @@ function TagEditModal({
             []) as string[]),
         ];
 
-    const pointSoundAllowedSections = new Set(['Intro', 'Bridge', 'Breakdown', 'Break', 'Instrumental', 'Solo', 'Outro']);
+    const pointSoundAllowedSections = new Set(['Intro', 'Bridge', 'Breakdown', 'Break', 'Instrumental', 'Interlude', 'Solo', 'Outro']);
     const pointSoundFallbacks = pointSoundAllowedSections.has(section)
       ? pointSoundTags.filter(Boolean)
       : [];
@@ -17202,16 +17261,16 @@ export const CUSTOM_STRUCTURE_SECTIONS = [
   'Verse',
   'Pre-Chorus',
   'Chorus',
+  'Refrain',
+  'Interlude',
   'Hook',
   'Bridge',
-  'Final Chorus',
   'Outro',
   'Breakdown',
   'Drop',
   'Break',
   'Stop',
   'Rap Section',
-  'Solo',
   'Instrumental',
   'Theme A',
   'Theme B',

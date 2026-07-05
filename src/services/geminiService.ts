@@ -25433,6 +25433,56 @@ function removeDuplicateOpeningFallbackIntroTag(lyrics: string, params: Generate
 }
 
 
+function removeOpeningDuplicateIntroSkeletonBeforeRealIntro(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const entries: { index: number; section: string; ownsBody: boolean }[] = [];
+  let realIntroIndex = -1;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (parsed) {
+      const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+      if (!isGhostCleanupStructuralTagLine(trimmed, params)) {
+        // A non-structural bracket cue before any lyric body belongs to the opening, not to cleanup.
+        continue;
+      }
+      const ownsBody = hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params);
+      entries.push({ index: i, section, ownsBody });
+      if (/^Intro$/i.test(section) && ownsBody) {
+        realIntroIndex = i;
+        break;
+      }
+      continue;
+    }
+
+    if (isConcreteLyricOrAdlibLineForGhostCleanup(trimmed, params)) {
+      break;
+    }
+  }
+
+  if (realIntroIndex < 0) return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+
+  const remove = new Set<number>();
+  for (const entry of entries) {
+    if (entry.index >= realIntroIndex) break;
+    if (/^Intro$/i.test(entry.section) && !entry.ownsBody) {
+      remove.add(entry.index);
+      continue;
+    }
+    if (isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(entry.section) && !entry.ownsBody) {
+      remove.add(entry.index);
+      continue;
+    }
+  }
+
+  if (!remove.size) return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+  return lines.filter((_, index) => !remove.has(index)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+
 function removeOpeningCueOnlySungTagsBeforeRealBody(lyrics: string, params: GenerateSongParams): string {
   const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
   const remove = new Set<number>();
@@ -25549,14 +25599,17 @@ function cleanupOpeningCueOnlySkeletonsAtRoot(lyrics: string, params: GenerateSo
 
 function cleanupGhostOpeningIntroAndEmptySungTags(lyrics: string, params: GenerateSongParams): string {
   let text = cleanupOpeningCueOnlySkeletonsAtRoot(lyrics, params);
+  text = removeOpeningDuplicateIntroSkeletonBeforeRealIntro(text, params);
   text = removeCueOnlyEmptyStructuralBlocksStrict(text, params);
   text = removeOpeningCueOnlySungTagsBeforeRealBody(text, params);
   text = removeGhostEmptyCoreSungSectionTags(text, params);
   text = removeDuplicateOpeningFallbackIntroTag(text, params);
+  text = removeOpeningDuplicateIntroSkeletonBeforeRealIntro(text, params);
   text = cleanupOpeningCueOnlySkeletonsAtRoot(text, params);
   text = removeCueOnlyEmptyStructuralBlocksStrict(text, params);
   text = removeOpeningCueOnlySungTagsBeforeRealBody(text, params);
   text = removeGhostEmptyCoreSungSectionTags(text, params);
+  text = removeOpeningDuplicateIntroSkeletonBeforeRealIntro(text, params);
   text = removeCueOnlyEmptyStructuralBlocksStrict(text, params);
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }

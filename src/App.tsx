@@ -8381,9 +8381,11 @@ ${normalizePromptForDisplay(result.prompt)}
       secondaryLanguage,
       showKoreanTitleInput: Boolean(initialKoreanTitle) || !initialSecondaryTitle,
       showSecondaryTitleInput: Boolean(initialSecondaryTitle),
-      prompt: result.prompt || '',
-      koreanLyrics: lyricsMap.ko || result.lyrics?.korean || '',
-      secondaryLyrics: lyricsMap[secondaryLanguage] || result.lyrics?.english || '',
+      // SORIDRAW_596: edit draft starts from the same text shown on screen.
+      // This only syncs UI/edit/copy text and does not change generation output.
+      prompt: normalizePromptForDisplay(result.prompt || ''),
+      koreanLyrics: normalizeLyricsForDisplay(lyricsMap.ko || result.lyrics?.korean || ''),
+      secondaryLyrics: normalizeLyricsForDisplay(lyricsMap[secondaryLanguage] || result.lyrics?.english || ''),
     });
     setRecentSongEditFocus(focus);
     setRecentSongInlineEditMode(focus);
@@ -8706,9 +8708,26 @@ ${normalizePromptForDisplay(result.prompt)}
       .join('\n');
   };
 
+
+  const splitInlineParentheticalAfterDisplaySectionTag = (value: string) => {
+    return String(value || '')
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .flatMap((rawLine) => {
+        const line = String(rawLine || '').trimEnd();
+        const match = line.match(/^(\s*\[(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus(?:\s+[A-Z0-9]+)?|Chorus(?:\s+[A-Z0-9]+)?|Hook(?:\s+[A-Z0-9]+)?|Refrain(?:\s+[A-Z0-9]+)?|Rap\s+Section(?:\s+[A-Z0-9]+)?|Build[-\s]?Up(?:\s+[A-Z0-9]+)?|Drop(?:\s+[A-Z0-9]+)?|Break(?:\s+[A-Z0-9]+)?|Bridge(?:\s+[A-Z0-9]+)?|Outro(?:\s+[A-Z0-9]+)?|Interlude(?:\s+[A-Z0-9]+)?|Instrumental(?:\s+[A-Z0-9]+)?|Instrumental\s+Opening|Stop)[^\]\n]*\])\s+(\([^()\n]{1,120}\))\s*$/i);
+        if (!match) return [line];
+        return [match[1].trim(), match[2].trim()];
+      })
+      .join('\n');
+  };
+
+
   const normalizeLyricsForDisplay = (value: string) => {
-    let normalized = normalizeClipboardText(value)
+    const structuralSectionDisplayRegex = /\s*(\[(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus(?:\s+[A-Z0-9]+)?|Chorus(?:\s+[A-Z0-9]+)?|Hook(?:\s+[A-Z0-9]+)?|Refrain(?:\s+[A-Z0-9]+)?|Rap\s+Section(?:\s+[A-Z0-9]+)?|Build[-\s]?Up(?:\s+[A-Z0-9]+)?|Drop(?:\s+[A-Z0-9]+)?|Break(?:\s+[A-Z0-9]+)?|Bridge(?:\s+[A-Z0-9]+)?|Outro(?:\s+[A-Z0-9]+)?|Interlude(?:\s+[A-Z0-9]+)?|Instrumental(?:\s+[A-Z0-9]+)?|Instrumental\s+Opening|Stop)[^\]\n]*\])/gi;
+    let normalized = splitInlineParentheticalAfterDisplaySectionTag(normalizeClipboardText(value))
       .replace(sectionRegex, '\n\n$1')
+      .replace(structuralSectionDisplayRegex, '\n\n$1')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
 
@@ -11543,7 +11562,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <div className="flex items-center gap-2">
                     {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 음악 프롬프트를 수정합니다.', 'section')}
                     <button
-                      onClick={() => copyToClipboard(normalizePromptForDisplay(result.prompt), 'prompt')}
+                      onClick={() => copyToClipboard(isRecentSongSectionEditing('prompt') && recentSongEditDraft ? recentSongEditDraft.prompt : normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
@@ -11628,7 +11647,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               <div className="flex items-center gap-2">
                                 {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
                                 <button
-                                  onClick={() => copyToClipboard(lyricsText, copyType)}
+                                  onClick={() => copyToClipboard(isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? getRecentSongLyricsDraftValue(lang) : normalizeLyricsForDisplay(lyricsText), copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
                                   className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
@@ -15320,35 +15339,8 @@ function SongStructureIntegratedControl({
   }
 
   const getStableStructureGuide = useCallback(() => {
-    const text = (selectedGenreIds ?? []).join(' ').toLowerCase();
-    const hasVocalGenreSignal = /new[-_\s]?jack|r&b|rnb|soul|slow[-_\s]?jam|city[-_\s]?r&b|pop|k[-_\s]?pop|j[-_\s]?pop|city[-_\s]?pop|idol|dance[-_\s]?pop|synth[-_\s]?pop|electropop|y2k|hyperpop|hip[-_\s]?hop|trap|drill|boom[-_\s]?bap|rap|phonk|g[-_\s]?funk|jersey|rock|metal|punk|shoegaze|shoegazing|emo|math[-_\s]?rock|post[-_\s]?punk|band|visual|anime[-_\s]?rock|jazz|bossa|folk|country|bluegrass|singer|acoustic|ballad|trot|7080|enka|gugak|pansori|world|reggae|afro|latin|flamenco|celtic|balkan/.test(text);
-    const hasDedicatedInstrumentalSignal = /instrumental|bgm|ambient|minimalism|nature|healing|piano[-_\s]?solo|string[-_\s]?ensemble|cafe/.test(text);
-    if (hasDedicatedInstrumentalSignal && !hasVocalGenreSignal) {
-      return 'Intro → Instrumental → Interlude → Instrumental → Outro';
-    }
-    if (/edm|house|techno|trance|dubstep|drum[-_\s]?bass|future[-_\s]?bass|hardstyle|breakbeat|garage|synthwave|darkwave|glitch|electro|club|eurobeat/.test(text)) {
-      return 'Intro → Build-Up → Drop → Verse → Build-Up → Drop → Break → Drop → Bridge → Outro';
-    }
-    if (/hip[-_\s]?hop|trap|drill|boom[-_\s]?bap|rap|phonk|g[-_\s]?funk|jersey/.test(text)) {
-      return 'Intro → Verse → Refrain → Verse → Rap Section → Refrain → Chorus → Bridge → Chorus → Outro';
-    }
-    if (/new[-_\s]?jack|r&b|rnb|soul|slow[-_\s]?jam|city[-_\s]?r&b|pop|k[-_\s]?pop|j[-_\s]?pop|city[-_\s]?pop|idol|dance[-_\s]?pop|synth[-_\s]?pop|electropop|y2k|hyperpop/.test(text)) {
-      return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Chorus → Outro';
-    }
-    if (/rock|metal|punk|shoegaze|shoegazing|emo|math[-_\s]?rock|post[-_\s]?punk|band|visual|anime[-_\s]?rock/.test(text)) {
-      return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Instrumental → Bridge → Chorus → Outro';
-    }
-    if (/jazz|bossa|folk|country|bluegrass|singer|acoustic|ballad/.test(text)) {
-      return 'Intro → Verse → Verse → Refrain → Interlude → Verse → Bridge → Refrain → Outro';
-    }
-    if (/trot|7080|enka|gugak|pansori|world|reggae|afro|latin|flamenco|celtic|balkan/.test(text)) {
-      return 'Intro → Verse → Chorus → Interlude → Verse → Chorus → Bridge → Chorus → Outro';
-    }
-    if (/classical|orchestra|opera|cinematic|score|theme|fantasy|trailer|battle|horror|sci[-_\s]?fi|chiptune/.test(text)) {
-      return 'Intro → Verse → Chorus → Interlude → Bridge → Instrumental → Chorus → Outro';
-    }
-    return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Chorus → Bridge → Chorus → Outro';
-  }, [selectedGenreIds]);
+    return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus → Chorus → Bridge → Chorus → Outro';
+  }, []);
 
   const stableStructureGuide = getStableStructureGuide();
   const customGuideText = (customStructure ?? []).length > 0 ? formatStructureText(customStructure) : '';
@@ -15356,7 +15348,7 @@ function SongStructureIntegratedControl({
   const structureOptions = [
     { id: '1', label: '추천', description: '곡의 장르와 분위기에 맞게 가장 추천하는 구조로 적용됩니다.' },
     { id: '2', label: '안정형', description: `장르에 맞는 정석 구조로 안정적으로 구성됩니다.\n${stableStructureGuide}` },
-    { id: '3', label: '실험형', description: '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다.' },
+    { id: '3', label: '실험형', description: '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다. 기존 Build-Up/Drop 중심 구조는 실험형 후보로만 사용됩니다.' },
     { id: 'custom', label: '커스텀', description: customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.' },
   ] as const;
 
@@ -15364,7 +15356,7 @@ function SongStructureIntegratedControl({
     const optionDescriptions: Record<SongStructure, string> = {
       '1': '곡의 장르와 분위기에 맞게 가장 추천하는 구조로 적용됩니다.',
       '2': `장르에 맞는 정석 구조로 안정적으로 구성됩니다.\n${stableStructureGuide}`,
-      '3': '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다.',
+      '3': '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다. 기존 Build-Up/Drop 중심 구조는 실험형 후보로만 사용됩니다.',
       'custom': customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.',
     };
 
@@ -15904,7 +15896,7 @@ function SongStructureIntegratedControl({
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words whitespace-pre-line">
                     {songStructure === '1' && '곡의 장르와 분위기에 맞게 가장 추천하는 구조로 적용됩니다.'}
                     {songStructure === '2' && `장르에 맞는 정석 구조로 안정적으로 구성됩니다.\n${stableStructureGuide}`}
-                    {songStructure === '3' && '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다.'}
+                    {songStructure === '3' && '장르와 분위기를 바탕으로 변칙적인 전개를 자유롭게 구성합니다. 기존 Build-Up/Drop 중심 구조는 실험형 후보로만 사용됩니다.'}
                     {songStructure === 'custom' && (customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.')}
                   </p>
                 </div>
@@ -17288,7 +17280,7 @@ const sectionPattern = CUSTOM_STRUCTURE_SECTIONS
 
 const sectionRegex = new RegExp(
   `\\s*(\\[(${sectionPattern})[^\\]]*\\])`,
-  'g'
+  'gi'
 );
 
 const TAG_DESCRIPTIONS_LOCAL: Record<string, string> = {

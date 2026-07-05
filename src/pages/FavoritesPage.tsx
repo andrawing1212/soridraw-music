@@ -1013,9 +1013,9 @@ export default function FavoritesPage({
     editedPrompt !== originalPrompt
   );
   const isTitleEditChanged = Boolean(selectedSong && editedTitle !== selectedSong.title);
-  const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== selectedSong.lyrics.korean);
-  const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== selectedSong.lyrics.english);
-  const isPromptEditChanged = Boolean(selectedSong && editedPrompt !== (selectedSong.prompt || ''));
+  const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== originalLyricsKo);
+  const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== originalLyricsEn);
+  const isPromptEditChanged = Boolean(selectedSong && editedPrompt !== originalPrompt);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(0); // 0: none, 1: warning, 2: execute
   const [confirmUnlockAll, setConfirmUnlockAll] = useState(0);
   const [confirmLockAll, setConfirmLockAll] = useState(0);
@@ -2351,9 +2351,9 @@ export default function FavoritesPage({
     if (selectedSong) {
       const selectedSongId = String(selectedSong.id || '');
       const sourceTitle = selectedSong.title || '';
-      const sourceKorean = selectedSong.lyrics?.korean || '';
-      const sourceEnglish = selectedSong.lyrics?.english || '';
-      const sourcePrompt = selectedSong.prompt || '';
+      const sourceKorean = normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || '');
+      const sourceEnglish = normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || '');
+      const sourcePrompt = normalizeFavoritePromptForDisplay(selectedSong.prompt || '');
 
       // Always hydrate the editor from the currently opened song itself.
       // Do not restore cross-screen drafts here: stale drafts were able to attach
@@ -3077,9 +3077,9 @@ export default function FavoritesPage({
     setActiveEditSection(null);
     setIsSyncEnabled(false);
     setEditedTitle(selectedSong.title);
-    setEditedKoreanLyrics(selectedSong.lyrics.korean);
-    setEditedEnglishLyrics(selectedSong.lyrics.english);
-    setEditedPrompt(selectedSong.prompt || '');
+    setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean));
+    setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english));
+    setEditedPrompt(normalizeFavoritePromptForDisplay(selectedSong.prompt || ''));
     const nextSunoState = buildFavoriteSunoEditorState(selectedSong);
     setDetailSunoUrlInputs(nextSunoState.inputs);
     setDetailSunoUrlMainIndex(nextSunoState.mainIndex);
@@ -3262,8 +3262,34 @@ export default function FavoritesPage({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // SORIDRAW_596: detail copy/edit uses the same visible text.
+  // This is UI-only normalization; generation, prompt building, and lyrics creation are not touched.
+  const normalizeFavoriteClipboardText = (value: string) => String(value || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const normalizeFavoritePromptForDisplay = (value: string) => normalizeFavoriteClipboardText(value)
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n');
+
+  const normalizeFavoriteLyricsForDisplay = (value: string) => normalizeFavoriteClipboardText(value)
+    .replace(/\s*(\[(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus(?:\s+[A-Z0-9]+)?|Chorus(?:\s+[A-Z0-9]+)?|Hook(?:\s+[A-Z0-9]+)?|Refrain(?:\s+[A-Z0-9]+)?|Rap\s+Section(?:\s+[A-Z0-9]+)?|Build[-\s]?Up(?:\s+[A-Z0-9]+)?|Drop(?:\s+[A-Z0-9]+)?|Break(?:\s+[A-Z0-9]+)?|Bridge(?:\s+[A-Z0-9]+)?|Outro(?:\s+[A-Z0-9]+)?|Interlude(?:\s+[A-Z0-9]+)?|Instrumental(?:\s+[A-Z0-9]+)?|Instrumental\s+Opening|Stop)[^\]\n]*\])/gi, '\n\n$1')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const getFavoriteCopyTextForType = (text: string, type: string) => {
+    if (type === 'prompt' || type.endsWith('-prompt')) return normalizeFavoritePromptForDisplay(text);
+    if (type.startsWith('lyrics')) return normalizeFavoriteLyricsForDisplay(text);
+    return normalizeFavoriteClipboardText(text);
+  };
+
   const copyToClipboard = (text: string, type: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(getFavoriteCopyTextForType(text, type));
     setCopiedType(type);
     setTimeout(() => setCopiedType(null), 2000);
   };
@@ -3288,13 +3314,13 @@ ${keywords}
 ${songTitleCopy}
 
 [Lyrics - English]
-${song.lyrics.english}
+${normalizeFavoriteLyricsForDisplay(song.lyrics.english || '')}
 
 [Lyrics - Korean]
-${song.lyrics.korean}
+${normalizeFavoriteLyricsForDisplay(song.lyrics.korean || '')}
 
 [Music Prompt]
-${song.prompt}
+${normalizeFavoritePromptForDisplay(song.prompt || '')}
     `.trim();
     copyToClipboard(text, `all-${song.id}`);
   };
@@ -6564,7 +6590,7 @@ ${song.prompt}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(selectedSong.lyrics.korean, 'lyrics-korean')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-ko' ? editedKoreanLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean), 'lyrics-korean')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-ko-copy', label: '한글 가사 복사', description: '한글 가사를 복사합니다.' })}
@@ -6584,7 +6610,7 @@ ${song.prompt}
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/88 whitespace-pre-wrap">
-                        {selectedSong.lyrics.korean}
+                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean)}
                       </div>
                     )}
                   </section>
@@ -6661,7 +6687,7 @@ ${song.prompt}
                           </button>
                         )}
                         <button
-                          onClick={() => copyToClipboard(selectedSong.lyrics.english, 'lyrics-foreign')}
+                          onClick={() => copyToClipboard(isEditing && activeEditSection === 'lyrics-en' ? editedEnglishLyrics : normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english), 'lyrics-foreign')}
                           onMouseEnter={() => onHover({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'detail-lyrics-foreign-copy', label: '외국어 가사 복사', description: '외국어 가사를 복사합니다.' })}
@@ -6681,7 +6707,7 @@ ${song.prompt}
                       />
                     ) : (
                       <div className="custom-scrollbar max-h-[380px] overflow-y-auto overscroll-contain rounded-2xl border border-black/20 bg-black/15 p-4 text-[15px] leading-7 text-white/72 whitespace-pre-wrap">
-                        {selectedSong.lyrics.english}
+                        {normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english)}
                       </div>
                     )}
                   </section>
@@ -6729,7 +6755,7 @@ ${song.prompt}
                         </button>
                       )}
                       <button
-                        onClick={() => copyToClipboard(selectedSong.prompt, 'prompt')}
+                        onClick={() => copyToClipboard(isEditing && activeEditSection === 'prompt' ? editedPrompt : normalizeFavoritePromptForDisplay(selectedSong.prompt || ''), 'prompt')}
                         onMouseEnter={() => onHover({ id: 'detail-prompt-copy', label: '프롬프트 복사', description: '곡 프롬프트를 복사합니다.' })}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: 'detail-prompt-copy', label: '프롬프트 복사', description: '곡 프롬프트를 복사합니다.' })}
@@ -6748,7 +6774,7 @@ ${song.prompt}
                     />
                   ) : (
                     <div className="rounded-2xl border border-black/20 bg-black/15 p-4 md:p-5">
-                      <p className="text-sm leading-7 text-white/68">{selectedSong.prompt || '프롬프트 정보가 없습니다.'}</p>
+                      <p className="text-sm leading-7 text-white/68">{normalizeFavoritePromptForDisplay(selectedSong.prompt || '') || '프롬프트 정보가 없습니다.'}</p>
                     </div>
                   )}
                 </section>

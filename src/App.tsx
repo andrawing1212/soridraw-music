@@ -3757,6 +3757,52 @@ function App() {
   const shouldRefreshFavoriteSearchTokens = (updates: Partial<any>) => {
     return ['title', 'koreanTitle', 'englishTitle', 'displayGenre', 'genre', 'appliedKeywords', 'situationSummary'].some((key) => key in updates);
   };
+
+  const buildFavoriteIdentityKey = (song: any): string => {
+    const titlePart = normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' '));
+    const promptPart = normalizeFavoriteSearchValue(song?.prompt);
+    const lyricPart = normalizeFavoriteSearchValue(`${song?.lyrics?.korean || ''} ${song?.lyrics?.english || ''}`);
+    const sourceText = [promptPart, lyricPart, titlePart].filter(Boolean).join('|').slice(0, 6000);
+    if (!sourceText) return '';
+
+    let hash = 2166136261;
+    for (let index = 0; index < sourceText.length; index += 1) {
+      hash ^= sourceText.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `song_${(hash >>> 0).toString(36)}`;
+  };
+
+  const getFavoriteComparableText = (song: any) => ({
+    title: normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' ')),
+    prompt: normalizeFavoriteSearchValue(song?.prompt),
+    lyrics: normalizeFavoriteSearchValue(`${song?.lyrics?.korean || ''} ${song?.lyrics?.english || ''}`).slice(0, 1200),
+  });
+
+  const isSameFavoriteSong = (favorite: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
+    if (!favorite || !song) return false;
+    if (song?.id && favorite?.id && song.id === favorite.id) return true;
+    const favoriteIdentityKey = favorite?.favoriteKey || buildFavoriteIdentityKey(favorite);
+    if (songIdentityKey && favoriteIdentityKey && songIdentityKey === favoriteIdentityKey) return true;
+
+    const favoriteComparable = getFavoriteComparableText(favorite);
+    const songComparable = getFavoriteComparableText(song);
+    if (favoriteComparable.prompt && songComparable.prompt && favoriteComparable.prompt === songComparable.prompt) {
+      if (favoriteComparable.lyrics && songComparable.lyrics && favoriteComparable.lyrics === songComparable.lyrics) return true;
+      if (favoriteComparable.title && songComparable.title && favoriteComparable.title === songComparable.title) return true;
+    }
+    return false;
+  };
+
+  const isFavoriteHidden = (favorite: any) => Boolean(favorite?.hidden === true || favorite?.favoriteHidden === true || favorite?.deletedAt || favorite?.trashedAt);
+
+  const writeFavoritesCache = (uid: string, list: any[]) => {
+    try {
+      localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(list));
+    } catch (e) {
+      console.error('Failed to save favorites to cache:', e);
+    }
+  };
   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
   const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
@@ -5995,80 +6041,174 @@ const toggleCycleVariantSelection = (
 
     const favoriteDeleteId = (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
-    const existingFavById = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
-    const existingFav = existingFavById || favorites.find(f => f.title === song.title && f.prompt === song.prompt);
+    const songIdentityKey = buildFavoriteIdentityKey(song);
+    const findLocalExistingFavorite = () => {
+      const byId = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
+      if (byId) return byId;
+      return favorites.find(f => isSameFavoriteSong(f, song, songIdentityKey)) || null;
+    };
+
+    const findServerExistingFavorite = async () => {
+      if (forceDeleteFavoriteById && favoriteDeleteId) {
+        const snap = await getDoc(doc(db, 'favorites', favoriteDeleteId));
+        return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      }
+
+      if (songIdentityKey) {
+        try {
+          const keySnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('favoriteKey', '==', songIdentityKey),
+            limit(3)
+          ));
+          const keyMatch = keySnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).find(favorite => isSameFavoriteSong(favorite, song, songIdentityKey));
+          if (keyMatch) return keyMatch;
+        } catch (error) {
+          console.warn('Favorite identity lookup by key failed. Falling back to title/prompt comparison.', error);
+        }
+      }
+
+      const titleCandidates = [song.title, song.koreanTitle, song.englishTitle].filter(Boolean).map(value => String(value).trim());
+      for (const titleCandidate of titleCandidates.slice(0, 3)) {
+        try {
+          const titleSnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('title', '==', titleCandidate),
+            limit(10)
+          ));
+          const titleMatch = titleSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).find(favorite => isSameFavoriteSong(favorite, song, songIdentityKey));
+          if (titleMatch) return titleMatch;
+        } catch (error) {
+          console.warn('Favorite identity lookup by title failed.', error);
+        }
+      }
+
+      return null;
+    };
+
+    const patchLocalFavorite = (id: string, updates: Record<string, any>, fallbackFavorite?: any) => {
+      setFavorites((prev) => {
+        const exists = (prev || []).some((favorite) => favorite.id === id);
+        const next = exists
+          ? (prev || []).map((favorite) => favorite.id === id ? { ...favorite, ...updates } : favorite)
+          : fallbackFavorite
+            ? [{ ...fallbackFavorite, ...updates }, ...(prev || [])]
+            : (prev || []);
+        const sorted = sortFavoriteList(next);
+        writeFavoritesCache(user.uid, sorted);
+        return sorted;
+      });
+    };
+
+    const removeLocalFavorite = (id: string) => {
+      setFavorites((prev) => {
+        const next = (prev || []).filter((favorite) => favorite.id !== id);
+        writeFavoritesCache(user.uid, next);
+        return next;
+      });
+    };
 
     try {
+      const existingFav = findLocalExistingFavorite() || await findServerExistingFavorite();
+
       if (existingFav) {
         if (existingFav.isLocked && !forceDeleteFavoriteById) {
           showToast('잠긴 곡은 삭제할 수 없습니다.');
           return;
         }
 
-        if (existingFav.isLocked && forceDeleteFavoriteById) {
-          await updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false });
+        if (forceDeleteFavoriteById) {
+          if (existingFav.isLocked) {
+            await updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false });
+          }
+          await deleteDoc(doc(db, 'favorites', existingFav.id));
+          removeLocalFavorite(existingFav.id);
+          await updateDoc(doc(db, 'users', user.uid), {
+            favoriteCount: increment(-1)
+          }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+          showToast('곡이 삭제 되었습니다.');
+          return;
         }
 
-        await deleteDoc(doc(db, 'favorites', existingFav.id));
-        
-        // Decrement favoriteCount in users document
-        await updateDoc(doc(db, 'users', user.uid), {
-          favoriteCount: increment(-1)
-        }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+        if (isFavoriteHidden(existingFav)) {
+          const restoreUpdates = {
+            hidden: false,
+            favoriteHidden: false,
+            deletedAt: null,
+            trashedAt: null,
+            restoredAt: Date.now(),
+            favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
+            searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
+          };
+          await updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates));
+          patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
+          showToast('보관함에 다시 저장되었습니다.');
+          return;
+        }
 
-        showToast('곡이 삭제 되었습니다.');
-      } else {
-        const createdAtMs = Date.now();
-        const resolvedGenre = getResolvedGenre(song);
-        const favoritePayload = sanitizeForFirestore({
-          uid: user.uid,
-          title: song.title,
-          koreanTitle: song.koreanTitle ?? '',
-          englishTitle: song.englishTitle ?? '',
-          genre: resolvedGenre,
-          lyrics: song.lyrics,
-          prompt: song.prompt,
-          appliedKeywords: song.appliedKeywords,
-          userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
-          situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
-          isLocked: false,
-          createdAtMs,
-          createdAt: serverTimestamp(),
-          searchTokens: buildFavoriteSearchTokens(song)
-        });
-        const favoriteDocRef = await addDoc(collection(db, 'favorites'), favoritePayload);
-
-        // Keep the Studio save button and Music Note cache in sync immediately.
-        // The paged Firestore listener will reconcile the same document again after the server timestamp resolves.
-        const localFavorite = sanitizeForFirestore({
-          ...song,
-          ...favoritePayload,
-          id: favoriteDocRef.id,
-          uid: user.uid,
-          genre: resolvedGenre,
-          createdAtMs,
-          createdAt: createdAtMs,
-          isLocked: false,
-        });
-        setFavorites((prev) => {
-          const merged = mergeFavoritePages([localFavorite], prev || []);
-          try {
-            localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(merged));
-          } catch (e) {
-            console.error('Failed to save favorites to cache:', e);
-          }
-          return merged;
-        });
-
-        // Increment favoriteCount in users document
-        await updateDoc(doc(db, 'users', user.uid), {
-          favoriteCount: increment(1)
-        }).catch(err => console.error("Failed to increment favoriteCount:", err));
-
-        showToast('저장되었습니다.');
+        const trashUpdates = {
+          hidden: true,
+          favoriteHidden: true,
+          isPublic: false,
+          deletedAt: serverTimestamp(),
+          trashedAt: Date.now(),
+        };
+        await updateDoc(doc(db, 'favorites', existingFav.id), trashUpdates);
+        patchLocalFavorite(existingFav.id, { ...trashUpdates, deletedAt: Date.now() }, existingFav);
+        showToast('곡이 휴지통으로 이동했습니다.');
+        return;
       }
+
+      const createdAtMs = Date.now();
+      const resolvedGenre = getResolvedGenre(song);
+      const favoritePayload = sanitizeForFirestore({
+        uid: user.uid,
+        title: song.title,
+        koreanTitle: song.koreanTitle ?? '',
+        englishTitle: song.englishTitle ?? '',
+        genre: resolvedGenre,
+        lyrics: song.lyrics,
+        prompt: song.prompt,
+        appliedKeywords: song.appliedKeywords,
+        userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
+        situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
+        isLocked: false,
+        hidden: false,
+        favoriteHidden: false,
+        createdAtMs,
+        createdAt: serverTimestamp(),
+        favoriteKey: songIdentityKey,
+        searchTokens: buildFavoriteSearchTokens(song)
+      });
+      const favoriteDocRef = await addDoc(collection(db, 'favorites'), favoritePayload);
+
+      const localFavorite = sanitizeForFirestore({
+        ...song,
+        ...favoritePayload,
+        id: favoriteDocRef.id,
+        uid: user.uid,
+        genre: resolvedGenre,
+        createdAtMs,
+        createdAt: createdAtMs,
+        isLocked: false,
+        hidden: false,
+        favoriteHidden: false,
+      });
+      setFavorites((prev) => {
+        const merged = mergeFavoritePages([localFavorite], prev || []);
+        writeFavoritesCache(user.uid, merged);
+        return merged;
+      });
+
+      await updateDoc(doc(db, 'users', user.uid), {
+        favoriteCount: increment(1)
+      }).catch(err => console.error("Failed to increment favoriteCount:", err));
+
+      showToast('저장되었습니다.');
     } catch (error) {
-      handleFirestoreError(error, existingFav ? OperationType.DELETE : OperationType.CREATE, 'favorites');
+      handleFirestoreError(error, OperationType.UPDATE, 'favorites');
     }
   };
 
@@ -6087,23 +6227,28 @@ const toggleCycleVariantSelection = (
         };
         sanitizedUpdates = {
           ...sanitizedUpdates,
+          favoriteKey: currentFavorite.favoriteKey || buildFavoriteIdentityKey(mergedForSearch),
           searchTokens: buildFavoriteSearchTokens(mergedForSearch),
         };
       }
       await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
-      setFavorites((prev) => prev.map((favorite) => {
-        if (favorite.id !== id) return favorite;
-        return {
-          ...favorite,
-          ...sanitizedUpdates,
-          lyrics: sanitizedUpdates.lyrics
-            ? { ...(favorite.lyrics || {}), ...(sanitizedUpdates.lyrics || {}) }
-            : favorite.lyrics,
-          appliedKeywords: sanitizedUpdates.appliedKeywords
-            ? { ...(favorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
-            : favorite.appliedKeywords,
-        };
-      }));
+      setFavorites((prev) => {
+        const next = prev.map((favorite) => {
+          if (favorite.id !== id) return favorite;
+          return {
+            ...favorite,
+            ...sanitizedUpdates,
+            lyrics: sanitizedUpdates.lyrics
+              ? { ...(favorite.lyrics || {}), ...(sanitizedUpdates.lyrics || {}) }
+              : favorite.lyrics,
+            appliedKeywords: sanitizedUpdates.appliedKeywords
+              ? { ...(favorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
+              : favorite.appliedKeywords,
+          };
+        });
+        if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next));
+        return next;
+      });
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
       } else {

@@ -679,7 +679,7 @@ export default function FavoritesPage({
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
-  updateFavorite: (id: string, updates: Partial<any>) => void;
+  updateFavorite: (id: string, updates: Partial<any>) => void | Promise<void>;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
   lockAllFavorites: () => void;
@@ -1651,16 +1651,17 @@ export default function FavoritesPage({
     const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
     if (safeSongIds.length === 0) return false;
 
+    const trashedAt = Date.now();
+    const updates = {
+      hidden: true,
+      favoriteHidden: true,
+      isPublic: false,
+      deletedAt: serverTimestamp(),
+      trashedAt,
+    };
+
     try {
-      await Promise.all(
-        safeSongIds.map((id) => updateDoc(doc(db, 'favorites', id), {
-          hidden: true,
-          favoriteHidden: true,
-          isPublic: false,
-          deletedAt: serverTimestamp(),
-          trashedAt: Date.now(),
-        }))
-      );
+      await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
       showFavoriteToast(`${safeSongIds.length}곡을 휴지통으로 이동했습니다.`);
       return true;
     } catch (error) {
@@ -1675,15 +1676,15 @@ export default function FavoritesPage({
     const safeSongIds = Array.from(new Set(songIds.filter(Boolean)));
     if (safeSongIds.length === 0) return false;
 
+    const updates = {
+      hidden: false,
+      favoriteHidden: false,
+      deletedAt: null,
+      trashedAt: null,
+    };
+
     try {
-      await Promise.all(
-        safeSongIds.map((id) => updateDoc(doc(db, 'favorites', id), {
-          hidden: false,
-          favoriteHidden: false,
-          deletedAt: null,
-          trashedAt: null,
-        }))
-      );
+      await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
       showFavoriteToast(`${safeSongIds.length}곡을 복구했습니다.`);
       return true;
     } catch (error) {
@@ -1700,7 +1701,7 @@ export default function FavoritesPage({
 
     try {
       await Promise.all(
-        safeSongIds.map((id) => deleteDoc(doc(db, 'favorites', id)))
+        safeSongIds.map((id) => Promise.resolve(toggleFavorite({ id, isLocked: false, __forceDeleteFavoriteById: true } as any)))
       );
       showFavoriteToast(`${safeSongIds.length}곡을 영구 삭제했습니다.`);
       return true;

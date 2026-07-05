@@ -9893,6 +9893,7 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
 
 function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
   const plan = buildInternalScenePlan(params, detailLayer);
+  const bp = buildSceneBlueprint(params);
   const directorBlock = plan.hasDirectorNote
     ? isProductionSeasoningDirectorNote(params)
       ? `- USER FREE-TEXT DIRECTOR NOTE is an additive production/color seasoning on top of the selected UI choices. Blend its intent into genre color, atmosphere, vocal attitude, arrangement, and lyric tone without replacing the selected genre/menu keywords or turning it into a separate lyric topic.`
@@ -9905,11 +9906,31 @@ function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = '')
   const directInputBlock = buildDirectInputProtectionInstruction(params);
   const themeInterpretationSummary = (plan.hasDirectorNote || plan.hasLyricDraft) ? "" : buildThemeInterpretationSummary(params, 4);
 
-  return `INTERNAL SCENE PLAN (MANDATORY, DO NOT OUTPUT THIS LABEL):
+  return `INTERNAL SCENE PLAN SOURCE & METHODOLOGY (MANDATORY, DO NOT OUTPUT THIS LABEL):
 ${directorBlock}
 ${lyricDraftBlock}${directInputBlock ? `
 ${directInputBlock}` : ''}
-- Scene: ${plan.scene}
+- Scene Source Text: ${bp.sceneSourceText || "None"}
+- Primary Intent: ${bp.primaryIntent || "None"}
+- Selected Keyword Intent: ${bp.selectedKeywordIntent || "None"}
+- Scene Inference Instruction: ${bp.sceneRequirement}
+- Detail Inference Instruction: ${bp.detailRequirement}
+- Chorus Core Instruction: ${bp.chorusRequirement}
+
+Before writing the final prompt or lyrics, infer a concrete Scene Blueprint from the source text. Do not output the blueprint label. Use the source text to infer:
+1. who is in the scene,
+2. where it happens,
+3. what visible action is happening,
+4. what conflict or desire is moving the song,
+5. what one lived detail makes the scene believable,
+6. how the vocalist should speak or sing from inside that scene,
+7. what the chorus wants to repeat emotionally.
+
+If the source text is Korean, translate and interpret it internally, then output the final music prompt in English only.
+Do not replace unusual user ideas with generic romance, generic breakup, bedroom-message, street-corner, or ordinary mood fallback.
+If the user gives only selected keywords, combine them into one believable scene instead of listing mood words.
+
+- Scene Base: ${plan.scene}
 - Lived detail pool: ${plan.detail}
 - Emotional temperature: ${plan.emotion}
 - Hidden conflict: ${plan.conflict}
@@ -9957,9 +9978,7 @@ function normalizeAtmosphereRendererScene(value: string, params?: GenerateSongPa
   let scene = cleanupPromptTail(String(value || '').replace(/\s+/g, ' '));
   if (!scene) return 'a concrete everyday scene';
 
-  const isSpecificScene = 
-    /astronaut|moon|space|holiday kitchen|mother-in-law|old radio/i.test(scene) ||
-    (params && (Boolean(params.userInput) || hasSituation(params.situation)));
+  const isSpecificScene = Boolean(params && (Boolean(params.userInput) || hasSituation(params.situation)));
 
   if (!isSpecificScene) {
     // Keep only the scene clause. Conflict is rendered separately so the final
@@ -10221,11 +10240,13 @@ function isGenericAtmosphereFallbackLine(value: string): boolean {
   if (!line) return true;
   
   if (
-    /^(?:bittersweet|sad|happy|lonely|emotional|cinematic)\s+scene$/i.test(line) ||
+    /the\s+concrete\s+scene\s+inferred\s+from\s+the\s+user's\s+source\s+text/i.test(line) ||
     /selected\s+story\s+becomes\s+visible/i.test(line) ||
     /one\s+lived\s+detail/i.test(line) ||
     /concrete\s+scene\s+where\s+the\s+selected\s+story/i.test(line) ||
-    /a\s+concrete\s+scene\s+where\s+the\s+selected\s+story\s+becomes\s+visible\s+through\s+one\s+lived\s+detail/i.test(line)
+    /a\s+concrete\s+scene\s+where\s+the\s+selected\s+story\s+becomes\s+visible\s+through\s+one\s+lived\s+detail/i.test(line) ||
+    /user-written\s+situation\s+creates\s+visible\s+emotional\s+pressure/i.test(line) ||
+    /^(?:bittersweet|sad|happy|lonely|emotional|cinematic|clear\s+emotional|balanced\s+emotional)\s+scene$/i.test(line)
   ) {
     return true;
   }
@@ -10754,15 +10775,6 @@ function reconstructStrongVocalsLine(params: GenerateSongParams, originalLine = 
     if (!hasAttitude) {
       candidates.push("restrained emotional breath");
     }
-  }
-
-  // For astronaut, kitchen, and hometown, let's inject specific custom attitude/reaction cues if not already present
-  if (/astronaut|moon/i.test(bp.scene) && !candidates.some(c => /message/i.test(c))) {
-    candidates.push("message-like delivery");
-  } else if (/kitchen|mother/i.test(bp.scene) && !candidates.some(c => /kitchen|sarcastic/i.test(c))) {
-    candidates.push("sarcastic kitchen-dialogue tone");
-  } else if (/radio|hometown/i.test(bp.scene) && !candidates.some(c => /nostalgic|hometown/i.test(c))) {
-    candidates.push("nostalgic hometown-memory reflection");
   }
 
   const finalCues = dedupePromptParts(candidates, 5)
@@ -13730,120 +13742,154 @@ function buildCompactMoodAngle(params: GenerateSongParams): string {
 }
 
 
-function buildSceneBlueprint(params: GenerateSongParams): {
+function collectSceneBlueprintSource(params: GenerateSongParams): string {
+  const parts: string[] = [];
+  
+  if (params.userInput) {
+    parts.push(`User Input: ${params.userInput}`);
+  }
+  if (params.lyricDraft) {
+    parts.push(`Lyric Draft: ${params.lyricDraft}`);
+  }
+  
+  const directThemeText = getDirectThemeInputText(params);
+  if (directThemeText) {
+    parts.push(`Direct Theme: ${directThemeText}`);
+  }
+  
+  const directMoodText = getDirectMoodInputText(params);
+  if (directMoodText) {
+    parts.push(`Direct Mood: ${directMoodText}`);
+  }
+  
+  if (params.situation) {
+    const sit = params.situation;
+    if (sit.relationship) parts.push(`Situation Relationship: ${sit.relationship}`);
+    if (sit.description) parts.push(`Situation Description: ${sit.description}`);
+    if (sit.details) parts.push(`Situation Details: ${sit.details}`);
+    if (sit.detailCustom) parts.push(`Situation Custom Details: ${sit.detailCustom}`);
+    if (sit.speakerAStyle) parts.push(`Speaker A Style: ${sit.speakerAStyle}`);
+    if (sit.speakerBStyle) parts.push(`Speaker B Style: ${sit.speakerBStyle}`);
+    if (sit.summary) parts.push(`Situation Summary: ${sit.summary}`);
+  }
+  
+  if (params.themes && params.themes.length > 0) {
+    parts.push(`Selected Themes: ${params.themes.join(', ')}`);
+  }
+  if (params.moods && params.moods.length > 0) {
+    parts.push(`Selected Moods: ${params.moods.join(', ')}`);
+  }
+  if (params.pointSounds && params.pointSounds.length > 0) {
+    parts.push(`Selected Sounds: ${params.pointSounds.join(', ')}`);
+  }
+  if (params.genre) {
+    parts.push(`Selected Genre: ${params.genre}`);
+  }
+  if (params.vocal) {
+    parts.push(`Selected Vocal: ${JSON.stringify(params.vocal)}`);
+  }
+  
+  return parts.join('\n');
+}
+
+function translateOrMapKoreanToEnglish(text: string): { characters: string; place: string; action: string; conflict: string } {
+  const lower = text.toLowerCase();
+
+  // Keep this fallback generic and source-faithful.
+  // Do NOT map broad words such as "어이", "사소", or "소원" into a specific test scene.
+  // The real Scene Blueprint is inferred by Gemini from sceneSourceText; this function only
+  // provides a safe deterministic backup when the model returns an unusable/generic scene.
+  let characters = "the main character";
+  let place = "the actual place implied by the source text";
+  let action = "moving through the source situation";
+  let conflict = "the source tension becoming visible through one concrete moment";
+
+  const has = (pattern: RegExp) => pattern.test(lower);
+
+  // Broad, non-story-specific setting hints only. These are category fallbacks, not scenario scripts.
+  if (has(/퇴근길|교통|정체|도로|차선|차가|차들|빨간불|신호|내비|네비|driver|traffic|commute|road|lane|brake/iu)) {
+    characters = "a tired commuter";
+    place = "on a slow, crowded road";
+    action = "trying to get home while traffic barely moves";
+    conflict = "comic frustration building from hunger, delay, and a road that will not open";
+  } else if (has(/회사|퇴근|야근|월요일|단톡|채팅|회의|상사|office|work|overtime|meeting|boss/iu)) {
+    characters = "a tired worker";
+    place = "inside an everyday work-life situation";
+    action = "trying to escape the pressure of the day";
+    conflict = "small workplace frustration turning into a repeatable emotional hook";
+  } else if (has(/카페|커피|cafe|coffee/iu)) {
+    place = "inside a quiet cafe corner";
+    action = "holding onto a small everyday detail";
+  } else if (has(/편의점|store|convenience/iu)) {
+    place = "inside a late-night convenience store";
+    action = "turning a small errand into an emotional moment";
+  } else if (has(/정류장|버스|지하철|역|station|bus|subway/iu)) {
+    place = "near a public transit stop";
+    action = "waiting while the scene reveals the feeling";
+  } else if (has(/방|침대|room|bedroom|bed/iu)) {
+    place = "inside a private room";
+    action = "facing a feeling that has nowhere else to go";
+  } else if (has(/바다|해변|sea|ocean|beach|shore/iu)) {
+    place = "near the sea";
+    action = "letting the scene move with the tide and air";
+  } else if (has(/공원|park/iu)) {
+    place = "on a quiet park bench";
+    action = "sitting with an unresolved thought";
+  }
+
+  // Broad relationship hints only.
+  if (has(/친구|friend/iu)) {
+    characters = "two friends";
+  } else if (has(/연인|사랑|커플|love|couple/iu)) {
+    characters = "two people caught in a relationship tension";
+  } else if (has(/가족|엄마|아빠|부모|아들|딸|family|mother|father|son|daughter/iu)) {
+    characters = "family members";
+  }
+
+  // Broad action/conflict hints only.
+  if (has(/이별|헤어|breakup|farewell/iu)) {
+    conflict = "the painful realization that some things cannot be repaired";
+  } else if (has(/기다|waiting|wait/iu)) {
+    action = "waiting longer than they wanted to";
+    conflict = "the wait stretching a small feeling into something impossible to ignore";
+  } else if (has(/고백|confession|말하지 못|unsaid/iu)) {
+    action = "trying to say what has been held back";
+    conflict = "the fear of saying the real thing out loud";
+  } else if (has(/시험|공부|study|exam/iu)) {
+    conflict = "expectation and exhaustion pressing against each other";
+  } else if (has(/여행|기차|travel|train/iu)) {
+    action = "watching the world pass by from a moving window";
+  } else if (has(/웃|코믹|장난|투정|어이없|playful|comic|funny|teasing|sassy/iu)) {
+    conflict = "playful complaint covering up real irritation or embarrassment";
+  }
+
+  return { characters, place, action, conflict };
+}
+
+function buildConcreteDeterministicFallbackBlueprint(params: GenerateSongParams): {
   scene: string;
   detail: string;
   conflict: string;
   vocalPoint: string;
   chorusCore: string;
 } {
-  const isSituationActive = hasSituation(params.situation);
-  const sit = params.situation;
-
-  const rawInput = String(params.userInput || '').trim();
-  const rawInputLower = rawInput.toLowerCase();
-  const lyricDraft = String(params.lyricDraft || '').trim();
-  const directThemeText = getDirectThemeInputText(params);
-  const directMoodText = getDirectMoodInputText(params);
-
-  // Astronaut test case:
-  const isAstronaut = /astronaut|우주인|cosmonaut|space traveler|moon|달\s*나라|지구|earth|last\s*message/i.test(rawInputLower) || 
-                      /astronaut|우주인|cosmonaut|space traveler|moon|달\s*나라|지구|earth|last\s*message/i.test(lyricDraft.toLowerCase()) ||
-                      /astronaut|우주인|cosmonaut|space traveler|moon|달\s*나라|지구|earth|last\s*message/i.test(directThemeText.toLowerCase());
-
-  // Mother-in-law / Daughter-in-law test case:
-  const isMotherDaughterInLaw = /mother-in-law|daughter-in-law|시어머니|며느리|시댁|명절|insult|명절\s*음식|holiday\s*food/i.test(rawInputLower) || 
-                                (isSituationActive && /mother-in-law|daughter-in-law|시어머니|며느리|시댁|명절|insult|명절\s*음식|holiday\s*food/i.test(String(sit?.relationship || '') + ' ' + String(sit?.description || '')));
-
-  // Selected theme/mood/sound keywords:
-  const themes = (params.themes ?? []).map(t => themeToIntentText(t)).filter(Boolean);
+  const sourceText = collectSceneBlueprintSource(params);
+  const mapped = translateOrMapKoreanToEnglish(sourceText);
+  
   const moods = getMoodWordsForMusicDirection(params).map(m => stripRemainingKoreanForProductionPrompt(m).trim()).filter(Boolean);
-  const genre = params.genre ? stripRemainingKoreanForProductionPrompt(params.genre).trim() : 'music';
-  const sounds = [
-    ...getCompactPointSoundPrompts(params.pointSounds ?? []),
-    ...getInstrumentSoundPromptItems(params.instrumentSounds ?? []).map((item) => item.prompt),
-  ].map(s => stripRemainingKoreanForProductionPrompt(s).trim()).filter(Boolean);
+  const leadMood = moods[0] || "quiet";
 
-  const cleanThemes = dedupePromptParts(themes, 4).map(t => t.toLowerCase());
-  const cleanMoods = dedupePromptParts(moods, 4).map(m => m.toLowerCase());
-  const cleanSounds = dedupePromptParts(sounds, 4).map(s => s.toLowerCase());
-
-  const hasHometownLocal = cleanThemes.some(t => t.includes('hometown') || t.includes('고향'));
-  const hasDawnLocal = cleanMoods.some(m => m.includes('dawn') || m.includes('새벽'));
-  const hasLongingLocal = cleanMoods.some(m => m.includes('longing') || m.includes('그리움')) || cleanThemes.some(t => t.includes('longing') || t.includes('그리움'));
-  const hasRadioLocal = cleanSounds.some(s => s.includes('radio') || s.includes('라디오')) || (params.pointSounds ?? []).some(s => /radio|라디오/i.test(s));
-
-  let scene = "";
-  let detail = "";
-  let conflict = "";
-  let vocalPoint = "";
-  let chorusCore = "";
-
-  if (isAstronaut) {
-    scene = "An astronaut alone on the moon sending their last message to Earth";
-    detail = "stark moon landscape, fading communication signal, last voice message, unable to return to Earth";
-    conflict = "one final signal drifts back toward Earth through quiet empty space";
-    vocalPoint = "lonely, breathy vocal delivery with low radio filter and static noise, conveying isolation and quiet resignation";
-    chorusCore = "the last transmission keeps fading near the blue Earth";
-  } else if (isMotherDaughterInLaw) {
-    scene = "A holiday kitchen where a mother-in-law and daughter-in-law subtly insult each other while preparing food";
-    detail = "holiday kitchen, sizzling pans, food preparation, passive-aggressive tension, comedic tone";
-    conflict = "forced smiles masking sharp words and passive-aggressive tension as they cook together";
-    vocalPoint = "conversational, theatrical vocal tone switching between sweet forced politeness and sharp sarcastic side-mumbles";
-    chorusCore = "sincere smiles hide the sharpest kitchen secrets under the steam";
-  } else if (hasHometownLocal && hasDawnLocal && hasLongingLocal && hasRadioLocal) {
-    scene = "An old radio playing in a quiet hometown room at dawn";
-    detail = "old radio static, quiet hometown room, dawn light filtering through windows, lingering longing";
-    conflict = "the familiar broadcast brings back memories and unresolved longing from a place left behind";
-    vocalPoint = "warm, nostalgic folk acoustic delivery with analog tape warmth and soft acoustic guitar backing";
-    chorusCore = "the old radio plays a melody of longing that time cannot erase";
-  } else if (isSituationActive) {
-    const rel = sit?.relationship ? stripRemainingKoreanForProductionPrompt(sit.relationship).trim() : '';
-    const desc = sit?.description ? stripRemainingKoreanForProductionPrompt(sit.description).trim() : '';
-    const targetA = sit?.targetA ? stripRemainingKoreanForProductionPrompt(sit.targetA).trim() : '';
-    const targetB = sit?.targetB ? stripRemainingKoreanForProductionPrompt(sit.targetB).trim() : '';
-    const relDesc = [rel, desc].filter(Boolean).join(', ');
-
-    scene = relDesc 
-      ? `A scene of ${relDesc}`
-      : `A scene involving ${targetA || 'Character A'} and ${targetB || 'Character B'} in a personal moment`;
-      
-    detail = [
-      sit?.details ? stripRemainingKoreanForProductionPrompt(sit.details).trim() : '',
-      sit?.detailCustom ? stripRemainingKoreanForProductionPrompt(sit.detailCustom).trim() : '',
-      "visible behavior, emotional pressure, and specific conversational timing"
-    ].filter(Boolean).join(', ');
-
-    conflict = sit?.summary 
-      ? stripRemainingKoreanForProductionPrompt(sit.summary).trim()
-      : "unresolved tension and emotional distance between the characters under the surface";
-
-    const speechA = [sit?.speakerAStyle, sit?.speakerAAttitude].filter(Boolean).join(' ');
-    const speechB = [sit?.speakerBStyle, sit?.speakerBAttitude].filter(Boolean).join(' ');
-    vocalPoint = `dual conversational roles; Vocal A is ${speechA || 'natural'} and Vocal B is ${speechB || 'natural'}`;
-    chorusCore = "the central conflict peaks through shared words, revealing their true unsaid feelings";
-  } else if (rawInput || lyricDraft || directThemeText || directMoodText) {
-    const combined = [rawInput, lyricDraft, directThemeText, directMoodText].filter(Boolean).join(' ');
-    const englishCleaned = stripRemainingKoreanForProductionPrompt(combined).trim() || combined;
-    scene = `A scene of ${englishCleaned}`;
-    detail = "lived details, small visible action, unsaid feelings, and emotional temperature";
-    conflict = "the user-written situation creates visible emotional pressure";
-    vocalPoint = "natural emotional delivery that follows the specific mood of the scene with human breath";
-    chorusCore = "the central feeling peaks in the chorus with a strong emotional hook";
-  } else {
-    const mainTheme = cleanThemes[0] || 'everyday memory';
-    const mainMood = cleanMoods[0] || 'quiet stillness';
-    const secondaryMood = cleanMoods[1] || '';
-    const moodPhrase = secondaryMood ? `${mainMood} and ${secondaryMood}` : mainMood;
-    const mainSound = cleanSounds[0] || '';
-    const soundPhrase = mainSound ? `accompanied by soft ${mainSound}` : '';
-
-    scene = `A quiet scene of ${mainTheme} in ${moodPhrase} atmosphere ${soundPhrase}`.replace(/\s+/g, ' ').trim();
-    detail = `${mainTheme}, ${moodPhrase}, a small personal object, and quiet space textures`;
-    conflict = `unresolved ${mainMood} and hidden feelings lingering in the quiet space`;
-    vocalPoint = `honest solo vocal delivery matching the ${genre} style, filled with ${mainMood}`;
-    chorusCore = `the essence of ${mainTheme} is captured with deep emotional resonance`;
-  }
+  const info = getVocalModeInfo(params.vocal);
+  const gender = info.gender || "male";
+  const isSolo = info.isSolo;
+  
+  const scene = `a ${leadMood} scene ${mapped.place ? `in ${mapped.place}` : ''} where ${mapped.characters} is ${mapped.action}`.replace(/\s+/g, ' ').trim();
+  
+  const detail = `${mapped.place || 'room'}, a small everyday object, ${leadMood} colors, and natural ambient noises`;
+  const conflict = mapped.conflict;
+  
+  const vocalPoint = `Natural ${gender} ${isSolo ? 'solo' : 'group'} vocal with ${isTrapOrHiphopCoreGenre(params) ? 'rhythmic spoken-melodic flow' : 'clear melodic phrasing'} and honest emotional delivery`;
+  const chorusCore = `the characters' core desire is expressed clearly through a repeatable melodic line`;
 
   return {
     scene: cleanScenePlanPhrase(scene, 180),
@@ -13854,9 +13900,71 @@ function buildSceneBlueprint(params: GenerateSongParams): {
   };
 }
 
+function buildSceneBlueprint(params: GenerateSongParams): {
+  scene: string;
+  detail: string;
+  conflict: string;
+  vocalPoint: string;
+  chorusCore: string;
+  sceneSourceText?: string;
+  primaryIntent?: string;
+  selectedKeywordIntent?: string;
+  sceneRequirement?: string;
+  detailRequirement?: string;
+  chorusRequirement?: string;
+} {
+  const sceneSourceText = collectSceneBlueprintSource(params);
+  
+  const directTheme = getDirectThemeInputText(params);
+  const directMood = getDirectMoodInputText(params);
+  const isSitActive = hasSituation(params.situation);
+  const rawInput = String(params.userInput || '').trim();
+  const rawLyricDraft = String(params.lyricDraft || '').trim();
+  
+  let primaryIntent = "";
+  if (rawInput || rawLyricDraft || directTheme || directMood || isSitActive) {
+    primaryIntent = [
+      rawInput ? `User note: ${rawInput}` : '',
+      rawLyricDraft ? `Lyric draft/correction goal: ${rawLyricDraft}` : '',
+      directTheme ? `Direct theme: ${directTheme}` : '',
+      directMood ? `Direct mood: ${directMood}` : '',
+      isSitActive ? `Situation context: ${JSON.stringify(params.situation)}` : '',
+    ].filter(Boolean).join(' | ');
+  }
+
+  const selectedThemes = (params.themes || []).join(', ');
+  const selectedMoods = (params.moods || []).join(', ');
+  const selectedGenre = params.genre || "";
+  const selectedKeywordIntent = `Themes: ${selectedThemes}, Moods: ${selectedMoods}, Genre: ${selectedGenre}`;
+
+  const sceneRequirement = "Infer a concrete scene preserving the characters, place, visible action, and emotional conflict from the source text. Choose at least 2 elements among (characters, place, action, conflict) to make the scene incredibly vivid and specific.";
+  const detailRequirement = "Extract at least 2 distinct lived details among (personal props, spatial texture, physical actions, speaking tone, relationship dynamic) directly connected to the scene's emotional truth.";
+  const chorusRequirement = "The chorus core must represent the character's burning desire or a repeatable emotional lyric line rather than a flat, abstract description of emotions.";
+
+  const scene = "the concrete scene inferred from the user's source text, preserving the actual characters, place, visible action, and emotional conflict";
+  const detail = "at least two distinct lived details among props, spatial texture, physical actions, speaking tone, or relationship dynamic";
+  const conflict = "the core emotional conflict or characters' unsaid desire moving the story forward";
+  const vocalPoint = "the vocal performance showing the singer speaking or sing from inside the scene with human breath";
+  const chorusCore = "the repeatable central emotional peak or character's burning desire";
+
+  return {
+    scene,
+    detail,
+    conflict,
+    vocalPoint,
+    chorusCore,
+    sceneSourceText,
+    primaryIntent,
+    selectedKeywordIntent,
+    sceneRequirement,
+    detailRequirement,
+    chorusRequirement,
+  };
+}
+
 
 function buildAbsoluteScenePlanSentence(params: GenerateSongParams): string {
-  const bp = buildSceneBlueprint(params);
+  const bp = buildConcreteDeterministicFallbackBlueprint(params);
   const scene = bp.scene;
   const detail = bp.detail;
   const conflict = bp.conflict;
@@ -15529,21 +15637,8 @@ function buildThemeMoodInterpretation(params: GenerateSongParams): ThemeMoodInte
     const scene = cleanupPromptTail(baseScene);
     const sceneWithoutArticle = scene.replace(/^(?:a|an|one)\s+/i, "");
     const isFlutterScene = /flutter|mistake|message|reply|설렘/i.test(scene);
-    const isAstronautMessageScene = /astronaut|space|earth|message|signal|transmission/i.test(scene)
-      && /astronaut|earth|message|signal|transmission/i.test(scene);
     if (isFlutterScene && /obsessive/.test(transitionCue)) {
       return cleanupPromptTail(`${moodAngle} crush tension, a small fluttering mistake spiraling into obsession${spaceTail ? `, ${spaceTail}` : ""}`);
-    }
-    if (isAstronautMessageScene) {
-      const directMoodPrefix = astronautMoodAtmospherePrefix(params);
-      const prefix = directMoodPrefix || moodAngle || '';
-      const hasDirectAmbientCue = /ambient|quiet music|distant music|앰비언트|조용히\s*들/i.test(rawUserMoodSceneText(params));
-      const atmosphereTailParts = [
-        hasDirectAmbientCue ? 'distant ambient music' : '',
-        spaceCue,
-      ].filter(Boolean);
-      const atmosphereTail = atmosphereTailParts.length ? ` with ${atmosphereTailParts.join(' and ')}` : '';
-      return cleanupPromptTail(`${prefix ? `${prefix} ` : ''}astronaut solitude, a fading signal drifting back toward Earth${atmosphereTail}`);
     }
     if (isFlutterScene) {
       return cleanupPromptTail(`${moodAngle} tension around ${sceneWithoutArticle}${spaceTail ? `, ${spaceTail}` : ""}`);
@@ -20834,6 +20929,21 @@ function baseLyricSectionName(section: string): string {
   return normalizeLyricSectionDisplayName(String(section || "").replace(/\s+[A-Z]$/i, "").trim());
 }
 
+function hasLyricBodyBeforeNextStructuralTagForSuffix(lines: string[], startIndex: number): boolean {
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+    const parsed = parseBracketOnlyLine(trimmed);
+    if (parsed) {
+      const composite = parseCompositeLyricTagInside(parsed.inside);
+      if (composite || isSectionOnlyLyricTagInside(parsed.inside)) return false;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
 function applySequentialSectionSuffixes(lines: string[]): string[] {
   const tagInfos: Array<{ index: number; section: string; base: string }> = [];
   lines.forEach((line, index) => {
@@ -20843,6 +20953,7 @@ function applySequentialSectionSuffixes(lines: string[]): string[] {
     if (!composite) return;
     const base = baseLyricSectionName(composite.section);
     if (!/^(?:Verse|Bridge)$/i.test(base)) return;
+    if (!hasLyricBodyBeforeNextStructuralTagForSuffix(lines, index)) return;
     tagInfos.push({ index, section: composite.section, base });
   });
 
@@ -21139,11 +21250,8 @@ function buildRequestedIntroFallbackTag(params: GenerateSongParams): string {
 }
 
 function ensureRequestedIntroPresentInMultiVocalLyrics(lyrics: string, params: GenerateSongParams): string {
-  const info = getVocalModeInfo(params.vocal);
-  if (!info.isMulti || !lyricStructureRequestsIntro(params) || hasIntroLyricSection(lyrics)) return lyrics;
-  const introTag = buildRequestedIntroFallbackTag(params);
-  const body = String(lyrics || '').trim();
-  return `${introTag}${body ? `\n\n${body}` : ''}`.trim();
+  // Never force-add [Intro : instrumental] when Gemini has omitted Intro.
+  return lyrics;
 }
 
 function realLyricLineCount(lines: string[], params: GenerateSongParams): number {
@@ -21434,10 +21542,13 @@ function hasLyricContentBeforeNextStructuralTag(lines: string[], startIndex: num
 }
 
 function removeEmptySungStructuralLyricBlocks(lyrics: string, params: GenerateSongParams): string {
-  // 576: Do not silently delete empty sung sections in lyric songs.
-  // Deleting [Intro]/[Build-Up]/[Drop] hides the real problem from the density repair step,
-  // so the user sees a shorter song instead of a repaired one.
-  if (isVocalLyricSong(params)) {
+  // Keep the old safety behavior for normal solo vocal songs, but allow the
+  // multi-vocal finalizer to remove cue-only sung sections such as
+  // [Verse: Vocal A, heavy sigh] followed immediately by another real Verse.
+  // Intro/Drop/Instrumental/Interlude are already excluded by
+  // isSungStructuralLyricTagLine(), so tag-only intros remain valid.
+  const vocalInfo = getVocalModeInfo(params.vocal);
+  if (isVocalLyricSong(params) && !vocalInfo.isMulti && !hasStoryboardVoiceIdentity(params)) {
     return String(lyrics || '').replace(/\r\n?/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
 
@@ -24324,35 +24435,7 @@ function openingIntroCueFromLooseTag(rawCue: string, params: GenerateSongParams)
 }
 
 function ensureRequestedIntroPresentForVocalLyrics(lyrics: string, params: GenerateSongParams): string {
-  if (!isVocalLyricSong(params) || !lyricStructureRequestsIntro(params) || hasIntroLyricSection(lyrics)) return lyrics;
-  const lines = String(lyrics || '').split('\n');
-  const firstIdx = lines.findIndex((line) => line.trim());
-  if (firstIdx < 0) return lyrics;
-  const first = lines[firstIdx].trim();
-  const parsed = parseBracketOnlyLine(first);
-  if (parsed) {
-    const composite = parseCompositeLyricTagInside(parsed.inside);
-    const isKnownSection = Boolean(composite) || isSectionOnlyLyricTagInside(parsed.inside);
-    if (!isKnownSection) {
-      const cue = openingIntroCueFromLooseTag(parsed.inside, params);
-      lines[firstIdx] = `[Intro : ${cue}]`;
-      return lines.join('\n');
-    }
-
-    // Do not insert an empty Intro tag. If Gemini skipped Intro but started with a real lyric block,
-    // convert that first sung block into the Intro so the required structure has an Intro with body.
-    if (hasLyricBodyLinesAfterSectionTag(lines, firstIdx)) {
-      const cue = lyricFriendlySectionCue('Intro', params);
-      lines[firstIdx] = `[Intro : ${cue}]`;
-      return lines.join('\n');
-    }
-    return lyrics;
-  }
-  if (!/^\[/.test(first)) {
-    const introTag = `[Intro : ${lyricFriendlySectionCue('Intro', params)}]`;
-    lines.splice(firstIdx, 0, introTag);
-    return lines.join('\n');
-  }
+  // Never force-add [Intro : instrumental] when Gemini has omitted Intro or starts with Verse/Rap directly.
   return lyrics;
 }
 
@@ -24367,6 +24450,11 @@ function normalizeLyricSectionTagForVocalSong(tag: string, params: GenerateSongP
 
   const isVocalSong = isVocalLyricSong(params);
   if (!cue) {
+    // Do not create fallback cue-only sung sections here.
+    // Empty Verse/Pre-Chorus/Chorus/etc. tags must stay plain so context-aware cleanup can
+    // remove them when they have no body, while ensureSungSectionTagsHaveSafeCue() can still
+    // add a cue later when the section actually has lyrics.
+    if (isVocalSong && (/^intro$/i.test(section) || isSungSectionThatNeedsBody(section))) return `[${section}]`;
     return `[${section} : ${lyricFriendlySectionCue(section, params)}]`;
   }
 
@@ -24382,15 +24470,24 @@ function normalizeLyricSectionTagForVocalSong(tag: string, params: GenerateSongP
     }
   }
 
-  if (isVocalSong && (/intro|build|break|outro/i.test(sectionLower)) && mainlySound) {
-    const safeCue = /intro/i.test(sectionLower) && cueOnlyParts.some((part) => /acoustic|fingerpicking|guitar/i.test(part))
-      ? 'acoustic opening'
-      : lyricFriendlySectionCue(section, params);
+  if (isVocalSong && /^intro$/i.test(section) && mainlySound) {
+    const introCue = dedupePromptParts([...anchorParts, ...cueOnlyParts], 4).slice(0, 3).join(', ');
+    return `[${section}${introCue ? ` : ${introCue}` : ''}]`;
+  }
+
+  if (isVocalSong && (/build|break|outro/i.test(sectionLower)) && mainlySound) {
+    const safeCue = lyricFriendlySectionCue(section, params);
     return `[${section} : ${[...anchorParts, safeCue].filter(Boolean).join(', ')}]`;
   }
 
   const finalParts = normalizeFinalLyricSectionCueParts(parts, section, params);
-  if (!finalParts.length) return `[${section} : ${lyricFriendlySectionCue(section, params)}]`;
+  if (!finalParts.length) {
+    // If all cue parts were removed from a sung section, do not invent a cue at this local
+    // tag-normalization step. A real body will receive a safe cue later; an empty section
+    // will be removed before it can trigger repair/fallback loops.
+    if (isVocalSong && isSungSectionThatNeedsBody(section)) return `[${section}]`;
+    return `[${section} : ${lyricFriendlySectionCue(section, params)}]`;
+  }
   return `[${section} : ${finalParts.join(', ')}]`;
 }
 
@@ -24403,14 +24500,20 @@ function normalizeLyricSectionTagsForVocalSong(lyrics: string, params: GenerateS
 }
 
 function repairOpeningUntaggedLyricBlock(lyrics: string, params: GenerateSongParams): string {
-  const withIntro = ensureRequestedIntroPresentForVocalLyrics(lyrics, params);
-  const lines = String(withIntro || '').split('\n');
+  const lines = String(lyrics || '').split('\n');
   const firstIdx = lines.findIndex((line) => line.trim());
-  if (firstIdx < 0) return withIntro;
+  if (firstIdx < 0) return lyrics;
   const first = lines[firstIdx].trim();
-  if (isBracketTag(first)) return withIntro;
-  if (/^\[/.test(first)) return withIntro;
-  const tag = `[Intro : ${lyricFriendlySectionCue('Intro', params)}]`;
+  if (isBracketTag(first)) return lyrics;
+  if (/^\[/.test(first)) return lyrics;
+
+  // Untagged opening lyrics exist. Tag them directly with the appropriate starting tag
+  // on the first line, without inserting empty/ghost tags or fallback structures.
+  // Do not promote untagged opening lyrics into Intro just because the built-in structure
+  // contains an Intro. If the model wanted a sung/spoken Intro it usually emits an [Intro]
+  // tag itself; otherwise the safest local repair is to start the lyric body at Verse.
+  const tag = `[Verse : ${lyricFriendlySectionCue('Verse', params)}]`;
+
   lines.splice(firstIdx, 0, tag);
   return lines.join('\n');
 }
@@ -24622,8 +24725,16 @@ async function repairSparseLyricsWithGemini(
   productionPrompt: string,
   languageLabel: string,
 ): Promise<string> {
-  const source = String(lyrics || '').trim();
-  if (!source || !needsLyricDensityRepair(source, params)) return lyrics;
+  const originalSource = String(lyrics || '').trim();
+  if (!originalSource) return lyrics;
+
+  // Repair must not treat locally-created ghost skeletons as real empty lyric sections.
+  // Clean tag-only fallback Intro/Verse shells before deciding whether a second Gemini pass
+  // is needed. This prevents the repair pass from creating a second, competing lyric version.
+  const source = cleanupGhostOpeningIntroAndEmptySungTags(originalSource, params);
+  if (!source || !needsLyricDensityRepair(source, params)) {
+    return enforceLyricSectionBlockSpacing(source || originalSource, params);
+  }
 
   const instruction = lyricDensityRepairInstruction(languageLabel);
   const context = [
@@ -24658,7 +24769,7 @@ async function repairSparseLyricsWithGemini(
     const parsed = JSON.parse(repairResponse.text || '{}');
     const repaired = typeof parsed?.lyrics === 'string' ? parsed.lyrics.trim() : '';
     if (!repaired) return enforceLyricSectionBlockSpacing(lyrics, params);
-    let repairedPost = postProcessLyricsSectionTags(repaired, params);
+    let repairedPost = cleanupGhostOpeningIntroAndEmptySungTags(postProcessLyricsSectionTags(repaired, params), params);
     const beforeChars = lyricDensityTextLength(lyricDensityBodyLines(source, params));
     let afterChars = lyricDensityTextLength(lyricDensityBodyLines(repairedPost, params));
 
@@ -24671,7 +24782,7 @@ async function repairSparseLyricsWithGemini(
         '- Preserve the same section order.',
         '- Do not add unrelated plot.',
         '- Do not make every line long.',
-        '- Fill every tag-only/empty sung section with concise sung content based on the existing images and hook. Keep section tags on their own lines and put lyrics on following lines.',
+        '- Fill every tag-only/empty required sung section except Intro with concise sung content based on the existing images and hook. Intro may remain lyric-free when it works as a prologue. Keep section tags on their own lines and put lyrics on following lines.',
         '',
         'Production prompt / song direction:',
         String(productionPrompt || '').slice(0, 1800),
@@ -24701,7 +24812,7 @@ async function repairSparseLyricsWithGemini(
       const strictParsed = JSON.parse(strictResponse.text || '{}');
       const strictLyrics = typeof strictParsed?.lyrics === 'string' ? strictParsed.lyrics.trim() : '';
       if (strictLyrics) {
-        const strictPost = postProcessLyricsSectionTags(strictLyrics, params);
+        const strictPost = cleanupGhostOpeningIntroAndEmptySungTags(postProcessLyricsSectionTags(strictLyrics, params), params);
         const strictChars = lyricDensityTextLength(lyricDensityBodyLines(strictPost, params));
         if (strictChars >= Math.max(beforeChars, Math.floor(lyricDensityMinimumCharsForLyrics(strictPost, params) * 0.85)) && !needsLyricDensityRepair(strictPost, params)) {
           repairedPost = strictPost;
@@ -24710,8 +24821,8 @@ async function repairSparseLyricsWithGemini(
       }
     }
 
-    if (afterChars < Math.floor(lyricDensityMinimumCharsForLyrics(repairedPost, params) * 0.65)) return enforceLyricSectionBlockSpacing(lyrics, params);
-    return enforceLyricSectionBlockSpacing(repairedPost, params);
+    if (afterChars < Math.floor(lyricDensityMinimumCharsForLyrics(repairedPost, params) * 0.65)) return enforceLyricSectionBlockSpacing(source, params);
+    return cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(repairedPost, params), params);
   } catch (error) {
     console.warn('[SORIDRAW Lyrics Density Repair] skipped:', error);
     return lyrics;
@@ -24726,7 +24837,9 @@ function isTransitionOrInstrumentalSectionName(sectionName: string): boolean {
 
 function isSungSectionThatNeedsBody(sectionName: string): boolean {
   const section = normalizeLyricSectionDisplayName(sectionName || '');
-  return /^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Build[-\s]?Up|Drop|Bridge(?:\s+[A-Z0-9]+)?|Outro)$/i.test(section)
+  // Intro is a prologue/opening section. It may be instrumental, ambient, texture, foley,
+  // humming, ad-lib, or sung depending on the song, so do not treat it as a required-body section.
+  return /^(?:Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Build[-\s]?Up|Drop|Bridge(?:\s+[A-Z0-9]+)?|Outro)$/i.test(section)
     && !isTransitionOrInstrumentalSectionName(section);
 }
 
@@ -24770,7 +24883,7 @@ function removeEmptySungLyricSections(lyrics: string, params: GenerateSongParams
     }
 
     if (!hasLyricBodyLinesAfterSectionTag(lines, i)) {
-      // Remove empty sung structural blocks such as [Intro : airy space] or [Verse : tunnel-echo].
+      // Remove empty required sung structural blocks such as [Verse : tunnel-echo]. Intro may stay tag-only as a prologue.
       continue;
     }
 
@@ -24808,17 +24921,9 @@ function isSoloOrSingleVocalLyricMode(params: GenerateSongParams): boolean {
 }
 
 function forceStableIntroWithExistingBody(lyrics: string, params: GenerateSongParams): string {
-  if (!isVocalLyricSong(params) || !isStableRecommendedLyricMode(params) || !lyricStructureRequestsIntro(params) || hasIntroLyricSection(lyrics)) return lyrics;
-  const lines = String(lyrics || '').split('\n');
-  const firstSungIdx = lines.findIndex((line, index) => {
-    const parsed = parseGuardBracketSectionTag(line);
-    if (!parsed) return false;
-    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
-    return isSungSectionThatNeedsBody(section) && hasLyricBodyLinesAfterSectionTag(lines, index);
-  });
-  if (firstSungIdx < 0) return lyrics;
-  lines[firstSungIdx] = `[Intro : ${fallbackLyricCueForSection('Intro')}]`;
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  // Intro must remain available as the opening/prologue, but existing Verse/Rap/Chorus bodies
+  // should never be converted into Intro by local post-processing.
+  return lyrics;
 }
 
 function normalizeStableSoloSectionSuffixes(lyrics: string, params: GenerateSongParams): string {
@@ -24849,6 +24954,152 @@ function removeStandaloneNonStructuralLyricCueLines(lyrics: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+
+function isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(sectionName: string): boolean {
+  const section = normalizeLyricSectionDisplayName(sectionName || '');
+  return /^(?:Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Bridge(?:\s+[A-Z0-9]+)?)$/i.test(section);
+}
+
+function isGhostCleanupStructuralTagLine(line: string, params: GenerateSongParams): boolean {
+  const parsed = parseGuardBracketSectionTag(String(line || '').trim());
+  if (!parsed) return false;
+  const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+  if (!section) return false;
+  if (/^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Bridge(?:\s+[A-Z0-9]+)?|Outro|Drop|Build[-\s]?Up|Break|Stop|Interlude|Instrumental|Instrumental Opening|Solo)$/i.test(section)) return true;
+  const normalizedInside = `${section}${parsed.body ? `: ${parsed.body}` : ''}`;
+  return isSectionOnlyLyricTagInside(section) || Boolean(parseCompositeLyricTagInside(normalizedInside));
+}
+
+function isConcreteLyricOrAdlibLineForGhostCleanup(line: string, params: GenerateSongParams): boolean {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) return false;
+  if (isGhostCleanupStructuralTagLine(trimmed, params)) return false;
+
+  // Short parenthetical ad-libs such as (Ha...), (Yeah), or Korean mutters are real Intro body.
+  // The older generic cue checker can misclassify them as non-lyric stage cues, so keep this
+  // check before isNonLyricCueLineInsideEmptySection().
+  const paren = trimmed.match(/^\(([^()]*)\)$/);
+  if (paren) {
+    const cue = String(paren[1] || '').trim();
+    if (!cue) return false;
+    if (/^(?:ha+|hah+|yeah|yea|uh+|oh+|ah+|hey|yo|mm+|hmm+|shh+|woo+|ooh+|ay+|okay|ok|let'?s\s+go|good\s+night|stay)\b/i.test(cue)) return true;
+    if (/[가-힣]/.test(cue) && cue.length <= 80) return true;
+    if (/[A-Za-z]/.test(cue) && cue.split(/\s+/).length <= 8 && !findSoundCueEnglish(cue)) return true;
+  }
+
+  if (isNonLyricCueLineInsideEmptySection(trimmed, params)) return false;
+  if (isBracketTag(trimmed)) return false;
+  return true;
+}
+
+function hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines: string[], startIndex: number, params: GenerateSongParams): boolean {
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+    if (isGhostCleanupStructuralTagLine(trimmed, params)) return false;
+    if (isConcreteLyricOrAdlibLineForGhostCleanup(trimmed, params)) return true;
+  }
+  return false;
+}
+
+function removeGhostEmptyCoreSungSectionTags(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const parsed = parseGuardBracketSectionTag(lines[i]);
+    if (!parsed) {
+      out.push(lines[i]);
+      continue;
+    }
+
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    if (isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(section) && !hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) {
+      continue;
+    }
+
+    out.push(lines[i]);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function isTagOnlyIntroBlockForGhostCleanup(lines: string[], introIndex: number, params: GenerateSongParams): boolean {
+  const parsed = parseGuardBracketSectionTag(lines[introIndex]);
+  if (!parsed) return false;
+  const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+  if (!/^Intro$/i.test(section)) return false;
+  return !hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, introIndex, params);
+}
+
+function removeDuplicateOpeningFallbackIntroTag(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const firstIdx = lines.findIndex((line) => line.trim());
+  if (firstIdx < 0) return String(lyrics || '').trim();
+
+  const firstParsed = parseGuardBracketSectionTag(lines[firstIdx]);
+  const firstSection = firstParsed ? normalizeLyricSectionDisplayName(firstParsed.rawSection) : '';
+  if (!/^Intro$/i.test(firstSection)) return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+
+  // A real opening Intro with ad-lib/lyric body must survive.
+  if (!isTagOnlyIntroBlockForGhostCleanup(lines, firstIdx, params)) {
+    return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // Remove an opening tag-only fallback Intro when the model later produced the real Intro.
+  // This catches patterns like:
+  // [Intro: scene-setting opening]
+  // [Verse: ...]        <-- empty ghost section
+  // [Intro: heavy sigh]
+  // (Ha...)
+  // 또 멈췄네
+  const removeIndices = new Set<number>([firstIdx]);
+  for (let i = firstIdx + 1; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (parsed) {
+      const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+
+      if (/^Intro$/i.test(section)) {
+        if (hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) {
+          const out = lines.filter((_, index) => !removeIndices.has(index));
+          return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        }
+        // Multiple empty opening Intro placeholders before the real one may appear; remove them too.
+        removeIndices.add(i);
+        continue;
+      }
+
+      if (isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(section) && !hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) {
+        removeIndices.add(i);
+        continue;
+      }
+
+      // A different structural section with body means the first Intro is a valid prologue.
+      if (hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) {
+        return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+      }
+      continue;
+    }
+
+    // Non-structural real body before a second Intro means the first Intro is real enough to keep.
+    if (isConcreteLyricOrAdlibLineForGhostCleanup(trimmed, params)) {
+      return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+    }
+  }
+
+  return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function cleanupGhostOpeningIntroAndEmptySungTags(lyrics: string, params: GenerateSongParams): string {
+  let text = removeGhostEmptyCoreSungSectionTags(lyrics, params);
+  text = removeDuplicateOpeningFallbackIntroTag(text, params);
+  text = removeGhostEmptyCoreSungSectionTags(text, params);
+  return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function postProcessLyricsSectionTags(lyrics: string, params: GenerateSongParams): string {
@@ -24965,6 +25216,7 @@ function postProcessLyricsSectionTags(lyrics: string, params: GenerateSongParams
   finalText = normalizeStableSoloSectionSuffixes(finalText, params);
   finalText = removeStandaloneNonStructuralLyricCueLines(finalText);
   finalText = ensureSungSectionTagsHaveSafeCue(finalText, params);
+  finalText = cleanupGhostOpeningIntroAndEmptySungTags(finalText, params);
   return finalText.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -26635,7 +26887,7 @@ ${buildExperimentalStructureInspiration(params)}
 ${exactStructureText}
 - In Stable/Recommended mode, do not place Chorus before the first Verse unless the user explicitly wrote a custom chorus-first instruction. The first sung storytelling section should begin with Verse or Rap Section according to the required structure.
 - Output the structural sections in this order. Do not omit, merge, rename, or absorb required structural sections into another tag.
-- The required Intro must appear first and must have 1-2 concise lyric, humming, or ad-lib lines after the tag. Do not output a tag-only Intro in Stable/Recommended mode.
+- If the required structure includes Intro, keep Intro as the opening/prologue section. Intro may be lyric-free when it functions as instrumental, ambient, foley, texture, mood-setting, or buildup opening. Add a short lyric, humming, ad-lib, spoken phrase, or hook-first line only when it naturally fits the genre, scene, and flow. Do not force Verse/Rap/Chorus body lyrics into Intro, and do not treat a tag-only Intro as an error.
 - Use [Verse] when Verse returns; do not output [Verse A], [Verse B], or [Verse C] unless there are multiple different speakers in a Situation.
 - Every sung section tag must include a fresh cue after the colon, shaped for this exact song. Bad: [Verse]. Good shape: [Verse : current-song vocal attitude or emotional function]. Do NOT put space-texture style labels such as tunnel echo, bathroom reverb, airy space, spatial texture, room reverb, or reverb-only cues inside sung lyric section tags; keep those in the production prompt only.
 - The structure is fixed, but section cue wording is NOT fixed. Do not reuse canned cues such as processed, soft swell, fading out, emotional build, controlled emotional turn, or high-energy hook as one-word/generic answers.
@@ -27661,8 +27913,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     eng = postProcessLyricsSectionTags(eng, params);
     eng = alignSectionTagsBetweenLanguages(kor, eng);
 
-    result.lyrics.korean = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(kor), params);
-    result.lyrics.english = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(eng), params);
+    result.lyrics.korean = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(kor), params), params);
+    result.lyrics.english = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(eng), params), params);
   }
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
@@ -27710,10 +27962,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   if (!params.isNoLyrics && result?.lyrics && typeof result.lyrics === 'object') {
     if (typeof result.lyrics.korean === 'string') {
-      result.lyrics.korean = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.korean), params);
+      result.lyrics.korean = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.korean), params), params);
     }
     if (typeof result.lyrics.english === 'string') {
-      result.lyrics.english = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.english), params);
+      result.lyrics.english = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.english), params), params);
     }
   }
 

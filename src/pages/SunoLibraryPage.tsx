@@ -9,7 +9,7 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
@@ -31,7 +31,9 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
-const WORKSPACE_PAGE_SIZE = 10;
+const WORKSPACE_PAGE_SIZE = 20;
+const WORKSPACE_SERVER_PAGE_SIZE = 20;
+const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE + 1;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
@@ -593,6 +595,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   ];
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
+  const [hasMoreWorkspaceServerTracks, setHasMoreWorkspaceServerTracks] = useState(false);
+  const [isLoadingMoreWorkspaceTracks, setIsLoadingMoreWorkspaceTracks] = useState(false);
+  const workspaceLastTrackDocRef = useRef<any>(null);
+  const workspacePaginationFallbackRef = useRef(false);
   const [showWorkspaceMoreTooltip, setShowWorkspaceMoreTooltip] = useState(false);
 
   useEffect(() => {
@@ -818,6 +824,37 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     };
   }, []);
 
+
+  const getTrackCreatedAtMs = (track: any): number => {
+    const value = track?.createdAt;
+    if (!value) return 0;
+    if (typeof value?.toMillis === 'function') return value.toMillis();
+    if (typeof value?.seconds === 'number') return value.seconds * 1000;
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const mergeWorkspaceTracks = (incoming: any[], previous: any[] = []): any[] => {
+    const map = new Map<string, any>();
+    previous.forEach((track: any) => {
+      const id = String(track?.id || '').trim();
+      if (id) map.set(id, track);
+    });
+    incoming.forEach((track: any) => {
+      const id = String(track?.id || '').trim();
+      if (id) map.set(id, { ...(map.get(id) || {}), ...track });
+    });
+    return Array.from(map.values()).sort((a: any, b: any) => getTrackCreatedAtMs(b) - getTrackCreatedAtMs(a));
+  };
+
+  const saveWorkspaceTrackCache = (uid: string, list: any[]) => {
+    try {
+      localStorage.setItem(`soridraw_suno_tracks_cache_${uid}`, JSON.stringify(list));
+    } catch (e) {
+      console.error('Failed to save suno_tracks to cache:', e);
+    }
+  };
+
   useEffect(() => {
     const searchParams = new URL(window.location.href).searchParams;
     const trackId = searchParams.get('track');
@@ -918,6 +955,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       }
 
       const cacheKey = `soridraw_suno_tracks_cache_${resolvedUser.uid}`;
+      workspaceLastTrackDocRef.current = null;
+      workspacePaginationFallbackRef.current = false;
+      setHasMoreWorkspaceServerTracks(false);
+      setIsLoadingMoreWorkspaceTracks(false);
+
       let cachedTracks: any[] = [];
       try {
         const cachedJson = localStorage.getItem(cacheKey);
@@ -932,42 +974,121 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         setTracks(cachedTracks);
         setLoading(false);
       } else {
+        setTracks([]);
         setLoading(true);
       }
 
-      const q = query(
-        collection(db, 'suno_tracks', resolvedUser.uid, 'tracks')
+      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
+      const pageQuery = query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
       );
 
-      const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-        const list = snapshot.docs.map(doc => ({
+      const startFullWorkspaceFallback = () => {
+        workspacePaginationFallbackRef.current = true;
+        setHasMoreWorkspaceServerTracks(false);
+        const fallbackQuery = query(tracksRef);
+        return onSnapshot(fallbackQuery, (snapshot) => {
+          const list = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          const sorted = mergeWorkspaceTracks(list, []);
+          setTracks(sorted);
+          setLoading(false);
+          saveWorkspaceTrackCache(resolvedUser.uid, sorted);
+        }, (error) => {
+          console.error('Error fetching tracks fallback:', error);
+          setLoading(false);
+        });
+      };
+
+      let unsubscribeFallback: (() => void) | undefined;
+      const unsubscribeSnapshot = onSnapshot(pageQuery, (snapshot) => {
+        const docs = snapshot.docs;
+        const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
+        const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
+        workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
+        setHasMoreWorkspaceServerTracks(hasMore);
+
+        const list = visibleDocs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
 
-        list.sort((a: any, b: any) => {
-          const t1 = a.createdAt?.seconds || 0;
-          const t2 = b.createdAt?.seconds || 0;
-          return t2 - t1;
+        setTracks((prev) => {
+          const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
+          saveWorkspaceTrackCache(resolvedUser.uid, merged);
+          return merged;
         });
-
-        setTracks(list);
         setLoading(false);
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(list));
-        } catch (e) {
-          console.error('Failed to save suno_tracks to cache:', e);
+      }, (error: any) => {
+        console.error('Error fetching paged tracks:', error);
+        setLoading(false);
+        if (!unsubscribeFallback) {
+          unsubscribeFallback = startFullWorkspaceFallback();
         }
-      }, (error) => {
-        console.error('Error fetching tracks:', error);
-        setLoading(false);
       });
 
-      return () => unsubscribeSnapshot();
+      return () => {
+        unsubscribeSnapshot();
+        if (unsubscribeFallback) unsubscribeFallback();
+      };
     });
 
     return () => unsubscribeAuth();
   }, [appUser?.uid]);
+
+
+  const loadMoreWorkspaceTracks = async () => {
+    if (!user || isSharedView || workspacePaginationFallbackRef.current) {
+      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
+      return;
+    }
+
+    if (workspaceVisibleCount < filteredTracks.length) {
+      setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length));
+      return;
+    }
+
+    if (!hasMoreWorkspaceServerTracks || !workspaceLastTrackDocRef.current || isLoadingMoreWorkspaceTracks) return;
+
+    setIsLoadingMoreWorkspaceTracks(true);
+    try {
+      const tracksRef = collection(db, 'suno_tracks', user.uid, 'tracks');
+      const nextQuery = query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        startAfter(workspaceLastTrackDocRef.current),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
+      );
+      const snapshot = await getDocs(nextQuery);
+      const docs = snapshot.docs;
+      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
+      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
+      workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;
+      setHasMoreWorkspaceServerTracks(hasMore);
+
+      const list = visibleDocs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      setTracks((prev) => {
+        const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
+        saveWorkspaceTrackCache(user.uid, merged);
+        return merged;
+      });
+      setWorkspaceVisibleCount((prev) => prev + WORKSPACE_PAGE_SIZE);
+    } catch (error) {
+      console.error('load more workspace tracks failed:', error);
+      workspacePaginationFallbackRef.current = true;
+      setHasMoreWorkspaceServerTracks(false);
+    } finally {
+      setIsLoadingMoreWorkspaceTracks(false);
+    }
+  };
 
   useEffect(() => {
     if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || isSharedView) {
@@ -2349,7 +2470,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return filteredTracks.slice(0, workspaceVisibleCount);
   }, [filteredTracks, libraryViewMode, workspaceVisibleCount]);
 
-  const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && workspaceVisibleCount < filteredTracks.length;
+  const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && (workspaceVisibleCount < filteredTracks.length || hasMoreWorkspaceServerTracks);
 
   const allPlayables = useMemo(() => {
     const list: any[] = [];
@@ -6112,7 +6233,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   type="button"
                   data-selection-keep="true"
                   onPointerDown={(event) => { if (multiSelectMode) event.stopPropagation(); }}
-                  onClick={(event) => { event.stopPropagation(); setWorkspaceVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, filteredTracks.length)); }}
+                  onClick={(event) => { event.stopPropagation(); void loadMoreWorkspaceTracks(); }}
                   onMouseEnter={() => setShowWorkspaceMoreTooltip(true)}
                   onMouseLeave={() => setShowWorkspaceMoreTooltip(false)}
                   onFocus={() => setShowWorkspaceMoreTooltip(true)}
@@ -6120,15 +6241,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
                 >
                   <span className="text-[#7FBD75] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
-                  더보기 ({filteredTracks.length - workspaceVisibleCount}세트 남음)
+                  {isLoadingMoreWorkspaceTracks ? '불러오는 중...' : `더보기 (${Math.max(0, filteredTracks.length - workspaceVisibleCount) + (hasMoreWorkspaceServerTracks ? WORKSPACE_PAGE_SIZE : 0)}세트 남음)`}
                 </button>
                 <p className="text-[11px] text-white/35">
-                  {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 총 {filteredTracks.length}세트
+                  {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 현재 {filteredTracks.length}세트
                 </p>
                 {false && showWorkspaceMoreTooltip && (
                   <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#7FBD75]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
                     <p className="text-xs font-bold text-[#7FBD75]">더보기</p>
-                    <p className="mt-1 text-[11px] text-white/60">곡을 10세트 더 불러옵니다.</p>
+                    <p className="mt-1 text-[11px] text-white/60">곡을 20세트 더 불러옵니다.</p>
                   </div>
                 )}
               </div>

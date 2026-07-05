@@ -758,6 +758,12 @@ export default function FavoritesPage({
   const [hasFavoriteSunoApiKey, setHasFavoriteSunoApiKey] = useState<boolean>(() => getCachedSunoApiStatus(user?.uid));
   const [foreignTargetLanguage, setForeignTargetLanguage] = useState<string>('English');
   const [editedTitle, setEditedTitle] = useState('');
+  const [editedTitleGenre, setEditedTitleGenre] = useState('');
+  const [editedKoreanTitle, setEditedKoreanTitle] = useState('');
+  const [editedEnglishTitle, setEditedEnglishTitle] = useState('');
+  const [originalTitleGenre, setOriginalTitleGenre] = useState('');
+  const [originalKoreanTitle, setOriginalKoreanTitle] = useState('');
+  const [originalEnglishTitle, setOriginalEnglishTitle] = useState('');
   const [editedKoreanLyrics, setEditedKoreanLyrics] = useState('');
   const [editedEnglishLyrics, setEditedEnglishLyrics] = useState('');
   const [originalPrompt, setOriginalPrompt] = useState('');
@@ -791,7 +797,13 @@ export default function FavoritesPage({
 
   // 제목/장르 표시 정규화
   const getDisplaySubGenre = (song: any): string => {
-    return getResolvedGenre(song);
+    const displayOverride = String(song?.displayGenre || song?.titleGenre || '')
+      .replace(/^\[|\]$/g, '')
+      .replace(/^['"]+|['"]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return displayOverride || getResolvedGenre(song);
   };
 
   const parseLegacyTitles = (song: any): { korean: string; english: string } => {
@@ -870,6 +882,24 @@ export default function FavoritesPage({
       .replace(/^['"]+|['"]+$/g, '')
       .trim();
   };
+
+  const cleanEditableTitleGenre = (value: any): string => {
+    return String(value || '')
+      .replace(/^\[|\]$/g, '')
+      .replace(/^['"]+|['"]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const composeFavoriteEditedTitle = (korean: any, english: any): string => {
+    const ko = cleanTitlePart(korean);
+    const foreign = cleanTitlePart(english);
+
+    if (ko && foreign && ko !== foreign) return `${ko} | ${foreign}`;
+    return ko || foreign || 'Untitled';
+  };
+
+  const getEditableFavoriteTitleGenre = (song: any): string => cleanEditableTitleGenre(song?.displayGenre || song?.titleGenre || getDisplaySubGenre(song));
 
   const formatPlainTitlePart = (value: any): string => cleanTitlePart(value) || 'Untitled';
 
@@ -1006,13 +1036,19 @@ export default function FavoritesPage({
         return `${genreLabel}${title}`.trim();
       };
       
+  const titleEditHasChanged = Boolean(selectedSong && (
+    cleanEditableTitleGenre(editedTitleGenre) !== cleanEditableTitleGenre(originalTitleGenre) ||
+    cleanTitlePart(editedKoreanTitle) !== cleanTitlePart(originalKoreanTitle) ||
+    cleanTitlePart(editedEnglishTitle) !== cleanTitlePart(originalEnglishTitle)
+  ));
+
   const isModified = selectedSong && (
-    editedTitle !== originalTitle ||
+    titleEditHasChanged ||
     editedKoreanLyrics !== originalLyricsKo ||
     editedEnglishLyrics !== originalLyricsEn ||
     editedPrompt !== originalPrompt
   );
-  const isTitleEditChanged = Boolean(selectedSong && editedTitle !== selectedSong.title);
+  const isTitleEditChanged = titleEditHasChanged;
   const isKoreanLyricsEditChanged = Boolean(selectedSong && editedKoreanLyrics !== originalLyricsKo);
   const isForeignLyricsEditChanged = Boolean(selectedSong && editedEnglishLyrics !== originalLyricsEn);
   const isPromptEditChanged = Boolean(selectedSong && editedPrompt !== originalPrompt);
@@ -2351,6 +2387,10 @@ export default function FavoritesPage({
     if (selectedSong) {
       const selectedSongId = String(selectedSong.id || '');
       const sourceTitle = selectedSong.title || '';
+      const sourceTitles = getNormalizedTitles(selectedSong);
+      const sourceTitleGenre = getEditableFavoriteTitleGenre(selectedSong);
+      const sourceKoreanTitle = cleanTitlePart(sourceTitles.korean);
+      const sourceEnglishTitle = cleanTitlePart(sourceTitles.english);
       const sourceKorean = normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.korean || '');
       const sourceEnglish = normalizeFavoriteLyricsForDisplay(selectedSong.lyrics?.english || '');
       const sourcePrompt = normalizeFavoritePromptForDisplay(selectedSong.prompt || '');
@@ -2366,8 +2406,14 @@ export default function FavoritesPage({
       setOriginalLyricsKo(sourceKorean);
       setOriginalLyricsEn(sourceEnglish);
       setOriginalTitle(sourceTitle);
+      setOriginalTitleGenre(sourceTitleGenre);
+      setOriginalKoreanTitle(sourceKoreanTitle);
+      setOriginalEnglishTitle(sourceEnglishTitle);
       setOriginalPrompt(sourcePrompt);
       setEditedTitle(sourceTitle);
+      setEditedTitleGenre(sourceTitleGenre);
+      setEditedKoreanTitle(sourceKoreanTitle);
+      setEditedEnglishTitle(sourceEnglishTitle);
       setEditedKoreanLyrics(sourceKorean);
       setEditedEnglishLyrics(sourceEnglish);
       setEditedPrompt(sourcePrompt);
@@ -2389,7 +2435,13 @@ export default function FavoritesPage({
       setOriginalLyricsKo('');
       setOriginalLyricsEn('');
       setOriginalTitle('');
+      setOriginalTitleGenre('');
+      setOriginalKoreanTitle('');
+      setOriginalEnglishTitle('');
       setOriginalPrompt('');
+      setEditedTitleGenre('');
+      setEditedKoreanTitle('');
+      setEditedEnglishTitle('');
       popupOpenedSongIdRef.current = null;
       activeFavoriteEditorSongIdRef.current = null;
       favoriteEditorReadySongIdRef.current = null;
@@ -2457,14 +2509,15 @@ export default function FavoritesPage({
       }
     }
 
-    const parsedEditedTitles = parseLegacyTitles({ title: editedTitle });
-    const fallbackTitlePart = cleanTitlePart(editedTitle);
-    const nextKoreanTitle = parsedEditedTitles.korean || (/[가-힣]/.test(fallbackTitlePart) ? fallbackTitlePart : '');
-    const nextEnglishTitle = parsedEditedTitles.english || (!/[가-힣]/.test(fallbackTitlePart) ? fallbackTitlePart : '');
+    const nextTitleGenre = cleanEditableTitleGenre(editedTitleGenre);
+    const nextKoreanTitle = cleanTitlePart(editedKoreanTitle);
+    const nextEnglishTitle = cleanTitlePart(editedEnglishTitle);
+    const nextEditedTitle = composeFavoriteEditedTitle(nextKoreanTitle, nextEnglishTitle);
 
     const nextSong = {
       ...selectedSong,
-      title: editedTitle,
+      title: nextEditedTitle,
+      displayGenre: nextTitleGenre,
       koreanTitle: nextKoreanTitle,
       englishTitle: nextEnglishTitle,
       prompt: editedPrompt,
@@ -2477,8 +2530,14 @@ export default function FavoritesPage({
 
     const updates: Partial<any> = {};
 
-    if (editedTitle !== originalTitle) {
-      updates.title = editedTitle;
+    if (
+      nextEditedTitle !== originalTitle ||
+      nextTitleGenre !== cleanEditableTitleGenre(originalTitleGenre) ||
+      nextKoreanTitle !== cleanTitlePart(originalKoreanTitle) ||
+      nextEnglishTitle !== cleanTitlePart(originalEnglishTitle)
+    ) {
+      updates.title = nextEditedTitle;
+      updates.displayGenre = nextTitleGenre;
       updates.koreanTitle = nextKoreanTitle;
       updates.englishTitle = nextEnglishTitle;
     }
@@ -2530,6 +2589,13 @@ export default function FavoritesPage({
 
       setSelectedSong(payload.nextSong);
       setOriginalTitle(payload.nextSong.title);
+      setOriginalTitleGenre(getEditableFavoriteTitleGenre(payload.nextSong));
+      setOriginalKoreanTitle(cleanTitlePart(payload.nextSong.koreanTitle || ''));
+      setOriginalEnglishTitle(cleanTitlePart(payload.nextSong.englishTitle || ''));
+      setEditedTitle(payload.nextSong.title);
+      setEditedTitleGenre(getEditableFavoriteTitleGenre(payload.nextSong));
+      setEditedKoreanTitle(cleanTitlePart(payload.nextSong.koreanTitle || ''));
+      setEditedEnglishTitle(cleanTitlePart(payload.nextSong.englishTitle || ''));
       setOriginalLyricsKo(payload.nextSong.lyrics?.korean || '');
       setOriginalLyricsEn(payload.nextSong.lyrics?.english || '');
       setOriginalPrompt(payload.nextSong.prompt || '');
@@ -2568,6 +2634,9 @@ export default function FavoritesPage({
     setEditedKoreanLyrics(originalLyricsKo);
     setEditedEnglishLyrics(originalLyricsEn);
     setEditedTitle(originalTitle);
+    setEditedTitleGenre(originalTitleGenre);
+    setEditedKoreanTitle(originalKoreanTitle);
+    setEditedEnglishTitle(originalEnglishTitle);
     setEditedPrompt(originalPrompt);
     setIsEditing(true);
   };
@@ -3073,10 +3142,15 @@ export default function FavoritesPage({
   const cancelModalEditing = () => {
     if (!selectedSong) return;
 
+    const normalizedTitles = getNormalizedTitles(selectedSong);
+
     setIsEditing(false);
     setActiveEditSection(null);
     setIsSyncEnabled(false);
     setEditedTitle(selectedSong.title);
+    setEditedTitleGenre(getEditableFavoriteTitleGenre(selectedSong));
+    setEditedKoreanTitle(cleanTitlePart(normalizedTitles.korean));
+    setEditedEnglishTitle(cleanTitlePart(normalizedTitles.english));
     setEditedKoreanLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.korean));
     setEditedEnglishLyrics(normalizeFavoriteLyricsForDisplay(selectedSong.lyrics.english));
     setEditedPrompt(normalizeFavoritePromptForDisplay(selectedSong.prompt || ''));
@@ -3497,9 +3571,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const getFavoriteMusicApiTitle = (song: any): string => {
     const titleSource = {
       ...song,
-      title: editedTitle || song?.title || '',
-      koreanTitle: '',
-      englishTitle: '',
+      title: composeFavoriteEditedTitle(editedKoreanTitle || song?.koreanTitle || '', editedEnglishTitle || song?.englishTitle || '') || editedTitle || song?.title || '',
+      displayGenre: editedTitleGenre || song?.displayGenre || song?.titleGenre || '',
+      koreanTitle: editedKoreanTitle || song?.koreanTitle || '',
+      englishTitle: editedEnglishTitle || song?.englishTitle || '',
     };
     return getCombinedFavoriteCopyText(titleSource);
   };
@@ -6107,11 +6182,35 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
                   <div className="mt-6 text-center">
                     {isEditing && activeEditSection === 'title' ? (
-                      <input
-                        value={editedTitle}
-                        onChange={(e) => setEditedTitle(e.target.value)}
-                        className="mx-auto w-full max-w-[820px] rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[24px] font-extrabold leading-tight tracking-tight text-white outline-none transition-all focus:border-[#FF5C52]/35 md:text-[34px]"
-                      />
+                      <div className="mx-auto grid w-full max-w-[820px] gap-3 text-left">
+                        <label className="block">
+                          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.28em] text-white/42">장르</span>
+                          <input
+                            value={editedTitleGenre}
+                            onChange={(e) => setEditedTitleGenre(e.target.value)}
+                            placeholder="Tropical House"
+                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-4 py-3 text-center text-[15px] font-bold leading-tight text-white outline-none transition-all focus:border-[#FF5C52]/35 md:text-[18px]"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.28em] text-white/42">한국어</span>
+                          <input
+                            value={editedKoreanTitle}
+                            onChange={(e) => setEditedKoreanTitle(e.target.value)}
+                            placeholder="한국어 제목"
+                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[24px] font-extrabold leading-tight tracking-tight text-white outline-none transition-all focus:border-[#FF5C52]/35 md:text-[34px]"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.28em] text-white/42">외국어</span>
+                          <input
+                            value={editedEnglishTitle}
+                            onChange={(e) => setEditedEnglishTitle(e.target.value)}
+                            placeholder="Foreign title"
+                            className="w-full rounded-2xl border border-white/10 bg-black/15 px-5 py-3 text-center text-[18px] font-bold leading-tight text-white/86 outline-none transition-all focus:border-[#FF5C52]/35 md:text-[24px]"
+                          />
+                        </label>
+                      </div>
                     ) : (
                       <>
                         {getDisplaySubGenre(selectedSong) && (

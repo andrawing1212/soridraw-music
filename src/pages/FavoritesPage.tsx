@@ -58,6 +58,8 @@ const PROJECT_ID = 'soridraw-app-866a5';
 const REGION = 'us-central1';
 const BASE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net`;
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
+const MUSIC_NOTE_VISIBLE_BATCH_SIZE = 20;
+let musicNoteVisibleCountMemory = MUSIC_NOTE_VISIBLE_BATCH_SIZE;
 
 const scopedApiStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 
@@ -730,7 +732,16 @@ export default function FavoritesPage({
   const [sortBy, setSortBy] = useState<'latest' | 'oldest' | 'genre-1' | 'genre-2' | 'title-en' | 'title-ko' | 'locked-top' | 'locked-bottom'>('latest');
   const [favoriteTrashView, setFavoriteTrashView] = useState(false);
   const [showSortPopup, setShowSortPopup] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(15);
+  const [visibleCount, setVisibleCountState] = useState(() => Math.max(MUSIC_NOTE_VISIBLE_BATCH_SIZE, musicNoteVisibleCountMemory));
+  const setVisibleCount = (value: number | ((prev: number) => number)) => {
+    setVisibleCountState((prev) => {
+      const nextValue = typeof value === 'function' ? (value as (prev: number) => number)(prev) : value;
+      const safeValue = Math.max(MUSIC_NOTE_VISIBLE_BATCH_SIZE, nextValue);
+      musicNoteVisibleCountMemory = safeValue;
+      return safeValue;
+    });
+  };
+  const resetVisibleCount = () => setVisibleCount(MUSIC_NOTE_VISIBLE_BATCH_SIZE);
   const sortPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const sortPopupRef = useRef<HTMLDivElement>(null);
   const [copiedType, setCopiedType] = useState<string | null>(null);
@@ -5008,7 +5019,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onClick={() => {
                 setMusicNoteViewMode('noteSpace');
                 setFavoriteTrashView((prev) => !prev);
-                setVisibleCount(15);
+                resetVisibleCount();
                 exitSelectionMode('ui');
               }}
               className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${favoriteTrashView ? 'bg-[#FF5C52]/72 text-white' : 'bg-transparent text-white/50 hover:text-white/75'}`}
@@ -5030,7 +5041,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onClick={() => {
                 setMusicNoteViewMode(tab.id);
                 setFavoriteTrashView(false);
-                setVisibleCount(15);
+                resetVisibleCount();
                 exitSelectionMode('ui');
               }}
               onMouseEnter={() => onHover({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description, _ts: Date.now() })}
@@ -5442,8 +5453,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               <button
                 data-selection-keep="true"
                 onPointerDown={(event) => { if (isSelectionMode) event.stopPropagation(); }}
-                onClick={(event) => { event.stopPropagation(); setVisibleCount(prev => prev + 15); }}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 15개 더 불러옵니다.' })}
+                onClick={(event) => { event.stopPropagation(); setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE); }}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 20개 더 보여줍니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]"
               >

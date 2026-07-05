@@ -367,6 +367,7 @@ import {
   serverTimestamp,
   where,
   limit,
+  startAfter,
   addDoc,
   writeBatch,
   getDocs,
@@ -3645,6 +3646,117 @@ function App() {
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
   const [favorites, setFavorites] = useState<any[]>([]);
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
+  const FAVORITES_PAGE_SIZE = 20;
+  const favoritePaginationCursorRef = useRef<any>(null);
+  const favoritePaginationExhaustedRef = useRef(false);
+  const favoritePaginationLoadingRef = useRef(false);
+  const favoritePaginationFallbackModeRef = useRef(false);
+  const [hasMoreFavorites, setHasMoreFavorites] = useState(false);
+  const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);
+  const sortFavoriteList = (list: any[]) => {
+    return [...list].sort((a: any, b: any) => {
+      const aTime = a.createdAtMs || getTimestampMs(a.createdAt);
+      const bTime = b.createdAtMs || getTimestampMs(b.createdAt);
+      return bTime - aTime;
+    });
+  };
+  const mergeFavoritePages = (current: any[], incoming: any[]) => {
+    const map = new Map<string, any>();
+    [...(current || []), ...(incoming || [])].forEach((item) => {
+      if (!item?.id) return;
+      map.set(item.id, { ...(map.get(item.id) || {}), ...item });
+    });
+    return sortFavoriteList(Array.from(map.values()));
+  };
+
+  const FAVORITE_SERVER_SEARCH_MIN_LENGTH = 2;
+  const FAVORITE_SERVER_SEARCH_LIMIT = 20;
+  const favoriteServerSearchCacheRef = useRef<Record<string, any[]>>({});
+
+  const normalizeFavoriteSearchValue = (value: unknown) => String(value ?? '')
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[^0-9a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣\s-]/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const addFavoriteSearchToken = (tokens: Set<string>, value: unknown, includePrefixes = false) => {
+    const normalized = normalizeFavoriteSearchValue(value);
+    if (!normalized || normalized.length < 2) return;
+
+    tokens.add(normalized.slice(0, 80));
+    normalized.split(/\s+/).forEach((rawPart) => {
+      const part = rawPart.trim();
+      if (part.length < 2) return;
+      tokens.add(part.slice(0, 50));
+      if (includePrefixes) {
+        const maxPrefixLength = Math.min(part.length, 14);
+        for (let length = 2; length <= maxPrefixLength; length += 1) {
+          tokens.add(part.slice(0, length));
+        }
+      }
+    });
+  };
+
+  const collectFavoriteKeywordValues = (song: any): string[] => {
+    const values: string[] = [];
+    const pushValue = (value: unknown) => {
+      if (!value) return;
+      if (typeof value === 'string' || typeof value === 'number') {
+        const text = String(value).trim();
+        if (text) values.push(text);
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach(pushValue);
+        return;
+      }
+      if (typeof value === 'object') {
+        const item = value as Record<string, unknown>;
+        ['labelKo', 'label', 'value', 'name', 'title', 'id'].forEach((key) => pushValue(item[key]));
+      }
+    };
+
+    const keywords = song?.appliedKeywords || {};
+    ['genre', 'genres', 'style', 'styles', 'sound', 'sounds', 'instrumentSounds', 'mood', 'moods', 'theme', 'themes', 'tags', 'keywords'].forEach((key) => {
+      pushValue(keywords[key]);
+    });
+    return values;
+  };
+
+  const buildFavoriteSearchTokens = (song: any): string[] => {
+    const tokens = new Set<string>();
+
+    // 서버 검색은 비용을 줄이기 위해 제목/장르/키워드/짧은 요약만 색인한다. 가사와 전체 프롬프트는 캐시 검색 전용으로 둔다.
+    [
+      song?.title,
+      song?.koreanTitle,
+      song?.englishTitle,
+      song?.displayGenre,
+      song?.genre,
+      getResolvedGenre(song),
+      song?.situationSummary,
+    ].forEach((value) => addFavoriteSearchToken(tokens, value, true));
+
+    collectFavoriteKeywordValues(song).forEach((value) => addFavoriteSearchToken(tokens, value, true));
+
+    return Array.from(tokens)
+      .filter((token) => token.length >= FAVORITE_SERVER_SEARCH_MIN_LENGTH)
+      .slice(0, 120);
+  };
+
+  const getFavoriteServerSearchTokens = (searchText: string): string[] => {
+    const tokens = new Set<string>();
+    addFavoriteSearchToken(tokens, searchText, false);
+    return Array.from(tokens)
+      .filter((token) => token.length >= FAVORITE_SERVER_SEARCH_MIN_LENGTH)
+      .slice(0, 10);
+  };
+
+  const shouldRefreshFavoriteSearchTokens = (updates: Partial<any>) => {
+    return ['title', 'koreanTitle', 'englishTitle', 'displayGenre', 'genre', 'appliedKeywords', 'situationSummary'].some((key) => key in updates);
+  };
   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
   const SUNO_REMAINING_CREDITS_STORAGE_BASE = 'soridraw_suno_remaining_credits';
@@ -5664,7 +5776,8 @@ const toggleCycleVariantSelection = (
 
         syncUserDoc();
 
-        // Fetch favorites for the user
+        // Fetch favorites for the user.
+        // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
         const cacheKey = `soridraw_favorites_cache_${currentUser.uid}`;
         let cachedFavs: any[] = [];
         try {
@@ -5677,34 +5790,96 @@ const toggleCycleVariantSelection = (
         }
 
         if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
-          setFavorites(cachedFavs);
+          // Do not slice the cache. It costs nothing and prevents existing My Note / Shared Note items from visually disappearing.
+          setFavorites(sortFavoriteList(cachedFavs));
         } else {
           setFavorites([]);
         }
         setIsFavoritesLoading(true);
 
-        const q = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
+        favoritePaginationCursorRef.current = null;
+        favoritePaginationExhaustedRef.current = false;
+        favoritePaginationLoadingRef.current = false;
+        favoritePaginationFallbackModeRef.current = false;
+        setHasMoreFavorites(false);
+        setIsLoadingMoreFavorites(false);
+
+        const attachLegacyFavoritesFallback = () => {
+          favoritePaginationCursorRef.current = null;
+          favoritePaginationExhaustedRef.current = true;
+          favoritePaginationLoadingRef.current = false;
+          favoritePaginationFallbackModeRef.current = true;
+          setHasMoreFavorites(false);
+          setIsLoadingMoreFavorites(false);
+
+          const legacyQuery = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
+          unsubFavs = onSnapshot(legacyQuery, (legacySnapshot) => {
+            const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            setFavorites(legacyFavs);
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(legacyFavs));
+            } catch (e) {
+              console.error('Failed to save favorites to cache:', e);
+            }
+            setIsFavoritesLoading(false);
+          }, (legacyError) => {
+            handleFirestoreError(legacyError, OperationType.GET, 'favorites');
+            setIsFavoritesLoading(false);
+          });
+        };
+
+        const q = query(
+          collection(db, 'favorites'),
+          where('uid', '==', currentUser.uid),
+          orderBy('createdAt', 'desc'),
+          limit(FAVORITES_PAGE_SIZE + 1)
+        );
+
         unsubFavs = onSnapshot(q, (snapshot) => {
-          const favs = snapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .sort((a: any, b: any) => {
-              const aTime = a.createdAtMs || getTimestampMs(a.createdAt);
-              const bTime = b.createdAtMs || getTimestampMs(b.createdAt);
-              return bTime - aTime;
-            });
-          setFavorites(favs);
+          const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+          const firstPageFavs = firstPageDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+          favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
+          favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+          favoritePaginationFallbackModeRef.current = false;
+          setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+          setFavorites((prev) => {
+            const firstPageIds = new Set(firstPageFavs.map((item: any) => item.id).filter(Boolean));
+            const retainedLoadedOrCached = (prev || []).filter((item: any) => item?.id && !firstPageIds.has(item.id));
+            const merged = mergeFavoritePages(firstPageFavs, retainedLoadedOrCached);
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify(merged));
+            } catch (e) {
+              console.error('Failed to save favorites to cache:', e);
+            }
+            return merged;
+          });
           setIsFavoritesLoading(false);
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(favs));
-          } catch (e) {
-            console.error('Failed to save favorites to cache:', e);
-          }
         }, (error) => {
-          handleFirestoreError(error, OperationType.GET, 'favorites');
-          setIsFavoritesLoading(false);
+          console.warn('Favorites paged query failed. Falling back to the legacy full-list listener until the Firestore index is available.', error);
+          // This query can fail before the composite index is deployed. Do not throw here;
+          // falling back keeps Music Note usable while Firebase builds the index.
+          if (favoritePaginationFallbackModeRef.current) {
+            setIsFavoritesLoading(false);
+            return;
+          }
+          if (unsubFavs) {
+            try {
+              unsubFavs();
+            } catch (unsubscribeError) {
+              console.warn('Failed to detach favorites paged listener before fallback:', unsubscribeError);
+            }
+            unsubFavs = null;
+          }
+          attachLegacyFavoritesFallback();
         });
       } else {
         setFavorites([]);
+        setHasMoreFavorites(false);
+        setIsLoadingMoreFavorites(false);
+        favoritePaginationCursorRef.current = null;
+        favoritePaginationExhaustedRef.current = false;
+        favoritePaginationLoadingRef.current = false;
+        favoritePaginationFallbackModeRef.current = false;
         setIsFavoritesLoading(false);
         setUserRole('free');
       }
@@ -5716,6 +5891,92 @@ const toggleCycleVariantSelection = (
       if (unsubUserDoc) unsubUserDoc();
     };
   }, []);
+
+  const loadMoreFavorites = useCallback(async () => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid) return;
+    if (favoritePaginationFallbackModeRef.current) return;
+    if (favoritePaginationLoadingRef.current || favoritePaginationExhaustedRef.current) return;
+    const cursor = favoritePaginationCursorRef.current;
+    if (!cursor) return;
+
+    favoritePaginationLoadingRef.current = true;
+    setIsLoadingMoreFavorites(true);
+    try {
+      const q = query(
+        collection(db, 'favorites'),
+        where('uid', '==', currentUser.uid),
+        orderBy('createdAt', 'desc'),
+        startAfter(cursor),
+        limit(FAVORITES_PAGE_SIZE + 1)
+      );
+      const snapshot = await getDocs(q);
+      const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+      const nextFavs = nextDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (nextDocs.length > 0) {
+        favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
+      }
+      favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+      setFavorites((prev) => {
+        const merged = mergeFavoritePages(prev || [], nextFavs);
+        try {
+          localStorage.setItem(`soridraw_favorites_cache_${currentUser.uid}`, JSON.stringify(merged));
+        } catch (e) {
+          console.error('Failed to save favorites to cache:', e);
+        }
+        return merged;
+      });
+    } catch (error) {
+      console.warn('Favorites additional page load failed. Keeping the current list instead of crashing the page.', error);
+      favoritePaginationExhaustedRef.current = true;
+      setHasMoreFavorites(false);
+    } finally {
+      favoritePaginationLoadingRef.current = false;
+      setIsLoadingMoreFavorites(false);
+    }
+  }, [user]);
+
+  const searchFavoritesOnServer = useCallback(async (rawSearchText: string): Promise<any[]> => {
+    const currentUser = user || auth.currentUser;
+    const normalizedSearch = normalizeFavoriteSearchValue(rawSearchText);
+    if (!currentUser?.uid || normalizedSearch.length < FAVORITE_SERVER_SEARCH_MIN_LENGTH) return [];
+
+    const cachedResult = favoriteServerSearchCacheRef.current[normalizedSearch];
+    if (cachedResult) return cachedResult;
+
+    const searchTokens = getFavoriteServerSearchTokens(normalizedSearch);
+    if (searchTokens.length === 0) return [];
+
+    try {
+      const q = query(
+        collection(db, 'favorites'),
+        where('uid', '==', currentUser.uid),
+        where('searchTokens', 'array-contains-any', searchTokens),
+        orderBy('createdAt', 'desc'),
+        limit(FAVORITE_SERVER_SEARCH_LIMIT)
+      );
+      const snapshot = await getDocs(q);
+      const serverResults = sortFavoriteList(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+      favoriteServerSearchCacheRef.current[normalizedSearch] = serverResults;
+      if (serverResults.length > 0) {
+        setFavorites((prev) => {
+          const merged = mergeFavoritePages(prev || [], serverResults);
+          try {
+            localStorage.setItem(`soridraw_favorites_cache_${currentUser.uid}`, JSON.stringify(merged));
+          } catch (e) {
+            console.error('Failed to save favorites to cache:', e);
+          }
+          return merged;
+        });
+      }
+      return serverResults;
+    } catch (error) {
+      console.warn('Favorite server search failed. Keeping local cache search only.', error);
+      favoriteServerSearchCacheRef.current[normalizedSearch] = [];
+      return [];
+    }
+  }, [user]);
 
   const showToast = useCallback((message: string) => {
     setToast({ message, visible: true });
@@ -5770,7 +6031,8 @@ const toggleCycleVariantSelection = (
             situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
             isLocked: false,
             createdAtMs: Date.now(),
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            searchTokens: buildFavoriteSearchTokens(song)
           }));
 
         // Increment favoriteCount in users document
@@ -5787,7 +6049,22 @@ const toggleCycleVariantSelection = (
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
     try {
-      const sanitizedUpdates = sanitizeForFirestore(updates);
+      const currentFavorite = favorites.find((favorite) => favorite.id === id);
+      let sanitizedUpdates = sanitizeForFirestore(updates);
+      if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
+        const mergedForSearch = {
+          ...currentFavorite,
+          ...updates,
+          ...sanitizedUpdates,
+          appliedKeywords: sanitizedUpdates.appliedKeywords
+            ? { ...(currentFavorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
+            : currentFavorite.appliedKeywords,
+        };
+        sanitizedUpdates = {
+          ...sanitizedUpdates,
+          searchTokens: buildFavoriteSearchTokens(mergedForSearch),
+        };
+      }
       await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
       setFavorites((prev) => prev.map((favorite) => {
         if (favorite.id !== id) return favorite;
@@ -5814,11 +6091,6 @@ const toggleCycleVariantSelection = (
 
   const clearAllFavorites = async () => {
     if (!user) return;
-    const unlockedFavs = favorites.filter(f => !f.isLocked);
-    if (unlockedFavs.length === 0) {
-      showToast('삭제할 수 있는 곡이 없습니다.');
-      return;
-    }
 
     if (userStatus === 'banned' && !isAdminUser) {
       showToast('차단된 계정입니다. 기능을 사용할 수 없습니다.');
@@ -5826,18 +6098,26 @@ const toggleCycleVariantSelection = (
     }
 
     try {
+      // In paged loading mode, never rely on the currently visible 20-item slice for destructive all-item actions.
+      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
+      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
+      if (unlockedDocs.length === 0) {
+        showToast('삭제할 수 있는 곡이 없습니다.');
+        return;
+      }
+
       const batch = writeBatch(db);
-      unlockedFavs.forEach(f => {
-        batch.delete(doc(db, 'favorites', f.id));
+      unlockedDocs.forEach((docSnap) => {
+        batch.delete(doc(db, 'favorites', docSnap.id));
       });
       
       // Update favoriteCount
       batch.update(doc(db, 'users', user.uid), {
-        favoriteCount: increment(-unlockedFavs.length)
+        favoriteCount: increment(-unlockedDocs.length)
       });
 
       await batch.commit();
-      showToast(`${unlockedFavs.length}개의 곡이 삭제되었습니다.`);
+      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'favorites');
     }
@@ -5845,18 +6125,20 @@ const toggleCycleVariantSelection = (
 
   const lockAllFavorites = async () => {
     if (!user) return;
-    const unlockedFavs = favorites.filter(f => !f.isLocked);
-    if (unlockedFavs.length === 0) {
-      showToast('이미 모든 곡이 잠겨 있습니다.');
-      return;
-    }
     try {
+      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
+      const unlockedDocs = allFavoritesSnap.docs.filter((docSnap) => !docSnap.data()?.isLocked);
+      if (unlockedDocs.length === 0) {
+        showToast('이미 모든 곡이 잠겨 있습니다.');
+        return;
+      }
+
       const batch = writeBatch(db);
-      unlockedFavs.forEach(f => {
-        batch.update(doc(db, 'favorites', f.id), { isLocked: true });
+      unlockedDocs.forEach((docSnap) => {
+        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: true });
       });
       await batch.commit();
-      showToast(`${unlockedFavs.length}개의 곡이 잠금 설정되었습니다.`);
+      showToast(`${unlockedDocs.length}개의 곡이 잠금 설정되었습니다.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'favorites');
     }
@@ -5864,18 +6146,20 @@ const toggleCycleVariantSelection = (
 
   const unlockAllFavorites = async () => {
     if (!user) return;
-    const lockedFavs = favorites.filter(f => f.isLocked);
-    if (lockedFavs.length === 0) {
-      showToast('잠긴 곡이 없습니다.');
-      return;
-    }
     try {
+      const allFavoritesSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
+      const lockedDocs = allFavoritesSnap.docs.filter((docSnap) => docSnap.data()?.isLocked);
+      if (lockedDocs.length === 0) {
+        showToast('잠긴 곡이 없습니다.');
+        return;
+      }
+
       const batch = writeBatch(db);
-      lockedFavs.forEach(f => {
-        batch.update(doc(db, 'favorites', f.id), { isLocked: false });
+      lockedDocs.forEach((docSnap) => {
+        batch.update(doc(db, 'favorites', docSnap.id), { isLocked: false });
       });
       await batch.commit();
-      showToast(`${lockedFavs.length}개의 곡이 잠금 해제되었습니다.`);
+      showToast(`${lockedDocs.length}개의 곡이 잠금 해제되었습니다.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'favorites');
     }
@@ -11771,6 +12055,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <FavoritesPageLazy
                   favorites={new URLSearchParams(location.search).has('note') ? [] : favorites}
                   isFavoritesLoading={isFavoritesLoading}
+                  hasMoreFavorites={hasMoreFavorites}
+                  isLoadingMoreFavorites={isLoadingMoreFavorites}
+                  onLoadMoreFavorites={loadMoreFavorites}
+                  onServerSearchFavorites={searchFavoritesOnServer}
                   toggleFavorite={toggleFavorite}
                   updateFavorite={updateFavorite}
                   clearAllFavorites={clearAllFavorites}

@@ -104,7 +104,16 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-
+const mergeMusicNoteSearchSource = (base: any[], extra: any[]) => {
+  if (!extra || extra.length === 0) return base || [];
+  const map = new Map<string, any>();
+  [...(base || []), ...(extra || [])].forEach((item) => {
+    if (!item) return;
+    const key = item.id || `${item.title || ''}-${item.createdAtMs || item.createdAt || Math.random()}`;
+    map.set(String(key), { ...(map.get(String(key)) || {}), ...item });
+  });
+  return Array.from(map.values());
+};
 
 function SunoUrlMobileGuideButton() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
@@ -662,6 +671,10 @@ export default function FavoritesPage({
   onLongPressStart,
   onLongPressEnd,
   isFavoritesLoading = false,
+  hasMoreFavorites = false,
+  isLoadingMoreFavorites = false,
+  onLoadMoreFavorites,
+  onServerSearchFavorites,
   onLogin
 }: { 
   favorites: any[]; 
@@ -676,6 +689,10 @@ export default function FavoritesPage({
   onLongPressStart: (item: { id: string; label: string; labelKo?: string; description: string; descriptionKo?: string }) => void;
   onLongPressEnd: () => void;
   isFavoritesLoading?: boolean;
+  hasMoreFavorites?: boolean;
+  isLoadingMoreFavorites?: boolean;
+  onLoadMoreFavorites?: () => Promise<void> | void;
+  onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
@@ -690,8 +707,15 @@ export default function FavoritesPage({
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
   const [searchQuery, setSearchQuery] = useState('');
+  const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
+  const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
+  const serverSearchQueriesRef = useRef<Set<string>>(new Set());
+  const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
-  const activeFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
+  const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
+  const activeFavoriteSource = !isMusicNoteSharedView && searchQuery.trim()
+    ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
+    : baseFavoriteSource;
   const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
   const isSharedMusicNoteItem = (song: any) => Boolean(
     song?.sharedReadOnly
@@ -4333,20 +4357,23 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     });
   };
 
-  const filteredFavoriteBase = activeFavoriteSource.filter(song => {
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const songMatchesMusicNoteSearch = (song: any, queryText = normalizedSearchQuery) => {
+    if (!queryText) return true;
+    return (song.koreanTitle || '').toLowerCase().includes(queryText) ||
+      (song.englishTitle || '').toLowerCase().includes(queryText) ||
+      (song.title || '').toLowerCase().includes(queryText) ||
+      ((song.lyrics?.korean || '') as string).toLowerCase().includes(queryText) ||
+      ((song.lyrics?.english || '') as string).toLowerCase().includes(queryText) ||
+      getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(queryText)) ||
+      getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(queryText)) ||
+      getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(queryText)) ||
+      getSongStyleValues(song).some((st: string) => st.toLowerCase().includes(queryText)) ||
+      getSongInstrumentSoundValues(song).some((sound: string) => sound.toLowerCase().includes(queryText));
+  };
+
+  const songMatchesMusicNoteFilters = (song: any) => {
     if (isMusicNoteSharedView) return true;
-
-    const matchesSearch = (song.koreanTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (song.englishTitle || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.lyrics.korean.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      song.lyrics.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      getSongGenreValues(song).some((g: string) => g.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongMoodValues(song).some((m: string) => m.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongThemeValues(song).some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongStyleValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      getSongInstrumentSoundValues(song).some((s: string) => s.toLowerCase().includes(searchQuery.toLowerCase()));
-
     const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
     const isTrashed = isFavoriteInTrash(song);
     const matchesTrashState = favoriteTrashView
@@ -4358,7 +4385,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       : musicNoteViewMode === 'myNote'
         ? !isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'myNote') === selectedMyNoteFolderId
         : isSharedNoteOnly && getMusicNoteFolderIdFromSong(song, 'sharedNote') === selectedSharedNoteFolderId;
-    return matchesSearch && matchesColor && matchesTrashState && matchesFolder;
+    return matchesColor && matchesTrashState && matchesFolder;
+  };
+
+  const localSearchMatchCount = baseFavoriteSource.filter(song => {
+    if (isMusicNoteSharedView) return true;
+    return songMatchesMusicNoteSearch(song) && songMatchesMusicNoteFilters(song);
+  }).length;
+
+  const filteredFavoriteBase = activeFavoriteSource.filter(song => {
+    if (isMusicNoteSharedView) return true;
+    return songMatchesMusicNoteSearch(song) && songMatchesMusicNoteFilters(song);
   });
 
   const dedupedFilteredFavorites = musicNoteViewMode === 'sharedNote' && !isMusicNoteSharedView
@@ -4367,6 +4404,36 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         return list.findIndex(item => getMusicNoteDuplicateKey(item) === key) === index;
       })
     : filteredFavoriteBase;
+
+  const runFavoriteServerSearch = async () => {
+    const rawSearch = searchQuery.trim();
+    const normalized = rawSearch.toLowerCase();
+
+    // 입력 중에는 기존처럼 캐시/현재 로드된 곡만 즉시 검색한다.
+    // 서버 검색은 Enter를 눌렀고, 로컬 결과가 하나도 없을 때만 1회 보조 실행한다.
+    if (!onServerSearchFavorites || isMusicNoteSharedView || !normalized || normalized.length < 2) return;
+    if (localSearchMatchCount > 0 || serverSearchQueriesRef.current.has(normalized)) return;
+
+    const runId = serverSearchRunIdRef.current + 1;
+    serverSearchRunIdRef.current = runId;
+    setIsServerSearchLoading(true);
+
+    try {
+      serverSearchQueriesRef.current.add(normalized);
+      const results = await onServerSearchFavorites(rawSearch);
+      if (serverSearchRunIdRef.current !== runId) return;
+      setServerSearchFavorites((prev) => mergeMusicNoteSearchSource(prev, results || []));
+    } finally {
+      if (serverSearchRunIdRef.current === runId) setIsServerSearchLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setServerSearchFavorites([]);
+      setIsServerSearchLoading(false);
+    }
+  }, [searchQuery]);
 
   const filteredFavorites = dedupedFilteredFavorites.sort((a, b) => {
     if (isMusicNoteSharedView) return 0;
@@ -4954,6 +5021,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  runFavoriteServerSearch();
+                }
+              }}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
               className="w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF5C52]/50 transition-all"
@@ -5448,18 +5521,36 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             })}
           </div>
 
-          {visibleCount < filteredFavorites.length && (
+          {(visibleCount < filteredFavorites.length || (!isMusicNoteSharedView && hasMoreFavorites)) && (
             <div className="flex justify-center pt-1" data-selection-keep="true">
               <button
                 data-selection-keep="true"
+                disabled={isLoadingMoreFavorites}
                 onPointerDown={(event) => { if (isSelectionMode) event.stopPropagation(); }}
-                onClick={(event) => { event.stopPropagation(); setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE); }}
-                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 20개 더 보여줍니다.' })}
+                onClick={async (event) => {
+                  event.stopPropagation();
+                  if (visibleCount < filteredFavorites.length) {
+                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
+                    return;
+                  }
+                  if (!isMusicNoteSharedView && hasMoreFavorites) {
+                    await onLoadMoreFavorites?.();
+                    setVisibleCount(prev => prev + MUSIC_NOTE_VISIBLE_BATCH_SIZE);
+                  }
+                }}
+                onMouseEnter={() => onHover({ id: 'load-more', label: '더보기', description: '곡을 20개 더 불러오거나 보여줍니다.' })}
                 onMouseLeave={() => onHover(null)}
-                className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]"
+                className={cn(
+                  "px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-black/20 flex items-center gap-2 group shadow-[var(--shadow-md)]",
+                  isLoadingMoreFavorites && "cursor-wait opacity-60"
+                )}
               >
                 <Plus className="w-5 h-5 text-[#FF5C52] group-hover:rotate-90 transition-transform" />
-                더보기 ({filteredFavorites.length - visibleCount}개 남음)
+                {isLoadingMoreFavorites
+                  ? '불러오는 중...'
+                  : visibleCount < filteredFavorites.length
+                    ? `더보기 (${filteredFavorites.length - visibleCount}개 남음)`
+                    : '더보기 (20개 더 불러오기)'}
               </button>
             </div>
           )}

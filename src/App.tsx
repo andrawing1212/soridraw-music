@@ -10975,14 +10975,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            const text = formatTitleWithoutGenre(result);
+                            const text = formatUnifiedTitle(result);
                             copyToClipboard(text, 'title');
                           }}
                           onMouseEnter={() =>
                             setHoveredItem({
                               id: 'copy-title',
                               label: '전체 제목 복사',
-                              description: '한글/외국어 제목만 복사합니다.',
+                              description: '장르가 포함된 한글/외국어 제목을 복사합니다.',
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
@@ -11022,14 +11022,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        const text = formatTitleWithoutGenre(result);
+                        const text = formatUnifiedTitle(result);
                         copyToClipboard(text, 'title');
                       }}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'copy-title-mobile',
                           label: '전체 제목 복사',
-                          description: '한글/외국어 제목만 복사합니다.',
+                          description: '장르가 포함된 한글/외국어 제목을 복사합니다.',
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}

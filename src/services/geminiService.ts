@@ -9894,10 +9894,14 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
 function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
   const plan = buildInternalScenePlan(params, detailLayer);
   const bp = buildSceneBlueprint(params);
+  const freeTextPrimary = isFreeTextPrimaryMode(params);
+  const productionShapeOnly = hasProductionShapeOnlyDirectorNote(params);
   const directorBlock = plan.hasDirectorNote
-    ? isProductionSeasoningDirectorNote(params)
-      ? `- USER FREE-TEXT DIRECTOR NOTE is an additive production/color seasoning on top of the selected UI choices. Blend its intent into genre color, atmosphere, vocal attitude, arrangement, and lyric tone without replacing the selected genre/menu keywords or turning it into a separate lyric topic.`
-      : `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command for genre, structure, mood, vocal attitude, arrangement, and lyric tone. Preserve its concrete intent; do not compress it into a generic theme.`
+    ? freeTextPrimary
+      ? `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command from genre selection through arrangement, vocal attitude, hook design, and lyrics. Interpret it freely as the song concept. If it describes production format rather than a literal scene, do NOT invent a random place or story; turn it into genre, hook, vocal, arrangement, and lyric-writing intent.`
+      : isProductionSeasoningDirectorNote(params)
+        ? `- USER FREE-TEXT DIRECTOR NOTE is an additive production/color seasoning on top of the selected UI choices. Blend its intent into genre color, atmosphere, vocal attitude, arrangement, and lyric tone without replacing the selected genre/menu keywords or turning it into a separate lyric topic.`
+        : `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command for genre, structure, mood, vocal attitude, arrangement, and lyric tone. Preserve its concrete intent; do not compress it into a generic theme.`
     : `- No free-text director note was provided. Convert selected keywords into a specific scene, character desire, everyday detail, and chorus intention so the output does not feel like a keyword list.`;
   const lyricDraftBlock = plan.hasLyricDraft
     ? `- lyricDraft / AI correction / original-preserve mode affects generated lyrics only. Do not use the draft as a direct production-prompt command, but keep its story and wording as the primary lyrical source.`
@@ -9917,7 +9921,7 @@ ${directInputBlock}` : ''}
 - Detail Inference Instruction: ${bp.detailRequirement}
 - Chorus Core Instruction: ${bp.chorusRequirement}
 
-Before writing the final prompt or lyrics, infer a concrete Scene Blueprint from the source text. Do not output the blueprint label. Use the source text to infer:
+${productionShapeOnly ? `Before writing the final prompt or lyrics, interpret the free-text command as a DIRECTOR BRIEF. It may define genre, duration, hook placement, vocal attitude, lyric humor, rhythm, and arrangement. Do not force it into a literal story scene when no concrete characters/place/action are given. For production-only notes, build [Genre], [Atmosphere], [Vocals], [Arrangement], and lyrics around song purpose, hook design, attitude, and performance energy.` : `Before writing the final prompt or lyrics, infer a concrete Scene Blueprint from the source text. Do not output the blueprint label. Use the source text to infer:
 1. who is in the scene,
 2. where it happens,
 3. what visible action is happening,
@@ -9928,7 +9932,8 @@ Before writing the final prompt or lyrics, infer a concrete Scene Blueprint from
 
 If the source text is Korean, translate and interpret it internally, then output the final music prompt in English only.
 Do not replace unusual user ideas with generic romance, generic breakup, bedroom-message, street-corner, or ordinary mood fallback.
-If the user gives only selected keywords, combine them into one believable scene instead of listing mood words.
+If the user gives only selected keywords, combine them into one believable scene instead of listing mood words.`}
+Never output internal placeholders such as "actual place implied by the source text", "source situation", or "concrete scene inferred from the user's source text" in [Atmosphere], [Lyrics], or section tags.
 
 - Scene Base: ${plan.scene}
 - Lived detail pool: ${plan.detail}
@@ -10241,6 +10246,7 @@ function isGenericAtmosphereFallbackLine(value: string): boolean {
   
   if (
     /the\s+concrete\s+scene\s+inferred\s+from\s+the\s+user's\s+source\s+text/i.test(line) ||
+    /actual\s+place\s+implied|source\s+situation|user['’]s\s+source\s+text|moving\s+through\s+the\s+source|main\s+character\s+is\s+moving\s+through/i.test(line) ||
     /selected\s+story\s+becomes\s+visible/i.test(line) ||
     /one\s+lived\s+detail/i.test(line) ||
     /concrete\s+scene\s+where\s+the\s+selected\s+story/i.test(line) ||
@@ -13799,10 +13805,10 @@ function translateOrMapKoreanToEnglish(text: string): { characters: string; plac
   // Do NOT map broad words such as "어이", "사소", or "소원" into a specific test scene.
   // The real Scene Blueprint is inferred by Gemini from sceneSourceText; this function only
   // provides a safe deterministic backup when the model returns an unusable/generic scene.
-  let characters = "the main character";
-  let place = "the actual place implied by the source text";
-  let action = "moving through the source situation";
-  let conflict = "the source tension becoming visible through one concrete moment";
+  let characters = "the central voice";
+  let place = "a compact emotional space";
+  let action = "turning the user's core idea into a visible musical moment";
+  let conflict = "the main feeling pushing toward a repeatable hook";
 
   const has = (pattern: RegExp) => pattern.test(lower);
 
@@ -13900,6 +13906,85 @@ function buildConcreteDeterministicFallbackBlueprint(params: GenerateSongParams)
   };
 }
 
+
+function hasProductionShapeOnlyDirectorNote(params: GenerateSongParams): boolean {
+  const note = getFreeTextDirectorNote(params);
+  if (!note) return false;
+  if (!isProductionSeasoningDirectorNote(params) && !hasProductionSeasoningSignal(note)) return false;
+  if (hasConcreteStorySignalInDirectorNote(note)) return false;
+  if (hasSituation(params.situation)) return false;
+  if (String(params.lyricDraft || '').trim()) return false;
+  if (getDirectThemeInputText(params) || getDirectMoodInputText(params)) return false;
+  return true;
+}
+
+function buildProductionIntentBlueprint(params: GenerateSongParams): {
+  scene: string;
+  detail: string;
+  conflict: string;
+  vocalPoint: string;
+  chorusCore: string;
+} {
+  const note = getFreeTextDirectorNote(params);
+  const lower = note.toLowerCase();
+  const profile = buildFreeTextDirectorProfile(note);
+  const parts: string[] = [];
+  const add = (value: string) => {
+    const clean = cleanupPromptTail(value || '');
+    if (clean && !parts.some((item) => item.toLowerCase() === clean.toLowerCase())) parts.push(clean);
+  };
+
+  if (/(숏폼|쇼츠|틱톡|릴스|short[-\s]?form|shorts|tiktok|reels|viral|바이럴)/iu.test(lower)) add('short-form pop focus');
+  if (/(20\s*초|20초|twenty\s*seconds?|20[-\s]?second|20sec)/iu.test(lower)) add('20-second chorus-centered shape');
+  if (/(첫\s*3\s*초|3\s*초|3초|first\s*three\s*seconds?|first\s*3\s*seconds?)/iu.test(lower)) add('first-three-second memorability');
+  if (/(후렴|훅|hook|chorus|refrain)/iu.test(lower)) add('hook-first writing');
+  if (/(자기비하|셀프디스|self[-\s]?deprecat|self[-\s]?mock|self[-\s]?roast)/iu.test(lower)) add('self-deprecating humor');
+  if (/(반전\s*자신감|자신감|confidence|confident|bravado)/iu.test(lower)) add('confidence-turn payoff');
+  if (/(반복\s*가능|반복되는|간단한?\s*리듬|simple\s+rhythm|repeatable|easy\s+chant)/iu.test(lower)) add('simple repeatable rhythm');
+  if (/(과한\s*고음\s*없|고음\s*없|no\s+high\s+note|no\s+belting|without\s+belting)/iu.test(lower)) add('no over-singing');
+  if (/(빠른|빠르게|빠른\s*템포|fast|uptempo|upbeat)/iu.test(lower)) add('quick upbeat momentum');
+
+  const shape = joinPromptPhrase(parts.slice(0, 5), 'and') || cleanupPromptTail(profile.mood || profile.arrangement || 'the user-directed song energy');
+  const scene = cleanupPromptTail(`a ${shape} performance intention`);
+  const detail = cleanupPromptTail(joinPromptPhrase(dedupePromptParts([
+    profile.sound,
+    profile.arrangement,
+    parts.includes('first-three-second memorability') ? 'instant opening phrase' : '',
+    parts.includes('simple repeatable rhythm') ? 'repeatable rhythm hook' : '',
+  ], 8).slice(0, 3), 'and')) || 'a compact hook, clean rhythmic motion, and direct vocal focus';
+  const conflict = cleanupPromptTail(parts.includes('self-deprecating humor') || parts.includes('confidence-turn payoff')
+    ? 'self-deprecating humor flips into confident payoff'
+    : 'the director note shapes a clear hook-driven song intention');
+  const vocalPoint = cleanupPromptTail(profile.vocal || 'natural vocal delivery shaped by the director note');
+  const chorusCore = cleanupPromptTail(parts.includes('first-three-second memorability') || parts.includes('hook-first writing')
+    ? 'a memorable hook phrase that lands within the first few seconds'
+    : 'a repeatable central hook shaped by the user direction');
+
+  return {
+    scene: cleanScenePlanPhrase(scene, 180),
+    detail: cleanScenePlanPhrase(detail, 200),
+    conflict: cleanScenePlanPhrase(conflict, 180),
+    vocalPoint: cleanScenePlanPhrase(vocalPoint, 200),
+    chorusCore: cleanScenePlanPhrase(chorusCore, 180),
+  };
+}
+
+function resolveConcreteSceneBlueprint(params: GenerateSongParams): {
+  scene: string;
+  detail: string;
+  conflict: string;
+  vocalPoint: string;
+  chorusCore: string;
+} {
+  if (hasProductionShapeOnlyDirectorNote(params)) return buildProductionIntentBlueprint(params);
+  return buildConcreteDeterministicFallbackBlueprint(params);
+}
+
+function containsSceneBlueprintPlaceholderLeak(value: string): boolean {
+  const line = String(value || '').toLowerCase();
+  return /actual\s+place\s+implied|source\s+situation|concrete\s+scene\s+inferred|user['’]s\s+source\s+text|source\s+text\s+where|moving\s+through\s+the\s+source|main\s+character\s+is\s+moving\s+through|actual\s+characters,\s*place,\s*visible\s+action/i.test(line);
+}
+
 function buildSceneBlueprint(params: GenerateSongParams): {
   scene: string;
   detail: string;
@@ -13937,22 +14022,25 @@ function buildSceneBlueprint(params: GenerateSongParams): {
   const selectedGenre = params.genre || "";
   const selectedKeywordIntent = `Themes: ${selectedThemes}, Moods: ${selectedMoods}, Genre: ${selectedGenre}`;
 
-  const sceneRequirement = "Infer a concrete scene preserving the characters, place, visible action, and emotional conflict from the source text. Choose at least 2 elements among (characters, place, action, conflict) to make the scene incredibly vivid and specific.";
-  const detailRequirement = "Extract at least 2 distinct lived details among (personal props, spatial texture, physical actions, speaking tone, relationship dynamic) directly connected to the scene's emotional truth.";
-  const chorusRequirement = "The chorus core must represent the character's burning desire or a repeatable emotional lyric line rather than a flat, abstract description of emotions.";
+  const productionOnly = hasProductionShapeOnlyDirectorNote(params);
+  const sceneRequirement = productionOnly
+    ? "Treat the free-text command as a top-level director brief for genre, structure, vocal, lyric hook, and arrangement. Do not force a literal story scene when the user only described format, hook, rhythm, vocal tone, or writing goal."
+    : "Infer a concrete scene preserving the characters, place, visible action, and emotional conflict from the source text. Choose at least 2 elements among (characters, place, action, conflict) to make the scene vivid and specific.";
+  const detailRequirement = productionOnly
+    ? "Extract production details such as hook timing, rhythm simplicity, vocal attitude, contrast, and arrangement purpose."
+    : "Extract at least 2 distinct lived details among (personal props, spatial texture, physical actions, speaking tone, relationship dynamic) directly connected to the scene's emotional truth.";
+  const chorusRequirement = productionOnly
+    ? "The chorus core must be a repeatable hook goal, first-impression phrase, or confidence turn specified by the director note."
+    : "The chorus core must represent the character's burning desire or a repeatable emotional lyric line rather than a flat, abstract description of emotions.";
 
-  const scene = "the concrete scene inferred from the user's source text, preserving the actual characters, place, visible action, and emotional conflict";
-  const detail = "at least two distinct lived details among props, spatial texture, physical actions, speaking tone, or relationship dynamic";
-  const conflict = "the core emotional conflict or characters' unsaid desire moving the story forward";
-  const vocalPoint = "the vocal performance showing the singer speaking or sing from inside the scene with human breath";
-  const chorusCore = "the repeatable central emotional peak or character's burning desire";
+  const concrete = resolveConcreteSceneBlueprint(params);
 
   return {
-    scene,
-    detail,
-    conflict,
-    vocalPoint,
-    chorusCore,
+    scene: concrete.scene,
+    detail: concrete.detail,
+    conflict: concrete.conflict,
+    vocalPoint: concrete.vocalPoint,
+    chorusCore: concrete.chorusCore,
     sceneSourceText,
     primaryIntent,
     selectedKeywordIntent,
@@ -13964,7 +14052,7 @@ function buildSceneBlueprint(params: GenerateSongParams): {
 
 
 function buildAbsoluteScenePlanSentence(params: GenerateSongParams): string {
-  const bp = buildConcreteDeterministicFallbackBlueprint(params);
+  const bp = resolveConcreteSceneBlueprint(params);
   const scene = bp.scene;
   const detail = bp.detail;
   const conflict = bp.conflict;
@@ -16322,6 +16410,33 @@ function compactFreeTextGenreColor(value: string): string {
     .trim());
 }
 
+
+function buildDirectorGenreIntentColorParts(rawNote: string): string[] {
+  const lower = String(rawNote || '').toLowerCase();
+  const parts: string[] = [];
+  const add = (value: string) => {
+    const clean = compactFreeTextGenreColor(value);
+    if (clean && !parts.some((item) => item.toLowerCase() === clean.toLowerCase())) parts.push(clean);
+  };
+
+  // Broad director-note colors only. These are not story mappings; they keep
+  // the [Genre] line from becoming a bare category when the user described the
+  // song's attitude, hook purpose, or surface texture in free text.
+  if (/(귀여|큐트|cute|kawaii)/iu.test(lower)) add('cute');
+  if (/(장난|위트|재치|농담|playful|cheeky|witty|whimsical|quirky)/iu.test(lower)) add('playful witty');
+  if (/(자기비하|셀프디스|self[-\s]?deprecat|self[-\s]?mock|self[-\s]?roast)/iu.test(lower)) add('self-deprecating humor');
+  if (/(반전\s*자신감|자신감|confidence|confident|bravado)/iu.test(lower)) add('confidence-turn energy');
+  if (/(심플|미니멀|간단한?\s*리듬|simple\s+rhythm|minimal|minimalist|repeatable|반복\s*가능)/iu.test(lower)) add('simple repeatable hook rhythm');
+  if (/(빠른|빠르게|업템포|fast|uptempo|upbeat|quick)/iu.test(lower)) add('quick upbeat pulse');
+  if (/(첫\s*3\s*초|3\s*초|3초|first\s*three\s*seconds?|first\s*3\s*seconds?)/iu.test(lower)) add('instant first-three-second hook');
+  if (/(숏폼|쇼츠|틱톡|릴스|short[-\s]?form|shorts|tiktok|reels|viral|바이럴)/iu.test(lower)) add('short-form hook focus');
+  if (/(과한\s*고음\s*없|고음\s*없|no\s+high\s+note|no\s+belting|without\s+belting)/iu.test(lower)) add('no-belting restraint');
+
+  // Keep it light: [Genre] should reveal the song color, not become another
+  // Arrangement or Atmosphere line.
+  return parts.slice(0, 3);
+}
+
 function buildFreeTextGenreColorParts(
   mainGenre: string,
   influences: string[],
@@ -16343,6 +16458,8 @@ function buildFreeTextGenreColorParts(
   if (/80년대|80s|80's|eighties|레트로|retro/i.test(lower)) add('retro analog warmth');
   if (/90년대|90s|90's|nineties/i.test(lower)) add('90s texture');
 
+  buildDirectorGenreIntentColorParts(rawNote).forEach(add);
+
   if (/넓은\s*공간|공간감|wide\s*space|spacious|vast|reverb|잔향|우주|space/i.test(lower)) add('wide spatial haze');
   if (/드래곤볼|용|구슬|조각|fantasy|판타지|마법|모험|adventure|journey|여행/i.test(lower)) add('fantasy journey atmosphere');
   if (/새벽|night|밤|midnight|도시|urban|city|드라이브|drive/i.test(lower)) add(/드라이브|drive/i.test(lower) ? 'late-night city-drive mood' : 'late-night urban mood');
@@ -16360,7 +16477,11 @@ function buildFreeTextGenreColorParts(
       .forEach(add);
   }
 
-  return parts.slice(0, /^(?:Dream Pop|Art Pop|City Pop|80s City Pop|Emo Rock|Tech House|Synth Pop)$/i.test(mainGenre) ? 3 : 2);
+  const maxGenreColors = /^(?:Dream Pop|Art Pop|City Pop|80s City Pop|Emo Rock|Tech House|Synth Pop)$/i.test(mainGenre)
+    || /short[-\s]?form|hook|viral|바이럴|숏폼|쇼츠|틱톡/i.test(rawNote)
+      ? 3
+      : 2;
+  return parts.slice(0, maxGenreColors);
 }
 
 function hasInfluenceBeforeMainGenre(
@@ -17552,13 +17673,16 @@ function buildFreeTextDirectorProfile(note: string): FreeTextDirectorProfile {
 
   prioritizeVocalGender();
 
+  const hasShortFormIntent = /(?:숏폼|쇼츠|틱톡|릴스|short[-\s]?form|shorts|tiktok|reels|viral|바이럴)/iu.test(lower);
   const mainGenre = mainGenreParts.length
     ? mainGenreParts[0]
-    : has(studyKeywords)
-      ? "Study Chill Pop"
-      : hasCalm || hasSlowTempo
-        ? "Slow Chill Pop"
-        : "Contemporary Pop";
+    : hasShortFormIntent
+      ? "Contemporary short-form pop"
+      : has(studyKeywords)
+        ? "Study Chill Pop"
+        : hasCalm || hasSlowTempo
+          ? "Slow Chill Pop"
+          : "Contemporary Pop";
   const extraMainGenres = mainGenreParts.slice(1);
   const genreColorParts = buildFreeTextGenreColorParts(
     mainGenre,
@@ -18168,6 +18292,10 @@ function refineFinalPromptWithGeneratedLyrics(prompt: string, params: GenerateSo
 function stripInternalPromptLeakPhrases(value: string): string {
   let cleaned = cleanupPromptTail(String(value || '')
     .replace(/\bdirect\s+user[-\s]?specified(?:\s+story\s+scene)?\b/gi, '')
+    .replace(/\bactual\s+place\s+implied\s+by\s+the\s+source\s+text\b/gi, '')
+    .replace(/\bsource\s+situation\b/gi, '')
+    .replace(/\bconcrete\s+scene\s+inferred\s+from\s+the\s+user['’]s\s+source\s+text\b/gi, '')
+    .replace(/\bmain\s+character\s+is\s+moving\s+through\s+the\s+source\b/gi, '')
     .replace(/\bcentered\s+on\s+the\s+exact\s+topic\s+the\s+user\s+wrote\b/gi, '')
     .replace(/\bexact\s+topic\b/gi, '')
     .replace(/\bfree[-\s]?text\s+direction\b/gi, '')
@@ -24708,7 +24836,7 @@ Rules:
 - This is a lyric song, not BGM. Do not turn Drop into an instrumental gap unless the source explicitly says instrumental/no vocal.
 - Do not hard-code long lines. Short lines, fragments, one-word emotional lines, and repeated hook lines are allowed when intentional.
 - The problem to fix is not short lines themselves; fix empty or underdeveloped sections, tag-only sections, and sections filled only with meaningless tiny phrases.
-- Intro is flexible: if the Intro cue is instrumental/ambient/opening, it may stay lyric-free. Do not force sung lyrics into an instrumental Intro.
+- Intro is flexible: if the Intro cue is instrumental/ambient/opening, it may stay lyric-free. If it naturally fits the scene, it may also carry one very short ad-lib, spoken aside, hook phrase, or atmospheric vocal line. Do not force sung lyrics into an instrumental Intro, and do not always leave Intro empty.
 - If Intro has sung/ad-lib lines, remove instrumental wording from the Intro tag and make it a sung opening cue.
 - In a lyric song, do not leave Build-Up, Drop, Verse, Bridge, or Outro as tag-only sections. Keep short lines if they work, but these sung sections need real lyric lines after the tag.
 - For the compact Drop-centered structure, avoid a sketch-like result: Build-Up and Drop should usually carry 3-4 concise lyric lines, Verse should carry a concrete 5-6 line scene, Bridge should carry at least 4 lines of emotional turn, and Outro should close the sentence while leaving aftertaste.
@@ -25095,9 +25223,128 @@ function removeDuplicateOpeningFallbackIntroTag(lyrics: string, params: Generate
   return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+
+function removeOpeningCueOnlySungTagsBeforeRealBody(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const remove = new Set<number>();
+  let seenConcreteBody = false;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (parsed) {
+      const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+
+      // A cue-only Verse/Pre/Chorus/Bridge at the very beginning is only a skeleton
+      // when another structural section appears before any lyric/ad-lib body.
+      // Remove it, but keep real sections that immediately own lyric body.
+      if (isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(section) && !hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) {
+        remove.add(i);
+        continue;
+      }
+
+      // Keep Intro itself available as a prologue. The duplicate Intro cleanup below
+      // will remove only proven fallback Intro placeholders when a later real Intro exists.
+      continue;
+    }
+
+    if (isConcreteLyricOrAdlibLineForGhostCleanup(trimmed, params)) {
+      seenConcreteBody = true;
+      break;
+    }
+  }
+
+  if (!remove.size) return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+  return lines.filter((_, index) => !remove.has(index)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+
+function isOpeningStandaloneCueOnlyBracketForCleanup(line: string): boolean {
+  const trimmed = String(line || '').trim();
+  if (!/^\[[^\]\n]{1,180}\]$/.test(trimmed)) return false;
+  const inside = trimmed.replace(/^\[|\]$/g, '').trim();
+  if (!inside) return false;
+  const parsed = parseGuardBracketSectionTag(trimmed);
+  if (parsed) {
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    const normalizedInside = `${section}${parsed.body ? `: ${parsed.body}` : ''}`;
+    if (isGhostCleanupStructuralTagLine(trimmed, {} as GenerateSongParams) || isSectionOnlyLyricTagInside(section) || parseCompositeLyricTagInside(normalizedInside)) return false;
+  }
+  return /\b(?:vocal|main|lead|sub|harmony|backing|fry|crackle|fade|noise|hiss|breath|sigh|hum|humming|ad[-\s]?lib|fx|effect|texture|vinyl|radio|telephone|filter|reverb|echo|clatter|foley|whisper|spoken|mumble|chant)\b/i.test(inside);
+}
+
+function cleanupOpeningCueOnlySkeletonsAtRoot(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  if (!lines.some((line) => String(line || '').trim())) return String(lyrics || '').trim();
+
+  const remove = new Set<number>();
+  let lastKeptIntroIndex = -1;
+  let sawConcreteBody = false;
+
+  const usableStandaloneCue = (line: string): string => {
+    const inside = String(line || '').trim().replace(/^\[|\]$/g, '').trim();
+    if (!inside) return '';
+    const parts = inside
+      .split(/[,，]/)
+      .map((part) => cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim())
+      .filter(Boolean)
+      .filter((part) => !/^(?:vocal\s*)?(?:male|female)?\s*(?:main|lead|sub|harmony|backing)?\s*(?:vocal|voice)?$/i.test(part))
+      .filter((part) => !/^(?:vocal\s*)?(?:main|lead|sub|harmony|backing)$/i.test(part))
+      .filter((part) => !/^vocal\s+(?:main|lead|sub)$/i.test(part));
+    return dedupePromptParts(parts, 4).slice(0, 2).join(', ');
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (parsed) {
+      const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+
+      if (/^Intro$/i.test(section)) {
+        lastKeptIntroIndex = i;
+        continue;
+      }
+
+      if (!sawConcreteBody && isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(section)) {
+        const ownsBody = hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params);
+        if (!ownsBody) {
+          remove.add(i);
+          continue;
+        }
+      }
+      continue;
+    }
+
+    if (!sawConcreteBody && isOpeningStandaloneCueOnlyBracketForCleanup(trimmed)) {
+      if (lastKeptIntroIndex >= 0 && !remove.has(lastKeptIntroIndex)) {
+        const cue = usableStandaloneCue(trimmed);
+        if (cue) lines[lastKeptIntroIndex] = appendCueToTag(lines[lastKeptIntroIndex], cue);
+      }
+      remove.add(i);
+      continue;
+    }
+
+    if (isConcreteLyricOrAdlibLineForGhostCleanup(trimmed, params)) {
+      sawConcreteBody = true;
+      break;
+    }
+  }
+
+  if (!remove.size) return String(lyrics || '').replace(/\n{3,}/g, '\n\n').trim();
+  return lines.filter((_, index) => !remove.has(index)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function cleanupGhostOpeningIntroAndEmptySungTags(lyrics: string, params: GenerateSongParams): string {
-  let text = removeGhostEmptyCoreSungSectionTags(lyrics, params);
+  let text = cleanupOpeningCueOnlySkeletonsAtRoot(lyrics, params);
+  text = removeOpeningCueOnlySungTagsBeforeRealBody(text, params);
+  text = removeGhostEmptyCoreSungSectionTags(text, params);
   text = removeDuplicateOpeningFallbackIntroTag(text, params);
+  text = cleanupOpeningCueOnlySkeletonsAtRoot(text, params);
+  text = removeOpeningCueOnlySungTagsBeforeRealBody(text, params);
   text = removeGhostEmptyCoreSungSectionTags(text, params);
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -26887,7 +27134,7 @@ ${buildExperimentalStructureInspiration(params)}
 ${exactStructureText}
 - In Stable/Recommended mode, do not place Chorus before the first Verse unless the user explicitly wrote a custom chorus-first instruction. The first sung storytelling section should begin with Verse or Rap Section according to the required structure.
 - Output the structural sections in this order. Do not omit, merge, rename, or absorb required structural sections into another tag.
-- If the required structure includes Intro, keep Intro as the opening/prologue section. Intro may be lyric-free when it functions as instrumental, ambient, foley, texture, mood-setting, or buildup opening. Add a short lyric, humming, ad-lib, spoken phrase, or hook-first line only when it naturally fits the genre, scene, and flow. Do not force Verse/Rap/Chorus body lyrics into Intro, and do not treat a tag-only Intro as an error.
+- If the required structure includes Intro, keep Intro as the opening/prologue section. Intro may be lyric-free when it functions as instrumental, ambient, foley, texture, mood-setting, or buildup opening. It may also contain one very short ad-lib, spoken aside, hook phrase, foley-like vocal moment, or atmospheric vocal line when it naturally fits the genre, scene, and flow. Avoid both extremes: do not force Verse/Rap/Chorus body lyrics into Intro, and do not always leave Intro as tag-only. Do not treat a tag-only Intro as an error.
 - Use [Verse] when Verse returns; do not output [Verse A], [Verse B], or [Verse C] unless there are multiple different speakers in a Situation.
 - Every sung section tag must include a fresh cue after the colon, shaped for this exact song. Bad: [Verse]. Good shape: [Verse : current-song vocal attitude or emotional function]. Do NOT put space-texture style labels such as tunnel echo, bathroom reverb, airy space, spatial texture, room reverb, or reverb-only cues inside sung lyric section tags; keep those in the production prompt only.
 - The structure is fixed, but section cue wording is NOT fixed. Do not reuse canned cues such as processed, soft swell, fading out, emotional build, controlled emotional turn, or high-energy hook as one-word/generic answers.
@@ -26918,6 +27165,7 @@ ROLE OF USER INPUT:
 ${buildDirectGenreStyleSoundLockInstruction(params)}
 
 - Same selected keywords must NOT create the same song every time. Treat the selections as a reusable palette, not a fixed template.
+- Intro must remain a flexible musical prologue. Let the current song decide whether Intro is tag-only, foley/texture-only, or has one short voice moment. Never fill Intro with Verse body just to satisfy structure, and never suppress a natural short Intro ad-lib/spoken/hook line when it fits.
 - If the user mentions a song length, slow/fast tempo, short/long lyrics, verse/chorus/bridge, rap/no rap, or vocal formation, reflect that in the final song direction.
 - If custom song structure mode is selected, keep the custom section order fixed, but still apply the note to mood, sound, theme, vocal expression, and section energy.
 

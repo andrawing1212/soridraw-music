@@ -22580,6 +22580,8 @@ function splitCleanCuePartsForSectionBody(body: string): string[] {
     .split(/[,，]/)
     .map((part) => cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim())
     .filter(Boolean)
+    .map((part) => cleanLyricSectionCuePartForStructuralTag(part))
+    .filter(Boolean)
     .filter((part) => !/^(?:solo|instrumental\s+solo|solo\s+instrumental|guitar\s+solo|lead\s+guitar\s+solo)$/i.test(part));
 }
 
@@ -24532,6 +24534,43 @@ function compactVerboseLyricSectionCuePart(cue: string, sectionName: string, par
   return lyricFriendlySectionCue(section, params);
 }
 
+
+function isDirectorProductionCueLeakForLyricSectionTag(part: string): boolean {
+  const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || ''))
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return true;
+  const lower = clean.toLowerCase();
+
+  // Director-note / production-purpose phrases belong to the prompt brief, not section tags.
+  // They caused leaks like [Bridge : 20. 3. rain, Clear melodic delivery].
+  if (/\b(?:shorts?|short form|shortform|tik\s*tok|tiktok|reels?|viral|first\s*3|first\s*three|3\s*sec|three\s*sec|seconds?|secs?|20\s*sec|hook\s*centered|chorus\s*centered|repeatable\s*hook|simple\s*rhythm|minimalist\s*rhythm|no\s*high\s*notes?|avoid\s*high\s*notes?)\b/i.test(lower)) return true;
+  if (/[0-9]/.test(clean) && /\b(?:sec|second|seconds|초|분|hook|chorus|refrain|rain|short|form|viral|bpm)\b/i.test(lower)) return true;
+  if (/^\d+(?:\s*[.:]\s*\d+)*(?:\s*[a-z]{1,12})?$/i.test(clean)) return true;
+
+  // Full vocal-line descriptors are allowed in [Vocals], but they make section tags look like fallback skeletons.
+  if (/\b(?:professional\s+pop\s+vocal\s+tone|natural\s+(?:male|female|solo)?\s*vocal|solo\s+vocal|single\s+lead\s+vocal\s+focus|genre\s*appropriate\s+vocal\s+tone|vocal\s+tone)\b/i.test(lower)) return true;
+
+  return false;
+}
+
+function isGenericFallbackOnlyLyricSectionCue(part: string): boolean {
+  const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || ''))
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return true;
+  return /^(?:clear\s+melodic\s+delivery|natural\s+emotional\s+delivery|professional\s+pop\s+vocal\s+tone|genre\s*appropriate\s+vocal\s+tone|balanced\s+delivery|restrained\s+delivery)$/i.test(clean);
+}
+
+function cleanLyricSectionCuePartForStructuralTag(part: string): string {
+  const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim();
+  if (!clean) return '';
+  if (isDirectorProductionCueLeakForLyricSectionTag(clean)) return '';
+  return clean;
+}
+
 function normalizeFinalLyricSectionCueParts(parts: string[], sectionName: string, params: GenerateSongParams): string[] {
   const anchorParts: string[] = [];
   const cueParts: string[] = [];
@@ -24544,8 +24583,9 @@ function normalizeFinalLyricSectionCueParts(parts: string[], sectionName: string
 
   const normalizedCueParts = cueParts
     .flatMap((part) => compactVerboseLyricSectionCuePart(part, sectionName, params).split(/[,，]/))
-    .map((part) => cleanupPromptTail(part).trim())
+    .map((part) => cleanLyricSectionCuePartForStructuralTag(part))
     .filter(Boolean)
+    .filter((part) => !isDirectorProductionCueLeakForLyricSectionTag(part))
     .filter((part) => !/^story[-\s]?aware\s+delivery$/i.test(part) || cueParts.length <= 1);
 
   const deduped = dedupePromptParts(normalizedCueParts, 8)
@@ -25029,8 +25069,11 @@ function ensureSungSectionTagsHaveSafeCue(lyrics: string, params: GenerateSongPa
     const section = normalizeLyricSectionDisplayName(parsed.rawSection);
     if (!isSungSectionThatNeedsBody(section)) return line;
     if (!hasLyricBodyLinesAfterSectionTag(lines, index)) return line;
-    const parts = splitCleanCuePartsForSectionBody(parsed.body).filter((part) => !isLyricSectionSpaceTextureCue(part));
-    if (parts.length) return line;
+    const parts = splitCleanCuePartsForSectionBody(parsed.body)
+      .filter((part) => !isLyricSectionSpaceTextureCue(part))
+      .filter((part) => !isDirectorProductionCueLeakForLyricSectionTag(part));
+    const meaningfulParts = parts.filter((part) => !isGenericFallbackOnlyLyricSectionCue(part));
+    if (meaningfulParts.length) return `[${section} : ${dedupePromptParts(meaningfulParts, 4).slice(0, 2).join(', ')}]`;
     return `[${section} : ${fallbackLyricCueForSection(section)}]`;
   }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -25149,6 +25192,52 @@ function removeGhostEmptyCoreSungSectionTags(lyrics: string, params: GenerateSon
     }
 
     out.push(lines[i]);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+
+function removeCueOnlyEmptyStructuralBlocksStrict(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const parsed = parseGuardBracketSectionTag(line);
+    if (!parsed) {
+      out.push(line);
+      continue;
+    }
+
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    if (!isCoreSungNarrativeSectionTagThatShouldNotBeEmpty(section)) {
+      out.push(line);
+      continue;
+    }
+
+    const blockLines: string[] = [];
+    let j = i + 1;
+    for (; j < lines.length; j += 1) {
+      const next = String(lines[j] || '').trim();
+      if (next && isGhostCleanupStructuralTagLine(next, params)) break;
+      blockLines.push(lines[j]);
+    }
+
+    const hasConcreteBody = blockLines.some((bodyLine) => isConcreteLyricOrAdlibLineForGhostCleanup(bodyLine, params));
+    if (!hasConcreteBody) {
+      // Drop cue-only structural skeletons and any non-lyric cue lines that belong only to them.
+      i = j - 1;
+      continue;
+    }
+
+    const cleanParts = splitCleanCuePartsForSectionBody(parsed.body)
+      .filter((part) => !isDirectorProductionCueLeakForLyricSectionTag(part))
+      .filter((part) => !isGenericFallbackOnlyLyricSectionCue(part));
+    if (cleanParts.length) out.push(`[${section} : ${dedupePromptParts(cleanParts, 4).slice(0, 2).join(', ')}]`);
+    else out.push(`[${section}]`);
+    out.push(...blockLines);
+    i = j - 1;
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
@@ -25340,12 +25429,15 @@ function cleanupOpeningCueOnlySkeletonsAtRoot(lyrics: string, params: GenerateSo
 
 function cleanupGhostOpeningIntroAndEmptySungTags(lyrics: string, params: GenerateSongParams): string {
   let text = cleanupOpeningCueOnlySkeletonsAtRoot(lyrics, params);
+  text = removeCueOnlyEmptyStructuralBlocksStrict(text, params);
   text = removeOpeningCueOnlySungTagsBeforeRealBody(text, params);
   text = removeGhostEmptyCoreSungSectionTags(text, params);
   text = removeDuplicateOpeningFallbackIntroTag(text, params);
   text = cleanupOpeningCueOnlySkeletonsAtRoot(text, params);
+  text = removeCueOnlyEmptyStructuralBlocksStrict(text, params);
   text = removeOpeningCueOnlySungTagsBeforeRealBody(text, params);
   text = removeGhostEmptyCoreSungSectionTags(text, params);
+  text = removeCueOnlyEmptyStructuralBlocksStrict(text, params);
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 

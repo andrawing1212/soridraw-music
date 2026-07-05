@@ -6018,22 +6018,47 @@ const toggleCycleVariantSelection = (
 
         showToast('곡이 삭제 되었습니다.');
       } else {
-          await addDoc(collection(db, 'favorites'), sanitizeForFirestore({
-            uid: user.uid,
-            title: song.title,
-            koreanTitle: song.koreanTitle ?? '',
-            englishTitle: song.englishTitle ?? '',
-            genre: getResolvedGenre(song),
-            lyrics: song.lyrics,
-            prompt: song.prompt,
-            appliedKeywords: song.appliedKeywords,
-            userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
-            situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
-            isLocked: false,
-            createdAtMs: Date.now(),
-            createdAt: serverTimestamp(),
-            searchTokens: buildFavoriteSearchTokens(song)
-          }));
+        const createdAtMs = Date.now();
+        const resolvedGenre = getResolvedGenre(song);
+        const favoritePayload = sanitizeForFirestore({
+          uid: user.uid,
+          title: song.title,
+          koreanTitle: song.koreanTitle ?? '',
+          englishTitle: song.englishTitle ?? '',
+          genre: resolvedGenre,
+          lyrics: song.lyrics,
+          prompt: song.prompt,
+          appliedKeywords: song.appliedKeywords,
+          userInput: song.userInput ?? (song.appliedKeywords as any)?.userInput ?? '',
+          situationSummary: song.situationSummary || (song.appliedKeywords as any)?.situationSummary || '',
+          isLocked: false,
+          createdAtMs,
+          createdAt: serverTimestamp(),
+          searchTokens: buildFavoriteSearchTokens(song)
+        });
+        const favoriteDocRef = await addDoc(collection(db, 'favorites'), favoritePayload);
+
+        // Keep the Studio save button and Music Note cache in sync immediately.
+        // The paged Firestore listener will reconcile the same document again after the server timestamp resolves.
+        const localFavorite = sanitizeForFirestore({
+          ...song,
+          ...favoritePayload,
+          id: favoriteDocRef.id,
+          uid: user.uid,
+          genre: resolvedGenre,
+          createdAtMs,
+          createdAt: createdAtMs,
+          isLocked: false,
+        });
+        setFavorites((prev) => {
+          const merged = mergeFavoritePages([localFavorite], prev || []);
+          try {
+            localStorage.setItem(`soridraw_favorites_cache_${user.uid}`, JSON.stringify(merged));
+          } catch (e) {
+            console.error('Failed to save favorites to cache:', e);
+          }
+          return merged;
+        });
 
         // Increment favoriteCount in users document
         await updateDoc(doc(db, 'users', user.uid), {

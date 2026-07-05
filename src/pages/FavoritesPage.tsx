@@ -675,6 +675,7 @@ export default function FavoritesPage({
   isLoadingMoreFavorites = false,
   onLoadMoreFavorites,
   onServerSearchFavorites,
+  onManualSyncFavorites,
   onLogin
 }: { 
   favorites: any[]; 
@@ -693,6 +694,7 @@ export default function FavoritesPage({
   isLoadingMoreFavorites?: boolean;
   onLoadMoreFavorites?: () => Promise<void> | void;
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
+  onManualSyncFavorites?: () => Promise<{ ok: boolean; limited?: boolean; message?: string }>;
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
@@ -709,6 +711,8 @@ export default function FavoritesPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
+  const [isManualSyncingFavorites, setIsManualSyncingFavorites] = useState(false);
+  const [isManualSyncUsedToday, setIsManualSyncUsedToday] = useState(false);
   const serverSearchQueriesRef = useRef<Set<string>>(new Set());
   const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
@@ -1200,6 +1204,21 @@ export default function FavoritesPage({
       setFavoriteToastMessage(null);
       favoriteToastTimerRef.current = null;
     }, 2200);
+  };
+
+  const handleManualFavoriteSync = async () => {
+    if (!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday) return;
+    setIsManualSyncingFavorites(true);
+    try {
+      const result = await onManualSyncFavorites();
+      if (result?.ok || result?.limited) setIsManualSyncUsedToday(true);
+      showFavoriteToast(result?.message || (result?.ok ? '뮤직노트를 동기화했습니다.' : '동기화에 실패했습니다.'));
+    } catch (error) {
+      console.error('manual favorite sync failed:', error);
+      showFavoriteToast('동기화에 실패했습니다.');
+    } finally {
+      setIsManualSyncingFavorites(false);
+    }
   };
 
   const requestMusicNoteLogin = () => {
@@ -5013,6 +5032,29 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#FFBB22] transition-all flex items-center justify-center"
             >
               <Zap className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              disabled={!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday}
+              onClick={handleManualFavoriteSync}
+              onMouseEnter={() => onHover({
+                id: 'music-note-manual-sync',
+                label: '동기화',
+                description: isManualSyncUsedToday ? '오늘 수동 동기화 1회를 이미 사용했습니다.' : '서버의 최신 뮤직노트 20개를 다시 확인합니다. 하루 1회만 사용할 수 있습니다.',
+                _ts: Date.now(),
+              })}
+              onMouseLeave={() => onHover(null)}
+              className={cn(
+                "h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/70 transition-all flex items-center justify-center",
+                isManualSyncingFavorites
+                  ? "cursor-wait text-[#FFBB22]"
+                  : isManualSyncUsedToday
+                    ? "opacity-40 cursor-not-allowed"
+                    : "hover:bg-white/5 hover:text-[#FFBB22]"
+              )}
+              title={isManualSyncUsedToday ? '오늘 동기화 1회 사용 완료' : '뮤직노트 동기화'}
+            >
+              <RefreshCw className={cn("w-4 h-4", isManualSyncingFavorites && "animate-spin")} />
             </button>
             <div className="relative flex-1 min-w-0 group overflow-hidden">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">

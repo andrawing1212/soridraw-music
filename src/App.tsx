@@ -6024,6 +6024,60 @@ const toggleCycleVariantSelection = (
     }
   }, [user]);
 
+  const FAVORITES_MANUAL_SYNC_STORAGE_BASE = 'soridraw_favorites_manual_sync_date';
+
+  const refreshFavoritesFromServerFirstPage = useCallback(async (): Promise<{ ok: boolean; limited?: boolean; message?: string }> => {
+    const currentUser = user || auth.currentUser;
+    if (!currentUser?.uid) {
+      return { ok: false, message: '로그인이 필요합니다.' };
+    }
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const storageKey = `${FAVORITES_MANUAL_SYNC_STORAGE_BASE}_${currentUser.uid}`;
+    try {
+      if (localStorage.getItem(storageKey) === todayKey) {
+        return { ok: false, limited: true, message: '오늘 동기화는 이미 사용했습니다.' };
+      }
+    } catch {
+      // localStorage is only a client-side daily limiter. If it fails, continue with the sync attempt.
+    }
+
+    try {
+      const q = query(
+        collection(db, 'favorites'),
+        where('uid', '==', currentUser.uid),
+        orderBy('createdAt', 'desc'),
+        limit(FAVORITES_PAGE_SIZE + 1)
+      );
+      const snapshot = await getDocs(q);
+      const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
+      const firstPageFavs = firstPageDocs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+      favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
+      favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
+      favoritePaginationFallbackModeRef.current = false;
+      setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
+
+      setFavorites((prev) => {
+        const firstPageIds = new Set(firstPageFavs.map((item: any) => item.id).filter(Boolean));
+        const retainedLoadedOrCached = (prev || []).filter((item: any) => item?.id && !firstPageIds.has(item.id));
+        const merged = mergeFavoritePages(firstPageFavs, retainedLoadedOrCached);
+        writeFavoritesCache(currentUser.uid, merged);
+        return merged;
+      });
+
+      try {
+        localStorage.setItem(storageKey, todayKey);
+      } catch {
+        // ignore daily marker write failure
+      }
+      return { ok: true, message: '뮤직노트를 동기화했습니다.' };
+    } catch (error) {
+      console.warn('Manual favorites sync failed.', error);
+      return { ok: false, message: '동기화에 실패했습니다.' };
+    }
+  }, [user]);
+
   const showToast = useCallback((message: string) => {
     setToast({ message, visible: true });
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
@@ -6148,16 +6202,14 @@ const toggleCycleVariantSelection = (
           return;
         }
 
-        const trashUpdates = {
-          hidden: true,
-          favoriteHidden: true,
-          isPublic: false,
-          deletedAt: serverTimestamp(),
-          trashedAt: Date.now(),
-        };
-        await updateDoc(doc(db, 'favorites', existingFav.id), trashUpdates);
-        patchLocalFavorite(existingFav.id, { ...trashUpdates, deletedAt: Date.now() }, existingFav);
-        showToast('곡이 휴지통으로 이동했습니다.');
+        // Studio heart toggle means save / unsave.
+        // It should remove the saved Music Note document immediately, not move it to trash.
+        await deleteDoc(doc(db, 'favorites', existingFav.id));
+        removeLocalFavorite(existingFav.id);
+        await updateDoc(doc(db, 'users', user.uid), {
+          favoriteCount: increment(-1)
+        }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+        showToast('저장이 해제되었습니다.');
         return;
       }
 
@@ -11668,7 +11720,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <Heart 
                         className={cn(
                           "w-6 h-6 transition-all",
-                          favorites.some(f => f.title === result.title && f.prompt === result.prompt)
+                          favorites.some(f => !isFavoriteHidden(f) && isSameFavoriteSong(f, result))
                             ? "fill-[#cd8c31] text-[#cd8c31]"
                             : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
                         )} 
@@ -11856,7 +11908,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <Heart 
                         className={cn(
                           "w-5 h-5 transition-all",
-                          favorites.some(f => f.title === result.title && f.prompt === result.prompt)
+                          favorites.some(f => !isFavoriteHidden(f) && isSameFavoriteSong(f, result))
                             ? "fill-[#cd8c31] text-[#cd8c31]"
                             : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
                         )} 
@@ -12229,6 +12281,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   isLoadingMoreFavorites={isLoadingMoreFavorites}
                   onLoadMoreFavorites={loadMoreFavorites}
                   onServerSearchFavorites={searchFavoritesOnServer}
+                  onManualSyncFavorites={refreshFavoritesFromServerFirstPage}
                   toggleFavorite={toggleFavorite}
                   updateFavorite={updateFavorite}
                   clearAllFavorites={clearAllFavorites}

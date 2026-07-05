@@ -13823,6 +13823,13 @@ function translateOrMapKoreanToEnglish(text: string): { characters: string; plac
     place = "inside an everyday work-life situation";
     action = "trying to escape the pressure of the day";
     conflict = "small workplace frustration turning into a repeatable emotional hook";
+  } else if (has(/(?:짜파게티|라면|국수|면|파스타|밥|음식|요리|조리|냄비|팬|프라이팬|그릇|젓가락|숟가락|주방|부엌|국물|소스|끓(?:이|여)|비비|젓|섞|볶|굽|먹|ramen|noodle|noodles|food|meal|kitchen|pot|pan|bowl|sauce|cook|boil|eat|mix|stir)/iu) && hasConcreteObjectActionSignalInDirectorNote(text)) {
+    characters = "someone inside a small food-prep ritual";
+    place = has(/주방|부엌|냄비|팬|프라이팬|끓|cook|boil|kitchen|pot|pan/iu) ? "inside a small kitchen or meal-prep space" : "around a simple meal";
+    action = "turning the cooking and eating process into visible rhythmic gestures";
+    conflict = has(/코믹|웃|장난|어이없|속삭|공격|comic|funny|playful|whisper|aggressive/iu)
+      ? "comic intensity growing from tiny physical actions and exaggerated appetite"
+      : "small physical actions becoming the song's emotional engine";
   } else if (has(/카페|커피|cafe|coffee/iu)) {
     place = "inside a quiet cafe corner";
     action = "holding onto a small everyday detail";
@@ -16237,10 +16244,30 @@ function getFreeTextDirectorNote(params: GenerateSongParams): string {
   return String(params.userInput || '').replace(/\s+/g, ' ').trim();
 }
 
+function hasConcreteObjectActionSignalInDirectorNote(value: string): boolean {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  const lower = raw.toLowerCase();
+
+  // Block common production metaphors so action words do not turn pure music
+  // direction into a fake lyric scene.
+  if (/(?:먹히는\s*(?:훅|후렴|멜로디|리듬|가사)|손에\s*잡히는\s*(?:훅|멜로디|리듬|사운드)|요리하듯\s*(?:편곡|사운드|구성)|비비는\s*(?:리듬|그루브|groove)|cook(?:ed|ing)?\s+(?:arrangement|sound|groove)|edible\s+hook)/iu.test(lower)) {
+    return false;
+  }
+
+  const concreteTarget = /(?:짜파게티|라면|국수|면|파스타|밥|음식|요리|조리|국물|소스|냄비|팬|프라이팬|그릇|젓가락|숟가락|주방|부엌|물|불|가스레인지|가스렌지|오른손|왼손|양손|손가락|손|발|눈|입|문|계단|창문|차|자동차|핸들|전화기|휴대폰|핸드폰|컵|잔|우산|가방|옷|책상|의자|침대|ramen|noodle|noodles|food|meal|kitchen|pot|pan|bowl|sauce|water|right\s+hand|left\s+hand|hands?|door|stairs?|window|car|phone|cup|umbrella|bag)/iu.test(lower);
+  const concreteAction = /(?:끓(?:이|여)|먹|비비|젓|섞|볶|굽|자르|썰|씻|넣|따르|붓|열|닫|기다리|멈추|앉|서서|서\s*있|눕|보다|쳐다|들고|들어|놓|잡|던지|마시|걷|뛰|달리|cook|boil|eat|mix|stir|shake|cut|pour|open|close|wait|stand|sit|look|hold|grab|drink|walk|run)/iu.test(lower);
+  const processMarker = /(?:까지\s*과정|하는\s*과정|과정|하면서|하며|한\s*뒤|after|while|process|sequence)/iu.test(lower);
+
+  if (concreteTarget && concreteAction) return true;
+  return Boolean(processMarker && concreteAction && /(?:먹기|요리|조리|비비|끓|걷|기다리|cook|eat|walk|wait)/iu.test(lower));
+}
+
 function hasConcreteStorySignalInDirectorNote(value: string): boolean {
   const raw = String(value || '').trim();
   if (!raw) return false;
-  return /(?:장면|이야기|스토리|상황|주인공|남자|여자|아이|친구|연인|엄마|아빠|가족|회사|학교|거리|골목|방|창문|버스|기차|정류장|역|바다|카페|휴대폰|핸드폰|문자|카톡|사진|편지|기다|떠나|돌아|만나|헤어|울고|웃고|싸우|화해|고백|사랑|이별|그리움|후회|분노|꿈속|비 오는|비오는|under|waiting|leaving|breakup|confession|scene|story|character|room|street|train|bus|message)/i.test(raw);
+  return /(?:장면|이야기|스토리|상황|주인공|남자|여자|아이|친구|연인|엄마|아빠|가족|회사|학교|거리|골목|방|창문|버스|기차|정류장|역|바다|카페|휴대폰|핸드폰|문자|카톡|사진|편지|기다|떠나|돌아|만나|헤어|울고|웃고|싸우|화해|고백|사랑|이별|그리움|후회|분노|꿈속|비 오는|비오는|under|waiting|leaving|breakup|confession|scene|story|character|room|street|train|bus|message)/i.test(raw)
+    || hasConcreteObjectActionSignalInDirectorNote(raw);
 }
 
 function hasProductionSeasoningSignal(value: string): boolean {
@@ -21349,6 +21376,60 @@ function hasIntroLyricSection(lyrics: string): boolean {
   });
 }
 
+function isDisallowedMinimalIntroCue(raw: string): boolean {
+  const text = String(raw || '').trim();
+  if (!text) return true;
+  const lower = text.toLowerCase();
+  if (/^(?:intro|verse|pre[-\s]?chorus|chorus|hook|refrain|bridge|outro|lyrics?|section|song)$/i.test(text)) return true;
+  // Do not use vocal-role or production-instruction residue as a tag-only Intro cue.
+  if (/\b(?:vocal|voice|male|female|solo|main|lead|sub|rapper|rap vocal|all vocals|duet|delivery|phrasing|tone|clear melodic|professional pop|natural)\b/i.test(lower)) return true;
+  if (/\b(?:20\s*(?:sec|second|초)|3\s*(?:sec|second|초)|first\s*3|short[-\s]?form|viral|hook[-\s]?centered|chorus[-\s]?first|lyrics?|lyric|repeatable|simple rhythm)\b/i.test(lower)) return true;
+  if (/source text|source situation|actual place|implied by|concrete scene|selected story/i.test(lower)) return true;
+  if (text.length > 52) return true;
+  return false;
+}
+
+function cleanMinimalIntroCueCandidate(raw: string): string {
+  const translated = cleanEnglishOnlyLyricTagPart(raw)
+    .replace(/\b(?:vocal|voice|male|female|solo|main|lead|sub|rapper|rap vocal|all vocals|duet)\b/gi, ' ')
+    .replace(/\b(?:delivery|phrasing|tone|clear melodic|professional pop|natural)\b/gi, ' ')
+    .replace(/\b(?:20\s*(?:sec|second)|3\s*(?:sec|second)|first\s*3|short[-\s]?form|viral|hook[-\s]?centered|chorus[-\s]?first)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^\s*[,.:\-]+\s*|\s*[,.:\-]+\s*$/g, '')
+    .trim();
+  if (!translated || isDisallowedMinimalIntroCue(translated)) return '';
+  return translated;
+}
+
+function splitMinimalIntroCueSource(raw: string): string[] {
+  return String(raw || '')
+    .split(/[,，;、/|]+|\s+and\s+/i)
+    .map((part) => cleanMinimalIntroCueCandidate(part))
+    .filter(Boolean);
+}
+
+function collectMinimalIntroCueCandidates(params: GenerateSongParams, customIntroTags: string[] = []): string[] {
+  const sources: string[] = [];
+
+  // Prefer concrete sound/instrument materials already chosen for this song. This is not
+  // a genre hardcode; it only borrows the current song palette for a tag-only prologue.
+  sources.push(...customIntroTags.filter((tag) => !isHumanVoiceCueText(tag)));
+  sources.push(...(params.pointSounds || []));
+  sources.push(...(params.instrumentSounds || []));
+  if (params.customSoundInput) sources.push(params.customSoundInput);
+
+  // Styles can help only when they describe a sonic bed/groove, not a lyric/vocal role.
+  (params.styles || []).forEach((style) => {
+    const text = String(style || '');
+    if (/\b(?:groove|funk|house|techno|edm|trap|drill|boom\s*bap|hip[-\s]?hop|r&b|soul|jazz|rock|guitar|piano|synth|pad|bass|drum|vinyl|lo[-\s]?fi|ambient|cinematic|disco|garage|city\s*pop)\b/i.test(text)) {
+      sources.push(text);
+    }
+  });
+
+  const candidates = sources.flatMap(splitMinimalIntroCueSource);
+  return dedupePromptParts(candidates, 2).slice(0, 2);
+}
+
 function buildRequestedIntroFallbackTag(params: GenerateSongParams): string {
   const stableLabels = getStableMultiVocalLyricTagLabels(params);
   const fallbackVoice = stableLabels[0] || fallbackSingleAcousticVoice(params, 0);
@@ -21369,17 +21450,57 @@ function buildRequestedIntroFallbackTag(params: GenerateSongParams): string {
     const label = mapped?.label || fallbackVoice;
     const cues = [mapped?.extraCue || '', first?.cue || '', hasHumCue ? 'hum' : '']
       .flatMap((cue) => String(cue || '').split(/[,，]/))
+      .map(cleanMinimalIntroCueCandidate)
       .filter(Boolean)
       .slice(0, 2);
     return formatCompositeLyricTag('Intro', label, cues.length ? cues : ['hum']);
   }
 
-  return '[Intro: instrumental]';
+  const cues = collectMinimalIntroCueCandidates(params, tags);
+  if (cues.length > 0) return buildInstrumentalOnlyTag('Intro', cues);
+  return hasHumCue ? '[Intro: soft humming]' : '[Intro: instrumental]';
+}
+
+function firstLyricSectionTagBaseName(lyrics: string): string {
+  const firstTagLine = String(lyrics || '').split('\n').map((line) => line.trim()).find((line) => {
+    if (!line) return false;
+    const parsed = parseBracketOnlyLine(line);
+    if (!parsed) return false;
+    const composite = parseCompositeLyricTagInside(parsed.inside);
+    const section = composite?.section || (isSectionOnlyLyricTagInside(parsed.inside) ? normalizeLyricSectionDisplayName(parsed.inside) : '');
+    return Boolean(section);
+  });
+  if (!firstTagLine) return '';
+  const parsed = parseBracketOnlyLine(firstTagLine);
+  if (!parsed) return '';
+  const composite = parseCompositeLyricTagInside(parsed.inside);
+  const section = composite?.section || (isSectionOnlyLyricTagInside(parsed.inside) ? normalizeLyricSectionDisplayName(parsed.inside) : '');
+  return baseLyricSectionName(section || '');
+}
+
+function shouldMinimallyRestoreRequestedIntro(lyrics: string, params: GenerateSongParams): boolean {
+  if (!String(lyrics || '').trim()) return false;
+  if (!isVocalLyricSong(params)) return false;
+  if (!lyricStructureRequestsIntro(params)) return false;
+  if (hasIntroLyricSection(lyrics)) return false;
+
+  const firstSection = firstLyricSectionTagBaseName(lyrics);
+  if (!firstSection) return false;
+  return /^(?:Verse|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Bridge|Outro)$/i.test(firstSection);
+}
+
+function minimallyRestoreRequestedIntroTagOnly(lyrics: string, params: GenerateSongParams): string {
+  const text = String(lyrics || '').trim();
+  if (!shouldMinimallyRestoreRequestedIntro(text, params)) return text;
+
+  const introTag = buildRequestedIntroFallbackTag(params).trim() || '[Intro: instrumental]';
+  // Restore only a tag-only prologue. Do not move Verse/Rap body into Intro, do not add
+  // fallback Verse cues, and do not create any lyric/ad-lib body here.
+  return `${introTag}\n\n${text}`.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function ensureRequestedIntroPresentInMultiVocalLyrics(lyrics: string, params: GenerateSongParams): string {
-  // Never force-add [Intro : instrumental] when Gemini has omitted Intro.
-  return lyrics;
+  return minimallyRestoreRequestedIntroTagOnly(lyrics, params);
 }
 
 function realLyricLineCount(lines: string[], params: GenerateSongParams): number {
@@ -24603,8 +24724,7 @@ function openingIntroCueFromLooseTag(rawCue: string, params: GenerateSongParams)
 }
 
 function ensureRequestedIntroPresentForVocalLyrics(lyrics: string, params: GenerateSongParams): string {
-  // Never force-add [Intro : instrumental] when Gemini has omitted Intro or starts with Verse/Rap directly.
-  return lyrics;
+  return minimallyRestoreRequestedIntroTagOnly(lyrics, params);
 }
 
 function normalizeLyricSectionTagForVocalSong(tag: string, params: GenerateSongParams): string {

@@ -3653,6 +3653,14 @@ function App() {
   const favoritePaginationFallbackModeRef = useRef(false);
   const [hasMoreFavorites, setHasMoreFavorites] = useState(false);
   const [isLoadingMoreFavorites, setIsLoadingMoreFavorites] = useState(false);
+  const isFavoriteSoftRemoved = (favorite: any) => Boolean(
+    favorite?.favoriteRemoved === true
+    || favorite?.saved === false
+    || favorite?.favoriteRemovedAt
+    || favorite?.unlikedAt
+    || favorite?.unsavedAt
+  );
+
   const sortFavoriteList = (list: any[]) => {
     return [...list].sort((a: any, b: any) => {
       const aTime = a.createdAtMs || getTimestampMs(a.createdAt);
@@ -3664,6 +3672,10 @@ function App() {
     const map = new Map<string, any>();
     [...(current || []), ...(incoming || [])].forEach((item) => {
       if (!item?.id) return;
+      if (isFavoriteSoftRemoved(item)) {
+        map.delete(item.id);
+        return;
+      }
       map.set(item.id, { ...(map.get(item.id) || {}), ...item });
     });
     return sortFavoriteList(Array.from(map.values()));
@@ -3794,7 +3806,13 @@ function App() {
     return false;
   };
 
-  const isFavoriteHidden = (favorite: any) => Boolean(favorite?.hidden === true || favorite?.favoriteHidden === true || favorite?.deletedAt || favorite?.trashedAt);
+  const isFavoriteHidden = (favorite: any) => Boolean(
+    isFavoriteSoftRemoved(favorite)
+    || favorite?.hidden === true
+    || favorite?.favoriteHidden === true
+    || favorite?.deletedAt
+    || favorite?.trashedAt
+  );
 
   const getFavoriteCreatedSortTime = (favorite: any): number => {
     return Number(favorite?.createdAtMs || 0)
@@ -5881,7 +5899,7 @@ const toggleCycleVariantSelection = (
 
         if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
           // Do not slice the cache. It costs nothing and prevents existing My Note / Shared Note items from visually disappearing.
-          setFavorites(sortFavoriteList(cachedFavs));
+          setFavorites(sortFavoriteList(cachedFavs.filter((favorite) => !isFavoriteSoftRemoved(favorite))));
         } else {
           setFavorites([]);
         }
@@ -5904,7 +5922,7 @@ const toggleCycleVariantSelection = (
 
           const legacyQuery = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
           unsubFavs = onSnapshot(legacyQuery, (legacySnapshot) => {
-            const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
             setFavorites(legacyFavs);
             writeFavoritesCache(currentUser.uid, legacyFavs);
             setIsFavoritesLoading(false);
@@ -5929,7 +5947,7 @@ const toggleCycleVariantSelection = (
 
           try {
             const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
-            const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+            const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
             if (fullFavorites.length === 0) {
               try {
                 localStorage.setItem(recoveryKey, 'done');
@@ -6081,7 +6099,7 @@ const toggleCycleVariantSelection = (
         limit(FAVORITE_SERVER_SEARCH_LIMIT)
       );
       const snapshot = await getDocs(q);
-      const serverResults = sortFavoriteList(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+      const serverResults = sortFavoriteList(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
       favoriteServerSearchCacheRef.current[normalizedSearch] = serverResults;
       if (serverResults.length > 0) {
         setFavorites((prev) => {
@@ -6280,6 +6298,11 @@ const toggleCycleVariantSelection = (
             favoriteHidden: false,
             deletedAt: null,
             trashedAt: null,
+            favoriteRemoved: false,
+            favoriteRemovedAt: null,
+            unlikedAt: null,
+            unsavedAt: null,
+            saved: true,
             restoredAt: Date.now(),
             favoriteKey: existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav),
             searchTokens: buildFavoriteSearchTokens({ ...existingFav, ...song }),
@@ -6291,8 +6314,21 @@ const toggleCycleVariantSelection = (
         }
 
         // Studio heart toggle means save / unsave.
-        // It should remove the saved Music Note document immediately, not move it to trash.
-        await deleteDoc(doc(db, 'favorites', existingFav.id));
+        // Cross-device listeners cannot reliably infer a hard delete from a 20-item limited query.
+        // Keep a lightweight non-trash tombstone so other devices can receive the change, while the song disappears immediately from Music Note.
+        const unsaveUpdates = sanitizeForFirestore({
+          favoriteRemoved: true,
+          favoriteRemovedAt: Date.now(),
+          unlikedAt: Date.now(),
+          unsavedAt: Date.now(),
+          saved: false,
+          hidden: false,
+          favoriteHidden: false,
+          deletedAt: null,
+          trashedAt: null,
+          isPublic: false,
+        });
+        await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
         removeLocalFavorite(existingFav.id);
         await updateDoc(doc(db, 'users', user.uid), {
           favoriteCount: increment(-1)
@@ -6317,6 +6353,9 @@ const toggleCycleVariantSelection = (
         isLocked: false,
         hidden: false,
         favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        saved: true,
         createdAtMs,
         createdAt: serverTimestamp(),
         favoriteKey: songIdentityKey,
@@ -6335,6 +6374,9 @@ const toggleCycleVariantSelection = (
         isLocked: false,
         hidden: false,
         favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        saved: true,
       });
       setFavorites((prev) => {
         const merged = mergeFavoritePages([localFavorite], prev || []);

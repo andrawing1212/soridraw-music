@@ -655,6 +655,14 @@ const getMusicNoteFolderIdFromSong = (song: any, mode: MusicNoteFolderMode): str
   return '__unassigned__';
 };
 
+const isFavoriteSoftRemoved = (song: any): boolean => Boolean(
+  song?.favoriteRemoved === true
+  || song?.saved === false
+  || song?.favoriteRemovedAt
+  || song?.unlikedAt
+  || song?.unsavedAt
+);
+
 const isFavoriteInTrash = (song: any): boolean => Boolean(song?.hidden === true || song?.favoriteHidden === true || song?.deletedAt || song?.trashedAt);
 
 
@@ -4394,6 +4402,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   const songMatchesMusicNoteFilters = (song: any) => {
     if (isMusicNoteSharedView) return true;
+    if (isFavoriteSoftRemoved(song)) return false;
     const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
     const isTrashed = isFavoriteInTrash(song);
     const matchesTrashState = favoriteTrashView

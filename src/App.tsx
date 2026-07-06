@@ -3859,6 +3859,44 @@ function App() {
     return hasMatchingFavoriteTitleFingerprint(candidate, song);
   };
 
+  const buildFavoriteSyncSignalFavorite = (action: 'save' | 'unsave', song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+    const primaryFavorite = (relatedFavorites || []).find((favorite) => favorite?.id) || relatedFavorites?.[0] || song || {};
+    const favoriteKey = primaryFavorite.favoriteKey || song?.favoriteKey || buildFavoriteIdentityKey(primaryFavorite) || buildFavoriteIdentityKey(song);
+    const payload = sanitizeForFirestore({
+      ...primaryFavorite,
+      id: primaryFavorite.id || '',
+      uid: primaryFavorite.uid || user?.uid || '',
+      title: primaryFavorite.title || song?.title || '',
+      koreanTitle: primaryFavorite.koreanTitle || song?.koreanTitle || '',
+      englishTitle: primaryFavorite.englishTitle || song?.englishTitle || '',
+      genre: getResolvedGenre(primaryFavorite) || getResolvedGenre(song) || primaryFavorite.genre || song?.genre || '',
+      lyrics: primaryFavorite.lyrics || song?.lyrics || {},
+      prompt: primaryFavorite.prompt || song?.prompt || '',
+      appliedKeywords: primaryFavorite.appliedKeywords || song?.appliedKeywords || {},
+      userInput: primaryFavorite.userInput ?? song?.userInput ?? '',
+      situationSummary: primaryFavorite.situationSummary || song?.situationSummary || '',
+      favoriteKey,
+      searchTokens: primaryFavorite.searchTokens || buildFavoriteSearchTokens({ ...song, ...primaryFavorite, favoriteKey }),
+      createdAtMs: Number(primaryFavorite.createdAtMs || 0) || getTimestampMs(primaryFavorite.createdAt) || at,
+      updatedAtMs: at,
+      hidden: action === 'save' ? false : primaryFavorite.hidden,
+      favoriteHidden: action === 'save' ? false : primaryFavorite.favoriteHidden,
+      favoriteRemoved: action === 'save' ? false : primaryFavorite.favoriteRemoved,
+      favoriteRemovedAt: action === 'save' ? null : primaryFavorite.favoriteRemovedAt,
+      saved: action === 'save' ? true : primaryFavorite.saved,
+    });
+
+    // User documents are used only as a light cross-device signal. Keep the snapshot compact
+    // but sufficient for another open device to render the new row without a page refresh.
+    const allowedKeys = [
+      'id', 'uid', 'title', 'koreanTitle', 'englishTitle', 'genre', 'lyrics', 'prompt', 'appliedKeywords',
+      'userInput', 'situationSummary', 'favoriteKey', 'searchTokens', 'createdAtMs', 'updatedAtMs',
+      'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked', 'color',
+      'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl', 'isPublic'
+    ];
+    return Object.fromEntries(Object.entries(payload).filter(([key, value]) => allowedKeys.includes(key) && value !== undefined));
+  };
+
   const buildFavoriteSyncSignal = (action: 'save' | 'unsave', song: any, relatedFavorites: any[] = [], at = Date.now()) => {
     const favoriteKeys = Array.from(new Set([
       buildFavoriteIdentityKey(song),
@@ -3866,18 +3904,20 @@ function App() {
       ...(relatedFavorites || []).map((favorite) => favorite?.favoriteKey || buildFavoriteIdentityKey(favorite)),
     ].filter(Boolean))).slice(0, 20);
     const favoriteIds = Array.from(new Set((relatedFavorites || []).map((favorite) => favorite?.id).filter(Boolean))).slice(0, 30);
+    const syncedFavorite = buildFavoriteSyncSignalFavorite(action, song, relatedFavorites, at);
     return sanitizeForFirestore({
       id: `${action}_${at}_${Math.random().toString(36).slice(2, 8)}`,
       action,
       at,
-      favoriteKey: favoriteKeys[0] || '',
+      favoriteKey: favoriteKeys[0] || syncedFavorite.favoriteKey || '',
       favoriteKeys,
       favoriteIds,
-      title: song?.title || relatedFavorites?.[0]?.title || '',
-      koreanTitle: song?.koreanTitle || relatedFavorites?.[0]?.koreanTitle || '',
-      englishTitle: song?.englishTitle || relatedFavorites?.[0]?.englishTitle || '',
-      titleFingerprint: getFavoriteTitleFingerprint(song || relatedFavorites?.[0]),
-      genre: getResolvedGenre(song) || song?.genre || relatedFavorites?.[0]?.genre || '',
+      title: song?.title || relatedFavorites?.[0]?.title || syncedFavorite.title || '',
+      koreanTitle: song?.koreanTitle || relatedFavorites?.[0]?.koreanTitle || syncedFavorite.koreanTitle || '',
+      englishTitle: song?.englishTitle || relatedFavorites?.[0]?.englishTitle || syncedFavorite.englishTitle || '',
+      titleFingerprint: getFavoriteTitleFingerprint(song || relatedFavorites?.[0] || syncedFavorite),
+      genre: getResolvedGenre(song) || song?.genre || relatedFavorites?.[0]?.genre || syncedFavorite.genre || '',
+      favorite: syncedFavorite,
     });
   };
 
@@ -3942,6 +3982,57 @@ function App() {
     if (!uid || !signal?.id) return;
     if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
     lastFavoriteSyncSignalIdRef.current = signal.id;
+
+    const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
+      if (!savedFavorite?.id) return;
+      const normalizedFavorite = sanitizeForFirestore({
+        ...savedFavorite,
+        uid: savedFavorite.uid || uid,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        saved: true,
+        favoriteKey: savedFavorite.favoriteKey || signal.favoriteKey || buildFavoriteIdentityKey(savedFavorite),
+        createdAtMs: Number(savedFavorite.createdAtMs || 0) || signal.at || Date.now(),
+        updatedAtMs: signal.at || Date.now(),
+        searchTokens: savedFavorite.searchTokens || buildFavoriteSearchTokens(savedFavorite),
+      });
+
+      try {
+        const cacheKey = `soridraw_favorites_cache_${uid}`;
+        const cachedRaw = localStorage.getItem(cacheKey);
+        const cachedList = cachedRaw ? JSON.parse(cachedRaw) : [];
+        const baseList = Array.isArray(cachedList) ? cachedList : [];
+        const withoutSame = baseList.filter((favorite) => {
+          if (!favorite?.id) return false;
+          if (favorite.id === normalizedFavorite.id) return false;
+          if (isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+          return true;
+        });
+        writeFavoritesCache(uid, mergeFavoritePages([normalizedFavorite], withoutSame));
+      } catch (cacheSaveError) {
+        console.warn('Favorite save sync cache update failed:', cacheSaveError);
+      }
+
+      setFavorites((prev) => {
+        const withoutSame = (prev || []).filter((favorite) => {
+          if (!favorite?.id) return false;
+          if (favorite.id === normalizedFavorite.id) return false;
+          if (isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+          return true;
+        });
+        const next = mergeFavoritePages([normalizedFavorite], withoutSame);
+        writeFavoritesCache(uid, next);
+        return next;
+      });
+    };
+
+    if (signal.action === 'save') {
+      mergeSavedFavoriteIntoCache(signal.favorite || signal);
+      return;
+    }
+
     if (signal.action !== 'unsave') return;
 
     // Clean localStorage directly as well as React state.

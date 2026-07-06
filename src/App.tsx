@@ -766,9 +766,9 @@ function useStableContentHeight(
     const measure = () => {
       const el = contentRef.current;
       if (!el) return;
-      const nextHeight = el.scrollHeight || el.getBoundingClientRect().height || 0;
+      const nextHeight = el.scrollHeight || el.offsetHeight || 0;
       if (nextHeight <= 0) return;
-      setHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+      setHeight(nextHeight);
       onHeightChange?.(nextHeight);
     };
 
@@ -778,20 +778,13 @@ function useStableContentHeight(
     };
 
     scheduleMeasure();
-    timeoutId = window.setTimeout(measure, 80);
-
-    let observer: ResizeObserver | null = null;
-    if (typeof ResizeObserver !== 'undefined' && contentRef.current) {
-      observer = new ResizeObserver(scheduleMeasure);
-      observer.observe(contentRef.current);
-    }
+    timeoutId = window.setTimeout(measure, 100);
 
     window.addEventListener('resize', scheduleMeasure);
 
     return () => {
       if (frameId !== null) cancelAnimationFrame(frameId);
       if (timeoutId !== null) window.clearTimeout(timeoutId);
-      observer?.disconnect();
       window.removeEventListener('resize', scheduleMeasure);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3855,6 +3848,37 @@ function App() {
     const matches = (list || []).filter((favorite) => isSameFavoriteSong(favorite, song, songIdentityKey));
     return matches.find((favorite) => !isFavoriteHidden(favorite)) || matches[0] || null;
   };
+
+  const favoritesStatusMap = useMemo(() => {
+    const map = new Map<string, any>();
+    favorites.forEach((fav) => {
+      if (!isFavoriteHidden(fav)) {
+        if (fav.id) map.set(fav.id, fav);
+        const key = fav.favoriteKey || buildFavoriteIdentityKey(fav);
+        if (key) map.set(key, fav);
+      }
+    });
+    return map;
+  }, [favorites]);
+
+  const favoritesRef = useRef(favorites);
+  useEffect(() => {
+    favoritesRef.current = favorites;
+  }, [favorites]);
+
+  const favoritesStatusMapRef = useRef(favoritesStatusMap);
+  useEffect(() => {
+    favoritesStatusMapRef.current = favoritesStatusMap;
+  }, [favoritesStatusMap]);
+
+  const isSongFavorited = useCallback((song: any) => {
+    if (!song) return false;
+    const statusMap = favoritesStatusMapRef.current;
+    if (song.id && statusMap.has(song.id)) return true;
+    const key = buildFavoriteIdentityKey(song);
+    if (key && statusMap.has(key)) return true;
+    return favoritesRef.current.some(f => !isFavoriteHidden(f) && isSameFavoriteSong(f, song, key));
+  }, []);
 
   const getFavoriteTitleFingerprint = (song: any): string => normalizeFavoriteSearchValue([
     song?.title,
@@ -11461,7 +11485,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-sm px-3 py-5"
+                    className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm px-3 py-5"
                     onPointerDown={(event) => {
                       storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
                     }}
@@ -12295,7 +12319,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <Heart 
                         className={cn(
                           "w-6 h-6 transition-all",
-                          favorites.some(f => !isFavoriteHidden(f) && isSameFavoriteSong(f, result))
+                          isSongFavorited(result)
                             ? "fill-[#cd8c31] text-[#cd8c31]"
                             : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
                         )} 
@@ -12483,7 +12507,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <Heart 
                         className={cn(
                           "w-5 h-5 transition-all",
-                          favorites.some(f => !isFavoriteHidden(f) && isSameFavoriteSong(f, result))
+                          isSongFavorited(result)
                             ? "fill-[#cd8c31] text-[#cd8c31]"
                             : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
                         )} 
@@ -12971,7 +12995,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[260] flex items-center justify-center bg-black/65 backdrop-blur-sm px-4 py-6"
+              className="fixed inset-0 z-[260] flex items-center justify-center bg-black/65 backdrop-blur-[1px] md:backdrop-blur-sm px-4 py-6"
               onMouseDown={(event) => {
                 if (event.target === event.currentTarget) closeRecentSongEditor();
               }}
@@ -13203,7 +13227,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
       <AnimatePresence>
         {isBanModalOpen && (
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-[2px] md:backdrop-blur-md">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -13239,7 +13263,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
       <AnimatePresence>
         {isForcedLogoutModalOpen && (
-          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-xl">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/90 backdrop-blur-[3px] md:backdrop-blur-xl">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -14254,7 +14278,7 @@ function GenreSelectModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[120] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
+      className="fixed inset-0 z-[120] bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm flex items-center justify-center px-4"
       onClick={onClose}
     >
       <motion.div
@@ -17049,7 +17073,7 @@ function SongStructureIntegratedControlComponent({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0 }}
-            className="studio-section-custom-modal-backdrop fixed inset-0 z-[140] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 overscroll-none"
+            className="studio-section-custom-modal-backdrop fixed inset-0 z-[140] bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm flex items-center justify-center px-4 overscroll-none"
             onPointerDown={(e) => {
               customModalBackdropMouseDownRef.current = e.target === e.currentTarget;
             }}
@@ -18138,7 +18162,7 @@ function TagEditModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
+      className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm flex items-center justify-center px-4"
       onMouseDown={(e) => {
         tagModalBackdropMouseDownRef.current = e.target === e.currentTarget;
       }}
@@ -18747,7 +18771,7 @@ interface VocalControlProps {
   onModalStateChange?: (isOpen: boolean) => void;
 }
 
-function VocalControl({ 
+function VocalControlComponent({ 
   maleCount, 
   femaleCount, 
   vocalMode,
@@ -19677,7 +19701,7 @@ function VocalControl({
         {editingVocalMember && (
           <Portal>
             <motion.div
-              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6 backdrop-blur-sm overscroll-none"
+              className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6 backdrop-blur-[1px] md:backdrop-blur-sm overscroll-none"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -19871,6 +19895,18 @@ function VocalControl({
 }
 
 
+const VocalControl = React.memo(VocalControlComponent, (prev, next) => {
+  return prev.maleCount === next.maleCount &&
+         prev.femaleCount === next.femaleCount &&
+         prev.vocalMode === next.vocalMode &&
+         prev.rapEnabled === next.rapEnabled &&
+         prev.isKoreanEnglishMix === next.isKoreanEnglishMix &&
+         prev.englishMixRatio === next.englishMixRatio &&
+         prev.isLocked === next.isLocked &&
+         isArrayEqual(prev.vocalMembers, next.vocalMembers) &&
+         isArrayEqual(prev.vocalTones, next.vocalTones);
+});
+
 interface TempoControlProps {
   enabled: boolean;
   onEnabledChange: (val: boolean) => void;
@@ -19884,7 +19920,7 @@ interface TempoControlProps {
   onLongPressEnd: () => void;
 }
 
-function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
+function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
@@ -20213,3 +20249,9 @@ function TempoControl({ enabled, onEnabledChange, min, max, onMinChange, onMaxCh
     </div>
   );
 }
+
+const TempoControl = React.memo(TempoControlComponent, (prev, next) => {
+  return prev.enabled === next.enabled &&
+         prev.min === next.min &&
+         prev.max === next.max;
+});

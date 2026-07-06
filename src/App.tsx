@@ -3796,6 +3796,43 @@ function App() {
 
   const isFavoriteHidden = (favorite: any) => Boolean(favorite?.hidden === true || favorite?.favoriteHidden === true || favorite?.deletedAt || favorite?.trashedAt);
 
+  const getFavoriteCreatedSortTime = (favorite: any): number => {
+    return Number(favorite?.createdAtMs || 0)
+      || getTimestampMs(favorite?.createdAt)
+      || getTimestampMs(favorite?.updatedAt)
+      || getTimestampMs(favorite?.restoredAt)
+      || 0;
+  };
+
+  const findBestMatchingFavorite = (list: any[], song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
+    const matches = (list || []).filter((favorite) => isSameFavoriteSong(favorite, song, songIdentityKey));
+    return matches.find((favorite) => !isFavoriteHidden(favorite)) || matches[0] || null;
+  };
+
+  const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
+    const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
+    const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
+    const firstPageTimes = firstPageFavs.map(getFavoriteCreatedSortTime).filter((time) => time > 0);
+    const oldestFirstPageTime = firstPageTimes.length > 0 ? Math.min(...firstPageTimes) : 0;
+
+    const retainedCached = (previous || []).filter((item: any) => {
+      if (!item?.id) return false;
+      if (firstPageIds.has(item.id)) return false;
+      const itemKey = item.favoriteKey || buildFavoriteIdentityKey(item);
+      if (itemKey && firstPageKeys.has(itemKey)) return false;
+      if (firstPageFavs.some((serverItem: any) => isSameFavoriteSong(serverItem, item, itemKey))) return false;
+      if (allServerFavoritesLoaded) return false;
+
+      // The first server page is the authoritative latest 20.
+      // If a cached item is new enough to belong to that page but is not in it, it was deleted/changed on another device.
+      const itemTime = getFavoriteCreatedSortTime(item);
+      if (oldestFirstPageTime > 0 && itemTime > 0 && itemTime >= oldestFirstPageTime) return false;
+      return true;
+    });
+
+    return mergeFavoritePages(firstPageFavs, retainedCached);
+  };
+
   const writeFavoritesCache = (uid: string, list: any[]) => {
     try {
       localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(list));
@@ -5889,9 +5926,7 @@ const toggleCycleVariantSelection = (
           favoritePaginationFallbackModeRef.current = false;
           setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
           setFavorites((prev) => {
-            const firstPageIds = new Set(firstPageFavs.map((item: any) => item.id).filter(Boolean));
-            const retainedLoadedOrCached = (prev || []).filter((item: any) => item?.id && !firstPageIds.has(item.id));
-            const merged = mergeFavoritePages(firstPageFavs, retainedLoadedOrCached);
+            const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
             try {
               localStorage.setItem(cacheKey, JSON.stringify(merged));
             } catch (e) {
@@ -6059,9 +6094,7 @@ const toggleCycleVariantSelection = (
       setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
 
       setFavorites((prev) => {
-        const firstPageIds = new Set(firstPageFavs.map((item: any) => item.id).filter(Boolean));
-        const retainedLoadedOrCached = (prev || []).filter((item: any) => item?.id && !firstPageIds.has(item.id));
-        const merged = mergeFavoritePages(firstPageFavs, retainedLoadedOrCached);
+        const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
         writeFavoritesCache(currentUser.uid, merged);
         return merged;
       });
@@ -6099,7 +6132,7 @@ const toggleCycleVariantSelection = (
     const findLocalExistingFavorite = () => {
       const byId = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
       if (byId) return byId;
-      return favorites.find(f => isSameFavoriteSong(f, song, songIdentityKey)) || null;
+      return findBestMatchingFavorite(favorites, song, songIdentityKey);
     };
 
     const findServerExistingFavorite = async () => {
@@ -6114,9 +6147,9 @@ const toggleCycleVariantSelection = (
             collection(db, 'favorites'),
             where('uid', '==', user.uid),
             where('favoriteKey', '==', songIdentityKey),
-            limit(3)
+            limit(5)
           ));
-          const keyMatch = keySnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).find(favorite => isSameFavoriteSong(favorite, song, songIdentityKey));
+          const keyMatch = findBestMatchingFavorite(keySnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), song, songIdentityKey);
           if (keyMatch) return keyMatch;
         } catch (error) {
           console.warn('Favorite identity lookup by key failed. Falling back to title/prompt comparison.', error);
@@ -6132,10 +6165,26 @@ const toggleCycleVariantSelection = (
             where('title', '==', titleCandidate),
             limit(10)
           ));
-          const titleMatch = titleSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).find(favorite => isSameFavoriteSong(favorite, song, songIdentityKey));
+          const titleMatch = findBestMatchingFavorite(titleSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), song, songIdentityKey);
           if (titleMatch) return titleMatch;
         } catch (error) {
           console.warn('Favorite identity lookup by title failed.', error);
+        }
+      }
+
+      // Last safety net for Studio heart toggles: compare against the current server first pages.
+      // This prevents duplicate addDoc when another device saved the same song but the local cache has not caught up yet.
+      const recentQueries = [
+        query(collection(db, 'favorites'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'), limit(80)),
+        query(collection(db, 'favorites'), where('uid', '==', user.uid), limit(80)),
+      ];
+      for (const recentQuery of recentQueries) {
+        try {
+          const recentSnap = await getDocs(recentQuery);
+          const recentMatch = findBestMatchingFavorite(recentSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), song, songIdentityKey);
+          if (recentMatch) return recentMatch;
+        } catch (error) {
+          console.warn('Favorite recent server lookup failed.', error);
         }
       }
 

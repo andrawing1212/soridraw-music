@@ -241,7 +241,7 @@ const GENRE_TITLE_MAP: Record<string, string> = {
   ambient: "Ambient",
 };
 
-export default function GenreHierarchySelector({
+function GenreHierarchySelectorComponent({
   selectedGenre,
   selectedSubGenre,
   onSelectGenre,
@@ -1485,3 +1485,25 @@ export default function GenreHierarchySelector({
     </div>
   );
 }
+
+const isArrayEqual = (a: any[] | undefined, b: any[] | undefined) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+const GenreHierarchySelector = React.memo(GenreHierarchySelectorComponent, (prev, next) => {
+  return prev.isLocked === next.isLocked &&
+         prev.isExpanded === next.isExpanded &&
+         prev.isRandomized === next.isRandomized &&
+         prev.forcedHeight === next.forcedHeight &&
+         prev.directInput?.selectedText === next.directInput?.selectedText &&
+         isArrayEqual(prev.selectedGenre, next.selectedGenre) &&
+         isArrayEqual(prev.selectedSubGenre, next.selectedSubGenre);
+});
+
+export default GenreHierarchySelector;

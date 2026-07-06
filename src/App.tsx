@@ -78,6 +78,29 @@ function Portal({ children }: { children: React.ReactNode }) {
   return createPortal(children, document.body);
 }
 
+const favoritesInMemoryCache = new Map<string, any[]>();
+const favoritesCacheWriteTimers = new Map<string, any>();
+
+const getFavoritesCacheInMemoryOrLocalStorage = (uid: string): any[] => {
+  if (favoritesInMemoryCache.has(uid)) {
+    return favoritesInMemoryCache.get(uid) || [];
+  }
+  try {
+    const cacheKey = `soridraw_favorites_cache_${uid}`;
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const parsed = JSON.parse(cachedRaw);
+      if (Array.isArray(parsed)) {
+        favoritesInMemoryCache.set(uid, parsed);
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to read favorites cache:', e);
+  }
+  return [];
+};
+
 
 const isDocumentFullscreenActive = () => {
   if (typeof document === 'undefined') return false;
@@ -3966,15 +3989,43 @@ function App() {
   };
 
   const writeFavoritesCache = (uid: string, list: any[]) => {
-    try {
-      localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(list));
-      const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
-      const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
-      if ((list?.length || 0) > previousMax) {
-        localStorage.setItem(maxCountKey, String(list.length));
+    // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
+    favoritesInMemoryCache.set(uid, list);
+
+    // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
+    if (favoritesCacheWriteTimers.has(uid)) {
+      const timer = favoritesCacheWriteTimers.get(uid);
+      if (timer) {
+        if (timer.type === 'idle' && typeof cancelIdleCallback !== 'undefined') {
+          cancelIdleCallback(timer.id);
+        } else {
+          clearTimeout(timer.id);
+        }
       }
-    } catch (e) {
-      console.error('Failed to save favorites to cache:', e);
+      favoritesCacheWriteTimers.delete(uid);
+    }
+
+    const doDeferredWrite = () => {
+      favoritesCacheWriteTimers.delete(uid);
+      try {
+        localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(list));
+        const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
+        const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+        if ((list?.length || 0) > previousMax) {
+          localStorage.setItem(maxCountKey, String(list.length));
+        }
+      } catch (e) {
+        console.error('Failed to save favorites to cache in deferred write:', e);
+      }
+    };
+
+    // Use requestIdleCallback with high timeout to run when main thread is totally free, or setTimeout as fallback
+    if (typeof requestIdleCallback !== 'undefined') {
+      const id = requestIdleCallback(doDeferredWrite, { timeout: 1500 });
+      favoritesCacheWriteTimers.set(uid, { id, type: 'idle' });
+    } else {
+      const id = setTimeout(doDeferredWrite, 1000);
+      favoritesCacheWriteTimers.set(uid, { id, type: 'timeout' });
     }
   };
 
@@ -4000,11 +4051,8 @@ function App() {
       });
 
       try {
-        const cacheKey = `soridraw_favorites_cache_${uid}`;
-        const cachedRaw = localStorage.getItem(cacheKey);
-        const cachedList = cachedRaw ? JSON.parse(cachedRaw) : [];
-        const baseList = Array.isArray(cachedList) ? cachedList : [];
-        const withoutSame = baseList.filter((favorite) => {
+        const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
+        const withoutSame = cachedList.filter((favorite) => {
           if (!favorite?.id) return false;
           if (favorite.id === normalizedFavorite.id) return false;
           if (isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
@@ -4039,16 +4087,10 @@ function App() {
     // On refresh, the user-doc signal can arrive before/after the cached favorites are hydrated.
     // Direct cache cleanup prevents the old saved row from coming back after a page reload.
     try {
-      const cacheKey = `soridraw_favorites_cache_${uid}`;
-      const cachedRaw = localStorage.getItem(cacheKey);
-      if (cachedRaw) {
-        const cachedList = JSON.parse(cachedRaw);
-        if (Array.isArray(cachedList)) {
-          const cleanedCache = cachedList.filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
-          if (cleanedCache.length !== cachedList.length) {
-            writeFavoritesCache(uid, sortFavoriteList(cleanedCache));
-          }
-        }
+      const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
+      const cleanedCache = cachedList.filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+      if (cleanedCache.length !== cachedList.length) {
+        writeFavoritesCache(uid, sortFavoriteList(cleanedCache));
       }
     } catch (cacheCleanupError) {
       console.warn('Favorite sync signal cache cleanup failed:', cacheCleanupError);
@@ -6089,16 +6131,7 @@ const toggleCycleVariantSelection = (
 
         // Fetch favorites for the user.
         // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
-        const cacheKey = `soridraw_favorites_cache_${currentUser.uid}`;
-        let cachedFavs: any[] = [];
-        try {
-          const cachedJson = localStorage.getItem(cacheKey);
-          if (cachedJson) {
-            cachedFavs = JSON.parse(cachedJson);
-          }
-        } catch (e) {
-          console.error('Failed to parse cached favorites:', e);
-        }
+        const cachedFavs = getFavoritesCacheInMemoryOrLocalStorage(currentUser.uid);
 
         if (Array.isArray(cachedFavs) && cachedFavs.length > 0) {
           // Do not slice the cache. It costs nothing and prevents existing My Note / Shared Note items from visually disappearing.
@@ -6136,45 +6169,65 @@ const toggleCycleVariantSelection = (
         };
 
         const runFavoritesFullCacheRecoveryOnce = async () => {
-          const recoveryKey = `soridraw_favorites_full_cache_recovery_v3_${currentUser.uid}`;
-          const maxCountKey = `soridraw_favorites_cache_max_count_${currentUser.uid}`;
-          let shouldSkipRecovery = false;
-          try {
-            const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
-            shouldSkipRecovery = localStorage.getItem(recoveryKey) === 'done'
-              && (!previousMaxCount || cachedFavs.length >= previousMaxCount);
-          } catch {
-            // If localStorage is unavailable, still try one safe recovery fetch for this page load.
-          }
-          if (shouldSkipRecovery) return;
-
-          try {
-            const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
-            const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
-            if (fullFavorites.length === 0) {
-              try {
-                localStorage.setItem(recoveryKey, 'done');
-              } catch {
-                // ignore marker write failure
-              }
-              return;
+          const performRecovery = async () => {
+            const recoveryKey = `soridraw_favorites_full_cache_recovery_v3_${currentUser.uid}`;
+            const maxCountKey = `soridraw_favorites_cache_max_count_${currentUser.uid}`;
+            let shouldSkipRecovery = false;
+            try {
+              const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+              shouldSkipRecovery = localStorage.getItem(recoveryKey) === 'done'
+                && (!previousMaxCount || cachedFavs.length >= previousMaxCount);
+            } catch {
+              // If localStorage is unavailable, still try one safe recovery fetch for this page load.
             }
-
-            setFavorites((prev) => {
-              const merged = mergeFavoritePages(prev || [], fullFavorites);
-              writeFavoritesCache(currentUser.uid, merged);
-              return merged;
-            });
+            if (shouldSkipRecovery) return;
 
             try {
-              localStorage.setItem(recoveryKey, 'done');
-              const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
-              localStorage.setItem(maxCountKey, String(Math.max(previousMaxCount, fullFavorites.length)));
-            } catch {
-              // ignore marker write failure
+              const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
+              const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+              if (fullFavorites.length === 0) {
+                try {
+                  localStorage.setItem(recoveryKey, 'done');
+                } catch {
+                  // ignore marker write failure
+                }
+                return;
+              }
+
+              const applyUpdates = () => {
+                setFavorites((prev) => {
+                  const merged = mergeFavoritePages(prev || [], fullFavorites);
+                  writeFavoritesCache(currentUser.uid, merged);
+                  return merged;
+                });
+
+                try {
+                  localStorage.setItem(recoveryKey, 'done');
+                  const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+                  localStorage.setItem(maxCountKey, String(Math.max(previousMaxCount, fullFavorites.length)));
+                } catch {
+                  // ignore marker write failure
+                }
+              };
+
+              if (typeof requestIdleCallback !== 'undefined') {
+                requestIdleCallback(() => applyUpdates());
+              } else {
+                setTimeout(applyUpdates, 100);
+              }
+            } catch (recoveryError) {
+              console.warn('Favorites full cache recovery failed. Keeping paged/cache data only.', recoveryError);
             }
-          } catch (recoveryError) {
-            console.warn('Favorites full cache recovery failed. Keeping paged/cache data only.', recoveryError);
+          };
+
+          if (typeof requestIdleCallback !== 'undefined') {
+            requestIdleCallback(() => {
+              void performRecovery();
+            });
+          } else {
+            setTimeout(() => {
+              void performRecovery();
+            }, 3000);
           }
         };
 
@@ -6219,7 +6272,7 @@ const toggleCycleVariantSelection = (
 
         favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
           void runFavoritesFullCacheRecoveryOnce();
-        }, 700);
+        }, 8000);
       } else {
         setFavorites([]);
         setHasMoreFavorites(false);
@@ -15616,7 +15669,7 @@ interface SongStructureIntegratedControlProps {
   onModalStateChange?: (isOpen: boolean) => void;
 }
 
-function SongStructureIntegratedControl({
+function SongStructureIntegratedControlComponent({
   lyricsLength,
   onLyricsLengthChange,
   songStructure,
@@ -17664,6 +17717,16 @@ function SongStructureIntegratedControl({
     </>
   );
 }
+
+const SongStructureIntegratedControl = React.memo(SongStructureIntegratedControlComponent, (prev, next) => {
+  return prev.lyricsLength === next.lyricsLength &&
+         prev.songStructure === next.songStructure &&
+         prev.isLocked === next.isLocked &&
+         prev.userTier === next.userTier &&
+         prev.user?.uid === next.user?.uid &&
+         isArrayEqual(prev.customStructure, next.customStructure) &&
+         isArrayEqual(prev.selectedGenreIds, next.selectedGenreIds);
+});
 
 interface SongStructureControlProps {
   value: SongStructure;

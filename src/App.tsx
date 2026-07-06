@@ -3812,8 +3812,6 @@ function App() {
   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
-    const firstPageTimes = firstPageFavs.map(getFavoriteCreatedSortTime).filter((time) => time > 0);
-    const oldestFirstPageTime = firstPageTimes.length > 0 ? Math.min(...firstPageTimes) : 0;
 
     const retainedCached = (previous || []).filter((item: any) => {
       if (!item?.id) return false;
@@ -3822,14 +3820,10 @@ function App() {
       if (itemKey && firstPageKeys.has(itemKey)) return false;
       if (firstPageFavs.some((serverItem: any) => isSameFavoriteSong(serverItem, item, itemKey))) return false;
 
-      // Do not drop older cached favorites just because the ordered page is exhausted.
-      // Some legacy favorites can be missing createdAt, and Firestore orderBy(createdAt) will not return them.
-      // They are restored/kept through the full-cache recovery path below.
-
-      // The first server page is the authoritative latest 20.
-      // If a cached item is new enough to belong to that page but is not in it, it was deleted/changed on another device.
-      const itemTime = getFavoriteCreatedSortTime(item);
-      if (oldestFirstPageTime > 0 && itemTime > 0 && itemTime >= oldestFirstPageTime) return false;
+      // A limited first-page query can prove what the latest server items are,
+      // but it cannot prove that older cached items were deleted.
+      // Never prune the full local Music Note cache from the 20-item listener.
+      // Otherwise legacy favorites without createdAt can visually collapse from 400+ items to only the ordered-query subset.
       return true;
     });
 
@@ -3839,6 +3833,11 @@ function App() {
   const writeFavoritesCache = (uid: string, list: any[]) => {
     try {
       localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(list));
+      const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
+      const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+      if ((list?.length || 0) > previousMax) {
+        localStorage.setItem(maxCountKey, String(list.length));
+      }
     } catch (e) {
       console.error('Failed to save favorites to cache:', e);
     }
@@ -5907,11 +5906,7 @@ const toggleCycleVariantSelection = (
           unsubFavs = onSnapshot(legacyQuery, (legacySnapshot) => {
             const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setFavorites(legacyFavs);
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(legacyFavs));
-            } catch (e) {
-              console.error('Failed to save favorites to cache:', e);
-            }
+            writeFavoritesCache(currentUser.uid, legacyFavs);
             setIsFavoritesLoading(false);
           }, (legacyError) => {
             handleFirestoreError(legacyError, OperationType.GET, 'favorites');
@@ -5920,12 +5915,17 @@ const toggleCycleVariantSelection = (
         };
 
         const runFavoritesFullCacheRecoveryOnce = async () => {
-          const recoveryKey = `soridraw_favorites_full_cache_recovery_v2_${currentUser.uid}`;
+          const recoveryKey = `soridraw_favorites_full_cache_recovery_v3_${currentUser.uid}`;
+          const maxCountKey = `soridraw_favorites_cache_max_count_${currentUser.uid}`;
+          let shouldSkipRecovery = false;
           try {
-            if (localStorage.getItem(recoveryKey) === 'done') return;
+            const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+            shouldSkipRecovery = localStorage.getItem(recoveryKey) === 'done'
+              && (!previousMaxCount || cachedFavs.length >= previousMaxCount);
           } catch {
             // If localStorage is unavailable, still try one safe recovery fetch for this page load.
           }
+          if (shouldSkipRecovery) return;
 
           try {
             const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
@@ -5947,6 +5947,8 @@ const toggleCycleVariantSelection = (
 
             try {
               localStorage.setItem(recoveryKey, 'done');
+              const previousMaxCount = Number(localStorage.getItem(maxCountKey) || '0') || 0;
+              localStorage.setItem(maxCountKey, String(Math.max(previousMaxCount, fullFavorites.length)));
             } catch {
               // ignore marker write failure
             }
@@ -5971,11 +5973,7 @@ const toggleCycleVariantSelection = (
           setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
           setFavorites((prev) => {
             const merged = mergeFavoriteFirstPageWithCache(firstPageFavs, prev || [], favoritePaginationExhaustedRef.current);
-            try {
-              localStorage.setItem(cacheKey, JSON.stringify(merged));
-            } catch (e) {
-              console.error('Failed to save favorites to cache:', e);
-            }
+            writeFavoritesCache(currentUser.uid, merged);
             return merged;
           });
           setIsFavoritesLoading(false);
@@ -6050,11 +6048,7 @@ const toggleCycleVariantSelection = (
       setHasMoreFavorites(!favoritePaginationExhaustedRef.current);
       setFavorites((prev) => {
         const merged = mergeFavoritePages(prev || [], nextFavs);
-        try {
-          localStorage.setItem(`soridraw_favorites_cache_${currentUser.uid}`, JSON.stringify(merged));
-        } catch (e) {
-          console.error('Failed to save favorites to cache:', e);
-        }
+        writeFavoritesCache(currentUser.uid, merged);
         return merged;
       });
     } catch (error) {
@@ -6092,11 +6086,7 @@ const toggleCycleVariantSelection = (
       if (serverResults.length > 0) {
         setFavorites((prev) => {
           const merged = mergeFavoritePages(prev || [], serverResults);
-          try {
-            localStorage.setItem(`soridraw_favorites_cache_${currentUser.uid}`, JSON.stringify(merged));
-          } catch (e) {
-            console.error('Failed to save favorites to cache:', e);
-          }
+          writeFavoritesCache(currentUser.uid, merged);
           return merged;
         });
       }

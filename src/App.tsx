@@ -6262,16 +6262,25 @@ const toggleCycleVariantSelection = (
       });
     };
 
-    const removeLocalFavorite = (id: string) => {
+    const removeLocalFavorite = (id: string, removeMatchingSong = false) => {
       setFavorites((prev) => {
-        const next = (prev || []).filter((favorite) => favorite.id !== id);
+        const next = (prev || []).filter((favorite) => {
+          if (favorite.id === id) return false;
+          if (removeMatchingSong && isSameFavoriteSong(favorite, song, songIdentityKey)) return false;
+          return true;
+        });
         writeFavoritesCache(user.uid, next);
         return next;
       });
     };
 
     try {
-      const existingFav = findLocalExistingFavorite() || await findServerExistingFavorite();
+      const localExistingFav = findLocalExistingFavorite();
+      const serverExistingFav = await findServerExistingFavorite().catch((error) => {
+        console.warn('Favorite server confirmation failed. Using local favorite state as fallback.', error);
+        return null;
+      });
+      const existingFav = serverExistingFav || localExistingFav;
 
       if (existingFav) {
         if (existingFav.isLocked && !forceDeleteFavoriteById) {
@@ -6328,13 +6337,28 @@ const toggleCycleVariantSelection = (
           trashedAt: null,
           isPublic: false,
         });
-        await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
-        removeLocalFavorite(existingFav.id);
-        await updateDoc(doc(db, 'users', user.uid), {
-          favoriteCount: increment(-1)
-        }).catch(err => console.error("Failed to decrement favoriteCount:", err));
-        showToast('저장이 해제되었습니다.');
-        return;
+        try {
+          await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
+          removeLocalFavorite(existingFav.id, true);
+          await updateDoc(doc(db, 'users', user.uid), {
+            favoriteCount: increment(-1)
+          }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+          showToast('저장이 해제되었습니다.');
+          return;
+        } catch (unsaveError: any) {
+          const code = String(unsaveError?.code || '');
+          const message = String(unsaveError?.message || unsaveError || '');
+          const looksLikeMissingOrBadLocalFavorite = code === 'not-found'
+            || code === 'invalid-argument'
+            || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
+          if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
+            // 이전 저장 오류 중 생긴 로컬 캐시 찌꺼기는 서버 문서가 없으므로 캐시에서만 제거한다.
+            removeLocalFavorite(existingFav.id, true);
+            showToast('저장이 해제되었습니다.');
+            return;
+          }
+          throw unsaveError;
+        }
       }
 
       const createdAtMs = Date.now();
@@ -6395,48 +6419,154 @@ const toggleCycleVariantSelection = (
   };
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
-    try {
-      const currentFavorite = favorites.find((favorite) => favorite.id === id);
-      let sanitizedUpdates = sanitizeForFirestore(updates);
-      if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
-        const mergedForSearch = {
-          ...currentFavorite,
-          ...updates,
-          ...sanitizedUpdates,
-          appliedKeywords: sanitizedUpdates.appliedKeywords
-            ? { ...(currentFavorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
-            : currentFavorite.appliedKeywords,
-        };
-        sanitizedUpdates = {
-          ...sanitizedUpdates,
-          favoriteKey: currentFavorite.favoriteKey || buildFavoriteIdentityKey(mergedForSearch),
-          searchTokens: buildFavoriteSearchTokens(mergedForSearch),
-        };
-      }
-      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
+    const currentFavorite = favorites.find((favorite) => favorite.id === id);
+    let sanitizedUpdates = sanitizeForFirestore(updates);
+    if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
+      const mergedForSearch = {
+        ...currentFavorite,
+        ...updates,
+        ...sanitizedUpdates,
+        appliedKeywords: sanitizedUpdates.appliedKeywords
+          ? { ...(currentFavorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
+          : currentFavorite.appliedKeywords,
+      };
+      sanitizedUpdates = {
+        ...sanitizedUpdates,
+        favoriteKey: currentFavorite.favoriteKey || buildFavoriteIdentityKey(mergedForSearch),
+        searchTokens: buildFavoriteSearchTokens(mergedForSearch),
+      };
+    }
+
+    const isRemovalLikeUpdate = Boolean(
+      sanitizedUpdates.hidden === true
+      || sanitizedUpdates.favoriteHidden === true
+      || sanitizedUpdates.favoriteRemoved === true
+      || sanitizedUpdates.saved === false
+      || sanitizedUpdates.deletedAt
+      || sanitizedUpdates.trashedAt
+      || sanitizedUpdates.unlikedAt
+      || sanitizedUpdates.unsavedAt
+    );
+
+    const applyFavoriteUpdateToLocalState = (targetIds: string[], localIdsToRemove: string[] = []) => {
+      const targetIdSet = new Set(targetIds.filter(Boolean));
+      const removeIdSet = new Set(localIdsToRemove.filter(Boolean));
       setFavorites((prev) => {
-        const next = prev.map((favorite) => {
-          if (favorite.id !== id) return favorite;
-          return {
-            ...favorite,
-            ...sanitizedUpdates,
-            lyrics: sanitizedUpdates.lyrics
-              ? { ...(favorite.lyrics || {}), ...(sanitizedUpdates.lyrics || {}) }
-              : favorite.lyrics,
-            appliedKeywords: sanitizedUpdates.appliedKeywords
-              ? { ...(favorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
-              : favorite.appliedKeywords,
-          };
-        });
+        const next = (prev || [])
+          .filter((favorite) => !removeIdSet.has(favorite.id))
+          .map((favorite) => {
+            if (!targetIdSet.has(favorite.id)) return favorite;
+            return {
+              ...favorite,
+              ...sanitizedUpdates,
+              lyrics: sanitizedUpdates.lyrics
+                ? { ...(favorite.lyrics || {}), ...(sanitizedUpdates.lyrics || {}) }
+                : favorite.lyrics,
+              appliedKeywords: sanitizedUpdates.appliedKeywords
+                ? { ...(favorite.appliedKeywords || {}), ...(sanitizedUpdates.appliedKeywords || {}) }
+                : favorite.appliedKeywords,
+            };
+          });
         if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next));
         return next;
       });
+    };
+
+    const removeLocalFavoriteOnly = (localId: string) => {
+      setFavorites((prev) => {
+        const next = (prev || []).filter((favorite) => favorite.id !== localId);
+        if (user?.uid) writeFavoritesCache(user.uid, sortFavoriteList(next));
+        return next;
+      });
+    };
+
+    const findServerMatchesForCurrentFavorite = async (): Promise<any[]> => {
+      if (!user?.uid || !currentFavorite) return [];
+      const matches = new Map<string, any>();
+      const targetKey = currentFavorite.favoriteKey || buildFavoriteIdentityKey(currentFavorite);
+      const addMatches = (docs: any[]) => {
+        docs.forEach((docSnap: any) => {
+          const candidate = { id: docSnap.id, ...docSnap.data() };
+          const candidateKey = candidate.favoriteKey || buildFavoriteIdentityKey(candidate);
+          if ((targetKey && candidateKey && targetKey === candidateKey) || isSameFavoriteSong(candidate, currentFavorite, targetKey)) {
+            matches.set(candidate.id, candidate);
+          }
+        });
+      };
+
+      if (targetKey) {
+        try {
+          const keySnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('favoriteKey', '==', targetKey),
+            limit(20)
+          ));
+          addMatches(keySnap.docs);
+        } catch (error) {
+          console.warn('Favorite recovery lookup by key failed.', error);
+        }
+      }
+
+      const titleCandidates = [currentFavorite.title, currentFavorite.koreanTitle, currentFavorite.englishTitle]
+        .filter(Boolean)
+        .map((value) => String(value).trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      for (const titleCandidate of titleCandidates) {
+        try {
+          const titleSnap = await getDocs(query(
+            collection(db, 'favorites'),
+            where('uid', '==', user.uid),
+            where('title', '==', titleCandidate),
+            limit(20)
+          ));
+          addMatches(titleSnap.docs);
+        } catch (error) {
+          console.warn('Favorite recovery lookup by title failed.', error);
+        }
+      }
+
+      return Array.from(matches.values());
+    };
+
+    try {
+      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
+      applyFavoriteUpdateToLocalState([id]);
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
       } else {
         showToast('수정되었습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
+      const code = String(error?.code || '');
+      const message = String(error?.message || error || '');
+      const looksLikeMissingOrBadLocalFavorite = code === 'not-found'
+        || code === 'invalid-argument'
+        || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
+
+      if (currentFavorite && isRemovalLikeUpdate && looksLikeMissingOrBadLocalFavorite) {
+        try {
+          const serverMatches = await findServerMatchesForCurrentFavorite();
+          if (serverMatches.length > 0) {
+            await Promise.all(serverMatches.map((favorite) => updateDoc(doc(db, 'favorites', favorite.id), sanitizedUpdates)));
+            const serverIds = serverMatches.map((favorite) => favorite.id);
+            const localIdsToRemove = serverIds.includes(id) ? [] : [id];
+            applyFavoriteUpdateToLocalState(serverIds, localIdsToRemove);
+            showToast('수정되었습니다.');
+            return;
+          }
+
+          // 이전 저장 오류 중 생긴 로컬 캐시 찌꺼기는 서버 문서가 없어서 updateDoc이 실패한다.
+          // 이런 곡은 사용자가 삭제를 눌렀을 때 실패로 남기지 말고 현재 기기의 캐시에서 제거한다.
+          removeLocalFavoriteOnly(id);
+          showToast('삭제되었습니다.');
+          return;
+        } catch (recoveryError) {
+          console.warn('Favorite orphan cleanup failed.', recoveryError);
+        }
+      }
+
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
     }
   };

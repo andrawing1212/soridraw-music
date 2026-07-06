@@ -3821,7 +3821,10 @@ function App() {
       const itemKey = item.favoriteKey || buildFavoriteIdentityKey(item);
       if (itemKey && firstPageKeys.has(itemKey)) return false;
       if (firstPageFavs.some((serverItem: any) => isSameFavoriteSong(serverItem, item, itemKey))) return false;
-      if (allServerFavoritesLoaded) return false;
+
+      // Do not drop older cached favorites just because the ordered page is exhausted.
+      // Some legacy favorites can be missing createdAt, and Firestore orderBy(createdAt) will not return them.
+      // They are restored/kept through the full-cache recovery path below.
 
       // The first server page is the authoritative latest 20.
       // If a cached item is new enough to belong to that page but is not in it, it was deleted/changed on another device.
@@ -5701,6 +5704,7 @@ const toggleCycleVariantSelection = (
 
     let unsubFavs: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
+    let favoriteFullCacheRecoveryTimer: ReturnType<typeof window.setTimeout> | null = null;
 
     const getSessionStartTime = (targetUser: User | null) => {
       if (!targetUser?.metadata?.lastSignInTime) return 0;
@@ -5742,6 +5746,10 @@ const toggleCycleVariantSelection = (
       if (unsubUserDoc) {
         unsubUserDoc();
         unsubUserDoc = null;
+      }
+      if (favoriteFullCacheRecoveryTimer) {
+        window.clearTimeout(favoriteFullCacheRecoveryTimer);
+        favoriteFullCacheRecoveryTimer = null;
       }
 
       if (currentUser) {
@@ -5911,6 +5919,42 @@ const toggleCycleVariantSelection = (
           });
         };
 
+        const runFavoritesFullCacheRecoveryOnce = async () => {
+          const recoveryKey = `soridraw_favorites_full_cache_recovery_v2_${currentUser.uid}`;
+          try {
+            if (localStorage.getItem(recoveryKey) === 'done') return;
+          } catch {
+            // If localStorage is unavailable, still try one safe recovery fetch for this page load.
+          }
+
+          try {
+            const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
+            const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+            if (fullFavorites.length === 0) {
+              try {
+                localStorage.setItem(recoveryKey, 'done');
+              } catch {
+                // ignore marker write failure
+              }
+              return;
+            }
+
+            setFavorites((prev) => {
+              const merged = mergeFavoritePages(prev || [], fullFavorites);
+              writeFavoritesCache(currentUser.uid, merged);
+              return merged;
+            });
+
+            try {
+              localStorage.setItem(recoveryKey, 'done');
+            } catch {
+              // ignore marker write failure
+            }
+          } catch (recoveryError) {
+            console.warn('Favorites full cache recovery failed. Keeping paged/cache data only.', recoveryError);
+          }
+        };
+
         const q = query(
           collection(db, 'favorites'),
           where('uid', '==', currentUser.uid),
@@ -5953,6 +5997,10 @@ const toggleCycleVariantSelection = (
           }
           attachLegacyFavoritesFallback();
         });
+
+        favoriteFullCacheRecoveryTimer = window.setTimeout(() => {
+          void runFavoritesFullCacheRecoveryOnce();
+        }, 700);
       } else {
         setFavorites([]);
         setHasMoreFavorites(false);
@@ -5970,6 +6018,7 @@ const toggleCycleVariantSelection = (
       unsubscribe();
       if (unsubFavs) unsubFavs();
       if (unsubUserDoc) unsubUserDoc();
+      if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);
     };
   }, []);
 

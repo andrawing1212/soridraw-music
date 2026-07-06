@@ -1256,36 +1256,34 @@ function GenreHierarchySelectorComponent({
         )}
       </div>
 
-      {activeGroup && typeof document !== "undefined" && createPortal(
+      {typeof document !== "undefined" && createPortal(
         <AnimatePresence>
-          <motion.div
-            key="genre-hierarchy-modal"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
-            className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none"
-          >
+          {activeGroup && (
             <motion.div
+              key="genre-hierarchy-modal"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className={cn(
-                "absolute inset-0 bg-black/40 transition-all duration-200",
-                isBackdropBlurReady ? "backdrop-blur-sm" : "backdrop-blur-0"
-              )}
-              onClick={applyModalChanges}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              transition={{ type: "spring", duration: 0.4, bounce: 0.3 }}
-              className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10"
-              onClick={(e) => e.stopPropagation()}
-              onWheel={blockModalOuterScroll}
-              onTouchMove={blockModalOuterScroll}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none"
             >
+              <div
+                className={cn(
+                  "absolute inset-0 bg-black/40 transition-all duration-150",
+                  isBackdropBlurReady ? "backdrop-blur-sm" : "backdrop-blur-0"
+                )}
+                onClick={applyModalChanges}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.97, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97, y: 10 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10"
+                onClick={(e) => e.stopPropagation()}
+                onWheel={blockModalOuterScroll}
+                onTouchMove={blockModalOuterScroll}
+              >
               {/* Modal Header */}
               <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
                 <h3
@@ -1502,6 +1500,7 @@ function GenreHierarchySelectorComponent({
               </div>
             </motion.div>
           </motion.div>
+          )}
         </AnimatePresence>,
         document.body
       )}

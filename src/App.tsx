@@ -71,6 +71,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
+import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
 
 // Portal component for top-level rendering
 function Portal({ children }: { children: React.ReactNode }) {
@@ -2197,6 +2198,48 @@ function SecondaryScrollControl() {
 }
 
 const FavoritesPageLazy = lazy(() => import('./pages/FavoritesPage'));
+
+function HistoryRouteWrapper({
+  isFavoritesLoading,
+  hasMoreFavorites,
+  isLoadingMoreFavorites,
+  loadMoreFavorites,
+  searchFavoritesOnServer,
+  refreshFavoritesFromServerFirstPage,
+  toggleFavorite,
+  updateFavorite,
+  clearAllFavorites,
+  unlockAllFavorites,
+  lockAllFavorites,
+  user,
+  handleLogin,
+}: any) {
+  const favorites = useFavorites();
+  const location = useLocation();
+
+  return (
+    <FavoritesPageLazy
+      favorites={new URLSearchParams(location.search).has('note') ? [] : favorites}
+      isFavoritesLoading={isFavoritesLoading}
+      hasMoreFavorites={hasMoreFavorites}
+      isLoadingMoreFavorites={isLoadingMoreFavorites}
+      onLoadMoreFavorites={loadMoreFavorites}
+      onServerSearchFavorites={searchFavoritesOnServer}
+      onManualSyncFavorites={refreshFavoritesFromServerFirstPage}
+      toggleFavorite={toggleFavorite}
+      updateFavorite={updateFavorite}
+      clearAllFavorites={clearAllFavorites}
+      unlockAllFavorites={unlockAllFavorites}
+      lockAllFavorites={lockAllFavorites}
+      user={user}
+      onLogin={handleLogin}
+      onHover={() => {}}
+      hoveredItem={null}
+      onLongPressStart={() => {}}
+      onLongPressEnd={() => {}}
+    />
+  );
+}
 const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
 const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
@@ -3673,7 +3716,16 @@ function App() {
   const [recentSongEditFocus, setRecentSongEditFocus] = useState<RecentSongEditFocus>('title');
   const [isSavingRecentSongEdit, setIsSavingRecentSongEdit] = useState(false);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<any[]>([]);
+  // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change
+  const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
+    if (typeof list === 'function') {
+      const current = favoritesStore.getFavorites();
+      favoritesStore.setFavorites(list(current));
+    } else {
+      favoritesStore.setFavorites(list);
+    }
+  }, []);
+  const favorites = favoritesStore.getFavorites();
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(true);
   const FAVORITES_PAGE_SIZE = 20;
   const favoritePaginationCursorRef = useRef<any>(null);
@@ -3861,35 +3913,25 @@ function App() {
     return matches.find((favorite) => !isFavoriteHidden(favorite)) || matches[0] || null;
   };
 
-  const favoritesStatusMap = useMemo(() => {
-    const map = new Map<string, any>();
-    favorites.forEach((fav) => {
-      if (!isFavoriteHidden(fav)) {
-        if (fav.id) map.set(fav.id, fav);
-        const key = fav.favoriteKey || buildFavoriteIdentityKey(fav);
-        if (key) map.set(key, fav);
-      }
-    });
-    return map;
-  }, [favorites]);
+  const favoritesStatusMap = favoritesStore.getStatusMap();
 
   const favoritesRef = useRef(favorites);
   useEffect(() => {
-    favoritesRef.current = favorites;
-  }, [favorites]);
+    favoritesRef.current = favoritesStore.getFavorites();
+  });
 
   const favoritesStatusMapRef = useRef(favoritesStatusMap);
   useEffect(() => {
-    favoritesStatusMapRef.current = favoritesStatusMap;
-  }, [favoritesStatusMap]);
+    favoritesStatusMapRef.current = favoritesStore.getStatusMap();
+  });
 
   const isSongFavorited = useCallback((song: any) => {
     if (!song) return false;
-    const statusMap = favoritesStatusMapRef.current;
+    const statusMap = favoritesStore.getStatusMap();
     if (song.id && statusMap.has(song.id)) return true;
     const key = buildFavoriteIdentityKey(song);
     if (key && statusMap.has(key)) return true;
-    return favoritesRef.current.some(f => !isFavoriteHidden(f) && isSameFavoriteSong(f, song, key));
+    return false;
   }, []);
 
   const getFavoriteTitleFingerprint = (song: any): string => normalizeFavoriteSearchValue([
@@ -12892,25 +12934,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <FavoritesPageLazy
-                  favorites={new URLSearchParams(location.search).has('note') ? [] : favorites}
+                <HistoryRouteWrapper
                   isFavoritesLoading={isFavoritesLoading}
                   hasMoreFavorites={hasMoreFavorites}
                   isLoadingMoreFavorites={isLoadingMoreFavorites}
-                  onLoadMoreFavorites={loadMoreFavorites}
-                  onServerSearchFavorites={searchFavoritesOnServer}
-                  onManualSyncFavorites={refreshFavoritesFromServerFirstPage}
+                  loadMoreFavorites={loadMoreFavorites}
+                  searchFavoritesOnServer={searchFavoritesOnServer}
+                  refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
                   toggleFavorite={toggleFavorite}
                   updateFavorite={updateFavorite}
                   clearAllFavorites={clearAllFavorites}
                   unlockAllFavorites={unlockAllFavorites}
                   lockAllFavorites={lockAllFavorites}
                   user={user || auth.currentUser}
-                  onLogin={handleLogin}
-                  onHover={() => {}}
-                  hoveredItem={null}
-                  onLongPressStart={() => {}}
-                  onLongPressEnd={() => {}}
+                  handleLogin={handleLogin}
                 />
               </Suspense>
             ) : (

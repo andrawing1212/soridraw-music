@@ -320,6 +320,10 @@ function GenreHierarchySelectorComponent({
   const MAX_MODAL_SELECTIONS = 2;
   const normalizeSelectionList = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(-MAX_MODAL_SELECTIONS);
 
+  const normalizedCommittedSubGenre = useMemo(() => {
+    return normalizeSelectionList(committedSubGenre);
+  }, [committedSubGenre]);
+
   // pending selections inside modal
   const [pendingMainId, setPendingMainId] = useState<string | null>(null);
   const [pendingSubId, setPendingSubId] = useState<string | null>(null);
@@ -328,6 +332,23 @@ function GenreHierarchySelectorComponent({
   const [hasChangedInModal, setHasChangedInModal] = useState(false);
   const initialModalMainIdRef = useRef<string | null>(null);
   const initialModalSubIdRef = useRef<string | null>(null);
+
+  const normalizedPendingSubIds = useMemo(() => {
+    return normalizeSelectionList(pendingSubIds);
+  }, [pendingSubIds]);
+
+  const [isBackdropBlurReady, setIsBackdropBlurReady] = useState(false);
+
+  useEffect(() => {
+    if (activeGroup) {
+      const handle = requestAnimationFrame(() => {
+        setIsBackdropBlurReady(true);
+      });
+      return () => cancelAnimationFrame(handle);
+    } else {
+      setIsBackdropBlurReady(false);
+    }
+  }, [activeGroup]);
 
   useEffect(() => {
     onModalStateChange?.(!!activeGroup);
@@ -502,17 +523,18 @@ function GenreHierarchySelectorComponent({
   }));
 
   const getSelectionOrderIndex = (id: string, ids = committedSubGenre) => {
-    const index = normalizeSelectionList(ids).indexOf(id);
+    const targetIds = ids === committedSubGenre ? normalizedCommittedSubGenre : (ids === pendingSubIds ? normalizedPendingSubIds : normalizeSelectionList(ids));
+    const index = targetIds.indexOf(id);
     return index >= 0 ? index + 1 : null;
   };
 
   const getGroupSelectionOrderIndex = (group: GroupItem, ids = committedSubGenre) => {
-    const normalizedIds = normalizeSelectionList(ids);
+    const targetIds = ids === committedSubGenre ? normalizedCommittedSubGenre : (ids === pendingSubIds ? normalizedPendingSubIds : normalizeSelectionList(ids));
     for (const main of group.children) {
-      const directIndex = normalizedIds.indexOf(main.id);
+      const directIndex = targetIds.indexOf(main.id);
       if (directIndex >= 0) return directIndex + 1;
       for (const sub of main.children) {
-        const subIndex = normalizedIds.indexOf(sub.id);
+        const subIndex = targetIds.indexOf(sub.id);
         if (subIndex >= 0) return subIndex + 1;
       }
     }
@@ -529,8 +551,8 @@ function GenreHierarchySelectorComponent({
   };
 
   const getMainSelectionOrderEntries = (main: MainGenreItem, ids = pendingSubIds.length > 0 ? pendingSubIds : committedSubGenre) => {
-    const normalizedIds = normalizeSelectionList(ids);
-    return normalizedIds
+    const targetIds = ids === pendingSubIds ? normalizedPendingSubIds : (ids === committedSubGenre ? normalizedCommittedSubGenre : normalizeSelectionList(ids));
+    return targetIds
       .map((id, index) => {
         const belongsToMain = id === main.id || main.children.some((sub) => sub.id === id);
         return belongsToMain ? { id, orderIndex: index + 1 } : null;
@@ -543,8 +565,8 @@ function GenreHierarchySelectorComponent({
   };
 
   const getGroupSelectionOrderEntries = (group: GroupItem, ids = committedSubGenre) => {
-    const normalizedIds = normalizeSelectionList(ids);
-    return normalizedIds
+    const targetIds = ids === committedSubGenre ? normalizedCommittedSubGenre : (ids === pendingSubIds ? normalizedPendingSubIds : normalizeSelectionList(ids));
+    return targetIds
       .map((id, index) => {
         const belongsToGroup = group.children.some((main) =>
           id === main.id || main.children.some((sub) => sub.id === id),
@@ -1086,14 +1108,12 @@ function GenreHierarchySelectorComponent({
           </div>
         </div>
 
-        <motion.div
-          initial={false}
-          animate={{
-            height: isExpanded ? forcedHeight || contentHeight || 320 : 76,
+        <div
+          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
+          style={{
+            maxHeight: isExpanded ? forcedHeight || contentHeight || 320 : 76,
             opacity: 1
           }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden min-h-[76px]"
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
             {groups.map((group) => {
@@ -1135,7 +1155,7 @@ function GenreHierarchySelectorComponent({
               );
             })}
           </div>
-        </motion.div>
+        </div>
       </div>
 
       <div
@@ -1250,7 +1270,10 @@ function GenreHierarchySelectorComponent({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className={cn(
+                "absolute inset-0 bg-black/40 transition-all duration-200",
+                isBackdropBlurReady ? "backdrop-blur-sm" : "backdrop-blur-0"
+              )}
               onClick={applyModalChanges}
             />
             <motion.div

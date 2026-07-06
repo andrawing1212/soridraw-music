@@ -3614,6 +3614,18 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [isStudioLoaded, setIsStudioLoaded] = useState(false);
+  useEffect(() => {
+    if (location.pathname === '/studio') {
+      const handle = requestAnimationFrame(() => {
+        setIsStudioLoaded(true);
+      });
+      return () => cancelAnimationFrame(handle);
+    } else {
+      setIsStudioLoaded(false);
+    }
+  }, [location.pathname]);
+
   // 1. ALL STATES & REFS FIRST
   const [user, setUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -11166,9 +11178,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
-              {/* Selection Sections */}
-              <div className="grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+            <main className={cn(
+              "studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7 transition-opacity duration-300",
+              isStudioLoaded ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}>
+              {isStudioLoaded && (
+                <>
+                  {/* Selection Sections */}
+                  <div className="grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -12858,6 +12875,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </motion.div>
           )}
         </AnimatePresence>
+                </>
+              )}
             </main>
           </>
         } />
@@ -14583,14 +14602,12 @@ function CycleSectionComponent({
           </div>
         </div>
 
-        <motion.div
-          initial={false}
-          animate={{
-            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
+        <div
+          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
+          style={{
+            maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
           }}
-          transition={{ duration: 0.14, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden min-h-[76px]"
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
             {cycles.map((cycle) => {
@@ -14696,7 +14713,7 @@ function CycleSectionComponent({
               );
             })}
           </div>
-        </motion.div>
+        </div>
       </div>
 
       <div 
@@ -15396,14 +15413,12 @@ function CategorySectionComponent({
           </div>
         </div>
         
-        <motion.div
-          initial={false}
-          animate={{ 
-            height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 48 : 96) : (window.innerWidth < 768 ? 48 : 96),
+        <div
+          className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px] transition-[max-height,opacity] duration-300 ease-out"
+          style={{
+            maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 48 : 96) : (window.innerWidth < 768 ? 48 : 96),
             opacity: 1
           }}
-          transition={{ duration: 0.14, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px]"
         >
           <div
             ref={contentRef}
@@ -15561,7 +15576,7 @@ function CategorySectionComponent({
             );
           })}
           </div>
-        </motion.div>
+        </div>
       </div>
 
       <div 

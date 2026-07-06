@@ -5923,7 +5923,7 @@ const toggleCycleVariantSelection = (
 
     let unsubFavs: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
-    let favoriteFullCacheRecoveryTimer: ReturnType<typeof window.setTimeout> | null = null;
+    let favoriteFullCacheRecoveryTimer: any = null;
 
     const getSessionStartTime = (targetUser: User | null) => {
       if (!targetUser?.metadata?.lastSignInTime) return 0;
@@ -13938,7 +13938,17 @@ interface GenreCategorySectionProps {
   onToggleExpand?: () => void;
 }
 
-function GenreCategorySection({
+const isArrayEqual = (a: any[] | undefined, b: any[] | undefined) => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
+function GenreCategorySectionComponent({
   title,
   description,
   groups,
@@ -14057,7 +14067,7 @@ function GenreCategorySection({
           height: isExpanded ? resolveExpandedHeight(undefined, contentHeight, 120) : 120,
           opacity: 1
         }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
+        transition={{ duration: 0.14, ease: "easeOut" }}
         className="overflow-hidden"
       >
         <div ref={contentRef} className="grid grid-cols-2 gap-2">
@@ -14147,6 +14157,15 @@ function GenreCategorySection({
     </div>
   );
 }
+
+const GenreCategorySection = React.memo(GenreCategorySectionComponent, (prev, next) => {
+  return prev.selectedGenreId === next.selectedGenreId &&
+         prev.isRandomized === next.isRandomized &&
+         prev.isLocked === next.isLocked &&
+         prev.isExpanded === next.isExpanded &&
+         prev.groups === next.groups &&
+         prev.directInput?.selectedText === next.directInput?.selectedText;
+});
 
 function GenreSelectModal({
   group,
@@ -14298,7 +14317,7 @@ interface CycleSectionProps {
   };
 }
 
-function CycleSection({ 
+function CycleSectionComponent({ 
   title, 
   titleKo,
   description, 
@@ -14493,7 +14512,7 @@ function CycleSection({
             height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
           }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
+          transition={{ duration: 0.14, ease: "easeOut" }}
           className="soridraw-expand-content overflow-hidden min-h-[76px]"
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
@@ -14716,6 +14735,20 @@ function CycleSection({
   );
 }
 
+const CycleSection = React.memo(CycleSectionComponent, (prev, next) => {
+  return prev.title === next.title &&
+         prev.isLocked === next.isLocked &&
+         prev.isRandomized === next.isRandomized &&
+         prev.isExpanded === next.isExpanded &&
+         prev.isPointSelectionMode === next.isPointSelectionMode &&
+         prev.forcedHeight === next.forcedHeight &&
+         prev.cycles === next.cycles &&
+         prev.directInput?.selectedText === next.directInput?.selectedText &&
+         isArrayEqual(prev.selected, next.selected) &&
+         isArrayEqual(prev.pointSelected, next.pointSelected) &&
+         isArrayEqual(prev.highlightedVariantIds, next.highlightedVariantIds);
+});
+
 
 function CycleKeywordPopup({
   title,
@@ -14910,7 +14943,7 @@ function CycleKeywordPopup({
         <div
           className={cn(
             "absolute inset-0 bg-black/40 transition-[backdrop-filter,opacity] duration-150 ease-out",
-            isBackdropBlurReady ? "backdrop-blur-sm" : "backdrop-blur-0"
+            isBackdropBlurReady ? "sm:backdrop-blur-sm backdrop-blur-[1px]" : "backdrop-blur-0"
           )}
           onPointerDown={() => {
             cyclePopupBackdropPointerDownRef.current = true;
@@ -14929,7 +14962,7 @@ function CycleKeywordPopup({
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
+          transition={{ type: 'spring', duration: 0.28, bounce: 0.15 }}
           className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
@@ -15109,7 +15142,7 @@ interface CategorySectionProps {
   };
 }
 
-function CategorySection({ 
+function CategorySectionComponent({ 
   title, 
   titleKo,
   description,
@@ -15292,7 +15325,7 @@ function CategorySection({
             height: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 48 : 96) : (window.innerWidth < 768 ? 48 : 96),
             opacity: 1
           }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
+          transition={{ duration: 0.14, ease: "easeOut" }}
           className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px]"
         >
           <div
@@ -15542,6 +15575,23 @@ function CategorySection({
     </div>
   );
 }
+
+const CategorySection = React.memo(CategorySectionComponent, (prev, next) => {
+  return prev.title === next.title &&
+         prev.isLocked === next.isLocked &&
+         prev.isRandomized === next.isRandomized &&
+         prev.isExpanded === next.isExpanded &&
+         prev.allExpanded === next.allExpanded &&
+         prev.kpopMode === next.kpopMode &&
+         prev.citypopMode === next.citypopMode &&
+         prev.forcedHeight === next.forcedHeight &&
+         prev.uniformKeywordGrid === next.uniformKeywordGrid &&
+         prev.items === next.items &&
+         prev.directInput?.selectedText === next.directInput?.selectedText &&
+         isArrayEqual(prev.selected, next.selected) &&
+         isArrayEqual(prev.pinned, next.pinned);
+});
+
 
 interface SongStructureIntegratedControlProps {
   lyricsLength: LyricsLength;

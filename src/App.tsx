@@ -3623,6 +3623,7 @@ function App() {
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
   const hasCompletedForceLogoutReentryCheckRef = useRef(false);
+  const lastFavoriteSyncSignalIdRef = useRef<string>('');
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -3673,6 +3674,11 @@ function App() {
     [...(current || []), ...(incoming || [])].forEach((item) => {
       if (!item?.id) return;
       if (isFavoriteSoftRemoved(item)) {
+        Array.from(map.entries()).forEach(([cachedId, cachedItem]) => {
+          if (doesFavoriteUnsaveSignalMatchFavorite(item, cachedItem)) {
+            map.delete(cachedId);
+          }
+        });
         map.delete(item.id);
         return;
       }
@@ -3827,13 +3833,84 @@ function App() {
     return matches.find((favorite) => !isFavoriteHidden(favorite)) || matches[0] || null;
   };
 
+  const getFavoriteTitleFingerprint = (song: any): string => normalizeFavoriteSearchValue([
+    song?.title,
+    song?.koreanTitle,
+    song?.englishTitle,
+  ].filter(Boolean).join(' '));
+
+  const hasMatchingFavoriteTitleFingerprint = (a: any, b: any): boolean => {
+    const aTitle = getFavoriteTitleFingerprint(a);
+    const bTitle = getFavoriteTitleFingerprint(b);
+    if (!aTitle || !bTitle) return false;
+    if (aTitle === bTitle) return true;
+    const aParts = new Set(aTitle.split(/\s+/).filter((part) => part.length >= 2));
+    const bParts = new Set(bTitle.split(/\s+/).filter((part) => part.length >= 2));
+    let overlap = 0;
+    aParts.forEach((part) => { if (bParts.has(part)) overlap += 1; });
+    return overlap >= 2 && Math.min(aParts.size, bParts.size) <= overlap + 1;
+  };
+
+  const isFavoriteServerDuplicateCandidate = (candidate: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)): boolean => {
+    if (!candidate || !song) return false;
+    const candidateKey = candidate.favoriteKey || buildFavoriteIdentityKey(candidate);
+    if (songIdentityKey && candidateKey && songIdentityKey === candidateKey) return true;
+    if (isSameFavoriteSong(candidate, song, songIdentityKey)) return true;
+    return hasMatchingFavoriteTitleFingerprint(candidate, song);
+  };
+
+  const buildFavoriteSyncSignal = (action: 'save' | 'unsave', song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+    const favoriteKeys = Array.from(new Set([
+      buildFavoriteIdentityKey(song),
+      song?.favoriteKey,
+      ...(relatedFavorites || []).map((favorite) => favorite?.favoriteKey || buildFavoriteIdentityKey(favorite)),
+    ].filter(Boolean))).slice(0, 20);
+    const favoriteIds = Array.from(new Set((relatedFavorites || []).map((favorite) => favorite?.id).filter(Boolean))).slice(0, 30);
+    return sanitizeForFirestore({
+      id: `${action}_${at}_${Math.random().toString(36).slice(2, 8)}`,
+      action,
+      at,
+      favoriteKey: favoriteKeys[0] || '',
+      favoriteKeys,
+      favoriteIds,
+      title: song?.title || relatedFavorites?.[0]?.title || '',
+      koreanTitle: song?.koreanTitle || relatedFavorites?.[0]?.koreanTitle || '',
+      englishTitle: song?.englishTitle || relatedFavorites?.[0]?.englishTitle || '',
+      titleFingerprint: getFavoriteTitleFingerprint(song || relatedFavorites?.[0]),
+      genre: getResolvedGenre(song) || song?.genre || relatedFavorites?.[0]?.genre || '',
+    });
+  };
+
+  const doesFavoriteUnsaveSignalMatchFavorite = (signal: any, favorite: any): boolean => {
+    if (!signal || !favorite) return false;
+    if (!(signal.action === 'unsave' || isFavoriteSoftRemoved(signal))) return false;
+    const signalIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
+    if (favorite.id && signalIds.includes(favorite.id)) return true;
+
+    const favoriteKey = favorite.favoriteKey || buildFavoriteIdentityKey(favorite);
+    const signalKeys = Array.from(new Set([
+      signal.favoriteKey,
+      ...(Array.isArray(signal.favoriteKeys) ? signal.favoriteKeys : []),
+      signal.favoriteKey || buildFavoriteIdentityKey(signal),
+    ].filter(Boolean)));
+    if (favoriteKey && signalKeys.includes(favoriteKey)) return true;
+
+    const signalTitle = signal.titleFingerprint || getFavoriteTitleFingerprint(signal);
+    const favoriteTitle = getFavoriteTitleFingerprint(favorite);
+    if (signalTitle && favoriteTitle && signalTitle === favoriteTitle) return true;
+
+    return hasMatchingFavoriteTitleFingerprint(signal, favorite);
+  };
+
   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
     const firstPageIds = new Set(firstPageFavs.map((item: any) => item?.id).filter(Boolean));
     const firstPageKeys = new Set(firstPageFavs.map((item: any) => item?.favoriteKey || buildFavoriteIdentityKey(item)).filter(Boolean));
+    const removalSignals = firstPageFavs.filter((item: any) => isFavoriteSoftRemoved(item));
 
     const retainedCached = (previous || []).filter((item: any) => {
       if (!item?.id) return false;
       if (firstPageIds.has(item.id)) return false;
+      if (removalSignals.some((signal: any) => doesFavoriteUnsaveSignalMatchFavorite(signal, item))) return false;
       const itemKey = item.favoriteKey || buildFavoriteIdentityKey(item);
       if (itemKey && firstPageKeys.has(itemKey)) return false;
       if (firstPageFavs.some((serverItem: any) => isSameFavoriteSong(serverItem, item, itemKey))) return false;
@@ -3859,6 +3936,40 @@ function App() {
     } catch (e) {
       console.error('Failed to save favorites to cache:', e);
     }
+  };
+
+  const applyFavoriteSyncSignal = (uid: string, signal: any) => {
+    if (!uid || !signal?.id) return;
+    if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
+    lastFavoriteSyncSignalIdRef.current = signal.id;
+    if (signal.action !== 'unsave') return;
+
+    // Clean localStorage directly as well as React state.
+    // On refresh, the user-doc signal can arrive before/after the cached favorites are hydrated.
+    // Direct cache cleanup prevents the old saved row from coming back after a page reload.
+    try {
+      const cacheKey = `soridraw_favorites_cache_${uid}`;
+      const cachedRaw = localStorage.getItem(cacheKey);
+      if (cachedRaw) {
+        const cachedList = JSON.parse(cachedRaw);
+        if (Array.isArray(cachedList)) {
+          const cleanedCache = cachedList.filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+          if (cleanedCache.length !== cachedList.length) {
+            writeFavoritesCache(uid, sortFavoriteList(cleanedCache));
+          }
+        }
+      }
+    } catch (cacheCleanupError) {
+      console.warn('Favorite sync signal cache cleanup failed:', cacheCleanupError);
+    }
+
+    setFavorites((prev) => {
+      const next = (prev || []).filter((favorite) => !doesFavoriteUnsaveSignalMatchFavorite(signal, favorite));
+      if (next.length !== (prev || []).length) {
+        writeFavoritesCache(uid, sortFavoriteList(next));
+      }
+      return next;
+    });
   };
   const SUNO_LIBRARY_SIGNAL_KEY = 'soridraw_suno_library_signal';
   const SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY = 'soridraw_suno_library_signal_started_at';
@@ -5808,6 +5919,7 @@ const toggleCycleVariantSelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
+            applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
             
             // Check for Banned status
             if (data.accountStatus) {
@@ -6192,10 +6304,20 @@ const toggleCycleVariantSelection = (
       return findBestMatchingFavorite(favorites, song, songIdentityKey);
     };
 
-    const findServerExistingFavorite = async () => {
+    const findServerMatchingFavorites = async (includeFullScan = false): Promise<any[]> => {
+      const matches = new Map<string, any>();
+      const addCandidates = (candidates: any[]) => {
+        candidates.forEach((candidate) => {
+          if (!candidate?.id) return;
+          if (isFavoriteServerDuplicateCandidate(candidate, song, songIdentityKey)) {
+            matches.set(candidate.id, candidate);
+          }
+        });
+      };
+
       if (forceDeleteFavoriteById && favoriteDeleteId) {
         const snap = await getDoc(doc(db, 'favorites', favoriteDeleteId));
-        return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+        if (snap.exists()) addCandidates([{ id: snap.id, ...snap.data() }]);
       }
 
       if (songIdentityKey) {
@@ -6204,10 +6326,9 @@ const toggleCycleVariantSelection = (
             collection(db, 'favorites'),
             where('uid', '==', user.uid),
             where('favoriteKey', '==', songIdentityKey),
-            limit(5)
+            limit(20)
           ));
-          const keyMatch = findBestMatchingFavorite(keySnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), song, songIdentityKey);
-          if (keyMatch) return keyMatch;
+          addCandidates(keySnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
         } catch (error) {
           console.warn('Favorite identity lookup by key failed. Falling back to title/prompt comparison.', error);
         }
@@ -6220,32 +6341,42 @@ const toggleCycleVariantSelection = (
             collection(db, 'favorites'),
             where('uid', '==', user.uid),
             where('title', '==', titleCandidate),
-            limit(10)
+            limit(30)
           ));
-          const titleMatch = findBestMatchingFavorite(titleSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), song, songIdentityKey);
-          if (titleMatch) return titleMatch;
+          addCandidates(titleSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
         } catch (error) {
           console.warn('Favorite identity lookup by title failed.', error);
         }
       }
 
-      // Last safety net for Studio heart toggles: compare against the current server first pages.
-      // This prevents duplicate addDoc when another device saved the same song but the local cache has not caught up yet.
       const recentQueries = [
-        query(collection(db, 'favorites'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'), limit(80)),
-        query(collection(db, 'favorites'), where('uid', '==', user.uid), limit(80)),
+        query(collection(db, 'favorites'), where('uid', '==', user.uid), orderBy('createdAt', 'desc'), limit(100)),
+        query(collection(db, 'favorites'), where('uid', '==', user.uid), limit(100)),
       ];
       for (const recentQuery of recentQueries) {
         try {
           const recentSnap = await getDocs(recentQuery);
-          const recentMatch = findBestMatchingFavorite(recentSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })), song, songIdentityKey);
-          if (recentMatch) return recentMatch;
+          addCandidates(recentSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
         } catch (error) {
           console.warn('Favorite recent server lookup failed.', error);
         }
       }
 
-      return null;
+      if (includeFullScan) {
+        try {
+          const fullSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
+          addCandidates(fullSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+        } catch (error) {
+          console.warn('Favorite full duplicate lookup failed. Continuing with targeted matches only.', error);
+        }
+      }
+
+      return Array.from(matches.values());
+    };
+
+    const findServerExistingFavorite = async () => {
+      const matches = await findServerMatchingFavorites(false);
+      return findBestMatchingFavorite(matches, song, songIdentityKey);
     };
 
     const patchLocalFavorite = (id: string, updates: Record<string, any>, fallbackFavorite?: any) => {
@@ -6318,14 +6449,32 @@ const toggleCycleVariantSelection = (
           };
           await updateDoc(doc(db, 'favorites', existingFav.id), sanitizeForFirestore(restoreUpdates));
           patchLocalFavorite(existingFav.id, restoreUpdates, existingFav);
+          const saveSignal = buildFavoriteSyncSignal('save', { ...song, ...restoreUpdates }, [{ ...existingFav, ...restoreUpdates }], Date.now());
+          updateDoc(doc(db, 'users', user.uid), {
+            favoriteSyncSignal: saveSignal,
+            favoriteSyncSignalUpdatedAt: saveSignal.at,
+          }).catch(err => console.error("Failed to publish favorite restore sync signal:", err));
           showToast('보관함에 다시 저장되었습니다.');
           return;
         }
 
         // Studio heart toggle means save / unsave.
-        // Cross-device listeners cannot reliably infer a hard delete from a 20-item limited query.
-        // Keep a lightweight non-trash tombstone so other devices can receive the change, while the song disappears immediately from Music Note.
+        // Unsave must affect every same-song duplicate created during earlier save bugs,
+        // and it must send a user-doc signal so other devices remove their full-cache copy even after refresh.
         const unsavedAt = Date.now();
+        const serverMatchesForUnsave = await findServerMatchingFavorites(true).catch((lookupError) => {
+          console.warn('Favorite duplicate lookup before unsave failed. Using the current match only.', lookupError);
+          return [];
+        });
+        const unsaveTargetsMap = new Map<string, any>();
+        [existingFav, ...(serverMatchesForUnsave || [])].forEach((favorite) => {
+          if (!favorite?.id) return;
+          if (favorite.isLocked) return;
+          if (favorite.hidden === true || favorite.favoriteHidden === true || favorite.deletedAt || favorite.trashedAt) return;
+          unsaveTargetsMap.set(favorite.id, favorite);
+        });
+        const unsaveTargets = Array.from(unsaveTargetsMap.values());
+        const unsaveSignal = buildFavoriteSyncSignal('unsave', song, unsaveTargets.length > 0 ? unsaveTargets : [existingFav], unsavedAt);
         const unsaveUpdates = sanitizeForFirestore({
           favoriteRemoved: true,
           favoriteRemovedAt: unsavedAt,
@@ -6337,18 +6486,27 @@ const toggleCycleVariantSelection = (
           deletedAt: null,
           trashedAt: null,
           isPublic: false,
-          // Keep the non-visible unsave signal in the latest live-sync window.
-          // Otherwise another device that keeps the full cache may never see that this saved song was unchecked.
           createdAtMs: unsavedAt,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
         try {
-          await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
+          if (unsaveTargets.length > 0) {
+            await Promise.all(unsaveTargets.map((targetFavorite) => updateDoc(doc(db, 'favorites', targetFavorite.id), sanitizeForFirestore({
+              ...unsaveUpdates,
+              favoriteKey: targetFavorite.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(targetFavorite),
+            }))));
+          } else if (existingFav?.id) {
+            await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
+          }
+
           removeLocalFavorite(existingFav.id, true);
+          applyFavoriteSyncSignal(user.uid, unsaveSignal);
           await updateDoc(doc(db, 'users', user.uid), {
+            favoriteSyncSignal: unsaveSignal,
+            favoriteSyncSignalUpdatedAt: unsavedAt,
             favoriteCount: increment(-1)
-          }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+          }).catch(err => console.error("Failed to publish favorite unsave sync signal:", err));
           showToast('저장이 해제되었습니다.');
           return;
         } catch (unsaveError: any) {
@@ -6358,8 +6516,12 @@ const toggleCycleVariantSelection = (
             || code === 'invalid-argument'
             || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
           if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
-            // 이전 저장 오류 중 생긴 로컬 캐시 찌꺼기는 서버 문서가 없으므로 캐시에서만 제거한다.
             removeLocalFavorite(existingFav.id, true);
+            applyFavoriteSyncSignal(user.uid, unsaveSignal);
+            await updateDoc(doc(db, 'users', user.uid), {
+              favoriteSyncSignal: unsaveSignal,
+              favoriteSyncSignalUpdatedAt: unsavedAt,
+            }).catch(err => console.error("Failed to publish local favorite cleanup signal:", err));
             showToast('저장이 해제되었습니다.');
             return;
           }
@@ -6414,9 +6576,12 @@ const toggleCycleVariantSelection = (
         return merged;
       });
 
+      const saveSignal = buildFavoriteSyncSignal('save', localFavorite, [localFavorite], createdAtMs);
       await updateDoc(doc(db, 'users', user.uid), {
+        favoriteSyncSignal: saveSignal,
+        favoriteSyncSignalUpdatedAt: createdAtMs,
         favoriteCount: increment(1)
-      }).catch(err => console.error("Failed to increment favoriteCount:", err));
+      }).catch(err => console.error("Failed to increment favoriteCount or publish save signal:", err));
 
       showToast('저장되었습니다.');
     } catch (error) {

@@ -6325,17 +6325,23 @@ const toggleCycleVariantSelection = (
         // Studio heart toggle means save / unsave.
         // Cross-device listeners cannot reliably infer a hard delete from a 20-item limited query.
         // Keep a lightweight non-trash tombstone so other devices can receive the change, while the song disappears immediately from Music Note.
+        const unsavedAt = Date.now();
         const unsaveUpdates = sanitizeForFirestore({
           favoriteRemoved: true,
-          favoriteRemovedAt: Date.now(),
-          unlikedAt: Date.now(),
-          unsavedAt: Date.now(),
+          favoriteRemovedAt: unsavedAt,
+          unlikedAt: unsavedAt,
+          unsavedAt,
           saved: false,
           hidden: false,
           favoriteHidden: false,
           deletedAt: null,
           trashedAt: null,
           isPublic: false,
+          // Keep the non-visible unsave signal in the latest live-sync window.
+          // Otherwise another device that keeps the full cache may never see that this saved song was unchecked.
+          createdAtMs: unsavedAt,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
         });
         try {
           await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);

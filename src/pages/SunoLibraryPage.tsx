@@ -573,7 +573,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       // 더보기 버튼/포털 메뉴 내부 클릭은 문서 클릭 닫기에서 제외한다.
       // React onClick 전에 document listener가 메뉴를 바로 닫아버리면
       // 더보기 창이 열리지 않는 것처럼 보일 수 있다.
-      if (target?.closest('[data-floating-menu="true"], [data-more-menu-panel="true"], [data-selection-action-bar="true"]')) {
+      if (target?.closest('[data-floating-menu="true"], [data-more-menu-panel="true"], [data-more-menu-trigger="true"], [data-selection-action-bar="true"]')) {
         return;
       }
       setActiveMenuState(null);
@@ -780,6 +780,46 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       placement,
       maxHeight: Math.round(maxHeight),
     };
+  };
+
+
+  const toggleWorkspaceMoreMenuFromButton = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    group: any,
+    item: any,
+    idx: number,
+    audioUrl: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (multiSelectMode) {
+      openBulkMenuFromButton(event.currentTarget);
+      return;
+    }
+
+    const id = `${group.id}-${idx}`;
+    if (activeMenuState?.id === id) {
+      setActiveMenuState(null);
+      return;
+    }
+
+    setActivePlaylistItemMenu(null);
+    setActiveColorMenu(null);
+    setBulkMenuState(null);
+    setActiveMenuState({
+      id,
+      position: computeWorkspaceMoreMenuPosition(
+        event.currentTarget,
+        getWorkspaceMoreMenuEstimatedHeight(group),
+        192,
+      ),
+      anchorEl: event.currentTarget,
+      group,
+      item,
+      idx,
+      audioUrl,
+    });
   };
 
   const syncWorkspaceMoreMenuPosition = () => {
@@ -6253,30 +6293,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           )}
 
                           <div className="relative shrink-0 ml-2">
-                            <button 
+                            <button
+                              type="button"
                               data-floating-menu="true"
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => { 
-                                e.stopPropagation();
-                                if (multiSelectMode) {
-                                  openBulkMenuFromButton(e.currentTarget);
-                                  return;
-                                }
-                                const id = `${group.id}-${idx}`;
-                                if (activeMenuState?.id === id) {
-                                  setActiveMenuState(null);
-                                } else {
-                                  setActiveMenuState({
-                                    id,
-                                    position: computeWorkspaceMoreMenuPosition(e.currentTarget, getWorkspaceMoreMenuEstimatedHeight(group), 192),
-                                    anchorEl: e.currentTarget,
-                                    group,
-                                    item,
-                                    idx,
-                                    audioUrl
-                                  });
-                                }
-                              }}
+                              data-more-menu-trigger="true"
+                              onClick={(e) => toggleWorkspaceMoreMenuFromButton(e, group, item, idx, audioUrl)}
                               className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#7FBD75] hover:text-[#7FBD75]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
                             >
                               <MoreVertical className="w-4 h-4" />
@@ -7408,6 +7429,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 transformOrigin: activeMenuState.position.placement === 'above' ? 'bottom right' : 'top right',
               }}
               onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
             >
               {(() => {
                 const isFailed = activeMenuState.group?.status === 'failed';

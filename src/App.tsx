@@ -11237,7 +11237,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+              <header className="studio-hero-tone soridraw-studio-theme pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
@@ -11267,7 +11267,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
+            <main className="studio-tone-down soridraw-studio-theme mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}

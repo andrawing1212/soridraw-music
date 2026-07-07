@@ -903,3 +903,568 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   color: #050505 !important;
   stroke: #050505 !important;
 }
+
+/* ==========================================================================
+   SORIDRAW FHD COMPACT MODE (1024px - 2420px PC monitors with standard/zoomed viewports)
+   Provides an elegant, high-density, beautifully balanced compact PC layout.
+   Uses fluid clamp() to ensure proportional scaling without sudden breakpoint jumping
+   when zooming from 100% to 90% or 80% on 1920x1080 (FHD) screens.
+   ========================================================================== */
+@media (min-width: 1024px) and (max-width: 2420px) and (max-height: 1350px) {
+  /* 1. Top Navigation Height & Padding Reduction */
+  div.absolute.left-0.z-\[60\].hidden.w-full.items-center {
+    padding-top: clamp(0.35rem, 0.6vh, 0.45rem) !important; /* Extremely neat navbar height */
+    padding-bottom: clamp(0.35rem, 0.6vh, 0.45rem) !important;
+  }
+  
+  /* Slightly decrease logo font size and navigation buttons padding/gap */
+  .font-display.text-\[22px\] {
+    font-size: clamp(17px, 1.1vw, 19px) !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 {
+    gap: 0.2rem !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 button {
+    height: 2.125rem !important; /* h-8.5 */
+    padding-left: clamp(0.5rem, 0.8vw, 0.625rem) !important;
+    padding-right: clamp(0.5rem, 0.8vw, 0.625rem) !important;
+    font-size: 12.5px !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 button svg {
+    width: 1.0625rem !important;
+    height: 1.0625rem !important;
+  }
+  
+  /* Decreasing navigation right side button sizes and padding */
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 {
+    gap: 0.35rem !important;
+  }
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 a,
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button {
+    height: 2rem !important; /* h-8 */
+    width: 2rem !important; /* w-8 */
+  }
+  /* Profile button needs to adjust max-width and internal padding */
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button.max-w-\[54px\] {
+    width: auto !important;
+    max-width: 130px !important;
+    padding-left: 0.45rem !important;
+    padding-right: 0.45rem !important;
+    font-size: 12px !important;
+  }
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button.max-w-\[54px\] img {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* 2. Common PC Page Container Width & Spacing Reduction (Recreates the spacious QHD editorial feeling) */
+  /* For SunoLibraryPage */
+  .soridraw-library-theme {
+    padding-top: clamp(62px, 5vh, 74px) !important; /* Harmonize layout offset */
+    padding-bottom: clamp(3.5rem, 8vh, 4.5rem) !important;
+  }
+  .soridraw-library-theme .mx-auto.w-full.max-w-\[1500px\] {
+    max-width: clamp(1180px, 70vw, 1340px) !important; /* Restricts max width so left/right margins match QHD aesthetic */
+  }
+  .soridraw-library-theme .space-y-3.md\:space-y-5 {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: clamp(0.25rem, 0.5vh, 0.35rem) !important;
+    margin-bottom: clamp(0.25rem, 0.5vh, 0.35rem) !important;
+  }
+  /* For FavoritesPage */
+  .soridraw-musicnote-theme {
+    max-width: clamp(1180px, 70vw, 1340px) !important; /* Restricts max width so left/right margins match QHD aesthetic */
+    padding-top: clamp(62px, 5vh, 74px) !important;
+    padding-bottom: clamp(1.5rem, 3vh, 2.5rem) !important;
+    padding-left: clamp(1rem, 2vw, 1.5rem) !important;
+    padding-right: clamp(1rem, 2vw, 1.5rem) !important;
+  }
+  .soridraw-musicnote-theme .space-y-4.md\:space-y-5 {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: clamp(0.25rem, 0.5vh, 0.35rem) !important;
+    margin-bottom: clamp(0.25rem, 0.5vh, 0.35rem) !important;
+  }
+
+  /* 3. Page Title & Description Font Sizes */
+  /* Headers: reduce 3xl/5xl titles to something more compact and elegant */
+  .soridraw-library-theme h1.text-3xl.md\:text-5xl,
+  .soridraw-musicnote-theme h1.text-3xl.md\:text-5xl {
+    font-size: clamp(1.5rem, 2vw, 1.875rem) !important; /* ~24px to 30px */
+    line-height: 2.25rem !important;
+  }
+  .soridraw-library-theme h1.text-3xl.md\:text-5xl svg,
+  .soridraw-musicnote-theme h1.text-3xl.md\:text-5xl svg {
+    width: clamp(1.5rem, 2vw, 1.875rem) !important;
+    height: clamp(1.5rem, 2vw, 1.875rem) !important;
+  }
+  .soridraw-library-theme p.text-sm.md\:text-base.mt-2,
+  .soridraw-musicnote-theme p.text-sm.md\:text-base.mt-2 {
+    font-size: clamp(12.5px, 0.8vw, 13.5px) !important;
+    margin-top: 0.15rem !important;
+  }
+
+  /* 4. Filter Buttons, Tabs and Action Bars Padding & Gaps */
+  /* Tabs selection (myNote/sharedNote tabs etc) */
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 {
+    max-width: clamp(320px, 20vw, 380px) !important;
+  }
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 button {
+    padding-top: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    padding-bottom: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    font-size: 11px !important;
+  }
+  /* Library tabs */
+  .soridraw-library-theme .grid-cols-3.gap-0.p-1 {
+    max-width: clamp(360px, 22vw, 420px) !important;
+  }
+  .soridraw-library-theme .grid-cols-3.gap-0.p-1 button {
+    padding-top: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    padding-bottom: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    font-size: 11px !important;
+  }
+
+  /* Folder and playlist buttons scrollbar */
+  .soridraw-folder-drag-scrollbar {
+    padding-top: 4px !important;
+    padding-bottom: 6px !important;
+    margin-top: -2px !important;
+    margin-bottom: -1px !important;
+  }
+  .soridraw-folder-drag-scrollbar button {
+    padding-left: clamp(0.55rem, 0.8vw, 0.75rem) !important;
+    padding-right: clamp(0.55rem, 0.8vw, 0.75rem) !important;
+    padding-top: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    padding-bottom: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    font-size: 11.5px !important;
+    border-radius: 0.375rem !important;
+  }
+
+  /* 5. Music Cards & Lists Layout Compression */
+  /* Song list gap */
+  .soridraw-musicnote-theme div.space-y-4 {
+    gap: clamp(0.3rem, 0.6vh, 0.45rem) !important; /* reduce vertical gap */
+  }
+  /* FavoritesPage: Song card container and item */
+  .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl {
+    border-radius: 0.5rem !important; /* rounded-lg */
+  }
+  .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl .flex.items-center.gap-3.py-4 {
+    padding-top: clamp(0.42rem, 0.8vh, 0.52rem) !important; /* py-1.75 to py-2 */
+    padding-bottom: clamp(0.42rem, 0.8vh, 0.52rem) !important;
+    padding-left: clamp(0.75rem, 1vw, 1rem) !important; /* tighter layout bounds */
+    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
+    gap: 0.45rem !important;
+  }
+  /* Shrink play/music icon box in cards */
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-11.w-11,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-11.w-11,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-12.md\:w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-12.md\:w-12 {
+    width: clamp(1.875rem, 3.5vh, 2.125rem) !important; /* snug thumbnail size */
+    height: clamp(1.875rem, 3.5vh, 2.125rem) !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 h3.text-\[15px\] {
+    font-size: 13px !important;
+  }
+
+  /* SunoLibraryPage: Group header and list */
+  .soridraw-library-theme .space-y-4.md\:space-y-5 {
+    gap: clamp(0.35rem, 0.6vh, 0.45rem) !important;
+  }
+  .soridraw-library-theme .rounded-2xl {
+    border-radius: 0.5rem !important; /* rounded-lg */
+  }
+  /* Group Header */
+  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 {
+    padding-top: clamp(0.42rem, 0.8vh, 0.52rem) !important;
+    padding-bottom: clamp(0.42rem, 0.8vh, 0.52rem) !important;
+    padding-left: clamp(0.75rem, 1vw, 1rem) !important;
+    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
+  }
+  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 .w-10.h-10 {
+    width: clamp(1.625rem, 3vh, 1.875rem) !important;
+    height: clamp(1.625rem, 3vh, 1.875rem) !important;
+  }
+  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 h3 {
+    font-size: 13px !important;
+  }
+  /* Tracks */
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 {
+    padding-top: clamp(0.38rem, 0.7vh, 0.48rem) !important; /* py-1.5 to py-1.75 */
+    padding-bottom: clamp(0.38rem, 0.7vh, 0.48rem) !important;
+    padding-left: clamp(0.75rem, 1vw, 1rem) !important;
+    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
+  }
+  /* Play button size */
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 .relative.w-12.h-12,
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 button.w-12.h-12 {
+    width: clamp(1.875rem, 3.5vh, 2.125rem) !important;
+    height: clamp(1.875rem, 3.5vh, 2.125rem) !important;
+  }
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 h4.text-sm.md\:text-base {
+    font-size: 12.5px !important;
+  }
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 p.text-xs {
+    font-size: 10.5px !important;
+  }
+
+  /* 6. Utility Elements & Search Bar Shrink */
+  .soridraw-library-theme div.relative.flex-1.max-w-md,
+  .soridraw-musicnote-theme div.relative.flex-1.max-w-md {
+    max-width: clamp(240px, 16vw, 300px) !important;
+  }
+  .soridraw-library-theme input.w-full.rounded-xl,
+  .soridraw-musicnote-theme input.w-full.rounded-xl,
+  .soridraw-library-theme input.w-full.rounded-2xl,
+  .soridraw-musicnote-theme input.w-full.rounded-2xl {
+    height: 36px !important;
+    padding-top: 0.3rem !important;
+    padding-bottom: 0.3rem !important;
+    font-size: 11.5px !important;
+  }
+  /* Actions/sync buttons */
+  .soridraw-library-theme button.h-\[46px\].w-\[46px\],
+  .soridraw-musicnote-theme button.h-\[46px\].w-\[46px\] {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 0.375rem !important;
+  }
+  .soridraw-library-theme button.h-\[46px\].w-\[46px\] svg,
+  .soridraw-musicnote-theme button.h-\[46px\].w-\[46px\] svg {
+    width: 0.8125rem !important;
+    height: 0.8125rem !important;
+  }
+  
+  /* Bulk select action bars / Keyword bottom strips */
+  .favorite-keyword-strip.fixed,
+  div.fixed.bottom-5.left-1\/2.z-\[170\] {
+    bottom: 0.75rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    gap: 0.3rem !important;
+  }
+  .favorite-keyword-strip.fixed button,
+  div.fixed.bottom-5.left-1\/2.z-\[170\] button {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    font-size: 11px !important;
+  }
+
+  /* ==========================================================================
+     SORIDRAW STUDIO FHD COMPACT MODE
+     Provides an elegant, high-density, beautifully balanced compact PC Studio layout.
+     ========================================================================== */
+  
+  /* 1. Header & Container Width Alignment (Perfect visual match between banner & content) */
+  header.soridraw-studio-theme {
+    padding-top: clamp(60px, 5.5vh, 74px) !important;
+  }
+  .soridraw-studio-theme .mx-auto.w-full.max-w-\[1500px\],
+  main.soridraw-studio-theme {
+    max-width: clamp(1180px, 70vw, 1340px) !important;
+  }
+  .soridraw-studio-theme .sori-studio-logo-text {
+    font-size: clamp(30px, 2.4vw, 40px) !important;
+  }
+  .soridraw-studio-theme .sori-studio-logo-text svg {
+    width: clamp(1.75rem, 2.2vw, 2.25rem) !important;
+    height: clamp(1.75rem, 2.2vw, 2.25rem) !important;
+  }
+
+  /* 1.1 Left Collapsed Generate Button Alignment (Always syncs with header/main left boundary) */
+  .soridraw-generate-heartbeat {
+    left: max(1.25rem, calc((100vw - clamp(1180px, 70vw, 1340px)) / 2 - 4.25rem)) !important;
+    height: clamp(54px, 7.5vh, 64px) !important;
+    width: clamp(54px, 5.4vh, 60px) !important;
+  }
+
+  /* 2. Main Layout Container Padding & Gap */
+  main.soridraw-studio-theme {
+    padding-top: clamp(0.75rem, 1.5vh, 1.25rem) !important;
+    padding-bottom: clamp(0.75rem, 1.5vh, 1.25rem) !important;
+  }
+  main.soridraw-studio-theme.space-y-7,
+  main.soridraw-studio-theme > * + * {
+    margin-top: clamp(1rem, 2.2vh, 1.5rem) !important;
+  }
+  
+  /* Grid selection section spacing reduction */
+  .soridraw-studio-theme .grid.grid-cols-1.gap-5 {
+    gap: clamp(0.75rem, 1.5vh, 1.125rem) !important;
+  }
+  .soridraw-studio-theme .grid.grid-cols-1.md\:grid-cols-2.gap-x-5.gap-y-7 {
+    gap-x: clamp(0.75rem, 1.5vh, 1.125rem) !important;
+    gap-y: clamp(0.875rem, 1.8vh, 1.25rem) !important;
+  }
+
+  /* 3. Studio Menu Cards */
+  .soridraw-studio-theme .soridraw-studio-menu-card {
+    padding: clamp(1.1rem, 1.6vh, 1.35rem) !important;
+    border-radius: clamp(16px, 1.6vh, 20px) !important;
+  }
+  
+  /* Storyboard Card specific compact adjustments (Fixing the "card remains huge" bug) */
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center {
+    padding: clamp(0.9rem, 1.4vh, 1.15rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center div.w-11.h-11 {
+    width: clamp(2.125rem, 3.8vh, 2.375rem) !important;
+    height: clamp(2.125rem, 3.8vh, 2.375rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center h3.text-base.md\:text-lg {
+    font-size: clamp(14.5px, 0.95vw, 16px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center p.text-xs.md\:text-sm {
+    font-size: clamp(11.5px, 0.78vw, 12.5px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center button {
+    height: clamp(30px, 4vh, 34px) !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    font-size: clamp(11px, 0.75vw, 12px) !important;
+    border-radius: clamp(8px, 0.9vh, 10px) !important;
+  }
+  
+  /* Card Top Title Block spacing & font-size */
+  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 {
+    margin-bottom: clamp(0.6rem, 1vh, 0.75rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card h3 {
+    font-size: clamp(16.5px, 1.1vw, 18.5px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card h3 span.w-1.5 {
+    height: 1.25rem !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card h3 span.ml-1.5 {
+    font-size: clamp(12px, 0.8vw, 13.5px) !important;
+  }
+  
+  /* Card top actions (lock, reset, randomized status buttons) */
+  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 button {
+    padding: clamp(0.45rem, 0.7vh, 0.52rem) !important;
+    border-radius: clamp(8px, 0.8vh, 10px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 button svg {
+    width: clamp(13px, 0.8vw, 14.5px) !important;
+    height: clamp(13px, 0.8vw, 14.5px) !important;
+  }
+
+  /* 4. Keyword Grids & Selection Buttons */
+  .soridraw-studio-theme .soridraw-expand-content div.grid-cols-2 {
+    gap: clamp(0.45rem, 0.7vh, 0.58rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-content button.min-h-\[58px\] {
+    min-h: clamp(44px, 5.2vh, 48px) !important;
+    padding-top: clamp(0.4rem, 0.7vh, 0.48rem) !important;
+    padding-bottom: clamp(0.4rem, 0.7vh, 0.48rem) !important;
+    padding-left: clamp(0.5rem, 0.8vw, 0.65rem) !important;
+    padding-right: clamp(0.5rem, 0.8vw, 0.65rem) !important;
+    border-radius: clamp(10px, 1.2vh, 12px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-content button.min-h-\[58px\] span {
+    font-size: clamp(12.5px, 0.82vw, 13.8px) !important;
+  }
+  
+  /* Selection Counter Badges (Main & Point) */
+  .soridraw-studio-theme .soridraw-clearable-badge {
+    width: clamp(15.5px, 1.8vh, 17px) !important;
+    height: clamp(15.5px, 1.8vh, 17px) !important;
+    font-size: clamp(8px, 0.8vh, 9px) !important;
+    top: 2.5px !important;
+    right: 2.5px !important;
+    left: auto !important;
+  }
+  .soridraw-studio-theme .soridraw-count-badge-point {
+    left: 2.5px !important;
+    right: auto !important;
+  }
+
+  /* 5. Expand / Compact Bottom Summary Cards */
+  .soridraw-studio-theme .soridraw-expand-summary {
+    margin-top: clamp(0.7rem, 1.1vh, 0.9rem) !important;
+    height: clamp(44px, 5.4vh, 48px) !important;
+    border-radius: clamp(10px, 1.2vh, 12px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-summary p,
+  .soridraw-studio-theme .soridraw-expand-summary span {
+    font-size: clamp(11px, 0.78vw, 12px) !important;
+  }
+  
+  /* Direct input pencil button */
+  .soridraw-studio-theme .soridraw-direct-input-button {
+    width: clamp(30px, 3.8vh, 34px) !important;
+    height: clamp(30px, 3.8vh, 34px) !important;
+    right: 3px !important;
+  }
+  .soridraw-studio-theme .soridraw-direct-input-button svg {
+    width: clamp(13px, 1.7vh, 14.5px) !important;
+    height: clamp(13px, 1.7vh, 14.5px) !important;
+  }
+  
+  /* Direct input inline editing fields and buttons */
+  .soridraw-studio-theme .soridraw-expand-summary input {
+    font-size: clamp(11px, 0.78vw, 12px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-summary button {
+    width: clamp(24px, 2.8vh, 28px) !important;
+    height: clamp(24px, 2.8vh, 28px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-summary button svg {
+    width: clamp(12px, 1.4vh, 14px) !important;
+    height: clamp(12px, 1.4vh, 14px) !important;
+  }
+
+  /* 6. Tempo & Structural Controllers Layout Spacing */
+  .soridraw-studio-theme .mb-4 {
+    margin-bottom: clamp(0.7rem, 1.4vh, 0.95rem) !important;
+  }
+
+  /* 7. Command Input / Direct Writing Area Adjustments */
+  .soridraw-studio-theme .soridraw-studio-command-card {
+    border-radius: clamp(12px, 1.4vh, 16px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card textarea {
+    font-size: clamp(14px, 0.92vw, 15px) !important;
+    padding-top: clamp(0.8rem, 1.4vh, 1rem) !important;
+    padding-bottom: clamp(0.8rem, 1.4vh, 1rem) !important;
+    padding-left: clamp(2.2rem, 3.2vw, 2.5rem) !important;
+    padding-right: clamp(10.5rem, 14vw, 12.5rem) !important;
+    min-height: clamp(50px, 5.8vh, 54px) !important;
+    border-radius: clamp(12px, 1.4vh, 16px) !important;
+  }
+  
+  /* Placeholder overlay adjustment */
+  .soridraw-studio-theme .soridraw-studio-command-card div.pointer-events-none {
+    font-size: clamp(12.5px, 0.85vw, 13.8px) !important;
+    left: clamp(2.2rem, 3.2vw, 2.5rem) !important;
+    right: clamp(10.5rem, 14vw, 12.5rem) !important;
+  }
+  
+  /* Left search icon adjustment */
+  .soridraw-studio-theme .soridraw-studio-command-card div.absolute.top-6.left-4 {
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    left: clamp(0.8rem, 1.4vw, 1rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card div.absolute.top-6.left-4 svg {
+    width: clamp(16px, 1.1vw, 18px) !important;
+    height: clamp(16px, 1.1vw, 18px) !important;
+  }
+  
+  /* Right Side X/Reset Button position and size */
+  .soridraw-studio-theme .soridraw-studio-command-card button.soridraw-no-active-translate {
+    width: clamp(26px, 3vh, 30px) !important;
+    height: clamp(26px, 3vh, 30px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-36,
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-40 {
+    right: clamp(6.1rem, 9vw, 7.6rem) !important;
+  }
+  
+  /* Direct Writing Toggle Button */
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 {
+    right: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 button {
+    min-height: clamp(32px, 4vh, 36px) !important;
+    font-size: clamp(11px, 0.78vw, 12px) !important;
+    padding-left: clamp(0.7rem, 1.1vw, 0.9rem) !important;
+    padding-right: clamp(0.7rem, 1.1vw, 0.9rem) !important;
+    border-radius: clamp(7px, 0.9vh, 9px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 button svg {
+    width: clamp(13px, 1.6vh, 14.5px) !important;
+    height: clamp(13px, 1.6vh, 14.5px) !important;
+  }
+  
+  /* Direct lyrics textarea box size */
+  .soridraw-studio-theme textarea[placeholder*="가사초안"] {
+    font-size: clamp(12px, 0.78vw, 13px) !important;
+    padding: clamp(0.7rem, 1.3vh, 0.9rem) !important;
+    border-radius: clamp(10px, 1.3vh, 12px) !important;
+  }
+
+  /* 8. Floating Actions Generation Panel Adjustments */
+  div.fixed.bottom-5.md\:bottom-7.left-0 {
+    bottom: clamp(0.75rem, 1.8vh, 1.25rem) !important;
+  }
+  div.fixed.bottom-5.md\:bottom-7.left-0 div.flex.flex-row.items-stretch {
+    padding: clamp(0.35rem, 0.9vh, 0.5rem) !important;
+    border-radius: clamp(16px, 1.8vh, 20px) !important;
+    gap: clamp(0.35rem, 0.9vw, 0.55rem) !important;
+  }
+
+  /* 9. Portal Modal & Popup Adjustments (Cohesive screen density scaling) */
+  
+  /* 9.1 Storyboard Modal & Vocal Member Editor Modal (originally max-w-4xl, max-h-[88vh]) */
+  .fixed.inset-0.z-\[9999\] .w-full.max-w-4xl,
+  .fixed.inset-0.z-\[10000\] .relative.flex.max-h-\[88vh\].w-full.max-w-4xl {
+    max-width: clamp(820px, 52vw, 900px) !important;
+    max-height: clamp(72vh, 76vh, 78vh) !important;
+  }
+  
+  /* 9.2 Cycle Section Popup / Keyword More Popup (originally max-w-2xl, max-h-[82vh]) */
+  .fixed.inset-0.z-\[300\] .relative.z-10.w-full.max-w-2xl {
+    max-width: clamp(600px, 40vw, 660px) !important;
+    max-height: clamp(68vh, 72vh, 74vh) !important;
+  }
+  
+  /* 9.3 Global Search Popup (originally max-w-3xl) */
+  .fixed.inset-0.z-\[10000\] .w-full.max-w-3xl {
+    max-width: clamp(660px, 44vw, 720px) !important;
+  }
+
+  /* 9.4 Suno Api / Custom Note Settings / Song Detail Modals */
+  .fixed.inset-0.z-\[100\] .relative.w-full.max-w-md {
+    max-width: clamp(380px, 26vw, 420px) !important;
+  }
+  .fixed.inset-0.z-\[20000\] .w-full.max-w-2xl,
+  .fixed.inset-0.z-\[260\] .relative.w-full {
+    max-width: clamp(600px, 40vw, 660px) !important;
+    max-height: clamp(68vh, 72vh, 74vh) !important;
+  }
+  
+  /* 9.5 Inner Padding & Gap reduction for modas/popups to harmonize scale */
+  .fixed.inset-0.z-\[9999\] .px-4.md\:px-5.py-4,
+  .fixed.inset-0.z-\[10000\] .px-5.py-4,
+  .fixed.inset-0.z-\[300\] .px-5.py-4 {
+    padding-top: clamp(0.7rem, 1.2vh, 0.85rem) !important;
+    padding-bottom: clamp(0.7rem, 1.2vh, 0.85rem) !important;
+    padding-left: clamp(1rem, 1.5vw, 1.2rem) !important;
+    padding-right: clamp(1rem, 1.5vw, 1.2rem) !important;
+  }
+  
+  /* Modal Headers font-size and spacing */
+  .fixed.inset-0 h2.text-xl,
+  .fixed.inset-0 h3.text-base.md\:text-lg,
+  .fixed.inset-0 h4.text-lg {
+    font-size: clamp(15px, 1vw, 16.5px) !important;
+  }
+  .fixed.inset-0 h3.text-2xl {
+    font-size: clamp(18.5px, 1.2vw, 21px) !important;
+  }
+  
+  /* Modal action buttons in header */
+  .fixed.inset-0 button {
+    height: clamp(30px, 3.8vh, 33px) !important;
+    font-size: clamp(11px, 0.75vw, 11.5px) !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .fixed.inset-0 button svg {
+    width: clamp(12.5px, 1.6vh, 14px) !important;
+    height: clamp(12.5px, 1.6vh, 14px) !important;
+  }
+  
+  /* Grid selection within modas/popups */
+  .fixed.inset-0 .grid {
+    gap: clamp(0.38rem, 0.65vh, 0.52rem) !important;
+  }
+  .fixed.inset-0 .grid button {
+    min-height: clamp(36px, 4.4vh, 42px) !important;
+    border-radius: clamp(8px, 0.9vh, 10px) !important;
+  }
+  .fixed.inset-0 .grid button span {
+    font-size: clamp(11px, 0.76vw, 12.2px) !important;
+  }
+}

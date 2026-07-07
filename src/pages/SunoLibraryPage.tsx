@@ -567,18 +567,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
   useEffect(() => {
-    const handleGlobalDismiss = () => {
+    const handleGlobalClick = () => {
       setActiveMenuState(null);
       setActivePlaylistItemMenu(null);
       setActiveColorMenu(null);
       setBulkMenuState(null);
     };
-    document.addEventListener('click', handleGlobalDismiss);
-    window.addEventListener('scroll', handleGlobalDismiss, { passive: true });
-    return () => {
-      document.removeEventListener('click', handleGlobalDismiss);
-      window.removeEventListener('scroll', handleGlobalDismiss);
-    };
+    document.addEventListener('click', handleGlobalClick);
+    return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
   // UI States
@@ -746,23 +742,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const computeWorkspaceMoreMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 300, estimatedWidth = 192) => {
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
+    const gap = 6;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || estimatedWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || estimatedHeight;
+    const safeWidth = Math.min(estimatedWidth, Math.max(160, viewportWidth - margin * 2));
+    const safeHeight = Math.min(estimatedHeight, Math.max(120, viewportHeight - margin * 2));
 
-    // 더보기 메뉴를 fixed로 렌더링하므로, 스크롤 보정 없이 pure viewport 좌표를 반환하고 경계에 안전하게 고정(clamp)한다.
-    const viewportTopBelow = rect.bottom + 8;
-    const viewportTopAbove = rect.top - estimatedHeight - 8;
-    const maxViewportTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
-    const shouldOpenAbove = viewportTopBelow + estimatedHeight > window.innerHeight;
-    const preferredViewportTop = shouldOpenAbove ? viewportTopAbove : viewportTopBelow;
+    // Viewport 기준 fixed 메뉴로 계산한다.
+    // 기존 absolute + window.scroll 좌표는 relative 컨테이너 기준과 섞여서
+    // 오른쪽 끝 버튼에서 메뉴가 화면 밖으로 밀리거나 버튼과 떨어져 보였다.
+    const belowTop = rect.bottom + gap;
+    const aboveTop = rect.top - safeHeight - gap;
+    const shouldOpenAbove = belowTop + safeHeight + margin > viewportHeight && aboveTop >= margin;
+    const preferredTop = shouldOpenAbove ? aboveTop : belowTop;
+    const maxTop = Math.max(margin, viewportHeight - safeHeight - margin);
+    const top = Math.min(Math.max(margin, preferredTop), maxTop);
 
-    const viewportTop = Math.min(Math.max(margin, preferredViewportTop), maxViewportTop);
-    const viewportLeft = Math.min(
-      Math.max(margin, rect.right - estimatedWidth),
-      Math.max(margin, window.innerWidth - estimatedWidth - margin)
-    );
+    // 기본은 메뉴 오른쪽 끝을 ... 버튼 오른쪽에 맞춘다.
+    // 오른쪽 경계에 가까우면 자동으로 왼쪽으로 들어오게 clamp한다.
+    const preferredLeft = rect.right - safeWidth;
+    const maxLeft = Math.max(margin, viewportWidth - safeWidth - margin);
+    const left = Math.min(Math.max(margin, preferredLeft), maxLeft);
 
     return {
-      top: viewportTop,
-      left: viewportLeft,
+      top: Math.round(top),
+      left: Math.round(left),
     };
   };
 
@@ -7344,6 +7348,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,
+                transformOrigin: 'top right',
               }}
               onClick={(e) => e.stopPropagation()}
             >

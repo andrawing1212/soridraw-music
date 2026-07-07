@@ -650,6 +650,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const selectedTrackList = useMemo(() => Object.values(selectedTrackMap), [selectedTrackMap]);
   const selectedTrackCount = selectedTrackList.length;
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
+  const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
   const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -741,26 +742,37 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const computeWorkspaceMoreMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 300, estimatedWidth = 192) => {
     const rect = anchorEl.getBoundingClientRect();
+    const rootRect = libraryPageRootRef.current?.getBoundingClientRect();
     const margin = 12;
+    const anchorGap = 8;
 
-    // 뮤직노트처럼 최초 클릭한 문서 위치에 메뉴를 고정한다.
-    // fixed를 쓰면 스크롤 시 메뉴만 화면을 따라다녀서, workspace 더보기 메뉴는 absolute 문서 좌표로 렌더링한다.
-    // 메뉴 항목 수에 따라 실제 높이를 다르게 잡아야 실패곡(3개 메뉴)이 과하게 위로 뜨지 않는다.
-    const viewportTopBelow = rect.bottom + 8;
-    const viewportTopAbove = rect.top - estimatedHeight - 8;
-    const maxViewportTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
-    const shouldOpenAbove = viewportTopBelow + estimatedHeight > window.innerHeight;
-    const preferredViewportTop = shouldOpenAbove ? viewportTopAbove : viewportTopBelow;
+    // 메뉴는 라이브러리 페이지 root 내부 absolute 요소로 렌더링된다.
+    // 그래서 getBoundingClientRect()의 viewport 좌표를 그대로 top/left에 쓰면,
+    // mx-auto 컨테이너의 left/top 오프셋만큼 위치가 밀린다.
+    // 먼저 viewport 안에서 안전한 위치를 잡고, 마지막에 root 기준 좌표로 변환한다.
+    const openBelowTop = rect.bottom + anchorGap;
+    const openAboveTop = rect.top - estimatedHeight - anchorGap;
+    const hasEnoughBelow = openBelowTop + estimatedHeight <= window.innerHeight - margin;
+    const hasEnoughAbove = openAboveTop >= margin;
 
-    const viewportTop = Math.min(Math.max(margin, preferredViewportTop), maxViewportTop);
-    const viewportLeft = Math.min(
-      Math.max(margin, rect.right - estimatedWidth),
+    let viewportTop = hasEnoughBelow || !hasEnoughAbove ? openBelowTop : openAboveTop;
+    viewportTop = Math.min(
+      Math.max(margin, viewportTop),
+      Math.max(margin, window.innerHeight - estimatedHeight - margin)
+    );
+
+    let viewportLeft = rect.right - estimatedWidth;
+    viewportLeft = Math.min(
+      Math.max(margin, viewportLeft),
       Math.max(margin, window.innerWidth - estimatedWidth - margin)
     );
 
+    const rootViewportTop = rootRect?.top ?? 0;
+    const rootViewportLeft = rootRect?.left ?? 0;
+
     return {
-      top: viewportTop + window.scrollY,
-      left: viewportLeft + window.scrollX,
+      top: viewportTop - rootViewportTop,
+      left: viewportLeft - rootViewportLeft,
     };
   };
 
@@ -5495,6 +5507,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   return (
     <div
+      ref={libraryPageRootRef}
       className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;

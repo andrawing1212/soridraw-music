@@ -567,14 +567,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
   useEffect(() => {
-    const handleGlobalClick = () => {
+    const handleGlobalDismiss = () => {
       setActiveMenuState(null);
       setActivePlaylistItemMenu(null);
       setActiveColorMenu(null);
       setBulkMenuState(null);
     };
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+    document.addEventListener('click', handleGlobalDismiss);
+    window.addEventListener('scroll', handleGlobalDismiss, { passive: true });
+    return () => {
+      document.removeEventListener('click', handleGlobalDismiss);
+      window.removeEventListener('scroll', handleGlobalDismiss);
+    };
   }, []);
 
   // UI States
@@ -743,9 +747,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
 
-    // 뮤직노트처럼 최초 클릭한 문서 위치에 메뉴를 고정한다.
-    // fixed를 쓰면 스크롤 시 메뉴만 화면을 따라다녀서, workspace 더보기 메뉴는 absolute 문서 좌표로 렌더링한다.
-    // 메뉴 항목 수에 따라 실제 높이를 다르게 잡아야 실패곡(3개 메뉴)이 과하게 위로 뜨지 않는다.
+    // 더보기 메뉴를 fixed로 렌더링하므로, 스크롤 보정 없이 pure viewport 좌표를 반환하고 경계에 안전하게 고정(clamp)한다.
     const viewportTopBelow = rect.bottom + 8;
     const viewportTopAbove = rect.top - estimatedHeight - 8;
     const maxViewportTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
@@ -759,8 +761,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     );
 
     return {
-      top: viewportTop + window.scrollY,
-      left: viewportLeft + window.scrollX,
+      top: viewportTop,
+      left: viewportLeft,
     };
   };
 
@@ -7338,7 +7340,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,

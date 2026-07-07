@@ -903,3 +903,248 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   color: #050505 !important;
   stroke: #050505 !important;
 }
+
+/* ==========================================================================
+   SORIDRAW FHD COMPACT MODE (1024px - 1920px PC monitors)
+   Improve page breathing room and layout density on 24-inch FHD displays
+   ========================================================================== */
+@media (min-width: 1024px) and (max-width: 1920px) and (max-height: 1100px) {
+  /* 1. Top Navigation Height & Padding Reduction */
+  div.absolute.left-0.z-\[60\].hidden.w-full.items-center {
+    padding-top: 0.5rem !important; /* py-2 (8px) instead of py-3.5 (14px) */
+    padding-bottom: 0.5rem !important; /* py-2 (8px) instead of py-3.5 (14px) */
+  }
+  
+  /* Slightly decrease logo font size and navigation buttons padding/gap */
+  .font-display.text-\[22px\] {
+    font-size: 19px !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 {
+    gap: 0.25rem !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 button {
+    height: 2.25rem !important; /* h-9 */
+    padding-left: 0.625rem !important; /* px-2.5 */
+    padding-right: 0.625rem !important; /* px-2.5 */
+    font-size: 13px !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 button svg {
+    width: 1.125rem !important;
+    height: 1.125rem !important;
+  }
+  
+  /* Decreasing navigation right side button sizes and padding */
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 {
+    gap: 0.375rem !important;
+  }
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 a,
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button {
+    height: 2.125rem !important; /* h-8.5 */
+    width: 2.125rem !important; /* w-8.5 */
+  }
+  /* Profile button needs to adjust max-width and internal padding */
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button.max-w-\[54px\] {
+    width: auto !important;
+    max-width: 140px !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    font-size: 12.5px !important;
+  }
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button.max-w-\[54px\] img {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  /* 2. Common PC Page Container Width & Spacing Reduction */
+  /* For SunoLibraryPage */
+  .soridraw-library-theme {
+    padding-top: 68px !important; /* Reduced from 96px (pt-24) to fit the smaller nav */
+    padding-bottom: 5rem !important; /* pb-20 instead of pb-32 */
+  }
+  .soridraw-library-theme .mx-auto.w-full.max-w-\[1500px\] {
+    max-width: 1280px !important; /* Compact container width */
+  }
+  .soridraw-library-theme .space-y-3.md\:space-y-5 {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse))) !important;
+    margin-bottom: calc(0.375rem * var(--tw-space-y-reverse)) !important;
+  }
+  /* For FavoritesPage */
+  .soridraw-musicnote-theme {
+    max-width: 1280px !important; /* Compact container width */
+    padding-top: 68px !important; /* Reduced from 96px (pt-24) */
+    padding-bottom: 2rem !important; /* Reduced bottom padding */
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+  .soridraw-musicnote-theme .space-y-4.md\:space-y-5 {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: calc(0.375rem * calc(1 - var(--tw-space-y-reverse))) !important;
+    margin-bottom: calc(0.375rem * var(--tw-space-y-reverse)) !important;
+  }
+
+  /* 3. Page Title & Description Font Sizes */
+  /* Headers: reduce 3xl/5xl titles to something more compact (e.g., 2xl/3xl) */
+  .soridraw-library-theme h1.text-3xl.md\:text-5xl,
+  .soridraw-musicnote-theme h1.text-3xl.md\:text-5xl {
+    font-size: 1.625rem !important; /* ~26px */
+    line-height: 2rem !important;
+  }
+  .soridraw-library-theme h1.text-3xl.md\:text-5xl svg,
+  .soridraw-musicnote-theme h1.text-3xl.md\:text-5xl svg {
+    width: 1.625rem !important; /* 26px */
+    height: 1.625rem !important;
+  }
+  .soridraw-library-theme p.text-sm.md\:text-base.mt-2,
+  .soridraw-musicnote-theme p.text-sm.md\:text-base.mt-2 {
+    font-size: 0.8125rem !important; /* ~13px */
+    margin-top: 0.2rem !important;
+  }
+
+  /* 4. Filter Buttons, Tabs and Action Bars Padding & Gaps */
+  /* Tabs selection (myNote/sharedNote tabs etc) */
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 {
+    max-width: 360px !important;
+  }
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 button {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    font-size: 11px !important;
+  }
+  /* Library tabs */
+  .soridraw-library-theme .grid-cols-3.gap-0.p-1 {
+    max-width: 400px !important;
+  }
+  .soridraw-library-theme .grid-cols-3.gap-0.p-1 button {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    font-size: 11px !important;
+  }
+
+  /* Folder and playlist buttons scrollbar */
+  .soridraw-folder-drag-scrollbar {
+    padding-top: 5px !important;
+    padding-bottom: 7px !important;
+    margin-top: -3px !important;
+    margin-bottom: -1px !important;
+  }
+  .soridraw-folder-drag-scrollbar button {
+    padding-left: 0.625rem !important; /* px-2.5 */
+    padding-right: 0.625rem !important; /* px-2.5 */
+    padding-top: 0.35rem !important; /* py-1.5 */
+    padding-bottom: 0.35rem !important; /* py-1.5 */
+    font-size: 11.5px !important; /* text-xs */
+    border-radius: 0.5rem !important; /* rounded-lg */
+  }
+
+  /* 5. Music Cards & Lists Layout Compression */
+  /* Song list gap */
+  .soridraw-musicnote-theme div.space-y-4 {
+    gap: 0.375rem !important; /* reduce vertical gap */
+  }
+  /* FavoritesPage: Song card container and item */
+  .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl {
+    border-radius: 0.625rem !important; /* rounded-lg */
+  }
+  .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl .flex.items-center.gap-3.py-4 {
+    padding-top: 0.5rem !important; /* py-2 instead of py-4 */
+    padding-bottom: 0.5rem !important; /* py-2 instead of py-4 */
+    padding-left: 0.875rem !important; /* px-3.5 instead of px-6 */
+    padding-right: 0.875rem !important; /* px-3.5 instead of px-6 */
+    gap: 0.5rem !important;
+  }
+  /* Shrink play/music icon box in cards */
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-11.w-11,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-11.w-11,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-12.md\:w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-12.md\:w-12 {
+    width: 2.125rem !important; /* w-8.5 */
+    height: 2.125rem !important; /* h-8.5 */
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 h3.text-\[15px\] {
+    font-size: 13px !important;
+  }
+
+  /* SunoLibraryPage: Group header and list */
+  .soridraw-library-theme .space-y-4.md\:space-y-5 {
+    gap: 0.5rem !important;
+  }
+  .soridraw-library-theme .rounded-2xl {
+    border-radius: 0.625rem !important; /* rounded-lg */
+  }
+  /* Group Header */
+  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 {
+    padding-top: 0.5rem !important; /* py-2 */
+    padding-bottom: 0.5rem !important; /* py-2 */
+    padding-left: 0.875rem !important; /* px-3.5 */
+    padding-right: 0.875rem !important; /* px-3.5 */
+  }
+  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 .w-10.h-10 {
+    width: 1.875rem !important; /* w-7.5 */
+    height: 1.875rem !important; /* h-7.5 */
+  }
+  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 h3 {
+    font-size: 13px !important;
+  }
+  /* Tracks */
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 {
+    padding-top: 0.4375rem !important; /* py-1.75 */
+    padding-bottom: 0.4375rem !important; /* py-1.75 */
+    padding-left: 0.875rem !important; /* px-3.5 */
+    padding-right: 0.875rem !important; /* px-3.5 */
+  }
+  /* Play button size */
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 .relative.w-12.h-12,
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 button.w-12.h-12 {
+    width: 2.125rem !important; /* w-8.5 */
+    height: 2.125rem !important; /* h-8.5 */
+  }
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 h4.text-sm.md\:text-base {
+    font-size: 12.5px !important;
+  }
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 p.text-xs {
+    font-size: 10.5px !important;
+  }
+
+  /* 6. Utility Elements & Search Bar Shrink */
+  .soridraw-library-theme div.relative.flex-1.max-w-md,
+  .soridraw-musicnote-theme div.relative.flex-1.max-w-md {
+    max-width: 280px !important;
+  }
+  .soridraw-library-theme input.w-full.rounded-xl,
+  .soridraw-musicnote-theme input.w-full.rounded-xl,
+  .soridraw-library-theme input.w-full.rounded-2xl,
+  .soridraw-musicnote-theme input.w-full.rounded-2xl {
+    height: 38px !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    font-size: 11.5px !important;
+  }
+  /* Actions/sync buttons */
+  .soridraw-library-theme button.h-\[46px\].w-\[46px\],
+  .soridraw-musicnote-theme button.h-\[46px\].w-\[46px\] {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 0.5rem !important; /* rounded-lg */
+  }
+  .soridraw-library-theme button.h-\[46px\].w-\[46px\] svg,
+  .soridraw-musicnote-theme button.h-\[46px\].w-\[46px\] svg {
+    width: 0.8125rem !important;
+    height: 0.8125rem !important;
+  }
+  
+  /* Bulk select action bars / Keyword bottom strips */
+  .favorite-keyword-strip.fixed,
+  div.fixed.bottom-5.left-1\/2.z-\[170\] {
+    bottom: 0.875rem !important;
+    padding-top: 0.4375rem !important; /* py-1.75 */
+    padding-bottom: 0.4375rem !important; /* py-1.75 */
+    gap: 0.375rem !important;
+  }
+  .favorite-keyword-strip.fixed button,
+  div.fixed.bottom-5.left-1\/2.z-\[170\] button {
+    padding-left: 0.625rem !important;
+    padding-right: 0.625rem !important;
+    font-size: 11px !important;
+  }
+}

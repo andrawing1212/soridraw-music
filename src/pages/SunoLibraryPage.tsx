@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import { 
   Settings, Zap, Music, RefreshCw, Loader2, AlertCircle, 
   Search, Filter, PlayCircle, MoreVertical, Download, 
@@ -568,14 +567,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
   useEffect(() => {
-    const handleGlobalClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      // 더보기 버튼/포털 메뉴 내부 클릭은 문서 클릭 닫기에서 제외한다.
-      // React onClick 전에 document listener가 메뉴를 바로 닫아버리면
-      // 더보기 창이 열리지 않는 것처럼 보일 수 있다.
-      if (target?.closest('[data-floating-menu="true"], [data-more-menu-panel="true"], [data-more-menu-trigger="true"], [data-selection-action-bar="true"]')) {
-        return;
-      }
+    const handleGlobalClick = () => {
       setActiveMenuState(null);
       setActivePlaylistItemMenu(null);
       setActiveColorMenu(null);
@@ -632,7 +624,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   interface MenuState {
     id: string;
-    position: { top?: number; left: number; bottom?: number; placement: 'above' | 'below'; maxHeight?: number };
+    position: { top: number; left: number };
     anchorEl?: HTMLElement | null;
     group: any;
     item: any;
@@ -640,7 +632,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     audioUrl: string;
   }
   const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
-  const workspaceMoreMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
   const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
   type MultiSelectContext = 'workspace' | 'playlist' | 'sharedPlaylist';
@@ -751,116 +742,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const computeWorkspaceMoreMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 300, estimatedWidth = 192) => {
     const rect = anchorEl.getBoundingClientRect();
     const margin = 12;
-    const gap = 6;
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || estimatedWidth;
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || estimatedHeight;
-    const safeWidth = Math.min(estimatedWidth, Math.max(160, viewportWidth - margin * 2));
-    const safeHeight = Math.min(estimatedHeight, Math.max(120, viewportHeight - margin * 2));
 
-    // body portal + fixed 메뉴는 viewport 좌표만 사용한다.
-    // bottom 좌표를 섞으면 하단 버튼에서 메뉴가 멀리 뜨거나 안 보이는 문제가 생겨 top 기준으로 통일한다.
-    const preferredLeft = rect.right - safeWidth;
-    const maxLeft = Math.max(margin, viewportWidth - safeWidth - margin);
-    const left = Math.min(Math.max(margin, preferredLeft), maxLeft);
+    // 뮤직노트처럼 최초 클릭한 문서 위치에 메뉴를 고정한다.
+    // fixed를 쓰면 스크롤 시 메뉴만 화면을 따라다녀서, workspace 더보기 메뉴는 absolute 문서 좌표로 렌더링한다.
+    // 메뉴 항목 수에 따라 실제 높이를 다르게 잡아야 실패곡(3개 메뉴)이 과하게 위로 뜨지 않는다.
+    const viewportTopBelow = rect.bottom + 8;
+    const viewportTopAbove = rect.top - estimatedHeight - 8;
+    const maxViewportTop = Math.max(margin, window.innerHeight - estimatedHeight - margin);
+    const shouldOpenAbove = viewportTopBelow + estimatedHeight > window.innerHeight;
+    const preferredViewportTop = shouldOpenAbove ? viewportTopAbove : viewportTopBelow;
 
-    const canOpenBelow = rect.bottom + gap + safeHeight <= viewportHeight - margin;
-    const placement = canOpenBelow ? 'below' as const : 'above' as const;
-    const preferredTop = canOpenBelow
-      ? rect.bottom + gap
-      : rect.top - safeHeight - gap;
-    const maxTop = Math.max(margin, viewportHeight - safeHeight - margin);
-    const top = Math.min(Math.max(margin, preferredTop), maxTop);
-    const maxHeight = placement === 'below'
-      ? Math.max(120, viewportHeight - top - margin)
-      : Math.max(120, rect.top - margin - gap);
-
-    return {
-      top: Math.round(top),
-      left: Math.round(left),
-      placement,
-      maxHeight: Math.round(maxHeight),
-    };
-  };
-
-
-  const toggleWorkspaceMoreMenuFromButton = (
-    event: React.MouseEvent<HTMLButtonElement>,
-    group: any,
-    item: any,
-    idx: number,
-    audioUrl: string,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (multiSelectMode) {
-      openBulkMenuFromButton(event.currentTarget);
-      return;
-    }
-
-    const id = `${group.id}-${idx}`;
-    if (activeMenuState?.id === id) {
-      setActiveMenuState(null);
-      return;
-    }
-
-    setActivePlaylistItemMenu(null);
-    setActiveColorMenu(null);
-    setBulkMenuState(null);
-    setActiveMenuState({
-      id,
-      position: computeWorkspaceMoreMenuPosition(
-        event.currentTarget,
-        getWorkspaceMoreMenuEstimatedHeight(group),
-        192,
-      ),
-      anchorEl: event.currentTarget,
-      group,
-      item,
-      idx,
-      audioUrl,
-    });
-  };
-
-  const syncWorkspaceMoreMenuPosition = () => {
-    if (!activeMenuState?.anchorEl || !workspaceMoreMenuPanelRef.current) return;
-    const panelRect = workspaceMoreMenuPanelRef.current.getBoundingClientRect();
-    const nextPosition = computeWorkspaceMoreMenuPosition(
-      activeMenuState.anchorEl,
-      Math.ceil(panelRect.height || getWorkspaceMoreMenuEstimatedHeight(activeMenuState.group)),
-      Math.ceil(panelRect.width || 192),
+    const viewportTop = Math.min(Math.max(margin, preferredViewportTop), maxViewportTop);
+    const viewportLeft = Math.min(
+      Math.max(margin, rect.right - estimatedWidth),
+      Math.max(margin, window.innerWidth - estimatedWidth - margin)
     );
 
-    if (
-      nextPosition.placement === activeMenuState.position.placement &&
-      Math.abs((nextPosition.top ?? -1) - (activeMenuState.position.top ?? -1)) < 1 &&
-      Math.abs(nextPosition.left - activeMenuState.position.left) < 1 &&
-      Math.abs((nextPosition.maxHeight ?? -1) - (activeMenuState.position.maxHeight ?? -1)) < 1
-    ) {
-      return;
-    }
-
-    setActiveMenuState((prev) => (prev && prev.id === activeMenuState.id
-      ? { ...prev, position: nextPosition }
-      : prev));
-  };
-
-  useLayoutEffect(() => {
-    if (!activeMenuState) return;
-    const frame = window.requestAnimationFrame(syncWorkspaceMoreMenuPosition);
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeMenuState?.id, activeMenuState?.position.top, activeMenuState?.position.left, activeMenuState?.position.placement]);
-
-  useEffect(() => {
-    if (!activeMenuState) return;
-    const handleReposition = () => syncWorkspaceMoreMenuPosition();
-    window.addEventListener('resize', handleReposition);
-    window.addEventListener('scroll', handleReposition, true);
-    return () => {
-      window.removeEventListener('resize', handleReposition);
-      window.removeEventListener('scroll', handleReposition, true);
+    return {
+      top: viewportTop + window.scrollY,
+      left: viewportLeft + window.scrollX,
     };
-  }, [activeMenuState?.id]);
+  };
 
   interface DeleteAction {
     groupId: string;
@@ -5601,11 +5503,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         if (multiSelectMode && isSelectionActionTarget) return;
 
-        // 더보기 버튼 자체는 메뉴 닫기 처리보다 먼저 통과시켜야 한다.
-        // 그렇지 않으면 열린 메뉴가 있는 상태에서 다른 ... 버튼을 눌렀을 때
-        // capture 단계에서 이벤트가 막혀 새 메뉴가 열리지 않는다.
-        if (target.closest('[data-floating-menu="true"]')) return;
-
         if (hasOpenMoreMenu && !target.closest('[data-more-menu-panel="true"]')) {
           e.preventDefault();
           e.stopPropagation();
@@ -5614,6 +5511,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           setBulkMenuState(null);
           return;
         }
+
+        if (target.closest('[data-floating-menu="true"]')) return;
 
         if (multiSelectMode && consumeLibraryDragSelectClick(e)) return;
 
@@ -6296,8 +6195,28 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <button
                               type="button"
                               data-floating-menu="true"
-                              data-more-menu-trigger="true"
-                              onClick={(e) => toggleWorkspaceMoreMenuFromButton(e, group, item, idx, audioUrl)}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onClick={(e) => { 
+                                e.stopPropagation();
+                                if (multiSelectMode) {
+                                  openBulkMenuFromButton(e.currentTarget);
+                                  return;
+                                }
+                                const id = `${group.id}-${idx}`;
+                                if (activeMenuState?.id === id) {
+                                  setActiveMenuState(null);
+                                } else {
+                                  setActiveMenuState({
+                                    id,
+                                    position: computeWorkspaceMoreMenuPosition(e.currentTarget, getWorkspaceMoreMenuEstimatedHeight(group), 192),
+                                    anchorEl: e.currentTarget,
+                                    group,
+                                    item,
+                                    idx,
+                                    audioUrl
+                                  });
+                                }
+                              }}
                               className={`w-10 h-10 flex items-center justify-center transition-all ${multiSelectMode ? 'text-[#7FBD75] hover:text-[#7FBD75]/80' : 'rounded-full hover:bg-white/10 text-white/50'}`}
                             >
                               <MoreVertical className="w-4 h-4" />
@@ -7414,23 +7333,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
 
       <AnimatePresence>
-        {activeMenuState && typeof document !== 'undefined' && createPortal(
-          <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              ref={workspaceMoreMenuPanelRef}
-              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary,#202020)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto text-[var(--text-primary,#f5f5f5)]"
+        {activeMenuState && (
+          <>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: -10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              data-floating-menu="true" data-more-menu-panel="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,
-                maxHeight: activeMenuState.position.maxHeight,
-                overflowY: 'auto',
-                transformOrigin: activeMenuState.position.placement === 'above' ? 'bottom right' : 'top right',
               }}
               onClick={(e) => e.stopPropagation()}
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
             >
               {(() => {
                 const isFailed = activeMenuState.group?.status === 'failed';
@@ -7471,8 +7385,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   {m.label}
                 </button>
               ))}
-            </motion.div>,
-          document.body
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

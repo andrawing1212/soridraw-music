@@ -1261,24 +1261,24 @@ function GenreHierarchySelectorComponent({
           {activeGroup && (
             <motion.div
               key="genre-hierarchy-modal"
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
+              exit={{ opacity: 1 }}
+              transition={{ duration: 0 }}
               className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none"
             >
               <div
                 className={cn(
-                  "absolute inset-0 bg-black/40 transition-all duration-150",
+                  "absolute inset-0 bg-black/40 transition-none",
                   isBackdropBlurReady ? "backdrop-blur-sm" : "backdrop-blur-0"
                 )}
                 onClick={applyModalChanges}
               />
               <motion.div
-                initial={{ opacity: 0, scale: 0.97, y: 10 }}
+                initial={{ opacity: 1, scale: 1, y: 0 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97, y: 10 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
+                exit={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0 }}
                 className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10"
                 onClick={(e) => e.stopPropagation()}
                 onWheel={blockModalOuterScroll}

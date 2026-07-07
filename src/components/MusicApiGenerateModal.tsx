@@ -444,9 +444,10 @@ export default function MusicApiGenerateModal({
       }}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 12 }}
+        initial={{ opacity: 1, scale: 1, y: 0 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 12 }}
+        exit={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0 }}
         className={`w-full max-w-md max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
         onMouseDown={(event) => {
           event.stopPropagation();

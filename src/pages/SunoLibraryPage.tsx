@@ -5964,8 +5964,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               return (
                 <motion.div
                   key={group.id}
-                  initial={{ opacity: 0, x: -10 }}
+                  initial={{ opacity: 1, x: 0 }}
                   animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0 }}
                   className="bg-[#151515] border border-black/24 rounded-2xl shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
                 >
                   {/* Group Header */}

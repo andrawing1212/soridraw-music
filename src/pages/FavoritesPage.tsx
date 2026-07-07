@@ -178,17 +178,18 @@ function SunoUrlMobileGuideButton() {
       <AnimatePresence>
         {isGuideOpen && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className="fixed inset-0 z-[220] flex items-center justify-center bg-black/76 px-4 py-6 backdrop-blur-md"
             onClick={requestGuideClose}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.96, y: 14 }}
+              initial={{ opacity: 1, scale: 1, y: 0 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 14 }}
-              transition={{ duration: 0.18 }}
+              exit={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0 }}
               className="max-h-[88vh] w-full max-w-[620px] overflow-y-auto rounded-[28px] border border-[#FF7066]/22 bg-[#181818] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.62)]"
               onClick={(event) => event.stopPropagation()}
             >
@@ -5233,8 +5234,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 <motion.div
                   key={song.id}
                   data-selection-keep="true"
-                  initial={{ opacity: 0, x: -10 }}
+                  initial={{ opacity: 1, x: 0 }}
                   animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0 }}
                   onMouseDown={(event) => {
                     handleSelectionDragStart(event, song.id);
                     handleCardLongPressStart(event, song);
@@ -5299,6 +5301,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   }}
                   className={cn(
                     "group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
+                    (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "z-[220]" : "z-0",
                     isSelectionMode ? "cursor-pointer" : "",
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
                   )}
@@ -5382,7 +5385,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     />
 
                     {activeFavoriteColorMenuId === song.id && (
-                      <div data-favorite-color-menu="true" className="absolute left-14 md:left-20 top-[54px] z-40 flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                      <div data-favorite-color-menu="true" className="absolute left-14 md:left-20 top-[54px] z-[260] flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                         {FAVORITE_COLOR_OPTIONS.map((color) => (
                           <button
                             key={color.value}
@@ -5506,7 +5509,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.9, y: -10 }}
                               transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                              className="absolute right-0 top-11 z-50 w-40 overflow-hidden rounded-xl border border-black/15 bg-[#2a2a2a] py-1 text-sm shadow-2xl"
+                              className="absolute right-0 top-11 z-[260] w-40 overflow-hidden rounded-xl border border-black/15 bg-[#2a2a2a] py-1 text-sm shadow-2xl"
                               onClick={(event) => event.stopPropagation()}
                             >
                             {isMusicNoteSharedView ? (
@@ -5614,18 +5617,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className="fixed inset-0 z-[155] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
             onClick={() => setMusicNoteFolderRenameArgs(null)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 14, scale: 0.96 }}
+              initial={{ opacity: 1, y: 0, scale: 1 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 14, scale: 0.96 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0 }}
               className="w-full max-w-[380px] overflow-hidden rounded-[24px] border border-[#FF5C52]/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
@@ -5679,18 +5682,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className="fixed inset-0 z-[155] flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
             onClick={() => setMusicNoteFolderDeleteArgs(null)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 14, scale: 0.96 }}
+              initial={{ opacity: 1, y: 0, scale: 1 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 14, scale: 0.96 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0 }}
               className="w-full max-w-[380px] overflow-hidden rounded-[24px] border border-red-400/25 bg-[#181818] shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
@@ -5785,7 +5788,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         data-selection-keep="true"
                         data-floating-menu="true"
                         data-more-menu-panel="true"
-                        className="absolute bottom-[calc(100%+12px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
+                        className="absolute bottom-[calc(100%+12px)] right-0 z-[260] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
                       >
                         <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
                         <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
@@ -5854,7 +5857,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         data-selection-keep="true"
                         data-floating-menu="true"
                         data-more-menu-panel="true"
-                        className="absolute bottom-[calc(100%+12px)] right-0 w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
+                        className="absolute bottom-[calc(100%+12px)] right-0 z-[260] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#1f1f1f]/95 py-2 text-sm text-white shadow-2xl backdrop-blur-xl"
                       >
                         <button onClick={selectAllVisibleFavorites} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><CheckSquare className="h-4 w-4" />전체선택</button>
                         <button onClick={() => exitSelectionMode()} className="flex w-full items-center gap-3 px-4 py-2.5 text-left font-bold text-white/80 hover:bg-white/5"><Square className="h-4 w-4" />선택해제</button>
@@ -5871,15 +5874,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       <AnimatePresence>
         {showMusicNoteKakaoWarning && isMusicNoteSharedView && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className="fixed inset-0 z-[300] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
           >
             <motion.div
-              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              initial={{ opacity: 1, y: 0, scale: 1 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 24, scale: 0.96 }}
+              exit={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0 }}
               className="w-full max-w-sm rounded-[2rem] border border-black/20 bg-[#1f1f1f] p-7 text-center shadow-2xl"
             >
               <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#FF5C52]/20 text-[#FF8B84]">
@@ -5921,16 +5926,18 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       <AnimatePresence>
         {musicNoteShareInfo && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className="fixed inset-0 z-[240] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
             onClick={() => setMusicNoteShareInfo(null)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 1, scale: 1 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0 }}
               className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[#FF5C52]/25 bg-[#1a1a1a] p-6 shadow-2xl"
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
@@ -6000,10 +6007,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <motion.div
             data-selection-keep="true"
             data-floating-menu="true"
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.16 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className={cn(
               "fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center",
               isSelectionMode && selectedSongIds.length > 0
@@ -6015,10 +6022,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             <motion.div
               data-selection-keep="true"
               data-floating-menu="true"
-              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              initial={{ opacity: 1, y: 0, scale: 1 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 0, scale: 1 }}
-              transition={{ duration: 0.08, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0 }}
               className="w-full max-w-[420px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
               onClick={(event) => event.stopPropagation()}
             >
@@ -6088,8 +6095,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
       <AnimatePresence>
         {sunoUrlEditorSong && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={closeFavoriteSunoUrlEditor}>
-            <motion.div initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 12 }} transition={{ duration: 0.18 }} className="w-full max-w-[520px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <motion.div initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} transition={{ duration: 0 }} className="fixed inset-0 z-[320] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={closeFavoriteSunoUrlEditor}>
+            <motion.div initial={{ opacity: 1, scale: 1, y: 0 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0 }} className="w-full max-w-[520px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]/80">suno url</div>
@@ -6163,19 +6170,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       {/* Lyrics Modal */}
       <AnimatePresence>
         {selectedSong && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 md:p-6 font-sans">
+          <div className="fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 1 }}
+              transition={{ duration: 0 }}
               onClick={() => closeSelectedSong()}
               className="absolute inset-0 bg-black/72 backdrop-blur-[7px]"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.965, y: 18 }}
+              initial={{ opacity: 1, scale: 1, y: 0 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 18 }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
+              exit={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0 }}
               className="relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
               onClick={(e) => e.stopPropagation()}
               onClickCapture={(e) => {

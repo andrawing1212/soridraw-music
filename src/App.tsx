@@ -3657,13 +3657,10 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [isStudioLoaded, setIsStudioLoaded] = useState(false);
+  const [isStudioLoaded, setIsStudioLoaded] = useState(location.pathname === '/studio');
   useEffect(() => {
     if (location.pathname === '/studio') {
-      const handle = requestAnimationFrame(() => {
-        setIsStudioLoaded(true);
-      });
-      return () => cancelAnimationFrame(handle);
+      setIsStudioLoaded(true);
     } else {
       setIsStudioLoaded(false);
     }
@@ -11220,10 +11217,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className={cn(
-              "studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7 transition-opacity duration-300",
-              isStudioLoaded ? "opacity-100" : "opacity-0 pointer-events-none"
-            )}>
+            <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}
@@ -11541,9 +11535,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               {isSituationExpanded && (
                 <Portal>
                   <motion.div
-                    initial={{ opacity: 0 }}
+                    initial={{ opacity: 1 }}
                     animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    exit={{ opacity: 1 }}
+                    transition={{ duration: 0 }}
                     className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm px-3 py-5"
                     onPointerDown={(event) => {
                       storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
@@ -11561,10 +11556,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     }}
                   >
                     <motion.div
-                      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                      initial={{ opacity: 1, scale: 1, y: 0 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                      transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
+                      exit={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ duration: 0 }}
                       className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -13735,16 +13730,18 @@ function GuideModal({ isOpen, onClose, applyTemplate }: { isOpen: boolean; onClo
     <Portal>
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <motion.div 
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          exit={{ opacity: 1 }}
+          transition={{ duration: 0 }}
           onClick={onClose}
           className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         />
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 1, scale: 1, y: 0 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          exit={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0 }}
           className="relative w-full max-w-md bg-[var(--card-bg)] border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
         >
           <div className="p-6">
@@ -14331,17 +14328,18 @@ function GenreSelectModal({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{ opacity: 1 }}
+      transition={{ duration: 0 }}
       className="fixed inset-0 z-[120] bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm flex items-center justify-center px-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+        initial={{ opacity: 1, y: 0, scale: 1 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 24, scale: 0.96 }}
-        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+        exit={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0 }}
         className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
@@ -15073,7 +15071,7 @@ function CycleKeywordPopup({
       <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 overscroll-none">
         <div
           className={cn(
-            "absolute inset-0 bg-black/40 transition-[backdrop-filter,opacity] duration-150 ease-out",
+            "absolute inset-0 bg-black/40 transition-none",
             isBackdropBlurReady ? "sm:backdrop-blur-sm backdrop-blur-[1px]" : "backdrop-blur-0"
           )}
           onPointerDown={() => {
@@ -15090,10 +15088,10 @@ function CycleKeywordPopup({
           onPointerCancel={() => { cyclePopupBackdropPointerDownRef.current = false; }}
         />
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 1, scale: 1, y: 0 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ type: 'spring', duration: 0.28, bounce: 0.15 }}
+          exit={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0 }}
           className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
@@ -18211,9 +18209,10 @@ function TagEditModal({
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{ opacity: 1 }}
+      transition={{ duration: 0 }}
       className="fixed inset-0 z-[160] bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm flex items-center justify-center px-4"
       onMouseDown={(e) => {
         tagModalBackdropMouseDownRef.current = e.target === e.currentTarget;
@@ -18224,9 +18223,10 @@ function TagEditModal({
       }}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
+        initial={{ opacity: 1, scale: 1 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+        exit={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0 }}
         className="w-full max-w-md rounded-3xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}
@@ -19633,10 +19633,10 @@ function VocalControlComponent({
                           <Portal>
                             <motion.div
                               data-member-tone-panel
-                              initial={{ opacity: 0, y: -6 }}
+                              initial={{ opacity: 1, y: 0 }}
                               animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -6 }}
-                              transition={{ duration: 0.14, ease: 'easeOut' }}
+                              exit={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0 }}
                               className="fixed z-[10050] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[#050505] shadow-2xl shadow-black/60"
                               style={{
                                 top: vocalTonePopupPos.top,
@@ -19754,9 +19754,10 @@ function VocalControlComponent({
           <Portal>
             <motion.div
               className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 px-4 py-6 backdrop-blur-[1px] md:backdrop-blur-sm overscroll-none"
-              initial={{ opacity: 0 }}
+              initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+              exit={{ opacity: 1 }}
+              transition={{ duration: 0 }}
               onPointerDown={(e) => {
                 vocalCharacterBackdropPointerDownRef.current = e.target === e.currentTarget;
               }}
@@ -19771,10 +19772,10 @@ function VocalControlComponent({
               onPointerCancel={() => { vocalCharacterBackdropPointerDownRef.current = false; }}
             >
               <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                initial={{ opacity: 1, scale: 1, y: 0 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                transition={{ type: 'spring', duration: 0.4, bounce: 0.3 }}
+                exit={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ duration: 0 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerUp={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}

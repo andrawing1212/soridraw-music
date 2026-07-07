@@ -213,15 +213,17 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
       {open && track && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center px-4 py-6" onClick={onClose}>
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 1 }}
+            transition={{ duration: 0 }}
             className="absolute inset-0 bg-black/35 backdrop-blur-sm"
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 18 }}
+            initial={{ opacity: 1, scale: 1, y: 0 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.94, y: 18 }}
+            exit={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0 }}
             className="relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[34px] border border-[#877198]/28 bg-[#171719]/96 shadow-[0_30px_90px_rgba(0,0,0,0.52)]"
             onClick={(e) => e.stopPropagation()}
           >

@@ -910,7 +910,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
    Uses fluid clamp() to ensure proportional scaling without sudden breakpoint jumping
    when zooming from 100% to 90% or 80% on 1920x1080 (FHD) screens.
    ========================================================================== */
-@media (min-width: 1024px) and (max-width: 2420px) and (max-height: 1350px) {
+[data-screen-type="fhd-desktop"] {
   /* 1. Top Navigation Height & Padding Reduction */
   div.absolute.left-0.z-\[60\].hidden.w-full.items-center {
     padding-top: clamp(0.35rem, 0.6vh, 0.45rem) !important; /* Extremely neat navbar height */
@@ -1151,320 +1151,225 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 
   /* ==========================================================================
-     SORIDRAW STUDIO FHD COMPACT MODE
-     Provides an elegant, high-density, beautifully balanced compact PC Studio layout.
+     7. Popups, Dropdowns & More Menus Sizing Adjustments
      ========================================================================== */
-  
-  /* 1. Header & Container Width Alignment (Perfect visual match between banner & content) */
-  header.soridraw-studio-theme {
-    padding-top: clamp(60px, 5.5vh, 74px) !important;
+  [data-more-menu-panel="true"] {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
   }
-  .soridraw-studio-theme .mx-auto.w-full.max-w-\[1500px\],
-  main.soridraw-studio-theme {
-    max-width: clamp(1180px, 70vw, 1340px) !important;
+  [data-more-menu-panel="true"] button {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    font-size: 12.5px !important;
+    gap: 0.5rem !important;
   }
-  .soridraw-studio-theme .sori-studio-logo-text {
-    font-size: clamp(30px, 2.4vw, 40px) !important;
-  }
-  .soridraw-studio-theme .sori-studio-logo-text svg {
-    width: clamp(1.75rem, 2.2vw, 2.25rem) !important;
-    height: clamp(1.75rem, 2.2vw, 2.25rem) !important;
-  }
-
-  /* 1.1 Left Collapsed Generate Button Alignment (Always syncs with header/main left boundary) */
-  .soridraw-generate-heartbeat {
-    left: max(1.25rem, calc((100vw - clamp(1180px, 70vw, 1340px)) / 2 - 4.25rem)) !important;
-    height: clamp(54px, 7.5vh, 64px) !important;
-    width: clamp(54px, 5.4vh, 60px) !important;
+  [data-more-menu-panel="true"] button svg {
+    width: 0.9rem !important;
+    height: 0.9rem !important;
   }
 
-  /* 2. Main Layout Container Padding & Gap */
-  main.soridraw-studio-theme {
-    padding-top: clamp(0.75rem, 1.5vh, 1.25rem) !important;
-    padding-bottom: clamp(0.75rem, 1.5vh, 1.25rem) !important;
+  /* Detailed Lyrics Modal (Music Note) */
+  .relative.flex.w-full.max-w-\[1120px\].flex-col.musicnote-edit-mobile-boost {
+    max-width: 960px !important;
+    border-radius: 24px !important;
+    max-h: 88vh !important;
   }
-  main.soridraw-studio-theme.space-y-7,
-  main.soridraw-studio-theme > * + * {
-    margin-top: clamp(1rem, 2.2vh, 1.5rem) !important;
+  .musicnote-edit-mobile-boost .px-6.py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
   }
-  
-  /* Grid selection section spacing reduction */
-  .soridraw-studio-theme .grid.grid-cols-1.gap-5 {
-    gap: clamp(0.75rem, 1.5vh, 1.125rem) !important;
+  .musicnote-edit-mobile-boost h3.text-\[28px\] {
+    font-size: 22px !important;
   }
-  .soridraw-studio-theme .grid.grid-cols-1.md\:grid-cols-2.gap-x-5.gap-y-7 {
-    gap-x: clamp(0.75rem, 1.5vh, 1.125rem) !important;
-    gap-y: clamp(0.875rem, 1.8vh, 1.25rem) !important;
+  .musicnote-edit-mobile-boost .custom-scrollbar {
+    padding: 1.25rem 1.5rem !important;
+    gap: 1rem !important;
   }
-
-  /* 3. Studio Menu Cards */
-  .soridraw-studio-theme .soridraw-studio-menu-card {
-    padding: clamp(1.1rem, 1.6vh, 1.35rem) !important;
-    border-radius: clamp(16px, 1.6vh, 20px) !important;
-  }
-  
-  /* Storyboard Card specific compact adjustments (Fixing the "card remains huge" bug) */
-  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center {
-    padding: clamp(0.9rem, 1.4vh, 1.15rem) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center div.w-11.h-11 {
-    width: clamp(2.125rem, 3.8vh, 2.375rem) !important;
-    height: clamp(2.125rem, 3.8vh, 2.375rem) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center h3.text-base.md\:text-lg {
-    font-size: clamp(14.5px, 0.95vw, 16px) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center p.text-xs.md\:text-sm {
-    font-size: clamp(11.5px, 0.78vw, 12.5px) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center button {
-    height: clamp(30px, 4vh, 34px) !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    font-size: clamp(11px, 0.75vw, 12px) !important;
-    border-radius: clamp(8px, 0.9vh, 10px) !important;
-  }
-  
-  /* Card Top Title Block spacing & font-size */
-  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 {
-    margin-bottom: clamp(0.6rem, 1vh, 0.75rem) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card h3 {
-    font-size: clamp(16.5px, 1.1vw, 18.5px) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card h3 span.w-1.5 {
-    height: 1.25rem !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card h3 span.ml-1.5 {
-    font-size: clamp(12px, 0.8vw, 13.5px) !important;
-  }
-  
-  /* Card top actions (lock, reset, randomized status buttons) */
-  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 button {
-    padding: clamp(0.45rem, 0.7vh, 0.52rem) !important;
-    border-radius: clamp(8px, 0.8vh, 10px) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 button svg {
-    width: clamp(13px, 0.8vw, 14.5px) !important;
-    height: clamp(13px, 0.8vw, 14.5px) !important;
+  .musicnote-edit-mobile-boost section.rounded-\[28px\] {
+    border-radius: 18px !important;
+    padding: 1rem !important;
   }
 
-  /* 4. Keyword Grids & Selection Buttons */
-  .soridraw-studio-theme .soridraw-expand-content div.grid-cols-2 {
-    gap: clamp(0.45rem, 0.7vh, 0.58rem) !important;
+  /* Suno Link Connection Guide Modal */
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] {
+    max-width: 670px !important;
+    padding: 1.25rem 1.75rem !important;
+    border-radius: 20px !important;
   }
-  .soridraw-studio-theme .soridraw-expand-content button.min-h-\[58px\] {
-    min-h: clamp(44px, 5.2vh, 48px) !important;
-    padding-top: clamp(0.4rem, 0.7vh, 0.48rem) !important;
-    padding-bottom: clamp(0.4rem, 0.7vh, 0.48rem) !important;
-    padding-left: clamp(0.5rem, 0.8vw, 0.65rem) !important;
-    padding-right: clamp(0.5rem, 0.8vw, 0.65rem) !important;
-    border-radius: clamp(10px, 1.2vh, 12px) !important;
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] h3.text-xl {
+    font-size: 17px !important;
   }
-  .soridraw-studio-theme .soridraw-expand-content button.min-h-\[58px\] span {
-    font-size: clamp(12.5px, 0.82vw, 13.8px) !important;
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] p.text-sm {
+    font-size: 12.5px !important;
+    line-height: 1.4 !important;
+    margin-top: 0.35rem !important;
   }
-  
-  /* Selection Counter Badges (Main & Point) */
-  .soridraw-studio-theme .soridraw-clearable-badge {
-    width: clamp(15.5px, 1.8vh, 17px) !important;
-    height: clamp(15.5px, 1.8vh, 17px) !important;
-    font-size: clamp(8px, 0.8vh, 9px) !important;
-    top: 2.5px !important;
-    right: 2.5px !important;
-    left: auto !important;
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] .mt-5 {
+    margin-top: 1rem !important;
   }
-  .soridraw-studio-theme .soridraw-count-badge-point {
-    left: 2.5px !important;
-    right: auto !important;
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] .mt-5 button {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 11px !important;
   }
 
-  /* 5. Expand / Compact Bottom Summary Cards */
-  .soridraw-studio-theme .soridraw-expand-summary {
-    margin-top: clamp(0.7rem, 1.1vh, 0.9rem) !important;
-    height: clamp(44px, 5.4vh, 48px) !important;
-    border-radius: clamp(10px, 1.2vh, 12px) !important;
+  /* Suno URL Editor Modal */
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] {
+    max-width: 580px !important;
+    padding: 1.125rem !important;
+    border-radius: 20px !important;
   }
-  .soridraw-studio-theme .soridraw-expand-summary p,
-  .soridraw-studio-theme .soridraw-expand-summary span {
-    font-size: clamp(11px, 0.78vw, 12px) !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] h3.text-xl {
+    font-size: 18px !important;
   }
-  
-  /* Direct input pencil button */
-  .soridraw-studio-theme .soridraw-direct-input-button {
-    width: clamp(30px, 3.8vh, 34px) !important;
-    height: clamp(30px, 3.8vh, 34px) !important;
-    right: 3px !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] p.text-sm {
+    font-size: 12.5px !important;
   }
-  .soridraw-studio-theme .soridraw-direct-input-button svg {
-    width: clamp(13px, 1.7vh, 14.5px) !important;
-    height: clamp(13px, 1.7vh, 14.5px) !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] .grid.grid-cols-1.gap-3.md\:grid-cols-2 > div {
+    padding: 0.625rem !important;
+    border-radius: 0.75rem !important;
   }
-  
-  /* Direct input inline editing fields and buttons */
-  .soridraw-studio-theme .soridraw-expand-summary input {
-    font-size: clamp(11px, 0.78vw, 12px) !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] input {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.75rem !important;
   }
-  .soridraw-studio-theme .soridraw-expand-summary button {
-    width: clamp(24px, 2.8vh, 28px) !important;
-    height: clamp(24px, 2.8vh, 28px) !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] p.text-xs {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
   }
-  .soridraw-studio-theme .soridraw-expand-summary button svg {
-    width: clamp(12px, 1.4vh, 14px) !important;
-    height: clamp(12px, 1.4vh, 14px) !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] .mt-5.flex.flex-wrap.justify-end {
+    margin-top: 1rem !important;
   }
-
-  /* 6. Tempo & Structural Controllers Layout Spacing */
-  .soridraw-studio-theme .mb-4 {
-    margin-bottom: clamp(0.7rem, 1.4vh, 0.95rem) !important;
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] button.h-11 {
+    height: 2.25rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.75rem !important;
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
   }
 
-  /* 7. Command Input / Direct Writing Area Adjustments */
-  .soridraw-studio-theme .soridraw-studio-command-card {
-    border-radius: clamp(12px, 1.4vh, 16px) !important;
+  /* Library Share and Bulk Share Modals */
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl {
+    max-width: 310px !important;
+    padding: 1.25rem !important;
+    border-radius: 14px !important;
   }
-  .soridraw-studio-theme .soridraw-studio-command-card textarea {
-    font-size: clamp(14px, 0.92vw, 15px) !important;
-    padding-top: clamp(0.8rem, 1.4vh, 1rem) !important;
-    padding-bottom: clamp(0.8rem, 1.4vh, 1rem) !important;
-    padding-left: clamp(2.2rem, 3.2vw, 2.5rem) !important;
-    padding-right: clamp(10.5rem, 14vw, 12.5rem) !important;
-    min-height: clamp(50px, 5.8vh, 54px) !important;
-    border-radius: clamp(12px, 1.4vh, 16px) !important;
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl .mb-6 {
+    margin-bottom: 1rem !important;
   }
-  
-  /* Placeholder overlay adjustment */
-  .soridraw-studio-theme .soridraw-studio-command-card div.pointer-events-none {
-    font-size: clamp(12.5px, 0.85vw, 13.8px) !important;
-    left: clamp(2.2rem, 3.2vw, 2.5rem) !important;
-    right: clamp(10.5rem, 14vw, 12.5rem) !important;
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl h2.text-xl {
+    font-size: 17px !important;
   }
-  
-  /* Left search icon adjustment */
-  .soridraw-studio-theme .soridraw-studio-command-card div.absolute.top-6.left-4 {
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    left: clamp(0.8rem, 1.4vw, 1rem) !important;
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl p.text-xs {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
   }
-  .soridraw-studio-theme .soridraw-studio-command-card div.absolute.top-6.left-4 svg {
-    width: clamp(16px, 1.1vw, 18px) !important;
-    height: clamp(16px, 1.1vw, 18px) !important;
-  }
-  
-  /* Right Side X/Reset Button position and size */
-  .soridraw-studio-theme .soridraw-studio-command-card button.soridraw-no-active-translate {
-    width: clamp(26px, 3vh, 30px) !important;
-    height: clamp(26px, 3vh, 30px) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-36,
-  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-40 {
-    right: clamp(6.1rem, 9vw, 7.6rem) !important;
-  }
-  
-  /* Direct Writing Toggle Button */
-  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 {
-    right: clamp(0.55rem, 0.9vw, 0.75rem) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 button {
-    min-height: clamp(32px, 4vh, 36px) !important;
-    font-size: clamp(11px, 0.78vw, 12px) !important;
-    padding-left: clamp(0.7rem, 1.1vw, 0.9rem) !important;
-    padding-right: clamp(0.7rem, 1.1vw, 0.9rem) !important;
-    border-radius: clamp(7px, 0.9vh, 9px) !important;
-  }
-  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 button svg {
-    width: clamp(13px, 1.6vh, 14.5px) !important;
-    height: clamp(13px, 1.6vh, 14.5px) !important;
-  }
-  
-  /* Direct lyrics textarea box size */
-  .soridraw-studio-theme textarea[placeholder*="가사초안"] {
-    font-size: clamp(12px, 0.78vw, 13px) !important;
-    padding: clamp(0.7rem, 1.3vh, 0.9rem) !important;
-    border-radius: clamp(10px, 1.3vh, 12px) !important;
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl button.py-4 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+    font-size: 13.5px !important;
+    border-radius: 0.75rem !important;
   }
 
-  /* 8. Floating Actions Generation Panel Adjustments */
-  div.fixed.bottom-5.md\:bottom-7.left-0 {
-    bottom: clamp(0.75rem, 1.8vh, 1.25rem) !important;
+  /* Playlist Rename & Move Modals */
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 {
+    max-width: 330px !important;
+    border-radius: 14px !important;
   }
-  div.fixed.bottom-5.md\:bottom-7.left-0 div.flex.flex-row.items-stretch {
-    padding: clamp(0.35rem, 0.9vh, 0.5rem) !important;
-    border-radius: clamp(16px, 1.8vh, 20px) !important;
-    gap: clamp(0.35rem, 0.9vw, 0.55rem) !important;
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 .p-4 {
+    padding: 0.875rem !important;
   }
-
-  /* 9. Portal Modal & Popup Adjustments (Cohesive screen density scaling) */
-  
-  /* 9.1 Storyboard Modal & Vocal Member Editor Modal (originally max-w-4xl, max-h-[88vh]) */
-  .fixed.inset-0.z-\[9999\] .w-full.max-w-4xl,
-  .fixed.inset-0.z-\[10000\] .relative.flex.max-h-\[88vh\].w-full.max-w-4xl {
-    max-width: clamp(820px, 52vw, 900px) !important;
-    max-height: clamp(72vh, 76vh, 78vh) !important;
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 h3.font-bold {
+    font-size: 14.5px !important;
   }
-  
-  /* 9.2 Cycle Section Popup / Keyword More Popup (originally max-w-2xl, max-h-[82vh]) */
-  .fixed.inset-0.z-\[300\] .relative.z-10.w-full.max-w-2xl {
-    max-width: clamp(600px, 40vw, 660px) !important;
-    max-height: clamp(68vh, 72vh, 74vh) !important;
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 input {
+    padding: 0.6rem 0.875rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.625rem !important;
   }
-  
-  /* 9.3 Global Search Popup (originally max-w-3xl) */
-  .fixed.inset-0.z-\[10000\] .w-full.max-w-3xl {
-    max-width: clamp(660px, 44vw, 720px) !important;
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 button {
+    padding: 0.45rem 1rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.625rem !important;
   }
 
-  /* 9.4 Suno Api / Custom Note Settings / Song Detail Modals */
-  .fixed.inset-0.z-\[100\] .relative.w-full.max-w-md {
-    max-width: clamp(380px, 26vw, 420px) !important;
+  /* Deletion / Confirmation & Warning Modals */
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl,
+  div.w-full.max-w-\[380px\].overflow-hidden.rounded-\[24px\] {
+    max-width: 320px !important;
+    border-radius: 18px !important;
   }
-  .fixed.inset-0.z-\[20000\] .w-full.max-w-2xl,
-  .fixed.inset-0.z-\[260\] .relative.w-full {
-    max-width: clamp(600px, 40vw, 660px) !important;
-    max-height: clamp(68vh, 72vh, 74vh) !important;
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl .p-4,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl .p-6,
+  div.w-full.max-w-\[380px\].overflow-hidden.rounded-\[24px\] .px-5 {
+    padding: 1.125rem !important;
   }
-  
-  /* 9.5 Inner Padding & Gap reduction for modas/popups to harmonize scale */
-  .fixed.inset-0.z-\[9999\] .px-4.md\:px-5.py-4,
-  .fixed.inset-0.z-\[10000\] .px-5.py-4,
-  .fixed.inset-0.z-\[300\] .px-5.py-4 {
-    padding-top: clamp(0.7rem, 1.2vh, 0.85rem) !important;
-    padding-bottom: clamp(0.7rem, 1.2vh, 0.85rem) !important;
-    padding-left: clamp(1rem, 1.5vw, 1.2rem) !important;
-    padding-right: clamp(1rem, 1.5vw, 1.2rem) !important;
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl h3,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl h3 {
+    font-size: 16px !important;
   }
-  
-  /* Modal Headers font-size and spacing */
-  .fixed.inset-0 h2.text-xl,
-  .fixed.inset-0 h3.text-base.md\:text-lg,
-  .fixed.inset-0 h4.text-lg {
-    font-size: clamp(15px, 1vw, 16.5px) !important;
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl p,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl p {
+    font-size: 12.5px !important;
+    line-height: 1.4 !important;
   }
-  .fixed.inset-0 h3.text-2xl {
-    font-size: clamp(18.5px, 1.2vw, 21px) !important;
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl button,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl button {
+    height: 2.25rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.75rem !important;
   }
-  
-  /* Modal action buttons in header */
-  .fixed.inset-0 button {
-    height: clamp(30px, 3.8vh, 33px) !important;
-    font-size: clamp(11px, 0.75vw, 11.5px) !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
+
+  /* Folder Picker / Playlist Save Picker Modals */
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] {
+    max-width: 360px !important;
+    padding: 1.125rem !important;
+    border-radius: 20px !important;
   }
-  .fixed.inset-0 button svg {
-    width: clamp(12.5px, 1.6vh, 14px) !important;
-    height: clamp(12.5px, 1.6vh, 14px) !important;
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] h3.text-lg {
+    font-size: 15px !important;
   }
-  
-  /* Grid selection within modas/popups */
-  .fixed.inset-0 .grid {
-    gap: clamp(0.38rem, 0.65vh, 0.52rem) !important;
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] p.text-xs {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
   }
-  .fixed.inset-0 .grid button {
-    min-height: clamp(36px, 4.4vh, 42px) !important;
-    border-radius: clamp(8px, 0.9vh, 10px) !important;
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] button.flex.h-12 {
+    height: 2.5rem !important;
+    font-size: 12.5px !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    border-radius: 0.75rem !important;
   }
-  .fixed.inset-0 .grid button span {
-    font-size: clamp(11px, 0.76vw, 12.2px) !important;
+
+  /* Library Detail Modal */
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col {
+    max-width: 960px !important;
+    border-radius: 24px !important;
+    max-h: 84vh !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col .px-6.py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col h3.text-\[28px\] {
+    font-size: 22px !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col .custom-scrollbar {
+    padding: 1.25rem 1.5rem !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col section.rounded-\[28px\] {
+    border-radius: 18px !important;
+    padding: 1rem !important;
   }
 }

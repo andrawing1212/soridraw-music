@@ -3504,6 +3504,33 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
 };
 
 function App() {
+  // Screen size detection for FHD / QHD Desktop monitors to preserve styles during browser zoom
+  useEffect(() => {
+    const updateScreenType = () => {
+      if (typeof window !== 'undefined' && window.screen) {
+        const sw = window.screen.width;
+        const sh = window.screen.height;
+        const isDesktop = window.innerWidth >= 1024 || sw >= 1024;
+        
+        if (isDesktop) {
+          // If physical screen resolution is less than 2200x1200, it's categorized as FHD desktop.
+          // This keeps the FHD style even at 67% or 50% browser zoom!
+          if (sw < 2200 || sh < 1200) {
+            document.documentElement.setAttribute('data-screen-type', 'fhd-desktop');
+          } else {
+            document.documentElement.setAttribute('data-screen-type', 'qhd-desktop');
+          }
+        } else {
+          document.documentElement.removeAttribute('data-screen-type');
+        }
+      }
+    };
+    
+    updateScreenType();
+    window.addEventListener('resize', updateScreenType);
+    return () => window.removeEventListener('resize', updateScreenType);
+  }, []);
+
   const getAvailableMusicApiLyricLanguages = (song: SongResult | null): LanguageCode[] => {
     return getGeneratedLyricLanguages(song);
   };
@@ -11237,7 +11264,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone soridraw-studio-theme pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+              <header className="studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
@@ -11267,7 +11294,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className="studio-tone-down soridraw-studio-theme mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
+            <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}

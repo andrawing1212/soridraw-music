@@ -4104,6 +4104,53 @@ function App() {
     }
   };
 
+  const patchFavoriteCacheImmediately = (uid: string, songId: string, updates: Partial<any>) => {
+    if (!uid) return;
+    try {
+      const cacheKey = `soridraw_favorites_cache_${uid}`;
+      const cachedRaw = localStorage.getItem(cacheKey);
+      let list: any[] = [];
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw);
+        if (Array.isArray(parsed)) {
+          list = parsed;
+        }
+      }
+
+      if (list.length === 0 && favoritesInMemoryCache.has(uid)) {
+        list = [...(favoritesInMemoryCache.get(uid) || [])];
+      }
+
+      let updated = false;
+      const newList = list.map((item) => {
+        if (item.id !== songId) return item;
+        updated = true;
+
+        const isSunoDeletion = Array.isArray(updates.sunoLinks) && updates.sunoLinks.length === 0 && updates.sunoShareUrl === null;
+
+        const merged: any = { ...item };
+        Object.entries(updates).forEach(([key, val]) => {
+          if (isSunoDeletion) {
+            merged[key] = val;
+          } else {
+            if (val !== undefined && val !== null && val !== '') {
+              merged[key] = val;
+            }
+          }
+        });
+
+        return merged;
+      });
+
+      if (updated) {
+        favoritesInMemoryCache.set(uid, newList);
+        localStorage.setItem(cacheKey, JSON.stringify(newList));
+      }
+    } catch (e) {
+      console.error('Failed to patch favorite cache immediately:', e);
+    }
+  };
+
   const applyFavoriteSyncSignal = (uid: string, signal: any) => {
     if (!uid || !signal?.id) return;
     if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
@@ -6923,6 +6970,9 @@ const toggleCycleVariantSelection = (
     try {
       await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
       applyFavoriteUpdateToLocalState([id]);
+      if (user?.uid) {
+        patchFavoriteCacheImmediately(user.uid, id, updates);
+      }
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");
       } else {

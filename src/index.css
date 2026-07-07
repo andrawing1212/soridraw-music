@@ -967,6 +967,8 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     padding-right: clamp(1rem, 2vw, 1.5rem) !important;
   }
   .soridraw-library-theme {
+    /* Music Note보다 대문 윗공간이 살짝 넓어 보이던 FHD 높이감을 보정 */
+    padding-top: clamp(56px, 4.6vh, 66px) !important;
     padding-bottom: clamp(3.5rem, 8vh, 4.5rem) !important;
   }
   .soridraw-musicnote-theme {

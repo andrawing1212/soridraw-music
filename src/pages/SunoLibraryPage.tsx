@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { 
   Settings, Zap, Music, RefreshCw, Loader2, AlertCircle, 
   Search, Filter, PlayCircle, MoreVertical, Download, 
@@ -632,6 +633,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     audioUrl: string;
   }
   const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
+  const workspaceMoreMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
   const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
   type MultiSelectContext = 'workspace' | 'playlist' | 'sharedPlaylist';
@@ -748,18 +750,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const safeWidth = Math.min(estimatedWidth, Math.max(160, viewportWidth - margin * 2));
     const safeHeight = Math.min(estimatedHeight, Math.max(120, viewportHeight - margin * 2));
 
-    // Viewport 기준 fixed 메뉴로 계산한다.
-    // 기존 absolute + window.scroll 좌표는 relative 컨테이너 기준과 섞여서
-    // 오른쪽 끝 버튼에서 메뉴가 화면 밖으로 밀리거나 버튼과 떨어져 보였다.
-    const belowTop = rect.bottom + gap;
-    const aboveTop = rect.top - safeHeight - gap;
-    const shouldOpenAbove = belowTop + safeHeight + margin > viewportHeight && aboveTop >= margin;
-    const preferredTop = shouldOpenAbove ? aboveTop : belowTop;
-    const maxTop = Math.max(margin, viewportHeight - safeHeight - margin);
-    const top = Math.min(Math.max(margin, preferredTop), maxTop);
+    // Fixed + portal 메뉴는 viewport 좌표만 사용한다.
+    // 아래 공간이 부족하면 실제 메뉴 높이 기준으로 버튼 바로 위에 붙이고,
+    // 위/아래 모두 부족한 경우에만 화면 안쪽으로 clamp한다.
+    const spaceBelow = viewportHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const canOpenBelow = spaceBelow >= safeHeight;
+    const canOpenAbove = spaceAbove >= safeHeight;
 
-    // 기본은 메뉴 오른쪽 끝을 ... 버튼 오른쪽에 맞춘다.
-    // 오른쪽 경계에 가까우면 자동으로 왼쪽으로 들어오게 clamp한다.
+    let top: number;
+    if (canOpenBelow) {
+      top = rect.bottom + gap;
+    } else if (canOpenAbove || spaceAbove >= spaceBelow) {
+      top = rect.top - safeHeight - gap;
+    } else {
+      top = rect.bottom + gap;
+    }
+
+    const maxTop = Math.max(margin, viewportHeight - safeHeight - margin);
+    top = Math.min(Math.max(margin, top), maxTop);
+
+    // 메뉴 오른쪽 끝을 ... 버튼 오른쪽에 맞추되, viewport 밖으로 나가지 않게 보정한다.
     const preferredLeft = rect.right - safeWidth;
     const maxLeft = Math.max(margin, viewportWidth - safeWidth - margin);
     const left = Math.min(Math.max(margin, preferredLeft), maxLeft);
@@ -769,6 +780,44 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       left: Math.round(left),
     };
   };
+
+  const syncWorkspaceMoreMenuPosition = () => {
+    if (!activeMenuState?.anchorEl || !workspaceMoreMenuPanelRef.current) return;
+    const panelRect = workspaceMoreMenuPanelRef.current.getBoundingClientRect();
+    const nextPosition = computeWorkspaceMoreMenuPosition(
+      activeMenuState.anchorEl,
+      Math.ceil(panelRect.height || getWorkspaceMoreMenuEstimatedHeight(activeMenuState.group)),
+      Math.ceil(panelRect.width || 192),
+    );
+
+    if (
+      Math.abs(nextPosition.top - activeMenuState.position.top) < 1 &&
+      Math.abs(nextPosition.left - activeMenuState.position.left) < 1
+    ) {
+      return;
+    }
+
+    setActiveMenuState((prev) => (prev && prev.id === activeMenuState.id
+      ? { ...prev, position: nextPosition }
+      : prev));
+  };
+
+  useLayoutEffect(() => {
+    if (!activeMenuState) return;
+    const frame = window.requestAnimationFrame(syncWorkspaceMoreMenuPosition);
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeMenuState?.id, activeMenuState?.position.top, activeMenuState?.position.left]);
+
+  useEffect(() => {
+    if (!activeMenuState) return;
+    const handleReposition = () => syncWorkspaceMoreMenuPosition();
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+    return () => {
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+    };
+  }, [activeMenuState?.id]);
 
   interface DeleteAction {
     groupId: string;
@@ -7338,13 +7387,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </AnimatePresence>
 
       <AnimatePresence>
-        {activeMenuState && (
-          <>
-            <motion.div
+        {activeMenuState && typeof document !== 'undefined' && createPortal(
+          <motion.div
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              ref={workspaceMoreMenuPanelRef}
+              data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary,#202020)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto text-[var(--text-primary,#f5f5f5)]"
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,
@@ -7391,8 +7440,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   {m.label}
                 </button>
               ))}
-            </motion.div>
-          </>
+            </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 

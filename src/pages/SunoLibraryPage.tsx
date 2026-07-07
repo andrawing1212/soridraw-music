@@ -568,7 +568,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
   useEffect(() => {
-    const handleGlobalClick = () => {
+    const handleGlobalClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      // 더보기 버튼/포털 메뉴 내부 클릭은 문서 클릭 닫기에서 제외한다.
+      // React onClick 전에 document listener가 메뉴를 바로 닫아버리면
+      // 더보기 창이 열리지 않는 것처럼 보일 수 있다.
+      if (target?.closest('[data-floating-menu="true"], [data-more-menu-panel="true"], [data-selection-action-bar="true"]')) {
+        return;
+      }
       setActiveMenuState(null);
       setActivePlaylistItemMenu(null);
       setActiveColorMenu(null);
@@ -625,7 +632,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   interface MenuState {
     id: string;
-    position: { top: number; left: number };
+    position: { top?: number; left: number; bottom?: number; placement: 'above' | 'below'; maxHeight?: number };
     anchorEl?: HTMLElement | null;
     group: any;
     item: any;
@@ -750,34 +757,28 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const safeWidth = Math.min(estimatedWidth, Math.max(160, viewportWidth - margin * 2));
     const safeHeight = Math.min(estimatedHeight, Math.max(120, viewportHeight - margin * 2));
 
-    // Fixed + portal 메뉴는 viewport 좌표만 사용한다.
-    // 아래 공간이 부족하면 실제 메뉴 높이 기준으로 버튼 바로 위에 붙이고,
-    // 위/아래 모두 부족한 경우에만 화면 안쪽으로 clamp한다.
-    const spaceBelow = viewportHeight - rect.bottom - margin;
-    const spaceAbove = rect.top - margin;
-    const canOpenBelow = spaceBelow >= safeHeight;
-    const canOpenAbove = spaceAbove >= safeHeight;
-
-    let top: number;
-    if (canOpenBelow) {
-      top = rect.bottom + gap;
-    } else if (canOpenAbove || spaceAbove >= spaceBelow) {
-      top = rect.top - safeHeight - gap;
-    } else {
-      top = rect.bottom + gap;
-    }
-
-    const maxTop = Math.max(margin, viewportHeight - safeHeight - margin);
-    top = Math.min(Math.max(margin, top), maxTop);
-
-    // 메뉴 오른쪽 끝을 ... 버튼 오른쪽에 맞추되, viewport 밖으로 나가지 않게 보정한다.
+    // body portal + fixed 메뉴는 viewport 좌표만 사용한다.
+    // bottom 좌표를 섞으면 하단 버튼에서 메뉴가 멀리 뜨거나 안 보이는 문제가 생겨 top 기준으로 통일한다.
     const preferredLeft = rect.right - safeWidth;
     const maxLeft = Math.max(margin, viewportWidth - safeWidth - margin);
     const left = Math.min(Math.max(margin, preferredLeft), maxLeft);
 
+    const canOpenBelow = rect.bottom + gap + safeHeight <= viewportHeight - margin;
+    const placement = canOpenBelow ? 'below' as const : 'above' as const;
+    const preferredTop = canOpenBelow
+      ? rect.bottom + gap
+      : rect.top - safeHeight - gap;
+    const maxTop = Math.max(margin, viewportHeight - safeHeight - margin);
+    const top = Math.min(Math.max(margin, preferredTop), maxTop);
+    const maxHeight = placement === 'below'
+      ? Math.max(120, viewportHeight - top - margin)
+      : Math.max(120, rect.top - margin - gap);
+
     return {
       top: Math.round(top),
       left: Math.round(left),
+      placement,
+      maxHeight: Math.round(maxHeight),
     };
   };
 
@@ -791,8 +792,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     );
 
     if (
-      Math.abs(nextPosition.top - activeMenuState.position.top) < 1 &&
-      Math.abs(nextPosition.left - activeMenuState.position.left) < 1
+      nextPosition.placement === activeMenuState.position.placement &&
+      Math.abs((nextPosition.top ?? -1) - (activeMenuState.position.top ?? -1)) < 1 &&
+      Math.abs(nextPosition.left - activeMenuState.position.left) < 1 &&
+      Math.abs((nextPosition.maxHeight ?? -1) - (activeMenuState.position.maxHeight ?? -1)) < 1
     ) {
       return;
     }
@@ -806,7 +809,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!activeMenuState) return;
     const frame = window.requestAnimationFrame(syncWorkspaceMoreMenuPosition);
     return () => window.cancelAnimationFrame(frame);
-  }, [activeMenuState?.id, activeMenuState?.position.top, activeMenuState?.position.left]);
+  }, [activeMenuState?.id, activeMenuState?.position.top, activeMenuState?.position.left, activeMenuState?.position.placement]);
 
   useEffect(() => {
     if (!activeMenuState) return;
@@ -5558,6 +5561,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         if (multiSelectMode && isSelectionActionTarget) return;
 
+        // 더보기 버튼 자체는 메뉴 닫기 처리보다 먼저 통과시켜야 한다.
+        // 그렇지 않으면 열린 메뉴가 있는 상태에서 다른 ... 버튼을 눌렀을 때
+        // capture 단계에서 이벤트가 막혀 새 메뉴가 열리지 않는다.
+        if (target.closest('[data-floating-menu="true"]')) return;
+
         if (hasOpenMoreMenu && !target.closest('[data-more-menu-panel="true"]')) {
           e.preventDefault();
           e.stopPropagation();
@@ -5566,8 +5574,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           setBulkMenuState(null);
           return;
         }
-
-        if (target.closest('[data-floating-menu="true"]')) return;
 
         if (multiSelectMode && consumeLibraryDragSelectClick(e)) return;
 
@@ -7096,9 +7102,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         {bulkMenuState && multiSelectMode && (
           <>
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
               data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#7FBD75]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
@@ -7389,15 +7395,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <AnimatePresence>
         {activeMenuState && typeof document !== 'undefined' && createPortal(
           <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: -10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -10 }}
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
               ref={workspaceMoreMenuPanelRef}
               data-floating-menu="true" data-more-menu-panel="true" className="fixed z-[9999] w-48 bg-[var(--bg-secondary,#202020)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto text-[var(--text-primary,#f5f5f5)]"
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,
-                transformOrigin: 'top right',
+                maxHeight: activeMenuState.position.maxHeight,
+                overflowY: 'auto',
+                transformOrigin: activeMenuState.position.placement === 'above' ? 'bottom right' : 'top right',
               }}
               onClick={(e) => e.stopPropagation()}
             >

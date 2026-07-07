@@ -737,10 +737,19 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       if (!isSharedView) itemCount += 2; // 즐겨찾기, 삭제(휴지통)
     }
 
-    // 실제 더보기 메뉴는 각 항목이 약 36px 높이(px-4 py-2.5 text-xs)라서
-    // 40px 기준으로 계산하면 메뉴가 위로 열릴 때 버튼과 메뉴 사이에 불필요한 간격이 생긴다.
-    // 열림 구조는 그대로 유지하고, 위치 계산용 추정 높이만 실제 렌더링 높이에 가깝게 맞춘다.
-    return Math.max(144, itemCount * 36 + 16);
+    const screenType = typeof document !== 'undefined'
+      ? document.documentElement.getAttribute('data-screen-type')
+      : null;
+    const isFhdCompact = screenType === 'fhd-desktop';
+
+    // FHD compact CSS reduces menu button vertical padding, so the actual menu height
+    // is smaller than the default px-4 py-2.5 estimate. If we keep the larger estimate,
+    // menus that open upward float too far above the ... button.
+    const itemHeight = isFhdCompact ? 30.5 : 36;
+    const panelPadding = isFhdCompact ? 12 : 16;
+    const minHeight = isFhdCompact ? 120 : 144;
+
+    return Math.max(minHeight, itemCount * itemHeight + panelPadding);
   };
 
   const computeWorkspaceMoreMenuPosition = (anchorEl: HTMLElement, estimatedHeight = 300, estimatedWidth = 192) => {

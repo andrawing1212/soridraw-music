@@ -1044,19 +1044,39 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     border-radius: 0.5rem !important; /* rounded-lg */
   }
   .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl .flex.items-center.gap-3.py-4 {
-    padding-top: clamp(0.42rem, 0.8vh, 0.52rem) !important; /* py-1.75 to py-2 */
-    padding-bottom: clamp(0.42rem, 0.8vh, 0.52rem) !important;
-    padding-left: clamp(0.75rem, 1vw, 1rem) !important; /* tighter layout bounds */
-    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
-    gap: 0.45rem !important;
+    padding-top: clamp(0.72rem, 1.18vh, 0.86rem) !important; /* keep Music Note cards breathable on FHD */
+    padding-bottom: clamp(0.72rem, 1.18vh, 0.86rem) !important;
+    padding-left: clamp(0.82rem, 1.08vw, 1.08rem) !important;
+    padding-right: clamp(0.82rem, 1.08vw, 1.08rem) !important;
+    gap: 0.58rem !important;
   }
-  /* Shrink play/music icon box in cards */
-  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-11.w-11,
-  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-11.w-11,
+  /* Keep Music Note cover/play/music icon boxes large and clear even in FHD compact mode */
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-12.w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-14.md\:w-14,
   .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-12.md\:w-12,
   .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-12.md\:w-12 {
-    width: clamp(1.875rem, 3.5vh, 2.125rem) !important; /* snug thumbnail size */
-    height: clamp(1.875rem, 3.5vh, 2.125rem) !important;
+    width: clamp(2.65rem, 5.1vh, 3.15rem) !important;
+    height: clamp(2.65rem, 5.1vh, 3.15rem) !important;
+    border-radius: 0.95rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-12.w-12 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-14.md\:w-14 svg {
+    width: 1.35rem !important;
+    height: 1.35rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12 .relative.z-10,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14 .relative.z-10 {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12 .relative.z-10 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14 .relative.z-10 svg {
+    width: 1rem !important;
+    height: 1rem !important;
   }
   .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 h3.text-\[15px\] {
     font-size: 13px !important;
@@ -1619,13 +1639,24 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 
   .soridraw-studio-cycle-modal-panel p,
-  .soridraw-studio-cycle-modal-panel .text-\[var\(--text-secondary\)\],
+  .soridraw-studio-cycle-modal-panel p.text-\[var\(--text-secondary\)\],
   .soridraw-studio-genre-modal-panel p,
-  .soridraw-studio-genre-modal-panel .text-\[var\(--text-secondary\)\],
+  .soridraw-studio-genre-modal-panel p.text-\[var\(--text-secondary\)\],
   .soridraw-studio-storyboard-modal-panel p,
   .soridraw-studio-vocal-modal-panel p {
     display: revert !important;
     visibility: visible !important;
+  }
+
+  .soridraw-studio-cycle-modal-panel button.w-12.shrink-0 {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
+  }
+
+  .soridraw-studio-cycle-modal-panel button.w-12.shrink-0 svg {
+    margin: 0 auto !important;
   }
 
   /* Library Detail Modal */

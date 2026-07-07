@@ -14633,6 +14633,8 @@ function CycleSectionComponent({
   const highlightedVariantIdSet = useMemo(() => new Set(highlightedVariantIds), [highlightedVariantIds]);
   const sectionAccent = getStudioSectionAccent(titleKo || title);
   const isExpandSummaryActive = isExpanded;
+  const normalizedCycleSectionTitle = `${titleKo || title}`.trim().toLowerCase();
+  const useGenreKeywordButtonFont = ['스타일', 'style', '사운드', 'sound'].includes(normalizedCycleSectionTitle);
 
   useEffect(() => {
     if (!isDirectInputEditing) setDirectInputDraft(directInput?.selectedText || '');
@@ -14794,7 +14796,12 @@ function CycleSectionComponent({
                         : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
                   )}
                 >
-                  <span className="text-[16px] md:text-[17px] font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]">
+                  <span
+                    className={cn(
+                      useGenreKeywordButtonFont ? "text-[15px] md:text-[16.5px]" : "text-[16px] md:text-[17px]",
+                      "font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
+                    )}
+                  >
                     {folderLabel}
                   </span>
                   {selectedCountInCycle > 0 && (

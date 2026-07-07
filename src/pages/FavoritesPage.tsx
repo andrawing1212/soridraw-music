@@ -5326,7 +5326,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="-ml-1 relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FF5C52]/24 text-[#FF8B84] transition-all hover:bg-[#FF5C52]/34 hover:text-white md:ml-0 md:h-12 md:w-12 md:bg-[#FF5C52]/22 md:hover:bg-[#FF5C52]/30 shadow-[0_0_0_1px_rgba(255,139,132,0.16)]"
+                        className="-ml-1 relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#FF5C52]/24 text-[#FF8B84] transition-all hover:bg-[#FF5C52]/34 hover:text-white md:ml-0 md:h-14 md:w-14 md:bg-[#FF5C52]/22 md:hover:bg-[#FF5C52]/30 shadow-[0_0_0_1px_rgba(255,139,132,0.18)]"
                       >
                         {getFavoriteSunoLinkCount(song) > 1 && (
                           <span className="absolute right-0.5 top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#FF8B84] px-1 text-[9px] font-black leading-none text-[#211615] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
@@ -5338,24 +5338,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             <img
                               src={getFavoriteSunoCoverUrl(song)}
                               alt=""
-                              className="absolute inset-0 h-full w-full object-cover opacity-95 transition-transform duration-300 group-hover:scale-105"
+                              className="absolute inset-0 h-full w-full object-cover opacity-100 brightness-110 contrast-105 transition-transform duration-300 group-hover:scale-105"
                               loading="lazy"
                               onError={(event) => {
                                 event.currentTarget.style.display = 'none';
                               }}
                             />
-                            <span className="absolute inset-0 bg-black/18" />
-                            <span className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/45 text-white shadow-[0_0_12px_rgba(0,0,0,0.35)]">
-                              <Play className="h-3 w-3 translate-x-[1px] fill-current" />
+                            <span className="absolute inset-0 bg-black/10" />
+                            <span className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/42 text-white shadow-[0_0_14px_rgba(0,0,0,0.36)]">
+                              <Play className="h-4 w-4 translate-x-[1px] fill-current" />
                             </span>
                           </>
                         ) : (
-                          <Play className="w-5 h-5 fill-current" />
+                          <Play className="w-6 h-6 fill-current" />
                         )}
                       </button>
                     ) : (
-                      <div className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.08] text-[#E98F7F] md:ml-0 md:h-12 md:w-12 md:bg-white/[0.07] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]">
-                        <Music className="w-5 h-5" />
+                      <div className="-ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/[0.10] text-[#FF9B8D] md:ml-0 md:h-14 md:w-14 md:bg-white/[0.09] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
+                        <Music className="w-7 h-7" />
                       </div>
                     )}
 

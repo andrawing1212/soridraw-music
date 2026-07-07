@@ -171,7 +171,7 @@ function SunoUrlMobileGuideButton() {
       <button
         type="button"
         onClick={openGuide}
-        className="inline-flex h-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] px-3 text-[11px] font-bold text-white/72 transition-all hover:bg-white/[0.08] hover:text-white active:scale-[0.98]"
+        className="inline-flex h-9 shrink-0 items-center justify-center rounded-xl border border-[#FF5C52]/30 bg-[#FF5C52]/10 px-3.5 text-[11px] font-bold text-[#FF8B84] transition-all hover:border-[#FF5C52]/50 hover:bg-[#FF5C52]/18 hover:text-white active:scale-[0.97]"
       >
         연결가이드
       </button>
@@ -191,7 +191,7 @@ function SunoUrlMobileGuideButton() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0 }}
-              className="max-h-[88vh] w-full max-w-[620px] overflow-y-auto rounded-[28px] border border-[#FF7066]/22 bg-[#181818] p-5 shadow-[0_30px_90px_rgba(0,0,0,0.62)]"
+              className="max-h-[88vh] w-full max-w-[95%] md:max-w-[780px] overflow-y-auto rounded-[28px] border border-[#FF7066]/22 bg-[#181818] p-6 shadow-[0_30px_90px_rgba(0,0,0,0.62)] md:p-8"
               onClick={(event) => event.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-4">
@@ -243,7 +243,7 @@ function SunoUrlMobileGuideButton() {
                   </div>
 
                   <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-black/20 p-2">
-                    <img src="/suno-copy-link-guide.png" alt="Suno 링크 복사 방법 예시" className="mx-auto h-auto max-h-[300px] w-auto max-w-full rounded-xl object-contain" />
+                    <img src="/suno-copy-link-guide.png" alt="Suno 링크 복사 방법 예시" className="mx-auto h-auto max-h-[420px] w-auto max-w-full rounded-xl object-contain" />
                   </div>
                 </>
               ) : (
@@ -259,7 +259,7 @@ function SunoUrlMobileGuideButton() {
                       <img
                         src="/suno-mobile-share-guide-1.jpeg"
                         alt="수노 모바일 노래 공유 버튼 위치"
-                        className="mx-auto h-auto max-h-[280px] w-auto max-w-full rounded-xl object-contain"
+                        className="mx-auto h-auto max-h-[360px] w-auto max-w-full rounded-xl object-contain"
                         loading="lazy"
                       />
                     </div>
@@ -267,7 +267,7 @@ function SunoUrlMobileGuideButton() {
                       <img
                         src="/suno-mobile-share-guide-2.jpeg"
                         alt="수노 모바일 링크 복사 버튼 위치"
-                        className="mx-auto h-auto max-h-[280px] w-auto max-w-full rounded-xl object-contain"
+                        className="mx-auto h-auto max-h-[360px] w-auto max-w-full rounded-xl object-contain"
                         loading="lazy"
                       />
                     </div>
@@ -6083,7 +6083,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       <AnimatePresence>
         {sunoUrlEditorSong && (
           <motion.div initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 1 }} transition={{ duration: 0 }} className="fixed inset-0 z-[320] flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm" onClick={closeFavoriteSunoUrlEditor}>
-            <motion.div initial={{ opacity: 1, scale: 1, y: 0 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0 }} className="w-full max-w-[520px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <motion.div initial={{ opacity: 1, scale: 1, y: 0 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0 }} className="w-full max-w-[520px] md:max-w-[680px] overflow-hidden rounded-[28px] border border-[#FF5C52]/25 bg-[#181818] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="text-[10px] font-bold uppercase tracking-[0.28em] text-[#FF8B84]/80">suno url</div>
@@ -6103,39 +6103,64 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   <button type="button" onClick={closeFavoriteSunoUrlEditor} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-white/65 transition-all hover:text-white"><X className="h-4 w-4" /></button>
                 </div>
               </div>
-              <div className="mt-5 space-y-3">
-                {[0, 1].map((index) => (
-                  <div key={`suno-url-modal-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <span className="text-xs font-black text-[#FF7066]">수노 URL {index + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSunoUrlMainIndex(index as 0 | 1)}
-                        disabled={!sunoUrlInputs[index].trim()}
-                        className={cn(
-                          'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
-                          sunoUrlMainIndex === index ? 'border-[#FF7066]/65 bg-[#FF5C52]/24 text-[#FF8B84]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+              <div className="mt-5">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {[0, 1].map((index) => (
+                    <div key={`suno-url-modal-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-[#FF7066]">수노 URL {index + 1}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSunoUrlMainIndex(index as 0 | 1)}
+                          disabled={!sunoUrlInputs[index].trim()}
+                          className={cn(
+                            'inline-flex h-8 items-center justify-center rounded-xl border px-3 text-[11px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                            sunoUrlMainIndex === index ? 'border-[#FF7066]/65 bg-[#FF5C52]/24 text-[#FF8B84]' : 'border-white/10 bg-white/[0.035] text-white/50 hover:text-white/75'
+                          )}
+                        >
+                          {sunoUrlMainIndex === index ? '1순위' : '1순위로'}
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          autoFocus={index === 0}
+                          value={sunoUrlInputs[index]}
+                          onChange={(event) => {
+                            const next = [...sunoUrlInputs] as [string, string];
+                            next[index] = event.target.value;
+                            setSunoUrlInputs(next);
+                            setSunoUrlError('');
+                            setSunoUrlSaveStatus('idle');
+                            if (!event.target.value.trim() && sunoUrlMainIndex === index) setSunoUrlMainIndex(index === 0 ? 1 : 0);
+                          }}
+                          placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
+                          className="w-full rounded-2xl border border-black/20 bg-black/20 pl-4 pr-10 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/25 focus:border-[#FF6A5C]/70"
+                        />
+                        {sunoUrlInputs[index] && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              const next = [...sunoUrlInputs] as [string, string];
+                              next[index] = '';
+                              setSunoUrlInputs(next);
+                              setSunoUrlError('');
+                              setSunoUrlSaveStatus('idle');
+                              if (sunoUrlMainIndex === index) {
+                                setSunoUrlMainIndex(index === 0 ? 1 : 0);
+                              }
+                            }}
+                            className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.08] text-white/40 transition-all hover:bg-white/[0.16] hover:text-white/80 active:scale-90"
+                            aria-label="URL 비우기"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         )}
-                      >
-                        {sunoUrlMainIndex === index ? '1순위' : '1순위로'}
-                      </button>
+                      </div>
                     </div>
-                    <input
-                      autoFocus={index === 0}
-                      value={sunoUrlInputs[index]}
-                      onChange={(event) => {
-                        const next = [...sunoUrlInputs] as [string, string];
-                        next[index] = event.target.value;
-                        setSunoUrlInputs(next);
-                        setSunoUrlError('');
-                        setSunoUrlSaveStatus('idle');
-                        if (!event.target.value.trim() && sunoUrlMainIndex === index) setSunoUrlMainIndex(index === 0 ? 1 : 0);
-                      }}
-                      placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
-                      className="w-full rounded-2xl border border-black/20 bg-black/20 px-4 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/25 focus:border-[#FF6A5C]/70"
-                    />
-                  </div>
-                ))}
+                  ))}
+                </div>
                 {sunoUrlError ? <p className="mt-2 text-xs font-semibold text-red-300">{sunoUrlError}</p> : <p className="mt-2 text-xs leading-5 text-white/38">수노에서 한 번에 생성된 2곡까지 연결할 수 있습니다. 1순위 곡이 목록의 메인 커버/재생 대상이 됩니다.</p>}
               </div>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
@@ -6657,7 +6682,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       })}
                     </div>
                   )}
-                  <div className="mt-4 grid gap-3">
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
                     {[0, 1].map((index) => (
                       <div key={`detail-suno-url-${index}`} className="rounded-2xl border border-white/10 bg-black/15 p-3">
                         <div className="mb-2 flex items-center justify-between gap-2">
@@ -6674,26 +6699,49 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             {detailSunoUrlMainIndex === index ? '1순위' : '1순위로'}
                           </button>
                         </div>
-                        <input
-                          value={detailSunoUrlInputs[index]}
-                          onChange={(event) => {
-                            const next = [...detailSunoUrlInputs] as [string, string];
-                            next[index] = event.target.value;
-                            setDetailSunoUrlInputs(next);
-                            setDetailSunoUrlError('');
-                            setDetailSunoUrlSaveStatus('idle');
-                            if (!event.target.value.trim() && detailSunoUrlMainIndex === index) setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
-                          }}
-                          placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
-                          className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/30 focus:border-[#FF6A5C]/75 focus:bg-black/25"
-                        />
+                        <div className="relative">
+                          <input
+                            value={detailSunoUrlInputs[index]}
+                            onChange={(event) => {
+                              const next = [...detailSunoUrlInputs] as [string, string];
+                              next[index] = event.target.value;
+                              setDetailSunoUrlInputs(next);
+                              setDetailSunoUrlError('');
+                              setDetailSunoUrlSaveStatus('idle');
+                              if (!event.target.value.trim() && detailSunoUrlMainIndex === index) setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
+                            }}
+                            placeholder={index === 0 ? 'https://suno.com/song/...  또는 https://suno.com/s/...' : '두 번째 수노 URL 선택 입력'}
+                            className="w-full rounded-2xl border border-white/10 bg-black/20 pl-4 pr-10 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/30 focus:border-[#FF6A5C]/75 focus:bg-black/25"
+                          />
+                          {detailSunoUrlInputs[index] && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                const next = [...detailSunoUrlInputs] as [string, string];
+                                next[index] = '';
+                                setDetailSunoUrlInputs(next);
+                                setDetailSunoUrlError('');
+                                setDetailSunoUrlSaveStatus('idle');
+                                if (detailSunoUrlMainIndex === index) {
+                                  setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
+                                }
+                              }}
+                              className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.08] text-white/40 transition-all hover:bg-white/[0.16] hover:text-white/80 active:scale-90"
+                              aria-label="URL 비우기"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
-                    <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={detailSunoUrlSaveStatus === 'saving' || (!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim()))} className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
-                      {detailSunoUrlSaveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      {detailSunoUrlSaveStatus === 'saving' ? '저장 중...' : detailSunoUrlSaveStatus === 'saved' ? '저장 완료' : '저장'}
-                    </button>
                   </div>
+                  <button type="button" onClick={() => saveFavoriteSunoShareUrls(selectedSong, detailSunoUrlInputs, detailSunoUrlMainIndex, 'detail')} disabled={detailSunoUrlSaveStatus === 'saving' || (!getFavoriteSunoShareUrl(selectedSong) && !detailSunoUrlInputs.some(value => value.trim()))} className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#FF5C52] px-4 text-sm font-bold text-white shadow-[0_10px_26px_rgba(255,92,82,0.18)] transition-all hover:bg-[#FF7066] disabled:cursor-not-allowed disabled:opacity-35">
+                    {detailSunoUrlSaveStatus === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {detailSunoUrlSaveStatus === 'saving' ? '저장 중...' : detailSunoUrlSaveStatus === 'saved' ? '저장 완료' : '저장'}
+                  </button>
                   {detailSunoUrlError ? (
                     <p className="mt-2 text-xs font-semibold text-red-300">{detailSunoUrlError}</p>
                   ) : (

@@ -1149,4 +1149,216 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     padding-right: 0.5rem !important;
     font-size: 11px !important;
   }
+
+  /* ==========================================================================
+     SORIDRAW STUDIO FHD COMPACT MODE
+     Provides an elegant, high-density, beautifully balanced compact PC Studio layout.
+     ========================================================================== */
+  
+  /* 1. Header Adjustments */
+  header.soridraw-studio-theme {
+    padding-top: clamp(60px, 5.5vh, 74px) !important;
+  }
+  .soridraw-studio-theme .sori-studio-logo-text {
+    font-size: clamp(30px, 2.4vw, 40px) !important;
+  }
+  .soridraw-studio-theme .sori-studio-logo-text svg {
+    width: clamp(1.75rem, 2.2vw, 2.25rem) !important;
+    height: clamp(1.75rem, 2.2vw, 2.25rem) !important;
+  }
+
+  /* 2. Main Layout Container Width, Padding & Gap */
+  main.soridraw-studio-theme {
+    max-width: clamp(1180px, 70vw, 1340px) !important;
+    padding-top: clamp(0.75rem, 1.5vh, 1.25rem) !important;
+    padding-bottom: clamp(0.75rem, 1.5vh, 1.25rem) !important;
+  }
+  main.soridraw-studio-theme.space-y-7,
+  main.soridraw-studio-theme > * + * {
+    margin-top: clamp(1rem, 2.2vh, 1.5rem) !important;
+  }
+  
+  /* Grid selection section spacing reduction */
+  .soridraw-studio-theme .grid.grid-cols-1.gap-5 {
+    gap: clamp(0.75rem, 1.5vh, 1.125rem) !important;
+  }
+  .soridraw-studio-theme .grid.grid-cols-1.md\:grid-cols-2.gap-x-5.gap-y-7 {
+    gap-x: clamp(0.75rem, 1.5vh, 1.125rem) !important;
+    gap-y: clamp(0.875rem, 1.8vh, 1.25rem) !important;
+  }
+
+  /* 3. Studio Menu Cards */
+  .soridraw-studio-theme .soridraw-studio-menu-card {
+    padding: clamp(1.1rem, 1.6vh, 1.35rem) !important;
+    border-radius: clamp(16px, 1.6vh, 20px) !important;
+  }
+  
+  /* Card Top Title Block spacing & font-size */
+  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 {
+    margin-bottom: clamp(0.6rem, 1vh, 0.75rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card h3 {
+    font-size: clamp(16.5px, 1.1vw, 18.5px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card h3 span.w-1.5 {
+    height: 1.25rem !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card h3 span.ml-1.5 {
+    font-size: clamp(12px, 0.8vw, 13.5px) !important;
+  }
+  
+  /* Card top actions (lock, reset, randomized status buttons) */
+  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 button {
+    padding: clamp(0.45rem, 0.7vh, 0.52rem) !important;
+    border-radius: clamp(8px, 0.8vh, 10px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.mb-4 button svg {
+    width: clamp(13px, 0.8vw, 14.5px) !important;
+    height: clamp(13px, 0.8vw, 14.5px) !important;
+  }
+
+  /* 4. Keyword Grids & Selection Buttons */
+  .soridraw-studio-theme .soridraw-expand-content div.grid-cols-2 {
+    gap: clamp(0.45rem, 0.7vh, 0.58rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-content button.min-h-\[58px\] {
+    min-h: clamp(44px, 5.2vh, 48px) !important;
+    padding-top: clamp(0.4rem, 0.7vh, 0.48rem) !important;
+    padding-bottom: clamp(0.4rem, 0.7vh, 0.48rem) !important;
+    padding-left: clamp(0.5rem, 0.8vw, 0.65rem) !important;
+    padding-right: clamp(0.5rem, 0.8vw, 0.65rem) !important;
+    border-radius: clamp(10px, 1.2vh, 12px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-content button.min-h-\[58px\] span {
+    font-size: clamp(12.5px, 0.82vw, 13.8px) !important;
+  }
+  
+  /* Selection Counter Badges (Main & Point) */
+  .soridraw-studio-theme .soridraw-clearable-badge {
+    width: clamp(15.5px, 1.8vh, 17px) !important;
+    height: clamp(15.5px, 1.8vh, 17px) !important;
+    font-size: clamp(8px, 0.8vh, 9px) !important;
+    top: 2.5px !important;
+    right: 2.5px !important;
+    left: auto !important;
+  }
+  .soridraw-studio-theme .soridraw-count-badge-point {
+    left: 2.5px !important;
+    right: auto !important;
+  }
+
+  /* 5. Expand / Compact Bottom Summary Cards */
+  .soridraw-studio-theme .soridraw-expand-summary {
+    margin-top: clamp(0.7rem, 1.1vh, 0.9rem) !important;
+    height: clamp(44px, 5.4vh, 48px) !important;
+    border-radius: clamp(10px, 1.2vh, 12px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-summary p,
+  .soridraw-studio-theme .soridraw-expand-summary span {
+    font-size: clamp(11px, 0.78vw, 12px) !important;
+  }
+  
+  /* Direct input pencil button */
+  .soridraw-studio-theme .soridraw-direct-input-button {
+    width: clamp(30px, 3.8vh, 34px) !important;
+    height: clamp(30px, 3.8vh, 34px) !important;
+    right: 3px !important;
+  }
+  .soridraw-studio-theme .soridraw-direct-input-button svg {
+    width: clamp(13px, 1.7vh, 14.5px) !important;
+    height: clamp(13px, 1.7vh, 14.5px) !important;
+  }
+  
+  /* Direct input inline editing fields and buttons */
+  .soridraw-studio-theme .soridraw-expand-summary input {
+    font-size: clamp(11px, 0.78vw, 12px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-summary button {
+    width: clamp(24px, 2.8vh, 28px) !important;
+    height: clamp(24px, 2.8vh, 28px) !important;
+  }
+  .soridraw-studio-theme .soridraw-expand-summary button svg {
+    width: clamp(12px, 1.4vh, 14px) !important;
+    height: clamp(12px, 1.4vh, 14px) !important;
+  }
+
+  /* 6. Tempo & Structural Controllers Layout Spacing */
+  .soridraw-studio-theme .mb-4 {
+    margin-bottom: clamp(0.7rem, 1.4vh, 0.95rem) !important;
+  }
+
+  /* 7. Command Input / Direct Writing Area Adjustments */
+  .soridraw-studio-theme .soridraw-studio-command-card {
+    border-radius: clamp(12px, 1.4vh, 16px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card textarea {
+    font-size: clamp(14px, 0.92vw, 15px) !important;
+    padding-top: clamp(0.8rem, 1.4vh, 1rem) !important;
+    padding-bottom: clamp(0.8rem, 1.4vh, 1rem) !important;
+    padding-left: clamp(2.2rem, 3.2vw, 2.5rem) !important;
+    padding-right: clamp(10.5rem, 14vw, 12.5rem) !important;
+    min-height: clamp(50px, 5.8vh, 54px) !important;
+    border-radius: clamp(12px, 1.4vh, 16px) !important;
+  }
+  
+  /* Placeholder overlay adjustment */
+  .soridraw-studio-theme .soridraw-studio-command-card div.pointer-events-none {
+    font-size: clamp(12.5px, 0.85vw, 13.8px) !important;
+    left: clamp(2.2rem, 3.2vw, 2.5rem) !important;
+    right: clamp(10.5rem, 14vw, 12.5rem) !important;
+  }
+  
+  /* Left search icon adjustment */
+  .soridraw-studio-theme .soridraw-studio-command-card div.absolute.top-6.left-4 {
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    left: clamp(0.8rem, 1.4vw, 1rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card div.absolute.top-6.left-4 svg {
+    width: clamp(16px, 1.1vw, 18px) !important;
+    height: clamp(16px, 1.1vw, 18px) !important;
+  }
+  
+  /* Right Side X/Reset Button position and size */
+  .soridraw-studio-theme .soridraw-studio-command-card button.soridraw-no-active-translate {
+    width: clamp(26px, 3vh, 30px) !important;
+    height: clamp(26px, 3vh, 30px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-36,
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-40 {
+    right: clamp(6.1rem, 9vw, 7.6rem) !important;
+  }
+  
+  /* Direct Writing Toggle Button */
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 {
+    right: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 button {
+    min-height: clamp(32px, 4vh, 36px) !important;
+    font-size: clamp(11px, 0.78vw, 12px) !important;
+    padding-left: clamp(0.7rem, 1.1vw, 0.9rem) !important;
+    padding-right: clamp(0.7rem, 1.1vw, 0.9rem) !important;
+    border-radius: clamp(7px, 0.9vh, 9px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-command-card .absolute.right-4 button svg {
+    width: clamp(13px, 1.6vh, 14.5px) !important;
+    height: clamp(13px, 1.6vh, 14.5px) !important;
+  }
+  
+  /* Direct lyrics textarea box size */
+  .soridraw-studio-theme textarea[placeholder*="가사초안"] {
+    font-size: clamp(12px, 0.78vw, 13px) !important;
+    padding: clamp(0.7rem, 1.3vh, 0.9rem) !important;
+    border-radius: clamp(10px, 1.3vh, 12px) !important;
+  }
+
+  /* 8. Floating Actions Generation Panel Adjustments */
+  div.fixed.bottom-5.md\:bottom-7.left-0 {
+    bottom: clamp(0.75rem, 1.8vh, 1.25rem) !important;
+  }
+  div.fixed.bottom-5.md\:bottom-7.left-0 div.flex.flex-row.items-stretch {
+    padding: clamp(0.35rem, 0.9vh, 0.5rem) !important;
+    border-radius: clamp(16px, 1.8vh, 20px) !important;
+    gap: clamp(0.35rem, 0.9vw, 0.55rem) !important;
+  }
 }

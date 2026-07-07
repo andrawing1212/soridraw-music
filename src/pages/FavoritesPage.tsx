@@ -6137,25 +6137,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           className="w-full rounded-2xl border border-black/20 bg-black/20 pl-4 pr-10 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/25 focus:border-[#FF6A5C]/70"
                         />
                         {sunoUrlInputs[index] && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              const next = [...sunoUrlInputs] as [string, string];
-                              next[index] = '';
-                              setSunoUrlInputs(next);
-                              setSunoUrlError('');
-                              setSunoUrlSaveStatus('idle');
-                              if (sunoUrlMainIndex === index) {
-                                setSunoUrlMainIndex(index === 0 ? 1 : 0);
-                              }
-                            }}
-                            className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.08] text-white/40 transition-all hover:bg-white/[0.16] hover:text-white/80 active:scale-90"
-                            aria-label="URL 비우기"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                const next = [...sunoUrlInputs] as [string, string];
+                                next[index] = '';
+                                setSunoUrlInputs(next);
+                                setSunoUrlError('');
+                                setSunoUrlSaveStatus('idle');
+                                if (sunoUrlMainIndex === index) {
+                                  setSunoUrlMainIndex(index === 0 ? 1 : 0);
+                                }
+                              }}
+                              className="soridraw-no-active-translate flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/40 transition-all hover:bg-white/[0.16] hover:text-white/80 active:scale-95 origin-center"
+                              aria-label="URL 비우기"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -6714,25 +6716,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                             className="w-full rounded-2xl border border-white/10 bg-black/20 pl-4 pr-10 py-3 text-sm text-white/82 outline-none transition-all placeholder:text-white/30 focus:border-[#FF6A5C]/75 focus:bg-black/25"
                           />
                           {detailSunoUrlInputs[index] && (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                const next = [...detailSunoUrlInputs] as [string, string];
-                                next[index] = '';
-                                setDetailSunoUrlInputs(next);
-                                setDetailSunoUrlError('');
-                                setDetailSunoUrlSaveStatus('idle');
-                                if (detailSunoUrlMainIndex === index) {
-                                  setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
-                                }
-                              }}
-                              className="absolute right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-white/[0.08] text-white/40 transition-all hover:bg-white/[0.16] hover:text-white/80 active:scale-90"
-                              aria-label="URL 비우기"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  const next = [...detailSunoUrlInputs] as [string, string];
+                                  next[index] = '';
+                                  setDetailSunoUrlInputs(next);
+                                  setDetailSunoUrlError('');
+                                  setDetailSunoUrlSaveStatus('idle');
+                                  if (detailSunoUrlMainIndex === index) {
+                                    setDetailSunoUrlMainIndex(index === 0 ? 1 : 0);
+                                  }
+                                }}
+                                className="soridraw-no-active-translate flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.08] text-white/40 transition-all hover:bg-white/[0.16] hover:text-white/80 active:scale-95 origin-center"
+                                aria-label="URL 비우기"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>

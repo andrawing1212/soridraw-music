@@ -1242,17 +1242,19 @@ function GenreHierarchySelectorComponent({
           </p>
         )}
         {directInput && !isDirectInputEditing && (
-          <button
-            type="button"
-            onPointerDown={(event) => { event.stopPropagation(); }}
-            onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
-            onMouseEnter={() => onHover({ id: 'direct-genre', label: 'Direct input', labelKo: '직접 입력', description: '장르 키워드를 직접 입력합니다.' } as CategoryItem)}
-            onMouseLeave={() => onHover(null)}
-            className="soridraw-direct-input-button absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
-            aria-label="장르 직접 입력"
-          >
-            <Edit2 className="w-[22px] h-[22px]" />
-          </button>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center">
+            <button
+              type="button"
+              onPointerDown={(event) => { event.stopPropagation(); }}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+              onMouseEnter={() => onHover({ id: 'direct-genre', label: 'Direct input', labelKo: '직접 입력', description: '장르 키워드를 직접 입력합니다.' } as CategoryItem)}
+              onMouseLeave={() => onHover(null)}
+              className="soridraw-direct-input-button soridraw-no-active-translate w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center active:scale-95 origin-center"
+              aria-label="장르 직접 입력"
+            >
+              <Edit2 className="w-[22px] h-[22px]" />
+            </button>
+          </div>
         )}
       </div>
 

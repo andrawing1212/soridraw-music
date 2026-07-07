@@ -11890,23 +11890,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
             </AnimatePresence>
             {userInput && (
-              <button
-                type="button"
-                aria-label="명령창 내용 삭제"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setUserInput('');
-                  window.requestAnimationFrame(() => {
-                    if (commandInputRef.current) {
-                      commandInputRef.current.style.height = 'auto';
-                      commandInputRef.current.focus();
-                    }
-                  });
-                }}
-                className="absolute right-36 md:right-40 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/12 border border-white/15 text-white/70 hover:text-white hover:bg-white/20 hover:border-white/25 transition-all flex items-center justify-center shadow-[0_8px_22px_rgba(0,0,0,0.22)]"
-              >
-                <X className="w-4.5 h-4.5" />
-              </button>
+              <div className="absolute right-36 md:right-40 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center">
+                <button
+                  type="button"
+                  aria-label="명령창 내용 삭제"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setUserInput('');
+                    window.requestAnimationFrame(() => {
+                      if (commandInputRef.current) {
+                        commandInputRef.current.style.height = 'auto';
+                        commandInputRef.current.focus();
+                      }
+                    });
+                  }}
+                  className="soridraw-no-active-translate w-9 h-9 rounded-full bg-white/12 border border-white/15 text-white/70 hover:text-white hover:bg-white/20 hover:border-white/25 transition-all flex items-center justify-center shadow-[0_8px_22px_rgba(0,0,0,0.22)] active:scale-95 origin-center"
+                >
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
             )}
 
             {/* Direct Lyrics Toggle Button */}
@@ -13681,8 +13683,24 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         a[href]:active,
         [role="button"]:not(.soridraw-direct-input-button):active {
           scale: 0.965;
-          translate: 0 2px;
           filter: brightness(0.94);
+        }
+
+        /* X, clear, edit buttons should not have any active translation or displacement */
+        .soridraw-no-active-translate,
+        .soridraw-no-active-translate:active,
+        button[aria-label*="삭제"]:active,
+        button[aria-label*="지우기"]:active,
+        button[aria-label*="취소"]:active,
+        button[aria-label*="닫기"]:active,
+        button[aria-label*="X"]:active,
+        button[aria-label*="x"]:active,
+        button[aria-label*="수정"]:active,
+        button[aria-label*="편집"]:active {
+          translate: 0 0 !important;
+          transform: none !important;
+          scale: 0.965 !important;
+          transform-origin: center !important;
         }
 
         .soridraw-direct-input-button {
@@ -13734,12 +13752,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         .section-expand-button:not(:disabled):active {
           scale: 1;
           translate: 0 0;
-          transform: translateX(-50%) translateY(2px) scale(0.965);
+          transform: translateX(-50%) translateY(0) scale(0.965);
           filter: brightness(0.94);
         }
 
         .section-expand-button--half-y:not(:disabled):active {
-          transform: translateX(-50%) translateY(calc(50% + 2px)) scale(0.965);
+          transform: translateX(-50%) translateY(50%) scale(0.965);
         }
 
         button:disabled {
@@ -14877,17 +14895,19 @@ function CycleSectionComponent({
           </p>
         )}
         {directInput && !isDirectInputEditing && (
-          <button
-            type="button"
-            onPointerDown={(event) => { event.stopPropagation(); }}
-            onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
-            onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
-            onMouseLeave={() => onHover(null)}
-            className="soridraw-direct-input-button absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
-            aria-label={`${titleKo || title} 직접 입력`}
-          >
-            <Edit2 className="w-[22px] h-[22px]" />
-          </button>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center">
+            <button
+              type="button"
+              onPointerDown={(event) => { event.stopPropagation(); }}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+              onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
+              onMouseLeave={() => onHover(null)}
+              className="soridraw-direct-input-button soridraw-no-active-translate w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center active:scale-95 origin-center"
+              aria-label={`${titleKo || title} 직접 입력`}
+            >
+              <Edit2 className="w-[22px] h-[22px]" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -15736,17 +15756,19 @@ function CategorySectionComponent({
           </p>
         )}
         {directInput && !isDirectInputEditing && (
-          <button
-            type="button"
-            onPointerDown={(event) => { event.stopPropagation(); }}
-            onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
-            onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
-            onMouseLeave={() => onHover(null)}
-            className="soridraw-direct-input-button absolute right-2 top-1/2 -translate-y-1/2 z-30 w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center"
-            aria-label={`${titleKo || title} 직접 입력`}
-          >
-            <Edit2 className="w-[22px] h-[22px]" />
-          </button>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 z-30 flex items-center justify-center">
+            <button
+              type="button"
+              onPointerDown={(event) => { event.stopPropagation(); }}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); openDirectInput(); }}
+              onMouseEnter={() => onHover({ id: `direct-${title}`, label: 'Direct input', labelKo: '직접 입력', description: `${titleKo || title} 키워드를 직접 입력합니다.` })}
+              onMouseLeave={() => onHover(null)}
+              className="soridraw-direct-input-button soridraw-no-active-translate w-12 h-12 bg-transparent border-0 shadow-none text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors flex items-center justify-center active:scale-95 origin-center"
+              aria-label={`${titleKo || title} 직접 입력`}
+            >
+              <Edit2 className="w-[22px] h-[22px]" />
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -16863,9 +16885,15 @@ function SongStructureIntegratedControlComponent({
               className="w-full rounded-xl bg-[var(--bg-secondary)] border border-btn-border pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#FFBB22]/40 shadow-inner"
             />
             {structureSearch && (
-              <button onClick={() => setStructureSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
-                <X className="w-3 h-3 text-[var(--text-secondary)]" />
-              </button>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => setStructureSearch('')}
+                  className="soridraw-no-active-translate flex items-center justify-center p-1 hover:bg-white/5 rounded-full active:scale-95 origin-center"
+                >
+                  <X className="w-3 h-3 text-[var(--text-secondary)]" />
+                </button>
+              </div>
             )}
           </div>
           <div className="flex gap-1">
@@ -17533,12 +17561,15 @@ function SongStructureIntegratedControlComponent({
                               className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#FFBB22]/40 shadow-inner"
                             />
                             {structureSearch && (
-                              <button 
-                                onClick={() => setStructureSearch('')}
-                                className="absolute right-3 top-1/2 -translate-y-1/2"
-                              >
-                                <X className="w-3 h-3 text-[var(--text-secondary)]" />
-                              </button>
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                                <button 
+                                  type="button"
+                                  onClick={() => setStructureSearch('')}
+                                  className="soridraw-no-active-translate flex items-center justify-center p-1 hover:bg-white/5 rounded-full active:scale-95 origin-center"
+                                >
+                                  <X className="w-3 h-3 text-[var(--text-secondary)]" />
+                                </button>
+                              </div>
                             )}
                           </div>
                           

@@ -5052,7 +5052,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               <Zap className="w-4 h-4" />
             </button>
             <div className="relative flex-1 min-w-0 group overflow-hidden">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] transition-colors" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#7FBD75] transition-colors" />
               <input
                 type="text"
                 value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
@@ -5062,10 +5062,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="w-full h-[46px] pl-11 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
+                className="w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
               />
               {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
-                <div className="absolute inset-0 flex items-center pl-11 pr-4 pointer-events-none overflow-hidden">
+                <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={`${isWorkspaceMode ? 'workspace' : 'playlist'}-${libraryPlaceholderIndex}`}
@@ -5495,7 +5495,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   return (
     <div
-      className={`soridraw-library-theme min-h-screen w-full max-w-full overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] ${multiSelectMode ? 'select-none' : ''}`}
+      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
@@ -5859,7 +5859,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      <div className="mx-auto w-full max-w-[1500px] space-y-3 md:space-y-5">
+      <div className="w-full space-y-3 md:space-y-5">
         
         {!isSharedView && typeof remainingCredits === 'number' && (
           <div className="flex md:hidden items-center justify-end">

@@ -958,27 +958,21 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 
   /* 2. Common PC Page Container Width & Spacing Reduction (Recreates the spacious QHD editorial feeling) */
-  /* For SunoLibraryPage */
-  .soridraw-library-theme {
-    padding-top: clamp(62px, 5vh, 74px) !important; /* Harmonize layout offset */
-    padding-bottom: clamp(3.5rem, 8vh, 4.5rem) !important;
-  }
-  .soridraw-library-theme .mx-auto.w-full.max-w-\[1500px\] {
-    max-width: clamp(1180px, 70vw, 1340px) !important; /* Restricts max width so left/right margins match QHD aesthetic */
-  }
-  .soridraw-library-theme .space-y-3.md\:space-y-5 {
-    --tw-space-y-reverse: 0 !important;
-    margin-top: clamp(0.25rem, 0.5vh, 0.35rem) !important;
-    margin-bottom: clamp(0.25rem, 0.5vh, 0.35rem) !important;
-  }
-  /* For FavoritesPage */
+  /* For SunoLibraryPage and FavoritesPage */
+  .soridraw-library-theme,
   .soridraw-musicnote-theme {
     max-width: clamp(1180px, 70vw, 1340px) !important; /* Restricts max width so left/right margins match QHD aesthetic */
     padding-top: clamp(62px, 5vh, 74px) !important;
-    padding-bottom: clamp(1.5rem, 3vh, 2.5rem) !important;
     padding-left: clamp(1rem, 2vw, 1.5rem) !important;
     padding-right: clamp(1rem, 2vw, 1.5rem) !important;
   }
+  .soridraw-library-theme {
+    padding-bottom: clamp(3.5rem, 8vh, 4.5rem) !important;
+  }
+  .soridraw-musicnote-theme {
+    padding-bottom: clamp(1.5rem, 3vh, 2.5rem) !important;
+  }
+  .soridraw-library-theme .space-y-3.md\:space-y-5,
   .soridraw-musicnote-theme .space-y-4.md\:space-y-5 {
     --tw-space-y-reverse: 0 !important;
     margin-top: clamp(0.25rem, 0.5vh, 0.35rem) !important;
@@ -1004,23 +998,22 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 
   /* 4. Filter Buttons, Tabs and Action Bars Padding & Gaps */
-  /* Tabs selection (myNote/sharedNote tabs etc) */
-  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 {
-    max-width: clamp(320px, 20vw, 380px) !important;
-  }
-  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 button {
-    padding-top: clamp(0.3rem, 0.6vh, 0.4rem) !important;
-    padding-bottom: clamp(0.3rem, 0.6vh, 0.4rem) !important;
-    font-size: 11px !important;
-  }
-  /* Library tabs */
+  /* Tabs selection (myNote/sharedNote tabs etc) and Library tabs */
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5,
   .soridraw-library-theme .grid-cols-3.gap-0.p-1 {
-    max-width: clamp(360px, 22vw, 420px) !important;
+    max-width: clamp(480px, 28vw, 540px) !important;
+    width: 100% !important;
   }
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 button,
   .soridraw-library-theme .grid-cols-3.gap-0.p-1 button {
-    padding-top: clamp(0.3rem, 0.6vh, 0.4rem) !important;
-    padding-bottom: clamp(0.3rem, 0.6vh, 0.4rem) !important;
-    font-size: 11px !important;
+    padding-top: clamp(0.35rem, 0.65vh, 0.45rem) !important;
+    padding-bottom: clamp(0.35rem, 0.65vh, 0.45rem) !important;
+    padding-left: clamp(0.25rem, 0.6vw, 0.75rem) !important;
+    padding-right: clamp(0.25rem, 0.6vw, 0.75rem) !important;
+    font-size: clamp(11.5px, 0.75vw, 12.5px) !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
   }
 
   /* Folder and playlist buttons scrollbar */
@@ -1071,7 +1064,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   .soridraw-library-theme .space-y-4.md\:space-y-5 {
     gap: clamp(0.35rem, 0.6vh, 0.45rem) !important;
   }
-  .soridraw-library-theme .rounded-2xl {
+  .soridraw-library-theme .group.relative.flex.items-center.rounded-2xl {
     border-radius: 0.5rem !important; /* rounded-lg */
   }
   /* Group Header */

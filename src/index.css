@@ -1155,9 +1155,13 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
      Provides an elegant, high-density, beautifully balanced compact PC Studio layout.
      ========================================================================== */
   
-  /* 1. Header Adjustments */
+  /* 1. Header & Container Width Alignment (Perfect visual match between banner & content) */
   header.soridraw-studio-theme {
     padding-top: clamp(60px, 5.5vh, 74px) !important;
+  }
+  .soridraw-studio-theme .mx-auto.w-full.max-w-\[1500px\],
+  main.soridraw-studio-theme {
+    max-width: clamp(1180px, 70vw, 1340px) !important;
   }
   .soridraw-studio-theme .sori-studio-logo-text {
     font-size: clamp(30px, 2.4vw, 40px) !important;
@@ -1167,9 +1171,15 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     height: clamp(1.75rem, 2.2vw, 2.25rem) !important;
   }
 
-  /* 2. Main Layout Container Width, Padding & Gap */
+  /* 1.1 Left Collapsed Generate Button Alignment (Always syncs with header/main left boundary) */
+  .soridraw-generate-heartbeat {
+    left: max(1.25rem, calc((100vw - clamp(1180px, 70vw, 1340px)) / 2 - 4.25rem)) !important;
+    height: clamp(54px, 7.5vh, 64px) !important;
+    width: clamp(54px, 5.4vh, 60px) !important;
+  }
+
+  /* 2. Main Layout Container Padding & Gap */
   main.soridraw-studio-theme {
-    max-width: clamp(1180px, 70vw, 1340px) !important;
     padding-top: clamp(0.75rem, 1.5vh, 1.25rem) !important;
     padding-bottom: clamp(0.75rem, 1.5vh, 1.25rem) !important;
   }
@@ -1191,6 +1201,28 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   .soridraw-studio-theme .soridraw-studio-menu-card {
     padding: clamp(1.1rem, 1.6vh, 1.35rem) !important;
     border-radius: clamp(16px, 1.6vh, 20px) !important;
+  }
+  
+  /* Storyboard Card specific compact adjustments (Fixing the "card remains huge" bug) */
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center {
+    padding: clamp(0.9rem, 1.4vh, 1.15rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center div.w-11.h-11 {
+    width: clamp(2.125rem, 3.8vh, 2.375rem) !important;
+    height: clamp(2.125rem, 3.8vh, 2.375rem) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center h3.text-base.md\:text-lg {
+    font-size: clamp(14.5px, 0.95vw, 16px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center p.text-xs.md\:text-sm {
+    font-size: clamp(11.5px, 0.78vw, 12.5px) !important;
+  }
+  .soridraw-studio-theme .soridraw-studio-menu-card div.p-5.md\:p-6.flex.items-center button {
+    height: clamp(30px, 4vh, 34px) !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    font-size: clamp(11px, 0.75vw, 12px) !important;
+    border-radius: clamp(8px, 0.9vh, 10px) !important;
   }
   
   /* Card Top Title Block spacing & font-size */
@@ -1360,5 +1392,79 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     padding: clamp(0.35rem, 0.9vh, 0.5rem) !important;
     border-radius: clamp(16px, 1.8vh, 20px) !important;
     gap: clamp(0.35rem, 0.9vw, 0.55rem) !important;
+  }
+
+  /* 9. Portal Modal & Popup Adjustments (Cohesive screen density scaling) */
+  
+  /* 9.1 Storyboard Modal & Vocal Member Editor Modal (originally max-w-4xl, max-h-[88vh]) */
+  .fixed.inset-0.z-\[9999\] .w-full.max-w-4xl,
+  .fixed.inset-0.z-\[10000\] .relative.flex.max-h-\[88vh\].w-full.max-w-4xl {
+    max-width: clamp(820px, 52vw, 900px) !important;
+    max-height: clamp(72vh, 76vh, 78vh) !important;
+  }
+  
+  /* 9.2 Cycle Section Popup / Keyword More Popup (originally max-w-2xl, max-h-[82vh]) */
+  .fixed.inset-0.z-\[300\] .relative.z-10.w-full.max-w-2xl {
+    max-width: clamp(600px, 40vw, 660px) !important;
+    max-height: clamp(68vh, 72vh, 74vh) !important;
+  }
+  
+  /* 9.3 Global Search Popup (originally max-w-3xl) */
+  .fixed.inset-0.z-\[10000\] .w-full.max-w-3xl {
+    max-width: clamp(660px, 44vw, 720px) !important;
+  }
+
+  /* 9.4 Suno Api / Custom Note Settings / Song Detail Modals */
+  .fixed.inset-0.z-\[100\] .relative.w-full.max-w-md {
+    max-width: clamp(380px, 26vw, 420px) !important;
+  }
+  .fixed.inset-0.z-\[20000\] .w-full.max-w-2xl,
+  .fixed.inset-0.z-\[260\] .relative.w-full {
+    max-width: clamp(600px, 40vw, 660px) !important;
+    max-height: clamp(68vh, 72vh, 74vh) !important;
+  }
+  
+  /* 9.5 Inner Padding & Gap reduction for modas/popups to harmonize scale */
+  .fixed.inset-0.z-\[9999\] .px-4.md\:px-5.py-4,
+  .fixed.inset-0.z-\[10000\] .px-5.py-4,
+  .fixed.inset-0.z-\[300\] .px-5.py-4 {
+    padding-top: clamp(0.7rem, 1.2vh, 0.85rem) !important;
+    padding-bottom: clamp(0.7rem, 1.2vh, 0.85rem) !important;
+    padding-left: clamp(1rem, 1.5vw, 1.2rem) !important;
+    padding-right: clamp(1rem, 1.5vw, 1.2rem) !important;
+  }
+  
+  /* Modal Headers font-size and spacing */
+  .fixed.inset-0 h2.text-xl,
+  .fixed.inset-0 h3.text-base.md\:text-lg,
+  .fixed.inset-0 h4.text-lg {
+    font-size: clamp(15px, 1vw, 16.5px) !important;
+  }
+  .fixed.inset-0 h3.text-2xl {
+    font-size: clamp(18.5px, 1.2vw, 21px) !important;
+  }
+  
+  /* Modal action buttons in header */
+  .fixed.inset-0 button {
+    height: clamp(30px, 3.8vh, 33px) !important;
+    font-size: clamp(11px, 0.75vw, 11.5px) !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+  .fixed.inset-0 button svg {
+    width: clamp(12.5px, 1.6vh, 14px) !important;
+    height: clamp(12.5px, 1.6vh, 14px) !important;
+  }
+  
+  /* Grid selection within modas/popups */
+  .fixed.inset-0 .grid {
+    gap: clamp(0.38rem, 0.65vh, 0.52rem) !important;
+  }
+  .fixed.inset-0 .grid button {
+    min-height: clamp(36px, 4.4vh, 42px) !important;
+    border-radius: clamp(8px, 0.9vh, 10px) !important;
+  }
+  .fixed.inset-0 .grid button span {
+    font-size: clamp(11px, 0.76vw, 12.2px) !important;
   }
 }

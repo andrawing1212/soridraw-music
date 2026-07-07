@@ -1281,7 +1281,7 @@ function GenreHierarchySelectorComponent({
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 1, scale: 1, y: 0 }}
                 transition={{ duration: 0 }}
-                className="w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10"
+                className="soridraw-studio-genre-modal-panel w-full max-w-md md:max-w-2xl lg:max-w-3xl rounded-[32px] bg-[var(--card-bg)] shadow-2xl overflow-hidden relative z-10"
                 onClick={(e) => e.stopPropagation()}
                 onWheel={blockModalOuterScroll}
                 onTouchMove={blockModalOuterScroll}

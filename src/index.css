@@ -1360,6 +1360,272 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     border-radius: 0.75rem !important;
   }
 
+
+  /* ==========================================================================
+     8. Sori Studio FHD compact mode
+     Keep QHD layout untouched, but make the Studio page fit FHD without global scale.
+     Header, main shell, floating generate button, cards and studio modals share one density.
+     ========================================================================== */
+  .soridraw-studio-hero,
+  .soridraw-studio-main,
+  .soridraw-studio-shell {
+    --soridraw-studio-fhd-max: clamp(1180px, 70vw, 1340px);
+  }
+
+  .soridraw-studio-hero {
+    padding-top: clamp(68px, 7vh, 82px) !important;
+  }
+
+  .soridraw-studio-shell,
+  .soridraw-studio-main {
+    max-width: var(--soridraw-studio-fhd-max) !important;
+    padding-left: clamp(1rem, 1.8vw, 1.5rem) !important;
+    padding-right: clamp(1rem, 1.8vw, 1.5rem) !important;
+  }
+
+  .soridraw-studio-main {
+    padding-top: clamp(0.75rem, 1.4vh, 1rem) !important;
+    padding-bottom: clamp(1.25rem, 2.4vh, 1.75rem) !important;
+    row-gap: clamp(1rem, 1.8vh, 1.25rem) !important;
+  }
+
+  .soridraw-studio-title {
+    gap: 0.55rem !important;
+    font-size: clamp(38px, 2.55vw, 44px) !important;
+    line-height: 1.05 !important;
+  }
+
+  .soridraw-studio-title svg {
+    width: clamp(1.9rem, 2.3vw, 2.15rem) !important;
+    height: clamp(1.9rem, 2.3vw, 2.15rem) !important;
+  }
+
+  .soridraw-studio-selection-grid {
+    gap: clamp(0.9rem, 1.4vw, 1.05rem) !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card {
+    border-radius: 22px !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card.p-7,
+  .studio-tone-down .soridraw-studio-menu-card.p-5,
+  .studio-tone-down .soridraw-studio-menu-card.px-6.py-4 {
+    padding: clamp(1.05rem, 1.55vw, 1.25rem) !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card.pb-12,
+  .studio-tone-down .soridraw-studio-menu-card.pb-10 {
+    padding-bottom: clamp(2.2rem, 3.2vw, 2.6rem) !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card h3.text-\[22px\] {
+    font-size: clamp(18px, 1.25vw, 20px) !important;
+    line-height: 1.15 !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card h3 .w-1\.5.h-6,
+  .studio-tone-down .soridraw-studio-menu-card h3 span.w-1\.5.h-6 {
+    height: 1.25rem !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card .soridraw-expand-content {
+    min-height: 68px !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card .soridraw-expand-summary {
+    margin-top: clamp(0.75rem, 1.25vh, 0.95rem) !important;
+    min-height: 52px !important;
+    height: 52px !important;
+    border-radius: 16px !important;
+    padding: 0.65rem 1rem !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card button {
+    border-radius: 14px !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card .grid.gap-2\.5,
+  .studio-tone-down .soridraw-studio-menu-card .grid.md\:gap-3,
+  .studio-tone-down .soridraw-studio-menu-card .grid.gap-2,
+  .studio-tone-down .soridraw-studio-menu-card .space-y-2,
+  .studio-tone-down .soridraw-studio-menu-card .space-y-3,
+  .studio-tone-down .soridraw-studio-menu-card .space-y-3\.5,
+  .studio-tone-down .soridraw-studio-menu-card .space-y-4 {
+    gap: clamp(0.45rem, 0.8vh, 0.65rem) !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card button.min-h-\[58px\] {
+    min-height: 50px !important;
+    padding: 0.55rem 0.75rem !important;
+  }
+
+  .studio-tone-down .soridraw-studio-menu-card button.min-h-\[58px\] span.text-\[15px\],
+  .studio-tone-down .soridraw-studio-menu-card button.min-h-\[58px\] span.md\:text-\[16\.5px\] {
+    font-size: clamp(13px, 0.95vw, 14.5px) !important;
+  }
+
+  .studio-tone-down .soridraw-studio-command-card textarea {
+    min-height: 58px !important;
+    padding-top: 0.9rem !important;
+    padding-bottom: 0.9rem !important;
+    font-size: clamp(14px, 1vw, 16px) !important;
+    border-radius: 18px !important;
+  }
+
+  .studio-tone-down .soridraw-studio-command-card .absolute.top-6.left-4 {
+    top: 1.05rem !important;
+  }
+
+  .soridraw-studio-action-collapsed {
+    left: max(16px, calc((100vw - var(--soridraw-studio-fhd-max, 1340px)) / 2 - 112px)) !important;
+    bottom: clamp(1.25rem, 3vh, 1.75rem) !important;
+    height: clamp(4.8rem, 9vh, 5.4rem) !important;
+    width: 3.25rem !important;
+  }
+
+  .soridraw-studio-action-bar {
+    bottom: clamp(1rem, 2.4vh, 1.5rem) !important;
+  }
+
+  .soridraw-studio-action-panel {
+    max-width: clamp(760px, 48vw, 860px) !important;
+  }
+
+  .soridraw-studio-action-panel button {
+    transform-origin: center !important;
+  }
+
+  .soridraw-studio-action-panel button:active,
+  .soridraw-studio-action-collapsed:active {
+    translate: 0 0 !important;
+    transform: none !important;
+  }
+
+  /* Studio popups/modals: proportional FHD adjustment without hiding item descriptions. */
+  .soridraw-studio-global-search-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-storyboard-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .studio-section-custom-modal-panel {
+    max-width: clamp(680px, 56vw, 820px) !important;
+    border-radius: 24px !important;
+  }
+
+  .soridraw-studio-global-search-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .studio-section-custom-modal-panel {
+    max-height: min(84vh, 820px) !important;
+  }
+
+  .soridraw-studio-storyboard-modal-panel {
+    max-width: clamp(760px, 62vw, 900px) !important;
+    max-height: min(86vh, 820px) !important;
+  }
+
+  .soridraw-studio-global-search-panel .px-5.py-4,
+  .soridraw-studio-genre-modal-panel .px-6.py-5,
+  .soridraw-studio-cycle-modal-panel .px-5.py-4,
+  .soridraw-studio-vocal-modal-panel .px-5.py-4,
+  .studio-section-custom-modal-panel .px-5.py-4,
+  .soridraw-studio-storyboard-modal-panel .px-4.py-4,
+  .soridraw-studio-storyboard-modal-panel .md\:px-5.py-4 {
+    padding: 0.9rem 1rem !important;
+  }
+
+  .soridraw-studio-genre-modal-panel .p-5,
+  .soridraw-studio-genre-modal-panel .md\:p-6,
+  .soridraw-studio-cycle-modal-panel .p-4,
+  .soridraw-studio-cycle-modal-panel .p-5,
+  .soridraw-studio-storyboard-modal-panel .p-4,
+  .soridraw-studio-storyboard-modal-panel .md\:p-5,
+  .soridraw-studio-vocal-modal-panel .p-5,
+  .studio-section-custom-modal-panel .p-5 {
+    padding: clamp(0.85rem, 1.25vw, 1rem) !important;
+  }
+
+  .soridraw-studio-genre-modal-panel h3,
+  .soridraw-studio-cycle-modal-panel h3,
+  .soridraw-studio-storyboard-modal-panel h3,
+  .soridraw-studio-vocal-modal-panel h4,
+  .studio-section-custom-modal-panel h3 {
+    font-size: clamp(16px, 1.25vw, 19px) !important;
+    line-height: 1.2 !important;
+  }
+
+  .soridraw-studio-cycle-modal-panel .text-xs,
+  .soridraw-studio-genre-modal-panel .text-xs,
+  .soridraw-studio-storyboard-modal-panel .text-xs,
+  .soridraw-studio-vocal-modal-panel .text-xs,
+  .studio-section-custom-modal-panel .text-xs {
+    font-size: 11.5px !important;
+    line-height: 1.45 !important;
+  }
+
+  .soridraw-studio-genre-modal-panel button.min-h-\[82px\],
+  .soridraw-studio-genre-modal-panel button.min-h-\[64px\],
+  .soridraw-studio-genre-modal-panel button.md\:min-h-\[72px\],
+  .soridraw-studio-cycle-modal-panel button,
+  .soridraw-studio-global-search-panel button,
+  .soridraw-studio-storyboard-modal-panel button,
+  .soridraw-studio-vocal-modal-panel button,
+  .studio-section-custom-modal-panel button {
+    border-radius: 14px !important;
+  }
+
+  .soridraw-studio-genre-modal-panel button.min-h-\[82px\] {
+    min-height: 72px !important;
+    padding: 0.85rem !important;
+  }
+
+  .soridraw-studio-genre-modal-panel button.min-h-\[64px\],
+  .soridraw-studio-genre-modal-panel button.md\:min-h-\[72px\] {
+    min-height: 58px !important;
+    padding: 0.8rem 0.9rem !important;
+  }
+
+  .soridraw-studio-genre-modal-panel .font-bold.text-\[20px\],
+  .soridraw-studio-genre-modal-panel .md\:text-\[22px\] {
+    font-size: clamp(17px, 1.3vw, 19px) !important;
+  }
+
+  .soridraw-studio-genre-modal-panel .soridraw-genre-desc-track,
+  .soridraw-studio-genre-modal-panel .soridraw-genre-desc-copy {
+    font-size: clamp(12px, 0.9vw, 13.5px) !important;
+  }
+
+  .soridraw-studio-cycle-modal-panel .grid,
+  .soridraw-studio-storyboard-modal-panel .grid,
+  .soridraw-studio-vocal-modal-panel .grid,
+  .studio-section-custom-modal-panel .grid {
+    gap: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+  }
+
+  .soridraw-studio-cycle-modal-panel .space-y-2,
+  .soridraw-studio-cycle-modal-panel .space-y-3,
+  .soridraw-studio-cycle-modal-panel .space-y-4,
+  .soridraw-studio-storyboard-modal-panel .space-y-3\.5,
+  .soridraw-studio-storyboard-modal-panel .space-y-4,
+  .soridraw-studio-storyboard-modal-panel .space-y-5,
+  .soridraw-studio-vocal-modal-panel .space-y-3\.5,
+  .soridraw-studio-vocal-modal-panel .space-y-4,
+  .studio-section-custom-modal-panel .space-y-4 {
+    row-gap: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+  }
+
+  .soridraw-studio-cycle-modal-panel p,
+  .soridraw-studio-cycle-modal-panel .text-\[var\(--text-secondary\)\],
+  .soridraw-studio-genre-modal-panel p,
+  .soridraw-studio-genre-modal-panel .text-\[var\(--text-secondary\)\],
+  .soridraw-studio-storyboard-modal-panel p,
+  .soridraw-studio-vocal-modal-panel p {
+    display: revert !important;
+    visibility: visible !important;
+  }
+
   /* Library Detail Modal */
   div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col {
     max-width: 960px !important;

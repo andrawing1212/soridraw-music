@@ -10928,7 +10928,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.14, ease: "easeOut" }}
-              className="flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--modal-soft-border)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
+              className="soridraw-studio-global-search-panel flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--modal-soft-border)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
               onPointerDown={(event) => event.stopPropagation()}
               onPointerUp={(event) => event.stopPropagation()}
             >
@@ -11264,8 +11264,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           <>
 
               {/* Header */}
-              <header className="studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
-                <div className="mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
+              <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+                <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
                   {/* Studio header search button */}
                   {user && (
                     <button
@@ -11285,7 +11285,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
                   >
                     <h1 
-                      className="inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                      className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
                       <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFBB22]" />
                       <span>Sori <span className="text-[#FFBB22]">Studio</span></span>
@@ -11294,11 +11294,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className="studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
+            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}
-                  <div className="grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -11637,7 +11637,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 1, scale: 1, y: 0 }}
                       transition={{ duration: 0 }}
-                      className="w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
+                      className="soridraw-studio-storyboard-modal-panel w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -12070,7 +12070,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
+                    className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-132px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
@@ -12084,9 +12084,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     animate={floatingActionBarVariants.animate}
                     exit={floatingActionBarVariants.exit}
                     transition={smoothActionPanelTransition}
-                    className="fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
+                    className="soridraw-studio-action-bar fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
                   >
-                    <div className="relative w-full max-w-4xl pointer-events-auto">
+                    <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
                       {generationModelNotice && (
                         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
                           {generationModelNotice}
@@ -15189,7 +15189,7 @@ function CycleKeywordPopup({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0 }}
-          className="relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
+          className="soridraw-studio-cycle-modal-panel relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -19889,7 +19889,7 @@ function VocalControlComponent({
                 onClick={(e) => e.stopPropagation()}
                 onWheel={blockVocalCharacterOuterScroll}
                 onTouchMove={blockVocalCharacterOuterScroll}
-                className="relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
+                className="soridraw-studio-vocal-modal-panel relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-[#111] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
               >
                 <div className="flex items-center justify-between gap-3 bg-[#151515] px-5 py-4 shadow-[inset_0_-1px_0_rgba(127,189,117,0.08)]">
                   <div className="min-w-0">

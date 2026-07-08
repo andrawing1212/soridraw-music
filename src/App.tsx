@@ -11294,7 +11294,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-3 md:space-y-4">
+            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-4 md:space-y-4">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}

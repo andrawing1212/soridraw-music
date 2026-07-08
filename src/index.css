@@ -1660,6 +1660,21 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
       margin: 0 auto !important;
     }
 
+
+/* Studio section boundary spacing: keep Sound→Mood and Section Structure→Tempo from feeling collapsed on both mobile and desktop. */
+.soridraw-studio-main > .soridraw-studio-secondary-sections,
+.soridraw-studio-main > .soridraw-studio-tempo-block {
+  --tw-space-y-reverse: 0 !important;
+  margin-top: clamp(1rem, 2.4vw, 1.2rem) !important;
+}
+
+@media (min-width: 1024px) {
+  .soridraw-studio-main > .soridraw-studio-secondary-sections,
+  .soridraw-studio-main > .soridraw-studio-tempo-block {
+    margin-top: clamp(1.05rem, 1.65vh, 1.28rem) !important;
+  }
+}
+
     /* Keep Studio compact spacing desktop-only. Do not affect mobile responsive layout. */
     .soridraw-studio-main > :not([hidden]) ~ :not([hidden]) {
       --tw-space-y-reverse: 0 !important;

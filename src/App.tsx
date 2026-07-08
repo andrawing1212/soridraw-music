@@ -3898,8 +3898,29 @@ function App() {
   const getFavoriteComparableText = (song: any) => ({
     title: normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' ')),
     prompt: normalizeFavoriteSearchValue(song?.prompt),
-    lyrics: normalizeFavoriteSearchValue(`${song?.lyrics?.korean || ''} ${song?.lyrics?.english || ''}`).slice(0, 1200),
+    lyrics: normalizeFavoriteSearchValue(`${song?.lyrics?.korean || ''} ${song?.lyrics?.english || ''}`),
   });
+
+  const isStrictSameFavoriteSongSnapshot = (favorite: any, song: any): boolean => {
+    if (!favorite || !song) return false;
+    const favoriteComparable = getFavoriteComparableText(favorite);
+    const songComparable = getFavoriteComparableText(song);
+
+    // Studio -> Music Note save must treat a song as the same only when all three core fields match.
+    // Title-only, prompt+lyrics-only, or prompt+title-only matching can connect an edited Studio result
+    // to an older Music Note and make the saved lyrics/prompt look mixed up.
+    return Boolean(
+      favoriteComparable.title &&
+      songComparable.title &&
+      favoriteComparable.prompt &&
+      songComparable.prompt &&
+      favoriteComparable.lyrics &&
+      songComparable.lyrics &&
+      favoriteComparable.title === songComparable.title &&
+      favoriteComparable.prompt === songComparable.prompt &&
+      favoriteComparable.lyrics === songComparable.lyrics
+    );
+  };
 
   const isSameFavoriteSong = (favorite: any, song: any, songIdentityKey = buildFavoriteIdentityKey(song)) => {
     if (!favorite || !song) return false;
@@ -3907,13 +3928,7 @@ function App() {
     const favoriteIdentityKey = favorite?.favoriteKey || buildFavoriteIdentityKey(favorite);
     if (songIdentityKey && favoriteIdentityKey && songIdentityKey === favoriteIdentityKey) return true;
 
-    const favoriteComparable = getFavoriteComparableText(favorite);
-    const songComparable = getFavoriteComparableText(song);
-    if (favoriteComparable.prompt && songComparable.prompt && favoriteComparable.prompt === songComparable.prompt) {
-      if (favoriteComparable.lyrics && songComparable.lyrics && favoriteComparable.lyrics === songComparable.lyrics) return true;
-      if (favoriteComparable.title && songComparable.title && favoriteComparable.title === songComparable.title) return true;
-    }
-    return false;
+    return isStrictSameFavoriteSongSnapshot(favorite, song);
   };
 
   const isFavoriteHidden = (favorite: any) => Boolean(
@@ -6028,6 +6043,7 @@ const toggleCycleVariantSelection = (
   const pinnedInstrumentSoundsRef = useRef(pinnedInstrumentSounds);
   const historyRef = useRef(history);
   const historyIndexRef = useRef(historyIndex);
+  const resultRef = useRef(result);
   const preserveHistoryIndexOnNextSnapshotRef = useRef<number | null>(null);
   const recentSongsReadyToCacheRef = useRef(false);
   const userRef = useRef(user);
@@ -6038,6 +6054,7 @@ const toggleCycleVariantSelection = (
   useEffect(() => { pinnedInstrumentSoundsRef.current = pinnedInstrumentSounds; }, [pinnedInstrumentSounds]);
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
+  useEffect(() => { resultRef.current = result; }, [result]);
   useEffect(() => { userRef.current = user; }, [user]);
 
   useEffect(() => {
@@ -9714,6 +9731,8 @@ ${normalizePromptForDisplay(result.prompt)}
       setResult(nextSong);
       setHistory(nextHistory);
       setHistoryIndex(currentIndex);
+      resultRef.current = nextSong;
+      historyRef.current = nextHistory;
       historyIndexRef.current = currentIndex;
       preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
       recentSongsReadyToCacheRef.current = true;
@@ -9747,16 +9766,17 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const getStudioFavoriteSaveSnapshot = (): SongResult | null => {
-    if (!result) return null;
+    const activeResult = resultRef.current || result;
+    if (!activeResult) return null;
 
     const currentIndex = historyIndexRef.current;
     const currentHistorySong = currentIndex >= 0 ? historyRef.current[currentIndex] : null;
-    const resultFingerprint = getStudioSongFingerprint(result);
+    const resultFingerprint = getStudioSongFingerprint(activeResult);
     const historyFingerprint = getStudioSongFingerprint(currentHistorySong);
-    const resultEditTime = Number((result.appliedKeywords as any)?.editedInStudioAt || result.updatedAt || result.createdAt || 0);
+    const resultEditTime = Number((activeResult.appliedKeywords as any)?.editedInStudioAt || activeResult.updatedAt || activeResult.createdAt || 0);
     const historyEditTime = Number((currentHistorySong?.appliedKeywords as any)?.editedInStudioAt || currentHistorySong?.updatedAt || currentHistorySong?.createdAt || 0);
 
-    let snapshot: SongResult = result;
+    let snapshot: SongResult = activeResult;
     if (currentHistorySong && resultFingerprint && resultFingerprint === historyFingerprint && historyEditTime > resultEditTime) {
       snapshot = currentHistorySong;
     }
@@ -9785,6 +9805,8 @@ ${normalizePromptForDisplay(result.prompt)}
       setResult(snapshot);
       setHistory(nextHistory);
       setHistoryIndex(currentIndex);
+      resultRef.current = snapshot;
+      historyRef.current = nextHistory;
       historyIndexRef.current = currentIndex;
       preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
       recentSongsReadyToCacheRef.current = true;

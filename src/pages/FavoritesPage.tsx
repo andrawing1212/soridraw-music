@@ -918,6 +918,30 @@ export default function FavoritesPage({
       .trim();
   };
 
+  const normalizeTitlePartForCompare = (value: any): string => cleanTitlePart(value)
+    .toLowerCase()
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[^0-9a-zA-Zㄱ-ㅎㅏ-ㅣ가-힣\s-]/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const areTitlePartsSame = (a: any, b: any): boolean => {
+    const first = normalizeTitlePartForCompare(a);
+    const second = normalizeTitlePartForCompare(b);
+    return Boolean(first && second && first === second);
+  };
+
+  const cleanTitlePair = (korean: any, foreign: any): { korean: string; foreign: string } => {
+    const ko = cleanTitlePart(korean);
+    const secondary = cleanTitlePart(foreign);
+    if (ko && secondary && areTitlePartsSame(ko, secondary)) {
+      return { korean: ko, foreign: '' };
+    }
+    return { korean: ko, foreign: secondary };
+  };
+
   const cleanEditableTitleGenre = (value: any): string => {
     return String(value || '')
       .replace(/^\[|\]$/g, '')
@@ -927,10 +951,9 @@ export default function FavoritesPage({
   };
 
   const composeFavoriteEditedTitle = (korean: any, english: any): string => {
-    const ko = cleanTitlePart(korean);
-    const foreign = cleanTitlePart(english);
+    const { korean: ko, foreign } = cleanTitlePair(korean, english);
 
-    if (ko && foreign && ko !== foreign) return `${ko} | ${foreign}`;
+    if (ko && foreign) return `${ko} | ${foreign}`;
     return ko || foreign || 'Untitled';
   };
 
@@ -942,10 +965,9 @@ export default function FavoritesPage({
     const genre = getDisplaySubGenre(song);
     const genreLabel = genre ? `[${genre}] ` : '';
     const { korean, english } = getNormalizedTitles(song);
-    const ko = cleanTitlePart(korean);
-    const foreign = cleanTitlePart(english);
+    const { korean: ko, foreign } = cleanTitlePair(korean, english);
 
-    if (ko && foreign && ko !== foreign) {
+    if (ko && foreign) {
       return `${genreLabel}${formatPlainTitlePart(ko)} | ${formatPlainTitlePart(foreign)}`;
     }
 
@@ -1028,7 +1050,7 @@ export default function FavoritesPage({
           <h2 className="text-[17px] md:text-[22px] font-bold text-[var(--text-primary)] leading-tight text-center break-keep">
             {koLine}
           </h2>
-          {enLine && enLine !== koLine && (
+          {enLine && !areTitlePartsSame(enLine, koLine) && (
             <h2 className="text-[13px] md:text-[16px] font-bold text-[var(--text-primary)]/70 leading-tight text-center whitespace-nowrap overflow-hidden text-ellipsis w-full max-w-full">
               {enLine}
             </h2>
@@ -1038,7 +1060,7 @@ export default function FavoritesPage({
         {/* 우측 복사 버튼 그룹 - 세로 1열 고정 */}
         <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10">
           <DetailActionCopyBtn text={getFavoriteTitleCopyWithGenre(song, 'ko')} type="title-ko" label="KO" />
-          {enLine && enLine !== koLine && (
+          {enLine && !areTitlePartsSame(enLine, koLine) && (
             <DetailActionCopyBtn text={getFavoriteTitleCopyWithGenre(song, 'en')} type="title-en" label="EN" />
           )}
         </div>
@@ -1047,17 +1069,19 @@ export default function FavoritesPage({
   };
       const getCombinedFavoriteCopyText = (song: any): string => {
         const { korean, english } = getNormalizedTitles(song);
-        const ko = cleanTitlePart(korean);
-        const foreign = cleanTitlePart(english);
+        const { korean: ko, foreign } = cleanTitlePair(korean, english);
 
-        if (ko && foreign && ko !== foreign) {
+        if (ko && foreign) {
           return `${ko} | ${foreign}`;
         }
 
         const fallback = cleanTitlePart(ko || foreign || song?.title || 'Untitled');
         if (fallback.includes('|') || fallback.includes('│')) {
           const parts = fallback.split(/[|│]/).map(cleanTitlePart).filter(Boolean);
-          if (parts.length >= 2) return `${parts[0]} | ${parts[1]}`;
+          if (parts.length >= 2) {
+            const { korean: first, foreign: second } = cleanTitlePair(parts[0], parts[1]);
+            return first && second ? `${first} | ${second}` : first || second || parts[0];
+          }
           if (parts.length === 1) return parts[0];
         }
 
@@ -5208,8 +5232,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
               const mobileGenreLabel = getDisplaySubGenre(song);
               const mobileTitles = getNormalizedTitles(song);
-              const mobileTitleKo = cleanTitlePart(mobileTitles.korean);
-              const mobileTitleEn = cleanTitlePart(mobileTitles.english);
+              const { korean: mobileTitleKo, foreign: mobileTitleEn } = cleanTitlePair(mobileTitles.korean, mobileTitles.english);
               const mobileTitleText = mobileTitleKo && mobileTitleEn
                 ? `${mobileTitleKo} | ${mobileTitleEn}`
                 : mobileTitleKo || mobileTitleEn || 'Untitled';

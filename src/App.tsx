@@ -3942,6 +3942,65 @@ function App() {
     return ['title', 'koreanTitle', 'englishTitle', 'displayGenre', 'genre', 'appliedKeywords', 'situationSummary'].some((key) => key in updates);
   };
 
+  const normalizeFavoriteTitlePartForCompare = (value: unknown): string => normalizeFavoriteSearchValue(
+    String(value ?? '')
+      .replace(/^(\[[^\]]+\]\s*)+/g, '')
+      .replace(/^['"]+|['"]+$/g, '')
+      .split(/[|│]/)[0]
+  );
+
+  const areFavoriteTitlePartsSame = (a: unknown, b: unknown): boolean => {
+    const first = normalizeFavoriteTitlePartForCompare(a);
+    const second = normalizeFavoriteTitlePartForCompare(b);
+    return Boolean(first && second && first === second);
+  };
+
+  const normalizeFavoriteTitleFields = <T extends Record<string, any>>(source: T): T => {
+    if (!source) return source;
+
+    const next: any = {
+      ...source,
+      appliedKeywords: { ...(source.appliedKeywords || {}) },
+    };
+    const applied = next.appliedKeywords as Record<string, any>;
+    const titlesByLanguage: Partial<Record<LanguageCode, string>> = {
+      ...((applied.titlesByLanguage || {}) as Partial<Record<LanguageCode, string>>),
+    };
+
+    const koreanTitle = String(next.koreanTitle || titlesByLanguage.ko || '').trim();
+    const englishTitle = String(next.englishTitle || titlesByLanguage.en || '').trim();
+
+    if (koreanTitle && englishTitle && areFavoriteTitlePartsSame(koreanTitle, englishTitle)) {
+      next.koreanTitle = koreanTitle;
+      next.englishTitle = '';
+      Object.keys(titlesByLanguage).forEach((lang) => {
+        if (lang !== 'ko' && areFavoriteTitlePartsSame(koreanTitle, (titlesByLanguage as any)[lang])) {
+          delete (titlesByLanguage as any)[lang];
+        }
+      });
+    }
+
+    if (titlesByLanguage.ko) {
+      Object.keys(titlesByLanguage).forEach((lang) => {
+        if (lang !== 'ko' && areFavoriteTitlePartsSame(titlesByLanguage.ko, (titlesByLanguage as any)[lang])) {
+          delete (titlesByLanguage as any)[lang];
+        }
+      });
+    }
+
+    const titleLanguages = (((applied.titleLanguages || applied.lyricLanguages || []) as LanguageCode[]) || [])
+      .filter((lang) => Boolean(lang && (lang === 'ko' || (titlesByLanguage as any)[lang])));
+    const dedupedTitleLanguages = Array.from(new Set(titleLanguages)) as LanguageCode[];
+
+    next.appliedKeywords = {
+      ...applied,
+      titlesByLanguage,
+      titleLanguages: dedupedTitleLanguages,
+    };
+
+    return next as T;
+  };
+
   const buildFavoriteIdentityKey = (song: any): string => {
     const titlePart = normalizeFavoriteSearchValue([song?.title, song?.koreanTitle, song?.englishTitle].filter(Boolean).join(' '));
     const promptPart = normalizeFavoriteSearchValue(song?.prompt);
@@ -6671,6 +6730,8 @@ const toggleCycleVariantSelection = (
   }, []);
 
   const toggleFavorite = async (song: SongResult) => {
+    song = normalizeFavoriteTitleFields(song as any) as SongResult;
+
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -9489,13 +9550,15 @@ ${normalizePromptForDisplay(result.prompt)}
   const formatTitleWithoutGenre = (song: SongResult | null = result): string => {
     const { korean, foreign, fallback } = getPlainTitleParts(song);
 
-    if (korean && foreign && korean !== foreign) {
+    if (korean && foreign && !areFavoriteTitlePartsSame(korean, foreign)) {
       return `${korean} | ${foreign}`;
     }
 
     if (fallback.includes('|') || fallback.includes('│')) {
       const parts = fallback.split(/[|│]/).map(stripDisplayTitlePart).filter(Boolean);
-      if (parts.length >= 2) return `${parts[0]} | ${parts[1]}`;
+      if (parts.length >= 2) {
+        return areFavoriteTitlePartsSame(parts[0], parts[1]) ? parts[0] : `${parts[0]} | ${parts[1]}`;
+      }
       if (parts.length === 1) return parts[0];
     }
 
@@ -9783,7 +9846,7 @@ ${normalizePromptForDisplay(result.prompt)}
       secondaryLyrics ? secondaryLanguage : null,
     ].filter(Boolean))) as LanguageCode[];
 
-    return {
+    const editedSong = {
       ...song,
       title: (shouldEditKoreanTitle ? koreanTitle : '') || (shouldEditSecondaryTitle ? secondaryTitle : '') || song.title || 'Untitled',
       koreanTitle: shouldEditKoreanTitle ? koreanTitle : (song.koreanTitle || ''),
@@ -9804,7 +9867,9 @@ ${normalizePromptForDisplay(result.prompt)}
         editedInStudio: true,
         editedInStudioAt: Date.now(),
       } as any,
-    };
+    } as SongResult;
+
+    return normalizeFavoriteTitleFields(editedSong);
   };
 
   const saveRecentSongEdit = async () => {
@@ -9879,14 +9944,14 @@ ${normalizePromptForDisplay(result.prompt)}
       snapshot = buildEditedRecentSong(snapshot, recentSongEditDraft);
     }
 
-    return {
+    return normalizeFavoriteTitleFields({
       ...snapshot,
       appliedKeywords: {
         ...(snapshot.appliedKeywords || {}),
         savedFromStudioSnapshot: true,
         savedFromStudioSnapshotAt: Date.now(),
       } as any,
-    };
+    } as SongResult);
   };
 
   const handleToggleCurrentStudioFavorite = async () => {

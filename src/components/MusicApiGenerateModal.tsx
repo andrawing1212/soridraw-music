@@ -75,6 +75,39 @@ const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; sho
 
 const getLanguageMeta = (id: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.id === id) || LANGUAGE_OPTIONS[0];
 
+const SelectionOrderBadge = ({ order }: { order: number }) => {
+  const isPrimary = order === 1;
+  const backgroundColor = isPrimary ? '#050505' : '#FFBB22';
+  const textColor = isPrimary ? '#FFBB22' : '#050505';
+
+  return (
+    <span
+      className="absolute right-1.5 top-1.5 z-20 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border px-1.5 text-[11px] font-black leading-none shadow-[0_3px_9px_rgba(0,0,0,0.32)] select-none pointer-events-none"
+      style={{
+        backgroundColor,
+        borderColor: isPrimary ? 'rgba(255, 187, 34, 0.38)' : 'rgba(5, 5, 5, 0.42)',
+        color: textColor,
+        fontWeight: 950,
+        lineHeight: 1,
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="block font-black leading-none"
+        style={{
+          color: textColor,
+          fontWeight: 950,
+          lineHeight: 1,
+          textShadow: 'none',
+          WebkitTextStroke: '0',
+        }}
+      >
+        {order}
+      </span>
+    </span>
+  );
+};
+
 
 const normalizeLanguageMixTargets = (
   baseLanguage: LanguageCode | undefined,
@@ -738,6 +771,7 @@ export default function MusicApiGenerateModal({
                           <div className="grid grid-cols-3 gap-2">
                             {(hiddenLanguages.length > 0 ? primaryLanguages : filteredLanguages).map((item) => {
                               const selected = lyricLanguages.includes(item.id);
+                              const selectedOrder = selected ? lyricLanguages.indexOf(item.id) + 1 : 0;
                               const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
                               return (
                                 <button
@@ -745,12 +779,13 @@ export default function MusicApiGenerateModal({
                                   type="button"
                                   disabled={disabled}
                                   onClick={() => toggleLyricLanguage(item.id)}
-                                  className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                  className={`relative rounded-xl px-3 py-2.5 pr-8 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                     selected
                                       ? accentSelected
                                       : optionRest
                                   }`}
                                 >
+                                  {selected && <SelectionOrderBadge order={selectedOrder} />}
                                   <p className="text-sm font-black flex items-center gap-1.5">
                                     {selected && <Check className="w-3.5 h-3.5" />}
                                     {item.label}
@@ -772,6 +807,7 @@ export default function MusicApiGenerateModal({
                                 <div className="grid grid-cols-3 gap-2 pt-2">
                                   {hiddenLanguages.map((item) => {
                                     const selected = lyricLanguages.includes(item.id);
+                                    const selectedOrder = selected ? lyricLanguages.indexOf(item.id) + 1 : 0;
                                     const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
                                     return (
                                       <button
@@ -779,12 +815,13 @@ export default function MusicApiGenerateModal({
                                         type="button"
                                         disabled={disabled}
                                         onClick={() => toggleLyricLanguage(item.id)}
-                                        className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        className={`relative rounded-xl px-3 py-2.5 pr-8 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                           selected
                                             ? accentSelected
                                             : optionRest
                                         }`}
                                       >
+                                        {selected && <SelectionOrderBadge order={selectedOrder} />}
                                         <p className="text-sm font-black flex items-center gap-1.5">
                                           {selected && <Check className="w-3.5 h-3.5" />}
                                           {item.label}
@@ -867,6 +904,7 @@ export default function MusicApiGenerateModal({
                                     <div className="grid grid-cols-3 gap-1.5">
                                       {mixTargetOptions.map((item) => {
                                         const selected = resolvedLanguageMixTargets.includes(item.id);
+                                        const selectedOrder = selected ? resolvedLanguageMixTargets.indexOf(item.id) + 1 : 0;
                                         const disabled = !selected && resolvedLanguageMixTargets.length >= 2;
                                         return (
                                           <button
@@ -874,10 +912,11 @@ export default function MusicApiGenerateModal({
                                             type="button"
                                             disabled={disabled}
                                             onClick={() => toggleLanguageMixTarget(item.id)}
-                                            className={`rounded-lg px-2 py-2 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                            className={`relative rounded-lg px-2 py-2 pr-6 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                               selected ? accentSelected : optionRestLight
                                             }`}
                                           >
+                                            {selected && <SelectionOrderBadge order={selectedOrder} />}
                                             {selected && <Check className="mr-1 inline h-3 w-3" />}
                                             {item.short}
                                           </button>

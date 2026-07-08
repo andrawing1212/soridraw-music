@@ -2338,6 +2338,26 @@ export default function FavoritesPage({
   }, [favorites]);
 
   useEffect(() => {
+    if (!selectedSong?.id || isMusicNoteSharedView) return;
+    const latestSong = (favorites || []).find((song: any) => song?.id === selectedSong.id);
+    if (!latestSong) return;
+
+    setSelectedSong((prev: any) => {
+      if (!prev || prev.id !== latestSong.id) return prev;
+      return {
+        ...prev,
+        ...latestSong,
+        lyrics: latestSong.lyrics
+          ? { ...(prev.lyrics || {}), ...(latestSong.lyrics || {}) }
+          : prev.lyrics,
+        appliedKeywords: latestSong.appliedKeywords
+          ? { ...(prev.appliedKeywords || {}), ...(latestSong.appliedKeywords || {}) }
+          : prev.appliedKeywords,
+      };
+    });
+  }, [favorites, selectedSong?.id, isMusicNoteSharedView]);
+
+  useEffect(() => {
     favoriteUserRef.current = user;
   }, [user]);
 

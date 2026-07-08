@@ -4123,7 +4123,9 @@ function App() {
     return false;
   };
 
-  const buildFavoriteSyncSignalFavorite = (action: 'save' | 'unsave', song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+  type FavoriteSyncAction = 'save' | 'update' | 'unsave' | 'delete';
+
+  const buildFavoriteSyncSignalFavorite = (action: FavoriteSyncAction, song: any, relatedFavorites: any[] = [], at = Date.now()) => {
     const primaryFavorite = (relatedFavorites || []).find((favorite) => favorite?.id) || relatedFavorites?.[0] || song || {};
     const favoriteKey = primaryFavorite.favoriteKey || song?.favoriteKey || buildFavoriteIdentityKey(primaryFavorite) || buildFavoriteIdentityKey(song);
     const payload = sanitizeForFirestore({
@@ -4155,13 +4157,20 @@ function App() {
     const allowedKeys = [
       'id', 'uid', 'title', 'koreanTitle', 'englishTitle', 'genre', 'lyrics', 'prompt', 'appliedKeywords',
       'userInput', 'situationSummary', 'favoriteKey', 'searchTokens', 'createdAtMs', 'updatedAtMs',
-      'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked', 'color',
-      'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl', 'isPublic'
+      'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',
+      'color', 'colorTag', 'favoriteColorTag', 'isPublic', 'shareId', 'shareType',
+      'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl',
+      'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
+      'sunoAudioUrl', 'sunoCoverUrl', 'sunoTitle', 'sunoDurationSeconds', 'sunoDurationText', 'sunoCoverFetchedAt',
+      'musicNoteMemo', 'noteMemo', 'memoUpdatedAt',
+      'noteFolderId', 'noteFolderTitle', 'noteFolderUpdatedAt',
+      'sharedNoteFolderId', 'sharedNoteFolderTitle', 'sharedNoteFolderUpdatedAt',
+      'musicNoteShareId', 'musicNoteShareUpdatedAt'
     ];
     return Object.fromEntries(Object.entries(payload).filter(([key, value]) => allowedKeys.includes(key) && value !== undefined));
   };
 
-  const buildFavoriteSyncSignal = (action: 'save' | 'unsave', song: any, relatedFavorites: any[] = [], at = Date.now()) => {
+  const buildFavoriteSyncSignal = (action: FavoriteSyncAction, song: any, relatedFavorites: any[] = [], at = Date.now()) => {
     const favoriteKeys = Array.from(new Set([
       buildFavoriteIdentityKey(song),
       song?.favoriteKey,
@@ -4348,7 +4357,7 @@ function App() {
         const withoutSame = cachedList.filter((favorite) => {
           if (!favorite?.id) return false;
           if (favorite.id === normalizedFavorite.id) return false;
-          if (isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+          if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
           return true;
         });
         writeFavoritesCache(uid, mergeFavoritePages([normalizedFavorite], withoutSame));
@@ -4360,7 +4369,7 @@ function App() {
         const withoutSame = (prev || []).filter((favorite) => {
           if (!favorite?.id) return false;
           if (favorite.id === normalizedFavorite.id) return false;
-          if (isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+          if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
           return true;
         });
         const next = mergeFavoritePages([normalizedFavorite], withoutSame);
@@ -4369,7 +4378,7 @@ function App() {
       });
     };
 
-    if (signal.action === 'save') {
+    if (signal.action === 'save' || signal.action === 'update') {
       mergeSavedFavoriteIntoCache(signal.favorite || signal);
       return;
     }
@@ -7162,9 +7171,24 @@ const toggleCycleVariantSelection = (
 
     try {
       await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);
+      const favoriteUpdatedAtMs = Date.now();
+      const updatedFavoriteSnapshot = sanitizeForFirestore({
+        ...(currentFavorite || {}),
+        ...sanitizedUpdates,
+        id,
+        uid: user?.uid || currentFavorite?.uid || '',
+        updatedAtMs: favoriteUpdatedAtMs,
+        favoriteKey: (currentFavorite?.favoriteKey || buildFavoriteIdentityKey({ ...(currentFavorite || {}), ...sanitizedUpdates, id })),
+        searchTokens: (sanitizedUpdates.searchTokens || (currentFavorite ? buildFavoriteSearchTokens({ ...currentFavorite, ...sanitizedUpdates, id }) : undefined)),
+      });
       applyFavoriteUpdateToLocalState([id]);
       if (user?.uid) {
         patchFavoriteCacheImmediately(user.uid, id, updates);
+        const updateSignal = buildFavoriteSyncSignal('update', updatedFavoriteSnapshot, [updatedFavoriteSnapshot], favoriteUpdatedAtMs);
+        updateDoc(doc(db, 'users', user.uid), {
+          favoriteSyncSignal: updateSignal,
+          favoriteSyncSignalUpdatedAt: favoriteUpdatedAtMs,
+        }).catch(err => console.error('Failed to publish favorite update sync signal:', err));
       }
       if ('isLocked' in updates) {
         showToast(updates.isLocked ? "곡을 잠궜습니다." : "잠김이 해제되었습니다.");

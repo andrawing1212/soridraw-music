@@ -3618,7 +3618,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   };
 
 
-  const FAVORITE_MUSIC_API_LANGUAGE_ORDER: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+  const FAVORITE_MUSIC_API_LANGUAGE_ORDER: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'ru', 'th'];
 
   const normalizeFavoriteMusicApiLanguage = (value: any): LanguageCode | null => {
     const lang = String(value || '').toLowerCase();
@@ -3628,6 +3628,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     if (lang === 'english') return 'en';
     if (lang === 'spanish') return 'es';
     if (lang === 'french') return 'fr';
+    if (lang === 'german') return 'de';
+    if (lang === 'russian') return 'ru';
+    if (lang === 'thai') return 'th';
     return FAVORITE_MUSIC_API_LANGUAGE_ORDER.includes(lang as LanguageCode) ? (lang as LanguageCode) : null;
   };
 

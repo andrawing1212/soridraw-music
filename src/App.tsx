@@ -3660,6 +3660,9 @@ function App() {
         zh: 'Chinese',
         es: 'Spanish',
         fr: 'French',
+        de: 'German',
+        ru: 'Russian',
+        th: 'Thai',
       };
 
       const resolveMusicApiLyricsByLanguage = (song: SongResult, lang: LanguageCode) => {
@@ -9515,6 +9518,9 @@ ${normalizePromptForDisplay(result.prompt)}
     zh: { ko: '중국어', en: 'Chinese', api: 'chinese' },
     es: { ko: '스페인어', en: 'Spanish', api: 'spanish' },
     fr: { ko: '프랑스어', en: 'French', api: 'french' },
+    de: { ko: '독일어', en: 'German', api: 'german' },
+    ru: { ko: '러시아어', en: 'Russian', api: 'russian' },
+    th: { ko: '태국어', en: 'Thai', api: 'thai' },
   };
 
   const getLyricsLanguageMap = (song: SongResult | null = result): Partial<Record<LanguageCode, string>> => {
@@ -9606,7 +9612,7 @@ ${normalizePromptForDisplay(result.prompt)}
   const getGeneratedLyricLanguages = (song: SongResult | null = result): LanguageCode[] => {
     const map = getLyricsLanguageMap(song);
     const stored = ((((song?.appliedKeywords as any)?.lyricLanguages || []) as LanguageCode[]).filter(Boolean));
-    const languageOrder: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+    const languageOrder: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'ru', 'th'];
     const ordered = [
       ...stored,
       ...languageOrder,
@@ -9634,7 +9640,7 @@ ${normalizePromptForDisplay(result.prompt)}
     const generated = getGeneratedLyricLanguages(song);
     if (!song || generated.length >= 2) return [];
 
-    const languageOrder: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr'];
+    const languageOrder: LanguageCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'ru', 'th'];
     return languageOrder.filter((lang) => !generated.includes(lang));
   };
 
@@ -13465,7 +13471,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryLanguage: event.target.value as LanguageCode } : prev)}
                             className="w-[92px] rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-3 py-3 text-xs font-bold text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50"
                           >
-                            {(['en', 'ja', 'zh', 'es', 'fr'] as LanguageCode[]).map((lang) => (
+                            {(['en', 'ja', 'zh', 'es', 'fr', 'de', 'ru', 'th'] as LanguageCode[]).map((lang) => (
                               <option key={lang} value={lang}>{lyricLanguageLabels[lang]?.ko || lang}</option>
                             ))}
                           </select>

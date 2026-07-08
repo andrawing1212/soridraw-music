@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr';
+export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr' | 'de' | 'ru' | 'th';
 export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
 
 type ModalVariant = 'main' | 'musicApi';
@@ -68,6 +68,9 @@ const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; sho
   { id: 'zh', label: '중국어 가사', subLabel: 'Chinese lyrics', short: '중국어' },
   { id: 'es', label: '스페인어 가사', subLabel: 'Spanish lyrics', short: '스페인어' },
   { id: 'fr', label: '프랑스어 가사', subLabel: 'French lyrics', short: '프랑스어' },
+  { id: 'de', label: '독일어 가사', subLabel: 'German lyrics', short: '독일어' },
+  { id: 'ru', label: '러시아어 가사', subLabel: 'Russian lyrics', short: '러시아어' },
+  { id: 'th', label: '태국어 가사', subLabel: 'Thai lyrics', short: '태국어' },
 ];
 
 const getLanguageMeta = (id: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.id === id) || LANGUAGE_OPTIONS[0];
@@ -256,7 +259,7 @@ export default function MusicApiGenerateModal({
     if (isMain) return;
     setSunoModelVersion(readStoredSunoModelVersion());
   }, [isMain]);
-  const primaryLanguageIds: LanguageCode[] = ['ko', 'en'];
+  const primaryLanguageIds: LanguageCode[] = ['ko', 'en', 'ja'];
   const primaryLanguages = filteredLanguages.filter((item) => primaryLanguageIds.includes(item.id));
   const hiddenLanguages = filteredLanguages.filter((item) => !primaryLanguageIds.includes(item.id));
   const visibleLanguages = showMoreLanguages || primaryLanguages.length === 0
@@ -506,7 +509,7 @@ export default function MusicApiGenerateModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0 }}
-        className={`w-full max-w-md max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
+        className={`w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
         onMouseDown={(event) => {
           event.stopPropagation();
           if (event.button === 3) {
@@ -732,7 +735,7 @@ export default function MusicApiGenerateModal({
                             <p className="text-xs font-black text-[var(--text-secondary)]">가사/제목 언어</p>
                             <p className={`text-[10px] font-bold ${accentText}`}>최대 {maxCount}개</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-3 gap-2">
                             {(hiddenLanguages.length > 0 ? primaryLanguages : filteredLanguages).map((item) => {
                               const selected = lyricLanguages.includes(item.id);
                               const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
@@ -766,7 +769,7 @@ export default function MusicApiGenerateModal({
                                 transition={{ duration: 0.18, ease: 'easeOut' }}
                                 className="overflow-hidden"
                               >
-                                <div className="grid grid-cols-2 gap-2 pt-2">
+                                <div className="grid grid-cols-3 gap-2 pt-2">
                                   {hiddenLanguages.map((item) => {
                                     const selected = lyricLanguages.includes(item.id);
                                     const disabled = maxCount > 1 && !selected && lyricLanguages.length >= maxCount;
@@ -861,7 +864,7 @@ export default function MusicApiGenerateModal({
                                       <p className="text-[11px] font-black text-[var(--text-secondary)]">섞을 언어</p>
                                       <p className={`text-[10px] font-bold ${accentText}`}>최대 2개</p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-1.5">
+                                    <div className="grid grid-cols-3 gap-1.5">
                                       {mixTargetOptions.map((item) => {
                                         const selected = resolvedLanguageMixTargets.includes(item.id);
                                         const disabled = !selected && resolvedLanguageMixTargets.length >= 2;

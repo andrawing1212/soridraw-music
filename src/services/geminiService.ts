@@ -362,7 +362,7 @@ export async function generateCustomSectionMetadata(input: CustomSectionAutoMeta
 type LegacyGenreInput = string[];
 type LegacyMoodInput = string[];
 type LegacyThemeInput = string[];
-type LanguageCode = "ko" | "en" | "ja" | "zh" | "es" | "fr";
+type LanguageCode = "ko" | "en" | "ja" | "zh" | "es" | "fr" | "de" | "ru" | "th";
 
 interface GenerateSongParams {
   genre: string | null;
@@ -27378,6 +27378,9 @@ export async function generateSong(
     zh: "Chinese",
     es: "Spanish",
     fr: "French",
+    de: "German",
+    ru: "Russian",
+    th: "Thai",
   };
   const secondaryLanguage =
     requestedLyricLanguages.find((lang) => lang !== "ko") || "en";

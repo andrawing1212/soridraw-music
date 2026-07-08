@@ -1683,6 +1683,18 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
       margin-bottom: calc(var(--soridraw-studio-section-gap) * var(--tw-space-y-reverse)) !important;
     }
 
+
+    /* PC only: visually center the Mood/Theme row between the top cards and Storyboard.
+       The first boundary looked slightly wider than the next one, so only these two
+       Studio boundaries are balanced without touching mobile. */
+    .soridraw-studio-selection-grid + .space-y-5 {
+      margin-top: clamp(0.78rem, 1.18vh, 0.95rem) !important;
+    }
+
+    .soridraw-studio-selection-grid + .space-y-5 > .grid.gap-y-5 {
+      row-gap: clamp(1.12rem, 1.7vh, 1.35rem) !important;
+    }
+
   }
 
   /* Library Detail Modal */

@@ -81,10 +81,68 @@ function Portal({ children }: { children: React.ReactNode }) {
 
 const favoritesInMemoryCache = new Map<string, any[]>();
 const favoritesCacheWriteTimers = new Map<string, any>();
+const FAVORITE_DELETED_TOMBSTONE_LIMIT = 800;
+
+const getFavoriteDeletedTombstoneStorageKey = (uid: string) => `soridraw_favorite_deleted_tombstones_${uid}`;
+
+const getFavoriteDeletedTombstoneIds = (uid: string): Set<string> => {
+  const ids = new Set<string>();
+  if (!uid || typeof localStorage === 'undefined') return ids;
+  try {
+    const raw = localStorage.getItem(getFavoriteDeletedTombstoneStorageKey(uid));
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) {
+      parsed.forEach((id) => {
+        const normalizedId = String(id || '').trim();
+        if (normalizedId) ids.add(normalizedId);
+      });
+    }
+  } catch (error) {
+    console.warn('Failed to read favorite deleted tombstones:', error);
+  }
+  return ids;
+};
+
+const writeFavoriteDeletedTombstoneIds = (uid: string, ids: Set<string>) => {
+  if (!uid || typeof localStorage === 'undefined') return;
+  try {
+    const list = Array.from(ids).filter(Boolean).slice(-FAVORITE_DELETED_TOMBSTONE_LIMIT);
+    localStorage.setItem(getFavoriteDeletedTombstoneStorageKey(uid), JSON.stringify(list));
+  } catch (error) {
+    console.warn('Failed to write favorite deleted tombstones:', error);
+  }
+};
+
+const rememberFavoriteDeletedTombstones = (uid: string, ids: string[]) => {
+  const safeIds = Array.from(new Set((ids || []).map((id) => String(id || '').trim()).filter(Boolean)));
+  if (!uid || safeIds.length === 0) return;
+  const tombstones = getFavoriteDeletedTombstoneIds(uid);
+  safeIds.forEach((id) => tombstones.add(id));
+  writeFavoriteDeletedTombstoneIds(uid, tombstones);
+
+  const cached = favoritesInMemoryCache.get(uid);
+  if (Array.isArray(cached)) {
+    favoritesInMemoryCache.set(uid, cached.filter((favorite) => !safeIds.includes(String(favorite?.id || ''))));
+  }
+};
+
+const isFavoriteDeletedTombstoned = (uid: string, id: string): boolean => {
+  if (!uid || !id) return false;
+  return getFavoriteDeletedTombstoneIds(uid).has(id);
+};
+
+const filterDeletedFavoriteTombstones = (uid: string, list: any[]): any[] => {
+  if (!uid || !Array.isArray(list) || list.length === 0) return Array.isArray(list) ? list : [];
+  const tombstones = getFavoriteDeletedTombstoneIds(uid);
+  if (tombstones.size === 0) return list;
+  return list.filter((favorite) => !favorite?.id || !tombstones.has(String(favorite.id)));
+};
 
 const getFavoritesCacheInMemoryOrLocalStorage = (uid: string): any[] => {
   if (favoritesInMemoryCache.has(uid)) {
-    return favoritesInMemoryCache.get(uid) || [];
+    const cached = filterDeletedFavoriteTombstones(uid, favoritesInMemoryCache.get(uid) || []);
+    favoritesInMemoryCache.set(uid, cached);
+    return cached;
   }
   try {
     const cacheKey = `soridraw_favorites_cache_${uid}`;
@@ -92,8 +150,12 @@ const getFavoritesCacheInMemoryOrLocalStorage = (uid: string): any[] => {
     if (cachedRaw) {
       const parsed = JSON.parse(cachedRaw);
       if (Array.isArray(parsed)) {
-        favoritesInMemoryCache.set(uid, parsed);
-        return parsed;
+        const filtered = filterDeletedFavoriteTombstones(uid, parsed);
+        favoritesInMemoryCache.set(uid, filtered);
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(cacheKey, JSON.stringify(filtered));
+        }
+        return filtered;
       }
     }
   } catch (e) {
@@ -4066,7 +4128,7 @@ function App() {
 
   const doesFavoriteUnsaveSignalMatchFavorite = (signal: any, favorite: any): boolean => {
     if (!signal || !favorite) return false;
-    if (!(signal.action === 'unsave' || isFavoriteSoftRemoved(signal))) return false;
+    if (!(signal.action === 'unsave' || signal.action === 'delete' || isFavoriteSoftRemoved(signal))) return false;
 
     const signalIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
     if (signalIds.length > 0) {
@@ -4111,8 +4173,10 @@ function App() {
   };
 
   const writeFavoritesCache = (uid: string, list: any[]) => {
+    const safeList = filterDeletedFavoriteTombstones(uid, Array.isArray(list) ? list : []);
+
     // Immediately update the in-memory cache to keep reads across active sessions 100% synchronous and up-to-date
-    favoritesInMemoryCache.set(uid, list);
+    favoritesInMemoryCache.set(uid, safeList);
 
     // Debounce/Schedule the actual high-cost JSON.stringify and localStorage.setItem writes
     if (favoritesCacheWriteTimers.has(uid)) {
@@ -4130,11 +4194,11 @@ function App() {
     const doDeferredWrite = () => {
       favoritesCacheWriteTimers.delete(uid);
       try {
-        localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(list));
+        localStorage.setItem(`soridraw_favorites_cache_${uid}`, JSON.stringify(safeList));
         const maxCountKey = `soridraw_favorites_cache_max_count_${uid}`;
         const previousMax = Number(localStorage.getItem(maxCountKey) || '0') || 0;
-        if ((list?.length || 0) > previousMax) {
-          localStorage.setItem(maxCountKey, String(list.length));
+        if ((safeList?.length || 0) > previousMax) {
+          localStorage.setItem(maxCountKey, String(safeList.length));
         }
       } catch (e) {
         console.error('Failed to save favorites to cache in deferred write:', e);
@@ -4205,6 +4269,7 @@ function App() {
 
     const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
       if (!savedFavorite?.id) return;
+      if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
       const normalizedFavorite = sanitizeForFirestore({
         ...savedFavorite,
         uid: savedFavorite.uid || uid,
@@ -4250,7 +4315,12 @@ function App() {
       return;
     }
 
-    if (signal.action !== 'unsave') return;
+    if (signal.action !== 'unsave' && signal.action !== 'delete') return;
+
+    if (signal.action === 'delete') {
+      const deletedIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
+      rememberFavoriteDeletedTombstones(uid, deletedIds);
+    }
 
     // Clean localStorage directly as well as React state.
     // On refresh, the user-doc signal can arrive before/after the cached favorites are hydrated.
@@ -6739,10 +6809,37 @@ const toggleCycleVariantSelection = (
             await updateDoc(doc(db, 'favorites', existingFav.id), { isLocked: false });
           }
           await deleteDoc(doc(db, 'favorites', existingFav.id));
+          rememberFavoriteDeletedTombstones(user.uid, [existingFav.id]);
           removeLocalFavorite(existingFav.id);
+
+          const deletedAt = Date.now();
+          const favoriteKey = existingFav.favoriteKey || songIdentityKey || buildFavoriteIdentityKey(existingFav);
+          const deleteSignal = sanitizeForFirestore({
+            id: `delete_${deletedAt}_${Math.random().toString(36).slice(2, 8)}`,
+            action: 'delete',
+            at: deletedAt,
+            favoriteId: existingFav.id,
+            favoriteIds: [existingFav.id],
+            favoriteKey: favoriteKey || '',
+            favoriteKeys: favoriteKey ? [favoriteKey] : [],
+            title: existingFav.title || song.title || '',
+            koreanTitle: existingFav.koreanTitle || song.koreanTitle || '',
+            englishTitle: existingFav.englishTitle || song.englishTitle || '',
+            titleFingerprint: getFavoriteTitleFingerprint(existingFav || song),
+            genre: getResolvedGenre(existingFav) || getResolvedGenre(song) || existingFav.genre || (song as any).genre || '',
+            favorite: {
+              id: existingFav.id,
+              uid: user.uid,
+              title: existingFav.title || '',
+              favoriteKey: favoriteKey || '',
+            },
+          });
+          applyFavoriteSyncSignal(user.uid, deleteSignal);
           await updateDoc(doc(db, 'users', user.uid), {
+            favoriteSyncSignal: deleteSignal,
+            favoriteSyncSignalUpdatedAt: deletedAt,
             favoriteCount: increment(-1)
-          }).catch(err => console.error("Failed to decrement favoriteCount:", err));
+          }).catch(err => console.error("Failed to decrement favoriteCount or publish favorite delete signal:", err));
           showToast('곡이 삭제 되었습니다.');
           return;
         }
@@ -6961,6 +7058,12 @@ const toggleCycleVariantSelection = (
       });
     };
 
+    if (user?.uid && id && isFavoriteDeletedTombstoned(user.uid, id)) {
+      removeLocalFavoriteOnly(id);
+      showToast('이미 삭제된 뮤직노트입니다. 목록을 새로고침해 주세요.');
+      throw new Error('favorite-deleted-tombstone');
+    }
+
     const findServerMatchesForCurrentFavorite = async (): Promise<any[]> => {
       if (!user?.uid || !currentFavorite) return [];
       const matches = new Map<string, any>();
@@ -6989,24 +7092,9 @@ const toggleCycleVariantSelection = (
         }
       }
 
-      const titleCandidates = [currentFavorite.title, currentFavorite.koreanTitle, currentFavorite.englishTitle]
-        .filter(Boolean)
-        .map((value) => String(value).trim())
-        .filter(Boolean)
-        .slice(0, 3);
-      for (const titleCandidate of titleCandidates) {
-        try {
-          const titleSnap = await getDocs(query(
-            collection(db, 'favorites'),
-            where('uid', '==', user.uid),
-            where('title', '==', titleCandidate),
-            limit(20)
-          ));
-          addMatches(titleSnap.docs);
-        } catch (error) {
-          console.warn('Favorite recovery lookup by title failed.', error);
-        }
-      }
+      // Never recover a missing update target by title.
+      // URL edits, trash cleanup, and exact Studio snapshot saves must stay tied to one Music Note id.
+      // Title recovery can touch old originals or deleted test items and make them appear to revive.
 
       return Array.from(matches.values());
     };
@@ -7029,6 +7117,10 @@ const toggleCycleVariantSelection = (
         || code === 'invalid-argument'
         || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
 
+      if (looksLikeMissingOrBadLocalFavorite && user?.uid && id) {
+        rememberFavoriteDeletedTombstones(user.uid, [id]);
+      }
+
       if (currentFavorite && isRemovalLikeUpdate && looksLikeMissingOrBadLocalFavorite) {
         try {
           const serverMatches = await findServerMatchesForCurrentFavorite();
@@ -7049,6 +7141,11 @@ const toggleCycleVariantSelection = (
         } catch (recoveryError) {
           console.warn('Favorite orphan cleanup failed.', recoveryError);
         }
+      }
+
+      if (currentFavorite && !isRemovalLikeUpdate && looksLikeMissingOrBadLocalFavorite) {
+        removeLocalFavoriteOnly(id);
+        showToast('이미 삭제된 뮤직노트입니다. 목록을 새로고침해 주세요.');
       }
 
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');

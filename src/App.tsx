@@ -11294,7 +11294,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </header>
 
-            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-7">
+            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-3 md:space-y-4">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}
@@ -11482,7 +11482,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-7 items-start">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"

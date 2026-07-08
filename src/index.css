@@ -1663,18 +1663,19 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     /* Keep Studio compact spacing desktop-only. Do not affect mobile responsive layout. */
     .soridraw-studio-main > :not([hidden]) ~ :not([hidden]) {
       --tw-space-y-reverse: 0 !important;
-      margin-top: calc(clamp(0.95rem, 1.7vh, 1.2rem) * calc(1 - var(--tw-space-y-reverse))) !important;
-      margin-bottom: calc(clamp(0.95rem, 1.7vh, 1.2rem) * var(--tw-space-y-reverse)) !important;
+      margin-top: calc(clamp(0.7rem, 1.15vh, 0.9rem) * calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(clamp(0.7rem, 1.15vh, 0.9rem) * var(--tw-space-y-reverse)) !important;
     }
 
-    .soridraw-studio-main .grid.gap-y-7 {
-      row-gap: clamp(1rem, 1.75vh, 1.35rem) !important;
+    .soridraw-studio-main .grid.gap-y-5 {
+      row-gap: clamp(1rem, 1.55vh, 1.25rem) !important;
     }
 
-    .soridraw-studio-main .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    .soridraw-studio-main .space-y-4 > :not([hidden]) ~ :not([hidden]),
+    .soridraw-studio-main .space-y-3 > :not([hidden]) ~ :not([hidden]) {
       --tw-space-y-reverse: 0 !important;
-      margin-top: calc(clamp(0.75rem, 1.35vh, 1rem) * calc(1 - var(--tw-space-y-reverse))) !important;
-      margin-bottom: calc(clamp(0.75rem, 1.35vh, 1rem) * var(--tw-space-y-reverse)) !important;
+      margin-top: calc(clamp(0.8rem, 1.25vh, 0.95rem) * calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(clamp(0.8rem, 1.25vh, 0.95rem) * var(--tw-space-y-reverse)) !important;
     }
 
   }

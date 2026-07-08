@@ -1501,7 +1501,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 
     .soridraw-studio-action-collapsed {
       /* Move the collapsed generate button right by roughly one button-width on FHD. */
-      left: max(68px, calc((100vw - var(--soridraw-studio-fhd-max, 1340px)) / 2 - 60px)) !important;
+      left: max(88px, calc((100vw - var(--soridraw-studio-fhd-max, 1340px)) / 2 - 40px)) !important;
       bottom: clamp(1.25rem, 3vh, 1.75rem) !important;
       height: clamp(4.8rem, 9vh, 5.4rem) !important;
       width: 3.25rem !important;

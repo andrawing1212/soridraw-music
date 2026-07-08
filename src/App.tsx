@@ -4967,6 +4967,7 @@ function App() {
     generationCount: number;
     isKoreanEnglishMix: boolean;
     englishMixRatio: number;
+    languageMixTargetLanguages?: LanguageCode[];
     rapEnabled: boolean;
   } | null>(null);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
@@ -6064,6 +6065,7 @@ const toggleCycleVariantSelection = (
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
   const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [englishMixRatio, setEnglishMixRatio] = useState(10);
+  const [languageMixTargetLanguages, setLanguageMixTargetLanguages] = useState<LanguageCode[]>([]);
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
@@ -8692,6 +8694,7 @@ const saveRecentSong = async (newSong: any) => {
     generationCount?: number;
     isKoreanEnglishMix?: boolean;
     englishMixRatio?: number;
+    languageMixTargetLanguages?: LanguageCode[];
     rapEnabled?: boolean;
   }) => {
     if (!user) {
@@ -8759,6 +8762,11 @@ const saveRecentSong = async (newSong: any) => {
       ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix)
       : false;
     const requestedEnglishMixRatio = Math.max(5, Math.min(90, Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10));
+    const requestedLanguageMixTargetLanguages = requestedIncludeLyrics && requestedKoreanEnglishMix
+      ? Array.from(new Set(((generationOptions?.languageMixTargetLanguages?.length ? generationOptions.languageMixTargetLanguages : languageMixTargetLanguages) || [])
+          .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== requestedLyricLanguages[0])))
+          .slice(0, 2) as LanguageCode[]
+      : [];
     const requestedRapEnabled = requestedIncludeLyrics
       ? Boolean(generationOptions?.rapEnabled ?? rapEnabled)
       : rapEnabled;
@@ -9263,6 +9271,7 @@ const saveRecentSong = async (newSong: any) => {
         kpopMode,
         isKoreanEnglishMix: requestedKoreanEnglishMix,
         englishMixRatio: requestedEnglishMixRatio,
+        languageMixTargetLanguages: requestedLanguageMixTargetLanguages,
         customStructure,
         isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
         includeLyrics: isFinalInstrumentalBgm ? false : requestedIncludeLyrics,
@@ -10057,7 +10066,7 @@ ${normalizePromptForDisplay(result.prompt)}
       ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
       : variant === 'title-desktop'
         ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
-        : 'flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
+        : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
 
     return (
       <button
@@ -10072,7 +10081,6 @@ ${normalizePromptForDisplay(result.prompt)}
         title={label}
       >
         <Edit2 className={variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
-        {variant !== 'title-mobile' && <span className="hidden sm:block md:block text-sm font-bold">수정</span>}
       </button>
     );
   };
@@ -10584,7 +10592,7 @@ ${normalizePromptForDisplay(result.prompt)}
       ...baseSelectedKeywordGroups,
       { id: 'option', label: '옵션', items: uniquePreviewLabels([
         previewIncludeLyrics === false ? '가사 없음' : '',
-        previewIsMix ? '한/영 혼합' : '',
+        previewIsMix ? '언어 혼합' : '',
         previewRap ? '랩 ON' : '',
       ]) },
     ].filter((group) => group.items.length > 0);
@@ -10842,7 +10850,7 @@ ${normalizePromptForDisplay(result.prompt)}
       if (languages.length === 1 && languages[0] === 'ko' && !isEnglishMix) {
         langStyleSummary = "우리말 고유의 섬세한 정서감과 문학적인 깊이에 입체성을 완주한 올-한글(Korean) 텍스처";
       } else if (isEnglishMix) {
-        langStyleSummary = `한국어의 풍성한 서정성과 영어 특유의 매끄럽고 리드미컬한 라임을 완벽한 비율로 직조한 한·영 혼합(K-Pop) 텍스처 (영어 비중 약 ${previewMixRatio}%)`;
+        langStyleSummary = `선택한 첫 번째 언어를 중심으로 다른 언어를 자연스럽게 섞는 언어 혼합 텍스처 (혼합 비중 약 ${previewMixRatio}%)`;
       } else if (languages.length > 0) {
         const langKoNames = languages.map(l => {
           if (l === 'en') return '영어';
@@ -12081,10 +12089,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setIsKoreanEnglishMix(nextValue);
                 setHoveredItem({
                   id: 'lyrics-mix-toggle',
-                  label: '한/영 혼합',
+                  label: '언어 혼합',
                   description: nextValue
-                    ? '선택한 장르와 관계없이 한국어와 영어가 자연스럽게 섞인 가사를 생성합니다.'
-                    : '한/영 혼합을 끄고 기본 언어 흐름으로 되돌립니다.',
+                    ? '선택한 첫 번째 언어를 기준으로 다른 언어를 자연스럽게 섞은 가사를 생성합니다.'
+                    : '언어 혼합을 끄고 기본 언어 흐름으로 되돌립니다.',
                   _ts: Date.now(),
                 });
               }}
@@ -12346,7 +12354,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-137px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
+                    className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFBB22] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
                                         <span className="relative flex h-9 w-9 items-center justify-center">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
@@ -12410,7 +12418,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
                 ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
                 ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
-                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#한/영 혼합' }] : []),
+                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
                 ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
               ].map((item) => {
                   const chipClassName = cn(
@@ -13076,13 +13084,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <div className="flex items-center gap-2">
                     {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 음악 프롬프트를 수정합니다.', 'section')}
                     <button
+                      type="button"
                       onClick={() => copyToClipboard(isRecentSongSectionEditing('prompt') && recentSongEditDraft ? recentSongEditDraft.prompt : normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
                     >
                       {copiedType === 'prompt' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
-                      <span className="hidden md:block text-sm font-bold">복사</span>
                     </button>
                   </div>
                 </div>
@@ -13161,13 +13169,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               <div className="flex items-center gap-2">
                                 {renderRecentSongInlineEditActions('lyrics', `edit-${copyType}`, `${label} 가사 수정`, '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'section')}
                                 <button
+                                  type="button"
                                   onClick={() => copyToClipboard(isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? getRecentSongLyricsDraftValue(lang) : normalizeLyricsForDisplay(lyricsText), copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
-                                  className="flex min-h-[46px] min-w-[46px] items-center justify-center gap-2 p-3 md:min-h-0 md:min-w-0 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
                                 >
                                   {copiedType === copyType ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
-                                  <span className="hidden md:block text-sm font-bold">복사</span>
                                 </button>
                               </div>
                             </div>
@@ -13567,6 +13575,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               maxLyricLanguages={hasSelectedInstrumentalBgm ? 0 : 2}
               isKoreanEnglishMix={isKoreanEnglishMix}
               englishMixRatio={englishMixRatio}
+              languageMixTargetLanguages={languageMixTargetLanguages}
               rapEnabled={rapEnabled}
               onClose={closeMainGenerationModal}
               suspendHistoryHandling={showPreviewPopup}
@@ -13578,8 +13587,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
                 const nextRatio = Math.max(5, Math.min(90, Number(options?.englishMixRatio ?? englishMixRatio) || 10));
                 const nextRap = includeLyrics ? Boolean(options?.rapEnabled ?? rapEnabled) : rapEnabled;
+                const nextMixTargets = includeLyrics && nextMix ? Array.from(new Set((options?.languageMixTargetLanguages || languageMixTargetLanguages).filter(Boolean))).slice(0, 2) as LanguageCode[] : [];
                 setIsKoreanEnglishMix(nextMix);
                 setEnglishMixRatio(nextRatio);
+                setLanguageMixTargetLanguages(nextMixTargets);
                 setRapEnabled(nextRap);
                 closeMainGenerationModal();
                 handleGenerate({
@@ -13588,6 +13599,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   generationCount,
                   isKoreanEnglishMix: nextMix,
                   englishMixRatio: nextRatio,
+                  languageMixTargetLanguages: nextMixTargets,
                   rapEnabled: nextRap,
                 });
               }}

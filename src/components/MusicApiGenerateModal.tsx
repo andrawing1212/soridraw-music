@@ -40,12 +40,14 @@ type MusicApiGenerateModalProps = {
       perTargetLyricLanguages?: Record<string, LanguageCode>;
       isKoreanEnglishMix?: boolean;
       englishMixRatio?: number;
+      languageMixTargetLanguages?: LanguageCode[];
       rapEnabled?: boolean;
       sunoModelVersion?: SunoModelVersion;
     }
   ) => void;
   isKoreanEnglishMix?: boolean;
   englishMixRatio?: number;
+  languageMixTargetLanguages?: LanguageCode[];
   rapEnabled?: boolean;
   onPreview?: (options: {
     includeLyrics: boolean;
@@ -53,6 +55,7 @@ type MusicApiGenerateModalProps = {
     generationCount: number;
     isKoreanEnglishMix?: boolean;
     englishMixRatio?: number;
+    languageMixTargetLanguages?: LanguageCode[];
     rapEnabled?: boolean;
   }) => void;
   suspendHistoryHandling?: boolean;
@@ -68,6 +71,27 @@ const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; sho
 ];
 
 const getLanguageMeta = (id: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.id === id) || LANGUAGE_OPTIONS[0];
+
+
+const normalizeLanguageMixTargets = (
+  baseLanguage: LanguageCode | undefined,
+  selectedLyricLanguages: LanguageCode[],
+  targets: LanguageCode[] | undefined,
+  availableLanguages: LanguageCode[],
+): LanguageCode[] => {
+  const base = baseLanguage || selectedLyricLanguages[0] || 'ko';
+  const available = availableLanguages.length ? availableLanguages : (LANGUAGE_OPTIONS.map((item) => item.id) as LanguageCode[]);
+  const cleaned = Array.from(new Set((targets || []).filter((lang): lang is LanguageCode => Boolean(lang) && lang !== base && available.includes(lang))));
+  if (cleaned.length > 0) return cleaned.slice(0, 2);
+
+  const selectedExtras = Array.from(new Set(selectedLyricLanguages.filter((lang) => lang !== base && available.includes(lang))));
+  if (selectedExtras.length > 0) return selectedExtras.slice(0, 2);
+
+  const fallback = base === 'ko'
+    ? (available.includes('en') ? 'en' : available.find((lang) => lang !== base))
+    : (available.includes('ko') ? 'ko' : available.find((lang) => lang !== base));
+  return fallback ? [fallback] : [];
+};
 
 const SUNO_MODEL_OPTIONS: { id: SunoModelVersion; label: string; subLabel: string }[] = [
   { id: 'V5_5', label: 'v5.5', subLabel: '최신 기본' },
@@ -123,6 +147,7 @@ export default function MusicApiGenerateModal({
   onConfirm,
   isKoreanEnglishMix = false,
   englishMixRatio = 10,
+  languageMixTargetLanguages,
   rapEnabled = false,
   onPreview,
   suspendHistoryHandling = false,
@@ -219,6 +244,9 @@ export default function MusicApiGenerateModal({
   const [generationCount, setGenerationCount] = useState<number>(1);
   const [localKoreanEnglishMix, setLocalKoreanEnglishMix] = useState<boolean>(() => Boolean(isKoreanEnglishMix));
   const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
+  const [localLanguageMixTargets, setLocalLanguageMixTargets] = useState<LanguageCode[]>(() =>
+    normalizeLanguageMixTargets(initialLangs[0], initialLangs, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)),
+  );
   const [localRapEnabled, setLocalRapEnabled] = useState<boolean>(() => Boolean(rapEnabled));
   const [showMoreLanguages, setShowMoreLanguages] = useState(false);
   const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => (isMain ? 'V5_5' : readStoredSunoModelVersion()));
@@ -353,8 +381,16 @@ export default function MusicApiGenerateModal({
     if (!isMain) return;
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
     setLocalEnglishMixRatio(Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
+    setLocalLanguageMixTargets(normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)));
     setLocalRapEnabled(Boolean(rapEnabled));
-  }, [englishMixRatio, isKoreanEnglishMix, isMain, rapEnabled]);
+  }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled]);
+
+  useEffect(() => {
+    if (!isMain || !includeLyrics || !localKoreanEnglishMix) return;
+    setLocalLanguageMixTargets((prev) =>
+      normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, prev, filteredLanguages.map((item) => item.id)),
+    );
+  }, [filteredLanguages, includeLyrics, isMain, localKoreanEnglishMix, lyricLanguages]);
 
   useEffect(() => {
     if (!includeLyrics) setShowMoreLanguages(false);
@@ -382,6 +418,27 @@ export default function MusicApiGenerateModal({
       return next;
     });
   }, [includeLyrics, isMain, musicApiTargets, targetMode]);
+
+  const availableLanguageIds = useMemo(() => filteredLanguages.map((item) => item.id), [filteredLanguages]);
+  const mixBaseLanguage = lyricLanguages[0] || 'ko';
+  const mixTargetOptions = filteredLanguages.filter((item) => item.id !== mixBaseLanguage);
+  const resolvedLanguageMixTargets = useMemo(
+    () => normalizeLanguageMixTargets(mixBaseLanguage, lyricLanguages, localLanguageMixTargets, availableLanguageIds),
+    [availableLanguageIds, lyricLanguages, localLanguageMixTargets, mixBaseLanguage],
+  );
+  const mixBaseMeta = getLanguageMeta(mixBaseLanguage);
+  const mixTargetLabel = resolvedLanguageMixTargets.map((lang) => getLanguageMeta(lang).short).join(' + ');
+
+  const toggleLanguageMixTarget = (lang: LanguageCode) => {
+    if (lang === mixBaseLanguage) return;
+    setLocalLanguageMixTargets((prev) => {
+      if (prev.includes(lang)) {
+        const next = prev.filter((item) => item !== lang);
+        return next.length > 0 ? next : prev;
+      }
+      return [...prev.filter((item) => item !== mixBaseLanguage), lang].slice(0, 2);
+    });
+  };
 
   const selectedLyricLabel = useMemo(() => {
     if (!includeLyrics) return '가사 미포함';
@@ -426,6 +483,7 @@ export default function MusicApiGenerateModal({
       perTargetLyricLanguages: includeLyrics && targetMode === 'batch' && !isMain ? perTargetLyricLanguages : undefined,
       isKoreanEnglishMix: isMain && includeLyrics ? localKoreanEnglishMix : undefined,
       englishMixRatio: isMain && includeLyrics ? localEnglishMixRatio : undefined,
+      languageMixTargetLanguages: isMain && includeLyrics && localKoreanEnglishMix ? resolvedLanguageMixTargets : undefined,
       rapEnabled: isMain && includeLyrics ? localRapEnabled : undefined,
       sunoModelVersion: !isMain ? sunoModelVersion : undefined,
     });
@@ -771,9 +829,9 @@ export default function MusicApiGenerateModal({
                             >
                               <p className="text-sm font-black flex items-center gap-1.5">
                                 <Languages className="w-3.5 h-3.5" />
-                                한/영 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
+                                언어 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
                               </p>
-                              <p className="text-[10px] opacity-70 mt-0.5">한국어 중심에 영어를 섞습니다</p>
+                              <p className="text-[10px] opacity-70 mt-0.5">첫 번째 선택 언어에 다른 언어를 섞습니다</p>
                             </button>
                             <button
                               type="button"
@@ -801,26 +859,61 @@ export default function MusicApiGenerateModal({
                                 transition={{ duration: 0.18, ease: 'easeOut' }}
                                 className="overflow-hidden"
                               >
-                                <div className={`rounded-xl p-3 ${isMain ? 'bg-white/[0.055]' : 'border border-[var(--border-color)] bg-black/10'}`}>
-                                  <div className="flex items-center justify-between mb-2">
-                                    <p className="text-[11px] font-black text-[var(--text-secondary)]">영어 비율</p>
-                                    <p className={`text-[11px] font-black ${accentText}`}>{localEnglishMixRatio}%</p>
+                                <div className={`rounded-xl p-3 space-y-3 ${isMain ? 'bg-white/[0.055]' : 'border border-[var(--border-color)] bg-black/10'}`}>
+                                  <div className="rounded-lg bg-black/10 px-3 py-2">
+                                    <p className="text-[10px] font-black text-[var(--text-secondary)]">기준 언어</p>
+                                    <p className={`mt-0.5 text-xs font-black ${accentText}`}>{mixBaseMeta.short} 기준 · 혼합 {mixTargetLabel || '자동'}</p>
                                   </div>
-                                  <div className="grid grid-cols-7 gap-1.5">
-                                    {mixRatioOptions.map((ratio) => (
-                                      <button
-                                        key={ratio}
-                                        type="button"
-                                        onClick={() => setLocalEnglishMixRatio(ratio)}
-                                        className={`rounded-lg px-1.5 py-2 border text-[10px] font-black transition-all ${
-                                          localEnglishMixRatio === ratio
-                                            ? accentSelected
-                                            : optionRestLight
-                                        }`}
-                                      >
-                                        {ratio}%
-                                      </button>
-                                    ))}
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <p className="text-[11px] font-black text-[var(--text-secondary)]">섞을 언어</p>
+                                      <p className={`text-[10px] font-bold ${accentText}`}>최대 2개</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                      {mixTargetOptions.map((item) => {
+                                        const selected = resolvedLanguageMixTargets.includes(item.id);
+                                        const disabled = !selected && resolvedLanguageMixTargets.length >= 2;
+                                        return (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            disabled={disabled}
+                                            onClick={() => toggleLanguageMixTarget(item.id)}
+                                            className={`rounded-lg px-2 py-2 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                              selected ? accentSelected : optionRestLight
+                                            }`}
+                                          >
+                                            {selected && <Check className="mr-1 inline h-3 w-3" />}
+                                            {item.short}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <p className="text-[11px] font-black text-[var(--text-secondary)]">혼합 비율</p>
+                                      <p className={`text-[11px] font-black ${accentText}`}>{localEnglishMixRatio}%</p>
+                                    </div>
+                                    <div className="grid grid-cols-7 gap-1.5">
+                                      {mixRatioOptions.map((ratio) => (
+                                        <button
+                                          key={ratio}
+                                          type="button"
+                                          onClick={() => setLocalEnglishMixRatio(ratio)}
+                                          className={`rounded-lg px-1.5 py-2 border text-[10px] font-black transition-all ${
+                                            localEnglishMixRatio === ratio
+                                              ? accentSelected
+                                              : optionRestLight
+                                          }`}
+                                        >
+                                          {ratio}%
+                                        </button>
+                                      ))}
+                                    </div>
+                                    <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-secondary)]/80">
+                                      {mixBaseMeta.short} {100 - localEnglishMixRatio}% + {mixTargetLabel || '혼합 언어'} {localEnglishMixRatio}% 기준으로 생성합니다.
+                                    </p>
                                   </div>
                                 </div>
                               </motion.div>
@@ -871,6 +964,7 @@ export default function MusicApiGenerateModal({
                           generationCount,
                           isKoreanEnglishMix: includeLyrics ? localKoreanEnglishMix : false,
                           englishMixRatio: localEnglishMixRatio,
+                          languageMixTargetLanguages: includeLyrics && localKoreanEnglishMix ? resolvedLanguageMixTargets : undefined,
                           rapEnabled: includeLyrics ? localRapEnabled : false,
                         });
                       }}
@@ -927,7 +1021,7 @@ export default function MusicApiGenerateModal({
                     <div className={`flex items-center justify-between px-5 py-4 border-t ${dividerClass}`}>
                       <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
                       <span className={`text-sm font-black ${accentText} text-right`}>
-                        {localKoreanEnglishMix ? `한/영 ${localEnglishMixRatio}%` : '한/영 OFF'} · 랩 {localRapEnabled ? 'ON' : 'OFF'}
+                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'} · 랩 {localRapEnabled ? 'ON' : 'OFF'}
                       </span>
                     </div>
                   )}

@@ -370,6 +370,7 @@ interface GenerateSongParams {
   isKpopSelected?: boolean;
   isKoreanEnglishMix?: boolean;
   englishMixRatio?: number;
+  languageMixTargetLanguages?: LanguageCode[];
   moods: string[];
   themes?: string[];
   situation?: SituationConfig;
@@ -4089,6 +4090,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       isKpopSelected: first.isKpopSelected ?? false,
       isKoreanEnglishMix: first.isKoreanEnglishMix ?? false,
       englishMixRatio: normalizeEnglishMixRatio((first as any).englishMixRatio),
+      languageMixTargetLanguages: (((first as any).languageMixTargetLanguages ?? []) as LanguageCode[]),
       customStructure: first.customStructure ?? [],
       lyricDraft: first.lyricDraft ?? "",
       isLyricMode: first.isLyricMode ?? false,
@@ -4525,6 +4527,158 @@ function rebalanceHighEnglishMixDominance(text: string, englishMixRatio = 10): s
   return source;
 }
 
+function isLyricBodyLineForMix(line: string): boolean {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return false;
+  if (/^\[[^\]]+\]$/.test(trimmed)) return false;
+  return true;
+}
+
+function getKoreanMixTargetLineShare(ratio: number): number {
+  if (ratio >= 90) return 0.78;
+  if (ratio >= 70) return 0.62;
+  if (ratio >= 50) return 0.45;
+  if (ratio >= 30) return 0.26;
+  if (ratio >= 20) return 0.17;
+  if (ratio >= 10) return 0.1;
+  if (ratio >= 5) return 0.05;
+  return 0;
+}
+
+function normalizeKoreanMixSourceLine(line: string): string {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) return "";
+  if (!containsHangul(trimmed)) return "";
+
+  // Keep natural bilingual hook lines, but remove very long English tails when the line is mostly Korean.
+  const koreanUnits = countKoreanWordUnits(trimmed);
+  const englishWords = countEnglishWords(trimmed);
+  let cleaned = trimmed;
+  if (koreanUnits >= 2 && englishWords >= 5) {
+    cleaned = cleaned
+      .replace(/\s+[A-Za-z][A-Za-z0-9\s’'",.!?&-]{12,}$/g, "")
+      .trim();
+  }
+
+  if (cleaned.length > 54) {
+    cleaned = cleaned.slice(0, 54).replace(/[\s,.;:!?-]+$/g, "");
+  }
+  return containsHangul(cleaned) ? cleaned : "";
+}
+
+function extractKoreanMixSourceLines(koreanLyrics: string): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const line of String(koreanLyrics || "").split("\n")) {
+    const normalized = normalizeKoreanMixSourceLine(line);
+    if (!normalized) continue;
+    const key = normalized.replace(/\s+/g, " ").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
+function raiseKoreanMixRatioInForeignLyrics(
+  foreignLyrics: string,
+  koreanLyrics: string,
+  englishMixRatio = 10,
+): string {
+  const ratio = normalizeEnglishMixRatio(englishMixRatio);
+  const source = String(foreignLyrics || "");
+  if (!source.trim() || ratio <= 0) return source;
+
+  const targetShare = getKoreanMixTargetLineShare(ratio);
+  if (targetShare <= 0) return source;
+
+  const lines = source.split("\n");
+  const bodyIndexes = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => isLyricBodyLineForMix(line));
+  if (!bodyIndexes.length) return source;
+
+  const currentKoreanLines = bodyIndexes.filter(({ line }) => containsHangul(line)).length;
+  const currentShare = currentKoreanLines / bodyIndexes.length;
+  if (currentShare >= targetShare) return source;
+
+  const sourceKoreanLines = extractKoreanMixSourceLines(koreanLyrics);
+  const fallbackKoreanLines = [
+    "아직 여기서 기다려",
+    "오늘 밤도 너를 불러",
+    "조금만 더 가까이 와",
+    "이 마음은 그대로야",
+    "다시 불빛이 켜질 거야",
+    "우린 아직 기다리고 있어",
+  ];
+  const pool = sourceKoreanLines.length ? sourceKoreanLines : fallbackKoreanLines;
+
+  const desiredAdditionalLines = Math.max(
+    0,
+    Math.ceil(((targetShare * bodyIndexes.length) - currentKoreanLines) / Math.max(0.1, 1 - targetShare)),
+  );
+  const maxAdditionalLines = ratio >= 90 ? 48 : ratio >= 70 ? 34 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
+  const additionsNeeded = Math.min(desiredAdditionalLines, maxAdditionalLines);
+  if (additionsNeeded <= 0) return source;
+
+  const preferredSections = /chorus|hook|rap|bridge|final|outro/i;
+  const insertAfterIndexes: number[] = [];
+  let currentSection = "";
+  lines.forEach((line, index) => {
+    const tag = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (tag) {
+      currentSection = tag[1] || "";
+      return;
+    }
+    if (!isLyricBodyLineForMix(line)) return;
+    if (containsHangul(line)) return;
+    if (preferredSections.test(currentSection)) insertAfterIndexes.push(index);
+  });
+  lines.forEach((line, index) => {
+    if (!isLyricBodyLineForMix(line)) return;
+    if (containsHangul(line)) return;
+    if (!insertAfterIndexes.includes(index)) insertAfterIndexes.push(index);
+  });
+
+  const expanded: string[] = [];
+  let poolIndex = 0;
+  let inserted = 0;
+  const existing = new Set(
+    lines
+      .map((line) => line.trim().replace(/\s+/g, " ").toLowerCase())
+      .filter(Boolean),
+  );
+  const insertionSet = new Set(insertAfterIndexes.slice(0, additionsNeeded));
+
+  for (let index = 0; index < lines.length; index += 1) {
+    expanded.push(lines[index]);
+    if (!insertionSet.has(index) || inserted >= additionsNeeded) continue;
+
+    let picked = "";
+    for (let attempts = 0; attempts < pool.length; attempts += 1) {
+      const candidate = pool[(poolIndex + attempts) % pool.length];
+      const key = candidate.trim().replace(/\s+/g, " ").toLowerCase();
+      if (candidate && !existing.has(key)) {
+        picked = candidate;
+        poolIndex += attempts + 1;
+        existing.add(key);
+        break;
+      }
+    }
+    if (!picked) {
+      picked = pool[poolIndex % pool.length] || "아직 여기서 기다려";
+      poolIndex += 1;
+    }
+    expanded.push(picked);
+    inserted += 1;
+  }
+
+  return expanded.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+
 function enforceKpopMixedLyrics(
   lyrics: { english: string; korean: string },
   englishMixRatio = 10,
@@ -4543,12 +4697,16 @@ function enforceKpopMixedLyrics(
       )
     : raiseEnglishMixRatioInKoreanLyrics(koreanSource, ratio);
 
-  const englishMixed = injectMixedPhrases(
-    lyrics.english ?? "",
+  const englishSource = lyrics.english ?? "";
+  const englishWithSoftAccent = injectMixedPhrases(
+    englishSource,
     ["(이 밤에)", "(너와 나)", "(괜찮아)"],
     containsHangul,
     maxInjections,
   );
+  const englishMixed = ratio >= 10
+    ? raiseKoreanMixRatioInForeignLyrics(englishWithSoftAccent, koreanMixed || koreanSource, ratio)
+    : englishWithSoftAccent;
 
   return {
     korean: ratio >= 50
@@ -4642,6 +4800,7 @@ function buildAppliedKeywordPayload(
     rapEnabled: params.vocal?.rap ?? false,
     isKoreanEnglishMix: params.isKoreanEnglishMix ?? false,
     englishMixRatio: normalizeEnglishMixRatio(params.englishMixRatio),
+    languageMixTargetLanguages: params.languageMixTargetLanguages ?? [],
     vocal: params.vocal ?? { male: 0, female: 0, rap: false },
     isNoLyrics: params.isNoLyrics ?? false,
     lyricDraft: params.lyricDraft,
@@ -27105,6 +27264,11 @@ export async function generateSong(
     (params as any).instrumentalBgmMode = true;
   }
   params.lyricLanguages = params.isNoLyrics ? [] : requestedLyricLanguages;
+  const primaryMixLanguage = requestedLyricLanguages[0] || 'ko';
+  const requestedLanguageMixTargets = Array.from(new Set(((params.languageMixTargetLanguages ?? []) as LanguageCode[])
+    .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== primaryMixLanguage)))
+    .slice(0, 2);
+  params.languageMixTargetLanguages = requestedLanguageMixTargets;
   const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
 
   const genresForDuration = params.genre ? [params.genre] : [];
@@ -27217,6 +27381,13 @@ export async function generateSong(
   };
   const secondaryLanguage =
     requestedLyricLanguages.find((lang) => lang !== "ko") || "en";
+  const mixTargetLanguages = requestedLanguageMixTargets.length
+    ? requestedLanguageMixTargets
+    : (primaryMixLanguage === 'ko' ? [secondaryLanguage] : ['ko' as LanguageCode]);
+  const mixTargetLanguageNames = Array.from(new Set(mixTargetLanguages))
+    .map((lang) => languageNameMap[lang] || lang)
+    .join(' + ');
+  const primaryMixLanguageName = languageNameMap[primaryMixLanguage] || primaryMixLanguage;
   const hasKoreanLanguage = requestedLyricLanguages.includes("ko");
   const hasSecondaryLanguage = requestedLyricLanguages.some(
     (lang) => lang !== "ko",
@@ -27293,22 +27464,23 @@ export async function generateSong(
 
   const mixedLyricsInstruction =
     shouldUseMixedLyrics && !params.isNoLyrics
-      ? `MIXED LANGUAGE MODE (MANDATORY):
-- Use natural Korean/English mixed lyrics only because the user enabled mixed lyrics.
-- Treat ${englishMixRatio}% as the intended English share of ACTUAL LYRIC LINES ONLY.
-- Do NOT count Suno section headers or section cue text toward the language ratio. Exclude all bracketed section lines such as [Intro], [Verse A: low and intimate], [Chorus: emotional lift], [Stop], [Break], and [Instrumental: guitar solo].
-- Count only sung/spoken lyric body lines. Parenthetical ad-libs like (Stay with me) count because they are lyric content.
-- Keep section headers and section tags in English if needed, but they must not be used to satisfy the English ratio.
-- For 5%: Korean body lyrics with at most one very short English accent in the whole lyric.
-- For 10%: Korean body lyrics with a few short English accents across the whole lyric.
-- For 20%: Korean body lyrics with occasional short English hooks/ad-libs in key payoff lines.
-- For 30%: Korean body lyrics with regular short English hooks/ad-libs in chorus, hook, rap, bridge, and final sections.
-- For 50%: Korean and English body lyric lines should feel clearly balanced. Do not let it collapse back to a 30% style.
-- For 70%: English body lyric lines must be dominant. Use English as the main body language and keep Korean only for key emotional hooks and identity lines.
-- For 90%: Near-English mode. Write almost every actual lyric body line in English, with Korean only as rare short hook words or one-line emotional anchors. Still place this mixed lyric body in lyrics.korean when Korean is the selected lyric card.
-- Do not make 90% more Korean-heavy than 70%. 90% must be the strongest English-led setting.
-- For lyrics.korean: write the selected Korean/English mixed lyric body according to the selected ratio, not Korean-only text.
-- For lyrics.english: keep English as the main language only when a non-Korean lyric language is selected; otherwise leave lyrics.english empty.
+      ? `LANGUAGE MIX MODE (MANDATORY):
+- The feature name is "Language Mix". It is not limited to Korean/English.
+- Base language = the first selected lyric language: ${primaryMixLanguageName}.
+- Mix target language(s) = ${mixTargetLanguageNames || 'the selected non-base language'}.
+- Treat ${englishMixRatio}% as the intended mixed-language share of ACTUAL LYRIC BODY LINES ONLY. Section tags do not count.
+- Use the base language for about ${100 - englishMixRatio}% of the lyric body and the mix target language(s) for about ${englishMixRatio}% of the lyric body.
+- If multiple lyric cards are requested, each card may keep its card language as the readable base, but it must still apply the same Language Mix rule. Do not leave the foreign-language card unmixed.
+- If the base language is Korean and mix targets are English + Japanese at 30%, the Korean lyric card should feel roughly Korean 70% + English/Japanese 30%.
+- If the base language is English and mix targets are Korean + Japanese at 30%, the English lyric card should feel roughly English 70% + Korean/Japanese 30%.
+- If two mix target languages are selected, share the mixed portion naturally between them. Do not make one target disappear.
+- For 5%: base language lyrics with at most one very short mixed-language accent in the whole lyric.
+- For 10%: base language lyrics with a few short mixed-language accents across the whole lyric.
+- For 20%: base language lyrics with occasional short mixed-language hooks/ad-libs in key payoff lines.
+- For 30%: base language lyrics with regular short mixed-language hooks/ad-libs in chorus, hook, rap, bridge, and final sections.
+- For 50%: base language and mix target language(s) should feel clearly balanced.
+- For 70%: mixed-language body lines become dominant but keep the base language identity lines.
+- For 90%: near mixed-language mode. Almost every actual lyric body line may use the mix target language(s), with base language only as rare short hook words or one-line emotional anchors.
 - Keep code-switching natural and melodic, not forced.`
       : "";
 
@@ -28379,8 +28551,13 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   if (shouldUseMixedLyrics && !params.isNoLyrics && englishMixRatio > 0) {
-    // Force mixed lyrics only inside the selected lyric card. Section headers are ignored for ratio balance.
-    result.lyrics = enforceKpopMixedLyrics(result.lyrics, englishMixRatio);
+    // Legacy Korean/English mode has safe ratio balancers.
+    // Custom language-mix targets (for example Japanese) are handled by the Gemini instruction
+    // to avoid forcing English/Korean into the wrong mix.
+    const legacyKoEnTargets = requestedLanguageMixTargets.length === 0 || requestedLanguageMixTargets.every((lang) => lang === 'ko' || lang === 'en');
+    if (legacyKoEnTargets) {
+      result.lyrics = enforceKpopMixedLyrics(result.lyrics, englishMixRatio);
+    }
   }
 
   if (!shouldUseMixedLyrics && !params.isNoLyrics) {
@@ -28414,7 +28591,11 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       eng = enforceRepeatedSloganInHook(eng, engSlogan);
     }
 
-    eng = removeKoreanFromEnglishLyrics(eng, kor, result.englishTitle || result.title || "");
+    // In language-mix mode, foreign lyric cards are allowed to contain Korean mixed lines.
+    // Do not strip Korean from lyrics.english here, or the English/foreign card loses its mix.
+    if (!shouldUseMixedLyrics) {
+      eng = removeKoreanFromEnglishLyrics(eng, kor, result.englishTitle || result.title || "");
+    }
 
     kor = postProcessLyricsSectionTags(kor, params);
     eng = postProcessLyricsSectionTags(eng, params);
@@ -28463,6 +28644,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     lyricLanguages: requestedLyricLanguages as any,
     titleLanguages: requestedLyricLanguages as any,
     secondaryLanguage: secondaryLanguage as any,
+    languageMixTargetLanguages: requestedLanguageMixTargets as any,
     isNoLyrics: params.isNoLyrics as any,
     instrumentalBgmMode: Boolean((params as any).instrumentalBgmMode) as any,
     userInput: params.userInput ?? "",

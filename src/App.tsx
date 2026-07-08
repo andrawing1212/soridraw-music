@@ -3981,7 +3981,10 @@ function App() {
     const candidateKey = candidate.favoriteKey || buildFavoriteIdentityKey(candidate);
     if (songIdentityKey && candidateKey && songIdentityKey === candidateKey) return true;
     if (isSameFavoriteSong(candidate, song, songIdentityKey)) return true;
-    return hasMatchingFavoriteTitleFingerprint(candidate, song);
+    // Do not match favorites by title alone.
+    // Studio titles can be edited before saving, and fuzzy title matching can connect the current result
+    // to an unrelated older Music Note, causing prompt/lyrics from another song to appear after save.
+    return false;
   };
 
   const buildFavoriteSyncSignalFavorite = (action: 'save' | 'unsave', song: any, relatedFavorites: any[] = [], at = Date.now()) => {
@@ -9732,6 +9735,74 @@ ${normalizePromptForDisplay(result.prompt)}
     }
   };
 
+  const getStudioSongFingerprint = (song: SongResult | null | undefined): string => {
+    if (!song) return '';
+    const applied = (song.appliedKeywords || {}) as any;
+    return [
+      applied.generationBatchId || '',
+      applied.generationIndex || '',
+      (song as any).createdAt || '',
+      (song as any).updatedAt || '',
+    ].filter(Boolean).join('|');
+  };
+
+  const getStudioFavoriteSaveSnapshot = (): SongResult | null => {
+    if (!result) return null;
+
+    const currentIndex = historyIndexRef.current;
+    const currentHistorySong = currentIndex >= 0 ? historyRef.current[currentIndex] : null;
+    const resultFingerprint = getStudioSongFingerprint(result);
+    const historyFingerprint = getStudioSongFingerprint(currentHistorySong);
+    const resultEditTime = Number((result.appliedKeywords as any)?.editedInStudioAt || result.updatedAt || result.createdAt || 0);
+    const historyEditTime = Number((currentHistorySong?.appliedKeywords as any)?.editedInStudioAt || currentHistorySong?.updatedAt || currentHistorySong?.createdAt || 0);
+
+    let snapshot: SongResult = result;
+    if (currentHistorySong && resultFingerprint && resultFingerprint === historyFingerprint && historyEditTime > resultEditTime) {
+      snapshot = currentHistorySong;
+    }
+
+    if (recentSongEditDraft) {
+      snapshot = buildEditedRecentSong(snapshot, recentSongEditDraft);
+    }
+
+    return {
+      ...snapshot,
+      appliedKeywords: {
+        ...(snapshot.appliedKeywords || {}),
+        savedFromStudioSnapshot: true,
+        savedFromStudioSnapshotAt: Date.now(),
+      } as any,
+    };
+  };
+
+  const handleToggleCurrentStudioFavorite = async () => {
+    const snapshot = getStudioFavoriteSaveSnapshot();
+    if (!snapshot) return;
+
+    const currentIndex = historyIndexRef.current;
+    if (recentSongEditDraft && currentIndex >= 0) {
+      const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
+      setResult(snapshot);
+      setHistory(nextHistory);
+      setHistoryIndex(currentIndex);
+      historyIndexRef.current = currentIndex;
+      preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
+      recentSongsReadyToCacheRef.current = true;
+      setIsRecentSongEditOpen(false);
+      setRecentSongInlineEditMode(null);
+      setRecentSongEditDraft(null);
+
+      if (user) {
+        const ref = doc(db, "user_recent_songs", user.uid);
+        setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {
+          console.error('Failed to persist studio edit before favorite save:', error);
+        });
+      }
+    }
+
+    await toggleFavorite(snapshot);
+  };
+
   const isRecentSongSectionEditing = (focus: RecentSongEditFocus) => recentSongInlineEditMode === focus && !!recentSongEditDraft;
 
   const renderRecentSongInlineEditActions = (
@@ -12446,7 +12517,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </div>
 
                     <button
-                      onClick={() => toggleFavorite(result)}
+                      onClick={handleToggleCurrentStudioFavorite}
                       className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0"
                     >
                       <Heart 
@@ -12634,7 +12705,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </div>
 
                     <button
-                      onClick={() => toggleFavorite(result)}
+                      onClick={handleToggleCurrentStudioFavorite}
                       className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart"
                     >
                       <Heart 

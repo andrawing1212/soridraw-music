@@ -1660,37 +1660,27 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
       margin: 0 auto !important;
     }
 
-
-/* Studio section boundary spacing: keep Sound→Mood and Section Structure→Tempo from feeling collapsed on both mobile and desktop. */
-.soridraw-studio-main > .soridraw-studio-secondary-sections,
-.soridraw-studio-main > .soridraw-studio-tempo-block {
-  --tw-space-y-reverse: 0 !important;
-  margin-top: clamp(1rem, 2.4vw, 1.2rem) !important;
-}
-
-@media (min-width: 1024px) {
-  .soridraw-studio-main > .soridraw-studio-secondary-sections,
-  .soridraw-studio-main > .soridraw-studio-tempo-block {
-    margin-top: clamp(1.05rem, 1.65vh, 1.28rem) !important;
-  }
-}
-
     /* Keep Studio compact spacing desktop-only. Do not affect mobile responsive layout. */
+    .soridraw-studio-main {
+      --soridraw-studio-section-gap: clamp(1rem, 1.55vh, 1.25rem);
+    }
+
     .soridraw-studio-main > :not([hidden]) ~ :not([hidden]) {
       --tw-space-y-reverse: 0 !important;
-      margin-top: calc(clamp(0.7rem, 1.15vh, 0.9rem) * calc(1 - var(--tw-space-y-reverse))) !important;
-      margin-bottom: calc(clamp(0.7rem, 1.15vh, 0.9rem) * var(--tw-space-y-reverse)) !important;
+      margin-top: calc(var(--soridraw-studio-section-gap) * calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(var(--soridraw-studio-section-gap) * var(--tw-space-y-reverse)) !important;
     }
 
     .soridraw-studio-main .grid.gap-y-5 {
-      row-gap: clamp(1rem, 1.55vh, 1.25rem) !important;
+      row-gap: var(--soridraw-studio-section-gap) !important;
     }
 
+    .soridraw-studio-main .space-y-5 > :not([hidden]) ~ :not([hidden]),
     .soridraw-studio-main .space-y-4 > :not([hidden]) ~ :not([hidden]),
     .soridraw-studio-main .space-y-3 > :not([hidden]) ~ :not([hidden]) {
       --tw-space-y-reverse: 0 !important;
-      margin-top: calc(clamp(0.8rem, 1.25vh, 0.95rem) * calc(1 - var(--tw-space-y-reverse))) !important;
-      margin-bottom: calc(clamp(0.8rem, 1.25vh, 0.95rem) * var(--tw-space-y-reverse)) !important;
+      margin-top: calc(var(--soridraw-studio-section-gap) * calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(var(--soridraw-studio-section-gap) * var(--tw-space-y-reverse)) !important;
     }
 
   }

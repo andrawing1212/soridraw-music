@@ -62,15 +62,15 @@ type MusicApiGenerateModalProps = {
 };
 
 const LANGUAGE_OPTIONS: { id: LanguageCode; label: string; subLabel: string; short: string }[] = [
-  { id: 'ko', label: '한글 가사', subLabel: 'Korean lyrics', short: '한글' },
-  { id: 'en', label: '영어 가사', subLabel: 'English lyrics', short: '영어' },
-  { id: 'ja', label: '일본어 가사', subLabel: 'Japanese lyrics', short: '일본어' },
-  { id: 'zh', label: '중국어 가사', subLabel: 'Chinese lyrics', short: '중국어' },
-  { id: 'es', label: '스페인어 가사', subLabel: 'Spanish lyrics', short: '스페인어' },
-  { id: 'fr', label: '프랑스어 가사', subLabel: 'French lyrics', short: '프랑스어' },
-  { id: 'de', label: '독일어 가사', subLabel: 'German lyrics', short: '독일어' },
-  { id: 'ru', label: '러시아어 가사', subLabel: 'Russian lyrics', short: '러시아어' },
-  { id: 'th', label: '태국어 가사', subLabel: 'Thai lyrics', short: '태국어' },
+  { id: 'ko', label: '한국어', subLabel: 'Korean lyrics', short: '한국어' },
+  { id: 'en', label: '영어', subLabel: 'English lyrics', short: '영어' },
+  { id: 'ja', label: '일본어', subLabel: 'Japanese lyrics', short: '일본어' },
+  { id: 'zh', label: '중국어', subLabel: 'Chinese lyrics', short: '중국어' },
+  { id: 'es', label: '스페인어', subLabel: 'Spanish lyrics', short: '스페인어' },
+  { id: 'fr', label: '프랑스어', subLabel: 'French lyrics', short: '프랑스어' },
+  { id: 'de', label: '독일어', subLabel: 'German lyrics', short: '독일어' },
+  { id: 'ru', label: '러시아어', subLabel: 'Russian lyrics', short: '러시아어' },
+  { id: 'th', label: '태국어', subLabel: 'Thai lyrics', short: '태국어' },
 ];
 
 const getLanguageMeta = (id: LanguageCode) => LANGUAGE_OPTIONS.find((item) => item.id === id) || LANGUAGE_OPTIONS[0];
@@ -463,7 +463,15 @@ export default function MusicApiGenerateModal({
     [availableLanguageIds, lyricLanguages, localLanguageMixTargets, mixBaseLanguage],
   );
   const mixBaseMeta = getLanguageMeta(mixBaseLanguage);
-  const mixTargetLabel = resolvedLanguageMixTargets.map((lang) => getLanguageMeta(lang).short).join(' + ');
+  const getLanguageMixTargetDisplayLabel = (lang: LanguageCode) => {
+    const targetLabel = getLanguageMeta(lang).short;
+    if (lyricLanguages.includes(lang)) {
+      return `${mixBaseMeta.short}+${targetLabel}`;
+    }
+    return targetLabel;
+  };
+  const mixTargetLabel = resolvedLanguageMixTargets.map((lang) => getLanguageMixTargetDisplayLabel(lang)).join(' + ');
+  const selectedLyricMixBaseLabel = lyricLanguages.map((lang) => getLanguageMeta(lang).short).join('/');
 
   const toggleLanguageMixTarget = (lang: LanguageCode) => {
     if (lang === mixBaseLanguage) return;
@@ -765,7 +773,7 @@ export default function MusicApiGenerateModal({
                       ) : (
                         <>
                           <div className="flex items-center justify-between mb-3">
-                            <p className="text-xs font-black text-[var(--text-secondary)]">가사/제목 언어</p>
+                            <p className={`text-xs font-black ${accentText}`}>가사/제목 언어</p>
                             <p className={`text-[10px] font-bold ${accentText}`}>최대 {maxCount}개</p>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
@@ -848,7 +856,7 @@ export default function MusicApiGenerateModal({
                       {isMain && (
                         <div className={`mt-4 pt-4 border-t ${dividerClass} space-y-3`}>
                           <div className="flex items-center justify-between">
-                            <p className="text-xs font-black text-[var(--text-secondary)]">가사 옵션</p>
+                            <p className={`text-xs font-black ${accentText}`}>가사 옵션</p>
                             <p className={`text-[10px] font-bold ${accentText}`}>가사 포함 시 적용</p>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
@@ -894,31 +902,30 @@ export default function MusicApiGenerateModal({
                                 <div className={`rounded-xl p-3 space-y-3 ${isMain ? 'bg-white/[0.055]' : 'border border-[var(--border-color)] bg-black/10'}`}>
                                   <div className="rounded-lg bg-black/10 px-3 py-2">
                                     <p className="text-[10px] font-black text-[var(--text-secondary)]">기준 언어</p>
-                                    <p className={`mt-0.5 text-xs font-black ${accentText}`}>{mixBaseMeta.short} 기준 · 혼합 {mixTargetLabel || '자동'}</p>
+                                    <p className={`mt-0.5 text-xs font-black ${accentText}`}>{selectedLyricMixBaseLabel || mixBaseMeta.short} 각각 · 혼합 {mixTargetLabel || '자동'}</p>
                                   </div>
                                   <div>
                                     <div className="flex items-center justify-between mb-2">
-                                      <p className="text-[11px] font-black text-[var(--text-secondary)]">섞을 언어</p>
+                                      <p className={`text-[11px] font-black ${accentText}`}>섞을 언어</p>
                                       <p className={`text-[10px] font-bold ${accentText}`}>최대 2개</p>
                                     </div>
                                     <div className="grid grid-cols-3 gap-1.5">
                                       {mixTargetOptions.map((item) => {
                                         const selected = resolvedLanguageMixTargets.includes(item.id);
-                                        const selectedOrder = selected ? resolvedLanguageMixTargets.indexOf(item.id) + 1 : 0;
                                         const disabled = !selected && resolvedLanguageMixTargets.length >= 2;
+                                        const displayLabel = getLanguageMixTargetDisplayLabel(item.id);
                                         return (
                                           <button
                                             key={item.id}
                                             type="button"
                                             disabled={disabled}
                                             onClick={() => toggleLanguageMixTarget(item.id)}
-                                            className={`relative rounded-lg px-2 py-2 pr-6 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                            className={`rounded-lg px-2 py-2 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                               selected ? accentSelected : optionRestLight
                                             }`}
                                           >
-                                            {selected && <SelectionOrderBadge order={selectedOrder} />}
                                             {selected && <Check className="mr-1 inline h-3 w-3" />}
-                                            {item.short}
+                                            {displayLabel}
                                           </button>
                                         );
                                       })}
@@ -926,7 +933,7 @@ export default function MusicApiGenerateModal({
                                   </div>
                                   <div>
                                     <div className="flex items-center justify-between mb-2">
-                                      <p className="text-[11px] font-black text-[var(--text-secondary)]">혼합 비율</p>
+                                      <p className={`text-[11px] font-black ${accentText}`}>혼합 비율</p>
                                       <p className={`text-[11px] font-black ${accentText}`}>{localEnglishMixRatio}%</p>
                                     </div>
                                     <div className="grid grid-cols-7 gap-1.5">
@@ -962,7 +969,7 @@ export default function MusicApiGenerateModal({
                 {isMain && (
                   <div className={plainPanelSurface}>
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-xs font-black text-[var(--text-secondary)] flex items-center gap-1.5">
+                      <p className={`text-xs font-black ${accentText} flex items-center gap-1.5`}>
                         <ListMusic className="w-3.5 h-3.5" />
                         생성 개수
                       </p>

@@ -4679,6 +4679,223 @@ function raiseKoreanMixRatioInForeignLyrics(
 }
 
 
+function containsLanguageSpecificText(line: string, language: LanguageCode): boolean {
+  const value = String(line || "");
+  switch (language) {
+    case "ko":
+      return containsHangul(value);
+    case "en":
+      return countEnglishWords(value) >= 2;
+    case "ja":
+      // Prefer kana as a strong Japanese signal; Kanji-only lines can overlap with Chinese.
+      return /[\u3040-\u30ff\u31f0-\u31ff]/.test(value);
+    case "zh":
+      return /[\u4e00-\u9fff]/.test(value);
+    case "ru":
+      return /[\u0400-\u04ff]/.test(value);
+    case "th":
+      return /[\u0e00-\u0e7f]/.test(value);
+    case "es":
+      return /[áéíóúñü¿¡]/i.test(value);
+    case "fr":
+      return /[àâæçéèêëîïôœùûüÿ]/i.test(value);
+    case "de":
+      return /[äöüß]/i.test(value);
+    default:
+      return false;
+  }
+}
+
+const LANGUAGE_MIX_FALLBACK_LINES: Record<LanguageCode, string[]> = {
+  ko: [
+    "아직 여기서 기다려",
+    "오늘 밤도 너를 불러",
+    "조금만 더 가까이 와",
+    "이 마음은 그대로야",
+  ],
+  en: [
+    "Stay with me tonight",
+    "Don't let the light go",
+    "I am still waiting here",
+    "Come back home to me",
+  ],
+  ja: [
+    "ここで待っているよ",
+    "もう少しだけそばにいて",
+    "君の声を探してる",
+    "夜が明けるまで",
+  ],
+  zh: [
+    "我还在这里等你",
+    "别让这束光熄灭",
+    "再靠近一点点",
+    "今晚别离开",
+  ],
+  es: [
+    "Quédate conmigo",
+    "No apagues esta luz",
+    "Te espero aquí",
+    "Vuelve a casa",
+  ],
+  fr: [
+    "Reste avec moi",
+    "Je t’attends ici",
+    "Ne laisse pas la lumière partir",
+    "Reviens ce soir",
+  ],
+  de: [
+    "Bleib heute Nacht bei mir",
+    "Ich warte hier auf dich",
+    "Lass das Licht nicht gehen",
+    "Komm wieder nach Hause",
+  ],
+  ru: [
+    "Я всё ещё жду тебя",
+    "Не гаси этот свет",
+    "Останься рядом со мной",
+    "Вернись домой сегодня",
+  ],
+  th: [
+    "ฉันยังรอเธออยู่",
+    "อย่าปล่อยให้ไฟดับ",
+    "กลับมาหาฉันคืนนี้",
+    "อยู่ข้างฉันอีกนิด",
+  ],
+};
+
+function getLanguageMixTargetLineShare(ratio: number): number {
+  return getKoreanMixTargetLineShare(ratio);
+}
+
+function normalizeLanguageMixSourceLine(line: string, language: LanguageCode): string {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) return "";
+  if (!containsLanguageSpecificText(trimmed, language)) return "";
+  if (trimmed.length > 58) {
+    return trimmed.slice(0, 58).replace(/[\s,.;:!?-]+$/g, "");
+  }
+  return trimmed;
+}
+
+function extractLanguageMixSourceLines(sourceLyrics: string, language: LanguageCode): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const line of String(sourceLyrics || "").split("\n")) {
+    const normalized = normalizeLanguageMixSourceLine(line, language);
+    if (!normalized) continue;
+    const key = normalized.replace(/\s+/g, " ").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function balanceLanguageMixTargetsInLyricCard(
+  baseLyrics: string,
+  allGeneratedLyrics: string,
+  targetLanguages: LanguageCode[],
+  mixRatio = 10,
+): string {
+  const ratio = normalizeEnglishMixRatio(mixRatio);
+  const source = String(baseLyrics || "");
+  const targets = Array.from(new Set((targetLanguages || []).filter(Boolean)));
+  if (!source.trim() || ratio <= 0 || targets.length === 0) return source;
+
+  const targetShare = getLanguageMixTargetLineShare(ratio);
+  if (targetShare <= 0) return source;
+
+  const lines = source.split("\n");
+  const bodyIndexes = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => isLyricBodyLineForMix(line));
+  if (!bodyIndexes.length) return source;
+
+  const containsAnyTargetLanguage = (line: string) => targets.some((lang) => containsLanguageSpecificText(line, lang));
+  const currentMixedLines = bodyIndexes.filter(({ line }) => containsAnyTargetLanguage(line)).length;
+  const currentShare = currentMixedLines / bodyIndexes.length;
+  if (currentShare >= targetShare) return source;
+
+  const sourcePools = new Map<LanguageCode, string[]>();
+  targets.forEach((lang) => {
+    const extracted = extractLanguageMixSourceLines(allGeneratedLyrics, lang);
+    sourcePools.set(lang, extracted.length ? extracted : (LANGUAGE_MIX_FALLBACK_LINES[lang] || []));
+  });
+
+  const desiredAdditionalLines = Math.max(
+    0,
+    Math.ceil(((targetShare * bodyIndexes.length) - currentMixedLines) / Math.max(0.1, 1 - targetShare)),
+  );
+  const maxAdditionalLines = ratio >= 90 ? 48 : ratio >= 70 ? 34 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
+  const additionsNeeded = Math.min(desiredAdditionalLines, maxAdditionalLines);
+  if (additionsNeeded <= 0) return source;
+
+  const preferredSections = /chorus|hook|rap|bridge|final|outro/i;
+  const insertAfterIndexes: number[] = [];
+  let currentSection = "";
+  lines.forEach((line, index) => {
+    const tag = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (tag) {
+      currentSection = tag[1] || "";
+      return;
+    }
+    if (!isLyricBodyLineForMix(line)) return;
+    if (containsAnyTargetLanguage(line)) return;
+    if (preferredSections.test(currentSection)) insertAfterIndexes.push(index);
+  });
+  lines.forEach((line, index) => {
+    if (!isLyricBodyLineForMix(line)) return;
+    if (containsAnyTargetLanguage(line)) return;
+    if (!insertAfterIndexes.includes(index)) insertAfterIndexes.push(index);
+  });
+
+  const expanded: string[] = [];
+  const existing = new Set(lines.map((line) => line.trim().replace(/\s+/g, " ").toLowerCase()).filter(Boolean));
+  const insertionSet = new Set(insertAfterIndexes.slice(0, additionsNeeded));
+  const poolOffsets = new Map<LanguageCode, number>();
+  let inserted = 0;
+  let targetCursor = 0;
+
+  const pickLineForLanguage = (lang: LanguageCode): string => {
+    const pool = sourcePools.get(lang) || LANGUAGE_MIX_FALLBACK_LINES[lang] || [];
+    if (!pool.length) return "";
+    const start = poolOffsets.get(lang) || 0;
+    for (let attempt = 0; attempt < pool.length; attempt += 1) {
+      const candidate = pool[(start + attempt) % pool.length];
+      const key = candidate.trim().replace(/\s+/g, " ").toLowerCase();
+      if (candidate && !existing.has(key)) {
+        poolOffsets.set(lang, start + attempt + 1);
+        existing.add(key);
+        return candidate;
+      }
+    }
+    const fallback = pool[start % pool.length] || "";
+    poolOffsets.set(lang, start + 1);
+    return fallback;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    expanded.push(lines[index]);
+    if (!insertionSet.has(index) || inserted >= additionsNeeded) continue;
+
+    let picked = "";
+    for (let attempts = 0; attempts < targets.length; attempts += 1) {
+      const lang = targets[(targetCursor + attempts) % targets.length];
+      picked = pickLineForLanguage(lang);
+      if (picked) {
+        targetCursor += attempts + 1;
+        break;
+      }
+    }
+    if (!picked) continue;
+    expanded.push(picked);
+    inserted += 1;
+  }
+
+  return expanded.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+
 function enforceKpopMixedLyrics(
   lyrics: { english: string; korean: string },
   englishMixRatio = 10,
@@ -27382,6 +27599,20 @@ export async function generateSong(
     ru: "Russian",
     th: "Thai",
   };
+  const languageNativeScriptMap: Record<LanguageCode, string> = {
+    ko: "Hangul Korean script",
+    en: "standard English Latin alphabet",
+    ja: "Japanese native script (Kanji + Hiragana/Katakana as natural)",
+    zh: "Chinese Han characters",
+    es: "standard Spanish Latin alphabet with accents when needed",
+    fr: "standard French Latin alphabet with accents when needed",
+    de: "standard German Latin alphabet with umlauts/ß when needed",
+    ru: "Russian Cyrillic script",
+    th: "Thai script",
+  };
+  const selectedNativeScriptInstruction = requestedLyricLanguages
+    .map((lang) => `  - ${languageNameMap[lang] || lang}: use ${languageNativeScriptMap[lang] || 'that language\'s normal native writing system'}.`)
+    .join("\n");
   const secondaryLanguage =
     requestedLyricLanguages.find((lang) => lang !== "ko") || "en";
   const mixTargetLanguages = requestedLanguageMixTargets.length
@@ -27390,7 +27621,30 @@ export async function generateSong(
   const mixTargetLanguageNames = Array.from(new Set(mixTargetLanguages))
     .map((lang) => languageNameMap[lang] || lang)
     .join(' + ');
+  const mixTargetNativeScriptInstruction = Array.from(new Set(mixTargetLanguages))
+    .map((lang) => `  - ${languageNameMap[lang] || lang}: use ${languageNativeScriptMap[lang] || 'that language\'s normal native writing system'}.`)
+    .join("\n");
   const primaryMixLanguageName = languageNameMap[primaryMixLanguage] || primaryMixLanguage;
+  const getCardMixTargets = (cardLanguage: LanguageCode): LanguageCode[] => {
+    const fallbackPairedLanguage = requestedLyricLanguages.find((lang) => lang !== cardLanguage);
+    const nextTargets = mixTargetLanguages
+      .map((lang) => {
+        if (lang !== cardLanguage) return lang;
+        return fallbackPairedLanguage || primaryMixLanguage;
+      })
+      .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== cardLanguage);
+    return Array.from(new Set(nextTargets)).slice(0, 2);
+  };
+  const languageMixCardPlan = requestedLyricLanguages
+    .map((cardLanguage) => {
+      const cardTargets = getCardMixTargets(cardLanguage);
+      const cardTargetNames = cardTargets.map((lang) => languageNameMap[lang] || lang).join(' + ') || 'no extra language';
+      const cardTargetScriptLines = cardTargets
+        .map((lang) => `    - ${languageNameMap[lang] || lang}: use ${languageNativeScriptMap[lang] || 'that language\'s normal native writing system'}.`)
+        .join('\n');
+      return `- ${languageNameMap[cardLanguage] || cardLanguage} lyric card: use ${languageNameMap[cardLanguage] || cardLanguage} as the base for about ${100 - englishMixRatio}% of actual lyric body lines, and mix ${cardTargetNames} for about ${englishMixRatio}% of actual lyric body lines.\n  Script rule for this card:\n    - ${languageNameMap[cardLanguage] || cardLanguage}: use ${languageNativeScriptMap[cardLanguage] || 'that language\'s normal native writing system'}.\n${cardTargetScriptLines || '    - No extra mixed script required.'}`;
+    })
+    .join('\n');
   const hasKoreanLanguage = requestedLyricLanguages.includes("ko");
   const hasSecondaryLanguage = requestedLyricLanguages.some(
     (lang) => lang !== "ko",
@@ -27425,9 +27679,12 @@ export async function generateSong(
     : `OUTPUT LANGUAGE RULE (MANDATORY):
 - Generate titles and lyrics only for the selected language setting: ${requestedLyricLanguages.map((lang) => languageNameMap[lang]).join(" + ")}.
 - The title language(s) MUST exactly match the selected lyric language(s).
+- Use each selected language in its normal native writing system, not romanization/transliteration.
+${selectedNativeScriptInstruction}
+- Do NOT write Japanese as romaji, Chinese as pinyin, Thai as romanized Thai, or Russian as Latin transliteration. Use the native script.
 - ${titleFormatInstruction}
 - If Korean is selected, put Korean lyrics in JSON field lyrics.korean and create a natural Korean title.
-- The JSON field lyrics.english is the SECONDARY LYRIC SLOT. It must contain the full lyrics for the selected non-Korean language (${languageNameMap[secondaryLanguage]}), even when that language is Japanese, Chinese, Spanish, or French.
+- The JSON field lyrics.english is the SECONDARY LYRIC SLOT. It must contain the full lyrics for the selected non-Korean language (${languageNameMap[secondaryLanguage]}), even when that language is Japanese, Chinese, Spanish, French, German, Russian, or Thai.
 - When both Korean and ${languageNameMap[secondaryLanguage]} are selected, BOTH lyrics.korean and lyrics.english must be non-empty full lyric bodies with matching sections.
 - If only Korean is selected, leave lyrics.english empty.
 - If a language is not selected, do not create a title or lyrics for that language.
@@ -27469,13 +27726,16 @@ export async function generateSong(
     shouldUseMixedLyrics && !params.isNoLyrics
       ? `LANGUAGE MIX MODE (MANDATORY):
 - The feature name is "Language Mix". It is not limited to Korean/English.
-- Base language = the first selected lyric language: ${primaryMixLanguageName}.
-- Mix target language(s) = ${mixTargetLanguageNames || 'the selected non-base language'}.
+- UI primary language = ${primaryMixLanguageName}, but every requested lyric card must use its own card language as its base.
+- Global mix target button selection = ${mixTargetLanguageNames || 'the selected non-base language'}.
+- Use native writing systems for every mixed language. Do not romanize or transliterate non-Latin languages.
+${mixTargetNativeScriptInstruction}
+- Japanese mix lines must use Japanese script, Chinese mix lines must use Chinese characters, Thai mix lines must use Thai script, and Russian mix lines must use Cyrillic.
 - Treat ${englishMixRatio}% as the intended mixed-language share of ACTUAL LYRIC BODY LINES ONLY. Section tags do not count.
-- Use the base language for about ${100 - englishMixRatio}% of the lyric body and the mix target language(s) for about ${englishMixRatio}% of the lyric body.
-- If multiple lyric cards are requested, each card may keep its card language as the readable base, but it must still apply the same Language Mix rule. Do not leave the foreign-language card unmixed.
-- If the base language is Korean and mix targets are English + Japanese at 30%, the Korean lyric card should feel roughly Korean 70% + English/Japanese 30%.
-- If the base language is English and mix targets are Korean + Japanese at 30%, the English lyric card should feel roughly English 70% + Korean/Japanese 30%.
+- Apply Language Mix independently to EACH selected lyric card. Do not use only the first selected language as the base for all cards.
+- CARD-SPECIFIC LANGUAGE MIX PLAN (MANDATORY):
+${languageMixCardPlan}
+- If a mix target is the same as a lyric card's base language, replace that target on that card with the paired selected lyric language, so no card becomes base + base. Example: selected lyric cards Korean + English and mix targets English + Japanese means lyrics.korean = Korean base + English/Japanese mix, while lyrics.english = English base + Korean/Japanese mix.
 - If two mix target languages are selected, share the mixed portion naturally between them. Do not make one target disappear.
 - For 5%: base language lyrics with at most one very short mixed-language accent in the whole lyric.
 - For 10%: base language lyrics with a few short mixed-language accents across the whole lyric.
@@ -28555,11 +28815,30 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   if (shouldUseMixedLyrics && !params.isNoLyrics && englishMixRatio > 0) {
     // Legacy Korean/English mode has safe ratio balancers.
-    // Custom language-mix targets (for example Japanese) are handled by the Gemini instruction
-    // to avoid forcing English/Korean into the wrong mix.
     const legacyKoEnTargets = requestedLanguageMixTargets.length === 0 || requestedLanguageMixTargets.every((lang) => lang === 'ko' || lang === 'en');
     if (legacyKoEnTargets) {
       result.lyrics = enforceKpopMixedLyrics(result.lyrics, englishMixRatio);
+    } else {
+      // Custom Language Mix targets need per-card balancing too.
+      // Gemini may correctly mix only the secondary slot, so reinforce the same mix target share
+      // into each selected lyric card using native-script lines from the generated result.
+      const allGeneratedLyricsForMix = [result.lyrics.korean, result.lyrics.english].filter(Boolean).join("\n");
+      if (requestedLyricLanguages.includes("ko")) {
+        result.lyrics.korean = balanceLanguageMixTargetsInLyricCard(
+          result.lyrics.korean,
+          allGeneratedLyricsForMix,
+          getCardMixTargets("ko"),
+          englishMixRatio,
+        );
+      }
+      if (requestedLyricLanguages.some((lang) => lang !== "ko")) {
+        result.lyrics.english = balanceLanguageMixTargetsInLyricCard(
+          result.lyrics.english,
+          allGeneratedLyricsForMix,
+          getCardMixTargets(secondaryLanguage),
+          englishMixRatio,
+        );
+      }
     }
   }
 
@@ -28603,8 +28882,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     kor = postProcessLyricsSectionTags(kor, params);
     eng = postProcessLyricsSectionTags(eng, params);
 
-    kor = await repairSparseLyricsWithGemini(ai, kor, params, result.productionPrompt || result.prompt || finalPrompt, 'Korean');
-    eng = await repairSparseLyricsWithGemini(ai, eng, params, result.productionPrompt || result.prompt || finalPrompt, 'English');
+    kor = await repairSparseLyricsWithGemini(ai, kor, params, result.productionPrompt || result.prompt || finalPrompt, 'Korean using Hangul');
+    const secondaryRepairLanguageLabel = `${languageNameMap[secondaryLanguage] || 'the selected secondary language'} using ${languageNativeScriptMap[secondaryLanguage] || 'its normal native writing system'}`;
+    eng = await repairSparseLyricsWithGemini(ai, eng, params, result.productionPrompt || result.prompt || finalPrompt, secondaryRepairLanguageLabel);
 
     kor = postProcessLyricsSectionTags(kor, params);
     eng = postProcessLyricsSectionTags(eng, params);

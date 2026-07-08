@@ -644,7 +644,6 @@ export default function MusicApiGenerateModal({
                           }`}
                         >
                           <p className="text-sm font-black">현재 곡만</p>
-                          <p className="text-[10px] opacity-70 mt-0.5">보고 있는 곡 1개</p>
                         </button>
                         <button
                           type="button"
@@ -656,7 +655,6 @@ export default function MusicApiGenerateModal({
                           }`}
                         >
                           <p className="text-sm font-black">최근 생성 묶음 전체</p>
-                          <p className="text-[10px] opacity-70 mt-0.5">각 곡을 따로 전송</p>
                         </button>
                       </div>
                     </div>
@@ -675,7 +673,6 @@ export default function MusicApiGenerateModal({
                         }`}
                       >
                         <p className="text-sm font-black">가사 포함</p>
-                        <p className="text-[10px] opacity-70 mt-0.5">선택한 언어 가사 생성</p>
                       </button>
                       <button
                         type="button"
@@ -687,7 +684,6 @@ export default function MusicApiGenerateModal({
                         }`}
                       >
                         <p className="text-sm font-black">가사 미포함</p>
-                        <p className="text-[10px] opacity-70 mt-0.5">프롬프트만 생성</p>
                       </button>
                     </div>
                   </div>
@@ -756,7 +752,6 @@ export default function MusicApiGenerateModal({
                                     {selected && <Check className="w-3.5 h-3.5" />}
                                     {item.label}
                                   </p>
-                                  <p className="text-[10px] opacity-70 mt-0.5">제목도 {item.short} 기준</p>
                                 </button>
                               );
                             })}
@@ -791,7 +786,6 @@ export default function MusicApiGenerateModal({
                                           {selected && <Check className="w-3.5 h-3.5" />}
                                           {item.label}
                                         </p>
-                                        <p className="text-[10px] opacity-70 mt-0.5">제목도 {item.short} 기준</p>
                                       </button>
                                     );
                                   })}
@@ -831,7 +825,6 @@ export default function MusicApiGenerateModal({
                                 <Languages className="w-3.5 h-3.5" />
                                 언어 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
                               </p>
-                              <p className="text-[10px] opacity-70 mt-0.5">첫 번째 선택 언어에 다른 언어를 섞습니다</p>
                             </button>
                             <button
                               type="button"
@@ -846,7 +839,6 @@ export default function MusicApiGenerateModal({
                                 <Mic2 className="w-3.5 h-3.5" />
                                 랩 {localRapEnabled ? 'ON' : 'OFF'}
                               </p>
-                              <p className="text-[10px] opacity-70 mt-0.5">랩 섹션과 리듬형 가사를 허용</p>
                             </button>
                           </div>
                           <AnimatePresence initial={false}>

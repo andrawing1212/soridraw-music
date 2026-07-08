@@ -4067,22 +4067,24 @@ function App() {
   const doesFavoriteUnsaveSignalMatchFavorite = (signal: any, favorite: any): boolean => {
     if (!signal || !favorite) return false;
     if (!(signal.action === 'unsave' || isFavoriteSoftRemoved(signal))) return false;
+
     const signalIds = Array.isArray(signal.favoriteIds) ? signal.favoriteIds.filter(Boolean) : [];
-    if (favorite.id && signalIds.includes(favorite.id)) return true;
+    if (signalIds.length > 0) {
+      return Boolean(favorite.id && signalIds.includes(favorite.id));
+    }
 
     const favoriteKey = favorite.favoriteKey || buildFavoriteIdentityKey(favorite);
     const signalKeys = Array.from(new Set([
       signal.favoriteKey,
       ...(Array.isArray(signal.favoriteKeys) ? signal.favoriteKeys : []),
-      signal.favoriteKey || buildFavoriteIdentityKey(signal),
+      signal.favoriteKey || buildFavoriteIdentityKey(signal.favorite || signal),
     ].filter(Boolean)));
-    if (favoriteKey && signalKeys.includes(favoriteKey)) return true;
+    if (signalKeys.length > 0) {
+      return Boolean(favoriteKey && signalKeys.includes(favoriteKey));
+    }
 
-    const signalTitle = signal.titleFingerprint || getFavoriteTitleFingerprint(signal);
-    const favoriteTitle = getFavoriteTitleFingerprint(favorite);
-    if (signalTitle && favoriteTitle && signalTitle === favoriteTitle) return true;
-
-    return hasMatchingFavoriteTitleFingerprint(signal, favorite);
+    const signalFavorite = signal.favorite || signal;
+    return isStrictSameFavoriteSongSnapshot(favorite, signalFavorite);
   };
 
   const mergeFavoriteFirstPageWithCache = (firstPageFavs: any[], previous: any[], allServerFavoritesLoaded = false) => {
@@ -6772,21 +6774,16 @@ const toggleCycleVariantSelection = (
         }
 
         // Studio heart toggle means save / unsave.
-        // Unsave must affect every same-song duplicate created during earlier save bugs,
-        // and it must send a user-doc signal so other devices remove their full-cache copy even after refresh.
+        // Unsave must affect only the exact Music Note item connected to the current Studio snapshot.
+        // Edited Studio saves are separate songs, so unsaving the edited version must not remove the original.
         const unsavedAt = Date.now();
-        const serverMatchesForUnsave = await findServerMatchingFavorites(true).catch((lookupError) => {
-          console.warn('Favorite duplicate lookup before unsave failed. Using the current match only.', lookupError);
-          return [];
-        });
-        const unsaveTargetsMap = new Map<string, any>();
-        [existingFav, ...(serverMatchesForUnsave || [])].forEach((favorite) => {
-          if (!favorite?.id) return;
-          if (favorite.isLocked) return;
-          if (favorite.hidden === true || favorite.favoriteHidden === true || favorite.deletedAt || favorite.trashedAt) return;
-          unsaveTargetsMap.set(favorite.id, favorite);
-        });
-        const unsaveTargets = Array.from(unsaveTargetsMap.values());
+        const unsaveTargets = existingFav?.id && !existingFav.isLocked
+          && existingFav.hidden !== true
+          && existingFav.favoriteHidden !== true
+          && !existingFav.deletedAt
+          && !existingFav.trashedAt
+          ? [existingFav]
+          : [];
         const unsaveSignal = buildFavoriteSyncSignal('unsave', song, unsaveTargets.length > 0 ? unsaveTargets : [existingFav], unsavedAt);
         const unsaveUpdates = sanitizeForFirestore({
           favoriteRemoved: true,
@@ -6813,7 +6810,7 @@ const toggleCycleVariantSelection = (
             await updateDoc(doc(db, 'favorites', existingFav.id), unsaveUpdates);
           }
 
-          removeLocalFavorite(existingFav.id, true);
+          removeLocalFavorite(existingFav.id);
           applyFavoriteSyncSignal(user.uid, unsaveSignal);
           await updateDoc(doc(db, 'users', user.uid), {
             favoriteSyncSignal: unsaveSignal,
@@ -6829,7 +6826,7 @@ const toggleCycleVariantSelection = (
             || code === 'invalid-argument'
             || /No document to update|not[- ]found|Invalid document reference|even number of segments/i.test(message);
           if (looksLikeMissingOrBadLocalFavorite && !serverExistingFav) {
-            removeLocalFavorite(existingFav.id, true);
+            removeLocalFavorite(existingFav.id);
             applyFavoriteSyncSignal(user.uid, unsaveSignal);
             await updateDoc(doc(db, 'users', user.uid), {
               favoriteSyncSignal: unsaveSignal,

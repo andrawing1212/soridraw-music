@@ -8597,26 +8597,18 @@ const toggleCycleVariantSelection = (
       setIsSituationExpanded(false);
     }
     if (!isMenuLocked('vocal')) {
-      const randomVocalMode: VocalMode = Math.random() < 0.5 ? 'solo' : 'group';
+      // 생성하기 옆 무작위는 보컬을 그룹으로 만들지 않고,
+      // 장르 힌트에 어울리는 솔로 남성/여성 중 하나만 추천 적용한다.
       const vocalGenreHints = [...g, ...sg, ...s, ...expandedRandomSoundSelection];
+      const gender = pickRecommendedSoloVocalGender(vocalGenreHints);
+      const nextMember = createRandomVocalMember(gender, 0, 1, vocalGenreHints);
 
-      setVocalMode(randomVocalMode);
+      setVocalMode('solo');
       setSelectedVocalToneId(undefined);
       setRapEnabled(false);
-
-      if (randomVocalMode === 'solo') {
-        const gender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
-        const nextMember = createRandomVocalMember(gender, 0, 1, vocalGenreHints);
-        setMaleCount(gender === 'male' ? 1 : 0);
-        setFemaleCount(gender === 'female' ? 1 : 0);
-        setVocalMembers([nextMember]);
-      } else {
-        const nextMembers = createRandomVocalGroupMembers(vocalGenreHints);
-        setMaleCount(nextMembers.filter((member) => member.gender === 'male').length);
-        setFemaleCount(nextMembers.filter((member) => member.gender === 'female').length);
-        setVocalMembers(nextMembers);
-      }
-
+      setMaleCount(gender === 'male' ? 1 : 0);
+      setFemaleCount(gender === 'female' ? 1 : 0);
+      setVocalMembers([nextMember]);
       setVocalRandomActivationKey((key) => key + 1);
     }
     if (!isMenuLocked('structure')) {
@@ -11594,7 +11586,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                     >
                       <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFBB22]" />
-                      <span>Sori <span className="text-[#FFBB22]">Studio</span></span>
+                      <span>Sori <span className="text-[#FFB400]">Studio</span></span>
                     </h1>
                   </motion.div>
                 </div>
@@ -19372,6 +19364,22 @@ const createRandomVocalMember = (
   roles: buildAutoVocalRoles(index, total, genreHints),
   character: buildRandomVocalCharacter(gender, index, total, genreHints),
 });
+
+const pickRecommendedSoloVocalGender = (genreHints?: string[]): 'male' | 'female' => {
+  const text = (genreHints || []).join(' ').toLowerCase();
+  let maleWeight = 1;
+  let femaleWeight = 1;
+
+  // 장르/질감 힌트에 따라 살짝 가중치만 준다. 확정값이 아니라 무작위 추천이다.
+  if (/rap|hip|drill|trap|boom|grime|rock|punk|metal|band|trot|enka/.test(text)) maleWeight += 1.1;
+  if (/rnb|r&b|soul|neo[_ -]?soul|dream|lofi|lo-fi|ambient|shoegaze|city|jazz|kpop|k-pop|jpop|j-pop|dance|house|disco|funk|cute|bright/.test(text)) femaleWeight += 1.1;
+  if (/ballad|folk|acoustic|indie|pop/.test(text)) {
+    maleWeight += 0.4;
+    femaleWeight += 0.4;
+  }
+
+  return Math.random() * (maleWeight + femaleWeight) < maleWeight ? 'male' : 'female';
+};
 
 const buildRandomVocalGenderSequence = (count: number): Array<'male' | 'female'> => {
   const safeCount = Math.min(3, Math.max(2, Math.round(count)));

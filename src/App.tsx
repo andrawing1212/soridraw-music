@@ -15103,7 +15103,7 @@ function CycleSectionComponent({
                 >
                   <span
                     className={cn(
-                      useGenreKeywordButtonFont ? "text-[15px] md:text-[16.5px]" : "text-[16px] md:text-[17px]",
+                      useGenreKeywordButtonFont ? "text-[13px] md:text-[14.5px]" : "text-[16px] md:text-[17px]",
                       "font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
                     )}
                   >

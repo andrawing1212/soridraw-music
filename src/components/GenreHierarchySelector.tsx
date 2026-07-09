@@ -1148,7 +1148,7 @@ function GenreHierarchySelectorComponent({
                   )}
                 >
                   {renderCategoryOrderBadges(groupOrderEntries, (event) => clearCommittedGenreIds(groupSelectedIds, event))}
-                  <span className="text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                  <span className="text-[13px] md:text-[14.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
                 </button>
@@ -1412,7 +1412,7 @@ function GenreHierarchySelectorComponent({
                           >
                             {renderCategoryOrderBadges(mainOrderEntries, (event) => clearPendingGenreIds(mainSelectedIds, event))}
                             <div className="w-full min-w-0">
-                              <div className="font-bold text-[20px] md:text-[22px] tracking-tight break-keep truncate">
+                              <div className="font-bold text-[18px] md:text-[20px] tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
                               <div
@@ -1423,7 +1423,7 @@ function GenreHierarchySelectorComponent({
                                     : "text-[var(--text-secondary)]",
                                 )}
                               >
-                                <span className="soridraw-genre-desc-track text-[14px] md:text-[15px] break-keep">
+                                <span className="soridraw-genre-desc-track text-[13px] md:text-[14px] break-keep">
                                   <span className="soridraw-genre-desc-copy">{mainDescription}</span>
                                   <span className="soridraw-genre-desc-copy" aria-hidden="true">{mainDescription}</span>
                                 </span>

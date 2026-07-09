@@ -991,9 +991,12 @@ function GenreHierarchySelectorComponent({
           display: inline-block;
           white-space: nowrap;
         }
+        .soridraw-genre-main-card .soridraw-genre-desc-track {
+          animation: soridrawGenreDescMarquee 10s linear infinite;
+        }
         .soridraw-genre-main-card:hover .soridraw-genre-desc-track,
         .soridraw-genre-main-card:focus-within .soridraw-genre-desc-track {
-          animation: soridrawGenreDescMarquee 8s linear infinite;
+          animation-play-state: paused;
         }
         @keyframes soridrawGenreDescMarquee {
           0%, 15% { transform: translateX(0); }
@@ -1412,7 +1415,7 @@ function GenreHierarchySelectorComponent({
                           >
                             {renderCategoryOrderBadges(mainOrderEntries, (event) => clearPendingGenreIds(mainSelectedIds, event))}
                             <div className="w-full min-w-0">
-                              <div className="font-bold text-[20px] md:text-[22px] tracking-tight break-keep truncate">
+                              <div className="font-bold text-[19px] md:text-[21px] tracking-tight break-keep truncate">
                                 {main.labelKo || main.label}
                               </div>
                               <div
@@ -1423,7 +1426,7 @@ function GenreHierarchySelectorComponent({
                                     : "text-[var(--text-secondary)]",
                                 )}
                               >
-                                <span className="soridraw-genre-desc-track text-[14px] md:text-[15px] break-keep">
+                                <span className="soridraw-genre-desc-track text-[13px] md:text-[14px] break-keep">
                                   <span className="soridraw-genre-desc-copy">{mainDescription}</span>
                                   <span className="soridraw-genre-desc-copy" aria-hidden="true">{mainDescription}</span>
                                 </span>

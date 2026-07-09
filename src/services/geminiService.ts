@@ -428,7 +428,7 @@ function buildRapModeInstruction(params: Pick<GenerateSongParams, 'vocal' | 'son
     const customHasRap = params.songStructure === 'custom' && (params.customStructure || []).some((item: any) => /rap/i.test(String(item?.label || item?.labelEn || item?.tagCue || '')));
     return customHasRap
       ? 'RAP MODE: ON. Preserve the custom Rap Section with real lyric lines; add "rap section" to final [Arrangement].'
-      : 'RAP MODE: ON. Include one real [Rap Section: ...] with lyric lines; add "rap section" to final [Arrangement].';
+      : 'RAP MODE: ON. Prefer one real [Rap Section: ...] with lyric lines in each lyric card; add "rap section" to final [Arrangement].';
   }
   return '';
 }
@@ -26311,11 +26311,93 @@ function removeEmptyRequiredSungBlocksStrictFinal(lyrics: string, params: Genera
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+
+function shouldForceRapSectionInLyrics(params: GenerateSongParams): boolean {
+  if (params.isNoLyrics || params.includeLyrics === false || isBackgroundOnlyBgmGenre(params)) return false;
+  return getRapModeFromParams(params) === 'on';
+}
+
+function lyricAlreadyHasRealRapSection(lyrics: string, params: GenerateSongParams): boolean {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    const parsed = parseGuardBracketSectionTag(lines[i]);
+    if (!parsed) continue;
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    if (!/^Rap\s+Section$/i.test(section)) continue;
+    if (hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) return true;
+  }
+  return false;
+}
+
+function buildIndependentRapSectionTagFromExistingTag(line: string): string {
+  const parsed = parseGuardBracketSectionTag(line);
+  const rawCueParts = parsed ? splitCleanCuePartsForSectionBody(parsed.body) : [];
+  const kept = rawCueParts
+    .map((part) => cleanEnglishOnlyLyricTagPart(part))
+    .filter(Boolean)
+    .filter((part) => !isLyricSectionSpaceTextureCue(part))
+    .filter((part) => !isDirectorProductionCueLeakForLyricSectionTag(part));
+  const out: string[] = [];
+  kept.forEach((part) => {
+    const key = part.toLowerCase();
+    if (!out.some((item) => item.toLowerCase() === key)) out.push(part);
+  });
+  if (!out.some((part) => /\brap\b|flow|rhythmic|bounce|spoken/i.test(part))) {
+    out.push('rhythmic rap delivery');
+  }
+  return `[Rap Section : ${dedupePromptParts(out, 4).slice(0, 2).join(', ')}]`;
+}
+
+function forceIndependentRapSectionForRapMode(lyrics: string, params: GenerateSongParams): string {
+  if (!shouldForceRapSectionInLyrics(params)) return lyrics;
+  const source = String(lyrics || '').replace(/\r\n?/g, '\n');
+  if (!source.trim() || lyricAlreadyHasRealRapSection(source, params)) return lyrics;
+
+  const lines = source.split('\n');
+  const candidates: Array<{ index: number; score: number }> = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const parsed = parseGuardBracketSectionTag(lines[i]);
+    if (!parsed) continue;
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    if (!/^Verse(?:\s+[A-Z0-9]+)?$/i.test(section)) continue;
+    if (!hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) continue;
+
+    const body = String(parsed.body || '');
+    let score = 10;
+    if (/\brap\b|flow|rhythmic|bounce|spoken|talk|west\s*coast|hip[-\s]?hop|trap|drill|boom\s*bap|melodic\s+flow/i.test(body)) score += 40;
+    if (i > 0) score += Math.max(0, 12 - Math.min(i, 12));
+    candidates.push({ index: i, score });
+  }
+
+  if (!candidates.length) {
+    for (let i = 0; i < lines.length; i += 1) {
+      const parsed = parseGuardBracketSectionTag(lines[i]);
+      if (!parsed) continue;
+      const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+      if (!/^(?:Pre[-\s]?Chorus|Bridge(?:\s+[A-Z0-9]+)?|Build[-\s]?Up|Drop)$/i.test(section)) continue;
+      if (!hasConcreteLyricBodyBeforeNextGhostStructuralTag(lines, i, params)) continue;
+      candidates.push({ index: i, score: 1 });
+      break;
+    }
+  }
+
+  if (!candidates.length) return lyrics;
+  candidates.sort((a, b) => b.score - a.score || a.index - b.index);
+  const targetIndex = candidates[0].index;
+  const copy = [...lines];
+  copy[targetIndex] = buildIndependentRapSectionTagFromExistingTag(copy[targetIndex]);
+  return copy.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function finalizeGeneratedLyricsStructuralSafety(lyrics: string, params: GenerateSongParams): string {
   let text = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(lyrics), params);
   text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
   text = removeEmptySungSectionsFinalGuard(text, params);
   text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
+  text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
+  text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
+  text = forceIndependentRapSectionForRapMode(text, params);
   text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
   text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
   return text.replace(/\n{3,}/g, '\n\n').trim();
@@ -26435,6 +26517,9 @@ function postProcessLyricsSectionTags(lyrics: string, params: GenerateSongParams
   finalText = normalizeStableSoloSectionSuffixes(finalText, params);
   finalText = removeStandaloneNonStructuralLyricCueLines(finalText);
   finalText = ensureSungSectionTagsHaveSafeCue(finalText, params);
+  finalText = cleanupGhostOpeningIntroAndEmptySungTags(finalText, params);
+  finalText = removeEmptySungSectionsFinalGuard(finalText, params);
+  finalText = forceIndependentRapSectionForRapMode(finalText, params);
   finalText = cleanupGhostOpeningIntroAndEmptySungTags(finalText, params);
   finalText = removeEmptySungSectionsFinalGuard(finalText, params);
   return finalText.replace(/\n{3,}/g, '\n\n').trim();
@@ -28019,6 +28104,7 @@ ${selectedNativeScriptInstruction}
 - If Korean is selected, put Korean lyrics in JSON field lyrics.korean and create a natural Korean title.
 - The JSON field lyrics.english is the SECONDARY LYRIC SLOT. It must contain the full lyrics for the selected non-Korean language (${languageNameMap[secondaryLanguage]}), even when that language is Japanese, Chinese, Spanish, French, German, Russian, or Thai.
 - When both Korean and ${languageNameMap[secondaryLanguage]} are selected, BOTH lyrics.korean and lyrics.english must be non-empty full lyric bodies with matching sections.
+- If RAP MODE is ON, each generated lyric card should independently include a real Rap Section when it fits the structure. Do not force the two lyric cards to share the exact same rap position.
 - If only Korean is selected, leave lyrics.english empty.
 - If a language is not selected, do not create a title or lyrics for that language.
 - Do not generate unselected lyric languages.

@@ -6,7 +6,7 @@ import {
   Search, Filter, PlayCircle, MoreVertical, Download, 
   Share2, Star, Trash2, Info, ChevronRight, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
-  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, CheckSquare, Square, ListChecks, Palette, Lock
+  Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, Plus, Check, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
@@ -271,6 +271,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const playlistsRef = useRef<Playlist[]>([]);
   const activePlaylistId = activePlaylistSection === 'normal' ? selectedNormalPlaylistId : selectedSharedPlaylistId;
   const [playlistItems, setPlaylistItems] = useState<PlaylistItem[]>([]);
+  const [playlistVisibleCount, setPlaylistVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [loadingPlaylistItems, setLoadingPlaylistItems] = useState(false);
   const [playlistSortMode, setPlaylistSortMode] = useState<'added' | 'genre' | 'custom'>('added');
   const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
@@ -563,6 +564,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [moveModalArgs, setMoveModalArgs] = useState<{ item: PlaylistItem } | null>(null);
   type PlaylistSaveTarget = { group: any; item: any; audioUrl: string; idx: number };
   const [playlistSavePicker, setPlaylistSavePicker] = useState<{ isShared: boolean; targets: PlaylistSaveTarget[]; playlists: Playlist[] } | null>(null);
+  const [playlistSaveCreateTitle, setPlaylistSaveCreateTitle] = useState<string | null>(null);
 
   const isKakaoInAppBrowser = /KAKAOTALK/i.test(navigator.userAgent || '');
 
@@ -613,6 +615,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
     }
   }, [libraryViewMode, searchTerm, filter, workspaceColorFilter]);
+
+  useEffect(() => {
+    if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
+      setPlaylistVisibleCount(WORKSPACE_PAGE_SIZE);
+    }
+  }, [libraryViewMode, activePlaylistId, playlistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode]);
 
   useEffect(() => {
     setMultiSelectMode(false);
@@ -1261,19 +1269,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     const currentList = isNormal ? actualNormalPlaylists : actualSharedPlaylists;
-    
-    const getNextNewFolderTitle = (playlists: Playlist[]) => {
-      const titles = new Set(playlists.map(p => p.title));
-      if (!titles.has("새폴더")) return "새폴더";
-
-      let index = 2;
-      while (titles.has(`새폴더 ${index}`)) {
-        index++;
-      }
-      return `새폴더 ${index}`;
-    };
-
-    const newTitle = getNextNewFolderTitle(currentList);
+    const newTitle = '새폴더';
     const newOrder = currentList.length > 0 ? Math.max(...currentList.map(p => p.order)) + 1 : 1;
 
     try {
@@ -2494,7 +2490,17 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return filteredTracks.slice(0, workspaceVisibleCount);
   }, [filteredTracks, libraryViewMode, workspaceVisibleCount]);
 
-  const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && (workspaceVisibleCount < filteredTracks.length || hasMoreWorkspaceServerTracks);
+  const canShowCachedWorkspaceMore = libraryViewMode === 'workspace' && workspaceVisibleCount < filteredTracks.length;
+  const canRequestMoreWorkspacePage = Boolean(
+    libraryViewMode === 'workspace' &&
+    !isSharedView &&
+    !searchTerm.trim() &&
+    filter === 'all' &&
+    workspaceColorFilter === 'all' &&
+    hasMoreWorkspaceServerTracks &&
+    filteredTracks.length >= WORKSPACE_PAGE_SIZE
+  );
+  const hasMoreWorkspaceTracks = libraryViewMode === 'workspace' && (canShowCachedWorkspaceMore || canRequestMoreWorkspacePage);
 
   const allPlayables = useMemo(() => {
     const list: any[] = [];
@@ -4126,6 +4132,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     setPlaylistSavePicker({ isShared, targets: safeTargets, playlists: targetLists });
+    setPlaylistSaveCreateTitle(null);
     setActiveMenuState(null);
     setBulkMenuState(null);
   };
@@ -4134,6 +4141,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (!playlistSavePicker) return;
     const picker = playlistSavePicker;
     setPlaylistSavePicker(null);
+    setPlaylistSaveCreateTitle(null);
     setBulkMenuState(null);
 
     let saved = 0;
@@ -4147,6 +4155,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
 
     if (saved > 0) {
+      if (multiSelectMode) {
+        clearMultiSelect();
+      }
       showToast(picker.targets.length > 1 ? `${targetPlaylist.title} 플레이리스트에 ${saved}곡 저장되었습니다.` : `'${targetPlaylist.title}' 플레이리스트에 저장되었습니다.`);
     } else if (duplicate > 0 && failed === 0) {
       showToast('이미 이 플레이리스트에 저장된 곡입니다.');
@@ -4155,6 +4166,57 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
+
+  const commitCreateAndSavePlaylist = async () => {
+    if (!user || !playlistSavePicker) return;
+
+    const picker = playlistSavePicker;
+    const type: 'normal' | 'shared' = picker.isShared ? 'shared' : 'normal';
+    const currentList = picker.playlists.filter((playlist) => !(playlist as any).isFallback);
+    const trimmedTitle = (playlistSaveCreateTitle || '').trim();
+
+    if (currentList.length >= 10) {
+      showToast('최대 개수까지 생성되었습니다.');
+      return;
+    }
+    if (!trimmedTitle) {
+      showToast('폴더 이름을 입력해주세요.');
+      return;
+    }
+    if (trimmedTitle.length > 20) {
+      showToast('폴더 이름은 최대 20자까지 가능합니다.');
+      return;
+    }
+    if (currentList.some((playlist) => playlist.title === trimmedTitle)) {
+      showToast('같은 이름의 폴더가 이미 있습니다.');
+      return;
+    }
+
+    const newOrder = currentList.length > 0 ? Math.max(...currentList.map((playlist) => playlist.order || 0)) + 1 : 1;
+
+    try {
+      const newId = await createPlaylist(user.uid, type, trimmedTitle, newOrder);
+      const nextPlaylist: Playlist = {
+        id: newId,
+        title: trimmedTitle,
+        type,
+        order: newOrder,
+        isDefault: false,
+      };
+
+      if (type === 'normal') {
+        setSelectedNormalPlaylistId(newId);
+      } else {
+        setSelectedSharedPlaylistId(newId);
+      }
+
+      setPlaylistSaveCreateTitle(null);
+      await savePlaylistPickerTargets(nextPlaylist);
+    } catch (error) {
+      console.error('create and save playlist failed:', error);
+      showToast('새 폴더 저장에 실패했습니다.');
+    }
+  };
 
   const getBulkShareTarget = (selection: MultiSelectedTrack) => {
     if (selection.context === 'workspace') {
@@ -4544,6 +4606,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       }
     }
 
+    if (moved > 0) {
+      clearMultiSelect();
+    }
     showToast(moved > 0 ? `${moved}곡을 폴더 이동했습니다.` : '이미 대상 폴더에 있는 곡입니다.');
   };
 
@@ -4696,6 +4761,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const handleLibrarySelectionLock = () => {
     setLibrarySelectionMoreOpen(false);
+    clearMultiSelect();
     showToast('라이브러리 잠금 기능은 다음 단계에서 연결합니다.');
   };
 
@@ -6259,20 +6325,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   type="button"
                   data-selection-keep="true"
+                  disabled={isLoadingMoreWorkspaceTracks}
                   onPointerDown={(event) => { if (multiSelectMode) event.stopPropagation(); }}
                   onClick={(event) => { event.stopPropagation(); void loadMoreWorkspaceTracks(); }}
                   onMouseEnter={() => setShowWorkspaceMoreTooltip(true)}
                   onMouseLeave={() => setShowWorkspaceMoreTooltip(false)}
                   onFocus={() => setShowWorkspaceMoreTooltip(true)}
                   onBlur={() => setShowWorkspaceMoreTooltip(false)}
-                  className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
+                  className={`px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)] ${isLoadingMoreWorkspaceTracks ? 'cursor-wait opacity-60' : ''}`}
                 >
                   <span className="text-[#7FBD75] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
-                  {isLoadingMoreWorkspaceTracks ? '불러오는 중...' : `더보기 (${Math.max(0, filteredTracks.length - workspaceVisibleCount) + (hasMoreWorkspaceServerTracks ? WORKSPACE_PAGE_SIZE : 0)}세트 남음)`}
+                  {isLoadingMoreWorkspaceTracks
+                    ? '불러오는 중...'
+                    : `더보기 (${Math.max(0, filteredTracks.length - workspaceVisibleCount) + (canRequestMoreWorkspacePage ? WORKSPACE_PAGE_SIZE : 0)}세트 남음)`}
                 </button>
-                <p className="text-[11px] text-white/35">
-                  {Math.min(workspaceVisibleCount, filteredTracks.length)}세트 / 현재 {filteredTracks.length}세트
-                </p>
                 {false && showWorkspaceMoreTooltip && (
                   <div className="fixed left-1/2 bottom-8 z-[500] -translate-x-1/2 rounded-2xl border border-[#7FBD75]/28 bg-[#171717] px-5 py-3 text-center shadow-2xl shadow-black/40 pointer-events-none">
                     <p className="text-xs font-bold text-[#7FBD75]">더보기</p>
@@ -6444,7 +6510,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     items = items.sort((a, b) => a.order - b.order);
                   }
 
-                  return items.map((item, index) => {
+                  const displayedItems = items.slice(0, playlistVisibleCount);
+                  const hasMorePlaylistItems = playlistVisibleCount < items.length;
+
+                  return (
+                    <>
+                      {displayedItems.map((item, index) => {
                   const isActive = isCurrentPlaylistItem(item);
                   const isShared = item.sourceType === 'shared_track';
                   const sourceTrackForPlaylist = !isShared
@@ -6814,7 +6885,27 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       </div>
                     </div>
                   );
-                })})()}
+                })}
+                      {hasMorePlaylistItems && (
+                        <div className="flex justify-center pt-2 pb-4" data-selection-keep="true">
+                          <button
+                            type="button"
+                            data-selection-keep="true"
+                            onPointerDown={(event) => { if (multiSelectMode) event.stopPropagation(); }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setPlaylistVisibleCount((prev) => Math.min(prev + WORKSPACE_PAGE_SIZE, items.length));
+                            }}
+                            className="px-8 py-4 rounded-2xl bg-[var(--card-bg)] hover:bg-[var(--hover-bg)] text-[var(--text-primary)] font-bold transition-all border border-[var(--border-color)] flex items-center gap-2 group shadow-[var(--shadow-md)]"
+                          >
+                            <span className="text-[#7FBD75] text-xl leading-none group-hover:rotate-90 transition-transform">+</span>
+                            {`더보기 (${Math.max(0, items.length - playlistVisibleCount)}곡 남음)`}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center border-t border-black/15 mt-3">
@@ -7261,7 +7352,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             data-selection-keep="true"
             data-floating-menu="true"
             className={`fixed inset-0 z-[220] flex items-end justify-center bg-black/55 px-4 backdrop-blur-sm md:items-center ${multiSelectMode && selectedTrackCount > 0 ? 'pb-[128px] md:pb-[142px]' : 'pb-6 md:pb-0'}`}
-            onClick={() => setPlaylistSavePicker(null)}
+            onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); }}
           >
             <motion.div
               data-selection-keep="true"
@@ -7283,7 +7374,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPlaylistSavePicker(null)}
+                  onClick={() => { setPlaylistSavePicker(null); setPlaylistSaveCreateTitle(null); }}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/55 transition-all hover:text-white"
                 >
                   <X className="h-4 w-4" />
@@ -7305,6 +7396,48 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     </button>
                   );
                 })}
+
+                {playlistSaveCreateTitle === null ? (
+                  <button
+                    type="button"
+                    onClick={() => setPlaylistSaveCreateTitle('')}
+                    className="mt-1 flex h-12 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#7FBD75]/35 bg-[#7FBD75]/8 px-4 text-sm font-black text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/14 hover:text-white"
+                  >
+                    <Plus className="h-4 w-4" /> 새 폴더 만들기
+                  </button>
+                ) : (
+                  <div className="mt-1 flex h-12 items-center gap-2 rounded-2xl border border-[#7FBD75]/35 bg-black/20 px-3">
+                    <input
+                      type="text"
+                      value={playlistSaveCreateTitle}
+                      onChange={(event) => setPlaylistSaveCreateTitle(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') commitCreateAndSavePlaylist();
+                        if (event.key === 'Escape') setPlaylistSaveCreateTitle(null);
+                      }}
+                      placeholder="새 폴더명"
+                      maxLength={20}
+                      autoFocus
+                      className="min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-white/25"
+                    />
+                    <button
+                      type="button"
+                      onClick={commitCreateAndSavePlaylist}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#7FBD75]/18 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/28 hover:text-white"
+                      aria-label="새 폴더 생성 후 저장"
+                    >
+                      <Check className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPlaylistSaveCreateTitle(null)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/45 transition-all hover:text-white"
+                      aria-label="새 폴더 생성 취소"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </motion.div>

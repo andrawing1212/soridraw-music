@@ -1720,3 +1720,197 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     padding: 1rem !important;
   }
 }
+
+/* SORIDRAW_25_MODAL_TONE_BALANCE_FIX
+   섹션 커스텀 / 보컬 캐릭터 만들기 팝업의 기본 바탕 톤을 같은 밝기로 맞춘다.
+   구조와 기능은 유지하고, 너무 어둡게 보이던 패널/헤더/기본 카드만 소폭 밝게 보정한다. */
+.dark .studio-section-custom-modal-panel,
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #202020 !important;
+  border-color: rgba(241, 218, 164, 0.12) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.54), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+.dark .studio-section-custom-modal-panel > .px-5.py-4,
+.dark .soridraw-studio-vocal-modal-panel > .px-5.py-4 {
+  background-color: #242424 !important;
+  border-color: rgba(241, 218, 164, 0.12) !important;
+}
+
+.dark .studio-section-custom-modal-panel > .p-5,
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #202020 !important;
+}
+
+.dark .studio-section-custom-modal-panel [class*="bg-[var(--hover-bg)]"],
+.dark .studio-section-custom-modal-panel [class*="bg-[var(--card-bg)]"],
+.dark .studio-section-custom-modal-panel [class*="bg-btn-bg"] {
+  background-color: #292929 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-[var(--card-bg)]"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-btn-bg"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-[#151515]"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-[#1a1a1a]"] {
+  background-color: #262626 !important;
+}
+
+.dark .studio-section-custom-modal-panel [class*="bg-white/5"],
+.dark .studio-section-custom-modal-panel [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.088) !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-white/5"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.075) !important;
+}
+
+.dark .studio-section-custom-modal-panel input,
+.dark .studio-section-custom-modal-panel textarea,
+.dark .soridraw-studio-vocal-modal-panel input,
+.dark .soridraw-studio-vocal-modal-panel textarea {
+  background-color: #252525 !important;
+  border-color: rgba(241, 218, 164, 0.13) !important;
+}
+
+/* SORIDRAW_26_MODAL_TONE_FINE_TUNE
+   섹션 커스텀의 현재 구조/Keep 섹션 카드는 살짝 더 밝게,
+   보컬 캐릭터 팝업은 제목 헤더와 내부 카드는 유지하고 본문 바탕만 조금 어둡게 맞춘다. */
+.dark .studio-section-custom-modal-panel [data-reorder-section-id],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: #2c2c2c !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #1e1e1e !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #1e1e1e !important;
+}
+
+/* SORIDRAW_27_MODAL_TONE_ROLLBACK_FINE_BALANCE
+   26차에서 과하게 밝아진 섹션 커스텀 내부 카드는 원래 톤에 가깝게 되돌리되
+   완전 검정이 아닌 아주 약한 명도 상승만 남긴다.
+   보컬 캐릭터는 섹션 커스텀과 분리해서 헤더/내부 카드 톤은 유지하고 본문 바탕만 더 어둡게 맞춘다. */
+.dark .studio-section-custom-modal-panel [data-reorder-section-id],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: #181818 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #181818 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #181818 !important;
+}
+
+/* SORIDRAW_28_VOCAL_MODAL_BACKGROUND_DECOUPLE_FIX
+   보컬 캐릭터 만들기 모달의 외부 본문 배경만 따로 어둡게 잡고,
+   내부 게이지 카드 밝기는 기존 카드 클래스 기준으로 되돌린다.
+   섹션 커스텀 색상과 묶이지 않도록 vocal modal 전용으로만 적용한다. */
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #171717 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #151515 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .px-5.py-4 {
+  background-color: #242424 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\] {
+  background-color: #1a1a1a !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFBB22\]\/12 {
+  background-color: rgba(255, 187, 34, 0.12) !important;
+}
+
+/* SORIDRAW_31_STORYBOARD_PARENT_BRIGHTER_FINE_FIX
+   스토리보드 팝업을 30차보다 조금 더 밝게 하되,
+   가장 큰 부모창/본문 바탕은 내부 카드보다 살짝 밝게 분리한다. */
+.dark .storyboard-tone-flat-panel {
+  background-color: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56) !important;
+}
+
+.dark .storyboard-tone-flat-panel > .sticky {
+  background-color: #242424 !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+.dark .storyboard-tone-flat-body {
+  background-color: #202020 !important;
+}
+
+.dark .storyboard-section-card {
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(255, 255, 255, 0.075) !important;
+  box-shadow: none !important;
+}
+
+.dark .storyboard-character-card {
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.dark .storyboard-control-card {
+  background-color: #1c1c1c !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: none !important;
+}
+
+.dark .storyboard-tone-flat-panel input,
+.dark .storyboard-tone-flat-panel textarea {
+  background-color: #343434 !important;
+  border-color: transparent !important;
+}
+
+.dark .storyboard-tone-flat-panel button {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.dark .storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background-color: #353535 !important;
+}
+
+.dark .storyboard-tone-flat-panel .storyboard-choice-button--selected {
+  border-color: transparent !important;
+}
+
+/* SORIDRAW_32_STORYBOARD_VOCAL_DARK_OUTLINE_FIX
+   스토리보드와 보컬 캐릭터 만들기 내부 카드의 외곽선을 섹션 커스텀처럼
+   밝은 회색선이 아닌 검정 계열 선으로 정리한다. 면 색/구조는 유지한다. */
+.dark .storyboard-tone-flat-panel .storyboard-section-card,
+.dark .storyboard-tone-flat-panel .storyboard-control-card {
+  border-color: rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark .storyboard-tone-flat-panel .storyboard-section-card input,
+.dark .storyboard-tone-flat-panel .storyboard-section-card textarea {
+  border: 1px solid rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\],
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFBB22\]\/12 {
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar input,
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar textarea {
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}

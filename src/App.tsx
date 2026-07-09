@@ -1730,7 +1730,7 @@ const StoryboardSlider = ({ label, left, right, value, onChange, description, st
         slider: 'storyboard-slider--story',
       };
   return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
+    <div className="storyboard-control-card rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
       <div className="flex items-center justify-between gap-3">
         <p className={cn("inline-flex items-center gap-2 text-base md:text-[17px] font-black", accentStyle.text)}>
           <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", accentStyle.dot)} />
@@ -1793,7 +1793,7 @@ const StoryboardGenderButtons = ({ label, value, onChange, accent = 'story' }: S
     { value: 'female', label: '여자' },
   ];
   return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
+    <div className="storyboard-control-card rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
       <div className="flex items-center justify-between gap-3">
         <p className={cn("inline-flex items-center gap-2 text-base md:text-[17px] font-black", accentStyle.text)}>
           <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", accentStyle.dot)} />
@@ -1810,9 +1810,9 @@ const StoryboardGenderButtons = ({ label, value, onChange, accent = 'story' }: S
               type="button"
               onClick={() => onChange(selected ? undefined : option.value)}
               className={cn(
-                "h-11 rounded-xl border text-sm font-black transition-all",
+                "storyboard-choice-button h-11 rounded-xl border text-sm font-black transition-all",
                 selected
-                  ? accentStyle.selected
+                  ? cn("storyboard-choice-button--selected", accentStyle.selected)
                   : "bg-[var(--input-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
             >
@@ -1856,7 +1856,7 @@ const StoryboardVocalRoleButtons = ({ label, value, onChange, accent = 'story' }
   ];
   const status = options.find((option) => option.value === value)?.label || '자동';
   return (
-    <div className="rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
+    <div className="storyboard-control-card rounded-2xl bg-[#1a1a1a] border border-[#2e2e2e] p-4 space-y-3.5 transition-all">
       <div className="flex items-center justify-between gap-3">
         <p className={cn("inline-flex items-center gap-2 text-base md:text-[17px] font-black", accentStyle.text)}>
           <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", accentStyle.dot)} />
@@ -1873,9 +1873,9 @@ const StoryboardVocalRoleButtons = ({ label, value, onChange, accent = 'story' }
               type="button"
               onClick={() => onChange(option.value)}
               className={cn(
-                "h-10 rounded-xl border text-xs font-black transition-all md:text-[13px]",
+                "storyboard-choice-button h-10 rounded-xl border text-xs font-black transition-all md:text-[13px]",
                 selected
-                  ? accentStyle.selected
+                  ? cn("storyboard-choice-button--selected", accentStyle.selected)
                   : "bg-[var(--input-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               )}
             >
@@ -11927,7 +11927,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 1, scale: 1, y: 0 }}
                       transition={{ duration: 0 }}
-                      className="soridraw-studio-storyboard-modal-panel w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
+                      className="soridraw-studio-storyboard-modal-panel storyboard-tone-flat-panel w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
                       onClick={(e) => e.stopPropagation()}
                       onMouseDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
@@ -11974,8 +11974,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </div>
                       </div>
 
-                      <div className="max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
-                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                      <div className="storyboard-tone-flat-body max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="space-y-3.5">
@@ -12005,10 +12005,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           </div>
                         </section>
 
-                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="캐릭터 포지션" description="원하는 스타일로 게이지를 맞춰보세요" />
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
+                            <div className="storyboard-character-card rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
                                 <p className="text-sm font-black text-[#FF9B92] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
                               </div>
@@ -12023,7 +12023,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               />
                             </div>
 
-                            <div className="rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
+                            <div className="storyboard-character-card rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
                               <div className="flex items-center gap-2 pl-2">
                                 <p className="text-sm font-black text-[#FFD36A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
                               </div>
@@ -12040,7 +12040,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           </div>
                         </section>
 
-                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
                           <textarea
                             value={draftSituation.description || ''}
@@ -12060,7 +12060,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           />
                         </section>
 
-                        <section className="rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                           <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <StoryboardSlider label="대화" left="대화" right="혼잣말" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["대화", "반반", "혼잣말"]} />
@@ -18994,7 +18994,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '20대 초반', prompt: 'young adult vocal color', hintKo: '젊고 선명함' },
       { labelKo: '풋풋한 성인', prompt: 'fresh early-adult vocal color', hintKo: '성인이지만 풋풋함' },
       { labelKo: '젊은 성인', prompt: 'clear young adult vocal color', hintKo: '젊고 안정적' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '성숙한 30대', prompt: 'mature adult vocal color', hintKo: '조금 더 안정적' },
       { labelKo: '중년감', prompt: 'middle-aged seasoned vocal color', hintKo: '삶의 결이 있음' },
       { labelKo: '노련함', prompt: 'aged seasoned vocal color', hintKo: '오래 부른 듯한 깊이' },
@@ -19015,7 +19015,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '낮음', prompt: 'low vocal range', hintKo: '낮은 목소리' },
       { labelKo: '중저음', prompt: 'low-mid vocal range', hintKo: '안정적인 중저음' },
       { labelKo: '낮은 보통', prompt: 'slightly low natural vocal range', hintKo: '기본보다 살짝 낮음' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '높은 보통', prompt: 'slightly high natural vocal range', hintKo: '기본보다 살짝 높음' },
       { labelKo: '중고음', prompt: 'upper-mid vocal range', hintKo: '밝게 올라감' },
       { labelKo: '높음', prompt: 'high vocal range', hintKo: '높고 선명함' },
@@ -19036,7 +19036,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '부드러운 가성', prompt: 'soft falsetto delivery', hintKo: '부드럽고 여린 가성 (가성)' },
       { labelKo: '가성 섞임', prompt: 'falsetto-leaning mixed delivery', hintKo: '가성 쪽으로 기운 연결 (가성)' },
       { labelKo: '믹스보이스', prompt: 'connected mixed voice', hintKo: '진성과 가성의 연결 (믹스보이스)' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '자연 진성', prompt: 'natural chest voice', hintKo: '자연스러운 진성 (진성)' },
       { labelKo: '힘 있는 진성', prompt: 'powerful chest voice', hintKo: '단단하게 밀어냄 (진성)' },
       { labelKo: '말하듯 부름', prompt: 'speech-like singing delivery', hintKo: '노래와 말 사이 (스프레히슈티메)' },
@@ -19057,7 +19057,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '살짝당김', prompt: 'slightly anticipated vocal phrasing', hintKo: '살짝 앞박으로 당김' },
       { labelKo: '빠른반응', prompt: 'quick responsive vocal phrasing', hintKo: '말맛처럼 빠르게 반응' },
       { labelKo: '정박근처', prompt: 'near-steady vocal phrasing with slight rhythmic pull', hintKo: '거의 정박에 가까움' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '레이백', prompt: 'laid-back behind-the-beat vocal phrasing', hintKo: '박자 뒤에 여유롭게 걸침 (레이백)' },
       { labelKo: '느슨함', prompt: 'loose rhythmic vocal delivery', hintKo: '정박을 풀어 느슨하게 부름' },
       { labelKo: '불안정', prompt: 'intentionally uneven off-beat timing, slightly missing the beat', hintKo: '일부러 박자를 흔들거나 놓침' },
@@ -19078,7 +19078,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '절제', prompt: 'restrained emotion', hintKo: '감정을 눌러 담음' },
       { labelKo: '담담함', prompt: 'calm understated emotion', hintKo: '담담하게 표현' },
       { labelKo: '은은함', prompt: 'subtle gentle emotion', hintKo: '감정이 살짝 비침' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '감정 있음', prompt: 'expressive emotion', hintKo: '감정이 드러남' },
       { labelKo: '감정 진함', prompt: 'strong expressive emotion', hintKo: '감정선이 진함' },
       { labelKo: '극적', prompt: 'dramatic emotion', hintKo: '드라마틱하게 표현' },
@@ -19099,7 +19099,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '크리키', prompt: 'creaky vocal texture', hintKo: '성대가 살짝 갈라짐 (크리키)' },
       { labelKo: '그로울링', prompt: 'low growling vocal edge', hintKo: '목 안쪽의 거친 울림 (그로울링)' },
       { labelKo: '비음 섞임', prompt: 'slightly nasal vocal tone', hintKo: '코끝 울림이 살짝 섞임 (비성)' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '따뜻함', prompt: 'warm vocal tone', hintKo: '온기 있는 목소리' },
       { labelKo: '부드러움', prompt: 'soft vocal texture', hintKo: '부드럽게 감김' },
       { labelKo: '공기감', prompt: 'airy vocal texture', hintKo: '가볍게 퍼짐' },
@@ -19120,7 +19120,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '귀여움', prompt: 'cute playful vocal charm', hintKo: '귀엽고 발랄함' },
       { labelKo: '친근함', prompt: 'friendly approachable vocal charm', hintKo: '가깝고 편안한 매력' },
       { labelKo: '따뜻매력', prompt: 'warm comforting vocal charm', hintKo: '따뜻하게 감싸는 매력' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '소울풀', prompt: 'soulful vocal character', hintKo: '영혼이 느껴지는 결' },
       { labelKo: '매혹적', prompt: 'seductive magnetic vocal charm', hintKo: '끌어당기는 매력' },
       { labelKo: '도도함', prompt: 'cool aloof vocal charm', hintKo: '도도하고 차가움' },
@@ -19143,7 +19143,7 @@ const VOCAL_CHARACTER_SCALE_CONFIGS: VocalCharacterScaleConfig[] = [
       { labelKo: '숨섞임', prompt: 'breathy phrasing', hintKo: '숨을 섞어 부름 (브레시)' },
       { labelKo: '하프에어', prompt: 'breathy half-air stops', hintKo: '숨으로 살짝 막고 품 (하프 에어 스톱)' },
       { labelKo: '더블브레스', prompt: 'double-breath phrasing', hintKo: '숨을 한 번 더 꺾어 넣음 (더블 브레스)' },
-      { labelKo: 'Gemini 기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
+      { labelKo: '기본', prompt: '', hintKo: '선택 없음 · 장르와 상황에 맡김' },
       { labelKo: '고스트노트', prompt: 'soft ghost-note vocal touches', hintKo: '들릴 듯 말 듯 스침 (고스트 노트)' },
       { labelKo: '데토네이션', prompt: 'slightly detuned vocal delivery', hintKo: '음정이 살짝 낮게 흔들림 (데토네이션)' },
       { labelKo: '클리산도', prompt: 'smooth vocal glissando slides', hintKo: '음을 미끄러지듯 연결 (클리산도)' },
@@ -20253,7 +20253,6 @@ function VocalControlComponent({
                           <h5 className="text-base font-black text-[var(--text-primary)]">보컬 캐릭터 게이지</h5>
                           <p className="text-xs leading-relaxed text-[var(--text-secondary)]">가운데가 기본값입니다. 움직인 항목만 보컬 프롬프트에 반영됩니다.</p>
                         </div>
-                        <span className="text-xs font-bold text-[#FFD36A]">좌우 5단계 · 기교 좌우 7단계</span>
                       </div>
 
                       <div className="space-y-3">

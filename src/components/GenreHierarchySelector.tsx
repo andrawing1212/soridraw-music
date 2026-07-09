@@ -991,12 +991,9 @@ function GenreHierarchySelectorComponent({
           display: inline-block;
           white-space: nowrap;
         }
-        .soridraw-genre-main-card .soridraw-genre-desc-track {
-          animation: soridrawGenreDescMarquee 10s linear infinite;
-        }
         .soridraw-genre-main-card:hover .soridraw-genre-desc-track,
         .soridraw-genre-main-card:focus-within .soridraw-genre-desc-track {
-          animation-play-state: paused;
+          animation: soridrawGenreDescMarquee 8s linear infinite;
         }
         @keyframes soridrawGenreDescMarquee {
           0%, 15% { transform: translateX(0); }

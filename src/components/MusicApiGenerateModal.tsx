@@ -471,7 +471,17 @@ export default function MusicApiGenerateModal({
     return targetLabel;
   };
   const mixTargetLabel = resolvedLanguageMixTargets.map((lang) => getLanguageMixTargetDisplayLabel(lang)).join(' + ');
+  const mixPlainTargetLabel = resolvedLanguageMixTargets.map((lang) => getLanguageMeta(lang).short).join('+');
   const selectedLyricMixBaseLabel = lyricLanguages.map((lang) => getLanguageMeta(lang).short).join('/');
+  const mixRatioDescriptionLines = useMemo(() => {
+    const baseLanguages = (lyricLanguages.length > 0 ? lyricLanguages : [mixBaseLanguage]);
+    const targetText = mixPlainTargetLabel || '혼합 언어';
+    return baseLanguages.map((lang, index) => {
+      const baseLabel = getLanguageMeta(lang).short;
+      const suffix = index === baseLanguages.length - 1 ? '기준으로 생성합니다.' : '기준으로,';
+      return `${baseLabel} ${100 - localEnglishMixRatio}% + (${targetText} ${localEnglishMixRatio}%) ${suffix}`;
+    });
+  }, [localEnglishMixRatio, lyricLanguages, mixBaseLanguage, mixPlainTargetLabel]);
 
   const toggleLanguageMixTarget = (lang: LanguageCode) => {
     if (lang === mixBaseLanguage) return;
@@ -952,9 +962,11 @@ export default function MusicApiGenerateModal({
                                         </button>
                                       ))}
                                     </div>
-                                    <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-secondary)]/80">
-                                      {mixBaseMeta.short} {100 - localEnglishMixRatio}% + {mixTargetLabel || '혼합 언어'} {localEnglishMixRatio}% 기준으로 생성합니다.
-                                    </p>
+                                    <div className="mt-2 space-y-0.5 text-[10px] leading-relaxed text-[var(--text-secondary)]/80">
+                                      {mixRatioDescriptionLines.map((line) => (
+                                        <p key={line}>{line}</p>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               </motion.div>

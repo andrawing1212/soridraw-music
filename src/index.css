@@ -2064,3 +2064,37 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   opacity: 0.45 !important;
   cursor: not-allowed !important;
 }
+
+/* SORIDRAW_46_GENERATION_OPTIONS_FONT_SIZE_FIX
+   생성 옵션 선택 모달 내부 폰트만 살짝 키우고, 섞을 언어/혼합 비율 버튼은 더 또렷하게 조정한다. */
+.music-api-generate-modal .text-\[9px\] {
+  font-size: 10px !important;
+}
+
+.music-api-generate-modal .text-\[10px\] {
+  font-size: 11px !important;
+}
+
+.music-api-generate-modal .text-\[11px\] {
+  font-size: 12px !important;
+}
+
+.music-api-generate-modal .text-xs {
+  font-size: 13px !important;
+}
+
+.music-api-generate-modal .text-sm {
+  font-size: 15px !important;
+}
+
+.music-api-generate-modal .music-mix-language-button,
+.music-api-generate-modal .music-mix-ratio-button {
+  font-size: 12px !important;
+}
+
+@media (min-width: 640px) {
+  .music-api-generate-modal .sm\:text-sm {
+    font-size: 15px !important;
+  }
+}
+

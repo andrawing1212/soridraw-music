@@ -560,7 +560,7 @@ export default function MusicApiGenerateModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0 }}
-        className={`w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
+        className={`music-api-generate-modal w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
         onMouseDown={(event) => {
           event.stopPropagation();
           if (event.button === 3) {
@@ -930,7 +930,7 @@ export default function MusicApiGenerateModal({
                                             type="button"
                                             disabled={disabled}
                                             onClick={() => toggleLanguageMixTarget(item.id)}
-                                            className={`rounded-lg px-2 py-2 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                            className={`music-mix-language-button rounded-lg px-2 py-2 border text-[10px] font-black transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                               selected ? accentSelected : optionRestLight
                                             }`}
                                           >
@@ -952,7 +952,7 @@ export default function MusicApiGenerateModal({
                                           key={ratio}
                                           type="button"
                                           onClick={() => setLocalEnglishMixRatio(ratio)}
-                                          className={`rounded-lg px-1.5 py-2 border text-[10px] font-black transition-all ${
+                                          className={`music-mix-ratio-button rounded-lg px-1.5 py-2 border text-[10px] font-black transition-all ${
                                             localEnglishMixRatio === ratio
                                               ? accentSelected
                                               : optionRestLight
@@ -1021,7 +1021,7 @@ export default function MusicApiGenerateModal({
                           rapEnabled: includeLyrics ? localRapEnabled : false,
                         });
                       }}
-                      className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[11px] sm:text-base transition-all flex items-center justify-center shrink-0 whitespace-nowrap outline-none select-none"
+                      className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[15px] sm:text-[20px] transition-all flex items-center justify-center shrink-0 whitespace-nowrap outline-none select-none"
                       style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       미리보기
@@ -1030,7 +1030,7 @@ export default function MusicApiGenerateModal({
                       type="button"
                       onClick={handleNext}
                       disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                      className="basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-sm sm:text-lg font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center outline-none select-none"
+                      className="basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[18px] sm:text-[22px] font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center outline-none select-none"
                       style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       다음
@@ -1041,7 +1041,7 @@ export default function MusicApiGenerateModal({
                     type="button"
                     onClick={handleNext}
                     disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                    className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg} outline-none select-none`}
+                    className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[22px] sm:text-[24px] font-black transition-all shadow-lg ${accentBg} outline-none select-none`}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
                   >
                     다음
@@ -1096,7 +1096,7 @@ export default function MusicApiGenerateModal({
                   type="button"
                   onClick={handleConfirm}
                   disabled={!hasApiKey}
-                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-lg sm:text-xl font-black transition-all shadow-lg ${accentBg}`}
+                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[22px] sm:text-[24px] font-black transition-all shadow-lg ${accentBg}`}
                 >
                   {isMain ? `${generationCount}곡 생성하기` : (targetMode === 'batch' ? `${musicApiTargets.length}곡 API 생성하기` : '1곡 API 생성하기')}
                 </button>

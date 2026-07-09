@@ -15103,7 +15103,7 @@ function CycleSectionComponent({
                 >
                   <span
                     className={cn(
-                      useGenreKeywordButtonFont ? "text-[13px] md:text-[14.5px]" : "text-[16px] md:text-[17px]",
+                      useGenreKeywordButtonFont ? "text-[15px] md:text-[16.5px]" : "text-[16px] md:text-[17px]",
                       "font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
                     )}
                   >
@@ -17771,9 +17771,10 @@ function SongStructureIntegratedControlComponent({
                         onClick={openSavedSectionsModal}
                         title="Keep 섹션"
                         aria-label="Keep 섹션"
-                        className="xl:hidden w-10 h-10 rounded-xl border border-black/20/45 bg-[#FFB400]/10 text-[#FFD36A] hover:bg-[#FFB400]/15 transition-all shadow-btn flex items-center justify-center"
+                        className="xl:hidden h-10 px-3 rounded-xl border border-black/20/45 bg-[#FFB400]/10 text-[#FFD36A] hover:bg-[#FFB400]/15 transition-all shadow-btn flex items-center justify-center gap-2 whitespace-nowrap"
                       >
-                        <Bookmark className="w-[18px] h-[18px]" />
+                        <Bookmark className="w-[18px] h-[18px] shrink-0" />
+                        <span className="text-[12px] font-black leading-none">KEEP 섹션</span>
                       </button>
                       <button
                         onClick={openSaveStructureModal}

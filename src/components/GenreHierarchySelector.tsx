@@ -617,8 +617,8 @@ function GenreHierarchySelectorComponent({
     onClear?: (event: React.MouseEvent<HTMLElement>) => void
   ) => {
     const isMain = orderIndex === 1;
-    const backgroundColor = isMain ? '#050505' : '#FFBB22';
-    const textColor = isMain ? '#FFBB22' : '#050505';
+    const backgroundColor = isMain ? '#050505' : '#FFB400';
+    const textColor = isMain ? '#FFB400' : '#050505';
     const badgeClass = isMain ? 'soridraw-count-badge-main' : 'soridraw-count-badge-point';
 
     return (
@@ -648,7 +648,7 @@ function GenreHierarchySelectorComponent({
           color: textColor,
           fontWeight: 950,
           lineHeight: 1,
-          ['--soridraw-badge-accent' as string]: '#FFBB22',
+          ['--soridraw-badge-accent' as string]: '#FFB400',
         } as React.CSSProperties}
         title={onClear ? "이 버튼의 선택 해제" : isMain ? "메인 장르" : "서브 장르"}
         aria-label={onClear ? "이 버튼의 선택 해제" : isMain ? "메인 장르" : "서브 장르"}

@@ -43,11 +43,11 @@
   --soridraw-border: #f1efed;
   --soridraw-text-main: #1a1a1a;
   --soridraw-text-muted: #7d756d;
-  --soridraw-selected-bg: #FFBB22;
+  --soridraw-selected-bg: #FFB400;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #FFBB22;
+  --soridraw-menu-theme-color: #FFB400;
   --soridraw-green-tone: #7FBD75;
-  --soridraw-menu-amber: #FFBB22;
+  --soridraw-menu-amber: #FFB400;
   --soridraw-menu-amber-rgb: 255 187 34;
   --soridraw-menu-amber-soft: #FFD36A;
   --soridraw-menu-amber-soft-rgb: 255 211 106;
@@ -81,11 +81,11 @@
   --soridraw-border: rgba(255, 255, 255, 0.25);
   --soridraw-text-main: #f8f9fa;
   --soridraw-text-muted: #b0b3b8;
-  --soridraw-selected-bg: #FFBB22;
+  --soridraw-selected-bg: #FFB400;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #FFBB22;
+  --soridraw-menu-theme-color: #FFB400;
   --soridraw-green-tone: #7FBD75;
-  --soridraw-menu-amber: #FFBB22;
+  --soridraw-menu-amber: #FFB400;
   --soridraw-menu-amber-rgb: 255 187 34;
   --soridraw-menu-amber-soft: #FFD36A;
   --soridraw-menu-amber-soft-rgb: 255 211 106;
@@ -288,9 +288,9 @@ body::-webkit-scrollbar-thumb:hover {
   --soridraw-border: rgba(241, 218, 164, 0.10);
   --soridraw-text-main: #f8f9fa;
   --soridraw-text-muted: #b0b3b8;
-  --soridraw-selected-bg: #FFBB22;
+  --soridraw-selected-bg: #FFB400;
   --soridraw-selected-text: #171717;
-  --soridraw-menu-theme-color: #FFBB22;
+  --soridraw-menu-theme-color: #FFB400;
   --soridraw-green-tone: #7FBD75;
 }
 
@@ -389,7 +389,7 @@ body::-webkit-scrollbar-thumb:hover {
 .soridraw-selected-strong .soridraw-count-badge-main,
 .soridraw-count-badge-main {
   background: rgba(3, 3, 3, 0.94) !important;
-  color: var(--soridraw-badge-accent, #FFBB22) !important;
+  color: var(--soridraw-badge-accent, #FFB400) !important;
   font-weight: 950 !important;
   -webkit-text-stroke: 0 !important;
   text-shadow: 0 0 0 transparent !important;
@@ -397,7 +397,7 @@ body::-webkit-scrollbar-thumb:hover {
 
 .soridraw-selected-strong .soridraw-count-badge-main > span,
 .soridraw-count-badge-main > span {
-  color: var(--soridraw-badge-accent, #FFBB22) !important;
+  color: var(--soridraw-badge-accent, #FFB400) !important;
   font-weight: 950 !important;
   -webkit-text-stroke: 0 !important;
   text-shadow: none !important;
@@ -892,8 +892,8 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 .soridraw-selected-strong .soridraw-count-badge-main .soridraw-badge-x,
 .soridraw-count-badge-main:hover .soridraw-badge-x,
 .soridraw-count-badge-main:focus-visible .soridraw-badge-x {
-  color: var(--soridraw-badge-accent, #FFBB22) !important;
-  stroke: var(--soridraw-badge-accent, #FFBB22) !important;
+  color: var(--soridraw-badge-accent, #FFB400) !important;
+  stroke: var(--soridraw-badge-accent, #FFB400) !important;
 }
 
 .soridraw-count-badge-point .soridraw-badge-x,
@@ -1830,7 +1830,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   background-color: #1a1a1a !important;
 }
 
-.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFBB22\]\/12 {
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
   background-color: rgba(255, 187, 34, 0.12) !important;
 }
 
@@ -1905,7 +1905,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 }
 
 .dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\],
-.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFBB22\]\/12 {
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
   border: 1px solid rgba(0, 0, 0, 0.52) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
 }
@@ -2003,7 +2003,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-genre-modal-panel
 ) button:is([aria-label*="적용"]):not([aria-label*="직접입력"]):not(:disabled) {
-  background-color: #FFBB22 !important;
+  background-color: #FFB400 !important;
   color: #171717 !important;
   border-color: rgba(0, 0, 0, 0.52) !important;
   font-weight: 900 !important;

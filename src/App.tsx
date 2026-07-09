@@ -66,6 +66,7 @@ import {
   Sunset,
   Activity,
   PenTool,
+  FlaskConical,
   AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -2308,8 +2309,10 @@ const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManageme
 const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
 const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
 const MyPageLazy = lazy(() => import('./pages/MyPage'));
+const LabPageLazy = lazy(() => import('./pages/LabPage'));
 const HomePageLazy = lazy(() => import('./pages/HomePage'));
 const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
+const AdminAppSettingsPageLazy = lazy(() => import('./pages/AdminAppSettingsPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -2929,7 +2932,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, showSunoLibraryMenu, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; showSunoLibraryMenu: boolean; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2961,7 +2964,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     { path: '/', label: '홈', icon: HomeIcon },
     { path: '/studio', label: '스튜디오', icon: Zap },
     { path: '/history', label: '뮤직노트', icon: HeartIcon },
-    { path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
+    ...(showSunoLibraryMenu ? [{ path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true }] : []),
+    { path: '/lab', label: '실험실', icon: FlaskConical },
     { path: '/my-page', label: '마이페이지', icon: UserIcon },
   ];
 
@@ -3256,30 +3260,35 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               <HeartIcon className="h-6 w-6" />
             </button>
 
+            {showSunoLibraryMenu && (
+              <button
+                type="button"
+                onClick={() => goToTopNav('/suno-library', { clearSuno: true })}
+                className={cn(
+                  "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                  isActivePath('/suno-library') && "bg-[#FFB400]/18 text-[#FFB400]"
+                )}
+                aria-label="라이브러리"
+                title="라이브러리"
+              >
+                {sunoLibrarySignal && (
+                  <span className={`absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full ${sunoLibrarySignalDotClass}`} />
+                )}
+                <Library className="h-6 w-6" />
+              </button>
+            )}
+
             <button
               type="button"
-              onClick={() => {
-                if (!user) {
-                  handleLogin();
-                  return;
-                }
-                clearSunoLibrarySignal();
-                navigate('/suno-library');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                setIsExpanded(false);
-                setIsProfileOpen(false);
-              }}
+              onClick={() => goToTopNav('/lab')}
               className={cn(
-                "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                isActivePath('/suno-library') && "bg-[#FFB400]/18 text-[#FFB400]"
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                isActivePath('/lab') && "bg-[#FFB400]/18 text-[#FFB400]"
               )}
-              aria-label="라이브러리"
-              title="라이브러리"
+              aria-label="실험실"
+              title="실험실"
             >
-              {sunoLibrarySignal && (
-                <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-black/40 ${sunoLibrarySignalDotClass}`} />
-              )}
-              <Library className="h-6 w-6" />
+              <FlaskConical className="h-6 w-6" />
             </button>
           </div>
 
@@ -4458,6 +4467,61 @@ function App() {
       return null;
     }
   });
+
+
+  const NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
+  const readStoredSunoLibraryMenuVisibility = () => {
+    try {
+      return localStorage.getItem(NAVIGATION_VISIBILITY_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  };
+
+  const [showSunoLibraryMenu, setShowSunoLibraryMenu] = useState(readStoredSunoLibraryMenuVisibility);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadNavigationVisibility = async () => {
+      try {
+        const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));
+        if (!isMounted) return;
+
+        const data = snapshot.exists() ? snapshot.data() : null;
+        const nextValue = data?.showSunoLibraryMenu === true;
+        setShowSunoLibraryMenu(nextValue);
+
+        try {
+          localStorage.setItem(NAVIGATION_VISIBILITY_STORAGE_KEY, nextValue ? 'true' : 'false');
+        } catch {
+          // localStorage may be blocked in some browsers. Ignore and keep the app alive.
+        }
+      } catch (error) {
+        console.warn('Navigation visibility setting read failed. Keeping safe fallback:', error);
+        if (isMounted) {
+          setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
+        }
+      }
+    };
+
+    const handleLocalVisibilityUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<{ showSunoLibraryMenu?: boolean }>).detail;
+      if (typeof detail?.showSunoLibraryMenu === 'boolean') {
+        setShowSunoLibraryMenu(detail.showSunoLibraryMenu);
+        return;
+      }
+      setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
+    };
+
+    window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
+    loadNavigationVisibility();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
+    };
+  }, []);
 
   const [sunoRemainingCredits, setSunoRemainingCredits] = useState<number | null>(() => {
     try {
@@ -12070,7 +12134,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} showSunoLibraryMenu={showSunoLibraryMenu} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       <Routes>
         <Route path="/" element={
@@ -13887,6 +13951,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Navigate to="/" replace />
           )
         } />
+        <Route path="/lab" element={
+          user ? (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-[#BBA8CA] animate-spin" /></div>}>
+              <LabPageLazy />
+            </Suspense>
+          ) : (
+            <Navigate to="/" replace />
+          )
+        } />
         
         {/* Admin Routes */}
         {isAdminUser ? (
@@ -13912,6 +13985,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <AdminSunoApiPageLazy />
               </Suspense>
             } />
+            <Route path="/admin/app-settings" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <AdminAppSettingsPageLazy />
+              </Suspense>
+            } />
           </>
         ) : (
           <>
@@ -13920,6 +13998,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Route path="/admin/vocals" element={<Navigate to="/" replace />} />
             <Route path="/admin/tags" element={<Navigate to="/" replace />} />
             <Route path="/admin/suno-api" element={<Navigate to="/" replace />} />
+            <Route path="/admin/app-settings" element={<Navigate to="/" replace />} />
           </>
         )}
       </Routes>

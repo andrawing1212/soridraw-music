@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Key } from 'lucide-react';
+import { Home, Users, Key, SlidersHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
@@ -13,6 +13,7 @@ type AdminPageLayoutProps = {
 const ADMIN_TABS = [
   { path: '/admin/users', label: '회원 관리', icon: Users },
   { path: '/admin/suno-api', label: 'Suno API', icon: Key },
+  { path: '/admin/app-settings', label: '앱 설정', icon: SlidersHorizontal },
 ];
 
 export default function AdminPageLayout({ title, description, actions, children }: AdminPageLayoutProps) {
@@ -31,10 +32,10 @@ export default function AdminPageLayout({ title, description, actions, children 
                 key={tab.path}
                 onClick={() => navigate(tab.path)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border shrink-0',
+                  'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0',
                   active
-                    ? 'bg-brand-orange text-white border-brand-orange shadow-[0_8px_18px_rgba(249,115,22,0.18)]'
-                    : 'bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover hover:text-[var(--text-primary)] shadow-btn'
+                    ? 'bg-brand-orange text-white shadow-[0_8px_18px_rgba(249,115,22,0.18)]'
+                    : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-[var(--text-primary)] shadow-btn'
                 )}
               >
                 <Icon className="w-3.5 h-3.5" />

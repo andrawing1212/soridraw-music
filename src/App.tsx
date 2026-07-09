@@ -5453,6 +5453,7 @@ function App() {
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
   const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([]);
+  const [vocalRandomActivationKey, setVocalRandomActivationKey] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
   useEffect(() => {
     const total = maleCount + femaleCount;
@@ -8596,12 +8597,27 @@ const toggleCycleVariantSelection = (
       setIsSituationExpanded(false);
     }
     if (!isMenuLocked('vocal')) {
-      setVocalMode('solo');
-      setMaleCount(0);
-      setFemaleCount(0);
+      const randomVocalMode: VocalMode = Math.random() < 0.5 ? 'solo' : 'group';
+      const vocalGenreHints = [...g, ...sg, ...s, ...expandedRandomSoundSelection];
+
+      setVocalMode(randomVocalMode);
       setSelectedVocalToneId(undefined);
-      setVocalMembers([]);
       setRapEnabled(false);
+
+      if (randomVocalMode === 'solo') {
+        const gender: 'male' | 'female' = Math.random() < 0.5 ? 'male' : 'female';
+        const nextMember = createRandomVocalMember(gender, 0, 1, vocalGenreHints);
+        setMaleCount(gender === 'male' ? 1 : 0);
+        setFemaleCount(gender === 'female' ? 1 : 0);
+        setVocalMembers([nextMember]);
+      } else {
+        const nextMembers = createRandomVocalGroupMembers(vocalGenreHints);
+        setMaleCount(nextMembers.filter((member) => member.gender === 'male').length);
+        setFemaleCount(nextMembers.filter((member) => member.gender === 'female').length);
+        setVocalMembers(nextMembers);
+      }
+
+      setVocalRandomActivationKey((key) => key + 1);
     }
     if (!isMenuLocked('structure')) {
       setLyricsLength('normal');
@@ -11242,7 +11258,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)]/40"
                     )}
                   >
-                    전체 해제
+                    초기화
                   </button>
                   <button
                     type="button"
@@ -11862,10 +11878,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock Storyboard' : 'Lock Storyboard', labelKo: menuLocks.situation ? '잠금 해제' : '스토리보드 잠금', description: menuLocks.situation ? '스토리보드를 랜덤 선택에 다시 포함합니다.' : '현재 스토리보드 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
                     onMouseLeave={() => setHoveredItem(null)}
                     className={cn(
-                      "p-2 rounded-xl border border-black/20 transition-all shadow-btn",
+                      "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                       menuLocks.situation
-                        ? "bg-[#FFBB22]/72 text-[#171717] border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
-                        : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                        ? "bg-[#FFBB22]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                        : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
                     )}
                     title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
                     aria-label={menuLocks.situation ? '스토리보드 잠금 해제' : '스토리보드 잠금'}
@@ -11885,14 +11901,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     type="button"
                     onClick={openStoryboardModal}
                     className={cn(
-                      "px-3 py-2 rounded-xl border text-xs font-black transition-all shadow-btn",
+                      "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                       hasActiveSituation(situation)
-                        ? "bg-[#FFBB22]/72 border-black/20 text-[#171717] font-black soridraw-selected-strong hover:bg-[#FFBB22]/82"
-                        : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                        ? "bg-[#FFBB22]/72 text-[#171717] font-black border-black/20 soridraw-selected-strong hover:bg-[#FFBB22]/82"
+                        : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
                     )}
+                    title={hasActiveSituation(situation) ? '스토리보드 편집' : '스토리보드 설정'}
                     aria-label="스토리보드 설정 열기"
                   >
-                    {hasActiveSituation(situation) ? '편집' : '설정'}
+                    <Settings className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -11946,9 +11963,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             <button
                               type="button"
                               onClick={clearDraftSituation}
-                              className="px-3 py-2 rounded-xl bg-btn-bg text-[11px] font-black text-[var(--text-secondary)] hover:text-[#FF9B92] hover:bg-[#E45F59]/10 transition-all"
+                              className="soridraw-modal-reset-button"
                             >
-                              전체 해제
+                              초기화
                             </button>
                           )}
                           {isStoryboardDraftChanged && (
@@ -12115,6 +12132,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onLongPressStart={handleLongPressStart}
               onLongPressEnd={handleLongPressEnd}
               onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
+              genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
+              randomActivationKey={vocalRandomActivationKey}
             />
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
@@ -15511,10 +15530,10 @@ function CycleKeywordPopup({
                     setLocalSelected([]);
                     setLocalOtherSelected([]);
                   }}
-                  className={cn("h-11 px-3 rounded-2xl border transition-all text-[11px] font-black whitespace-nowrap", sectionAccent.selectedSoft)}
-                  title="이 폴더 선택 전체 해제"
+                  className={cn("soridraw-modal-reset-button", sectionAccent.selectedSoft)}
+                  title="초기화"
                 >
-                  전체 해제
+                  초기화
                 </button>
               )}
               {hasChanges && (
@@ -17389,7 +17408,7 @@ function SongStructureIntegratedControlComponent({
                 onMouseEnter={() => onHover({ id: 'song-structure-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '섹션 구조를 랜덤 선택에 다시 포함합니다.' : '현재 섹션 구조 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-[9px] rounded-lg transition-all border border-btn-border shadow-btn",
+                  "p-2.5 rounded-xl transition-all border border-btn-border shadow-btn",
                   isLocked
                     ? "bg-[#FFBB22]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -17405,10 +17424,10 @@ function SongStructureIntegratedControlComponent({
               onMouseEnter={() => onHover({ id: 'song-structure-integrated-clear', label: '초기화', description: '섹션 설정을 초기화합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-[9px] rounded-lg transition-all border shadow-btn",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
-                  ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20/30 hover:bg-[#FFBB22]/30" 
-                  : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
+                  ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFBB22]/30" 
+                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
               )}
             >
               <Trash2 className="w-4 h-4" />
@@ -17566,10 +17585,10 @@ function SongStructureIntegratedControlComponent({
                     <button
                       type="button"
                       onClick={resetDraftStructure}
-                      className="h-10 px-3 rounded-xl border border-black/20/30 bg-[#FFBB22]/10 text-[#FFD36A] hover:bg-[#FFBB22]/20 transition-all text-[11px] font-black whitespace-nowrap"
-                      title="섹션 전체 해제"
+                      className="soridraw-modal-reset-button"
+                      title="초기화"
                     >
-                      전체 해제
+                      초기화
                     </button>
                   )}
                   {hasCustomStructureModalChanges && (
@@ -19207,6 +19226,193 @@ const getVocalCharacterScalePromptParts = (character?: VocalMember['character'])
 };
 
 
+
+const pickOne = <T,>(items: readonly T[], fallback: T): T => {
+  if (!items.length) return fallback;
+  return items[Math.floor(Math.random() * items.length)] ?? fallback;
+};
+
+const getRandomLevel = (levels: number[]) => pickOne(levels, 6);
+
+const hasGenreSignal = (genreHints: string[] | undefined, signals: string[]) => {
+  const text = (genreHints || []).join(' ').toLowerCase();
+  return signals.some((signal) => text.includes(signal));
+};
+
+const isRapLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['rap', 'hip', 'drill', 'trap', 'boom', 'garage', 'grime']);
+const isRockLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['rock', 'punk', 'metal', 'band', 'emo']);
+const isRnbLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['rnb', 'r&b', 'soul', 'neo_soul', 'neo soul']);
+const isDreamyLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['dream', 'lofi', 'lo-fi', 'ambient', 'shoegaze', 'city', 'chill', 'jazz']);
+const isTrotLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['trot', 'enka']);
+const isDanceLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['edm', 'house', 'dance', 'disco', 'funk', 'kpop', 'k-pop', 'jpop', 'j-pop']);
+
+const buildRandomVocalCharacter = (
+  gender: 'male' | 'female',
+  index: number,
+  total: number,
+  genreHints?: string[],
+): VocalCharacterSelection => {
+  const isRap = isRapLikeGenre(genreHints);
+  const isRock = isRockLikeGenre(genreHints);
+  const isRnb = isRnbLikeGenre(genreHints);
+  const isDreamy = isDreamyLikeGenre(genreHints);
+  const isTrot = isTrotLikeGenre(genreHints);
+  const isDance = isDanceLikeGenre(genreHints);
+
+  const voiceTonePools: string[][] = [
+    gender === 'male' ? ['heavy', 'husky_tone', 'dry'] : ['clear', 'bright', 'wet'],
+    gender === 'male' ? ['calm', 'dry', 'lazy'] : ['airy', 'first_love', 'clear'],
+    gender === 'male' ? ['wet', 'bright', 'heavy'] : ['hollow', 'lazy', 'wet'],
+  ];
+  if (isRap || isRock) voiceTonePools.unshift(gender === 'male' ? ['dry', 'husky_tone', 'heavy'] : ['bright', 'dry', 'husky_tone']);
+  if (isRnb) voiceTonePools.unshift(['wet', 'lazy', 'clear']);
+  if (isDreamy) voiceTonePools.unshift(['airy', 'hollow', 'lazy']);
+  if (isDance) voiceTonePools.unshift(['bright', 'clear', 'wet']);
+  if (isTrot) voiceTonePools.unshift(gender === 'male' ? ['heavy', 'wet', 'husky_tone'] : ['wet', 'clear', 'bright']);
+
+  const personalityPools: string[][] = [
+    ['relaxed', 'cool', 'plain'],
+    ['sensitive', 'unable_to_let_go', 'frustrated'],
+    ['bouncy', 'sly', 'proud'],
+  ];
+  if (isRap) personalityPools.unshift(['cool', 'proud', 'sly']);
+  if (isRock) personalityPools.unshift(['stubborn', 'frustrated', 'proud']);
+  if (isRnb || isDreamy) personalityPools.unshift(['relaxed', 'sensitive', 'unable_to_let_go']);
+  if (isDance) personalityPools.unshift(['bouncy', 'cute', 'sly']);
+
+  const techniquePools: string[][] = [
+    ['breathy', 'vibrato', 'glissando'],
+    ['muted_pronunciation', 'ghost_note', 'half_air_stop'],
+    ['mixed_voice', 'layback', 'blue_note'],
+    ['vocal_fry', 'creaky_voice', 'slurring'],
+  ];
+  if (isRap) techniquePools.unshift(['anticipation', 'sprechgesang', 'muted_pronunciation']);
+  if (isRock) techniquePools.unshift(['edge_voice', 'belting', 'growling']);
+  if (isRnb) techniquePools.unshift(['mixed_voice', 'glissando', 'blue_note']);
+  if (isDreamy) techniquePools.unshift(['airy', 'ghost_note', 'off_mic']);
+  if (isTrot) techniquePools.unshift(['vibrato', 'bending', 'chest_voice']);
+  if (isDance) techniquePools.unshift(['anticipation', 'mixed_voice', 'staccato_breath']);
+
+  const tonePool = voiceTonePools[index % voiceTonePools.length] || voiceTonePools[0] || ['calm'];
+  const personalityPool = personalityPools[index % personalityPools.length] || personalityPools[0] || ['plain'];
+  const techniquePool = techniquePools[index % techniquePools.length] || techniquePools[0] || ['breathy'];
+  const techniqueCount = total >= 3 ? 2 : 1;
+  const techniqueStart = Math.floor(Math.random() * techniquePool.length);
+  const techniqueIds = Array.from({ length: techniqueCount }, (_, offset) => techniquePool[(techniqueStart + offset) % techniquePool.length]).filter(Boolean);
+
+  return {
+    voiceToneId: pickOne(tonePool, 'calm'),
+    personalityId: pickOne(personalityPool, 'plain'),
+    techniqueIds: Array.from(new Set(techniqueIds)),
+    ageLevel: getRandomLevel(index % 2 === 0 ? [4, 5, 6, 7] : [5, 6, 7, 8]),
+    rangeLevel: gender === 'male'
+      ? getRandomLevel(index % 2 === 0 ? [3, 4, 5, 6] : [4, 5, 6, 7])
+      : getRandomLevel(index % 2 === 0 ? [6, 7, 8, 9] : [5, 6, 7, 8]),
+    deliveryLevel: isRap
+      ? getRandomLevel([9, 10, 11])
+      : isRock
+        ? getRandomLevel([7, 8, 9])
+        : isDreamy
+          ? getRandomLevel([1, 2, 3, 4, 5])
+          : getRandomLevel([4, 5, 6, 7, 8]),
+    rhythmLevel: isRap || isDance
+      ? getRandomLevel([2, 3, 4, 7])
+      : isDreamy
+        ? getRandomLevel([6, 7, 8, 10])
+        : getRandomLevel([4, 5, 6, 7]),
+    emotionLevel: isRock || isTrot
+      ? getRandomLevel([7, 8, 9])
+      : isDreamy
+        ? getRandomLevel([3, 4, 5, 6])
+        : getRandomLevel([5, 6, 7, 8]),
+    textureLevel: isDreamy
+      ? getRandomLevel([8, 9, 10, 11])
+      : isRap || isRock
+        ? getRandomLevel([2, 3, 4, 5])
+        : getRandomLevel([5, 6, 7, 8, 9]),
+    charmLevel: isDance
+      ? getRandomLevel([3, 4, 7, 8])
+      : isRnb
+        ? getRandomLevel([7, 8, 11])
+        : getRandomLevel([4, 5, 6, 7, 8, 9]),
+    ornamentLevel: isRap
+      ? getRandomLevel([2, 3, 4, 9, 10])
+      : isRock
+        ? getRandomLevel([7, 10, 12, 13])
+        : isDreamy
+          ? getRandomLevel([5, 6, 9, 11])
+          : getRandomLevel([3, 5, 6, 8, 9, 11, 13]),
+    ornamentSecondaryLevel: total >= 2
+      ? getRandomLevel(index % 2 === 0 ? [4, 5, 6, 9, 10] : [2, 7, 11, 12, 13])
+      : undefined,
+  };
+};
+
+const buildAutoVocalRoles = (index: number, total: number, genreHints?: string[]): VocalRole[] => {
+  const rapLike = isRapLikeGenre(genreHints);
+  if (total <= 1) return rapLike ? ['main', 'rapper'] : ['main'];
+  if (rapLike) {
+    if (index === 0) return ['main'];
+    if (index === 1) return ['rapper'];
+    return ['lead'];
+  }
+  if (index === 0) return ['main'];
+  if (index === 1) return ['lead'];
+  return ['sub'];
+};
+
+const createRandomVocalMember = (
+  gender: 'male' | 'female',
+  index: number,
+  total: number,
+  genreHints?: string[],
+): VocalMember => ({
+  id: `member_${Date.now()}_${Math.random().toString(36).slice(2, 8)}_${index}`,
+  gender,
+  roles: buildAutoVocalRoles(index, total, genreHints),
+  character: buildRandomVocalCharacter(gender, index, total, genreHints),
+});
+
+const buildRandomVocalGenderSequence = (count: number): Array<'male' | 'female'> => {
+  const safeCount = Math.min(3, Math.max(2, Math.round(count)));
+  const templates: Array<Array<'male' | 'female'>> = safeCount === 3
+    ? [
+        ['male', 'male', 'male'],
+        ['female', 'female', 'female'],
+        ['male', 'male', 'female'],
+        ['male', 'female', 'male'],
+        ['female', 'male', 'male'],
+        ['female', 'female', 'male'],
+        ['female', 'male', 'female'],
+        ['male', 'female', 'female'],
+      ]
+    : [
+        ['male', 'male'],
+        ['female', 'female'],
+        ['male', 'female'],
+        ['female', 'male'],
+      ];
+  return pickOne(templates, templates[0] || ['male', 'female']);
+};
+
+const createRandomVocalGroupMembers = (
+  genreHints?: string[],
+  preferredCount?: number,
+): VocalMember[] => {
+  const count = preferredCount || (2 + Math.floor(Math.random() * 2));
+  const genders = buildRandomVocalGenderSequence(count);
+  return genders.map((gender, index) => createRandomVocalMember(gender, index, genders.length, genreHints));
+};
+
+const isDefaultAutoGroupMembers = (members: VocalMember[], maleCount: number, femaleCount: number) => {
+  if (maleCount !== 1 || femaleCount !== 1 || members.length !== 2) return false;
+  const [first, second] = members;
+  if (!first || !second) return false;
+  const firstDefault = first.gender === 'male' && isArrayEqual(first.roles || [], ['main']) && !first.character && !first.toneId;
+  const secondDefault = second.gender === 'female' && isArrayEqual(second.roles || [], ['lead']) && !second.character && !second.toneId;
+  return firstDefault && secondDefault;
+};
+
 interface VocalControlProps {
   maleCount: number;
   femaleCount: number;
@@ -19230,6 +19436,8 @@ interface VocalControlProps {
   onLongPressStart: (item: CategoryItem) => void;
   onLongPressEnd: () => void;
   onModalStateChange?: (isOpen: boolean) => void;
+  genreHints?: string[];
+  randomActivationKey?: number;
 }
 
 function VocalControlComponent({ 
@@ -19255,6 +19463,8 @@ function VocalControlComponent({
   onLongPressStart, 
   onLongPressEnd,
   onModalStateChange,
+  genreHints = [],
+  randomActivationKey = 0,
 }: VocalControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
@@ -19267,6 +19477,16 @@ function VocalControlComponent({
   const [memberToneDirectInputId, setMemberToneDirectInputId] = useState<string | null>(null);
   const [memberToneDirectDraft, setMemberToneDirectDraft] = useState('');
   const [vocalTonePopupPos, setVocalTonePopupPos] = useState({ top: 0, left: 0, width: 560, maxHeight: 320 });
+  const [isVocalRandomActive, setIsVocalRandomActive] = useState(false);
+  const [vocalCompositionSource, setVocalCompositionSource] = useState<'empty' | 'manual' | 'random'>('empty');
+  const lastRandomActivationKeyRef = useRef(randomActivationKey);
+
+  useEffect(() => {
+    if (!randomActivationKey || lastRandomActivationKeyRef.current === randomActivationKey) return;
+    lastRandomActivationKeyRef.current = randomActivationKey;
+    setIsVocalRandomActive(true);
+    setVocalCompositionSource('random');
+  }, [randomActivationKey]);
 
   const updateMemberTonePopupPos = useCallback((trigger?: HTMLElement | null) => {
     const target = trigger || document.querySelector(`[data-tone-trigger="${activeVocalTonePopup || ''}"]`) as HTMLElement | null;
@@ -19363,6 +19583,23 @@ function VocalControlComponent({
     return "그룹";
   };
 
+  const markVocalManualSelection = () => {
+    setIsVocalRandomActive(false);
+    setVocalCompositionSource('manual');
+  };
+
+  const markVocalEmptySelection = () => {
+    setIsVocalRandomActive(false);
+    setVocalCompositionSource('empty');
+  };
+
+  useEffect(() => {
+    if (maleCount + femaleCount === 0 && vocalMembers.length === 0) {
+      setIsVocalRandomActive(false);
+      setVocalCompositionSource('empty');
+    }
+  }, [maleCount, femaleCount, vocalMembers.length]);
+
   const getCombinedDescription = () => {
     if (maleCount === 0 && femaleCount === 0) return "보컬의 구성과 성별을 선택합니다.";
     
@@ -19382,18 +19619,18 @@ function VocalControlComponent({
 
   const handleModeClick = (mode: VocalMode) => {
     const nextMode = mode === 'duo' ? 'group' : mode;
+    const isModeChanging = vocalMode !== nextMode;
     onModeChange(nextMode);
 
-    // Reset counts when mode changes to keep it consistent
-    if (nextMode === 'solo') {
-      if (maleCount > 0) { onMaleChange(1); onFemaleChange(0); }
-      else if (femaleCount > 0) { onMaleChange(0); onFemaleChange(1); }
-      else { onMaleChange(1); onFemaleChange(0); } // Default to male solo
-    } else if (nextMode === 'group') {
-      // Start with a simple two-person group if empty.
-      if (maleCount + femaleCount < 2) {
-        onMaleChange(1); onFemaleChange(1);
-      }
+    // 모드 버튼은 이제 성별/인원을 자동으로 채우지 않는다.
+    // 비어 있는 상태에서 랜덤을 누르면 솔로는 남/여 랜덤, 그룹은 동성 2~3인 랜덤으로 구성한다.
+    // 사용자가 직접 성별이나 멤버를 고른 뒤 랜덤을 누르면 구성은 유지하고 캐릭터만 랜덤 적용한다.
+    if (isModeChanging) {
+      onMaleChange(0);
+      onFemaleChange(0);
+      onMembersChange([]);
+      onRapChange(false);
+      markVocalEmptySelection();
     }
 
     onHover({ id: 'vocal-mode', label: 'Vocal Mode', labelKo: getModeLabel(nextMode), description: `${getModeLabel(nextMode)} 모드로 전환합니다.`, _ts: Date.now() });
@@ -19403,21 +19640,26 @@ function VocalControlComponent({
     if (vocalMode === 'solo') {
       // Solo mode: selected gender button toggles off to random solo.
       // male only = solo male, female only = solo female, none = random solo.
+      onMembersChange([]);
       if (gender === 'male') {
         if (maleCount > 0 && femaleCount === 0) {
           onMaleChange(0);
           onFemaleChange(0);
+          markVocalEmptySelection();
         } else {
           onMaleChange(1);
           onFemaleChange(0);
+          markVocalManualSelection();
         }
       } else {
         if (femaleCount > 0 && maleCount === 0) {
           onMaleChange(0);
           onFemaleChange(0);
+          markVocalEmptySelection();
         } else {
           onMaleChange(0);
           onFemaleChange(1);
+          markVocalManualSelection();
         }
       }
     } else if (vocalMode === 'group') {
@@ -19447,6 +19689,7 @@ function VocalControlComponent({
     onMembersChange(newMembers);
     if (gender === 'male') onMaleChange(maleCount + 1);
     else onFemaleChange(femaleCount + 1);
+    markVocalManualSelection();
   };
 
   const handleRemoveMember = (idx: number) => {
@@ -19460,12 +19703,15 @@ function VocalControlComponent({
 
     if (member.gender === 'male') onMaleChange(Math.max(0, maleCount - 1));
     else onFemaleChange(Math.max(0, femaleCount - 1));
+    if (newMembers.length > 0) markVocalManualSelection();
+    else markVocalEmptySelection();
   };
 
   const handleUpdateMember = (idx: number, updates: Partial<VocalMember>) => {
     const newMembers = [...vocalMembers];
     newMembers[idx] = { ...newMembers[idx], ...updates };
     onMembersChange(newMembers);
+    markVocalManualSelection();
   };
 
 
@@ -19750,6 +19996,66 @@ function VocalControlComponent({
     return true;
   });
 
+  const handleRandomVocal = () => {
+    if (isLocked) {
+      onHover({ id: 'vocal-random-locked', label: 'Locked', labelKo: '보컬 잠금', description: '보컬 메뉴가 잠겨 있어 랜덤을 적용하지 않습니다.', _ts: Date.now() });
+      return;
+    }
+
+    const total = maleCount + femaleCount;
+    const hasManualSoloGender = vocalMode === 'solo' && total === 1 && vocalCompositionSource === 'manual';
+    const hasManualGroupComposition = vocalMode === 'group' && vocalMembers.length > 0 && vocalCompositionSource === 'manual';
+
+    if (vocalMode === 'solo') {
+      const currentRandomGender: 'male' | 'female' | null = maleCount > 0 && femaleCount === 0
+        ? 'male'
+        : femaleCount > 0 && maleCount === 0
+          ? 'female'
+          : null;
+      const gender: 'male' | 'female' = hasManualSoloGender
+        ? (maleCount > 0 ? 'male' : 'female')
+        : currentRandomGender
+          ? (currentRandomGender === 'male' ? 'female' : 'male')
+          : (Math.random() < 0.5 ? 'male' : 'female');
+      const nextMember = createRandomVocalMember(gender, 0, 1, genreHints);
+      nextMember.roles = buildAutoVocalRoles(0, 1, genreHints);
+      onModeChange('solo');
+      onMaleChange(gender === 'male' ? 1 : 0);
+      onFemaleChange(gender === 'female' ? 1 : 0);
+      onMembersChange([nextMember]);
+      onRapChange(false);
+      setIsVocalRandomActive(true);
+      setVocalCompositionSource(hasManualSoloGender ? 'manual' : 'random');
+      onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: hasManualSoloGender ? '선택한 솔로 성별은 유지하고 보컬 캐릭터만 랜덤 적용했습니다.' : '솔로 남성/여성 중 하나와 보컬 캐릭터를 랜덤 적용했습니다.', _ts: Date.now() });
+      return;
+    }
+
+    if (hasManualGroupComposition) {
+      const nextMembers = vocalMembers.map((member, index) => ({
+        ...member,
+        character: buildRandomVocalCharacter(member.gender, index, vocalMembers.length, genreHints),
+      }));
+      onMembersChange(nextMembers);
+      setIsVocalRandomActive(true);
+      setVocalCompositionSource('manual');
+      onHover({ id: 'vocal-random', label: 'Random Vocal Character', labelKo: '보컬 캐릭터 랜덤', description: '직접 구성한 그룹 인원과 역할은 유지하고 보컬 캐릭터만 랜덤 적용했습니다.', _ts: Date.now() });
+      return;
+    }
+
+    const preferredCount = vocalCompositionSource === 'random' && (vocalMembers.length === 2 || vocalMembers.length === 3)
+      ? (vocalMembers.length === 2 ? 3 : 2)
+      : undefined;
+    const nextMembers = createRandomVocalGroupMembers(genreHints, preferredCount);
+    onModeChange('group');
+    onMaleChange(nextMembers.filter((member) => member.gender === 'male').length);
+    onFemaleChange(nextMembers.filter((member) => member.gender === 'female').length);
+    onMembersChange(nextMembers);
+    onRapChange(false);
+    setIsVocalRandomActive(true);
+    setVocalCompositionSource('random');
+    onHover({ id: 'vocal-random', label: 'Random Group Vocal', labelKo: '그룹 보컬 랜덤', description: '남성/여성/혼성 그룹 중 하나로 2~3명을 랜덤 구성하고 각 보컬 캐릭터를 다르게 적용했습니다.', _ts: Date.now() });
+  };
+
   return (
     <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full relative overflow-visible">
       <div className="relative mb-4 flex items-center justify-between">
@@ -19772,7 +20078,7 @@ function VocalControlComponent({
               onMouseEnter={() => onHover({ id: 'vocal-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '보컬 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 보컬 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-[9px] rounded-lg transition-all border border-btn-border shadow-btn",
+                "p-2.5 rounded-xl transition-all border border-btn-border shadow-btn",
                 isLocked
                   ? "bg-[#FFBB22]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -19784,13 +20090,33 @@ function VocalControlComponent({
             </button>
           )}
           <button
-            onClick={onClear}
+            type="button"
+            onClick={handleRandomVocal}
+            onMouseEnter={() => onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '보컬 구성 또는 보컬 캐릭터를 현재 선택 상태에 맞게 랜덤 적용합니다.' })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "p-2.5 rounded-xl transition-all border shadow-btn",
+              isVocalRandomActive
+                ? "bg-[#FFBB22]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+            )}
+            title="보컬 랜덤"
+            aria-label="보컬 랜덤"
+            aria-pressed={isVocalRandomActive}
+          >
+            <Dices className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              markVocalEmptySelection();
+              onClear();
+            }}
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
             className={cn(
-              "p-[9px] rounded-lg transition-all border shadow-btn",
+              "p-2.5 rounded-xl transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0)
-                ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20/30 hover:bg-[#FFBB22]/30" 
+                ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFBB22]/30" 
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
           >
@@ -20210,10 +20536,10 @@ function VocalControlComponent({
                       <button
                         type="button"
                         onClick={clearLocalVocalCharacter}
-                        className="h-10 px-3 rounded-xl bg-[#FFBB22]/12 text-[#FFD36A] hover:bg-[#FFBB22]/18 transition-all text-[11px] font-black whitespace-nowrap"
-                        title="캐릭터 전체 해제"
+                        className="soridraw-modal-reset-button"
+                        title="초기화"
                       >
-                        전체 해제
+                        초기화
                       </button>
                     )}
                     {hasVocalCharacterChanges && (
@@ -20365,7 +20691,9 @@ const VocalControl = React.memo(VocalControlComponent, (prev, next) => {
          prev.englishMixRatio === next.englishMixRatio &&
          prev.isLocked === next.isLocked &&
          isArrayEqual(prev.vocalMembers, next.vocalMembers) &&
-         isArrayEqual(prev.vocalTones, next.vocalTones);
+         isArrayEqual(prev.vocalTones, next.vocalTones) &&
+         prev.randomActivationKey === next.randomActivationKey &&
+         isArrayEqual(prev.genreHints || [], next.genreHints || []);
 });
 
 interface TempoControlProps {
@@ -20524,13 +20852,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 onMouseEnter={() => onHover({ id: 'tempo-clear-mobile', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "p-2 rounded-lg transition-all border shadow-btn",
+                  "p-2.5 rounded-xl transition-all border shadow-btn",
                   (!enabled || min !== 90 || max !== 110)
-                    ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20/30 hover:bg-[#FFBB22]/30" 
+                    ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFBB22]/30" 
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <RotateCcw className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -20560,13 +20888,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               onMouseEnter={() => onHover({ id: 'tempo-clear-pc', label: 'Reset', labelKo: '초기화', description: '템포 설정을 초기화합니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "p-2 rounded-lg transition-all border",
+                "p-2.5 rounded-xl transition-all border shadow-btn",
                 (!enabled || min !== 90 || max !== 110)
-                  ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20/30 hover:bg-[#FFBB22]/30" 
-                  : "bg-white/10 text-[var(--text-secondary)] border-white/10 hover:bg-white/20"
+                  ? "bg-[#FFBB22]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFBB22]/30" 
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <RotateCcw className="w-4 h-4" />
             </button>
           </div>
         </div>

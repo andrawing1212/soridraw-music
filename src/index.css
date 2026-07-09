@@ -1936,3 +1936,131 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 .dark .soridraw-studio-genre-modal-panel :where(button, div).border:hover {
   border-color: rgba(0, 0, 0, 0.42) !important;
 }
+
+/* SORIDRAW_35_MODAL_HEADER_AND_ACTION_BUTTON_UNIFY_FIX
+   장르 팝업을 제외한 스튜디오 팝업 상단 구분선을 섹션 커스텀 기준으로 통일하고,
+   스튜디오 팝업의 V/X 아이콘 버튼 형태를 스타일 팝업 기준으로 맞춘다. */
+.dark .soridraw-studio-cycle-modal-panel > .px-5.py-4.border-b,
+.dark .storyboard-tone-flat-panel > .sticky,
+.dark .soridraw-studio-vocal-modal-panel > .flex.items-center.justify-between.gap-3.bg-\[\#151515\] {
+  border-bottom: 1px solid rgba(241, 218, 164, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.dark .studio-section-custom-modal-panel > .px-5.py-4.border-b {
+  border-bottom-color: rgba(241, 218, 164, 0.12) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="닫기"], [aria-label*="적용"]):not([aria-label*="전체"]):not([aria-label*="직접입력"]) {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  transform: none !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="닫기"]):not([aria-label*="전체"]) {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  color: var(--text-secondary) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="닫기"]):not([aria-label*="전체"]):hover {
+  background-color: rgba(255, 255, 255, 0.085) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="적용"]):not([aria-label*="직접입력"]):not(:disabled) {
+  background-color: #FFBB22 !important;
+  color: #171717 !important;
+  border-color: rgba(0, 0, 0, 0.52) !important;
+  font-weight: 900 !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="적용"]):not([aria-label*="직접입력"]):not(:disabled):hover {
+  background-color: #D49A18 !important;
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="적용"]):disabled {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  border-color: rgba(0, 0, 0, 0.45) !important;
+  cursor: not-allowed !important;
+}
+
+
+/* SORIDRAW_36_MODAL_RESET_BUTTON_LABEL_AND_STYLE_FIX
+   팝업 공통 초기화 버튼 문구와 디자인을 스타일 메뉴 기준으로 통일한다. */
+.dark .soridraw-modal-reset-button {
+  height: 40px !important;
+  padding: 0 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  background-color: rgba(255, 187, 34, 0.10) !important;
+  color: #FFD36A !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease !important;
+}
+
+.dark .soridraw-modal-reset-button:hover:not(:disabled) {
+  background-color: rgba(255, 187, 34, 0.18) !important;
+  color: #FFE3A3 !important;
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark .soridraw-modal-reset-button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}

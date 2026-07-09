@@ -1301,11 +1301,11 @@ function GenreHierarchySelectorComponent({
                     <button
                       type="button"
                       onClick={handleClearModalSelection}
-                      className="h-10 px-2.5 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.35)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] text-[var(--soridraw-menu-amber-soft)] text-[10.5px] font-black hover:bg-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] transition-all active:scale-95"
-                      title="전체해제"
-                      aria-label="선택한 장르 전체해제"
+                      className="soridraw-modal-reset-button"
+                      title="초기화"
+                      aria-label="선택한 장르 초기화"
                     >
-                      전체해제
+                      초기화
                     </button>
                   )}
                   {showConfirmButton && (

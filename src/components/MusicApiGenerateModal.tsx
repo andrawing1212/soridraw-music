@@ -13,6 +13,7 @@ export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
 
 type ModalVariant = 'main' | 'musicApi';
 type MusicApiTargetMode = 'current' | 'batch';
+export type RapMode = 'auto' | 'off' | 'on';
 
 export type MusicApiTargetOption = {
   id: string;
@@ -41,6 +42,7 @@ type MusicApiGenerateModalProps = {
       isKoreanEnglishMix?: boolean;
       englishMixRatio?: number;
       languageMixTargetLanguages?: LanguageCode[];
+      rapMode?: RapMode;
       rapEnabled?: boolean;
       sunoModelVersion?: SunoModelVersion;
     }
@@ -49,6 +51,7 @@ type MusicApiGenerateModalProps = {
   englishMixRatio?: number;
   languageMixTargetLanguages?: LanguageCode[];
   rapEnabled?: boolean;
+  rapMode?: RapMode;
   onPreview?: (options: {
     includeLyrics: boolean;
     lyricLanguages: LanguageCode[];
@@ -56,6 +59,7 @@ type MusicApiGenerateModalProps = {
     isKoreanEnglishMix?: boolean;
     englishMixRatio?: number;
     languageMixTargetLanguages?: LanguageCode[];
+    rapMode?: RapMode;
     rapEnabled?: boolean;
   }) => void;
   suspendHistoryHandling?: boolean;
@@ -185,6 +189,7 @@ export default function MusicApiGenerateModal({
   englishMixRatio = 10,
   languageMixTargetLanguages,
   rapEnabled = false,
+  rapMode,
   onPreview,
   suspendHistoryHandling = false,
 }: MusicApiGenerateModalProps) {
@@ -283,7 +288,7 @@ export default function MusicApiGenerateModal({
   const [localLanguageMixTargets, setLocalLanguageMixTargets] = useState<LanguageCode[]>(() =>
     normalizeLanguageMixTargets(initialLangs[0], initialLangs, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)),
   );
-  const [localRapEnabled, setLocalRapEnabled] = useState<boolean>(() => Boolean(rapEnabled));
+  const [localRapMode, setLocalRapMode] = useState<RapMode>(() => rapMode || (rapEnabled ? 'on' : 'auto'));
   const [showMoreLanguages, setShowMoreLanguages] = useState(false);
   const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => (isMain ? 'V5_5' : readStoredSunoModelVersion()));
   const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
@@ -418,8 +423,8 @@ export default function MusicApiGenerateModal({
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
     setLocalEnglishMixRatio(Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
     setLocalLanguageMixTargets(normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)));
-    setLocalRapEnabled(Boolean(rapEnabled));
-  }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled]);
+    setLocalRapMode(rapMode || (rapEnabled ? 'on' : 'auto'));
+  }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled, rapMode]);
 
   useEffect(() => {
     if (!isMain || !includeLyrics || !localKoreanEnglishMix) return;
@@ -538,7 +543,8 @@ export default function MusicApiGenerateModal({
       isKoreanEnglishMix: isMain && includeLyrics ? localKoreanEnglishMix : undefined,
       englishMixRatio: isMain && includeLyrics ? localEnglishMixRatio : undefined,
       languageMixTargetLanguages: isMain && includeLyrics && localKoreanEnglishMix ? resolvedLanguageMixTargets : undefined,
-      rapEnabled: isMain && includeLyrics ? localRapEnabled : undefined,
+      rapMode: isMain && includeLyrics ? localRapMode : undefined,
+      rapEnabled: isMain && includeLyrics ? localRapMode === 'on' : undefined,
       sunoModelVersion: !isMain ? sunoModelVersion : undefined,
     });
   };
@@ -884,20 +890,28 @@ export default function MusicApiGenerateModal({
                                 언어 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
                               </p>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setLocalRapEnabled((prev) => !prev)}
-                              className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
-                                localRapEnabled
-                                  ? accentSelected
-                                  : optionRest
-                              }`}
-                            >
-                              <p className="text-sm font-black flex items-center gap-1.5">
+                            <div className={`rounded-xl px-2 py-2 border transition-all ${optionRest}`}>
+                              <p className="mb-2 text-sm font-black flex items-center gap-1.5">
                                 <Mic2 className="w-3.5 h-3.5" />
-                                랩 {localRapEnabled ? 'ON' : 'OFF'}
+                                랩 모드
                               </p>
-                            </button>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                {(['off', 'auto', 'on'] as RapMode[]).map((mode) => (
+                                  <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setLocalRapMode(mode)}
+                                    className={`rounded-lg px-2 py-2 text-[12px] font-black transition-all ${
+                                      localRapMode === mode
+                                        ? accentSelected
+                                        : 'bg-black/10 text-[var(--text-secondary)] hover:bg-white/[0.06]'
+                                    }`}
+                                  >
+                                    {mode === 'auto' ? 'AUTO' : mode.toUpperCase()}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
                           </div>
                           <AnimatePresence initial={false}>
                             {localKoreanEnglishMix && (
@@ -1018,7 +1032,8 @@ export default function MusicApiGenerateModal({
                           isKoreanEnglishMix: includeLyrics ? localKoreanEnglishMix : false,
                           englishMixRatio: localEnglishMixRatio,
                           languageMixTargetLanguages: includeLyrics && localKoreanEnglishMix ? resolvedLanguageMixTargets : undefined,
-                          rapEnabled: includeLyrics ? localRapEnabled : false,
+                          rapMode: includeLyrics ? localRapMode : 'auto',
+                          rapEnabled: includeLyrics ? localRapMode === 'on' : false,
                         });
                       }}
                       className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[15px] sm:text-[20px] transition-all flex items-center justify-center shrink-0 whitespace-nowrap outline-none select-none"
@@ -1074,7 +1089,7 @@ export default function MusicApiGenerateModal({
                     <div className={`flex items-center justify-between px-5 py-4 border-t ${dividerClass}`}>
                       <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
                       <span className={`text-sm font-black ${accentText} text-right`}>
-                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'} · 랩 {localRapEnabled ? 'ON' : 'OFF'}
+                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'} · 랩 {localRapMode.toUpperCase()}
                       </span>
                     </div>
                   )}

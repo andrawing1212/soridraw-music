@@ -364,6 +364,8 @@ type LegacyMoodInput = string[];
 type LegacyThemeInput = string[];
 type LanguageCode = "ko" | "en" | "ja" | "zh" | "es" | "fr" | "de" | "ru" | "th";
 
+type RapMode = "auto" | "off" | "on";
+
 interface GenerateSongParams {
   genre: string | null;
   subGenre?: string[];
@@ -405,6 +407,30 @@ interface GenerateSongParams {
   generationIndex?: number;
   generationCount?: number;
   recentStoryMemory?: string[];
+}
+
+function getRapModeFromVocal(vocal?: VocalConfig | null): RapMode {
+  const raw = String((vocal as any)?.rapMode || '').toLowerCase();
+  if (raw === 'off' || raw === 'on' || raw === 'auto') return raw;
+  return vocal?.rap ? 'on' : 'auto';
+}
+
+function getRapModeFromParams(params: Pick<GenerateSongParams, 'vocal'>): RapMode {
+  return getRapModeFromVocal(params.vocal);
+}
+
+function buildRapModeInstruction(params: Pick<GenerateSongParams, 'vocal' | 'songStructure' | 'customStructure'>): string {
+  const mode = getRapModeFromParams(params);
+  if (mode === 'off') {
+    return 'RAP MODE: OFF. Add only "no rap" to final [Arrangement]. Do not alter lyric sections only because of this option.';
+  }
+  if (mode === 'on') {
+    const customHasRap = params.songStructure === 'custom' && (params.customStructure || []).some((item: any) => /rap/i.test(String(item?.label || item?.labelEn || item?.tagCue || '')));
+    return customHasRap
+      ? 'RAP MODE: ON. Preserve the custom Rap Section with real lyric lines; add "rap section" to final [Arrangement].'
+      : 'RAP MODE: ON. Include one real [Rap Section: ...] with lyric lines; add "rap section" to final [Arrangement].';
+  }
+  return '';
 }
 
 type GenerateSongInput =
@@ -1861,6 +1887,7 @@ function buildLyricGuidancePrompt(
 - Short inline moment cues may stay as their own bracket line only when they occur inside the lyric body after real lyric lines, not directly below a section header.
 - Do not leave singer-role, performance instructions, or sung structural sections as naked tags such as [Lead Vocal], [dreamy turn], [Verse], [Chorus], or [Outro]; attach a fresh current-song cue to the nearest section tag instead.
 - Rich section tags are encouraged when they help performance, but every sung section tag must own real lyric/ad-lib lines before the next section. Never output a planning-only empty [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Drop], or [Outro]. Break/Stop/Instrumental transition tags may be lyric-free.
+- Do not place a cue-only duplicate section tag immediately before the real section. Merge the cue into the real section tag instead.
 - Actual sung ad-libs or sung short words should use parentheses, not square brackets.
 - The lyrics should primarily follow the user's story/intention.
 - Do not use vocal technique, instrument names, sound layers, mood labels, or genre DNA as lyric topics. They are performance/production directions only.
@@ -3934,9 +3961,12 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
     genderRule = `Choose the most appropriate vocal type (gender and tone) for the genre.`;
   }
 
-  const rapRule = vocal.rap
-    ? "Rap sections MUST be included in the song."
-    : "Rap is strictly forbidden unless explicitly requested.";
+  const rapMode = getRapModeFromVocal(vocal);
+  const rapRule = rapMode === "on"
+    ? "Rap: include rap section."
+    : rapMode === "off"
+      ? "Rap: no rap."
+      : "Rap: auto by genre.";
 
   let toneRule = "";
   if (vocal.tonePrompt) {
@@ -5162,6 +5192,7 @@ function buildAppliedKeywordPayload(
       params.songStructure === "custom" ? (params.customStructure ?? []) : [],
     maleCount: params.vocal?.male ?? 0,
     femaleCount: params.vocal?.female ?? 0,
+    rapMode: getRapModeFromParams(params),
     rapEnabled: params.vocal?.rap ?? false,
     isKoreanEnglishMix: params.isKoreanEnglishMix ?? false,
     englishMixRatio: normalizeEnglishMixRatio(params.englishMixRatio),
@@ -20227,7 +20258,13 @@ function buildFinalPrompt(
     normalizeAtmospherePromptLine(getAtmosphereForPrompt(params, detailLayer) || 'balanced emotional air'),
   );
   const vocals = safeBuildLine('Vocals', () => buildFiveLineVocalsValue(params, detailLayer), 'natural solo vocal with story-aware delivery');
-  const arrangement = safeBuildLine('Arrangement', () => buildFiveLineArrangementValue(params, resolvedStructure, variation), 'clear sectional contrast');
+  let arrangement = safeBuildLine('Arrangement', () => buildFiveLineArrangementValue(params, resolvedStructure, variation), 'clear sectional contrast');
+  const rapMode = getRapModeFromParams(params);
+  if (rapMode === 'off' && !/\bno\s+rap\b/i.test(arrangement)) {
+    arrangement = cleanupPromptTail([arrangement, 'no rap'].filter(Boolean).join(', '));
+  } else if (rapMode === 'on' && !/\brap\b/i.test(arrangement)) {
+    arrangement = cleanupPromptTail([arrangement, 'rap section'].filter(Boolean).join(', '));
+  }
 
   const bodyLines = compactFiveLinePromptBody([
     `[Genre] ${genre}`,
@@ -26194,6 +26231,96 @@ function cleanupGhostOpeningIntroAndEmptySungTags(lyrics: string, params: Genera
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
+
+function isStrictFinalLyricStructuralSection(sectionName: string): boolean {
+  const section = normalizeLyricSectionDisplayName(sectionName || '');
+  return /^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Build[-\s]?Up|Drop|Bridge(?:\s+[A-Z0-9]+)?|Outro|Break|Stop|Interlude|Instrumental|Instrumental Opening|Solo)$/i.test(section);
+}
+
+function isStrictFinalLyricFreeSection(sectionName: string): boolean {
+  const section = normalizeLyricSectionDisplayName(sectionName || '');
+  return /^(?:Break|Stop|Interlude|Instrumental|Instrumental Opening|Solo)$/i.test(section);
+}
+
+function isStrictFinalRequiredSungSection(sectionName: string): boolean {
+  const section = normalizeLyricSectionDisplayName(sectionName || '');
+  return /^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Build[-\s]?Up|Drop|Bridge(?:\s+[A-Z0-9]+)?|Outro)$/i.test(section);
+}
+
+function parseStrictFinalStructuralTagLine(line: string, params: GenerateSongParams): { section: string; body: string } | null {
+  const parsed = parseGuardBracketSectionTag(line);
+  if (!parsed) return null;
+  const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+  if (!section || !isStrictFinalLyricStructuralSection(section)) return null;
+  const normalizedInside = `${section}${parsed.body ? `: ${parsed.body}` : ''}`;
+  if (
+    !isSectionOnlyLyricTagInside(section) &&
+    !parseCompositeLyricTagInside(normalizedInside) &&
+    !/^(?:Break|Stop|Interlude|Instrumental|Instrumental Opening|Solo)$/i.test(section)
+  ) {
+    return null;
+  }
+  return { section, body: parsed.body || '' };
+}
+
+function strictFinalBlockOwnsConcreteLyricBody(blockLines: string[], params: GenerateSongParams): boolean {
+  return blockLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(String(line || '').trim(), params));
+}
+
+function removeEmptyRequiredSungBlocksStrictFinal(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const parsed = parseStrictFinalStructuralTagLine(line, params);
+    if (!parsed) {
+      out.push(line);
+      continue;
+    }
+
+    const blockLines: string[] = [];
+    let nextIndex = i + 1;
+    for (; nextIndex < lines.length; nextIndex += 1) {
+      const next = String(lines[nextIndex] || '').trim();
+      if (next && parseStrictFinalStructuralTagLine(next, params)) break;
+      blockLines.push(lines[nextIndex]);
+    }
+
+    if (isStrictFinalLyricFreeSection(parsed.section)) {
+      out.push(line, ...blockLines);
+      i = nextIndex - 1;
+      continue;
+    }
+
+    const ownsBody = strictFinalBlockOwnsConcreteLyricBody(blockLines, params);
+    const allowedEmptyIntro = /^Intro$/i.test(parsed.section) && sectionCueAllowsLyricFreeFinalBlock(parsed.section, parsed.body);
+
+    if (isStrictFinalRequiredSungSection(parsed.section) && !ownsBody && !allowedEmptyIntro) {
+      // Strong final guard: remove only the orphan tag-only block. This keeps rich section
+      // tags that own lyrics, but prevents duplicated empty Verse/Chorus/Bridge skeletons
+      // from leaking into the final lyric card.
+      i = nextIndex - 1;
+      continue;
+    }
+
+    out.push(line, ...blockLines);
+    i = nextIndex - 1;
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function finalizeGeneratedLyricsStructuralSafety(lyrics: string, params: GenerateSongParams): string {
+  let text = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(lyrics), params);
+  text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
+  text = removeEmptySungSectionsFinalGuard(text, params);
+  text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
+  text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
+  text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
+  return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function postProcessLyricsSectionTags(lyrics: string, params: GenerateSongParams): string {
   if (!lyrics) return "";
   
@@ -27863,6 +27990,7 @@ export async function generateSong(
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
   const sectionCueMusicalVarietyInstruction = buildSectionCueMusicalVarietyInstruction(params, exactStructureText);
+  const rapModeInstruction = buildRapModeInstruction(params);
   const scenePlanInstruction = buildScenePlanInstruction(params, detailLayer);
   const stableMultiVocalLyricLabels = getStableMultiVocalLyricTagLabels(params);
   const multiVocalLyricTagAnchorInstruction = stableMultiVocalLyricLabels.length >= 2
@@ -28030,6 +28158,7 @@ ${buildExperimentalStructureInspiration(params)}
 - Every sung section tag must include a fresh cue after the colon, shaped for this exact song. Bad: [Verse]. Good shape: [Verse : current-song vocal attitude or emotional function]. Do NOT put space-texture style labels such as tunnel echo, bathroom reverb, airy space, spatial texture, room reverb, or reverb-only cues inside sung lyric section tags; keep those in the production prompt only.
 - Do not copy the inspiration phrases mechanically. Create new structure choices and new cues from the current genre, mood, theme, Situation, vocal character, selected sounds, and user text.
 - Break and Stop are short transition sections with no lyric lines, but they must still include a short cue after the colon. If the same transition tag or same transition meaning appears immediately twice, merge or replace the duplicate so it does not look like an accidental repeat.
+- Never output an empty sung section as a placeholder before another section. If a rich cue is useful, attach it to the section that actually has lyric lines.
 - Interlude must stay lyric-free and vocal-free. Instrumental should be mainly instrumental. In lyric songs, Drop is not a default instrumental substitute; use it as a compact vocal/hook release when musically useful, and if Drop includes lyrics, its cue must describe a vocal/hook drop rather than an instrumental break.
 - Never use Final Chorus, Final Hook, Hook, Solo/solo, Guitar Solo/guitar solo, Instrumental Solo/instrumental solo, or Movement as structural section names. Use Chorus, Refrain, Instrumental, or Bridge with a fresh cue instead.
 - Do not end the lyric at Stop, Break, Drop, Build-Up, Interlude, or Instrumental. Always finish with a real payoff and Outro.`
@@ -28260,6 +28389,8 @@ ${moodTransitionSectionInstruction}
 ${pointSoundSectionInstruction}
 
 ${requestedLanguageInstruction}
+
+${rapModeInstruction}
 
 FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
 - Return productionPrompt as the final 6-line Suno production prompt.
@@ -29095,8 +29226,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     eng = postProcessLyricsSectionTags(eng, params);
     eng = alignSectionTagsBetweenLanguages(kor, eng);
 
-    result.lyrics.korean = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(kor), params), params), params);
-    result.lyrics.english = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(eng), params), params), params);
+    result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(kor, params);
+    result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(eng, params);
   }
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
@@ -29145,10 +29276,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   if (!params.isNoLyrics && result?.lyrics && typeof result.lyrics === 'object') {
     if (typeof result.lyrics.korean === 'string') {
-      result.lyrics.korean = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.korean), params), params), params);
+      result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params);
     }
     if (typeof result.lyrics.english === 'string') {
-      result.lyrics.english = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.english), params), params), params);
+      result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(result.lyrics.english, params);
     }
   }
 
@@ -29394,7 +29525,7 @@ ${targetLanguage === "ko" && !allowLatinScriptFragments ? `- The Korean lyric bo
 
   lyrics = alignRegeneratedLyricsToCurrentLyricStructure(lyrics, params.currentLyrics || "");
   lyrics = removeMalformedRegeneratedSectionTagLines(lyrics);
-  lyrics = removeEmptySungSectionsFinalGuard(lyrics, params as unknown as GenerateSongParams);
+  lyrics = finalizeGeneratedLyricsStructuralSafety(lyrics, params as unknown as GenerateSongParams);
 
   // Regeneration is cheaper because it only asks for one lyric card, but it still needs
   // the same language guard as full generation. If Korean-only or Korean + non-Latin

@@ -465,7 +465,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode } from './components/MusicApiGenerateModal';
 
 const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
   'instrumental_bgm',
@@ -4991,6 +4991,7 @@ function App() {
     isKoreanEnglishMix: boolean;
     englishMixRatio: number;
     languageMixTargetLanguages?: LanguageCode[];
+    rapMode?: RapMode;
     rapEnabled: boolean;
   } | null>(null);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
@@ -5478,6 +5479,7 @@ function App() {
   const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([]);
   const [vocalRandomActivationKey, setVocalRandomActivationKey] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
+  const [rapMode, setRapMode] = useState<RapMode>('auto');
   useEffect(() => {
     const total = maleCount + femaleCount;
     if (total === 0) {
@@ -5891,6 +5893,7 @@ function App() {
     setMaleCount(template.maleCount ?? 0);
     setFemaleCount(template.femaleCount ?? 0);
     setRapEnabled(template.rapEnabled ?? false);
+    setRapMode((template as any).rapMode || (template.rapEnabled ? 'on' : 'auto'));
     
     const isValidVocalTone = VOCAL_TONES.some(tone => tone.id === template.vocalToneId);
     setSelectedVocalToneId(isValidVocalTone ? template.vocalToneId : undefined);
@@ -7567,6 +7570,7 @@ const toggleCycleVariantSelection = (
     if (appliedKeywords.songStructure) setSongStructure(appliedKeywords.songStructure);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
+    if ((appliedKeywords as any).rapMode) setRapMode((appliedKeywords as any).rapMode);
     if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
     if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
 
@@ -8729,6 +8733,7 @@ const saveRecentSong = async (newSong: any) => {
     isKoreanEnglishMix?: boolean;
     englishMixRatio?: number;
     languageMixTargetLanguages?: LanguageCode[];
+    rapMode?: RapMode;
     rapEnabled?: boolean;
   }) => {
     if (!user) {
@@ -8801,8 +8806,11 @@ const saveRecentSong = async (newSong: any) => {
           .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== requestedLyricLanguages[0])))
           .slice(0, 2) as LanguageCode[]
       : [];
+    const requestedRapMode: RapMode = requestedIncludeLyrics
+      ? (generationOptions?.rapMode || (generationOptions?.rapEnabled ? 'on' : rapMode || (rapEnabled ? 'on' : 'auto')))
+      : (rapMode || (rapEnabled ? 'on' : 'auto'));
     const requestedRapEnabled = requestedIncludeLyrics
-      ? Boolean(generationOptions?.rapEnabled ?? rapEnabled)
+      ? requestedRapMode === 'on'
       : rapEnabled;
 
     const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
@@ -9295,6 +9303,7 @@ const saveRecentSong = async (newSong: any) => {
           male: maleCount,
           female: femaleCount,
           rap: requestedRapEnabled,
+          rapMode: requestedRapMode,
           mode: vocalMode,
           members: vocalMembers,
         },
@@ -9427,6 +9436,7 @@ const saveRecentSong = async (newSong: any) => {
             customStyleInput,
             customSoundInput,
             vocalType: formation || 'Default',
+            rapMode: requestedRapMode,
             rapEnabled: requestedRapEnabled,
             isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
             lyricLanguages: isFinalInstrumentalBgm ? [] : requestedLyricLanguages,
@@ -9952,6 +9962,7 @@ ${normalizePromptForDisplay(result.prompt)}
           male: Number(applied.maleCount || 0),
           female: Number(applied.femaleCount || 0),
           rap: Boolean(applied.rapEnabled),
+          rapMode: applied.rapMode || (applied.rapEnabled ? 'on' : 'auto'),
         };
 
     return {
@@ -11103,7 +11114,8 @@ ${normalizePromptForDisplay(result.prompt)}
     const previewLyricLangs = currentPreviewOptions ? currentPreviewOptions.lyricLanguages : [];
     const previewIsMix = previewIncludeLyrics ? (currentPreviewOptions ? currentPreviewOptions.isKoreanEnglishMix : isKoreanEnglishMix) : false;
     const previewMixRatio = currentPreviewOptions ? currentPreviewOptions.englishMixRatio : englishMixRatio;
-    const previewRap = previewIncludeLyrics ? (currentPreviewOptions ? currentPreviewOptions.rapEnabled : rapEnabled) : false;
+    const previewRapMode: RapMode = previewIncludeLyrics ? (currentPreviewOptions?.rapMode || (currentPreviewOptions?.rapEnabled ? 'on' : rapMode)) : rapMode;
+    const previewRap = previewIncludeLyrics ? previewRapMode === 'on' : false;
     const previewGenCount = currentPreviewOptions ? currentPreviewOptions.generationCount : 1;
     const selectedKeywordGroups = [
       ...baseSelectedKeywordGroups,
@@ -11410,6 +11422,7 @@ ${normalizePromptForDisplay(result.prompt)}
         lyricLanguages: previewLyricLangs,
         bilingualMix: previewIsMix,
         englishMixRatio: previewMixRatio,
+        rapMode: previewRapMode,
         rapEnabled: previewRap,
         directInput: userInput,
         vocalMode,
@@ -14112,6 +14125,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               englishMixRatio={englishMixRatio}
               languageMixTargetLanguages={languageMixTargetLanguages}
               rapEnabled={rapEnabled}
+              rapMode={rapMode}
               onClose={closeMainGenerationModal}
               suspendHistoryHandling={showPreviewPopup}
               onPreview={(options) => {
@@ -14121,11 +14135,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
                 const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
                 const nextRatio = Math.max(5, Math.min(90, Number(options?.englishMixRatio ?? englishMixRatio) || 10));
-                const nextRap = includeLyrics ? Boolean(options?.rapEnabled ?? rapEnabled) : rapEnabled;
+                const nextRapMode: RapMode = includeLyrics ? (options?.rapMode || (options?.rapEnabled ? 'on' : rapMode)) : rapMode;
+                const nextRap = includeLyrics ? nextRapMode === 'on' : rapEnabled;
                 const nextMixTargets = includeLyrics && nextMix ? Array.from(new Set((options?.languageMixTargetLanguages || languageMixTargetLanguages).filter(Boolean))).slice(0, 2) as LanguageCode[] : [];
                 setIsKoreanEnglishMix(nextMix);
                 setEnglishMixRatio(nextRatio);
                 setLanguageMixTargetLanguages(nextMixTargets);
+                setRapMode(nextRapMode);
                 setRapEnabled(nextRap);
                 closeMainGenerationModal();
                 handleGenerate({
@@ -14135,6 +14151,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   isKoreanEnglishMix: nextMix,
                   englishMixRatio: nextRatio,
                   languageMixTargetLanguages: nextMixTargets,
+                  rapMode: nextRapMode,
                   rapEnabled: nextRap,
                 });
               }}

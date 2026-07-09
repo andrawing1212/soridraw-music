@@ -1914,3 +1914,25 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 .dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar textarea {
   border-color: rgba(0, 0, 0, 0.42) !important;
 }
+
+/* SORIDRAW_34_STUDIO_MENU_POPUP_DARK_BUTTON_OUTLINE_FIX
+   스타일/사운드/장르 팝업 내부의 항목 버튼 외곽선을 다른 메뉴 팝업처럼
+   밝은 회색선이 아닌 검정 계열 선으로 맞춘다. 팝업 배경/구조는 건드리지 않는다. */
+.dark .soridraw-studio-cycle-modal-panel :where(button, div).border,
+.dark .soridraw-studio-genre-modal-panel :where(button, div).border {
+  border-color: rgba(0, 0, 0, 0.52) !important;
+}
+
+.dark .soridraw-studio-cycle-modal-panel :where(button, div)[class*="border-btn-border"],
+.dark .soridraw-studio-cycle-modal-panel :where(button, div)[class*="border-[var(--keyword-button-border)]"],
+.dark .soridraw-studio-cycle-modal-panel :where(button, div)[class*="border-[var(--modal-button-border)]"],
+.dark .soridraw-studio-genre-modal-panel :where(button, div)[class*="border-btn-border"],
+.dark .soridraw-studio-genre-modal-panel :where(button, div)[class*="border-[var(--keyword-button-border)]"],
+.dark .soridraw-studio-genre-modal-panel :where(button, div)[class*="border-[var(--modal-button-border)]"] {
+  border-color: rgba(0, 0, 0, 0.52) !important;
+}
+
+.dark .soridraw-studio-cycle-modal-panel :where(button, div).border:hover,
+.dark .soridraw-studio-genre-modal-panel :where(button, div).border:hover {
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}

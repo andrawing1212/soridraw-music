@@ -11872,7 +11872,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     className={cn(
                       "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                       menuLocks.situation
-                        ? "bg-[#FFB400]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                        ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                         : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
                     )}
                     title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
@@ -11895,7 +11895,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     className={cn(
                       "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
                       hasActiveSituation(situation)
-                        ? "bg-[#FFB400]/72 text-[#171717] font-black border-black/20 soridraw-selected-strong hover:bg-[#FFB400]/82"
+                        ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong hover:bg-[#FFB400]/90"
                         : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
                     )}
                     title={hasActiveSituation(situation) ? '스토리보드 편집' : '스토리보드 설정'}
@@ -17402,7 +17402,7 @@ function SongStructureIntegratedControlComponent({
                 className={cn(
                   "p-2.5 rounded-xl transition-all border border-btn-border shadow-btn",
                   isLocked
-                    ? "bg-[#FFB400]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                    ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                     : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
                 )}
                 title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -20088,7 +20088,7 @@ function VocalControlComponent({
               className={cn(
                 "p-2.5 rounded-xl transition-all border border-btn-border shadow-btn",
                 isLocked
-                  ? "bg-[#FFB400]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                  ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                   : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
               )}
               title={isLocked ? '잠금 해제' : '메뉴 잠금'}
@@ -20105,7 +20105,7 @@ function VocalControlComponent({
             className={cn(
               "p-2.5 rounded-xl transition-all border shadow-btn",
               isVocalRandomActive
-                ? "bg-[#FFB400]/72 text-[#171717] font-black border-black/20 shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
                 : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
             title="보컬 랜덤"

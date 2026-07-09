@@ -1860,6 +1860,7 @@ function buildLyricGuidancePrompt(
 - Do NOT place section-wide cue lines immediately below a section tag such as [Chorus] then [full choir]. Write [Chorus : full choir, clear hook] instead.
 - Short inline moment cues may stay as their own bracket line only when they occur inside the lyric body after real lyric lines, not directly below a section header.
 - Do not leave singer-role, performance instructions, or sung structural sections as naked tags such as [Lead Vocal], [dreamy turn], [Verse], [Chorus], or [Outro]; attach a fresh current-song cue to the nearest section tag instead.
+- Rich section tags are encouraged when they help performance, but every sung section tag must own real lyric/ad-lib lines before the next section. Never output a planning-only empty [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Drop], or [Outro]. Break/Stop/Instrumental transition tags may be lyric-free.
 - Actual sung ad-libs or sung short words should use parentheses, not square brackets.
 - The lyrics should primarily follow the user's story/intention.
 - Do not use vocal technique, instrument names, sound layers, mood labels, or genre DNA as lyric topics. They are performance/production directions only.
@@ -4959,6 +4960,153 @@ function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
       const next = arr[index + 1]?.trim();
       return Boolean(prev && next && /^\[/.test(next));
     })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function stripLatinFragmentsForKoreanOnlyLyrics(text: string): string {
+  return String(text || "")
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return line;
+      // Keep Suno section tags and their English cue text.
+      if (/^\[[^\]]+\]$/.test(trimmed)) return line;
+      // Remove standalone Latin-script ad-libs or lyric lines.
+      if (/^\(?[A-Za-z0-9\s’'",.!?&-]+\)?$/.test(trimmed)) return "";
+      // Remove English-only parenthetical phrases and Latin words inside Korean lines.
+      return line
+        .replace(/\s*\([A-Za-z0-9\s’'",.!?&-]+\)\s*/g, " ")
+        .replace(/[A-Za-z]+(?:[’'-][A-Za-z]+)?/g, "")
+        .replace(/^[\s,.:;!?-]+|[\s,.:;!?-]+$/g, "")
+        .replace(/\s{2,}/g, " ")
+        .trimEnd();
+    })
+    .filter((line, index, arr) => {
+      if (line.trim()) return true;
+      const prev = arr[index - 1]?.trim();
+      const next = arr[index + 1]?.trim();
+      return Boolean(prev && next && /^\[/.test(next));
+    })
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+
+interface RegenerationLyricTemplateBlock {
+  tag: string;
+  bodyLines: string[];
+}
+
+function isMalformedRegeneratedSectionTagLine(line: string): boolean {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return false;
+  if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return false;
+  if (isProperSectionTag(trimmed)) return false;
+
+  // Gemini sometimes returns broken placeholder tags such as
+  // [ : , ][ : ] when an instrumental/stop/break section has no lyric body.
+  // Treat any bracket-only tag group with no real letters as malformed.
+  if (/^(?:\[\s*[^\p{L}\p{N}\]]*\]\s*)+$/u.test(trimmed)) return true;
+  if (/^\[\s*[:：,\s-]+\]$/u.test(trimmed)) return true;
+  if (/^\[\s*(?:undefined|null|NaN)?\s*[:：,\s-]*\]$/iu.test(trimmed)) return true;
+  return false;
+}
+
+function extractRegenerationLyricTemplateBlocks(lyrics: string): RegenerationLyricTemplateBlock[] {
+  const lines = String(lyrics || "").split("\n");
+  const blocks: RegenerationLyricTemplateBlock[] = [];
+  let current: RegenerationLyricTemplateBlock | null = null;
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || "").trim();
+    if (!line) continue;
+
+    if (isProperSectionTag(line)) {
+      if (current) blocks.push(current);
+      current = { tag: line, bodyLines: [] };
+      continue;
+    }
+
+    if (!current) continue;
+    if (isMalformedRegeneratedSectionTagLine(line)) continue;
+    current.bodyLines.push(line);
+  }
+
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+function collectRegeneratedLyricBodyLines(lyrics: string): string[] {
+  return String(lyrics || "")
+    .split("\n")
+    .map((line) => String(line || "").trim())
+    .filter((line) => {
+      if (!line) return false;
+      if (isProperSectionTag(line)) return false;
+      if (isMalformedRegeneratedSectionTagLine(line)) return false;
+      return true;
+    });
+}
+
+function buildRegenerationSectionTemplateText(currentLyrics: string): string {
+  const blocks = extractRegenerationLyricTemplateBlocks(currentLyrics);
+  if (!blocks.length) return "";
+  return blocks
+    .map((block) => `${block.tag} (${block.bodyLines.length} lyric line${block.bodyLines.length === 1 ? "" : "s"})`)
+    .join(" -> ");
+}
+
+function alignRegeneratedLyricsToCurrentLyricStructure(generatedLyrics: string, currentLyrics: string): string {
+  const templateBlocks = extractRegenerationLyricTemplateBlocks(currentLyrics);
+  if (!templateBlocks.length) {
+    return String(generatedLyrics || "")
+      .split("\n")
+      .filter((line) => !isMalformedRegeneratedSectionTagLine(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  const totalTemplateBodyLines = templateBlocks.reduce((sum, block) => sum + block.bodyLines.length, 0);
+  const bodyPool = collectRegeneratedLyricBodyLines(generatedLyrics);
+
+  // If Gemini returned almost no usable body, keep the raw output rather than deleting content.
+  if (totalTemplateBodyLines > 0 && bodyPool.length < Math.max(1, Math.floor(totalTemplateBodyLines * 0.45))) {
+    return String(generatedLyrics || "")
+      .split("\n")
+      .filter((line) => !isMalformedRegeneratedSectionTagLine(line))
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
+  const rebuilt: string[] = [];
+  let cursor = 0;
+
+  templateBlocks.forEach((block, blockIndex) => {
+    const wantedLineCount = block.bodyLines.length;
+    rebuilt.push(block.tag);
+
+    if (wantedLineCount > 0) {
+      const nextLines = bodyPool.slice(cursor, cursor + wantedLineCount);
+      cursor += wantedLineCount;
+      if (nextLines.length) rebuilt.push(...nextLines);
+    }
+
+    if (blockIndex < templateBlocks.length - 1) rebuilt.push("");
+  });
+
+  return rebuilt.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+
+function removeMalformedRegeneratedSectionTagLines(lyrics: string): string {
+  return String(lyrics || "")
+    .split("\n")
+    .filter((line) => !isMalformedRegeneratedSectionTagLine(line))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -24798,7 +24946,7 @@ function isProperSectionTag(line: string): boolean {
     return false;
   }
   
-  const knownSections = ['intro', 'verse', 'chorus', 'bridge', 'outro', 'hook', 'pre-chorus', 'post-chorus', 'interlude', 'solo', 'build-up', 'buildup', 'drop', 'break', 'breakdown', 'instrumental'];
+  const knownSections = ['intro', 'verse', 'chorus', 'bridge', 'outro', 'hook', 'pre-chorus', 'post-chorus', 'interlude', 'solo', 'build-up', 'buildup', 'drop', 'break', 'breakdown', 'stop', 'pause', 'instrumental'];
   return knownSections.some(s => sectionName.startsWith(s));
 }
 
@@ -25557,6 +25705,62 @@ function removeEmptySungLyricSections(lyrics: string, params: GenerateSongParams
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function isFinalEmptySungSectionGuardTarget(sectionName: string): boolean {
+  const section = normalizeLyricSectionDisplayName(sectionName || '');
+  return /^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus|Chorus|Hook|Refrain|Rap\s+Section|Build[-\s]?Up|Drop|Bridge(?:\s+[A-Z0-9]+)?|Outro)$/i.test(section);
+}
+
+function sectionCueAllowsLyricFreeFinalBlock(sectionName: string, cueBody: string): boolean {
+  const section = normalizeLyricSectionDisplayName(sectionName || '');
+  if (!/^Intro$/i.test(section)) return false;
+  const cue = String(cueBody || '').toLowerCase();
+  // Keep a clearly instrumental/texture-only Intro. Remove style/genre planning leaks such as
+  // [Intro : fusion-retro-disco] when they do not own any lyric body.
+  return /\b(?:instrumental|no[-\s]?vocal|ambient|texture|foley|sfx|sound|rain|wind|vinyl|radio|noise|hiss|crackle|marimba|steel|drum|percussion|pad|synth|piano|guitar|bass|strings?|humming|hum|choir|fade|intro\s+fx)\b/i.test(cue)
+    && !/\b(?:fusion|retro|disco|catchy|restraint|light|genre|style|production|groove|theme|scene|story)\b/i.test(cue);
+}
+
+function hasConcreteLyricBodyBeforeNextFinalStructuralTag(lines: string[], startIndex: number, params: GenerateSongParams): boolean {
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    const trimmed = String(lines[i] || '').trim();
+    if (!trimmed) continue;
+    if (isGhostCleanupStructuralTagLine(trimmed, params)) return false;
+    if (isConcreteLyricOrAdlibLineForGhostCleanup(trimmed, params)) return true;
+  }
+  return false;
+}
+
+function removeEmptySungSectionsFinalGuard(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const parsed = parseGuardBracketSectionTag(line);
+    if (!parsed) {
+      out.push(line);
+      continue;
+    }
+
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    if (!isFinalEmptySungSectionGuardTarget(section)) {
+      out.push(line);
+      continue;
+    }
+
+    const ownsConcreteBody = hasConcreteLyricBodyBeforeNextFinalStructuralTag(lines, i, params);
+    if (!ownsConcreteBody && !sectionCueAllowsLyricFreeFinalBlock(section, parsed.body)) {
+      // Remove only the empty planning/skeleton tag itself. Rich cue text is preserved when the
+      // section actually owns lyrics, so section-tag quality is not flattened.
+      continue;
+    }
+
+    out.push(line);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function ensureSungSectionTagsHaveSafeCue(lyrics: string, params: GenerateSongParams): string {
   const lines = String(lyrics || '').split('\n');
   return lines.map((line, index) => {
@@ -26105,6 +26309,7 @@ function postProcessLyricsSectionTags(lyrics: string, params: GenerateSongParams
   finalText = removeStandaloneNonStructuralLyricCueLines(finalText);
   finalText = ensureSungSectionTagsHaveSafeCue(finalText, params);
   finalText = cleanupGhostOpeningIntroAndEmptySungTags(finalText, params);
+  finalText = removeEmptySungSectionsFinalGuard(finalText, params);
   return finalText.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -28890,8 +29095,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     eng = postProcessLyricsSectionTags(eng, params);
     eng = alignSectionTagsBetweenLanguages(kor, eng);
 
-    result.lyrics.korean = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(kor), params), params);
-    result.lyrics.english = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(eng), params), params);
+    result.lyrics.korean = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(kor), params), params), params);
+    result.lyrics.english = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(eng), params), params), params);
   }
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
@@ -28940,10 +29145,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   if (!params.isNoLyrics && result?.lyrics && typeof result.lyrics === 'object') {
     if (typeof result.lyrics.korean === 'string') {
-      result.lyrics.korean = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.korean), params), params);
+      result.lyrics.korean = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.korean), params), params), params);
     }
     if (typeof result.lyrics.english === 'string') {
-      result.lyrics.english = cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.english), params), params);
+      result.lyrics.english = removeEmptySungSectionsFinalGuard(cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(result.lyrics.english), params), params), params);
     }
   }
 
@@ -28999,6 +29204,215 @@ Translate the following Korean song title into English or generate a matching ca
   return "The Sound of Circling Back";
 }
 
+
+export interface RegenerateLyricsOnlyParams {
+  title?: string;
+  prompt?: string;
+  targetLanguage: LanguageCode;
+  targetLanguageName?: string;
+  currentLyrics?: string;
+  siblingLyrics?: string;
+  appliedKeywords?: any;
+  geminiApiKey?: string;
+}
+
+export async function regenerateLyricsOnly(
+  params: RegenerateLyricsOnlyParams,
+): Promise<{ lyrics: string; geminiModelInfo?: GeminiModelUsageInfo }> {
+  const targetLanguageNameMap: Record<LanguageCode, string> = {
+    ko: "Korean",
+    en: "English",
+    ja: "Japanese",
+    zh: "Chinese",
+    es: "Spanish",
+    fr: "French",
+    de: "German",
+    ru: "Russian",
+    th: "Thai",
+  };
+  const nativeScriptMap: Record<LanguageCode, string> = {
+    ko: "Hangul Korean script",
+    en: "standard English Latin alphabet",
+    ja: "Japanese native script (Kanji + Hiragana/Katakana as natural)",
+    zh: "Chinese Han characters",
+    es: "standard Spanish Latin alphabet with accents when needed",
+    fr: "standard French Latin alphabet with accents when needed",
+    de: "standard German Latin alphabet with umlauts/ß when needed",
+    ru: "Russian Cyrillic script",
+    th: "Thai script",
+  };
+  const applied = params.appliedKeywords || {};
+  const targetLanguage = params.targetLanguage || "ko";
+  const targetLanguageName = params.targetLanguageName || targetLanguageNameMap[targetLanguage] || targetLanguage;
+  const lyricLanguages = Array.isArray(applied.lyricLanguages) ? applied.lyricLanguages.filter(Boolean).slice(0, 2) : [targetLanguage];
+  const primaryLanguage = (lyricLanguages[0] || targetLanguage) as LanguageCode;
+  const rawMixTargets = Array.isArray(applied.languageMixTargetLanguages) ? applied.languageMixTargetLanguages : [];
+  const explicitMixEnabled = Boolean(applied.isKoreanEnglishMix || applied.kpopMode === 2);
+  // Important: a second lyric card language (for example Korean + English separate lyrics)
+  // is NOT the same thing as language-mix mode. Only the explicit mix flag may enable mixing.
+  const mixTargets = explicitMixEnabled
+    ? Array.from(new Set(rawMixTargets))
+        .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== targetLanguage)
+        .slice(0, 2)
+    : [];
+  const mixRatio = explicitMixEnabled ? Math.max(0, Math.min(90, Number(applied.englishMixRatio || applied.languageMixRatio || 10))) : 0;
+  const isMixed = explicitMixEnabled && mixTargets.length > 0;
+  const mixTargetText = mixTargets.length
+    ? mixTargets.map((lang) => `${targetLanguageNameMap[lang] || lang} (${nativeScriptMap[lang] || "native script"})`).join(", ")
+    : "none";
+  const latinScriptLanguages = new Set<LanguageCode>(["en", "es", "fr", "de"]);
+  const allowLatinScriptFragments = latinScriptLanguages.has(targetLanguage) || mixTargets.some((lang) => latinScriptLanguages.has(lang));
+  const structureSummary = (() => {
+    const custom = Array.isArray(applied.customStructure) ? applied.customStructure : [];
+    if (custom.length) {
+      return custom.map((item: any) => {
+        const section = String(item?.section || item?.label || "Section").trim();
+        const tags = Array.isArray(item?.tags) ? item.tags.map((tag: any) => String(tag || "").replace(/^VOCAL_ALL::/, "All Vocals").replace(/^VOCAL::/, "").trim()).filter(Boolean).slice(0, 3) : [];
+        return `${section}${tags.length ? `: ${tags.join(", ")}` : ""}`;
+      }).join(" -> ");
+    }
+    return String(applied.songStructure || "auto");
+  })();
+
+  const systemInstruction = `
+You are SORIDRAW's focused lyric regeneration engine.
+Regenerate ONLY the requested lyric text. Do not create a title. Do not create a production prompt.
+
+[OUTPUT]
+- Return valid JSON only: { "lyrics": "..." }.
+- The lyrics field must contain only the regenerated lyric body.
+- Keep section tags and line breaks readable for Suno-style lyrics.
+
+[TARGET]
+- Target lyric card language: ${targetLanguageName}.
+- Use ${nativeScriptMap[targetLanguage] || "the target language's normal native writing system"}.
+- Language mixing active: ${isMixed ? "YES" : "NO"}.
+${isMixed ? `- Keep the same mix condition: about ${100 - mixRatio}% ${targetLanguageName} and about ${mixRatio}% mixed-language lines from: ${mixTargetText}.
+- Mixed language must be short rhythm points, hook fragments, ad-libs, or punchlines. Do not turn the whole lyric into the mixed language.` : `- Do NOT add mixed-language lyric lines, foreign ad-libs, or foreign hook phrases.
+- For Korean lyrics, keep the lyric body in Korean only. English section tags such as [Verse : warm delivery] may stay, but lyric lines like Oh baby / alright / Just take your time are forbidden.`}
+${targetLanguage === "ko" && !allowLatinScriptFragments ? `- The Korean lyric body must not contain Latin-script words or English ad-libs. Keep only Korean text in lyric lines, except existing Suno section tags.` : ""}
+
+[QUALITY RULES]
+- Preserve the existing song identity: genre, mood, theme, vocal roles, tempo feel, section structure, and production prompt context.
+- Create a fresh lyric version, not a minor synonym edit.
+- Follow the CURRENT SECTION TEMPLATE exactly: same section order, same number of sections, and the same approximate line count per section.
+- If a section in the current template has 0 lyric lines, output that exact section tag only and do not invent placeholder tags such as [ : , ].
+- Do not add extra Verse/Chorus/Bridge/Outro sections that are not in the current lyric.
+- Keep lyric length, density, section count, and breath close to the current lyric.
+- Keep the same section-tag style as the current lyric.
+- If the current lyric has multi-vocal tags, keep stable vocalist anchors and role separation.
+- If the current lyric has no Korean/English/foreign mixing, do not add unnecessary mixing.
+- Do not leak production instructions into lyrics.
+- Do not write about genre names, BPM, hooks, vocals, arrangement, prompt, or AI instructions unless they are the actual story topic.
+- Use concrete scenes, character voice, and singable phrasing. Avoid abstract filler.
+- If a user draft existed, preserve its core story and emotional intent while making a new version.
+`.trim();
+
+  const contents = JSON.stringify({
+    title: params.title || "",
+    productionPrompt: params.prompt || "",
+    targetLanguage,
+    targetLanguageName,
+    currentLyrics: params.currentLyrics || "",
+    currentSectionTemplate: buildRegenerationSectionTemplateText(params.currentLyrics || ""),
+    siblingLyrics: params.siblingLyrics || "",
+    context: {
+      genre: applied.genre || [],
+      subGenre: applied.subGenre || applied.subGenreIds || [],
+      mood: applied.mood || [],
+      theme: applied.theme || [],
+      situation: applied.situation || null,
+      style: applied.style || [],
+      instrumentSound: applied.instrumentSound || [],
+      pointSound: applied.pointSound || applied.pointSounds || [],
+      customInputs: {
+        genre: applied.customGenreInput || "",
+        mood: applied.customMoodInput || "",
+        theme: applied.customThemeInput || "",
+        style: applied.customStyleInput || "",
+        sound: applied.customSoundInput || "",
+        directorNote: applied.userInput || "",
+      },
+      lyricsLength: applied.lyricsLength || "normal",
+      songStructure: applied.songStructure || "auto",
+      customStructureSummary: structureSummary,
+      vocal: applied.vocal || { male: applied.maleCount || 0, female: applied.femaleCount || 0, rap: Boolean(applied.rapEnabled) },
+      tempo: applied.tempo || "",
+      lyricDraft: applied.lyricDraft || "",
+      lyricMode: applied.lyricMode || "",
+      languageMix: {
+        active: isMixed,
+        primaryLanguage,
+        targetLanguage,
+        mixTargets,
+        mixRatio,
+      },
+    },
+  });
+
+  const ai = getAI(params.geminiApiKey);
+  let response;
+  const generateParams = {
+    model: GEMINI_TEXT_MODEL_CHAIN[0],
+    contents,
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          lyrics: { type: Type.STRING },
+        },
+        required: ["lyrics"],
+      },
+    },
+  };
+
+  try {
+    response = await generateContentWithModelFallback(
+      ai,
+      generateParams,
+      "regenerateLyricsOnly",
+    );
+  } catch (error) {
+    handleGeminiError(error, "regenerateLyricsOnly");
+  }
+
+  let lyrics = "";
+  try {
+    const parsed = JSON.parse(response?.text || "{}");
+    lyrics = String(parsed?.lyrics || "").trim();
+  } catch (parseError) {
+    console.warn("Failed to parse regenerateLyricsOnly JSON:", parseError, response?.text);
+    lyrics = String(response?.text || "").trim();
+  }
+
+  lyrics = lyrics
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/g, "")
+    .trim();
+
+  lyrics = alignRegeneratedLyricsToCurrentLyricStructure(lyrics, params.currentLyrics || "");
+  lyrics = removeMalformedRegeneratedSectionTagLines(lyrics);
+  lyrics = removeEmptySungSectionsFinalGuard(lyrics, params as unknown as GenerateSongParams);
+
+  // Regeneration is cheaper because it only asks for one lyric card, but it still needs
+  // the same language guard as full generation. If Korean-only or Korean + non-Latin
+  // mix was requested, remove accidental English/Latin ad-libs from the lyric body while
+  // keeping Suno section tags such as [Verse : warm delivery].
+  if (targetLanguage === "ko" && !allowLatinScriptFragments) {
+    lyrics = stripLatinFragmentsForKoreanOnlyLyrics(lyrics);
+  } else if (targetLanguage === "ko" && isMixed && mixTargets.includes("en")) {
+    lyrics = limitEnglishMixRatioInKoreanLyrics(lyrics, mixRatio);
+  }
+
+  if (!lyrics) {
+    throw new Error("정상적인 가사를 다시 생성하지 못했습니다. 다시 시도해주세요.");
+  }
+
+  const geminiModelInfo: GeminiModelUsageInfo | undefined = (response as any)?.__soridrawGeminiModelInfo;
+  return { lyrics, geminiModelInfo };
+}
 
 export async function translateTitleAndLyrics(
   title: string,

@@ -27,6 +27,10 @@ import {
   SituationConfig,
   CustomSectionKind,
 } from "../types";
+import { buildPromptEngineV1OutputInstruction } from "./promptEngineV1";
+import { buildPromptEngineV2OutputInstruction, isPromptEngineV2 } from "./promptEngineV2";
+import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
+import { generateSongV2 } from "./songEngineV2";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -119,7 +123,9 @@ const GEMINI_TEXT_MODEL_CHAIN = [
 const GEMINI_FALLBACK_STABILITY_INSTRUCTION = `
 [FALLBACK MODEL SAFETY MODE]
 - Prioritize structural stability over creative reinterpretation.
-- Keep the exact 5-line production prompt structure: [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement].
+- Keep the active final production prompt structure defined by the current generation engine.
+- Classic engine labels: [Genre], [Instruments], [Atmosphere], [Vocals], [Arrangement].
+- Version 2 engine labels: [Genre], [Sound], [Mood], [Vocals], [Production].
 - Do not invent extra vocal roles. If the user selected solo vocal, keep it solo.
 - Do not convert a vocal song into instrumental. Use instrumental/no vocals only when instrumental BGM or no-lyrics mode is explicitly active.
 - Preserve direct user input above automatic keyword interpretation.
@@ -364,6 +370,7 @@ type LegacyMoodInput = string[];
 type LegacyThemeInput = string[];
 type LanguageCode = "ko" | "en" | "ja" | "zh" | "es" | "fr" | "de" | "ru" | "th";
 
+type GenerationEngineVersion = "classic" | "v2";
 type RapMode = "auto" | "off" | "on";
 
 interface GenerateSongParams {
@@ -407,6 +414,43 @@ interface GenerateSongParams {
   generationIndex?: number;
   generationCount?: number;
   recentStoryMemory?: string[];
+  generationEngineVersion?: GenerationEngineVersion;
+}
+
+function isGenerationEngineV2(params?: Pick<GenerateSongParams, 'generationEngineVersion'> | null): boolean {
+  return isPromptEngineV2(params?.generationEngineVersion);
+}
+
+function normalizeProductionPromptLabelToClassicKey(label: string): keyof FinalPromptLineMap | null {
+  const normalized = String(label || '').trim().toLowerCase();
+  if (normalized === 'genre') return 'genre';
+  if (normalized === 'instruments' || normalized === 'sound') return 'instruments';
+  if (normalized === 'atmosphere' || normalized === 'mood') return 'atmosphere';
+  if (normalized === 'vocals') return 'vocals';
+  if (normalized === 'arrangement' || normalized === 'production') return 'arrangement';
+  return null;
+}
+
+function buildGenerationEngineOutputInstruction(params: Pick<GenerateSongParams, 'generationEngineVersion' | 'isNoLyrics'>): string {
+  if (isGenerationEngineV2(params)) {
+    return buildPromptEngineV2OutputInstruction({ isNoLyrics: params.isNoLyrics });
+  }
+  return buildPromptEngineV1OutputInstruction();
+}
+
+function renderProductionPromptForGenerationEngine(prompt: string, params: Pick<GenerateSongParams, 'generationEngineVersion'>): string {
+  if (!isGenerationEngineV2(params)) return prompt;
+  const map = parseFinalPromptLineMap(prompt);
+  const hasAudioQuality = /\[Audio quality improved to masterpiece\]/i.test(String(prompt || ''));
+  const lines = [
+    `[Genre] ${cleanupPromptTail(map.genre || 'Genre-led pop fusion')}`,
+    `[Sound] ${cleanupPromptTail(map.instruments || 'balanced band and synth texture')}`,
+    `[Mood] ${cleanupPromptTail(map.atmosphere || 'balanced emotional air')}`,
+    `[Vocals] ${cleanupPromptTail(map.vocals || 'natural solo vocal with story-aware delivery')}`,
+    `[Production] ${cleanupPromptTail(map.arrangement || 'clear sectional contrast')}`,
+  ];
+  if (hasAudioQuality) lines.push('[Audio quality improved to masterpiece]');
+  return removeAudioQualityLineWhenPromptIsNearLimit(lines.join('\n'));
 }
 
 function getRapModeFromVocal(vocal?: VocalConfig | null): RapMode {
@@ -4131,6 +4175,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
         (first as any).includeLyrics ?? !(first.isNoLyrics ?? false),
       instrumentalBgmMode: Boolean((first as any).instrumentalBgmMode),
       lyricLanguages: ((first as any).lyricLanguages ?? ["ko"]) as LanguageCode[],
+      generationEngineVersion: (first as any).generationEngineVersion === "v2" ? "v2" : "classic",
       customGenreInput: uniqueNormalizedValues([
         (first as any).customGenreInput,
         ...(isSoridrawCustomKeyword(rawGenre, 'genre') ? [decodeSoridrawCustomKeyword(rawGenre)] : []),
@@ -6089,17 +6134,24 @@ function buildSelectedKeywordLiteralLyricGuard(params: GenerateSongParams): stri
   const genreTerms = collect(selectedGenreTextForPromptGuard(params));
   const styleTerms = collect(selectedStyleText(params, { excludeEraTexture: false }));
   const soundTerms = collect(selectedSoundText(params));
-  const moodTerms = collect([...(params.moods ?? []), selectedMoodText(params)].join(' '));
-  const protectedTerms = dedupePromptParts([...genreTerms, ...styleTerms, ...soundTerms, ...moodTerms], 40)
+  const moodTerms = dedupePromptParts([
+    ...collect([...(params.moods ?? []), selectedMoodText(params)].join(' ')),
+    ...selectedMoodLiteralLeakTerms(params),
+  ], 60);
+  const protectedTerms = dedupePromptParts([...genreTerms, ...styleTerms, ...soundTerms, ...moodTerms], 60)
     .filter((item) => !/^no\s+/.test(item.toLowerCase()))
-    .slice(0, 28);
+    .slice(0, 32);
   const themeTerms = collect([...(params.themes ?? []), selectedThemeText(params)].join(' ')).slice(0, 10);
   if (!protectedTerms.length && !themeTerms.length) return '';
   return `SELECTED KEYWORD LITERAL-LEAK GUARD (MANDATORY):
-- Do not copy selected Genre/Style/Sound/Mood words literally into lyric lines, titles, or repeated hooks. Translate them into behavior, metaphor temperature, sentence rhythm, or production feel instead.
+- Do not copy selected Genre/Style/Sound/Mood words literally into lyric body lines, titles, or repeated hooks. Translate them into behavior, metaphor temperature, sentence rhythm, sensory detail, or production feel instead.
+- [MOOD WORD USE BAN / 분위기 단어 직접 사용 금지] 분위기 키워드는 가사 소재가 아니라 표현 필터입니다. 선택된 분위기 단어 자체를 가사 본문, 제목, 반복 훅에 직접 쓰지 마십시오.
+- 분위기는 새 장소, 사건, 관계, 갈등, 제목, 훅을 만들지 말고 기존 주제/직접입력/상황의 감정 온도, 주변 공기, 촉감, 행동, 호흡, 문장 리듬만 조절하십시오.
+- 선택 분위기는 “말하지 말고 보여주기” 방식으로만 반영하십시오. 예: 공허한 → 공허하다고 쓰지 말고 빈 방, 초침 소리, 식은 컵 같은 감각 묘사로 표현합니다.
+- This ban applies to lyric body lines. English acoustic/performance cues inside section tags such as [Verse : tense delivery] may stay rich and expressive.
 - Forbidden literal lyric words from Genre/Style/Sound/Mood unless the user directly typed them as story text: ${protectedTerms.length ? protectedTerms.join(', ') : 'none'}.
 - Theme words are story seeds, not mandatory lyric words. Use them as objects/relationships/places only when the story truly needs them; otherwise imply them through actions and details: ${themeTerms.length ? themeTerms.join(', ') : 'none'}.
-- If a forbidden production/mood word appears in a lyric line, rewrite that line into an ordinary-life image or character action before returning JSON.`;
+- If a forbidden production/mood word appears in a lyric body line, rewrite that line into an ordinary-life image, character action, sensory background, or concrete object before returning JSON.`;
 }
 
 function selectedGenreTextForPromptGuard(params: GenerateSongParams): string {
@@ -12608,6 +12660,43 @@ function selectedMoodText(params: GenerateSongParams): string {
   return getMoodWordsForMusicDirection(params).join(" ").toLowerCase();
 }
 
+function selectedMoodLiteralLeakTerms(params: GenerateSongParams): string[] {
+  const terms: string[] = [];
+  (params.moods ?? [])
+    .filter((mood) => !isSoridrawCustomKeyword(mood))
+    .forEach((mood) => {
+      const item = resolveMoodItem(mood);
+      const rawValues = item
+        ? [item.id, item.label, item.labelKo, item.mood, item.promptCore]
+        : [mood];
+
+      rawValues
+        .filter(Boolean)
+        .forEach((value) => {
+          String(value)
+            .split(/[,/|·•()]+|\s{2,}/)
+            .map((part) => cleanupPromptTail(part).replace(/[.!?。]+$/g, '').trim())
+            .filter((part) => part.length >= 2 && part.length <= 28)
+            .forEach((part) => terms.push(part));
+        });
+
+      if (item?.labelKo) {
+        const ko = String(item.labelKo).trim();
+        if (ko) {
+          terms.push(ko);
+          terms.push(ko.replace(/한$/g, '하다'));
+          terms.push(ko.replace(/한$/g, '함'));
+          terms.push(ko.replace(/적$/g, '적인'));
+          terms.push(ko.replace(/적$/g, '적으로'));
+          terms.push(ko.replace(/운$/g, '움'));
+        }
+      }
+    });
+
+  return dedupePromptParts(terms.map((term) => term.trim()).filter(Boolean), 60)
+    .filter((term) => !/^no\s+/i.test(term));
+}
+
 function selectedSoundText(params: GenerateSongParams): string {
   return [
     ...getCompactPointSoundPrompts(params.pointSounds ?? []),
@@ -18949,10 +19038,18 @@ function removeAudioQualityLineWhenPromptIsNearLimit(prompt: string): string {
 
 function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string): string {
   const labels = ['Genre', 'Instruments', 'Atmosphere', 'Vocals', 'Arrangement'] as const;
+  const labelToClassicName: Record<keyof FinalPromptLineMap, typeof labels[number]> = {
+    genre: 'Genre',
+    instruments: 'Instruments',
+    atmosphere: 'Atmosphere',
+    vocals: 'Vocals',
+    arrangement: 'Arrangement',
+  };
   const fallbackByLabel = new Map<string, string>();
+  const fallbackMap = parseFinalPromptLineMap(fallbackPrompt);
   labels.forEach((label) => {
-    const match = String(fallbackPrompt || '').match(new RegExp('^\\[' + label + '\\]\\s*(.*)$', 'im'));
-    fallbackByLabel.set(label, match ? cleanupPromptTail(match[1] || '') : '');
+    const classicKey = normalizeProductionPromptLabelToClassicKey(label);
+    fallbackByLabel.set(label, classicKey ? cleanupPromptTail(fallbackMap[classicKey] || '') : '');
   });
 
   const rawLines = normalizeProductionPromptSectionBreaks(rawPrompt)
@@ -18962,9 +19059,10 @@ function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string):
 
   const byLabel = new Map<string, string>();
   rawLines.forEach((line) => {
-    const match = line.match(/^\[(Genre|Instruments|Atmosphere|Vocals|Arrangement)\]\s*(.*)$/i);
+    const match = line.match(/^\[(Genre|Instruments|Sound|Atmosphere|Mood|Vocals|Arrangement|Production)\]\s*(.*)$/i);
     if (!match) return;
-    const label = labels.find((item) => item.toLowerCase() === match[1].toLowerCase());
+    const classicKey = normalizeProductionPromptLabelToClassicKey(match[1]);
+    const label = classicKey ? labelToClassicName[classicKey] : null;
     if (!label || byLabel.has(label)) return;
     let value = stripInternalPromptLeakPhrases(match[2] || '');
     value = stripRemainingKoreanForProductionPrompt(value);
@@ -18995,7 +19093,6 @@ function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string):
   finalLines.push('[Audio quality improved to masterpiece]');
   return removeAudioQualityLineWhenPromptIsNearLimit(finalLines.join('\n'));
 }
-
 function reconcileFiveLinePromptRoles(prompt: string): string {
   const lines = String(prompt || '').split('\n');
   const genreLine = lines.find((line) => /^\[Genre\]/i.test(line)) || '';
@@ -19782,11 +19879,12 @@ function isBackgroundOnlyBgmGenre(params: GenerateSongParams): boolean {
 function parseFinalPromptLineMap(prompt: string): FinalPromptLineMap {
   const map: FinalPromptLineMap = { genre: '', instruments: '', atmosphere: '', vocals: '', arrangement: '' };
   const source = normalizeProductionPromptSectionBreaks(prompt);
-  const labelPattern = /\[(Genre|Instruments|Atmosphere|Vocals|Arrangement)\]\s*/gi;
+  const labelPattern = /\[(Genre|Instruments|Sound|Atmosphere|Mood|Vocals|Arrangement|Production)\]\s*/gi;
   const matches = Array.from(source.matchAll(labelPattern));
   for (let i = 0; i < matches.length; i += 1) {
     const match = matches[i];
-    const label = String(match[1] || '').toLowerCase() as keyof FinalPromptLineMap;
+    const label = normalizeProductionPromptLabelToClassicKey(String(match[1] || ''));
+    if (!label) continue;
     const start = (match.index || 0) + match[0].length;
     const end = i + 1 < matches.length ? (matches[i + 1].index || source.length) : source.length;
     const value = cleanupPromptTail(source.slice(start, end).replace(/\[Audio quality improved to masterpiece\]/gi, ''));
@@ -26819,7 +26917,7 @@ function lowercaseFirstLetter(str: string): string {
 
 
 function normalizeProductionPromptSectionBreaks(prompt: string): string {
-  const sectionTagPattern = /\[(?:Genre|Instruments|Atmosphere|Vocals|Arrangement)\]\s*/gi;
+  const sectionTagPattern = /\[(?:Genre|Instruments|Sound|Atmosphere|Mood|Vocals|Arrangement|Production)\]\s*/gi;
   return String(prompt || '')
     .replace(/\r\n?/g, '\n')
     .replace(/\\n/g, '\n')
@@ -27898,6 +27996,14 @@ export async function generateSong(
     (params as any).instrumentalBgmMode = true;
   }
   params.lyricLanguages = params.isNoLyrics ? [] : requestedLyricLanguages;
+
+  if (isGenerationEngineV2(params)) {
+    return generateSongV2(params, {
+      getAI,
+      generateContentWithModelFallback,
+      modelChain: GEMINI_TEXT_MODEL_CHAIN,
+    });
+  }
   const primaryMixLanguage = requestedLyricLanguages[0] || 'ko';
   const requestedLanguageMixTargets = Array.from(new Set(((params.languageMixTargetLanguages ?? []) as LanguageCode[])
     .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== primaryMixLanguage)))
@@ -28508,6 +28614,8 @@ FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
 - [Arrangement] must be a natural music-flow sentence. Do not output internal phrases such as matching the free-text direction, matching the character arc, or direct-story section movement.
 - Do not invent a new story that is absent from the active Situation, user's direct input, selected Theme/Mood, or generated lyrics.
 - Do not expose analysis, scene plans, priority rules, or hidden notes.
+
+${buildGenerationEngineOutputInstruction(params)}
 
 Return JSON:
 {
@@ -29275,45 +29383,66 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   if (!params.isNoLyrics) {
-    let kor = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.korean, params);
-    let eng = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.english, params);
+    if (isGenerationEngineV2(params)) {
+      let kor = sanitizeV2GeneratedLyrics(result.lyrics.korean, {
+        language: 'ko',
+        rapMode: getRapModeFromParams(params),
+      });
+      let eng = sanitizeV2GeneratedLyrics(result.lyrics.english, {
+        language: secondaryLanguage,
+        rapMode: getRapModeFromParams(params),
+      });
 
-    // Apply Group A: Strip spatial and era keywords from lyrics
-    kor = stripSpatialAndEraKeywordsFromLyrics(kor, params);
-    eng = stripSpatialAndEraKeywordsFromLyrics(eng, params);
+      // V2는 Classic의 무거운 섹션/가사 후처리 체인을 타지 않는다.
+      // 목적: 기존 엔진의 보정 규칙이 v2 가사 섹션과 말투를 오염시키는 것을 방지한다.
+      if (!shouldUseMixedLyrics) {
+        eng = removeKoreanFromEnglishLyrics(eng, kor, result.englishTitle || result.title || "");
+      }
+      eng = alignSectionTagsBetweenLanguages(kor, eng);
 
-    // Apply Group B: Lyrics structure reflection
-    const selectedStyleIds = params.styles ?? [];
-    if (selectedStyleIds.includes('call-response-hook') || selectedStyleIds.includes('call-and-response')) {
-      kor = enforceCallAndResponseInHook(kor);
-      eng = enforceCallAndResponseInHook(eng);
+      result.lyrics.korean = kor;
+      result.lyrics.english = eng;
+    } else {
+      let kor = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.korean, params);
+      let eng = sanitizeGeneratedLyricTagsAndFragments(result.lyrics.english, params);
+
+      // Apply Group A: Strip spatial and era keywords from lyrics
+      kor = stripSpatialAndEraKeywordsFromLyrics(kor, params);
+      eng = stripSpatialAndEraKeywordsFromLyrics(eng, params);
+
+      // Apply Group B: Lyrics structure reflection
+      const selectedStyleIds = params.styles ?? [];
+      if (selectedStyleIds.includes('call-response-hook') || selectedStyleIds.includes('call-and-response')) {
+        kor = enforceCallAndResponseInHook(kor);
+        eng = enforceCallAndResponseInHook(eng);
+      }
+      if (selectedStyleIds.includes('repeated-slogan')) {
+        const korSlogan = result.koreanTitle || result.title || "";
+        const engSlogan = result.englishTitle || result.title || "";
+        kor = enforceRepeatedSloganInHook(kor, korSlogan);
+        eng = enforceRepeatedSloganInHook(eng, engSlogan);
+      }
+
+      // In language-mix mode, foreign lyric cards are allowed to contain Korean mixed lines.
+      // Do not strip Korean from lyrics.english here, or the English/foreign card loses its mix.
+      if (!shouldUseMixedLyrics) {
+        eng = removeKoreanFromEnglishLyrics(eng, kor, result.englishTitle || result.title || "");
+      }
+
+      kor = postProcessLyricsSectionTags(kor, params);
+      eng = postProcessLyricsSectionTags(eng, params);
+
+      kor = await repairSparseLyricsWithGemini(ai, kor, params, result.productionPrompt || result.prompt || finalPrompt, 'Korean using Hangul');
+      const secondaryRepairLanguageLabel = `${languageNameMap[secondaryLanguage] || 'the selected secondary language'} using ${languageNativeScriptMap[secondaryLanguage] || 'its normal native writing system'}`;
+      eng = await repairSparseLyricsWithGemini(ai, eng, params, result.productionPrompt || result.prompt || finalPrompt, secondaryRepairLanguageLabel);
+
+      kor = postProcessLyricsSectionTags(kor, params);
+      eng = postProcessLyricsSectionTags(eng, params);
+      eng = alignSectionTagsBetweenLanguages(kor, eng);
+
+      result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(kor, params);
+      result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(eng, params);
     }
-    if (selectedStyleIds.includes('repeated-slogan')) {
-      const korSlogan = result.koreanTitle || result.title || "";
-      const engSlogan = result.englishTitle || result.title || "";
-      kor = enforceRepeatedSloganInHook(kor, korSlogan);
-      eng = enforceRepeatedSloganInHook(eng, engSlogan);
-    }
-
-    // In language-mix mode, foreign lyric cards are allowed to contain Korean mixed lines.
-    // Do not strip Korean from lyrics.english here, or the English/foreign card loses its mix.
-    if (!shouldUseMixedLyrics) {
-      eng = removeKoreanFromEnglishLyrics(eng, kor, result.englishTitle || result.title || "");
-    }
-
-    kor = postProcessLyricsSectionTags(kor, params);
-    eng = postProcessLyricsSectionTags(eng, params);
-
-    kor = await repairSparseLyricsWithGemini(ai, kor, params, result.productionPrompt || result.prompt || finalPrompt, 'Korean using Hangul');
-    const secondaryRepairLanguageLabel = `${languageNameMap[secondaryLanguage] || 'the selected secondary language'} using ${languageNativeScriptMap[secondaryLanguage] || 'its normal native writing system'}`;
-    eng = await repairSparseLyricsWithGemini(ai, eng, params, result.productionPrompt || result.prompt || finalPrompt, secondaryRepairLanguageLabel);
-
-    kor = postProcessLyricsSectionTags(kor, params);
-    eng = postProcessLyricsSectionTags(eng, params);
-    eng = alignSectionTagsBetweenLanguages(kor, eng);
-
-    result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(kor, params);
-    result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(eng, params);
   }
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
@@ -29329,8 +29458,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     forceSoloVocalCharacterInPrompt(cleanProductionPrompt(finalPromptStr, params), params),
     params,
   ), params), params);
-  result.prompt = cleanedPromptStr;
-  result.productionPrompt = cleanedPromptStr;
+  const enginePromptStr = renderProductionPromptForGenerationEngine(cleanedPromptStr, params);
+  result.prompt = enginePromptStr;
+  result.productionPrompt = enginePromptStr;
   result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
@@ -29353,6 +29483,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     isNoLyrics: params.isNoLyrics as any,
     instrumentalBgmMode: Boolean((params as any).instrumentalBgmMode) as any,
     userInput: params.userInput ?? "",
+    generationEngineVersion: params.generationEngineVersion || "classic",
     geminiUsedModel: geminiModelInfo.usedModel,
     geminiFallbackUsed: geminiModelInfo.fallbackUsed,
     geminiFallbackFrom: geminiModelInfo.fallbackFrom || null,
@@ -29361,11 +29492,26 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   } as any;
 
   if (!params.isNoLyrics && result?.lyrics && typeof result.lyrics === 'object') {
-    if (typeof result.lyrics.korean === 'string') {
-      result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params);
-    }
-    if (typeof result.lyrics.english === 'string') {
-      result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(result.lyrics.english, params);
+    if (isGenerationEngineV2(params)) {
+      if (typeof result.lyrics.korean === 'string') {
+        result.lyrics.korean = sanitizeV2GeneratedLyrics(result.lyrics.korean, {
+          language: 'ko',
+          rapMode: getRapModeFromParams(params),
+        });
+      }
+      if (typeof result.lyrics.english === 'string') {
+        result.lyrics.english = sanitizeV2GeneratedLyrics(result.lyrics.english, {
+          language: secondaryLanguage,
+          rapMode: getRapModeFromParams(params),
+        });
+      }
+    } else {
+      if (typeof result.lyrics.korean === 'string') {
+        result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params);
+      }
+      if (typeof result.lyrics.english === 'string') {
+        result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(result.lyrics.english, params);
+      }
     }
   }
 

@@ -5,11 +5,13 @@ import { Check, ChevronDown, ChevronLeft, Key, Languages, Music, X, ListMusic, M
 declare global {
   interface Window {
     __soridrawMusicApiSunoModelVersion?: 'V5_5' | 'V5' | 'V4_5';
+    __soridrawGenerationEngineVersion?: 'classic' | 'v2';
   }
 }
 
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr' | 'de' | 'ru' | 'th';
 export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
+export type GenerationEngineVersion = 'classic' | 'v2';
 
 type ModalVariant = 'main' | 'musicApi';
 type MusicApiTargetMode = 'current' | 'batch';
@@ -45,6 +47,7 @@ type MusicApiGenerateModalProps = {
       rapMode?: RapMode;
       rapEnabled?: boolean;
       sunoModelVersion?: SunoModelVersion;
+      generationEngineVersion?: GenerationEngineVersion;
     }
   ) => void;
   isKoreanEnglishMix?: boolean;
@@ -61,6 +64,7 @@ type MusicApiGenerateModalProps = {
     languageMixTargetLanguages?: LanguageCode[];
     rapMode?: RapMode;
     rapEnabled?: boolean;
+    generationEngineVersion?: GenerationEngineVersion;
   }) => void;
   suspendHistoryHandling?: boolean;
 };
@@ -139,6 +143,12 @@ const SUNO_MODEL_OPTIONS: { id: SunoModelVersion; label: string; subLabel: strin
   { id: 'V4_5', label: 'v4.5', subLabel: '안정 비교' },
 ];
 
+const GENERATION_ENGINE_OPTIONS: { id: GenerationEngineVersion; label: string; subLabel: string }[] = [
+  { id: 'v2', label: 'v2', subLabel: '신규 생성' },
+  { id: 'classic', label: 'v1', subLabel: '기존 생성' },
+];
+
+const GENERATION_ENGINE_STORAGE_KEY = 'soridraw.main.generationEngineVersion';
 const SUNO_MODEL_STORAGE_KEY = 'soridraw.musicApi.sunoModelVersion';
 
 const isSunoModelVersion = (value: unknown): value is SunoModelVersion =>
@@ -173,7 +183,37 @@ const writeStoredSunoModelVersion = (value: SunoModelVersion) => {
   }
 };
 
+const isGenerationEngineVersion = (value: unknown): value is GenerationEngineVersion =>
+  typeof value === 'string' && GENERATION_ENGINE_OPTIONS.some((item) => item.id === value);
+
+const readStoredGenerationEngineVersion = (): GenerationEngineVersion => {
+  if (typeof window === 'undefined') return 'classic';
+
+  try {
+    const stored = window.localStorage.getItem(GENERATION_ENGINE_STORAGE_KEY);
+    if (isGenerationEngineVersion(stored)) return stored;
+  } catch {
+    // Keep working when localStorage is blocked.
+  }
+
+  const runtimeStored = window.__soridrawGenerationEngineVersion;
+  return isGenerationEngineVersion(runtimeStored) ? runtimeStored : 'classic';
+};
+
+const writeStoredGenerationEngineVersion = (value: GenerationEngineVersion) => {
+  if (typeof window === 'undefined') return;
+
+  window.__soridrawGenerationEngineVersion = value;
+
+  try {
+    window.localStorage.setItem(GENERATION_ENGINE_STORAGE_KEY, value);
+  } catch {
+    // Runtime copy above is enough for the current page session.
+  }
+};
+
 const getSunoModelMeta = (id: SunoModelVersion) => SUNO_MODEL_OPTIONS.find((item) => item.id === id) || SUNO_MODEL_OPTIONS[0];
+const getGenerationEngineMeta = (id: GenerationEngineVersion) => GENERATION_ENGINE_OPTIONS.find((item) => item.id === id) || GENERATION_ENGINE_OPTIONS.find((item) => item.id === 'classic') || GENERATION_ENGINE_OPTIONS[0];
 
 export default function MusicApiGenerateModal({
   hasApiKey = true,
@@ -221,6 +261,8 @@ export default function MusicApiGenerateModal({
   const optionRestLight = isMain
     ? 'border-transparent bg-white/[0.055] text-[var(--text-secondary)] hover:bg-white/[0.08]'
     : 'border-[var(--border-color)] bg-white/5 text-[var(--text-secondary)] hover:bg-white/10';
+  const neutralSelected = 'border-white/20 bg-white/[0.08] text-[var(--text-primary)]';
+  const neutralRest = 'border-[var(--border-color)] bg-black/10 text-[var(--text-secondary)] hover:bg-white/[0.055]';
   const dividerClass = isMain ? 'border-white/[0.06]' : 'border-[var(--border-color)]';
 
   const filteredLanguages = useMemo(() => {
@@ -292,11 +334,32 @@ export default function MusicApiGenerateModal({
   const [showMoreLanguages, setShowMoreLanguages] = useState(false);
   const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => (isMain ? 'V5_5' : readStoredSunoModelVersion()));
   const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
+  const [generationEngineVersion, setGenerationEngineVersion] = useState<GenerationEngineVersion>(() => (isMain ? readStoredGenerationEngineVersion() : 'classic'));
+  const [isGenerationEngineOpen, setIsGenerationEngineOpen] = useState(false);
+  const generationEngineMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isMain) return;
     setSunoModelVersion(readStoredSunoModelVersion());
   }, [isMain]);
+
+  useEffect(() => {
+    if (!isMain) return;
+    setGenerationEngineVersion(readStoredGenerationEngineVersion());
+  }, [isMain]);
+
+  useEffect(() => {
+    if (!isMain || !isGenerationEngineOpen) return;
+
+    const handleOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && generationEngineMenuRef.current?.contains(target)) return;
+      setIsGenerationEngineOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointerDown);
+    return () => document.removeEventListener('pointerdown', handleOutsidePointerDown);
+  }, [isMain, isGenerationEngineOpen]);
   const primaryLanguageIds: LanguageCode[] = ['ko', 'en', 'ja'];
   const primaryLanguages = filteredLanguages.filter((item) => primaryLanguageIds.includes(item.id));
   const hiddenLanguages = filteredLanguages.filter((item) => !primaryLanguageIds.includes(item.id));
@@ -546,6 +609,7 @@ export default function MusicApiGenerateModal({
       rapMode: isMain && includeLyrics ? localRapMode : undefined,
       rapEnabled: isMain && includeLyrics ? localRapMode === 'on' : undefined,
       sunoModelVersion: !isMain ? sunoModelVersion : undefined,
+      generationEngineVersion: isMain ? generationEngineVersion : undefined,
     });
   };
 
@@ -592,7 +656,7 @@ export default function MusicApiGenerateModal({
               event.stopPropagation();
               handleModalBack();
             }}
-            className="absolute left-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
+            className="absolute left-5 top-5 w-9 h-9 rounded-full border border-white/10 bg-black/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all flex items-center justify-center"
             title={step === 2 ? '이전 단계' : '닫기'}
           >
             <ChevronLeft className="w-5 h-5" />
@@ -611,11 +675,56 @@ export default function MusicApiGenerateModal({
               event.stopPropagation();
               onClose();
             }}
-            className="absolute right-5 top-5 p-2 rounded-full text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all"
+            className="absolute right-5 top-5 w-9 h-9 rounded-full border border-white/10 bg-black/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all flex items-center justify-center"
             title="닫기"
           >
             <X className="w-5 h-5" />
           </button>
+
+          {isMain && (
+            <div ref={generationEngineMenuRef} className="absolute right-[4.75rem] top-5 z-20">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setIsGenerationEngineOpen((prev) => !prev);
+                }}
+                className="h-9 min-w-[54px] px-3 rounded-full border border-white/10 bg-black/10 text-xs font-black text-[var(--text-primary)] flex items-center justify-center gap-1 transition-all hover:bg-white/[0.055]"
+                title="생성 방식 선택"
+              >
+                {getGenerationEngineMeta(generationEngineVersion).label}
+                <ChevronDown className={`w-3 h-3 transition-transform ${isGenerationEngineOpen ? 'rotate-180' : ''}`} />
+              </button>
+              <AnimatePresence>
+                {isGenerationEngineOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.14, ease: 'easeOut' }}
+                    className="absolute right-0 mt-2 w-32 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)] shadow-2xl overflow-hidden"
+                  >
+                    {GENERATION_ENGINE_OPTIONS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          writeStoredGenerationEngineVersion(item.id);
+                          setGenerationEngineVersion(item.id);
+                          setIsGenerationEngineOpen(false);
+                        }}
+                        className={`w-full px-3 py-2 text-left transition-all ${generationEngineVersion === item.id ? neutralSelected : 'text-[var(--text-secondary)] hover:bg-white/5'}`}
+                      >
+                        <span className="block text-xs font-black">{item.label}</span>
+                        <span className="block text-[9px] opacity-70">{item.subLabel}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           {!isMain && (
             <div className="absolute right-14 top-5 z-20">
@@ -1034,6 +1143,7 @@ export default function MusicApiGenerateModal({
                           languageMixTargetLanguages: includeLyrics && localKoreanEnglishMix ? resolvedLanguageMixTargets : undefined,
                           rapMode: includeLyrics ? localRapMode : 'auto',
                           rapEnabled: includeLyrics ? localRapMode === 'on' : false,
+                          generationEngineVersion,
                         });
                       }}
                       className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[15px] sm:text-[20px] transition-all flex items-center justify-center shrink-0 whitespace-nowrap outline-none select-none"
@@ -1083,6 +1193,12 @@ export default function MusicApiGenerateModal({
                     <div className={`flex items-center justify-between px-5 py-4 border-t ${dividerClass}`}>
                       <span className="text-sm font-black text-[var(--text-secondary)]">Suno 버전</span>
                       <span className={`text-sm font-black ${accentText}`}>{getSunoModelMeta(sunoModelVersion).label}</span>
+                    </div>
+                  )}
+                  {isMain && (
+                    <div className={`flex items-center justify-between px-5 py-4 border-t ${dividerClass}`}>
+                      <span className="text-sm font-black text-[var(--text-secondary)]">생성 방식</span>
+                      <span className="text-sm font-black text-[var(--text-primary)]">{getGenerationEngineMeta(generationEngineVersion).label}</span>
                     </div>
                   )}
                   {isMain && includeLyrics && (

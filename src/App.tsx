@@ -465,7 +465,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion } from './components/MusicApiGenerateModal';
 
 const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
   'instrumental_bgm',
@@ -4993,6 +4993,7 @@ function App() {
     languageMixTargetLanguages?: LanguageCode[];
     rapMode?: RapMode;
     rapEnabled: boolean;
+    generationEngineVersion?: GenerationEngineVersion;
   } | null>(null);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [addingLyricsLanguageTarget, setAddingLyricsLanguageTarget] = useState<LanguageCode | null>(null);
@@ -8735,6 +8736,7 @@ const saveRecentSong = async (newSong: any) => {
     languageMixTargetLanguages?: LanguageCode[];
     rapMode?: RapMode;
     rapEnabled?: boolean;
+    generationEngineVersion?: GenerationEngineVersion;
   }) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
@@ -8812,6 +8814,7 @@ const saveRecentSong = async (newSong: any) => {
     const requestedRapEnabled = requestedIncludeLyrics
       ? requestedRapMode === 'on'
       : rapEnabled;
+    const requestedGenerationEngineVersion: GenerationEngineVersion = generationOptions?.generationEngineVersion === 'v2' ? 'v2' : 'classic';
 
     const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
 
@@ -9324,6 +9327,7 @@ const saveRecentSong = async (newSong: any) => {
         isLyricMode,
         lyricMode: isLyricMode ? lyricMode : undefined,
         geminiApiKey: personalGeminiApiKey,
+        generationEngineVersion: requestedGenerationEngineVersion,
       };
 
       console.log("SELECTED GENRE:", selectedGenres);
@@ -14153,6 +14157,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   languageMixTargetLanguages: nextMixTargets,
                   rapMode: nextRapMode,
                   rapEnabled: nextRap,
+                  generationEngineVersion: options?.generationEngineVersion === 'v2' ? 'v2' : 'classic',
                 });
               }}
             />
@@ -15599,20 +15604,12 @@ function CycleSectionComponent({
                 }
               };
 
-              const baseVariant = cycle.variants.find((variant) => variant.kind !== 'separator') ?? cycle.variants[0];
-              const hoverItem: CategoryItem = activeVariant
-                ? {
-                    id: cycle.id,
-                    label: activeVariant.label,
-                    labelKo: activeVariant.labelKo,
-                    description: activeVariant.descriptionKo ?? activeVariant.description,
-                  }
-                : {
-                    id: cycle.id,
-                    label: cycle.title,
-                    labelKo: cycle.titleKo,
-                    description: baseVariant.descriptionKo ?? baseVariant.description,
-                  };
+              const hoverItem: CategoryItem = {
+                id: cycle.id,
+                label: cycle.title,
+                labelKo: cycle.titleKo,
+                description: cycle.descriptionKo ?? cycle.description,
+              };
               const folderLabel = cycle.titleKo ?? cycle.title;
               return (
                 <button
@@ -20600,6 +20597,15 @@ function VocalControlComponent({
     onHover({ id: 'vocal-random', label: 'Random Group Vocal', labelKo: '그룹 보컬 랜덤', description: '남성/여성/혼성 그룹 중 하나로 2~3명을 랜덤 구성하고 각 보컬 캐릭터를 다르게 적용했습니다.', _ts: Date.now() });
   };
 
+  const getVocalModeTooltip = (mode: VocalMode): CategoryItem => {
+    const modeInfo: Record<VocalMode, CategoryItem> = {
+      solo: { id: 'vocal-mode-solo', label: 'Solo', labelKo: '솔로', description: '혼자서 노래하는 솔로 보컬을 선택합니다.' },
+      duo: { id: 'vocal-mode-duo', label: 'Group', labelKo: '그룹', description: '두 명 이상을 캐릭터별로 설정합니다.' },
+      group: { id: 'vocal-mode-group', label: 'Group', labelKo: '그룹', description: '두 명 이상을 캐릭터별로 설정합니다.' },
+    };
+    return modeInfo[mode] || modeInfo.group;
+  };
+
   return (
     <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full relative overflow-visible">
       <div className="relative mb-4 flex items-center justify-between">
@@ -20621,6 +20627,9 @@ function VocalControlComponent({
               onClick={onToggleLock}
               onMouseEnter={() => onHover({ id: 'vocal-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '보컬 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 보컬 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
               onMouseLeave={() => onHover(null)}
+              onTouchStart={() => onLongPressStart({ id: 'vocal-lock', label: isLocked ? 'Unlock menu' : 'Lock menu', labelKo: isLocked ? '잠금 해제' : '메뉴 잠금', description: isLocked ? '보컬 메뉴를 랜덤 선택에 다시 포함합니다.' : '현재 보컬 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
+              onTouchEnd={onLongPressEnd}
+              onTouchCancel={onLongPressEnd}
               className={cn(
                 "p-2.5 rounded-xl transition-all border border-btn-border shadow-btn",
                 isLocked
@@ -20638,6 +20647,9 @@ function VocalControlComponent({
             onClick={handleRandomVocal}
             onMouseEnter={() => onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '보컬 구성 또는 보컬 캐릭터를 현재 선택 상태에 맞게 랜덤 적용합니다.' })}
             onMouseLeave={() => onHover(null)}
+            onTouchStart={() => onLongPressStart({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '보컬 구성 또는 보컬 캐릭터를 현재 선택 상태에 맞게 랜덤 적용합니다.' })}
+            onTouchEnd={onLongPressEnd}
+            onTouchCancel={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all border shadow-btn",
               isVocalRandomActive
@@ -20657,6 +20669,9 @@ function VocalControlComponent({
             }}
             onMouseEnter={() => onHover({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
             onMouseLeave={() => onHover(null)}
+            onTouchStart={() => onLongPressStart({ id: 'vocal-clear', label: 'Reset', labelKo: '초기화', description: '보컬 설정을 초기화합니다.' })}
+            onTouchEnd={onLongPressEnd}
+            onTouchCancel={onLongPressEnd}
             className={cn(
               "p-2.5 rounded-xl transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0)
@@ -20698,15 +20713,11 @@ function VocalControlComponent({
               <button
                 key={mode}
                 onClick={() => handleModeClick(mode)}
-                onMouseEnter={() => {
-                  const modeInfo = {
-                    solo: { label: 'Solo', labelKo: '솔로', description: '혼자서 노래하는 솔로 보컬을 선택합니다.' },
-                    duo: { label: 'Group', labelKo: '그룹', description: '두 명 이상을 캐릭터별로 설정합니다.' },
-                    group: { label: 'Group', labelKo: '그룹', description: '두 명 이상을 캐릭터별로 설정합니다.' }
-                  };
-                  onHover({ id: `vocal-mode-${mode}`, ...modeInfo[mode] });
-                }}
+                onMouseEnter={() => onHover(getVocalModeTooltip(mode))}
                 onMouseLeave={() => onHover(null)}
+                onTouchStart={() => onLongPressStart(getVocalModeTooltip(mode))}
+                onTouchEnd={onLongPressEnd}
+                onTouchCancel={onLongPressEnd}
                 className={cn(
                   "flex-1 py-2.5 rounded-xl text-[14px] font-bold transition-all",
                   vocalMode === mode 
@@ -20727,6 +20738,9 @@ function VocalControlComponent({
                 disabled={maleCount + femaleCount >= 7}
                 onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
+                onTouchStart={() => onLongPressStart({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
+                onTouchEnd={onLongPressEnd}
+                onTouchCancel={onLongPressEnd}
                 className={cn(
                   "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
@@ -20742,6 +20756,9 @@ function VocalControlComponent({
                 disabled={maleCount + femaleCount >= 7}
                 onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
+                onTouchStart={() => onLongPressStart({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
+                onTouchEnd={onLongPressEnd}
+                onTouchCancel={onLongPressEnd}
                 className={cn(
                   "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
                   maleCount + femaleCount < 7
@@ -20759,6 +20776,9 @@ function VocalControlComponent({
                 onClick={() => handleGenderToggle('male')}
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
+                onTouchStart={() => onLongPressStart({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
+                onTouchEnd={onLongPressEnd}
+                onTouchCancel={onLongPressEnd}
                 className={cn(
                   "py-3.5 px-3 rounded-2xl text-[15px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
                   maleCount > 0
@@ -20773,6 +20793,9 @@ function VocalControlComponent({
                 onClick={() => handleGenderToggle('female')}
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
+                onTouchStart={() => onLongPressStart({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
+                onTouchEnd={onLongPressEnd}
+                onTouchCancel={onLongPressEnd}
                 className={cn(
                   "py-3.5 px-3 rounded-2xl text-[15px] font-bold transition-all border flex items-center justify-center gap-2.5 shadow-btn",
                   femaleCount > 0
@@ -20842,6 +20865,9 @@ function VocalControlComponent({
                                 }}
                                 onMouseEnter={() => onHover({ id: `role-${role}`, ...info })}
                                 onMouseLeave={() => onHover(null)}
+                                onTouchStart={() => onLongPressStart({ id: `role-${role}`, ...info })}
+                                onTouchEnd={onLongPressEnd}
+                                onTouchCancel={onLongPressEnd}
                                 className={cn(
                                   "px-2.5 py-1 rounded-md text-[12px] font-bold transition-all border",
                                   isActive
@@ -20865,6 +20891,9 @@ function VocalControlComponent({
                           onClick={() => handleRemoveMember(idx)}
                           onMouseEnter={() => onHover({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: vocalMode === 'solo' ? '선택한 솔로 보컬을 해제합니다.' : '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
                           onMouseLeave={() => onHover(null)}
+                          onTouchStart={() => onLongPressStart({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: vocalMode === 'solo' ? '선택한 솔로 보컬을 해제합니다.' : '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
+                          onTouchEnd={onLongPressEnd}
+                          onTouchCancel={onLongPressEnd}
                           className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100"
                         >
                           <X className="w-[18px] h-[18px]" />

@@ -2932,7 +2932,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, showSunoLibraryMenu, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; showSunoLibraryMenu: boolean; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, showSunoLibraryMenu, sunoLibraryMenuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; showSunoLibraryMenu: boolean; sunoLibraryMenuAdminOnly: boolean; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2944,6 +2944,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     if (path === '/') return location.pathname === '/';
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
+
+  const canShowSunoLibraryMenu = showSunoLibraryMenu && (!sunoLibraryMenuAdminOnly || isAdminUser);
 
   const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
     if (!user) {
@@ -2964,7 +2966,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     { path: '/', label: '홈', icon: HomeIcon },
     { path: '/studio', label: '스튜디오', icon: Zap },
     { path: '/history', label: '뮤직노트', icon: HeartIcon },
-    ...(showSunoLibraryMenu ? [{ path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true }] : []),
+    ...(canShowSunoLibraryMenu ? [{ path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true }] : []),
     { path: '/lab', label: '실험실', icon: FlaskConical },
     { path: '/my-page', label: '마이페이지', icon: UserIcon },
   ];
@@ -3260,7 +3262,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
               <HeartIcon className="h-6 w-6" />
             </button>
 
-            {showSunoLibraryMenu && (
+            {canShowSunoLibraryMenu && (
               <button
                 type="button"
                 onClick={() => goToTopNav('/suno-library', { clearSuno: true })}
@@ -4470,6 +4472,7 @@ function App() {
 
 
   const NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
+  const NAVIGATION_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
   const readStoredSunoLibraryMenuVisibility = () => {
     try {
       return localStorage.getItem(NAVIGATION_VISIBILITY_STORAGE_KEY) === 'true';
@@ -4477,8 +4480,16 @@ function App() {
       return false;
     }
   };
+  const readStoredSunoLibraryMenuAdminOnly = () => {
+    try {
+      return localStorage.getItem(NAVIGATION_ADMIN_ONLY_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  };
 
   const [showSunoLibraryMenu, setShowSunoLibraryMenu] = useState(readStoredSunoLibraryMenuVisibility);
+  const [sunoLibraryMenuAdminOnly, setSunoLibraryMenuAdminOnly] = useState(readStoredSunoLibraryMenuAdminOnly);
 
   useEffect(() => {
     let isMounted = true;
@@ -4490,10 +4501,13 @@ function App() {
 
         const data = snapshot.exists() ? snapshot.data() : null;
         const nextValue = data?.showSunoLibraryMenu === true;
+        const nextAdminOnly = data?.sunoLibraryMenuAdminOnly === true;
         setShowSunoLibraryMenu(nextValue);
+        setSunoLibraryMenuAdminOnly(nextAdminOnly);
 
         try {
           localStorage.setItem(NAVIGATION_VISIBILITY_STORAGE_KEY, nextValue ? 'true' : 'false');
+          localStorage.setItem(NAVIGATION_ADMIN_ONLY_STORAGE_KEY, nextAdminOnly ? 'true' : 'false');
         } catch {
           // localStorage may be blocked in some browsers. Ignore and keep the app alive.
         }
@@ -4501,17 +4515,23 @@ function App() {
         console.warn('Navigation visibility setting read failed. Keeping safe fallback:', error);
         if (isMounted) {
           setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
+          setSunoLibraryMenuAdminOnly(readStoredSunoLibraryMenuAdminOnly());
         }
       }
     };
 
     const handleLocalVisibilityUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ showSunoLibraryMenu?: boolean }>).detail;
+      const detail = (event as CustomEvent<{ showSunoLibraryMenu?: boolean; sunoLibraryMenuAdminOnly?: boolean }>).detail;
       if (typeof detail?.showSunoLibraryMenu === 'boolean') {
         setShowSunoLibraryMenu(detail.showSunoLibraryMenu);
-        return;
       }
-      setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
+      if (typeof detail?.sunoLibraryMenuAdminOnly === 'boolean') {
+        setSunoLibraryMenuAdminOnly(detail.sunoLibraryMenuAdminOnly);
+      }
+      if (typeof detail?.showSunoLibraryMenu !== 'boolean' && typeof detail?.sunoLibraryMenuAdminOnly !== 'boolean') {
+        setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
+        setSunoLibraryMenuAdminOnly(readStoredSunoLibraryMenuAdminOnly());
+      }
     };
 
     window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
@@ -12134,7 +12154,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} showSunoLibraryMenu={showSunoLibraryMenu} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} showSunoLibraryMenu={showSunoLibraryMenu} sunoLibraryMenuAdminOnly={sunoLibraryMenuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       <Routes>
         <Route path="/" element={

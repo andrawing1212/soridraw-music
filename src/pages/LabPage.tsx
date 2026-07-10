@@ -33,10 +33,6 @@ export default function LabPage() {
             <h1 className="mt-2 flex items-center gap-3 text-3xl font-black tracking-tight md:text-4xl">
               <FlaskConical className="h-8 w-8 text-[#BBA8CA]" /> 실험실
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-secondary)]">
-              프롬프트 그릇, 재료 배치, 가사 섹션 구조를 직접 조립해보기 위한 별도 작업 공간입니다.
-              지금은 첫 카드와 작업대 입구만 만든 상태입니다.
-            </p>
           </div>
         </motion.div>
 
@@ -45,7 +41,6 @@ export default function LabPage() {
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-lg font-black">실험 카드</h2>
-                <p className="mt-1 text-sm text-[var(--text-secondary)]">우선 1번 카드만 둡니다. 카드를 누르면 실험실 작업대로 들어갑니다.</p>
               </div>
               <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[11px] font-black text-white/45">1개 준비됨</span>
             </div>
@@ -61,9 +56,6 @@ export default function LabPage() {
                   <FlaskConical className="h-3.5 w-3.5" /> 1번 실험실
                 </div>
                 <h2 className="mt-4 text-2xl font-black">FREEDOM 마인드맵 작업대</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-secondary)]">
-                  프롬프트와 가사를 두 개의 지도로 나누고, 재료를 끌어다 놓으며 구조를 설계하는 첫 실험 화면입니다.
-                </p>
               </div>
               <button
                 type="button"

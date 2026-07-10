@@ -9,20 +9,13 @@ type LabIngredient = {
   type: IngredientType;
 };
 
-type PromptZone = {
+type MapZone = {
   id: string;
   label: string;
-  guide: string;
   max: number;
   items: string[];
-};
-
-type LyricZone = {
-  id: string;
-  label: string;
-  guide: string;
-  max: number;
-  items: string[];
+  x: number;
+  y: number;
 };
 
 const promptIngredients: LabIngredient[] = [
@@ -49,20 +42,20 @@ const lyricIngredients: LabIngredient[] = [
   { id: 'englishPoint', label: '영어 포인트', type: 'lyric' },
 ];
 
-const initialPromptZones: PromptZone[] = [
-  { id: 'genreLine', label: 'Genre', guide: '곡의 뼈대', max: 3, items: ['장르'] },
-  { id: 'soundLine', label: 'Sound', guide: '악기와 질감', max: 4, items: ['사운드'] },
-  { id: 'moodLine', label: 'Mood', guide: '장면과 공기', max: 4, items: ['분위기', '주제'] },
-  { id: 'vocalsLine', label: 'Vocals', guide: '누가 어떻게 부르는지', max: 3, items: ['보컬'] },
-  { id: 'productionLine', label: 'Production', guide: '템포와 전개', max: 4, items: ['템포', '곡 구조'] },
+const initialPromptZones: MapZone[] = [
+  { id: 'genreLine', label: 'Genre', max: 3, items: ['장르'], x: 22, y: 20 },
+  { id: 'soundLine', label: 'Sound', max: 4, items: ['사운드'], x: 78, y: 20 },
+  { id: 'moodLine', label: 'Mood', max: 4, items: ['분위기', '주제'], x: 20, y: 58 },
+  { id: 'vocalsLine', label: 'Vocals', max: 3, items: ['보컬'], x: 80, y: 58 },
+  { id: 'productionLine', label: 'Production', max: 4, items: ['템포', '곡 구조'], x: 50, y: 82 },
 ];
 
-const initialLyricZones: LyricZone[] = [
-  { id: 'verse', label: 'Verse', guide: '장면 시작', max: 4, items: ['장면', '화자'] },
-  { id: 'preChorus', label: 'Pre-Chorus', guide: '감정 상승', max: 3, items: ['욕망'] },
-  { id: 'chorus', label: 'Chorus', guide: '기억되는 훅', max: 4, items: ['반복 훅', '말투'] },
-  { id: 'bridge', label: 'Bridge', guide: '반전 또는 고백', max: 3, items: ['결함'] },
-  { id: 'outro', label: 'Outro', guide: '여운', max: 3, items: ['밀도'] },
+const initialLyricZones: MapZone[] = [
+  { id: 'verse', label: 'Verse', max: 4, items: ['장면', '화자'], x: 15, y: 50 },
+  { id: 'preChorus', label: 'Pre-Chorus', max: 3, items: ['욕망'], x: 34, y: 28 },
+  { id: 'chorus', label: 'Chorus', max: 4, items: ['반복 훅', '말투'], x: 54, y: 50 },
+  { id: 'bridge', label: 'Bridge', max: 3, items: ['결함'], x: 73, y: 28 },
+  { id: 'outro', label: 'Outro', max: 3, items: ['밀도'], x: 88, y: 50 },
 ];
 
 function getDragPayload(event: DragEvent<HTMLElement>): LabIngredient | null {
@@ -75,20 +68,11 @@ function getDragPayload(event: DragEvent<HTMLElement>): LabIngredient | null {
   }
 }
 
-function FillBar({ count, max, tone = 'prompt' }: { count: number; max: number; tone?: IngredientType }) {
-  const percent = Math.min(100, Math.round((count / Math.max(max, 1)) * 100));
-  const fillClass = tone === 'lyric'
-    ? 'bg-gradient-to-r from-[#86B6F6]/15 via-[#BBA8CA]/25 to-[#BBA8CA]/45'
-    : 'bg-gradient-to-r from-[#BBA8CA]/12 via-[#BBA8CA]/25 to-[#D8C5E8]/45';
-
-  return (
-    <div className="absolute inset-x-0 bottom-0 h-1.5 overflow-hidden rounded-b-[1.4rem] bg-white/[0.025]">
-      <div className={`h-full ${fillClass} transition-all duration-700 ease-out`} style={{ width: `${percent}%` }} />
-    </div>
-  );
-}
-
 function IngredientChip({ ingredient }: { ingredient: LabIngredient }) {
+  const toneClass = ingredient.type === 'lyric'
+    ? 'hover:bg-[#86B6F6]/16 hover:text-[#D7E8FF]'
+    : 'hover:bg-[#BBA8CA]/16 hover:text-[#F2E7FF]';
+
   return (
     <div
       draggable
@@ -96,40 +80,124 @@ function IngredientChip({ ingredient }: { ingredient: LabIngredient }) {
         event.dataTransfer.setData('application/x-soridraw-lab', JSON.stringify(ingredient));
         event.dataTransfer.effectAllowed = 'copy';
       }}
-      className="group inline-flex cursor-grab select-none items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-2 text-xs font-black text-white/78 shadow-sm transition-all hover:bg-[#BBA8CA]/18 hover:text-white active:cursor-grabbing"
+      className={`inline-flex cursor-grab select-none items-center gap-1.5 rounded-full bg-white/[0.055] px-3 py-2 text-xs font-black text-white/72 transition-all active:cursor-grabbing ${toneClass}`}
     >
-      <Grip className="h-3.5 w-3.5 text-white/35 transition group-hover:text-[#BBA8CA]" />
+      <Grip className="h-3.5 w-3.5 text-white/28" />
       {ingredient.label}
     </div>
   );
 }
 
-function PlacedChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+function PlacedChip({ label, tone, onRemove }: { label: string; tone: IngredientType; onRemove: () => void }) {
   return (
     <button
       type="button"
       onClick={onRemove}
-      title="누르면 제거"
-      className="rounded-full bg-black/20 px-2.5 py-1 text-[11px] font-black text-white/75 transition-all hover:bg-[#BBA8CA]/20 hover:text-white"
+      className={`rounded-full px-2.5 py-1 text-[11px] font-black transition-all ${tone === 'lyric' ? 'bg-[#86B6F6]/12 text-[#D7E8FF] hover:bg-[#86B6F6]/22' : 'bg-[#BBA8CA]/13 text-[#F2E7FF] hover:bg-[#BBA8CA]/24'}`}
     >
       {label}
     </button>
   );
 }
 
+function MapNode({
+  zone,
+  tone,
+  active,
+  onDropItem,
+  onRemoveItem,
+}: {
+  zone: MapZone;
+  tone: IngredientType;
+  active: boolean;
+  onDropItem: (zoneId: string, ingredient: LabIngredient) => void;
+  onRemoveItem: (zoneId: string, label: string) => void;
+}) {
+  const percent = Math.min(100, Math.round((zone.items.length / Math.max(zone.max, 1)) * 100));
+  const glowClass = tone === 'lyric'
+    ? 'shadow-[0_0_26px_rgba(134,182,246,0.08)]'
+    : 'shadow-[0_0_26px_rgba(187,168,202,0.09)]';
+  const fillClass = tone === 'lyric'
+    ? 'bg-gradient-to-r from-[#86B6F6]/20 via-[#86B6F6]/10 to-transparent'
+    : 'bg-gradient-to-r from-[#BBA8CA]/22 via-[#BBA8CA]/10 to-transparent';
+
+  return (
+    <div
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const payload = getDragPayload(event);
+        if (payload) onDropItem(zone.id, payload);
+      }}
+      className={`absolute min-h-[96px] w-[178px] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl bg-white/[0.055] p-3.5 transition-all duration-300 ${glowClass} ${active ? 'scale-[1.04] bg-white/[0.08]' : ''}`}
+      style={{ left: `${zone.x}%`, top: `${zone.y}%` }}
+    >
+      <div className={`pointer-events-none absolute inset-y-0 left-0 transition-all duration-700 ease-out ${fillClass}`} style={{ width: `${percent}%` }} />
+      <div className="relative z-10">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-black text-white">[{zone.label}]</p>
+          <span className="rounded-full bg-black/20 px-2 py-1 text-[10px] font-black text-white/38">{zone.items.length}/{zone.max}</span>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {zone.items.map((item) => (
+            <PlacedChip key={item} label={item} tone={tone} onRemove={() => onRemoveItem(zone.id, item)} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConnectorLines({ zones, tone, flow = false }: { zones: MapZone[]; tone: IngredientType; flow?: boolean }) {
+  const stroke = tone === 'lyric' ? 'rgba(134,182,246,0.24)' : 'rgba(187,168,202,0.25)';
+  const activeStroke = tone === 'lyric' ? 'rgba(134,182,246,0.55)' : 'rgba(187,168,202,0.55)';
+
+  if (flow) {
+    return (
+      <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {zones.slice(0, -1).map((zone, index) => {
+          const next = zones[index + 1];
+          return (
+            <path
+              key={`${zone.id}-${next.id}`}
+              d={`M ${zone.x} ${zone.y} C ${(zone.x + next.x) / 2} ${zone.y - 20}, ${(zone.x + next.x) / 2} ${next.y + 20}, ${next.x} ${next.y}`}
+              fill="none"
+              stroke={zone.items.length || next.items.length ? activeStroke : stroke}
+              strokeWidth="0.45"
+              strokeLinecap="round"
+            />
+          );
+        })}
+      </svg>
+    );
+  }
+
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+      {zones.map((zone) => (
+        <path
+          key={zone.id}
+          d={`M 50 50 C ${(50 + zone.x) / 2} ${zone.y}, ${(50 + zone.x) / 2} ${50}, ${zone.x} ${zone.y}`}
+          fill="none"
+          stroke={zone.items.length ? activeStroke : stroke}
+          strokeWidth="0.45"
+          strokeLinecap="round"
+        />
+      ))}
+    </svg>
+  );
+}
+
 export default function LabWorkspace() {
-  const [promptZones, setPromptZones] = useState<PromptZone[]>(initialPromptZones);
-  const [lyricZones, setLyricZones] = useState<LyricZone[]>(initialLyricZones);
-  const [activeDropId, setActiveDropId] = useState<string | null>(null);
+  const [promptZones, setPromptZones] = useState<MapZone[]>(initialPromptZones);
+  const [lyricZones, setLyricZones] = useState<MapZone[]>(initialLyricZones);
 
   const promptPreview = useMemo(
-    () => promptZones.map((zone) => `[${zone.label}] ${zone.items.join(' + ') || '비어 있음'}`).join('\n'),
+    () => promptZones.map((zone) => `[${zone.label}] ${zone.items.join(' + ')}`).join('\n'),
     [promptZones]
-  );
-
-  const lyricPreview = useMemo(
-    () => lyricZones.map((zone) => `[${zone.label}] ${zone.items.join(' / ') || zone.guide}`).join(' → '),
-    [lyricZones]
   );
 
   const addPromptItem = (zoneId: string, ingredient: LabIngredient) => {
@@ -155,166 +223,84 @@ export default function LabWorkspace() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl bg-white/[0.025] p-4 md:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#BBA8CA]/75">FREEDOM WORKSPACE</p>
-            <h2 className="mt-2 text-2xl font-black">마인드맵 작업대</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-secondary)]">
-              재료를 끌어서 원하는 그릇에 넣어보는 1차 실험 화면입니다. 아직 실제 생성에는 연결하지 않았고, 구조를 눈으로 설계하는 단계입니다.
-            </p>
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[230px_minmax(0,1fr)]">
+        <aside className="rounded-[2rem] bg-[var(--card-bg)]/65 p-4 shadow-xl">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black text-white">
+            <Network className="h-4 w-4 text-[#BBA8CA]" /> 재료
           </div>
-          <div className="rounded-2xl bg-black/20 px-4 py-3 text-xs leading-relaxed text-white/50">
-            드래그해서 추가 · 추가될수록 아래 색이 채워짐 · 넣은 칩은 누르면 제거
-          </div>
-        </div>
-      </div>
 
-      <div className="grid gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="space-y-4 rounded-3xl bg-[var(--card-bg)]/70 p-5 shadow-xl">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-black text-white">
-              <Network className="h-4 w-4 text-[#BBA8CA]" /> 재료 창
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/35">Prompt</p>
+              <div className="flex flex-wrap gap-2">
+                {promptIngredients.map((ingredient) => <IngredientChip key={ingredient.id} ingredient={ingredient} />)}
+              </div>
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">버튼을 늘리지 않고, 필요한 재료를 작업대로 끌어다 놓는 방식입니다.</p>
-          </div>
 
-          <div className="space-y-3">
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/35">Prompt Materials</p>
-            <div className="flex flex-wrap gap-2">
-              {promptIngredients.map((ingredient) => <IngredientChip key={ingredient.id} ingredient={ingredient} />)}
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/35">Lyric Tools</p>
-            <div className="flex flex-wrap gap-2">
-              {lyricIngredients.map((ingredient) => <IngredientChip key={ingredient.id} ingredient={ingredient} />)}
+            <div className="space-y-2">
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-white/35">Lyrics</p>
+              <div className="flex flex-wrap gap-2">
+                {lyricIngredients.map((ingredient) => <IngredientChip key={ingredient.id} ingredient={ingredient} />)}
+              </div>
             </div>
           </div>
         </aside>
 
         <div className="grid gap-5 2xl:grid-cols-2">
-          <section className="rounded-3xl bg-[var(--card-bg)]/70 p-5 shadow-xl">
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-black text-white">
-                  <Sparkles className="h-4 w-4 text-[#BBA8CA]" /> 프롬프트 지도
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">그릇 이름은 유지하고, 어떤 재료를 어느 줄에 넣을지 먼저 실험합니다.</p>
+          <section className="rounded-[2rem] bg-[var(--card-bg)]/65 p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-black text-white">
+                <Sparkles className="h-4 w-4 text-[#BBA8CA]" /> 프롬프트
               </div>
-              <span className="rounded-full bg-[#BBA8CA]/10 px-3 py-1 text-[11px] font-black text-[#D8C5E8]">Prompt</span>
+              <span className="rounded-full bg-[#BBA8CA]/10 px-3 py-1 text-[11px] font-black text-[#D8C5E8]">Mind Map</span>
             </div>
 
-            <div className="relative rounded-[2rem] bg-black/15 p-4">
-              <div className="pointer-events-none absolute left-1/2 top-1/2 hidden h-[68%] w-px -translate-y-1/2 bg-gradient-to-b from-transparent via-[#BBA8CA]/18 to-transparent md:block" />
-              <div className="pointer-events-none absolute left-[12%] right-[12%] top-1/2 hidden h-px bg-gradient-to-r from-transparent via-[#BBA8CA]/18 to-transparent md:block" />
-              <div className="relative z-10 mb-4 flex justify-center">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#BBA8CA]/12 px-4 py-2 text-xs font-black text-[#D8C5E8]">
-                  <FlaskConical className="h-3.5 w-3.5" /> Prompt Recipe
-                </div>
+            <div className="relative min-h-[560px] overflow-hidden rounded-[2rem] bg-black/15">
+              <ConnectorLines zones={promptZones} tone="prompt" />
+              <div className="absolute left-1/2 top-1/2 z-10 flex h-[94px] w-[94px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#BBA8CA]/15 text-sm font-black text-[#F2E7FF] shadow-[0_0_36px_rgba(187,168,202,0.16)]">
+                PROMPT
               </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                {promptZones.map((zone) => {
-                  const isActive = activeDropId === zone.id;
-                  return (
-                    <div
-                      key={zone.id}
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'copy';
-                        setActiveDropId(zone.id);
-                      }}
-                      onDragLeave={() => setActiveDropId((current) => current === zone.id ? null : current)}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        const payload = getDragPayload(event);
-                        if (payload) addPromptItem(zone.id, payload);
-                        setActiveDropId(null);
-                      }}
-                      className={`relative min-h-[142px] overflow-hidden rounded-[1.4rem] bg-white/[0.04] p-4 transition-all duration-300 ${isActive ? 'scale-[1.015] bg-[#BBA8CA]/10 shadow-[0_0_0_1px_rgba(187,168,202,0.18)]' : ''}`}
-                    >
-                      <FillBar count={zone.items.length} max={zone.max} />
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black text-white">[{zone.label}]</p>
-                          <p className="mt-1 text-xs text-white/38">{zone.guide}</p>
-                        </div>
-                        <span className="rounded-full bg-black/20 px-2 py-1 text-[10px] font-black text-white/35">{zone.items.length}/{zone.max}</span>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {zone.items.length ? zone.items.map((item) => (
-                          <PlacedChip key={item} label={item} onRemove={() => removePromptItem(zone.id, item)} />
-                        )) : <p className="text-xs text-white/25">여기로 재료를 끌어오세요</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {promptZones.map((zone) => (
+                <MapNode
+                  key={zone.id}
+                  zone={zone}
+                  tone="prompt"
+                  active={false}
+                  onDropItem={addPromptItem}
+                  onRemoveItem={removePromptItem}
+                />
+              ))}
             </div>
 
-            <div className="mt-4 rounded-2xl bg-black/18 p-4">
-              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-white/35">Preview</p>
-              <pre className="whitespace-pre-wrap text-xs leading-relaxed text-white/58">{promptPreview}</pre>
+            <div className="mt-3 rounded-2xl bg-black/18 p-3">
+              <pre className="whitespace-pre-wrap text-xs leading-relaxed text-white/55">{promptPreview}</pre>
             </div>
           </section>
 
-          <section className="rounded-3xl bg-[var(--card-bg)]/70 p-5 shadow-xl">
-            <div className="mb-5 flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-sm font-black text-white">
-                  <Music2 className="h-4 w-4 text-[#86B6F6]" /> 가사 지도
-                </div>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">가사는 시간 흐름이 중요해서 섹션을 길처럼 이어놓고, 필요한 도구를 끌어다 넣습니다.</p>
+          <section className="rounded-[2rem] bg-[var(--card-bg)]/65 p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm font-black text-white">
+                <Music2 className="h-4 w-4 text-[#86B6F6]" /> 가사
               </div>
-              <span className="rounded-full bg-[#86B6F6]/10 px-3 py-1 text-[11px] font-black text-[#BFD8FF]">Lyrics</span>
+              <span className="rounded-full bg-[#86B6F6]/10 px-3 py-1 text-[11px] font-black text-[#BFD8FF]">Flow Map</span>
             </div>
 
-            <div className="space-y-3 rounded-[2rem] bg-black/15 p-4">
-              {lyricZones.map((zone, index) => {
-                const isActive = activeDropId === zone.id;
-                return (
-                  <div key={zone.id} className="relative">
-                    {index > 0 && <div className="mx-auto mb-3 h-5 w-px bg-gradient-to-b from-[#86B6F6]/28 to-transparent" />}
-                    <div
-                      onDragOver={(event) => {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = 'copy';
-                        setActiveDropId(zone.id);
-                      }}
-                      onDragLeave={() => setActiveDropId((current) => current === zone.id ? null : current)}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        const payload = getDragPayload(event);
-                        if (payload) addLyricItem(zone.id, payload);
-                        setActiveDropId(null);
-                      }}
-                      className={`relative min-h-[104px] overflow-hidden rounded-[1.4rem] bg-white/[0.04] p-4 transition-all duration-300 ${isActive ? 'scale-[1.01] bg-[#86B6F6]/10 shadow-[0_0_0_1px_rgba(134,182,246,0.18)]' : ''}`}
-                    >
-                      <FillBar count={zone.items.length} max={zone.max} tone="lyric" />
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-black text-white">[{zone.label}]</p>
-                          <p className="mt-1 text-xs text-white/38">{zone.guide}</p>
-                        </div>
-                        <span className="rounded-full bg-black/20 px-2 py-1 text-[10px] font-black text-white/35">{zone.items.length}/{zone.max}</span>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {zone.items.length ? zone.items.map((item) => (
-                          <PlacedChip key={item} label={item} onRemove={() => removeLyricItem(zone.id, item)} />
-                        )) : <p className="text-xs text-white/25">여기로 도구를 끌어오세요</p>}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 rounded-2xl bg-black/18 p-4">
-              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.2em] text-white/35">Preview</p>
-              <p className="text-xs leading-relaxed text-white/58">{lyricPreview}</p>
+            <div className="relative min-h-[560px] overflow-hidden rounded-[2rem] bg-black/15">
+              <ConnectorLines zones={lyricZones} tone="lyric" flow />
+              <div className="absolute left-1/2 top-[74%] z-10 flex h-[88px] w-[88px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#86B6F6]/13 text-sm font-black text-[#D7E8FF] shadow-[0_0_36px_rgba(134,182,246,0.14)]">
+                LYRICS
+              </div>
+              {lyricZones.map((zone) => (
+                <MapNode
+                  key={zone.id}
+                  zone={zone}
+                  tone="lyric"
+                  active={false}
+                  onDropItem={addLyricItem}
+                  onRemoveItem={removeLyricItem}
+                />
+              ))}
             </div>
           </section>
         </div>

@@ -12,8 +12,8 @@ export default function LabPage() {
   const [view, setView] = useState<LabView>('cards');
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-20 pb-16 text-[var(--text-primary)]">
-      <div className="mx-auto w-full max-w-[1560px] space-y-7">
+    <div className="min-h-screen bg-[var(--bg-primary)] px-2 md:px-4 pt-20 pb-10 text-[var(--text-primary)]">
+      <div className="mx-auto w-full max-w-[1760px] space-y-7">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
@@ -50,12 +50,12 @@ export default function LabPage() {
           </motion.section>
         ) : (
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] bg-gradient-to-br from-[#FF9BD7]/10 via-white/[0.04] to-[#6EF0D4]/10 p-4 shadow-2xl backdrop-blur-xl md:p-5">
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-[#FF9BD7]/12 px-3 py-1.5 text-xs font-black text-[#FF9BD7]">
                   <FlaskConical className="h-3.5 w-3.5" /> 1번 실험실
                 </div>
-                <h2 className="mt-4 text-2xl font-black">FREEDOM 마인드맵 작업대</h2>
+                <h2 className="mt-3 text-2xl font-black">FREEDOM 마인드맵 작업대</h2>
               </div>
               <button
                 type="button"

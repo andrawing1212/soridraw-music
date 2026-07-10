@@ -5,25 +5,25 @@ import { ArrowLeft, FlaskConical, Power } from 'lucide-react';
 import LabStartCard from '../components/lab/LabStartCard';
 import LabWorkspace from '../components/lab/LabWorkspace';
 
-type LabView = 'cards' | 'workspace';
+type LabView = 'cards' | 'style' | 'lyrics';
 
 export default function LabPage() {
   const navigate = useNavigate();
   const [view, setView] = useState<LabView>('cards');
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] px-2 md:px-4 pt-20 pb-10 text-[var(--text-primary)]">
-      <div className="mx-auto w-full max-w-[1840px] space-y-7">
+    <div className="min-h-screen bg-[var(--bg-primary)] px-3 md:px-6 pt-20 pb-10 text-[var(--text-primary)]">
+      <div className="mx-auto w-full max-w-[1520px] space-y-7">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
-              onClick={() => navigate('/')}
-              className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 px-4 py-2.5 text-sm font-black text-[var(--text-secondary)] transition-all hover:bg-[var(--hover-bg)]"
+              onClick={() => (view === 'cards' ? navigate('/') : setView('cards'))}
+              className="inline-flex items-center gap-2 rounded-2xl bg-white/[0.045] px-4 py-2.5 text-sm font-black text-[var(--text-secondary)] transition-all hover:bg-white/[0.08] hover:text-white"
             >
-              <ArrowLeft className="h-4 w-4" /> 홈
+              <ArrowLeft className="h-4 w-4" /> {view === 'cards' ? '홈' : '카드 목록'}
             </button>
-            <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-black text-[#FF8AAE]">
+            <div className="inline-flex items-center gap-2 rounded-2xl bg-white/[0.035] px-4 py-2.5 text-xs font-black text-[#FF8AAE]">
               <Power className="h-4 w-4" /> Lab OFF · 입구만 준비됨
             </div>
           </div>
@@ -37,35 +37,33 @@ export default function LabPage() {
         </motion.div>
 
         {view === 'cards' ? (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] bg-gradient-to-br from-[#FFD36B]/10 via-white/[0.04] to-[#FF7DAF]/10 p-5 shadow-2xl backdrop-blur-xl md:p-6">
-            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-lg font-black">실험 카드</h2>
-              </div>
-              <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-[11px] font-black text-white/45">1개 준비됨</span>
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-[2rem] bg-[#0A0B0F] p-5 shadow-2xl md:p-6">
+            <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.28) 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+            <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(circle at 18% 12%, rgba(255,214,107,0.13), transparent 26%), radial-gradient(circle at 82% 18%, rgba(255,111,174,0.13), transparent 30%)' }} />
+            <div className="relative z-10 mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <h2 className="text-xl font-black">실험 카드</h2>
+              <span className="rounded-full bg-white/[0.05] px-3 py-1.5 text-[11px] font-black text-white/45">2개 준비됨</span>
             </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <LabStartCard onOpen={() => setView('workspace')} />
+            <div className="relative z-10 grid gap-7 md:grid-cols-2">
+              <LabStartCard
+                title="스타일 마인드맵"
+                description="프롬프트 구조와 재료 배치를 실험하는 작업대"
+                badge="STYLE"
+                variant="style"
+                onOpen={() => setView('style')}
+              />
+              <LabStartCard
+                title="가사 마인드맵"
+                description="가사 섹션과 말투 흐름을 실험하는 작업대"
+                badge="LYRICS"
+                variant="lyrics"
+                onOpen={() => setView('lyrics')}
+              />
             </div>
           </motion.section>
         ) : (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] bg-gradient-to-br from-[#FFD36B]/10 via-white/[0.04] to-[#FF7DAF]/10 p-3 shadow-2xl backdrop-blur-xl md:p-4">
-            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#FFD36B]/12 px-3 py-1.5 text-xs font-black text-[#FF8AAE]">
-                  <FlaskConical className="h-3.5 w-3.5" /> 1번 실험실
-                </div>
-                <h2 className="mt-3 text-2xl font-black">FREEDOM 마인드맵 작업대</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setView('cards')}
-                className="rounded-2xl bg-white/[0.04] px-4 py-2.5 text-sm font-black text-[var(--text-secondary)] transition-all hover:bg-white/[0.08] hover:text-white"
-              >
-                카드 목록
-              </button>
-            </div>
-            <LabWorkspace />
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <LabWorkspace mode={view === 'lyrics' ? 'lyrics' : 'style'} />
           </motion.section>
         )}
       </div>

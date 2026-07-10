@@ -1,7 +1,8 @@
-import React, { PointerEvent, useEffect, useRef, useState } from 'react';
-import { Grip, Music2, Network, Sparkles } from 'lucide-react';
+import React, { PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Grip, Network, Sparkles } from 'lucide-react';
 
-type IngredientType = 'prompt' | 'lyric';
+type LabMode = 'style' | 'lyrics';
+type IngredientType = 'style' | 'lyrics';
 
 type LabIngredient = {
   id: string;
@@ -9,7 +10,7 @@ type LabIngredient = {
   type: IngredientType;
 };
 
-type MapZone = {
+type MapNode = {
   id: string;
   label: string;
   max: number;
@@ -18,95 +19,72 @@ type MapZone = {
   y: number;
 };
 
-type IngredientDragState = {
-  kind: 'ingredient';
-  ingredient: LabIngredient;
-  x: number;
-  y: number;
-  overZoneId: string | null;
-};
+type DragState =
+  | { kind: 'ingredient'; ingredient: LabIngredient; x: number; y: number; overNodeId: string | null }
+  | { kind: 'node'; nodeId: string; x: number; y: number; boardRect: DOMRect };
 
-type ZoneDragState = {
-  kind: 'zone';
-  tone: IngredientType;
-  zoneId: string;
-  x: number;
-  y: number;
-  boardRect: DOMRect;
-};
+type BoardSize = { width: number; height: number };
 
-type DragState = IngredientDragState | ZoneDragState;
+const CENTER_RADIUS = 82;
+const NODE_RADIUS = 68;
 
-type BoardSize = {
-  width: number;
-  height: number;
-};
-
-const NODE_WIDTH = 206;
-const NODE_HEIGHT = 116;
-const CENTER_SIZE = 112;
-
-const promptIngredients: LabIngredient[] = [
-  { id: 'genre', label: '장르', type: 'prompt' },
-  { id: 'style', label: '스타일', type: 'prompt' },
-  { id: 'sound', label: '사운드', type: 'prompt' },
-  { id: 'mood', label: '분위기', type: 'prompt' },
-  { id: 'theme', label: '주제', type: 'prompt' },
-  { id: 'vocal', label: '보컬', type: 'prompt' },
-  { id: 'tempo', label: '템포', type: 'prompt' },
-  { id: 'structure', label: '곡 구조', type: 'prompt' },
-  { id: 'director', label: '직접입력', type: 'prompt' },
+const styleIngredients: LabIngredient[] = [
+  { id: 'genre', label: '장르', type: 'style' },
+  { id: 'style', label: '스타일', type: 'style' },
+  { id: 'sound', label: '사운드', type: 'style' },
+  { id: 'mood', label: '분위기', type: 'style' },
+  { id: 'theme', label: '주제', type: 'style' },
+  { id: 'vocal', label: '보컬', type: 'style' },
+  { id: 'tempo', label: '템포', type: 'style' },
+  { id: 'structure', label: '곡 구조', type: 'style' },
+  { id: 'director', label: '직접입력', type: 'style' },
 ];
 
-const lyricIngredients: LabIngredient[] = [
-  { id: 'speaker', label: '화자', type: 'lyric' },
-  { id: 'scene', label: '장면', type: 'lyric' },
-  { id: 'desire', label: '욕망', type: 'lyric' },
-  { id: 'flaw', label: '결함', type: 'lyric' },
-  { id: 'tone', label: '말투', type: 'lyric' },
-  { id: 'hook', label: '반복 훅', type: 'lyric' },
-  { id: 'density', label: '밀도', type: 'lyric' },
-  { id: 'vocalSplit', label: '보컬 분리', type: 'lyric' },
-  { id: 'englishPoint', label: '영어 포인트', type: 'lyric' },
+const lyricsIngredients: LabIngredient[] = [
+  { id: 'speaker', label: '화자', type: 'lyrics' },
+  { id: 'scene', label: '장면', type: 'lyrics' },
+  { id: 'desire', label: '욕망', type: 'lyrics' },
+  { id: 'flaw', label: '결함', type: 'lyrics' },
+  { id: 'tone', label: '말투', type: 'lyrics' },
+  { id: 'hook', label: '반복 훅', type: 'lyrics' },
+  { id: 'density', label: '밀도', type: 'lyrics' },
+  { id: 'vocalSplit', label: '보컬 분리', type: 'lyrics' },
+  { id: 'englishPoint', label: '영어 포인트', type: 'lyrics' },
 ];
 
-const initialPromptZones: MapZone[] = [
-  { id: 'genreLine', label: 'Genre', max: 3, items: ['장르'], x: 24, y: 20 },
-  { id: 'soundLine', label: 'Sound', max: 4, items: ['사운드'], x: 76, y: 20 },
-  { id: 'moodLine', label: 'Mood', max: 4, items: ['분위기', '주제'], x: 22, y: 63 },
-  { id: 'vocalsLine', label: 'Vocals', max: 3, items: ['보컬'], x: 78, y: 63 },
-  { id: 'productionLine', label: 'Production', max: 4, items: ['템포', '곡 구조'], x: 50, y: 84 },
+const initialStyleNodes: MapNode[] = [
+  { id: 'genreLine', label: 'Genre', max: 3, items: ['장르'], x: 24, y: 30 },
+  { id: 'soundLine', label: 'Sound', max: 4, items: ['사운드'], x: 78, y: 28 },
+  { id: 'moodLine', label: 'Mood', max: 4, items: ['분위기', '주제'], x: 18, y: 66 },
+  { id: 'vocalsLine', label: 'Vocals', max: 3, items: ['보컬'], x: 80, y: 68 },
+  { id: 'productionLine', label: 'Production', max: 4, items: ['템포', '곡 구조'], x: 50, y: 82 },
 ];
 
-const initialLyricZones: MapZone[] = [
-  { id: 'verse', label: 'Verse', max: 4, items: ['장면', '화자'], x: 24, y: 22 },
-  { id: 'preChorus', label: 'Pre-Chorus', max: 3, items: ['욕망'], x: 76, y: 22 },
-  { id: 'chorus', label: 'Chorus', max: 4, items: ['반복 훅', '말투'], x: 78, y: 63 },
-  { id: 'bridge', label: 'Bridge', max: 3, items: ['결함'], x: 24, y: 72 },
-  { id: 'outro', label: 'Outro', max: 3, items: ['밀도'], x: 52, y: 86 },
+const initialLyricsNodes: MapNode[] = [
+  { id: 'verse', label: 'Verse', max: 4, items: ['장면', '화자'], x: 22, y: 28 },
+  { id: 'preChorus', label: 'Pre-Chorus', max: 3, items: ['욕망'], x: 78, y: 28 },
+  { id: 'chorus', label: 'Chorus', max: 4, items: ['반복 훅', '말투'], x: 78, y: 66 },
+  { id: 'bridge', label: 'Bridge', max: 3, items: ['결함'], x: 22, y: 66 },
+  { id: 'outro', label: 'Outro', max: 3, items: ['밀도'], x: 50, y: 84 },
 ];
 
-function getTone(ingredientType: IngredientType) {
-  return ingredientType === 'lyric'
+function getTone(mode: LabMode) {
+  return mode === 'lyrics'
     ? {
-        main: '#FF7AAE',
-        warm: '#FFD166',
-        soft: 'rgba(255, 196, 105, 0.16)',
-        fill: 'rgba(255, 122, 174, 0.22)',
-        glow: 'rgba(255, 154, 115, 0.20)',
-        text: '#FFE9F1',
-        solid: 'rgba(32, 22, 24, 0.98)',
-        surface: 'rgba(30, 23, 24, 0.97)',
+        coreA: '#5EF2D6',
+        coreB: '#FF7AAE',
+        nodeA: '#5EF2D6',
+        nodeB: '#A7F7FF',
+        text: '#EFFFFB',
+        bg: 'rgba(7, 17, 20, 0.74)',
       }
     : {
-        main: '#FF7DAF',
-        warm: '#FFD36B',
-        soft: 'rgba(255, 211, 107, 0.16)',
-        fill: 'rgba(255, 125, 175, 0.22)',
-        glow: 'rgba(255, 152, 112, 0.20)',
-        text: '#FFF0E8',
-        solid: 'rgba(34, 23, 24, 0.98)',
-        surface: 'rgba(31, 23, 25, 0.97)',
+        coreA: '#FFD66B',
+        coreB: '#FF6FAE',
+        nodeA: '#FFD66B',
+        nodeB: '#FF7AAE',
+        text: '#FFF6EA',
+        bg: 'rgba(18, 13, 17, 0.74)',
       };
 }
 
@@ -115,7 +93,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function IngredientChip({ ingredient, onStartDrag }: { ingredient: LabIngredient; onStartDrag: (ingredient: LabIngredient, event: PointerEvent<HTMLDivElement>) => void }) {
-  const tone = getTone(ingredient.type);
+  const tone = getTone(ingredient.type === 'lyrics' ? 'lyrics' : 'style');
 
   return (
     <div
@@ -125,22 +103,22 @@ function IngredientChip({ ingredient, onStartDrag }: { ingredient: LabIngredient
       onDragStart={(event) => event.preventDefault()}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => onStartDrag(ingredient, event)}
-      className="inline-flex cursor-grab select-none items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-2 text-xs font-black text-white/80 transition-all duration-200 active:cursor-grabbing hover:-translate-y-0.5"
+      className="inline-flex cursor-grab select-none items-center gap-1.5 rounded-full px-3 py-2 text-xs font-black transition-all duration-200 active:cursor-grabbing hover:-translate-y-0.5"
       style={{
+        color: tone.text,
         WebkitUserDrag: 'none',
-        boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.035), 0 0 24px ${tone.soft}`,
-        backgroundImage: `linear-gradient(135deg, ${tone.warm}1E, ${tone.main}20)`,
+        background: `linear-gradient(135deg, ${tone.coreA}18, ${tone.coreB}18), rgba(255,255,255,0.055)`,
+        boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.05), 0 0 24px ${tone.coreB}12`,
       }}
     >
-      <Grip className="h-3.5 w-3.5 text-white/24" />
+      <Grip className="h-3.5 w-3.5 text-white/26" />
       <span draggable={false}>{ingredient.label}</span>
     </div>
   );
 }
 
-function PlacedChip({ label, tone, onRemove }: { label: string; tone: IngredientType; onRemove: () => void }) {
-  const toneStyle = getTone(tone);
-
+function PlacedChip({ label, mode, onRemove }: { label: string; mode: LabMode; onRemove: () => void }) {
+  const tone = getTone(mode);
   return (
     <button
       type="button"
@@ -149,11 +127,11 @@ function PlacedChip({ label, tone, onRemove }: { label: string; tone: Ingredient
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={onRemove}
-      className="select-none rounded-full px-2.5 py-1 text-[11px] font-black transition-all hover:-translate-y-0.5"
+      className="select-none rounded-full px-2.5 py-1 text-[10px] font-black transition-all hover:-translate-y-0.5"
       style={{
-        background: `linear-gradient(135deg, ${toneStyle.warm}22, ${toneStyle.main}2B)`,
-        color: toneStyle.text,
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.045)',
+        color: tone.text,
+        background: `linear-gradient(135deg, ${tone.coreA}24, ${tone.coreB}2B), rgba(0,0,0,0.18)`,
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.055)',
       }}
     >
       {label}
@@ -161,68 +139,94 @@ function PlacedChip({ label, tone, onRemove }: { label: string; tone: Ingredient
   );
 }
 
-function MapNode({
-  zone,
-  tone,
-  active,
-  moving,
-  onRemoveItem,
-  onStartMove,
-}: {
-  zone: MapZone;
-  tone: IngredientType;
+function ConnectorLines({ nodes, mode, boardSize }: { nodes: MapNode[]; mode: LabMode; boardSize: BoardSize }) {
+  const tone = getTone(mode);
+  const width = Math.max(boardSize.width, 1);
+  const height = Math.max(boardSize.height, 1);
+  const cx = width / 2;
+  const cy = height / 2;
+
+  const line = (node: MapNode) => {
+    const nx = (node.x / 100) * width;
+    const ny = (node.y / 100) * height;
+    const dx = nx - cx;
+    const dy = ny - cy;
+    const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+    const ux = dx / distance;
+    const uy = dy / distance;
+    const startX = cx + ux * CENTER_RADIUS;
+    const startY = cy + uy * CENTER_RADIUS;
+    const endX = nx - ux * NODE_RADIUS;
+    const endY = ny - uy * NODE_RADIUS;
+    const curve = Math.min(distance * 0.25, 132);
+    const c1X = startX + ux * curve;
+    const c1Y = startY + uy * curve;
+    const c2X = endX - ux * curve;
+    const c2Y = endY - uy * curve;
+    return `M ${startX} ${startY} C ${c1X} ${c1Y}, ${c2X} ${c2Y}, ${endX} ${endY}`;
+  };
+
+  return (
+    <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id={`lab-line-${mode}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={tone.coreA} />
+          <stop offset="100%" stopColor={tone.coreB} />
+        </linearGradient>
+      </defs>
+      {nodes.map((node) => (
+        <path
+          key={node.id}
+          d={line(node)}
+          fill="none"
+          stroke={`url(#lab-line-${mode})`}
+          strokeWidth={node.items.length ? 3.2 : 2.1}
+          strokeLinecap="round"
+          opacity={node.items.length ? 0.72 : 0.28}
+        />
+      ))}
+    </svg>
+  );
+}
+
+function MapNodeView({ node, mode, active, moving, onRemoveItem, onStartMove }: {
+  node: MapNode;
+  mode: LabMode;
   active: boolean;
   moving: boolean;
-  onRemoveItem: (zoneId: string, label: string) => void;
-  onStartMove: (zoneId: string, tone: IngredientType, event: PointerEvent<HTMLDivElement>) => void;
+  onRemoveItem: (nodeId: string, label: string) => void;
+  onStartMove: (nodeId: string, event: PointerEvent<HTMLDivElement>) => void;
 }) {
-  const percent = Math.min(100, Math.round((zone.items.length / Math.max(zone.max, 1)) * 100));
-  const isComplete = zone.items.length >= zone.max;
-  const toneStyle = getTone(tone);
-  const lightOpacity = 0.08 + percent / 210;
-  const glowStrength = 18 + percent * 0.42;
+  const tone = getTone(mode);
+  const percent = Math.min(100, Math.round((node.items.length / Math.max(node.max, 1)) * 100));
+  const isComplete = node.items.length >= node.max;
+  const glow = 0.08 + percent / 170;
 
   return (
     <div
-      data-lab-zone-id={zone.id}
-      data-lab-zone-type={tone}
+      data-lab-node-id={node.id}
       onContextMenu={(event) => event.preventDefault()}
-      onPointerDown={(event) => onStartMove(zone.id, tone, event)}
-      className={`absolute z-40 h-[116px] w-[206px] -translate-x-1/2 -translate-y-1/2 cursor-move select-none overflow-hidden rounded-[1.6rem] p-3.5 shadow-xl transition-[box-shadow,filter,transform,background] duration-300 ${active ? 'scale-[1.035]' : ''}`}
+      onPointerDown={(event) => onStartMove(node.id, event)}
+      className="absolute z-30 flex h-[136px] w-[136px] -translate-x-1/2 -translate-y-1/2 cursor-move select-none flex-col items-center justify-center overflow-hidden rounded-full p-3 text-center shadow-2xl transition-[box-shadow,filter,transform] duration-300"
       style={{
-        left: `${zone.x}%`,
-        top: `${zone.y}%`,
+        left: `${node.x}%`,
+        top: `${node.y}%`,
         WebkitUserDrag: 'none',
-        background: toneStyle.surface,
+        background: `linear-gradient(135deg, ${tone.coreA}${Math.round(glow * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((glow + 0.06) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,0.92)`,
+        filter: `brightness(${1 + percent / 240})`,
         animation: isComplete ? 'labNodeHeartbeat 1.35s ease-in-out infinite' : undefined,
-        filter: `brightness(${1 + percent / 260})`,
         boxShadow: active || moving
-          ? `0 24px 70px rgba(0,0,0,0.38), 0 0 0 1px ${toneStyle.warm}90, 0 0 44px ${toneStyle.main}3F`
-          : `0 18px 46px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.045), 0 0 ${glowStrength}px ${toneStyle.main}18`,
+          ? `0 0 0 2px ${tone.coreA}AA, 0 0 60px ${tone.coreB}55, 0 20px 70px rgba(0,0,0,0.48)`
+          : `0 0 0 1px rgba(255,255,255,0.06), 0 0 ${18 + percent * 0.46}px ${tone.coreB}25, 0 18px 54px rgba(0,0,0,0.44)`,
       }}
     >
-      <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-700 ease-out"
-        style={{
-          opacity: lightOpacity,
-          background: `linear-gradient(135deg, ${toneStyle.warm} 0%, ${toneStyle.main} 100%)`,
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-700 ease-out"
-        style={{
-          opacity: isComplete ? 0.22 : 0,
-          background: `linear-gradient(135deg, ${toneStyle.warm}55, ${toneStyle.main}66)`,
-        }}
-      />
-      <div className="relative z-10">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-black text-white">{zone.label}</p>
-          <span className="rounded-full bg-black/20 px-2 py-1 text-[10px] font-black text-white/45">{zone.items.length}/{zone.max}</span>
-        </div>
-        <div className="mt-3 flex max-h-[56px] flex-wrap gap-1.5 overflow-hidden">
-          {zone.items.map((item) => (
-            <PlacedChip key={item} label={item} tone={tone} onRemove={() => onRemoveItem(zone.id, item)} />
+      <div className="pointer-events-none absolute inset-0 rounded-full opacity-70" style={{ background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.18), transparent 34%), radial-gradient(circle at 50% 55%, ${tone.coreA}${Math.round((0.04 + percent / 360) * 255).toString(16).padStart(2, '0')}, transparent 62%)` }} />
+      <div className="relative z-10 flex flex-col items-center gap-2">
+        <span className="text-sm font-black text-white">{node.label}</span>
+        <span className="rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-black text-white/50">{node.items.length}/{node.max}</span>
+        <div className="flex max-h-[44px] max-w-[112px] flex-wrap justify-center gap-1 overflow-hidden">
+          {node.items.map((item) => (
+            <PlacedChip key={item} label={item} mode={mode} onRemove={() => onRemoveItem(node.id, item)} />
           ))}
         </div>
       </div>
@@ -230,225 +234,90 @@ function MapNode({
   );
 }
 
-function ConnectorLines({ zones, tone, boardSize }: { zones: MapZone[]; tone: IngredientType; boardSize: BoardSize }) {
-  const toneStyle = getTone(tone);
-  const width = Math.max(boardSize.width, 1);
-  const height = Math.max(boardSize.height, 1);
-  const cx = width / 2;
-  const cy = height / 2;
-
-  const makePath = (zone: MapZone) => {
-    const zx = (zone.x / 100) * width;
-    const zy = (zone.y / 100) * height;
-    const dx = zx - cx;
-    const dy = zy - cy;
-    const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-    const ux = dx / distance;
-    const uy = dy / distance;
-    const centerRadius = CENTER_SIZE / 2;
-    const halfW = NODE_WIDTH / 2;
-    const halfH = NODE_HEIGHT / 2;
-    const targetOffset = Math.min(
-      Math.abs(ux) > 0.001 ? halfW / Math.abs(ux) : Number.POSITIVE_INFINITY,
-      Math.abs(uy) > 0.001 ? halfH / Math.abs(uy) : Number.POSITIVE_INFINITY,
-    );
-    const startX = cx + ux * centerRadius;
-    const startY = cy + uy * centerRadius;
-    const endX = zx - ux * targetOffset;
-    const endY = zy - uy * targetOffset;
-    const curve = Math.min(distance * 0.28, 160);
-    const c1X = startX + ux * curve;
-    const c1Y = startY + uy * curve * 0.28;
-    const c2X = endX - ux * curve;
-    const c2Y = endY - uy * curve * 0.28;
-
-    return `M ${startX} ${startY} C ${c1X} ${c1Y}, ${c2X} ${c2Y}, ${endX} ${endY}`;
-  };
-
-  return (
-    <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-      {zones.map((zone) => (
-        <path
-          key={zone.id}
-          d={makePath(zone)}
-          fill="none"
-          stroke={zone.items.length ? `url(#${tone}-line-gradient)` : 'rgba(255,255,255,0.12)'}
-          strokeWidth={zone.items.length ? 1.25 : 1}
-          strokeLinecap="butt"
-          opacity={zone.items.length ? 0.34 : 0.13}
-        />
-      ))}
-      <defs>
-        <linearGradient id={`${tone}-line-gradient`} x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor={toneStyle.warm} />
-          <stop offset="100%" stopColor={toneStyle.main} />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function MindMapBoard({
-  title,
-  center,
-  tone,
-  zones,
-  activeZoneId,
-  movingZoneId,
-  onRemoveItem,
-  onStartMove,
-}: {
-  title: string;
-  center: string;
-  tone: IngredientType;
-  zones: MapZone[];
-  activeZoneId: string | null;
-  movingZoneId: string | null;
-  onRemoveItem: (zoneId: string, label: string) => void;
-  onStartMove: (zoneId: string, tone: IngredientType, event: PointerEvent<HTMLDivElement>) => void;
-}) {
-  const toneStyle = getTone(tone);
-  const boardRef = useRef<HTMLDivElement | null>(null);
-  const [boardSize, setBoardSize] = useState<BoardSize>({ width: 760, height: 810 });
-
-  useEffect(() => {
-    const board = boardRef.current;
-    if (!board) return;
-
-    const update = () => setBoardSize({ width: board.clientWidth, height: board.clientHeight });
-    update();
-
-    const observer = new ResizeObserver(update);
-    observer.observe(board);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <section className="min-h-[880px] rounded-[2rem] bg-white/[0.03] p-3 shadow-xl backdrop-blur-xl">
-      <div className="mb-3 flex items-center gap-2 px-1 text-sm font-black text-white">
-        {tone === 'lyric' ? <Music2 className="h-4 w-4" style={{ color: toneStyle.main }} /> : <Sparkles className="h-4 w-4" style={{ color: toneStyle.warm }} />}
-        {title}
-      </div>
-
-      <div
-        ref={boardRef}
-        data-lab-board-type={tone}
-        className="relative min-h-[820px] overflow-hidden rounded-[2rem] bg-black/[0.09]"
-      >
-        <ConnectorLines zones={zones} tone={tone} boardSize={boardSize} />
-        <div
-          className="pointer-events-none absolute left-1/2 top-1/2 z-50 flex h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-sm font-black text-white shadow-2xl"
-          style={{
-            background: `linear-gradient(135deg, ${toneStyle.warm}30, ${toneStyle.main}34), ${toneStyle.solid}`,
-            boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 0 42px ${toneStyle.glow}`,
-          }}
-        >
-          {center}
-        </div>
-        {zones.map((zone) => (
-          <MapNode
-            key={zone.id}
-            zone={zone}
-            tone={tone}
-            active={activeZoneId === zone.id}
-            moving={movingZoneId === zone.id}
-            onRemoveItem={onRemoveItem}
-            onStartMove={onStartMove}
-          />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-export default function LabWorkspace() {
-  const [promptZones, setPromptZones] = useState<MapZone[]>(initialPromptZones);
-  const [lyricZones, setLyricZones] = useState<MapZone[]>(initialLyricZones);
+export default function LabWorkspace({ mode }: { mode: LabMode }) {
+  const [nodes, setNodes] = useState<MapNode[]>(mode === 'lyrics' ? initialLyricsNodes : initialStyleNodes);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [boardSize, setBoardSize] = useState<BoardSize>({ width: 1280, height: 760 });
+
+  const tone = getTone(mode);
+  const ingredients = useMemo(() => (mode === 'lyrics' ? lyricsIngredients : styleIngredients), [mode]);
+  const centerLabel = mode === 'lyrics' ? 'LYRICS' : 'STYLE';
+  const title = mode === 'lyrics' ? '가사 마인드맵' : '스타일 마인드맵';
 
   const syncDrag = (next: DragState | null) => {
     dragRef.current = next;
     setDragging(next);
   };
 
-  const addPromptItem = (zoneId: string, ingredient: LabIngredient) => {
-    setPromptZones((zones) => zones.map((zone) => {
-      if (zone.id !== zoneId || zone.items.includes(ingredient.label) || zone.items.length >= zone.max) return zone;
-      return { ...zone, items: [...zone.items, ingredient.label] };
+  useEffect(() => {
+    setNodes(mode === 'lyrics' ? initialLyricsNodes : initialStyleNodes);
+  }, [mode]);
+
+  useEffect(() => {
+    const board = boardRef.current;
+    if (!board) return;
+    const update = () => setBoardSize({ width: board.clientWidth, height: board.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(board);
+    return () => observer.disconnect();
+  }, []);
+
+  const addItem = (nodeId: string, ingredient: LabIngredient) => {
+    setNodes((current) => current.map((node) => {
+      if (node.id !== nodeId || node.items.includes(ingredient.label) || node.items.length >= node.max) return node;
+      return { ...node, items: [...node.items, ingredient.label] };
     }));
   };
 
-  const addLyricItem = (zoneId: string, ingredient: LabIngredient) => {
-    setLyricZones((zones) => zones.map((zone) => {
-      if (zone.id !== zoneId || zone.items.includes(ingredient.label) || zone.items.length >= zone.max) return zone;
-      return { ...zone, items: [...zone.items, ingredient.label] };
-    }));
-  };
-
-  const removePromptItem = (zoneId: string, label: string) => {
-    setPromptZones((zones) => zones.map((zone) => zone.id === zoneId ? { ...zone, items: zone.items.filter((item) => item !== label) } : zone));
-  };
-
-  const removeLyricItem = (zoneId: string, label: string) => {
-    setLyricZones((zones) => zones.map((zone) => zone.id === zoneId ? { ...zone, items: zone.items.filter((item) => item !== label) } : zone));
+  const removeItem = (nodeId: string, label: string) => {
+    setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, items: node.items.filter((item) => item !== label) } : node));
   };
 
   const handleStartIngredientDrag = (ingredient: LabIngredient, event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     event.preventDefault();
-    syncDrag({ kind: 'ingredient', ingredient, x: event.clientX, y: event.clientY, overZoneId: null });
+    syncDrag({ kind: 'ingredient', ingredient, x: event.clientX, y: event.clientY, overNodeId: null });
   };
 
-  const handleStartZoneMove = (zoneId: string, tone: IngredientType, event: PointerEvent<HTMLDivElement>) => {
+  const handleStartNodeMove = (nodeId: string, event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
     if (target.closest('button')) return;
-    const board = target.closest('[data-lab-board-type]') as HTMLElement | null;
+    const board = boardRef.current;
     if (!board) return;
     event.preventDefault();
-    syncDrag({ kind: 'zone', zoneId, tone, x: event.clientX, y: event.clientY, boardRect: board.getBoundingClientRect() });
+    syncDrag({ kind: 'node', nodeId, x: event.clientX, y: event.clientY, boardRect: board.getBoundingClientRect() });
   };
 
   useEffect(() => {
     const previousUserSelect = document.body.style.userSelect;
     const previousCursor = document.body.style.cursor;
 
-    const getDropTarget = (clientX: number, clientY: number, activeIngredient: LabIngredient) => {
+    const getDropTarget = (clientX: number, clientY: number) => {
       const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-      const zoneElement = element?.closest('[data-lab-zone-id]') as HTMLElement | null;
-      const zoneId = zoneElement?.dataset.labZoneId ?? null;
-      const zoneType = zoneElement?.dataset.labZoneType as IngredientType | undefined;
-
-      if (!zoneId || zoneType !== activeIngredient.type) return null;
-      return zoneId;
-    };
-
-    const updateZonePosition = (current: ZoneDragState, clientX: number, clientY: number) => {
-      const halfX = (NODE_WIDTH / 2 / current.boardRect.width) * 100;
-      const halfY = (NODE_HEIGHT / 2 / current.boardRect.height) * 100;
-      const nextX = clamp(((clientX - current.boardRect.left) / current.boardRect.width) * 100, halfX, 100 - halfX);
-      const nextY = clamp(((clientY - current.boardRect.top) / current.boardRect.height) * 100, halfY, 100 - halfY);
-      const updater = (zone: MapZone) => zone.id === current.zoneId ? { ...zone, x: nextX, y: nextY } : zone;
-
-      if (current.tone === 'prompt') {
-        setPromptZones((zones) => zones.map(updater));
-      } else {
-        setLyricZones((zones) => zones.map(updater));
-      }
-      syncDrag({ ...current, x: clientX, y: clientY });
+      const nodeElement = element?.closest('[data-lab-node-id]') as HTMLElement | null;
+      return nodeElement?.dataset.labNodeId ?? null;
     };
 
     const handlePointerMove = (event: globalThis.PointerEvent) => {
       const current = dragRef.current;
       if (!current) return;
       event.preventDefault();
+
       if (current.kind === 'ingredient') {
-        const overZoneId = getDropTarget(event.clientX, event.clientY, current.ingredient);
-        syncDrag({ ...current, x: event.clientX, y: event.clientY, overZoneId });
+        syncDrag({ ...current, x: event.clientX, y: event.clientY, overNodeId: getDropTarget(event.clientX, event.clientY) });
         return;
       }
-      updateZonePosition(current, event.clientX, event.clientY);
+
+      const radiusX = (NODE_RADIUS / current.boardRect.width) * 100;
+      const radiusY = (NODE_RADIUS / current.boardRect.height) * 100;
+      const nextX = clamp(((event.clientX - current.boardRect.left) / current.boardRect.width) * 100, radiusX, 100 - radiusX);
+      const nextY = clamp(((event.clientY - current.boardRect.top) / current.boardRect.height) * 100, radiusY, 100 - radiusY);
+      setNodes((currentNodes) => currentNodes.map((node) => node.id === current.nodeId ? { ...node, x: nextX, y: nextY } : node));
+      syncDrag({ ...current, x: event.clientX, y: event.clientY });
     };
 
     const handlePointerUp = (event: globalThis.PointerEvent) => {
@@ -456,14 +325,8 @@ export default function LabWorkspace() {
       if (!current) return;
       event.preventDefault();
       if (current.kind === 'ingredient') {
-        const overZoneId = getDropTarget(event.clientX, event.clientY, current.ingredient);
-        if (overZoneId) {
-          if (current.ingredient.type === 'prompt') {
-            addPromptItem(overZoneId, current.ingredient);
-          } else {
-            addLyricItem(overZoneId, current.ingredient);
-          }
-        }
+        const nodeId = getDropTarget(event.clientX, event.clientY);
+        if (nodeId) addItem(nodeId, current.ingredient);
       }
       syncDrag(null);
     };
@@ -475,7 +338,7 @@ export default function LabWorkspace() {
     const blockContextMenu = (event: MouseEvent) => event.preventDefault();
 
     document.body.style.userSelect = dragging ? 'none' : previousUserSelect;
-    document.body.style.cursor = dragging?.kind === 'ingredient' ? 'grabbing' : dragging?.kind === 'zone' ? 'move' : previousCursor;
+    document.body.style.cursor = dragging?.kind === 'ingredient' ? 'grabbing' : dragging?.kind === 'node' ? 'move' : previousCursor;
 
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp, { passive: false });
@@ -492,80 +355,71 @@ export default function LabWorkspace() {
     };
   }, [dragging?.kind]);
 
-  const movingZoneId = dragging?.kind === 'zone' ? dragging.zoneId : null;
-  const activePromptZoneId = dragging?.kind === 'ingredient' && dragging.ingredient.type === 'prompt' ? dragging.overZoneId : null;
-  const activeLyricZoneId = dragging?.kind === 'ingredient' && dragging.ingredient.type === 'lyric' ? dragging.overZoneId : null;
+  const activeNodeId = dragging?.kind === 'ingredient' ? dragging.overNodeId : null;
+  const movingNodeId = dragging?.kind === 'node' ? dragging.nodeId : null;
 
   return (
-    <div
-      className="select-none"
-      onContextMenu={(event) => event.preventDefault()}
-      onDragStart={(event) => event.preventDefault()}
-    >
+    <div className="select-none" onContextMenu={(event) => event.preventDefault()} onDragStart={(event) => event.preventDefault()}>
       <style>{`
         @keyframes labNodeHeartbeat {
           0%, 100% { transform: translate(-50%, -50%) scale(1); }
-          45% { transform: translate(-50%, -50%) scale(1.028); }
-          62% { transform: translate(-50%, -50%) scale(0.994); }
-          78% { transform: translate(-50%, -50%) scale(1.014); }
+          42% { transform: translate(-50%, -50%) scale(1.026); }
+          62% { transform: translate(-50%, -50%) scale(0.996); }
+          78% { transform: translate(-50%, -50%) scale(1.012); }
         }
-        [data-lab-board-type], [data-lab-zone-id], [role='button'] {
+        [data-lab-node-id], [role='button'] {
           -webkit-user-drag: none;
           user-select: none;
         }
       `}</style>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_276px_minmax(0,1fr)]">
-        <MindMapBoard
-          title="프롬프트"
-          center="PROMPT"
-          tone="prompt"
-          zones={promptZones}
-          activeZoneId={activePromptZoneId}
-          movingZoneId={movingZoneId}
-          onRemoveItem={removePromptItem}
-          onStartMove={handleStartZoneMove}
-        />
+      <section className="relative overflow-hidden rounded-[2.2rem] bg-[#090B10] shadow-2xl" style={{ minHeight: '760px' }}>
+        <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.34) 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
+        <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${tone.coreA}14, transparent 28%), radial-gradient(circle at 72% 30%, ${tone.coreB}13, transparent 30%), linear-gradient(180deg, rgba(255,255,255,0.035), transparent 48%)` }} />
 
-        <aside className="order-first rounded-[2rem] bg-white/[0.04] p-4 shadow-xl backdrop-blur-xl xl:order-none xl:min-h-[880px]">
-          <div className="mb-4 flex items-center justify-center gap-2 text-sm font-black text-white">
-            <Network className="h-4 w-4 text-[#FFD36B]" /> 재료
+        <div className="relative z-20 flex items-center justify-between px-6 pt-5">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.25em]" style={{ color: tone.coreA }}>{mode === 'lyrics' ? 'LYRIC MAP' : 'STYLE MAP'}</p>
+            <h2 className="mt-1 text-2xl font-black text-white">{title}</h2>
           </div>
+          <div className="rounded-full bg-white/[0.06] px-3 py-1.5 text-[11px] font-black text-white/48">입구만 준비됨</div>
+        </div>
 
-          <div className="space-y-5">
-            <div className="space-y-2.5">
-              <p className="text-center text-[11px] font-black uppercase tracking-[0.22em] text-[#FFD36B]/82">Prompt</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {promptIngredients.map((ingredient) => (
-                  <IngredientChip key={ingredient.id} ingredient={ingredient} onStartDrag={handleStartIngredientDrag} />
-                ))}
-              </div>
-            </div>
-
-            <div className="h-px bg-white/[0.06]" />
-
-            <div className="space-y-2.5">
-              <p className="text-center text-[11px] font-black uppercase tracking-[0.22em] text-[#FF7DAF]/80">Lyrics</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {lyricIngredients.map((ingredient) => (
-                  <IngredientChip key={ingredient.id} ingredient={ingredient} onStartDrag={handleStartIngredientDrag} />
-                ))}
-              </div>
-            </div>
+        <div ref={boardRef} className="relative z-10 mx-auto h-[620px] w-full max-w-[1320px]">
+          <ConnectorLines nodes={nodes} mode={mode} boardSize={boardSize} />
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 z-40 flex h-[164px] w-[164px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-2xl font-black text-white shadow-2xl"
+            style={{
+              background: `linear-gradient(135deg, ${tone.coreA}, ${tone.coreB})`,
+              boxShadow: `0 0 0 8px rgba(255,255,255,0.045), 0 0 70px ${tone.coreA}38, 0 0 110px ${tone.coreB}24`,
+            }}
+          >
+            {centerLabel}
           </div>
-        </aside>
+          {nodes.map((node) => (
+            <MapNodeView
+              key={node.id}
+              node={node}
+              mode={mode}
+              active={activeNodeId === node.id}
+              moving={movingNodeId === node.id}
+              onRemoveItem={removeItem}
+              onStartMove={handleStartNodeMove}
+            />
+          ))}
+        </div>
 
-        <MindMapBoard
-          title="가사"
-          center="LYRICS"
-          tone="lyric"
-          zones={lyricZones}
-          activeZoneId={activeLyricZoneId}
-          movingZoneId={movingZoneId}
-          onRemoveItem={removeLyricItem}
-          onStartMove={handleStartZoneMove}
-        />
-      </div>
+        <div className="relative z-30 mx-auto mb-6 max-w-[1180px] rounded-[1.7rem] bg-black/28 p-4 shadow-xl backdrop-blur-md">
+          <div className="mb-3 flex items-center justify-center gap-2 text-sm font-black text-white/86">
+            <Network className="h-4 w-4" style={{ color: tone.coreA }} /> 재료
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            {ingredients.map((ingredient) => (
+              <IngredientChip key={ingredient.id} ingredient={ingredient} onStartDrag={handleStartIngredientDrag} />
+            ))}
+          </div>
+        </div>
+      </section>
 
       {dragging?.kind === 'ingredient' && (
         <div
@@ -573,9 +427,9 @@ export default function LabWorkspace() {
           style={{
             left: dragging.x,
             top: dragging.y,
-            background: `linear-gradient(135deg, ${getTone(dragging.ingredient.type).warm}33, ${getTone(dragging.ingredient.type).main}44), ${getTone(dragging.ingredient.type).solid}`,
-            color: getTone(dragging.ingredient.type).text,
-            boxShadow: `0 0 0 1px rgba(255,255,255,0.05), 0 18px 45px rgba(0,0,0,0.34)`,
+            background: `linear-gradient(135deg, ${tone.coreA}33, ${tone.coreB}44), rgba(16,16,20,0.96)`,
+            color: tone.text,
+            boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 18px 45px rgba(0,0,0,0.34)`,
           }}
         >
           {dragging.ingredient.label}

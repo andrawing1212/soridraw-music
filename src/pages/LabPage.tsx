@@ -13,7 +13,7 @@ export default function LabPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-20 pb-16 text-[var(--text-primary)]">
-      <div className="mx-auto w-full max-w-[1200px] space-y-7">
+      <div className="mx-auto w-full max-w-[1560px] space-y-7">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button
@@ -23,21 +23,21 @@ export default function LabPage() {
             >
               <ArrowLeft className="h-4 w-4" /> 홈
             </button>
-            <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-black text-[#BBA8CA]">
+            <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-black text-[#FF9BD7]">
               <Power className="h-4 w-4" /> Lab OFF · 입구만 준비됨
             </div>
           </div>
 
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#BBA8CA]/80">SORIDRAW LAB</p>
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-[#FF9BD7]/80">SORIDRAW LAB</p>
             <h1 className="mt-2 flex items-center gap-3 text-3xl font-black tracking-tight md:text-4xl">
-              <FlaskConical className="h-8 w-8 text-[#BBA8CA]" /> 실험실
+              <FlaskConical className="h-8 w-8 text-[#FF9BD7]" /> 실험실
             </h1>
           </div>
         </motion.div>
 
         {view === 'cards' ? (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-[var(--border-color)] bg-[var(--card-bg)]/80 p-5 shadow-2xl backdrop-blur-xl md:p-6">
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] bg-gradient-to-br from-[#FF9BD7]/10 via-white/[0.04] to-[#6EF0D4]/10 p-5 shadow-2xl backdrop-blur-xl md:p-6">
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-lg font-black">실험 카드</h2>
@@ -49,10 +49,10 @@ export default function LabPage() {
             </div>
           </motion.section>
         ) : (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl bg-[var(--card-bg)]/80 p-5 shadow-2xl backdrop-blur-xl md:p-6">
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-[2rem] bg-gradient-to-br from-[#FF9BD7]/10 via-white/[0.04] to-[#6EF0D4]/10 p-4 shadow-2xl backdrop-blur-xl md:p-5">
             <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#877198]/12 px-3 py-1.5 text-xs font-black text-[#BBA8CA]">
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#FF9BD7]/12 px-3 py-1.5 text-xs font-black text-[#FF9BD7]">
                   <FlaskConical className="h-3.5 w-3.5" /> 1번 실험실
                 </div>
                 <h2 className="mt-4 text-2xl font-black">FREEDOM 마인드맵 작업대</h2>

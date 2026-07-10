@@ -1,5 +1,5 @@
 import React, { PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Grip, Network, Sparkles } from 'lucide-react';
+import { Grip, Network } from 'lucide-react';
 
 type LabMode = 'style' | 'lyrics';
 type IngredientType = 'style' | 'lyrics';
@@ -20,13 +20,24 @@ type MapNode = {
 };
 
 type DragState =
-  | { kind: 'ingredient'; ingredient: LabIngredient; x: number; y: number; overNodeId: string | null }
+  | {
+      kind: 'ingredient';
+      ingredient: LabIngredient;
+      x: number;
+      y: number;
+      overNodeId: string | null;
+      offsetX: number;
+      offsetY: number;
+      width: number;
+      height: number;
+    }
   | { kind: 'node'; nodeId: string; x: number; y: number; boardRect: DOMRect };
 
 type BoardSize = { width: number; height: number };
 
-const CENTER_RADIUS = 82;
-const NODE_RADIUS = 68;
+const CENTER_NODE_SIZE = 164;
+const MAP_NODE_SIZE = 136;
+const NODE_MOVE_PADDING = 74;
 
 const styleIngredients: LabIngredient[] = [
   { id: 'genre', label: '장르', type: 'style' },
@@ -154,16 +165,16 @@ function ConnectorLines({ nodes, mode, boardSize }: { nodes: MapNode[]; mode: La
     const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
     const ux = dx / distance;
     const uy = dy / distance;
-    const startX = cx + ux * CENTER_RADIUS;
-    const startY = cy + uy * CENTER_RADIUS;
-    const endX = nx - ux * NODE_RADIUS;
-    const endY = ny - uy * NODE_RADIUS;
-    const curve = Math.min(distance * 0.25, 132);
-    const c1X = startX + ux * curve;
-    const c1Y = startY + uy * curve;
-    const c2X = endX - ux * curve;
-    const c2Y = endY - uy * curve;
-    return `M ${startX} ${startY} C ${c1X} ${c1Y}, ${c2X} ${c2Y}, ${endX} ${endY}`;
+    const curve = Math.min(distance * 0.22, 118);
+    const c1X = cx + ux * curve;
+    const c1Y = cy + uy * curve;
+    const c2X = nx - ux * curve;
+    const c2Y = ny - uy * curve;
+
+    // 중앙 원과 바깥 노드의 중심끼리 연결한다.
+    // 선은 노드보다 아래 레이어에 있으므로 노드 내부 선은 가려지고,
+    // 보이는 부분은 항상 노드 가장자리에 1px 오차 없이 붙어 보인다.
+    return `M ${cx} ${cy} C ${c1X} ${c1Y}, ${c2X} ${c2Y}, ${nx} ${ny}`;
   };
 
   return (
@@ -180,9 +191,9 @@ function ConnectorLines({ nodes, mode, boardSize }: { nodes: MapNode[]; mode: La
           d={line(node)}
           fill="none"
           stroke={`url(#lab-line-${mode})`}
-          strokeWidth={node.items.length ? 3.2 : 2.1}
+          strokeWidth={node.items.length ? 2.8 : 2.1}
           strokeLinecap="round"
-          opacity={node.items.length ? 0.72 : 0.28}
+          opacity={node.items.length ? 0.54 : 0.24}
         />
       ))}
     </svg>
@@ -200,27 +211,33 @@ function MapNodeView({ node, mode, active, moving, onRemoveItem, onStartMove }: 
   const tone = getTone(mode);
   const percent = Math.min(100, Math.round((node.items.length / Math.max(node.max, 1)) * 100));
   const isComplete = node.items.length >= node.max;
-  const glow = 0.08 + percent / 170;
-
   return (
     <div
       data-lab-node-id={node.id}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => onStartMove(node.id, event)}
-      className="absolute z-30 flex h-[136px] w-[136px] -translate-x-1/2 -translate-y-1/2 cursor-move select-none flex-col items-center justify-center overflow-hidden rounded-full p-3 text-center shadow-2xl transition-[box-shadow,filter,transform] duration-300"
+      className="absolute z-30 flex -translate-x-1/2 -translate-y-1/2 cursor-move select-none flex-col items-center justify-center overflow-hidden rounded-full p-3 text-center shadow-2xl transition-[box-shadow,filter,transform] duration-300"
       style={{
         left: `${node.x}%`,
         top: `${node.y}%`,
+        width: MAP_NODE_SIZE,
+        height: MAP_NODE_SIZE,
         WebkitUserDrag: 'none',
-        background: `linear-gradient(135deg, ${tone.coreA}${Math.round(glow * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((glow + 0.06) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,0.92)`,
-        filter: `brightness(${1 + percent / 240})`,
-        animation: isComplete ? 'labNodeHeartbeat 1.35s ease-in-out infinite' : undefined,
+        background: `linear-gradient(135deg, ${tone.coreA}${Math.round((0.055 + percent / 520) * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((0.075 + percent / 430) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,0.98)`,
+        filter: `brightness(${1 + percent / 330}) saturate(${1 + percent / 420})`,
+        animation: isComplete ? 'labNodeHeartbeat 1.5s ease-in-out infinite' : undefined,
         boxShadow: active || moving
-          ? `0 0 0 2px ${tone.coreA}AA, 0 0 60px ${tone.coreB}55, 0 20px 70px rgba(0,0,0,0.48)`
-          : `0 0 0 1px rgba(255,255,255,0.06), 0 0 ${18 + percent * 0.46}px ${tone.coreB}25, 0 18px 54px rgba(0,0,0,0.44)`,
+          ? `0 0 0 2px ${tone.coreA}B8, 0 0 54px ${tone.coreB}4A, 0 20px 68px rgba(0,0,0,0.5)`
+          : `0 0 0 1px rgba(255,255,255,0.07), 0 0 ${14 + percent * 0.28}px ${tone.coreB}1F, 0 18px 52px rgba(0,0,0,0.44)`,
       }}
     >
-      <div className="pointer-events-none absolute inset-0 rounded-full opacity-70" style={{ background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.18), transparent 34%), radial-gradient(circle at 50% 55%, ${tone.coreA}${Math.round((0.04 + percent / 360) * 255).toString(16).padStart(2, '0')}, transparent 62%)` }} />
+      <div
+        className="pointer-events-none absolute inset-0 rounded-full"
+        style={{
+          opacity: 0.18 + percent / 190,
+          background: `linear-gradient(135deg, rgba(255,255,255,0.18), transparent 42%), linear-gradient(180deg, ${tone.coreA}16, ${tone.coreB}12)`,
+        }}
+      />
       <div className="relative z-10 flex flex-col items-center gap-2">
         <span className="text-sm font-black text-white">{node.label}</span>
         <span className="rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-black text-white/50">{node.items.length}/{node.max}</span>
@@ -278,8 +295,19 @@ export default function LabWorkspace({ mode }: { mode: LabMode }) {
 
   const handleStartIngredientDrag = (ingredient: LabIngredient, event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
     event.preventDefault();
-    syncDrag({ kind: 'ingredient', ingredient, x: event.clientX, y: event.clientY, overNodeId: null });
+    syncDrag({
+      kind: 'ingredient',
+      ingredient,
+      x: event.clientX,
+      y: event.clientY,
+      overNodeId: null,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
   };
 
   const handleStartNodeMove = (nodeId: string, event: PointerEvent<HTMLDivElement>) => {
@@ -312,8 +340,8 @@ export default function LabWorkspace({ mode }: { mode: LabMode }) {
         return;
       }
 
-      const radiusX = (NODE_RADIUS / current.boardRect.width) * 100;
-      const radiusY = (NODE_RADIUS / current.boardRect.height) * 100;
+      const radiusX = (NODE_MOVE_PADDING / current.boardRect.width) * 100;
+      const radiusY = (NODE_MOVE_PADDING / current.boardRect.height) * 100;
       const nextX = clamp(((event.clientX - current.boardRect.left) / current.boardRect.width) * 100, radiusX, 100 - radiusX);
       const nextY = clamp(((event.clientY - current.boardRect.top) / current.boardRect.height) * 100, radiusY, 100 - radiusY);
       setNodes((currentNodes) => currentNodes.map((node) => node.id === current.nodeId ? { ...node, x: nextX, y: nextY } : node));
@@ -363,9 +391,9 @@ export default function LabWorkspace({ mode }: { mode: LabMode }) {
       <style>{`
         @keyframes labNodeHeartbeat {
           0%, 100% { transform: translate(-50%, -50%) scale(1); }
-          42% { transform: translate(-50%, -50%) scale(1.026); }
-          62% { transform: translate(-50%, -50%) scale(0.996); }
-          78% { transform: translate(-50%, -50%) scale(1.012); }
+          42% { transform: translate(-50%, -50%) scale(1.014); }
+          62% { transform: translate(-50%, -50%) scale(0.998); }
+          78% { transform: translate(-50%, -50%) scale(1.007); }
         }
         [data-lab-node-id], [role='button'] {
           -webkit-user-drag: none;
@@ -388,8 +416,10 @@ export default function LabWorkspace({ mode }: { mode: LabMode }) {
         <div ref={boardRef} className="relative z-10 mx-auto h-[620px] w-full max-w-[1320px]">
           <ConnectorLines nodes={nodes} mode={mode} boardSize={boardSize} />
           <div
-            className="pointer-events-none absolute left-1/2 top-1/2 z-40 flex h-[164px] w-[164px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-2xl font-black text-white shadow-2xl"
+            className="pointer-events-none absolute left-1/2 top-1/2 z-40 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-2xl font-black text-white shadow-2xl"
             style={{
+              width: CENTER_NODE_SIZE,
+              height: CENTER_NODE_SIZE,
               background: `linear-gradient(135deg, ${tone.coreA}, ${tone.coreB})`,
               boxShadow: `0 0 0 8px rgba(255,255,255,0.045), 0 0 70px ${tone.coreA}38, 0 0 110px ${tone.coreB}24`,
             }}
@@ -423,10 +453,12 @@ export default function LabWorkspace({ mode }: { mode: LabMode }) {
 
       {dragging?.kind === 'ingredient' && (
         <div
-          className="pointer-events-none fixed z-[9999] -translate-x-1/2 -translate-y-1/2 rounded-full px-3 py-2 text-xs font-black shadow-2xl"
+          className="pointer-events-none fixed z-[9999] flex items-center justify-center rounded-full px-3 py-2 text-xs font-black shadow-2xl"
           style={{
-            left: dragging.x,
-            top: dragging.y,
+            left: dragging.x - dragging.offsetX,
+            top: dragging.y - dragging.offsetY,
+            width: dragging.width,
+            height: dragging.height,
             background: `linear-gradient(135deg, ${tone.coreA}33, ${tone.coreB}44), rgba(16,16,20,0.96)`,
             color: tone.text,
             boxShadow: `0 0 0 1px rgba(255,255,255,0.06), 0 18px 45px rgba(0,0,0,0.34)`,

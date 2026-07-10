@@ -396,6 +396,8 @@ export interface GenerateSongParams {
   kpopMode?: 0 | 1 | 2;
   instrumentTags?: string[];
   isNoLyrics?: boolean;
+  recentGeneratedTitles?: string[];
+  recentGeneratedLyricSnippets?: string[];
 }
 
 export interface SongResult {

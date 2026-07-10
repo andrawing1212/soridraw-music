@@ -13,7 +13,7 @@ export default function LabPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] px-3 md:px-6 pt-20 pb-10 text-[var(--text-primary)]">
-      <div className="mx-auto w-full max-w-[1520px] space-y-7">
+      <div className="mx-auto w-full max-w-[1720px] space-y-7">
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button

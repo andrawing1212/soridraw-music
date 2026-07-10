@@ -31,6 +31,7 @@ import { buildPromptEngineV1OutputInstruction } from "./promptEngineV1";
 import { buildPromptEngineV2OutputInstruction, isPromptEngineV2 } from "./promptEngineV2";
 import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
 import { generateSongV2 } from "./songEngineV2";
+import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -414,6 +415,8 @@ interface GenerateSongParams {
   generationIndex?: number;
   generationCount?: number;
   recentStoryMemory?: string[];
+  recentGeneratedTitles?: string[];
+  recentGeneratedLyricSnippets?: string[];
   generationEngineVersion?: GenerationEngineVersion;
 }
 
@@ -4199,6 +4202,14 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
         ...extractSoridrawCustomKeywordValues(rawPointSounds, 'sound'),
       ]).join(' / '),
       geminiApiKey: String((first as any).geminiApiKey || '').trim(),
+      recentGeneratedTitles: (((first as any).recentGeneratedTitles ?? []) as unknown[])
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 10),
+      recentGeneratedLyricSnippets: (((first as any).recentGeneratedLyricSnippets ?? []) as unknown[])
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 10),
     };
   }
 
@@ -6108,13 +6119,14 @@ const TECHNICAL_DIRECTION_LYRICS_GUARD = `
 TECHNICAL DIRECTION GUARD (MANDATORY):
 - Treat genre, style, mood, sound, instrument, vocal, tempo, hook, transition, and arrangement words as production instructions only, unless the user explicitly states they are the story topic.
 - LYRIC CONTENT SOURCE LOCK: the actual lyric event, objects, relationship, setting, and conflict must come from the direct theme input, selected Theme, active Situation, lyric draft, or user director note.
-- MOOD INTERPRETATION LOCK: mood choices are not lyric content sources. They must not invent new objects, events, relationships, settings, conflicts, titles, hooks, or repeated lyric phrases. They may reinterpret the already-existing Theme/Situation/direct-input content through emotional temperature, metaphor style, phrasing, pacing, vocal attitude, and scene texture.
+- MOOD INTERPRETATION LOCK: mood choices are not lyric content sources. They must not invent new objects, events, relationships, settings, conflicts, titles, hooks, or repeated lyric phrases. They may reinterpret the already-existing Theme/Situation/direct-input content only through speech distance, sentence rhythm, action pressure, silence, pacing, vocal attitude, and scene density. Do not use literal mood-surface words such as 온도, 온기, 공기, 계절, 새벽, 오후, 창가, 모퉁이, 색, 푸른, 회색, 따뜻한, 차가운.
 - If a direct theme/topic sentence exists, it outranks automatic context. Do not import any prewritten story template unless the direct input actually contains that story.
-- Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, beat, drop, glitch, neon pulse, melody line, sound layer, R&B groove, anime rock, synthwave, indie-pop production, genre labels.
-- Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 비트, 드롭, 글리치, 네온, 멜로디라인, 사운드레이어, 장르명.
-- These terms should shape performance, phrasing, arrangement, and production, but must NOT become repeated lyric phrases, metaphors, title concepts, or the central story.
+- Do NOT turn these into literal title or lyric content: offbeat, syncopated, half-beat, slow tempo, fast tempo, BPM, hook, addictive chorus, vocal tone, female vocal, male vocal, unique voice, high-note restraint, avoid belting, guitar, synth, bass, beat, drop, glitch, neon pulse, melody line, sound layer, R&B groove, anime rock, synthwave, indie-pop production, genre labels, instrument names, traditional-instrument names.
+- Korean equivalents are also production instructions only: 엇박자, 느린템포, 빠른템포, 고음자제, 고음방지, 중독성있는 후렴, 후렴구, 여자보컬, 남자보컬, 여자보이스, 남자보이스, 독특한 목소리, 보컬톤, 기타, 신스, 베이스, 비트, 드롭, 글리치, 네온, 멜로디라인, 사운드레이어, 장르명, 해금, 가야금, 대금, 장구, 꽹과리, 판소리, 민요, 카혼, 피아노, 드럼, 밴조, 베이스.
+- These terms should shape performance, phrasing, arrangement, and production, but must NOT become repeated lyric phrases, metaphors, title concepts, objects heard inside the story, or the central story.
+- INSTRUMENT LEAK LOCK: if a genre/sound/style contains instruments such as 해금, 가야금, 카혼, 밴조, 피아노, 기타, 신스, 베이스, 드럼, use them only for arrangement/performance. Do not write lyric body lines like “해금 소리”, “가야금 줄”, “기타 소리”, or “베이스가 울려” unless the user explicitly wrote the instrument as a story object.
 - MOOD ROLE LOCK: selected mood labels are NOT story sources. They must not create lyric objects, events, relationships, places, conflicts, titles, hooks, or repeated lyric phrases.
-- Moods are indirect lyric-expression modifiers and production color. They may color how the existing Theme/Situation/direct-input content feels: emotional temperature, vocal pressure, phrasing, pacing, density, brightness/darkness, metaphor style, scene texture, and how strongly the existing story is performed.
+- Moods are indirect lyric-expression modifiers and production color. They may only adjust: who avoids what, how close/far people feel, how fast the action moves, how much pressure sits between lines, how dry/soft the speech is, and how dense/sparse the scene feels. They must not become literal objects, weather, time, color, temperature, air, kitchen steam, windows, corners, or decorative props.
 - If a mood suggests a behavior such as hesitation, panic, comedy, loneliness, magic, darkness, or cuteness, apply it as the way the existing Theme story is expressed. Do not invent a new scene, character, object, relationship, place, conflict, title, or hook from the mood itself.
 - The lyric's concrete content must come from Theme, direct input, Situation, lyric draft, or user director note. If those are weak, infer a fresh concrete scene from the Theme first, then let mood reinterpret that scene's tone and phrasing without changing the story source.
 - Do not import genre/style/sound imagery into lyrics just because it was selected. For Synthwave/Anime Rock, do not automatically write neon, glitch, synth, anime, melody line, or guitar. If the Theme is 설렘, infer a fresh concrete moment from the selected theme instead of using a prewritten example scene.
@@ -6144,10 +6156,11 @@ function buildSelectedKeywordLiteralLyricGuard(params: GenerateSongParams): stri
   const themeTerms = collect([...(params.themes ?? []), selectedThemeText(params)].join(' ')).slice(0, 10);
   if (!protectedTerms.length && !themeTerms.length) return '';
   return `SELECTED KEYWORD LITERAL-LEAK GUARD (MANDATORY):
-- Do not copy selected Genre/Style/Sound/Mood words literally into lyric body lines, titles, or repeated hooks. Translate them into behavior, metaphor temperature, sentence rhythm, sensory detail, or production feel instead.
+- Do not copy selected Genre/Style/Sound/Mood words literally into lyric body lines, titles, or repeated hooks. Translate them into behavior, speech distance, sentence rhythm, action pressure, silence, pacing, or production feel instead. Do not translate mood into obvious words such as warmth, cold air, season names, exact time, color words, window/corner/room props, or atmosphere nouns.
 - [MOOD WORD USE BAN / 분위기 단어 직접 사용 금지] 분위기 키워드는 가사 소재가 아니라 표현 필터입니다. 선택된 분위기 단어 자체를 가사 본문, 제목, 반복 훅에 직접 쓰지 마십시오.
-- 분위기는 새 장소, 사건, 관계, 갈등, 제목, 훅을 만들지 말고 기존 주제/직접입력/상황의 감정 온도, 주변 공기, 촉감, 행동, 호흡, 문장 리듬만 조절하십시오.
-- 선택 분위기는 “말하지 말고 보여주기” 방식으로만 반영하십시오. 예: 공허한 → 공허하다고 쓰지 말고 빈 방, 초침 소리, 식은 컵 같은 감각 묘사로 표현합니다.
+- 분위기는 새 장소, 사건, 관계, 갈등, 제목, 훅을 만들지 말고 기존 주제/직접입력/상황의 말투, 거리감, 행동 속도, 침묵의 길이, 문장 리듬, 압력만 조절하십시오. 감정 온도, 온기, 공기, 촉감, 계절명, 시간명, 창가/모퉁이/방 같은 표면 단어로 번역하지 마십시오.
+- 선택 분위기는 “말하지 말고 보여주기” 방식으로만 반영하되, 새로운 소품을 억지로 만들지 마십시오. 먼저 사용자의 주제/상황 안에 이미 있는 인물, 행동, 말하지 못한 문장만 사용하십시오.
+- 선택된 악기/사운드/장르명은 가사 본문에 등장하는 물건이나 비유가 아닙니다. 해금/가야금/카혼/기타/신스/베이스/드럼 같은 단어를 가사 본문에 넣지 마십시오. 단, 사용자가 직접 이야기 소재로 쓴 경우만 예외입니다.
 - This ban applies to lyric body lines. English acoustic/performance cues inside section tags such as [Verse : tense delivery] may stay rich and expressive.
 - Forbidden literal lyric words from Genre/Style/Sound/Mood unless the user directly typed them as story text: ${protectedTerms.length ? protectedTerms.join(', ') : 'none'}.
 - Theme words are story seeds, not mandatory lyric words. Use them as objects/relationships/places only when the story truly needs them; otherwise imply them through actions and details: ${themeTerms.length ? themeTerms.join(', ') : 'none'}.
@@ -11888,17 +11901,23 @@ function buildPointSoundSectionInstruction(params: GenerateSongParams): string {
     return `POINT SOUND SECTION CUES (CUSTOM MODE):
 - Available point sound cues selected in Sound Point Mode: ${cueList}.
 - These are sound/stage cues only. Do NOT turn them into lyric words, story topics, metaphors, or repeated hook phrases.
-- If one of these cues appears in the custom section tags, place it inside that section tag after the colon, not as a sung lyric.
-- Format example: [Intro: door creak, tense build-up] or [Break: glitchy stutter effect].
+- If one of these cues is used, place it as an English standalone square-bracket cue directly under the relevant structural section tag, not as a sung lyric and not as a Korean parenthetical line.
+- Format example: [Intro]
+[door creak]
+or [Break]
+[glitchy stutter effect].
 - Do not add extra point sound cues to sections where the user did not place them.`;
   }
 
   return `POINT SOUND SECTION CUES (AUTO MODE):
 - Selected point sound cues: ${cueList}.
 - These are sound/stage/texture cues only. Do NOT turn them into lyric words, story topics, metaphors, or repeated hook phrases.
-- Place them inside the section tag after the colon in only 1-2 sections total, never as separate bracket lines directly under the section.
-- These cues are NOT structural sections and must never replace or consume [Verse], [Pre-Chorus], [Chorus], [Bridge], or [Outro].
-- Format example: [Verse: tense whisper, clock tick] or [Chorus: explosive hook, group shout].
+- If they are used, place them as English standalone square-bracket cue lines directly under the relevant structural section tag in only 1-2 sections total. Do not write them as Korean parenthetical lyric lines.
+- These cue lines are NOT structural sections and must never replace or consume [Verse], [Pre-Chorus], [Chorus], [Bridge], or [Outro].
+- Format example: [Verse]
+[clock tick]
+or [Chorus]
+[group shout].
 - Instrumental sections may use these cues inside the section tag, but never add lyric lines inside an instrumental-only section.
 - Never invent unselected Foley/SFX such as doors, clocks, sirens, footsteps, typing, or radio noise.`;
 }
@@ -11955,7 +11974,7 @@ function buildSectionCueMusicalVarietyInstruction(params: GenerateSongParams, ex
 - Do not repeat the same generic cues across sections such as emotional build, controlled emotional turn, high-energy hook, or clear hook unless they are musically justified. Make them more specific to the song.
 - Good cue ingredients: vocal attitude, rhythmic feel, instrument state, production texture, tension/release, silence/drop, hook function.
 - Refrain must mean a short, catchy repeated phrase with the same lyric and melody returning. If Refrain is used anywhere in the song structure, use it at least twice so it functions as a real returning refrain. Interlude must be no-vocal instrumental transition.
-- Do not add new sections just to use these cues. Do not put cue lines directly under a section tag; put them inside the tag after the colon.
+- Do not add new sections just to use these cues. Keep normal performance/energy cues inside the section tag after the colon, but real sound effects or environmental SFX must be standalone square-bracket cue lines directly under the section tag.
 ${structureLine}
 - Example flavor for this generation family: ${flavorExamples}`.trim();
 }
@@ -24387,9 +24406,9 @@ function normalizeLyricBracketOnlyLine(line: string, params: GenerateSongParams)
     return [`[${section}]`];
   }
 
-  if (isSungLyricAdlib(inside) && /[가-힣]/.test(inside)) return [`(${inside})`];
   if (/[가-힣]/.test(inside) && isKoreanSoundOrStageCue(inside)) return [`[${translateKoreanSoundCueToEnglish(inside)}]`];
   const soundCueEnglish = findSoundCueEnglish(inside);
+  if (isSungLyricAdlib(inside) && /[가-힣]/.test(inside)) return [`(${inside})`];
   if (soundCueEnglish) return [`[${soundCueEnglish}]`];
 
   // Unknown English bracket cues are preserved as non-structural cue lines.
@@ -24474,15 +24493,15 @@ function formatLyricsParenthesesAndBrackets(lyrics: string, params: GenerateSong
         normalizedLines.push(`[${inside}]`);
         return;
       }
-      if (isSungLyricAdlib(inside)) {
-        normalizedLines.push(`(${inside})`);
-        return;
-      }
       if (/[가-힣]/.test(inside) && isKoreanSoundOrStageCue(inside)) {
         normalizedLines.push(`[${translateKoreanSoundCueToEnglish(inside)}]`);
         return;
       }
       const soundCueEnglish = findSoundCueEnglish(inside);
+      if (isSungLyricAdlib(inside)) {
+        normalizedLines.push(`(${inside})`);
+        return;
+      }
       if (soundCueEnglish) {
         normalizedLines.push(`[${soundCueEnglish}]`);
         return;
@@ -28178,6 +28197,8 @@ export async function generateSong(
       : hasKoreanLanguage
         ? `Return the title as: 'Korean Title'. Do not create an English or other-language title.`
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
+  const recentTitleAntiRepeatInstruction = buildRecentTitleAntiRepeatInstruction(params.recentGeneratedTitles ?? []);
+  const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params.recentGeneratedLyricSnippets ?? []);
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
   const sectionCueMusicalVarietyInstruction = buildSectionCueMusicalVarietyInstruction(params, exactStructureText);
@@ -28218,6 +28239,7 @@ ${selectedNativeScriptInstruction}
 - Environmental SFX, vocal effects, and sound/texture descriptions must be English standalone square-bracket cues placed directly under the relevant section tag. Good: [Outro]
 [distant waves fade out]. Good: [Intro]
 [humming layer]. Bad: (서서히 멀어지는 파도 소리), (빗소리), (바람 소리). Korean parenthetical lines are allowed only when they are actual sung inner thoughts or spoken ad-libs, not production cues.
+- Do not invent pseudo-sound phrases such as (어스름한 소리), (우울한 소리), or (분위기 소리). A valid SFX cue must be a real audible event.
 - Do not start lyrics with a naked sound-palette bracket such as [soft synth, bass] before any section. First write a real section tag, then place any sound/vocal-effect cue under it as a standalone bracket line.`;
 
   const lyricsResponseSchema = params.isNoLyrics
@@ -28367,7 +28389,7 @@ ${exactStructureText}
 - If the fixed structure includes Refrain, keep every Refrain occurrence and make it feel like a returning short phrase. Do not reduce Refrain to a one-time section.
 - Each sung cue must combine at least two current-song anchors such as genre movement, mood color, selected sound, vocal attitude, story image, or arrangement motion.
 - Standalone texture/effect bracket cue lines such as [breath sound], [youth choir backing], [soft choir ahh], or [Instrumental intro, synth] are NOT structural sections and must never replace Verse, Pre-Chorus, Chorus, Bridge, Refrain, Rap Section, or Outro.
-- Place sound/texture cues inside the parent section tag after the colon, not as separate bracket lines directly under it.
+- Keep performance/emotion cues inside the parent section tag after the colon. Real sound effects, vocal effects, ambience, and texture-event cues must be standalone square-bracket cue lines directly under the relevant section tag, not Korean parenthetical lyric lines.
 - Do not merge [Chorus] into [Outro]. Good: [Chorus] as its own section, then [Outro] as its own section.
 - Instrumental or Interlude sections may carry short sound cues, but do not turn them into sung lyric sections. Interlude must stay lyric-free and vocal-free. In lyric songs, do not automatically leave Drop empty; when Drop serves the song as a hook/release, write concise lyric lines and make the Drop cue match a vocal/hook drop.
 - Break and Stop are standalone transition tags with no lyric lines, but they must still include a short cue after the colon, e.g. [Break : current-song transition cue].
@@ -28410,6 +28432,10 @@ CREATIVE VARIATION SEED (MANDATORY, DO NOT OUTPUT AS A SECTION):
 - When Situation text is long, vague, or repeated, compress it into a fresh dramatic angle rather than copying the user's wording. Same Situation can become ghost regret focus, reaper fatigue focus, negotiation focus, object/detail focus, role reversal, or unresolved comedy depending on this generation.
 
 ${buildRecentStoryMemoryInstruction(params)}
+
+${recentTitleAntiRepeatInstruction}
+
+${recentLyricAntiRepeatInstruction}
 
 SITUATION NUANCE VARIATION RULE (MANDATORY):
 - Before writing lyrics, reinterpret the Situation through the current Attempt ID.
@@ -28807,7 +28833,7 @@ ${multiVocalLyricTagAnchorInstruction}
 - Solo songs: do NOT repeat the vocalist identity in section tags. Remove labels such as [Main Vocal], [Lead Vocal], [Airy Male Vocal], [Female Vocal], [Male Vocal], [Whisper Vocal] from every section when the prompt already defines the vocal identity. Use only emotion/performance cues like [Verse: whispery numb], [Chorus: clear hook], [Bridge: hollow]. Keep a rap label only for actual Rap Section tags.
 - Solo section tags must include short performance/emotion tags, e.g. [Verse: low, intimate], [Chorus: clear hook, aching].
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
-- Use parentheses only for short vocal gestures/ad-libs such as (sigh), (soft breath), (short laugh), (whisper), or brief sung English ad-libs. Environmental SFX, instrument textures, ambience, noise, and point sounds must go inside the [Section: ...] tag instead of parentheses.
+- Use parentheses only for short vocal gestures/ad-libs such as (sigh), (soft breath), (short laugh), (whisper), or brief sung English ad-libs. Environmental SFX, instrument textures, ambience, noise, and point sounds must be standalone square-bracket cue lines directly under the relevant section tag, not parentheses. Never write pseudo-SFX like (어스름한 소리).
 - Situation target A/B are story roles, NOT automatic duet singers. The actual singer count and gender MUST follow the Vocal menu.
 - Solo vocal + two targets: write one singer narrating/addressing the other; do NOT create alternating role vocal tags.
 - Duo/group vocal + two targets: use composite Suno tags for sung sections with stable Vocal A/B/C anchors. UI story roles such as 저승사자/Ghost/Boss/Mother are story context only; final lyric tags must use the resolved vocal anchors such as [Verse: Vocal A Male Main, dry] or [Chorus: Vocal B Female Sub, pleading hook]. Do NOT output Korean role labels such as [저승사자] or [귀신], and do NOT fall back to generic [Main Vocal] / [Airy Vocal] tags in character-led lyrics.

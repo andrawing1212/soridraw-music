@@ -9366,6 +9366,39 @@ const saveRecentSong = async (newSong: any) => {
         .map(compactGeneratedStoryMemory)
         .filter(Boolean);
 
+      const compactGeneratedTitleMemory = (song: SongResult | null | undefined) => {
+        if (!song) return '';
+        return formatTitleWithoutGenre(song)
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80);
+      };
+
+      const recentGeneratedTitleBase = history
+        .slice(0, 10)
+        .map(compactGeneratedTitleMemory)
+        .filter(Boolean);
+
+      const compactGeneratedLyricMemory = (song: SongResult | null | undefined) => {
+        if (!song?.lyrics) return '';
+        const lyricText = normalizeLyricsForDisplay(song.lyrics.korean || song.lyrics.english || '')
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .filter((line) => !/^\[[^\]]+\]$/.test(line))
+          .filter((line) => !/^\([^)]{0,80}\)$/.test(line))
+          .slice(0, 14)
+          .join(' / ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return lyricText.slice(0, 360);
+      };
+
+      const recentGeneratedLyricBase = history
+        .slice(0, 10)
+        .map(compactGeneratedLyricMemory)
+        .filter(Boolean);
+
       const payload = {
         genre: customGenreInput || finalGenres[0] || selectedGenres[0] || subGenre[0] || null,
         subGenre: finalGenres,
@@ -9427,6 +9460,12 @@ const saveRecentSong = async (newSong: any) => {
         const inBatchStoryMemory = generatedResults
           .map(compactGeneratedStoryMemory)
           .filter(Boolean);
+        const inBatchTitleMemory = generatedResults
+          .map(compactGeneratedTitleMemory)
+          .filter(Boolean);
+        const inBatchLyricMemory = generatedResults
+          .map(compactGeneratedLyricMemory)
+          .filter(Boolean);
 
         const song = await generateSong({
           ...payload,
@@ -9436,6 +9475,14 @@ const saveRecentSong = async (newSong: any) => {
             ...inBatchStoryMemory,
             ...recentStoryMemoryBase,
           ].slice(0, 8),
+          recentGeneratedTitles: [
+            ...inBatchTitleMemory,
+            ...recentGeneratedTitleBase,
+          ].slice(0, 10),
+          recentGeneratedLyricSnippets: [
+            ...inBatchLyricMemory,
+            ...recentGeneratedLyricBase,
+          ].slice(0, 10),
         } as any);
 
         if (abortControllerRef.current?.signal.aborted) return;

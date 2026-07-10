@@ -32,6 +32,8 @@ import { buildPromptEngineV2OutputInstruction, isPromptEngineV2 } from "./prompt
 import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
 import { generateSongV2 } from "./songEngineV2";
 import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
+import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
+import { buildSongCreativeBriefInstruction } from "./songCreativeBrief";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -28199,6 +28201,8 @@ export async function generateSong(
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
   const recentTitleAntiRepeatInstruction = buildRecentTitleAntiRepeatInstruction(params.recentGeneratedTitles ?? []);
   const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params.recentGeneratedLyricSnippets ?? []);
+  const songCreativeBriefInstruction = buildSongCreativeBriefInstruction(params);
+  const lyricStoryBriefInstruction = buildLyricStoryBriefInstruction(params);
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
   const sectionCueMusicalVarietyInstruction = buildSectionCueMusicalVarietyInstruction(params, exactStructureText);
@@ -28433,9 +28437,13 @@ CREATIVE VARIATION SEED (MANDATORY, DO NOT OUTPUT AS A SECTION):
 
 ${buildRecentStoryMemoryInstruction(params)}
 
+${songCreativeBriefInstruction}
+
 ${recentTitleAntiRepeatInstruction}
 
 ${recentLyricAntiRepeatInstruction}
+
+${lyricStoryBriefInstruction}
 
 SITUATION NUANCE VARIATION RULE (MANDATORY):
 - Before writing lyrics, reinterpret the Situation through the current Attempt ID.

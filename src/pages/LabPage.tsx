@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FlaskConical, Power, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, FlaskConical, Power } from 'lucide-react';
 import LabStartCard from '../components/lab/LabStartCard';
+import LabWorkspace from '../components/lab/LabWorkspace';
 
 type LabView = 'cards' | 'workspace';
 
@@ -53,41 +54,26 @@ export default function LabPage() {
             </div>
           </motion.section>
         ) : (
-          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl border border-[#BBA8CA]/18 bg-[var(--card-bg)]/80 p-5 shadow-2xl backdrop-blur-xl md:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-3xl bg-[var(--card-bg)]/80 p-5 shadow-2xl backdrop-blur-xl md:p-6">
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#BBA8CA]/18 bg-[#877198]/12 px-3 py-1.5 text-xs font-black text-[#BBA8CA]">
-                  <SlidersHorizontal className="h-3.5 w-3.5" /> 1번 실험실
+                <div className="inline-flex items-center gap-2 rounded-full bg-[#877198]/12 px-3 py-1.5 text-xs font-black text-[#BBA8CA]">
+                  <FlaskConical className="h-3.5 w-3.5" /> 1번 실험실
                 </div>
-                <h2 className="mt-4 text-2xl font-black">조립 작업대 준비중</h2>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--text-secondary)]">
-                  여기에는 다음 단계에서 프롬프트 줄 추가/삭제, 이름 변경, 재료 배치, 가사 섹션 순서 조립 도구가 들어갑니다.
-                  이번 수정에서는 기존 생성 엔진에 연결하지 않고, 실험실을 별도 파일과 별도 화면으로 분리하는 입구만 만들었습니다.
+                <h2 className="mt-4 text-2xl font-black">FREEDOM 마인드맵 작업대</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[var(--text-secondary)]">
+                  프롬프트와 가사를 두 개의 지도로 나누고, 재료를 끌어다 놓으며 구조를 설계하는 첫 실험 화면입니다.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setView('cards')}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-black text-[var(--text-secondary)] transition-all hover:bg-white/[0.08] hover:text-white"
+                className="rounded-2xl bg-white/[0.04] px-4 py-2.5 text-sm font-black text-[var(--text-secondary)] transition-all hover:bg-white/[0.08] hover:text-white"
               >
                 카드 목록
               </button>
             </div>
-
-            <div className="mt-6 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm font-black">프롬프트 그릇</p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">5단/6단 구조, 라벨 이름 변경 예정</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm font-black">재료 배치</p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">장르/사운드/분위기/직접입력 위치 배치 예정</p>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <p className="text-sm font-black">가사 섹션</p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">Verse/Chorus/Bridge 순서 조립 예정</p>
-              </div>
-            </div>
+            <LabWorkspace />
           </motion.section>
         )}
       </div>

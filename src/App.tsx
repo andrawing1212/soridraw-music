@@ -3835,6 +3835,7 @@ function App() {
   const [recentSongEditDraft, setRecentSongEditDraft] = useState<RecentSongEditDraft | null>(null);
   const [recentSongEditFocus, setRecentSongEditFocus] = useState<RecentSongEditFocus>('title');
   const [isSavingRecentSongEdit, setIsSavingRecentSongEdit] = useState(false);
+  const [isStudioFavoriteSaving, setIsStudioFavoriteSaving] = useState(false);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
   // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change
   const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
@@ -10674,33 +10675,40 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const handleToggleCurrentStudioFavorite = async () => {
+    if (isStudioFavoriteSaving) return;
+
     const snapshot = getStudioFavoriteSaveSnapshot();
     if (!snapshot) return;
 
-    const currentIndex = historyIndexRef.current;
-    if (recentSongEditDraft && currentIndex >= 0) {
-      const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
-      setResult(snapshot);
-      setHistory(nextHistory);
-      setHistoryIndex(currentIndex);
-      resultRef.current = snapshot;
-      historyRef.current = nextHistory;
-      historyIndexRef.current = currentIndex;
-      preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
-      recentSongsReadyToCacheRef.current = true;
-      setIsRecentSongEditOpen(false);
-      setRecentSongInlineEditMode(null);
-      setRecentSongEditDraft(null);
+    setIsStudioFavoriteSaving(true);
+    try {
+      const currentIndex = historyIndexRef.current;
+      if (recentSongEditDraft && currentIndex >= 0) {
+        const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
+        setResult(snapshot);
+        setHistory(nextHistory);
+        setHistoryIndex(currentIndex);
+        resultRef.current = snapshot;
+        historyRef.current = nextHistory;
+        historyIndexRef.current = currentIndex;
+        preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
+        recentSongsReadyToCacheRef.current = true;
+        setIsRecentSongEditOpen(false);
+        setRecentSongInlineEditMode(null);
+        setRecentSongEditDraft(null);
 
-      if (user) {
-        const ref = doc(db, "user_recent_songs", user.uid);
-        setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {
-          console.error('Failed to persist studio edit before favorite save:', error);
-        });
+        if (user) {
+          const ref = doc(db, "user_recent_songs", user.uid);
+          setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {
+            console.error('Failed to persist studio edit before favorite save:', error);
+          });
+        }
       }
-    }
 
-    await toggleFavorite(snapshot);
+      await toggleFavorite(snapshot);
+    } finally {
+      setIsStudioFavoriteSaving(false);
+    }
   };
 
   const isRecentSongSectionEditing = (focus: RecentSongEditFocus) => recentSongInlineEditMode === focus && !!recentSongEditDraft;
@@ -13466,16 +13474,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={handleToggleCurrentStudioFavorite}
-                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0"
+                      disabled={isStudioFavoriteSaving}
+                      aria-label={isStudioFavoriteSaving ? '뮤직노트 저장 처리 중' : '뮤직노트 저장'}
+                      className={cn(
+                        "p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0",
+                        isStudioFavoriteSaving && "cursor-wait opacity-90"
+                      )}
                     >
-                      <Heart 
-                        className={cn(
-                          "w-6 h-6 transition-all",
-                          isSongFavorited(result)
-                            ? "fill-[#cd8c31] text-[#cd8c31]"
-                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
-                        )} 
-                      />
+                      {isStudioFavoriteSaving ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-[#cd8c31]" />
+                      ) : (
+                        <Heart
+                          className={cn(
+                            "w-6 h-6 transition-all",
+                            isSongFavorited(result)
+                              ? "fill-[#cd8c31] text-[#cd8c31]"
+                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                          )}
+                        />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -13654,16 +13671,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={handleToggleCurrentStudioFavorite}
-                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart"
+                      disabled={isStudioFavoriteSaving}
+                      aria-label={isStudioFavoriteSaving ? '뮤직노트 저장 처리 중' : '뮤직노트 저장'}
+                      className={cn(
+                        "p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart",
+                        isStudioFavoriteSaving && "cursor-wait opacity-90"
+                      )}
                     >
-                      <Heart 
-                        className={cn(
-                          "w-5 h-5 transition-all",
-                          isSongFavorited(result)
-                            ? "fill-[#cd8c31] text-[#cd8c31]"
-                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
-                        )} 
-                      />
+                      {isStudioFavoriteSaving ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-[#cd8c31]" />
+                      ) : (
+                        <Heart
+                          className={cn(
+                            "w-5 h-5 transition-all",
+                            isSongFavorited(result)
+                              ? "fill-[#cd8c31] text-[#cd8c31]"
+                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                          )}
+                        />
+                      )}
                     </button>
                   </div>
                 </div>

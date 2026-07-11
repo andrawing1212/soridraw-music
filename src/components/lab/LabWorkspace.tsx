@@ -1615,6 +1615,11 @@ function StyleCanvasWorkspace() {
         const materialSize = material ? getMaterialNodeSize(material) : STYLE_MATERIAL_NODE_SIZE;
         const nextX = clamp(pointer.x - current.offsetX, materialSize / 2, STYLE_CANVAS_WIDTH - materialSize / 2);
         const nextY = clamp(pointer.y - current.offsetY, materialSize / 2, STYLE_CANVAS_HEIGHT - materialSize / 2);
+        if (material?.kind === 'styleDetail' && !material.connected) {
+          // 작은 원은 터치 클릭 중 미세한 손가락 흔들림만으로 드래그/분리 처리하지 않는다.
+          // 연결 전 작은 원은 클릭으로만 부모에 붙이고, 연결 후에만 직접 움직일 수 있게 해서 옆으로 튀는 현상을 막는다.
+          return;
+        }
         if (material && !material.connected) {
           const parentTarget = getParentDropTarget(material);
           const startDistance = parentTarget ? getCanvasDistance(material, parentTarget) : 0;
@@ -1715,7 +1720,8 @@ function StyleCanvasWorkspace() {
           } else if (!clickedMaterial.connected) {
             connectMaterialToParent(clickedMaterial);
           } else if (clickedMaterial.kind === 'styleDetail') {
-            disconnectMaterialFromParent(clickedMaterial);
+            // 연결된 작은 원은 클릭만으로 해제하지 않는다.
+            // 클릭 해제 때문에 원래 자리로 스냅되는 현상을 막고, 위치 이동은 드래그로만 처리한다.
           } else if (clickedMaterial.kind === 'middle') {
             if (clickedMaterial.detached) {
               // 분리된 중간 원만 클릭으로 작은 원을 펼치거나 접는다.

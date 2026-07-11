@@ -94,12 +94,13 @@
 }
 
 
-/* 모바일 앱 화면 확대/축소 고정: 한 손가락 스크롤은 유지하고 pinch zoom 흔들림만 줄입니다. */
+/* 모바일 앱 화면 확대/축소 고정: pinch zoom은 막되, 아래로 당겨 새로고침은 유지합니다. */
 html,
 body,
 #root {
   touch-action: pan-x pan-y;
-  overscroll-behavior: none;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }

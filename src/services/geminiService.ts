@@ -420,6 +420,7 @@ interface GenerateSongParams {
   recentGeneratedTitles?: string[];
   recentGeneratedLyricSnippets?: string[];
   recentMoodThemeMemory?: string[];
+  lyricClicheGuard?: any;
   generationEngineVersion?: GenerationEngineVersion;
 }
 

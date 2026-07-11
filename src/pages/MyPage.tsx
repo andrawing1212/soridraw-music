@@ -17,6 +17,7 @@ import {
   LogOut,
   Music,
   Palette,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   UserCircle2,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { AppUserInfo, UserRole } from '../types';
+import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
 
 type FeatureState = boolean | 'partial';
@@ -209,6 +211,19 @@ const getRemainingCredits = (uid?: string | null) => {
   }
 };
 
+type PersonalClicheDraft = {
+  hardBanText: string;
+  softBanText: string;
+};
+
+const EMPTY_PERSONAL_CLICHE_DRAFT: PersonalClicheDraft = {
+  hardBanText: '',
+  softBanText: '',
+};
+
+const parsePersonalClicheTerms = (value: string) => normalizeClicheTermList(value, 80);
+const formatPersonalClicheTerms = (value: unknown) => normalizeClicheTermList(value, 80).join('\n');
+
 function StatusPill({ active, label }: { active: boolean; label: string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black border ${active ? 'bg-emerald-500/10 text-emerald-300 border-emerald-400/20' : 'bg-rose-500/10 text-rose-300 border-rose-400/20'}`}>
@@ -239,6 +254,9 @@ export default function MyPage() {
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [isSavingNickname, setIsSavingNickname] = useState(false);
   const [nicknameMessage, setNicknameMessage] = useState<string | null>(null);
+  const [personalClicheDraft, setPersonalClicheDraft] = useState<PersonalClicheDraft>(EMPTY_PERSONAL_CLICHE_DRAFT);
+  const [isSavingPersonalCliche, setIsSavingPersonalCliche] = useState(false);
+  const [personalClicheMessage, setPersonalClicheMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -315,6 +333,19 @@ export default function MyPage() {
     setNicknameDraft(displayNickname === 'SORIDRAW User' ? '' : displayNickname);
   }, [user?.uid, displayNickname]);
 
+  useEffect(() => {
+    if (!user) {
+      setPersonalClicheDraft(EMPTY_PERSONAL_CLICHE_DRAFT);
+      setPersonalClicheMessage(null);
+      return;
+    }
+    const guard = (profile as any)?.lyricClicheGuard || {};
+    setPersonalClicheDraft({
+      hardBanText: formatPersonalClicheTerms(guard.hardBanTerms),
+      softBanText: formatPersonalClicheTerms(guard.softBanTerms),
+    });
+  }, [user?.uid, profile?.lyricClicheGuard]);
+
   const handleSaveNickname = useCallback(async () => {
     if (!user?.uid || isSavingNickname) return;
     const nextNickname = nicknameDraft.trim().replace(/\s+/g, ' ');
@@ -345,6 +376,35 @@ export default function MyPage() {
       setIsSavingNickname(false);
     }
   }, [isSavingNickname, nicknameDraft, user]);
+
+  const handleSavePersonalCliche = useCallback(async () => {
+    if (!user?.uid || isSavingPersonalCliche) return;
+    const hardBanTerms = parsePersonalClicheTerms(personalClicheDraft.hardBanText);
+    const softBanTerms = parsePersonalClicheTerms(personalClicheDraft.softBanText);
+
+    setIsSavingPersonalCliche(true);
+    setPersonalClicheMessage(null);
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        lyricClicheGuard: {
+          hardBanTerms,
+          softBanTerms,
+          updatedAt: Date.now(),
+        },
+        updatedAt: Date.now(),
+      });
+      setPersonalClicheDraft({
+        hardBanText: hardBanTerms.join('\n'),
+        softBanText: softBanTerms.join('\n'),
+      });
+      setPersonalClicheMessage('개인 클리셰 설정이 저장되었습니다.');
+    } catch (error) {
+      console.error('personal cliche guard update failed:', error);
+      setPersonalClicheMessage('개인 클리셰 설정 저장에 실패했습니다.');
+    } finally {
+      setIsSavingPersonalCliche(false);
+    }
+  }, [isSavingPersonalCliche, personalClicheDraft.hardBanText, personalClicheDraft.softBanText, user?.uid]);
 
   const handleLogout = useCallback(async () => {
     await signOut(auth);
@@ -531,6 +591,56 @@ export default function MyPage() {
                     <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">추후 연결 예정</p>
                   </div>
                   <Lock className="w-4 h-4 text-[var(--text-secondary)]" />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-2xl border border-[#BBA8CA]/20 bg-[#BBA8CA]/10 p-2 text-[#BBA8CA]">
+                    <ShieldAlert className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-black">개인 클리셰 관리</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+                      나만 피하고 싶은 단어를 한 줄에 하나씩 입력합니다. 관리자 전체 설정 위에 추가 적용됩니다.
+                    </p>
+                    <div className="mt-4 grid gap-3">
+                      <label className="block">
+                        <span className="text-[11px] font-black text-[#D8A4A2]">HardBan · 나만 강하게 피하기</span>
+                        <textarea
+                          value={personalClicheDraft.hardBanText}
+                          onChange={(event) => setPersonalClicheDraft((prev) => ({ ...prev, hardBanText: event.target.value }))}
+                          disabled={isSavingPersonalCliche}
+                          placeholder={"너라는 우주\n심장이 기억해"}
+                          className="mt-2 h-28 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs font-bold text-white outline-none transition-all placeholder:text-white/20 focus:border-[#D8A4A2]/55 disabled:opacity-60"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-[11px] font-black text-[#BBA8CA]">SoftBan · 나만 조건부 회피</span>
+                        <textarea
+                          value={personalClicheDraft.softBanText}
+                          onChange={(event) => setPersonalClicheDraft((prev) => ({ ...prev, softBanText: event.target.value }))}
+                          disabled={isSavingPersonalCliche}
+                          placeholder={"비\n창문\n거리"}
+                          className="mt-2 h-28 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5 text-xs font-bold text-white outline-none transition-all placeholder:text-white/20 focus:border-[#BBA8CA]/55 disabled:opacity-60"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      {personalClicheMessage ? (
+                        <p className="text-xs font-bold text-[#BBA8CA]">{personalClicheMessage}</p>
+                      ) : (
+                        <p className="text-xs leading-relaxed text-[var(--text-secondary)]">HardBan은 거의 금지, SoftBan은 내가 직접 주제로 고르면 허용됩니다.</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSavePersonalCliche}
+                        disabled={isSavingPersonalCliche}
+                        className="inline-flex items-center justify-center rounded-2xl bg-[#D8A4A2] px-4 py-2.5 text-xs font-black text-[#211615] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isSavingPersonalCliche ? '저장중...' : '개인 클리셰 저장'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

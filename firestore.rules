@@ -75,7 +75,7 @@ service cloud.firestore {
     // navigation_visibility is read by the app so the public menu can react to admin toggles.
     // Writes remain admin-only.
     match /app_settings/{docId} {
-      allow read: if docId == 'navigation_visibility' || isAdmin();
+      allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard'] || isAdmin();
       allow write: if isAdmin();
     }
 

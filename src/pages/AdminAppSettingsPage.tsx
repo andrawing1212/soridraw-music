@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Loader2, SlidersHorizontal } from 'lucide-react';
+import { Loader2, ShieldAlert, SlidersHorizontal } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { db } from '../firebase';
+import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 
 const NAVIGATION_VISIBILITY_DOC = doc(db, 'app_settings', 'navigation_visibility');
+const LYRIC_CLICHE_GUARD_DOC = doc(db, 'app_settings', 'lyric_cliche_guard');
 const LIBRARY_MENU_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
 const LIBRARY_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
 
@@ -17,6 +19,19 @@ const DEFAULT_SETTINGS: NavigationVisibilitySettings = {
   showSunoLibraryMenu: false,
   sunoLibraryMenuAdminOnly: false,
 };
+
+type LyricClicheDraft = {
+  hardBanText: string;
+  softBanText: string;
+};
+
+const DEFAULT_CLICHE_DRAFT: LyricClicheDraft = {
+  hardBanText: '',
+  softBanText: '',
+};
+
+const parseTerms = (value: string) => normalizeClicheTermList(value, 120);
+const formatTerms = (value: unknown) => normalizeClicheTermList(value, 120).join('\n');
 
 type SavingTarget = 'visibility' | 'adminOnly' | null;
 
@@ -56,6 +71,10 @@ export default function AdminAppSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [savingTarget, setSavingTarget] = useState<SavingTarget>(null);
   const [message, setMessage] = useState('');
+  const [clicheDraft, setClicheDraft] = useState<LyricClicheDraft>(DEFAULT_CLICHE_DRAFT);
+  const [isClicheLoading, setIsClicheLoading] = useState(true);
+  const [isSavingCliche, setIsSavingCliche] = useState(false);
+  const [clicheMessage, setClicheMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -82,6 +101,33 @@ export default function AdminAppSettingsPage() {
     };
 
     loadSettings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadClicheGuard = async () => {
+      try {
+        const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);
+        if (!isMounted) return;
+        const data = snapshot.exists() ? snapshot.data() : null;
+        setClicheDraft({
+          hardBanText: formatTerms(data?.hardBanTerms),
+          softBanText: formatTerms(data?.softBanTerms),
+        });
+      } catch (error) {
+        console.error('Failed to load lyric cliche guard settings:', error);
+        if (isMounted) setClicheMessage('클리셰 설정을 불러오지 못했습니다. Firestore 권한을 확인해주세요.');
+      } finally {
+        if (isMounted) setIsClicheLoading(false);
+      }
+    };
+
+    loadClicheGuard();
 
     return () => {
       isMounted = false;
@@ -144,6 +190,34 @@ export default function AdminAppSettingsPage() {
     );
   };
 
+  const saveClicheGuard = async () => {
+    setIsSavingCliche(true);
+    setClicheMessage('');
+    try {
+      const hardBanTerms = parseTerms(clicheDraft.hardBanText);
+      const softBanTerms = parseTerms(clicheDraft.softBanText);
+      await setDoc(
+        LYRIC_CLICHE_GUARD_DOC,
+        {
+          hardBanTerms,
+          softBanTerms,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+      setClicheDraft({
+        hardBanText: hardBanTerms.join('\n'),
+        softBanText: softBanTerms.join('\n'),
+      });
+      setClicheMessage('전체 클리셰 설정을 저장했습니다.');
+    } catch (error) {
+      console.error('Failed to save lyric cliche guard settings:', error);
+      setClicheMessage('저장에 실패했습니다. 관리자 권한 또는 Firestore 규칙을 확인해주세요.');
+    } finally {
+      setIsSavingCliche(false);
+    }
+  };
+
   const isSavingAdminOnly = savingTarget === 'adminOnly';
   const isSavingVisibility = savingTarget === 'visibility';
   return (
@@ -182,6 +256,66 @@ export default function AdminAppSettingsPage() {
             </div>
           </div>
         </div>
+
+        <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6 shadow-sm">
+          <div className="flex flex-col gap-5">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
+                <ShieldAlert className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-black text-[var(--text-primary)]">전체 클리셰 관리</h3>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+                  모든 사용자에게 공통 적용됩니다. 한 줄에 하나씩 입력하고, HardBan은 거의 금지 / SoftBan은 사용자가 직접 고른 경우만 허용합니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-black text-[#D8A4A2]">HardBan · 전체 강한 금지</span>
+                <textarea
+                  value={clicheDraft.hardBanText}
+                  onChange={(event) => setClicheDraft((prev) => ({ ...prev, hardBanText: event.target.value }))}
+                  disabled={isClicheLoading || isSavingCliche}
+                  placeholder={"미로\n궤도\n신기루"}
+                  className="mt-2 h-44 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none transition-all placeholder:text-white/20 focus:border-[#D8A4A2]/55 disabled:opacity-60"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black text-[#BBA8CA]">SoftBan · 전체 조건부 회피</span>
+                <textarea
+                  value={clicheDraft.softBanText}
+                  onChange={(event) => setClicheDraft((prev) => ({ ...prev, softBanText: event.target.value }))}
+                  disabled={isClicheLoading || isSavingCliche}
+                  placeholder={"비\n바람\n그림자"}
+                  className="mt-2 h-44 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none transition-all placeholder:text-white/20 focus:border-[#BBA8CA]/55 disabled:opacity-60"
+                />
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
+                기본 내장 클리셰 목록은 유지되고, 여기 입력한 단어가 추가로 합쳐집니다.
+              </p>
+              <button
+                type="button"
+                onClick={saveClicheGuard}
+                disabled={isClicheLoading || isSavingCliche}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#D8A4A2] px-5 py-3 text-sm font-black text-[#211615] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSavingCliche ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                전체 클리셰 저장
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {clicheMessage && (
+          <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-sm font-bold text-[#BBA8CA]">
+            {clicheMessage}
+          </div>
+        )}
 
         {message && (
           <div className="rounded-2xl bg-white/[0.04] px-4 py-3 text-sm font-bold text-[#BBA8CA]">

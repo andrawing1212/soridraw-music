@@ -278,7 +278,7 @@ import {
   VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
@@ -4490,6 +4490,30 @@ function App() {
 
   const [showSunoLibraryMenu, setShowSunoLibraryMenu] = useState(readStoredSunoLibraryMenuVisibility);
   const [sunoLibraryMenuAdminOnly, setSunoLibraryMenuAdminOnly] = useState(readStoredSunoLibraryMenuAdminOnly);
+  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
+    hardBanTerms: [],
+    softBanTerms: [],
+  });
+  const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(
+      doc(db, 'app_settings', 'lyric_cliche_guard'),
+      (snapshot) => {
+        const data = snapshot.exists() ? snapshot.data() : null;
+        setGlobalLyricClicheGuard({
+          hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
+          softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
+        });
+      },
+      (error) => {
+        console.warn('Lyric cliche guard setting read failed. Keeping built-in defaults:', error);
+        setGlobalLyricClicheGuard({ hardBanTerms: [], softBanTerms: [] });
+      },
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -6421,6 +6445,7 @@ const toggleCycleVariantSelection = (
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
+      if (!currentUser) setUserLyricClicheGuard(null);
       setIsForcedLogoutModalOpen(false);
       setForcedLogoutCountdown(10);
       lastForcedLogoutTimeRef.current = 0;
@@ -6478,6 +6503,10 @@ const toggleCycleVariantSelection = (
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.role) setUserRole(data.role as UserRole);
+            setUserLyricClicheGuard({
+              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
+              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
+            });
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
             
             // Check for Banned status
@@ -6501,6 +6530,7 @@ const toggleCycleVariantSelection = (
             // Initial signup fallback
             setUserRole('free');
             setUserStatus('active');
+            setUserLyricClicheGuard(null);
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
@@ -9471,6 +9501,10 @@ const saveRecentSong = async (newSong: any) => {
         lyricMode: isLyricMode ? lyricMode : undefined,
         geminiApiKey: personalGeminiApiKey,
         generationEngineVersion: requestedGenerationEngineVersion,
+        lyricClicheGuard: {
+          global: globalLyricClicheGuard,
+          user: userLyricClicheGuard,
+        },
       };
 
       console.log("SELECTED GENRE:", selectedGenres);

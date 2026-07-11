@@ -370,6 +370,19 @@ export interface AppliedKeywords {
   geminiAttemptedModels?: string[];
 }
 
+
+export interface LyricClicheGuardSettings {
+  hardBanTerms?: string[];
+  softBanTerms?: string[];
+  updatedAt?: any;
+  updatedBy?: string | null;
+}
+
+export interface LyricClicheGuardRuntimeSettings {
+  global?: LyricClicheGuardSettings | null;
+  user?: LyricClicheGuardSettings | null;
+}
+
 export interface GenerateSongParams {
   genre: string;
   subGenre: string[];
@@ -399,6 +412,7 @@ export interface GenerateSongParams {
   recentGeneratedTitles?: string[];
   recentGeneratedLyricSnippets?: string[];
   recentMoodThemeMemory?: string[];
+  lyricClicheGuard?: LyricClicheGuardRuntimeSettings;
 }
 
 export interface SongResult {
@@ -455,6 +469,7 @@ export interface AppUserInfo {
   
   // Admin only
   adminMemo?: string;
+  lyricClicheGuard?: LyricClicheGuardSettings | null;
 }
 
 // ==========================================

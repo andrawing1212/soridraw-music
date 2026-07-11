@@ -7,6 +7,16 @@ export type ClicheTerm = {
   reason: string;
 };
 
+export type DynamicClicheGuardSettings = {
+  hardBanTerms?: string[];
+  softBanTerms?: string[];
+};
+
+export type RuntimeClicheGuardSettings = {
+  global?: DynamicClicheGuardSettings | null;
+  user?: DynamicClicheGuardSettings | null;
+};
+
 export type ClicheGuardConfig = {
   recentSongLimit: number;
   maxRecentTitleSimilarity: number;
@@ -93,6 +103,36 @@ export const LYRIC_CLICHE_GUARD = {
   titleClichePatterns: TITLE_CLICHE_PATTERNS,
 };
 
+function normalizeClicheTermText(value: unknown): string {
+  return String(value ?? '')
+    .replace(/[\[\]{}]/g, ' ')
+    .replace(/["“”‘’]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 32);
+}
+
+export function normalizeClicheTermList(value: unknown, limit = 80): string[] {
+  const rawItems = Array.isArray(value)
+    ? value.flatMap((item) => String(item ?? '').split(/[\n,]/g))
+    : String(value ?? '').split(/[\n,]/g);
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const item of rawItems) {
+    const cleaned = normalizeClicheTermText(item);
+    if (!cleaned || cleaned.length > 32) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(cleaned);
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
 function formatTermList(terms: ClicheTerm[], limit = 60): string {
   return terms
     .slice(0, limit)
@@ -101,6 +141,34 @@ function formatTermList(terms: ClicheTerm[], limit = 60): string {
       return `${term.ko}${english}`;
     })
     .join(', ');
+}
+
+function formatDynamicTermList(terms: string[], limit = 80): string {
+  return normalizeClicheTermList(terms, limit).join(', ');
+}
+
+function readRuntimeClicheSettings(params?: any): RuntimeClicheGuardSettings {
+  const direct = params?.lyricClicheGuard || params?.clicheGuard || {};
+  return {
+    global: direct.global || params?.globalLyricClicheGuard || null,
+    user: direct.user || params?.userLyricClicheGuard || params?.personalLyricClicheGuard || null,
+  };
+}
+
+function buildRuntimeTermBlocks(params?: any) {
+  const runtime = readRuntimeClicheSettings(params);
+  const globalHard = normalizeClicheTermList(runtime.global?.hardBanTerms ?? []);
+  const globalSoft = normalizeClicheTermList(runtime.global?.softBanTerms ?? []);
+  const userHard = normalizeClicheTermList(runtime.user?.hardBanTerms ?? []);
+  const userSoft = normalizeClicheTermList(runtime.user?.softBanTerms ?? []);
+
+  return {
+    globalHard,
+    globalSoft,
+    userHard,
+    userSoft,
+    hasDynamicTerms: Boolean(globalHard.length || globalSoft.length || userHard.length || userSoft.length),
+  };
 }
 
 export function normalizeRecentTitleForGuard(value: unknown): string {
@@ -168,11 +236,20 @@ Do not copy a recent song's main scene, conflict, title formula, hook attitude, 
 Do not force strange replacement words. Keep lyrics natural and let Gemini write freely inside the current theme/mood.`;
 }
 
-export function buildLyricClicheGuardInstruction(): string {
+export function buildLyricClicheGuardInstruction(params?: any): string {
+  const dynamic = buildRuntimeTermBlocks(params);
+  const extraLines = [
+    dynamic.globalHard.length ? `Admin hard avoid for all users: ${formatDynamicTermList(dynamic.globalHard)}.` : '',
+    dynamic.globalSoft.length ? `Admin soft avoid for all users unless explicitly selected: ${formatDynamicTermList(dynamic.globalSoft)}.` : '',
+    dynamic.userHard.length ? `User personal hard avoid: ${formatDynamicTermList(dynamic.userHard)}.` : '',
+    dynamic.userSoft.length ? `User personal soft avoid unless explicitly selected: ${formatDynamicTermList(dynamic.userSoft)}.` : '',
+  ].filter(Boolean).join('\n');
+
   return `BASIC AI CLICHE GUARD (LIGHTWEIGHT):
 Avoid obvious AI lyric/poetry clichés as automatic metaphors.
 Hard avoid: ${formatTermList(HARD_BAN_CLICHE_TERMS)}.
 Soft avoid unless the user explicitly made it the real subject/background: ${formatTermList(SOFT_BAN_CLICHE_TERMS)}.
+${extraLines ? `${extraLines}\n` : ''}HardBan means do not use it as a lyric word unless it is absolutely required by the user's direct input. SoftBan means do not let Gemini introduce it by habit; allow it when the user selected or typed that exact subject.
 This is not a general word blacklist. Do not replace natural Korean with weird evasive words. If a term is truly required by the user's explicit theme, keep it natural.`;
 }
 
@@ -188,7 +265,7 @@ export function normalizeRecentLyricSnippetForGuard(value: unknown): string {
 
 export function buildRecentLyricAntiRepeatInstruction(recentMoodThemeMemory: unknown[] = [], params?: any): string {
   return [
-    buildLyricClicheGuardInstruction(),
+    buildLyricClicheGuardInstruction(params),
     buildRecentMoodThemeDirectionGuardInstruction(recentMoodThemeMemory, params),
   ].join('\n\n');
 }

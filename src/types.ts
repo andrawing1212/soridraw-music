@@ -398,6 +398,7 @@ export interface GenerateSongParams {
   isNoLyrics?: boolean;
   recentGeneratedTitles?: string[];
   recentGeneratedLyricSnippets?: string[];
+  recentMoodThemeMemory?: string[];
 }
 
 export interface SongResult {

@@ -9399,6 +9399,32 @@ const saveRecentSong = async (newSong: any) => {
         .map(compactGeneratedLyricMemory)
         .filter(Boolean);
 
+      const toRecentMemoryList = (value: unknown): string[] => {
+        if (Array.isArray(value)) {
+          return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+        }
+        const text = String(value ?? '').trim();
+        return text ? [text] : [];
+      };
+
+      const compactMoodThemeMemory = (song: SongResult | null | undefined) => {
+        if (!song) return '';
+        const applied = (song.appliedKeywords || {}) as any;
+        const mood = toRecentMemoryList(applied.mood).join(', ') || 'none';
+        const theme = toRecentMemoryList(applied.theme).join(', ') || 'none';
+        const title = compactGeneratedTitleMemory(song) || 'untitled';
+        const story = String(song.situationSummary || applied.situationSummary || applied.userInput || song.userInput || '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 120);
+        return `mood=${mood} | theme=${theme} | title=${title}${story ? ` | direction=${story}` : ''}`.slice(0, 260);
+      };
+
+      const recentMoodThemeMemoryBase = history
+        .slice(0, 5)
+        .map(compactMoodThemeMemory)
+        .filter(Boolean);
+
       const payload = {
         genre: customGenreInput || finalGenres[0] || selectedGenres[0] || subGenre[0] || null,
         subGenre: finalGenres,
@@ -9466,6 +9492,9 @@ const saveRecentSong = async (newSong: any) => {
         const inBatchLyricMemory = generatedResults
           .map(compactGeneratedLyricMemory)
           .filter(Boolean);
+        const inBatchMoodThemeMemory = generatedResults
+          .map(compactMoodThemeMemory)
+          .filter(Boolean);
 
         const song = await generateSong({
           ...payload,
@@ -9483,6 +9512,10 @@ const saveRecentSong = async (newSong: any) => {
             ...inBatchLyricMemory,
             ...recentGeneratedLyricBase,
           ].slice(0, 10),
+          recentMoodThemeMemory: [
+            ...inBatchMoodThemeMemory,
+            ...recentMoodThemeMemoryBase,
+          ].slice(0, 5),
         } as any);
 
         if (abortControllerRef.current?.signal.aborted) return;

@@ -70,14 +70,9 @@ The hidden brief must decide only:
 - scene boundary: what concrete world is allowed, based only on story sources
 - leak guard: which music keywords must stay out of lyric body and title
 
-Mood-to-lyric translation rule:
-- Mood choices are emotional direction controls, not words to insert.
-- Translate mood into how the speaker talks, avoids, jokes, hesitates, repeats, or finally says something.
-- Do not turn mood controls into obvious props or labels such as warm air, cold room, blue tone, dawn, spring, autumn, corner, window, tableware, shadow, or streetlight unless those were explicit story inputs.
-
 Lyric writing rule:
-- Write from the hidden brief, not from the final production prompt.
-- The production prompt may guide musical energy, but it must not supply lyric objects or metaphors.
-- If the story source is weak, make the lyric simpler and broader instead of inventing random props or a random location.
-- Korean lyric body must sound like contemporary Korean speech/thought, not translated AI prose.`;
+- Write freely from the hidden story brief, not by copying the final production prompt.
+- Genre/Sound/Production may shape rhythm, line length, hook behavior, and emotional scale, but they must not become the lyric topic unless the user explicitly made them the topic.
+- Korean lyrics must feel like contemporary Korean emotional speech: plain, specific, restrained, and not translated, overly poetic, or AI-poetic.
+- Do not over-apply safety rules. Keep the Korean lyric natural, coherent, and human first.`;
 }

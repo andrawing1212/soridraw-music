@@ -176,6 +176,56 @@ function removeEmptySungBlocks(text: string): string {
   return out.join("\n");
 }
 
+function mergeCueBodies(previousTag: string, currentTag: string): string {
+  const prev = previousTag.match(/^\[([^:\]\n]+)(?::([^\]]*))?\]$/);
+  const curr = currentTag.match(/^\[([^:\]\n]+)(?::([^\]]*))?\]$/);
+  const section = curr?.[1]?.trim() || prev?.[1]?.trim() || '';
+  const cues: string[] = [];
+  [prev?.[2], curr?.[2]].forEach((body) => {
+    String(body || '')
+      .split(/[,，]/)
+      .map(normalizeCue)
+      .filter(Boolean)
+      .forEach((cue) => {
+        if (!cues.some((existing) => existing.toLowerCase() === cue.toLowerCase())) cues.push(cue);
+      });
+  });
+  return `[${section}${cues.length ? `: ${cues.slice(0, 3).join(', ')}` : ''}]`;
+}
+
+function collapseAdjacentDuplicateSections(text: string): string {
+  const lines = cleanWhitespace(text).split("\n");
+  const out: string[] = [];
+  let lastTagIndex = -1;
+  let hasLyricSinceLastTag = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      out.push(line);
+      continue;
+    }
+
+    if (isBracketLine(trimmed)) {
+      const currentSection = sectionNameFromTag(trimmed);
+      const previousSection = lastTagIndex >= 0 ? sectionNameFromTag(out[lastTagIndex]) : null;
+      if (currentSection && previousSection && !hasLyricSinceLastTag && currentSection.toLowerCase() === previousSection.toLowerCase()) {
+        out[lastTagIndex] = mergeCueBodies(out[lastTagIndex], trimmed);
+        continue;
+      }
+      out.push(line);
+      lastTagIndex = out.length - 1;
+      hasLyricSinceLastTag = false;
+      continue;
+    }
+
+    out.push(line);
+    hasLyricSinceLastTag = true;
+  }
+
+  return cleanWhitespace(out.join("\n"));
+}
+
 export function sanitizeV2GeneratedLyrics(lyrics: string, options: V2LyricSanitizeOptions = {}): string {
   const source = cleanWhitespace(lyrics);
   if (!source) return "";
@@ -216,5 +266,6 @@ export function sanitizeV2GeneratedLyrics(lyrics: string, options: V2LyricSaniti
     text = `[Verse: natural delivery]\n${text}`;
   }
   text = removeEmptySungBlocks(text);
+  text = collapseAdjacentDuplicateSections(text);
   return cleanWhitespace(text);
 }

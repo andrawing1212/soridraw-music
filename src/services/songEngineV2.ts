@@ -12,7 +12,7 @@ import { buildPromptEngineV2OutputInstruction } from "./promptEngineV2";
 import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
 import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
 import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
-import { buildSongCreativeBriefInstruction } from "./songCreativeBrief";
+import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
 
 export interface GenerateSongV2Deps {
   getAI: (apiKeyOverride?: string | null) => any;
@@ -368,8 +368,9 @@ export async function generateSongV2(params: any, deps: GenerateSongV2Deps): Pro
   const selectedInputSummary = buildSelectedInputSummary(params);
   const model = deps.modelChain[0];
   const recentTitleAntiRepeatInstruction = buildRecentTitleAntiRepeatInstruction(params?.recentGeneratedTitles ?? []);
-  const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params?.recentGeneratedLyricSnippets ?? []);
+  const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params?.recentMoodThemeMemory ?? [], params);
   const songCreativeBriefInstruction = buildSongCreativeBriefInstruction(params);
+  const globalMoodDistributionInstruction = buildGlobalMoodDistributionInstruction(params);
   const lyricStoryBriefInstruction = buildLyricStoryBriefInstruction(params);
   const systemInstruction = `SORIDRAW GENERATION ENGINE v2 — CLEAN-ROOM ROUTE
 This is a clean v2 generation path. Do not use Classic/v1 repair logic, Classic label names, or Classic section-recovery habits.
@@ -380,6 +381,8 @@ SELECTED INPUTS:
 ${selectedInputSummary}
 
 ${songCreativeBriefInstruction}
+
+${globalMoodDistributionInstruction}
 
 ${recentTitleAntiRepeatInstruction}
 
@@ -461,7 +464,7 @@ V2 CLEAN-ROOM RULES:
     attemptedModels: [...deps.modelChain],
   };
 
-  const prompt = sanitizeV2ProductionPrompt(parsed.productionPrompt || parsed.prompt || "", params);
+  const prompt = sanitizeV2ProductionPrompt(applyGlobalMoodDirectiveToProductionPrompt(parsed.productionPrompt || parsed.prompt || "", params), params);
   let koreanLyrics = "";
   let secondaryLyrics = "";
 

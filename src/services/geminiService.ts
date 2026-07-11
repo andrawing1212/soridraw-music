@@ -33,7 +33,7 @@ import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
 import { generateSongV2 } from "./songEngineV2";
 import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
 import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
-import { buildSongCreativeBriefInstruction } from "./songCreativeBrief";
+import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -419,6 +419,7 @@ interface GenerateSongParams {
   recentStoryMemory?: string[];
   recentGeneratedTitles?: string[];
   recentGeneratedLyricSnippets?: string[];
+  recentMoodThemeMemory?: string[];
   generationEngineVersion?: GenerationEngineVersion;
 }
 
@@ -4212,6 +4213,10 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
         .map((value) => String(value ?? '').trim())
         .filter(Boolean)
         .slice(0, 10),
+      recentMoodThemeMemory: (((first as any).recentMoodThemeMemory ?? []) as unknown[])
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 5),
     };
   }
 
@@ -24070,7 +24075,7 @@ function isKoreanSoundOrStageCue(inside: string): boolean {
     "파도", "바람", "째깍", "심장", "박동", "사이렌", "기침", "효과음", "신호음", "시그널", 
     "웅성", "환호", "멜로디", "악기", "소프라노", "알토", "테너", "첼로", "바이올린",
     "트럼펫", "색소폰", "플루트", "클라리넷", "하프", "오르간", "키보드", "퍼커션", "새벽 공기",
-    "허밍", "흥얼", "숨", "잔향", "울림", "문소리", "방 안"
+    "허밍", "흥얼", "숨", "잔향", "울림", "문소리", "방 안", "혼잣말", "읊조림", "중얼", "내레이션", "나레이션", "말하듯", "쓴웃음"
   ];
 
   // 숨, 음 등 단독 한 글자 또는 흥얼
@@ -24184,6 +24189,8 @@ function translateKoreanSoundCueToEnglish(text: string): string {
     [/강렬한/g, "intense"],
     [/새벽\s*공기\s*소리|새벽\s*공기/g, "dawn"],
     [/스며드는/g, "faint"],
+    [/허탈한|맥빠진/g, "defeated"],
+    [/쓴웃음|씁쓸한/g, "bitter"],
   ];
 
   let matchedMods: string[] = [];
@@ -24216,6 +24223,10 @@ function translateKoreanSoundCueToEnglish(text: string): string {
     [/신스\s*신호음|신스\s*사운드|신스\s*소리|신호음|신스/g, "synth signal"],
     [/카페\s*소음|카페\s*소리/g, "cafe ambience"],
     [/도시\s*소음|도시\s*소리/g, "city ambience"],
+    [/혼잣말/g, "spoken aside"],
+    [/읊조림|중얼거림|중얼/g, "spoken murmur"],
+    [/내레이션|나레이션/g, "spoken narration"],
+    [/쓴웃음/g, "bitter laugh"],
     [/환경음|소음/g, "ambience"],
     [/빗소리|비\s*소리/g, "rain ambience"],
     [/바람소리|바람\s*소리/g, "wind ambience"],
@@ -24686,7 +24697,7 @@ function sanitizeGeneratedLyricTagsAndFragments(
   const finalBareTagGuardedLyricText = ensureEmotionCuesForBareLyricSections(chorusFirstGuardedLyricText, params);
   const leakSanitizedLyricText = sanitizeLyricSectionCueLeaksAndMergeAdjacentCues(finalBareTagGuardedLyricText, params);
   const finalCueGuardedLyricText = ensureEmotionCuesForBareLyricSections(leakSanitizedLyricText, params);
-  const sectionSpacedLyricText = enforceLyricSectionBlockSpacing(normalizeLyricSectionColonSpacing(finalCueGuardedLyricText), params);
+  const sectionSpacedLyricText = enforceLyricSectionBlockSpacing(normalizeLyricSectionColonSpacing(collapseAdjacentDuplicateStructuralSections(finalCueGuardedLyricText, params)), params);
   return sectionSpacedLyricText
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -26509,6 +26520,74 @@ function forceIndependentRapSectionForRapMode(lyrics: string, params: GenerateSo
   return copy.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+
+function mergeCuePartsForDuplicateSectionTags(previousBody: string, currentBody: string): string {
+  const cues: string[] = [];
+  [previousBody, currentBody].forEach((body) => {
+    String(body || '')
+      .split(/[,，]/)
+      .map((part) => cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim())
+      .filter(Boolean)
+      .forEach((cue) => {
+        const lower = cue.toLowerCase();
+        if (!cues.some((existing) => existing.toLowerCase() === lower)) cues.push(cue);
+      });
+  });
+  return cues.slice(0, 3).join(', ');
+}
+
+function collapseAdjacentDuplicateStructuralSections(lyrics: string, params: GenerateSongParams): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const out: string[] = [];
+  let lastStructuralIndex = -1;
+  let hasLyricSinceLastStructural = false;
+
+  const isStandaloneCue = (line: string): boolean => {
+    const trimmed = String(line || '').trim();
+    if (!/^\[[^\]]+\]$/.test(trimmed)) return false;
+    if (isGuardStructuralSectionTagLine(trimmed)) return false;
+    return true;
+  };
+
+  for (const rawLine of lines) {
+    const line = String(rawLine || '').trimEnd();
+    const trimmed = line.trim();
+    if (!trimmed) {
+      out.push(line);
+      continue;
+    }
+
+    if (isGuardStructuralSectionTagLine(trimmed)) {
+      const current = parseGuardBracketSectionTag(trimmed);
+      const currentSection = normalizeLyricSectionDisplayName(current?.rawSection || '');
+      const lastLine = lastStructuralIndex >= 0 ? out[lastStructuralIndex] : '';
+      const previous = parseGuardBracketSectionTag(String(lastLine || '').trim());
+      const previousSection = normalizeLyricSectionDisplayName(previous?.rawSection || '');
+
+      if (
+        current && previous && !hasLyricSinceLastStructural &&
+        currentSection && previousSection && currentSection.toLowerCase() === previousSection.toLowerCase()
+      ) {
+        const mergedCue = mergeCuePartsForDuplicateSectionTags(previous.body, current.body);
+        out[lastStructuralIndex] = `[${currentSection}${mergedCue ? ` : ${mergedCue}` : ''}]`;
+        continue;
+      }
+
+      out.push(line);
+      lastStructuralIndex = out.length - 1;
+      hasLyricSinceLastStructural = false;
+      continue;
+    }
+
+    out.push(line);
+    if (!isStandaloneCue(trimmed)) {
+      hasLyricSinceLastStructural = true;
+    }
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function finalizeGeneratedLyricsStructuralSafety(lyrics: string, params: GenerateSongParams): string {
   let text = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(lyrics), params);
   text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
@@ -26519,6 +26598,7 @@ function finalizeGeneratedLyricsStructuralSafety(lyrics: string, params: Generat
   text = forceIndependentRapSectionForRapMode(text, params);
   text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
   text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
+  text = collapseAdjacentDuplicateStructuralSections(text, params);
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -28200,8 +28280,9 @@ export async function generateSong(
         ? `Return the title as: 'Korean Title'. Do not create an English or other-language title.`
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
   const recentTitleAntiRepeatInstruction = buildRecentTitleAntiRepeatInstruction(params.recentGeneratedTitles ?? []);
-  const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params.recentGeneratedLyricSnippets ?? []);
+  const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params.recentMoodThemeMemory ?? [], params);
   const songCreativeBriefInstruction = buildSongCreativeBriefInstruction(params);
+  const globalMoodDistributionInstruction = buildGlobalMoodDistributionInstruction(params);
   const lyricStoryBriefInstruction = buildLyricStoryBriefInstruction(params);
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
@@ -28439,6 +28520,8 @@ ${buildRecentStoryMemoryInstruction(params)}
 
 ${songCreativeBriefInstruction}
 
+${globalMoodDistributionInstruction}
+
 ${recentTitleAntiRepeatInstruction}
 
 ${recentLyricAntiRepeatInstruction}
@@ -28622,6 +28705,7 @@ FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
 - Return productionPrompt as the final 6-line Suno production prompt.
 - Never output two production prompts in one response. Do not write a one-line prompt containing multiple labels and then repeat the labels again below.
 - GENRE FIRST-IMPRESSION RULE: [Genre] is not just a plain genre name. Keep it concise and genre-like, but include 1–2 core identity keywords from the selected mood/theme/direct input when they define the song’s first impression. Do not turn [Genre] into a long keyword list. Move detailed emotional/story words into [Atmosphere] and movement/flow words into [Arrangement].
+- GLOBAL MOOD DISTRIBUTION RULE: Selected Mood must not be compressed into only 1–2 fixed words before [Genre]. Synthesize the mood combination into one global feeling and distribute it across [Genre], [Instruments], [Atmosphere], [Vocals], and [Arrangement] by role. Genre receives mood-colored identity, Instruments receive texture/weight/air, Atmosphere receives emotional design, Vocals receive delivery/distance/emotional pressure, and Arrangement receives section motion/density/pacing. Keep all lines concise and do not repeat the same mood adjective everywhere.
 - USER ARTIST/GROUP REFERENCE RULE: If the user directly mentions an artist or group in the direct input, preserve that reference in [Genre] as “-style” or “-inspired”, and also translate it into musical traits such as energy, vocal attitude, era, groove, arrangement color, emotional tone, and when relevant vocal technique. Do not remove the artist/group reference when it was explicitly written by the user. Do not rely on the name alone; include trait cues so less globally recognized Korean references still work.
 - INSTRUMENTAL BGM NATURAL REINTERPRETATION RULE: ${buildInstrumentalBgmGeminiReinterpretationRule()}
 - If the selected genre is Lo-Fi Study, Nature Ambience, Cafe BGM, Healing Piano, Ambient, Minimalism, Piano Solo, String Ensemble, or another dedicated Instrumental BGM/background-only choice, force instrumental-only mode. [Vocals] must be exactly: Instrumental only, no vocals, no humming. Do not add female/male vocal, humming, wordless airy texture, breathy phrasing, sighs, chant, choir, or hook-vocal language.
@@ -29485,7 +29569,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   
   // Apply Style Keyword Router to the validated production prompt
   const routedPrompt = routeStyleKeywordsToPrompt(validatedProductionPrompt, params);
-  const compressedPrompt = compressFinalPromptIfNeeded(routedPrompt, params);
+  const globallyMoodedPrompt = applyGlobalMoodDirectiveToProductionPrompt(routedPrompt, params);
+  const compressedPrompt = compressFinalPromptIfNeeded(globallyMoodedPrompt, params);
   const finalPromptStr = cleanupAtmosphereFallbackResidue(forceSingleAtmosphereSentence(hardEnforceInstrumentalBgmFinalPrompt(compressedPrompt, params)), params);
   
   const cleanedPromptStr = applyAtmosphereSpaceTextureCommaTailFinal(enforceSelectedSpecialVoiceTonesInPrompt(forceSelectedMultiVocalsInPrompt(

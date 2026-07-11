@@ -78,22 +78,26 @@ type DragState =
 const CENTER_NODE_SIZE = 164;
 const MAP_NODE_SIZE = 136;
 const NODE_MOVE_PADDING = 74;
-const STYLE_CANVAS_WIDTH = 3200;
-const STYLE_CANVAS_HEIGHT = 2200;
-const STYLE_CENTER = { x: STYLE_CANVAS_WIDTH / 2, y: 1000 };
+const STYLE_CANVAS_WIDTH = 4800;
+const STYLE_CANVAS_HEIGHT = 4800;
+const STYLE_CENTER = { x: STYLE_CANVAS_WIDTH / 2, y: STYLE_CANVAS_HEIGHT / 2 };
 const STYLE_NODE_SIZE = 138;
 const STYLE_CENTER_SIZE = 174;
 const STYLE_MATERIAL_NODE_SIZE = 82;
 const STYLE_DETAIL_NODE_SIZE = 58;
 const STYLE_LINE_WIDTH = 1.25;
 const MIDDLE_ORBIT_RADIUS = 188;
-const SMALL_ORBIT_RADIUS = 112;
+const SMALL_ORBIT_RADIUS = 148;
+const SMALL_MENU_TOGGLE_RADIUS = 78;
+const SMALL_MENU_TOGGLE_ANGLE = Math.PI / 4;
+const SMALL_MENU_TOGGLE_SIZE = 54;
 const SMALL_DEFAULT_VISIBLE_COUNT = 4;
 const MIDDLE_ORBIT_START_ANGLE = -Math.PI / 2 + Math.PI / 8;
-const SMALL_ORBIT_START_ANGLE = -Math.PI / 2 + Math.PI / 5;
-const STYLE_INITIAL_VIEW_CENTER = { x: 1600, y: 1000 };
+const SMALL_ORBIT_ANGLE_OFFSET = Math.PI / 12;
+const CARDINAL_DIRECTION_MIN_GAP = Math.PI / 12;
+const STYLE_INITIAL_VIEW_CENTER = STYLE_CENTER;
 const STYLE_INITIAL_VIEW_WIDTH = 1850;
-const STYLE_INITIAL_VIEW_HEIGHT = 1540;
+const STYLE_INITIAL_VIEW_HEIGHT = 1850;
 
 const styleIngredients: LabIngredient[] = [
   { id: 'genre', label: '장르', type: 'style' },
@@ -119,32 +123,32 @@ const lyricsIngredients: LabIngredient[] = [
 ];
 
 const initialStyleNodes: CanvasNode[] = [
-  { id: 'genreLine', label: 'Genre', max: 3, items: [], x: 1764, y: 506 },
-  { id: 'soundLine', label: 'Sound', max: 4, items: [], x: 2142, y: 981 },
-  { id: 'vocalsLine', label: 'Vocals', max: 3, items: [], x: 1720, y: 1420 },
-  { id: 'productionLine', label: 'Production', max: 4, items: [], x: 1087, y: 1268 },
-  { id: 'moodLine', label: 'Mood', max: 4, items: [], x: 1013, y: 721 },
+  { id: 'genreLine', label: 'Genre', max: 3, items: [], x: 2564, y: 1906 },
+  { id: 'soundLine', label: 'Sound', max: 4, items: [], x: 2942, y: 2381 },
+  { id: 'vocalsLine', label: 'Vocals', max: 3, items: [], x: 2520, y: 2820 },
+  { id: 'productionLine', label: 'Production', max: 4, items: [], x: 1887, y: 2668 },
+  { id: 'moodLine', label: 'Mood', max: 4, items: [], x: 1813, y: 2121 },
 ];
 
 
 const initialStyleMaterialNodes: MaterialNode[] = [
-  { id: 'material-tempo', label: '템포', x: 1680, y: 610, kind: 'middle' },
-  { id: 'material-genre', label: '장르', x: 850, y: 840, kind: 'middle' },
-  { id: 'material-sound', label: '사운드', x: 2235, y: 840, kind: 'middle' },
-  { id: 'material-mood', label: '분위기', x: 690, y: 1135, kind: 'middle' },
-  { id: 'material-style', label: '스타일', x: 2290, y: 1135, kind: 'middle' },
-  { id: 'material-theme', label: '주제', x: 840, y: 1450, kind: 'middle' },
-  { id: 'material-vocal', label: '보컬', x: 2085, y: 1490, kind: 'middle' },
-  { id: 'material-structure', label: '곡 구조', x: 1680, y: 1515, kind: 'middle' },
-  { id: 'style-detail-hybrid', label: '하이브리드', x: 1040, y: 1655, kind: 'styleDetail' },
-  { id: 'style-detail-vocal-line', label: '보컬 라인', x: 1190, y: 1735, kind: 'styleDetail' },
-  { id: 'style-detail-special-effect', label: '특수 효과', x: 1340, y: 1655, kind: 'styleDetail' },
-  { id: 'style-detail-era-texture', label: '시대 질감', x: 1490, y: 1735, kind: 'styleDetail' },
-  { id: 'style-detail-transition', label: '전환 연출', x: 1640, y: 1655, kind: 'styleDetail' },
-  { id: 'style-detail-space-texture', label: '공간 질감', x: 1790, y: 1735, kind: 'styleDetail' },
-  { id: 'style-detail-narrative', label: '서사 연출', x: 1940, y: 1655, kind: 'styleDetail' },
-  { id: 'style-detail-chorus-line', label: '후렴 라인', x: 2090, y: 1735, kind: 'styleDetail' },
-  { id: 'style-detail-rhythm', label: '리듬감', x: 2240, y: 1655, kind: 'styleDetail' },
+  { id: 'material-tempo', label: '템포', x: 2480, y: 2010, kind: 'middle' },
+  { id: 'material-genre', label: '장르', x: 1650, y: 2240, kind: 'middle' },
+  { id: 'material-sound', label: '사운드', x: 3035, y: 2240, kind: 'middle' },
+  { id: 'material-mood', label: '분위기', x: 1490, y: 2535, kind: 'middle' },
+  { id: 'material-style', label: '스타일', x: 3090, y: 2535, kind: 'middle' },
+  { id: 'material-theme', label: '주제', x: 1640, y: 2850, kind: 'middle' },
+  { id: 'material-vocal', label: '보컬', x: 2885, y: 2890, kind: 'middle' },
+  { id: 'material-structure', label: '곡 구조', x: 2480, y: 2915, kind: 'middle' },
+  { id: 'style-detail-hybrid', label: '하이브리드', x: 1840, y: 3055, kind: 'styleDetail' },
+  { id: 'style-detail-vocal-line', label: '보컬 라인', x: 1990, y: 3135, kind: 'styleDetail' },
+  { id: 'style-detail-special-effect', label: '특수 효과', x: 2140, y: 3055, kind: 'styleDetail' },
+  { id: 'style-detail-era-texture', label: '시대 질감', x: 2290, y: 3135, kind: 'styleDetail' },
+  { id: 'style-detail-transition', label: '전환 연출', x: 2440, y: 3055, kind: 'styleDetail' },
+  { id: 'style-detail-space-texture', label: '공간 질감', x: 2590, y: 3135, kind: 'styleDetail' },
+  { id: 'style-detail-narrative', label: '서사 연출', x: 2740, y: 3055, kind: 'styleDetail' },
+  { id: 'style-detail-chorus-line', label: '후렴 라인', x: 2890, y: 3135, kind: 'styleDetail' },
+  { id: 'style-detail-rhythm', label: '리듬감', x: 3040, y: 3055, kind: 'styleDetail' },
 ];
 
 const styleMiddleMenuNodes = [
@@ -269,23 +273,33 @@ function getTone(mode: LabMode) {
 }
 
 function getMaterialNodeSize(material: MaterialNode) {
+  if (isSmallDetailMenuToggleNode(material)) return SMALL_MENU_TOGGLE_SIZE;
   return material.kind === 'styleDetail' ? STYLE_DETAIL_NODE_SIZE : STYLE_MATERIAL_NODE_SIZE;
 }
 
 function getMaterialNodeTone(material: MaterialNode) {
+  if (isSmallDetailMenuToggleNode(material)) {
+    return {
+      coreA: '#B990FF',
+      coreB: '#5EEBFF',
+      glow: '#B990FF',
+      bg: 'rgba(12, 12, 24, 1)',
+      text: '#F5F0FF',
+    };
+  }
   return material.kind === 'styleDetail'
     ? {
         coreA: '#FFD66B',
         coreB: '#FF9C5E',
         glow: '#FFD66B',
-        bg: 'rgba(18, 12, 9, 0.96)',
+        bg: 'rgba(18, 12, 9, 1)',
         text: '#FFF5DB',
       }
     : {
         coreA: '#FF8B83',
         coreB: '#C85F86',
         glow: '#FF7AAE',
-        bg: 'rgba(15, 12, 16, 0.97)',
+        bg: 'rgba(15, 12, 16, 1)',
         text: '#FFF1F5',
       };
 }
@@ -332,7 +346,8 @@ function getVisibleStraightLinePath(from: CanvasPoint, to: CanvasPoint, fromRadi
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   const distance = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-  const visiblePadding = -6;
+  // 선은 원 아래 레이어에 있으므로 원을 덮지 않으면서도 연결된 느낌이 나도록 가장자리 가까이 붙인다.
+  const visiblePadding = 2;
   const safeFromRadius = Math.max(0, Math.min(fromRadius + visiblePadding, distance / 2 - 2));
   const safeToRadius = Math.max(0, Math.min(toRadius + visiblePadding, distance / 2 - 2));
   const start = {
@@ -352,6 +367,25 @@ function getCanvasDistance(a: CanvasPoint, b: CanvasPoint) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+function getAngleDistance(from: number, to: number) {
+  return Math.atan2(Math.sin(from - to), Math.cos(from - to));
+}
+
+function avoidCardinalDirection(angle: number, index: number) {
+  const cardinals = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+  let nextAngle = angle;
+
+  cardinals.forEach((cardinal) => {
+    const distance = getAngleDistance(nextAngle, cardinal);
+    const absoluteDistance = Math.abs(distance);
+    if (absoluteDistance >= CARDINAL_DIRECTION_MIN_GAP) return;
+    const direction = distance === 0 ? (index % 2 === 0 ? 1 : -1) : Math.sign(distance);
+    nextAngle += direction * (CARDINAL_DIRECTION_MIN_GAP - absoluteDistance);
+  });
+
+  return nextAngle;
+}
+
 function getCircularChildren<T extends { id: string; label: string }>(
   items: T[],
   center: CanvasPoint,
@@ -360,10 +394,12 @@ function getCircularChildren<T extends { id: string; label: string }>(
   kind: MaterialNodeKind,
   parentId: string,
   parentBigNodeId: string,
+  avoidCardinalDirections = false,
 ): MaterialNode[] {
   const step = (Math.PI * 2) / Math.max(items.length, 1);
   return items.map((item, index) => {
-    const angle = startAngle + step * index;
+    const rawAngle = startAngle + step * index;
+    const angle = avoidCardinalDirections ? avoidCardinalDirection(rawAngle, index) : rawAngle;
     return {
       id: `${parentId}-${item.id}`,
       label: item.label,
@@ -371,6 +407,33 @@ function getCircularChildren<T extends { id: string; label: string }>(
       y: center.y + Math.sin(angle) * radius,
       kind,
       parentId,
+      parentBigNodeId,
+    };
+  });
+}
+
+function getStableSmallCircularChildren(parentMaterial: MaterialNode, expanded: boolean): MaterialNode[] {
+  void expanded;
+  const parentBigNodeId = parentMaterial.parentBigNodeId ?? parentMaterial.parentId ?? '';
+  const items = getStyleSmallDetailNodesForMiddle(parentMaterial);
+
+  const getRegularAngle = (index: number, total: number) => {
+    const safeTotal = Math.max(total, 1);
+    const step = (Math.PI * 2) / safeTotal;
+    // 더보기 버튼 없이 모든 작은 원을 처음부터 표시한다.
+    // 모든 원은 중간 원을 기준으로 같은 반지름과 같은 간격의 원형 슬롯에 고정된다.
+    return -Math.PI + step / 2 + SMALL_ORBIT_ANGLE_OFFSET + step * index;
+  };
+
+  return items.map((item, index) => {
+    const angle = getRegularAngle(index, items.length);
+    return {
+      id: `${parentMaterial.id}-${item.id}`,
+      label: item.label,
+      x: parentMaterial.x + Math.cos(angle) * SMALL_ORBIT_RADIUS,
+      y: parentMaterial.y + Math.sin(angle) * SMALL_ORBIT_RADIUS,
+      kind: 'styleDetail',
+      parentId: parentMaterial.id,
       parentBigNodeId,
     };
   });
@@ -395,10 +458,8 @@ function getStyleSmallDetailNodesForMiddle(material: Pick<MaterialNode, 'id' | '
 }
 
 function getDisplayStyleSmallDetailNodesForMiddle(material: Pick<MaterialNode, 'id' | 'label'> | { id: string; label: string }, expanded: boolean) {
-  const items = getStyleSmallDetailNodesForMiddle(material);
-  if (items.length <= SMALL_DEFAULT_VISIBLE_COUNT) return items;
-  if (expanded) return [...items, { id: 'small-detail-less-toggle', label: '간단히' }];
-  return [...items.slice(0, SMALL_DEFAULT_VISIBLE_COUNT), { id: 'small-detail-more-toggle', label: '+ 더보기' }];
+  void expanded;
+  return getStyleSmallDetailNodesForMiddle(material);
 }
 
 function isSmallDetailMenuToggleNode(material: Pick<MaterialNode, 'id' | 'label'> | { id: string; label: string }) {
@@ -418,15 +479,7 @@ function getMiddleOrbitNode(parentNode: CanvasNode, materialId: string): Materia
 }
 
 function getSmallOrbitNode(parentMaterial: MaterialNode, materialId: string, expanded = false): MaterialNode | null {
-  return getCircularChildren(
-    getDisplayStyleSmallDetailNodesForMiddle(parentMaterial, expanded),
-    parentMaterial,
-    SMALL_ORBIT_RADIUS,
-    SMALL_ORBIT_START_ANGLE,
-    'styleDetail',
-    parentMaterial.id,
-    parentMaterial.parentBigNodeId ?? parentMaterial.parentId ?? '',
-  ).find((material) => material.id === materialId) ?? null;
+  return getStableSmallCircularChildren(parentMaterial, expanded).find((material) => material.id === materialId) ?? null;
 }
 
 function IngredientChip({ ingredient, onStartDrag }: { ingredient: LabIngredient; onStartDrag: (ingredient: LabIngredient, event: PointerEvent<HTMLDivElement>) => void }) {
@@ -649,7 +702,7 @@ function MapNodeView({ node, mode, active, moving, onRemoveItem, onStartMove }: 
         width: MAP_NODE_SIZE,
         height: MAP_NODE_SIZE,
         WebkitUserDrag: 'none',
-        background: `linear-gradient(135deg, ${tone.coreA}${Math.round((0.055 + percent / 520) * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((0.075 + percent / 430) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,0.98)`,
+        background: `linear-gradient(135deg, ${tone.coreA}${Math.round((0.055 + percent / 520) * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((0.075 + percent / 430) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,1)`,
         filter: `brightness(${1 + percent / 330}) saturate(${1 + percent / 420})`,
         boxShadow: active || moving
           ? `0 0 0 2px ${tone.coreA}B8, 0 0 54px ${tone.coreB}4A, 0 20px 68px rgba(0,0,0,0.5)`
@@ -710,7 +763,7 @@ function CanvasNodeView({ node, active, moving, connecting, connectionCount, onR
         width: STYLE_NODE_SIZE,
         height: STYLE_NODE_SIZE,
         WebkitUserDrag: 'none',
-        background: `linear-gradient(135deg, ${tone.coreA}${Math.round((0.055 + percent / 520 + glowPercent * 0.16) * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((0.075 + percent / 430 + glowPercent * 0.18) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,0.98)`,
+        background: `linear-gradient(135deg, ${tone.coreA}${Math.round((0.055 + percent / 520 + glowPercent * 0.16) * 255).toString(16).padStart(2, '0')}, ${tone.coreB}${Math.round((0.075 + percent / 430 + glowPercent * 0.18) * 255).toString(16).padStart(2, '0')}), rgba(18,18,22,1)`,
         filter: `brightness(${1 + percent / 330 + glowPercent * 0.16}) saturate(${1 + percent / 420 + glowPercent * 0.14})`,
         boxShadow: active || moving || connecting
           ? `0 0 0 2px ${tone.coreA}B8, 0 0 54px ${tone.coreB}4A, 0 20px 68px rgba(0,0,0,0.5)`
@@ -796,7 +849,7 @@ function CanvasMaterialNodeView({ material, active, connectionCount, onToggle, o
         top: material.y,
         width: size,
         height: size,
-        fontSize: isSmall ? 10 : 12,
+        fontSize: isMenuToggle ? 9 : isSmall ? 10 : 12,
         cursor: isMenuToggle ? 'pointer' : canMove ? 'move' : 'grab',
         WebkitUserDrag: 'none',
         background: `linear-gradient(135deg, ${nodeTone.coreA}${Math.round((isSmall ? 0.16 : 0.14) * 255 + glowPercent * 42).toString(16).padStart(2, '0')}, ${nodeTone.coreB}${Math.round((isSmall ? 0.19 : 0.18) * 255 + glowPercent * 48).toString(16).padStart(2, '0')}), ${nodeTone.bg}`,
@@ -824,7 +877,7 @@ function CanvasMaterialNodeView({ material, active, connectionCount, onToggle, o
           }}
         />
       )}
-      <span className="relative z-10 leading-tight" style={{ color: nodeTone.text, maxWidth: isSmall ? 48 : 64 }}>
+      <span className="relative z-10 leading-tight" style={{ color: nodeTone.text, maxWidth: isMenuToggle ? 46 : isSmall ? 48 : 64 }}>
         {material.label}
       </span>
     </button>
@@ -855,7 +908,7 @@ function CanvasHierarchyLines({ nodes, materials, connections, draft }: { nodes:
   return (
     <svg
       className="pointer-events-none absolute inset-0"
-      style={{ zIndex: 28 }}
+      style={{ zIndex: 24 }}
       width={STYLE_CANVAS_WIDTH}
       height={STYLE_CANVAS_HEIGHT}
       viewBox={`0 0 ${STYLE_CANVAS_WIDTH} ${STYLE_CANVAS_HEIGHT}`}
@@ -887,11 +940,11 @@ function CanvasHierarchyLines({ nodes, materials, connections, draft }: { nodes:
               d={d}
               fill="none"
               stroke={isSmallLink ? 'url(#style-hierarchy-middle-small)' : 'url(#style-hierarchy-big-middle)'}
-              strokeWidth={STYLE_LINE_WIDTH}
+              strokeWidth={Math.max(1.8, STYLE_LINE_WIDTH * 1.45)}
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
               shapeRendering="geometricPrecision"
-              opacity={0.82}
+              opacity={0.96}
             />
           </g>
         );
@@ -1114,15 +1167,7 @@ function StyleCanvasWorkspace() {
       // 중간 원이 부모 큰 원에 붙어 있는 기본 상태에서는 클릭이 연결/해제만 담당한다.
       // 작은 원 펼침은 중간 원을 밖으로 분리(detached)한 뒤에만 열린다.
       if (!openMiddleNode || !openMiddleNode.detached) return;
-      getCircularChildren(
-        getDisplayStyleSmallDetailNodesForMiddle(openMiddleNode, expandedSmallMenuIds.includes(openMiddleNode.id)),
-        openMiddleNode,
-        SMALL_ORBIT_RADIUS,
-        SMALL_ORBIT_START_ANGLE,
-        'styleDetail',
-        openMiddleNode.id,
-        openMiddleNode.parentBigNodeId ?? openMiddleNode.parentId ?? '',
-      ).forEach((material) => {
+      getStableSmallCircularChildren(openMiddleNode, expandedSmallMenuIds.includes(openMiddleNode.id)).forEach((material) => {
         if (!visibleMap.has(material.id)) visibleMap.set(material.id, material);
       });
     });
@@ -1609,15 +1654,18 @@ function StyleCanvasWorkspace() {
         if (!moved) return;
         const pointer = clientToCanvas(event.clientX, event.clientY);
         if (material && isSmallDetailMenuToggleNode(material)) {
-          syncDrag({ ...current, moved: true });
+          // 더보기/간단히 컨트롤은 항상 고정 위치에 있고 드래그로 움직이지 않는다.
+          syncDrag({ ...current, moved: false });
           return;
         }
         const materialSize = material ? getMaterialNodeSize(material) : STYLE_MATERIAL_NODE_SIZE;
         const nextX = clamp(pointer.x - current.offsetX, materialSize / 2, STYLE_CANVAS_WIDTH - materialSize / 2);
         const nextY = clamp(pointer.y - current.offsetY, materialSize / 2, STYLE_CANVAS_HEIGHT - materialSize / 2);
         if (material?.kind === 'styleDetail' && !material.connected) {
-          // 작은 원은 터치 클릭 중 미세한 손가락 흔들림만으로 드래그/분리 처리하지 않는다.
-          // 연결 전 작은 원은 클릭으로만 부모에 붙이고, 연결 후에만 직접 움직일 수 있게 해서 옆으로 튀는 현상을 막는다.
+          // 연결 전 작은 원도 바로 바깥으로 끌면 손가락을 따라 나오면서 부모와 연결된다.
+          // 단, dragThreshold를 넘은 경우에만 처리해 단순 탭으로 옆으로 튀는 현상은 막는다.
+          connectMaterialToParentAt(material, { x: nextX, y: nextY }, true);
+          syncDrag({ ...current, x: nextX, y: nextY, moved: true });
           return;
         }
         if (material && !material.connected) {
@@ -1720,8 +1768,8 @@ function StyleCanvasWorkspace() {
           } else if (!clickedMaterial.connected) {
             connectMaterialToParent(clickedMaterial);
           } else if (clickedMaterial.kind === 'styleDetail') {
-            // 연결된 작은 원은 클릭만으로 해제하지 않는다.
-            // 클릭 해제 때문에 원래 자리로 스냅되는 현상을 막고, 위치 이동은 드래그로만 처리한다.
+            // 작은 원은 1번 누르면 연결, 연결된 상태에서 다시 누르면 해제된다.
+            disconnectMaterialFromParent(clickedMaterial);
           } else if (clickedMaterial.kind === 'middle') {
             if (clickedMaterial.detached) {
               // 분리된 중간 원만 클릭으로 작은 원을 펼치거나 접는다.
@@ -1858,7 +1906,7 @@ function StyleCanvasWorkspace() {
   return (
     <div className="select-none" onContextMenu={(event) => event.preventDefault()} onDragStart={(event) => event.preventDefault()}>
       <LabWorkspaceGlobalStyle />
-      <section className="relative overflow-hidden rounded-[2.2rem] bg-[#090B10] shadow-2xl" style={{ minHeight: '940px' }}>
+      <section className="relative overflow-hidden rounded-[2.2rem] bg-[#090B10] shadow-2xl" style={{ minHeight: '1080px' }}>
         <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.34) 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${tone.coreA}14, transparent 28%), radial-gradient(circle at 72% 30%, ${tone.coreB}13, transparent 30%), linear-gradient(180deg, rgba(255,255,255,0.035), transparent 48%)` }} />
 
@@ -1879,7 +1927,7 @@ function StyleCanvasWorkspace() {
           ref={viewportRef}
           onPointerDownCapture={handleViewportPointerDownCapture}
           onPointerDown={handleStartPan}
-          className="relative z-10 mx-auto mt-4 h-[760px] w-[calc(100%-3rem)] cursor-grab overflow-hidden rounded-[1.8rem] bg-black/18 active:cursor-grabbing"
+          className="relative z-10 mx-auto mt-4 h-[900px] w-[calc(100%-3rem)] cursor-grab overflow-hidden rounded-[1.8rem] bg-black/18 active:cursor-grabbing"
           style={{ overscrollBehavior: 'contain', touchAction: 'none' }}
         >
           <div

@@ -696,6 +696,7 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const selectedSongRef = useRef<any | null>(null);
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
   const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
   const [sharedMusicNoteLoading, setSharedMusicNoteLoading] = useState(false);
@@ -821,6 +822,10 @@ export default function FavoritesPage({
   const detailSunoUrlSectionRef = useRef<HTMLElement | null>(null);
   const pendingDetailSunoUrlScrollRef = useRef(false);
   const [isDetailSunoUrlHighlighted, setIsDetailSunoUrlHighlighted] = useState(false);
+
+  useEffect(() => {
+    selectedSongRef.current = selectedSong;
+  }, [selectedSong]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -2225,8 +2230,10 @@ export default function FavoritesPage({
 
       await updateFavorite(song.id, updates);
 
-      const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
-      if (selectedSong?.id === song.id) {
+      const currentSelectedSong = selectedSongRef.current;
+      const shouldUpdateOpenDetail = currentSelectedSong?.id === song.id;
+      const nextSong = { ...(shouldUpdateOpenDetail ? currentSelectedSong : song), ...updates };
+      if (shouldUpdateOpenDetail) {
         setSelectedSong(nextSong);
         const nextState = buildFavoriteSunoEditorState(nextSong);
         setDetailSunoUrlInputs(nextState.inputs);

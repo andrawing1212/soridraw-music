@@ -79,8 +79,8 @@ const CENTER_NODE_SIZE = 164;
 const MAP_NODE_SIZE = 136;
 const NODE_MOVE_PADDING = 74;
 const STYLE_CANVAS_WIDTH = 3200;
-const STYLE_CANVAS_HEIGHT = 2000;
-const STYLE_CENTER = { x: STYLE_CANVAS_WIDTH / 2, y: STYLE_CANVAS_HEIGHT / 2 };
+const STYLE_CANVAS_HEIGHT = 2200;
+const STYLE_CENTER = { x: STYLE_CANVAS_WIDTH / 2, y: 1000 };
 const STYLE_NODE_SIZE = 138;
 const STYLE_CENTER_SIZE = 174;
 const STYLE_MATERIAL_NODE_SIZE = 82;
@@ -93,7 +93,7 @@ const MIDDLE_ORBIT_START_ANGLE = -Math.PI / 2 + Math.PI / 8;
 const SMALL_ORBIT_START_ANGLE = -Math.PI / 2 + Math.PI / 5;
 const STYLE_INITIAL_VIEW_CENTER = { x: 1600, y: 1000 };
 const STYLE_INITIAL_VIEW_WIDTH = 1850;
-const STYLE_INITIAL_VIEW_HEIGHT = 1420;
+const STYLE_INITIAL_VIEW_HEIGHT = 1540;
 
 const styleIngredients: LabIngredient[] = [
   { id: 'genre', label: '장르', type: 'style' },
@@ -185,7 +185,7 @@ const styleSmallDetailNodesByMiddle = {
     { id: 'small-space', label: '공간감' },
     { id: 'small-tension', label: '긴장감' },
     { id: 'small-energy', label: '에너지' },
-    { id: 'small-color', label: '색감' },
+    { id: 'small-tone', label: '톤' },
   ],
   theme: [
     { id: 'small-theme-target', label: '대상' },
@@ -417,9 +417,9 @@ function getMiddleOrbitNode(parentNode: CanvasNode, materialId: string): Materia
   ).find((material) => material.id === materialId) ?? null;
 }
 
-function getSmallOrbitNode(parentMaterial: MaterialNode, materialId: string): MaterialNode | null {
+function getSmallOrbitNode(parentMaterial: MaterialNode, materialId: string, expanded = false): MaterialNode | null {
   return getCircularChildren(
-    getStyleSmallDetailNodesForMiddle(parentMaterial),
+    getDisplayStyleSmallDetailNodesForMiddle(parentMaterial, expanded),
     parentMaterial,
     SMALL_ORBIT_RADIUS,
     SMALL_ORBIT_START_ANGLE,
@@ -1071,6 +1071,8 @@ function StyleCanvasWorkspace() {
   const dragRef = useRef<DragState | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<ViewportTransform>({ x: 0, y: 0, scale: 0.48 });
+  const activeTouchPointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
+  const pinchRef = useRef<{ canvasX: number; canvasY: number; startDistance: number; startScale: number } | null>(null);
 
   const tone = getTone('style');
 
@@ -1134,7 +1136,7 @@ function StyleCanvasWorkspace() {
         const shouldShowAttached = !material.detached && openMiddleNodeIds.includes(material.parentId) && !!parentMaterial.detached;
         const shouldShowDetached = !!material.detached;
         if (!shouldShowAttached && !shouldShowDetached) return;
-        const orbitNode = shouldShowAttached ? getSmallOrbitNode(parentMaterial, material.id) : null;
+        const orbitNode = shouldShowAttached ? getSmallOrbitNode(parentMaterial, material.id, expandedSmallMenuIds.includes(parentMaterial.id)) : null;
         visibleMap.set(material.id, {
           ...material,
           ...(orbitNode ? { x: orbitNode.x, y: orbitNode.y } : {}),
@@ -1204,6 +1206,51 @@ function StyleCanvasWorkspace() {
       x: (clientX - rect.left - view.x) / view.scale,
       y: (clientY - rect.top - view.y) / view.scale,
     };
+  };
+
+  const getTouchPinchMetrics = () => {
+    const points = Array.from(activeTouchPointersRef.current.values());
+    if (points.length < 2) return null;
+    const [first, second] = points;
+    const centerX = (first.clientX + second.clientX) / 2;
+    const centerY = (first.clientY + second.clientY) / 2;
+    const distance = Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+    return { centerX, centerY, distance };
+  };
+
+  const beginTouchPinch = () => {
+    const viewport = viewportRef.current;
+    const metrics = getTouchPinchMetrics();
+    if (!viewport || !metrics || metrics.distance <= 0) return;
+    const currentView = viewRef.current;
+    const rect = viewport.getBoundingClientRect();
+    const localX = metrics.centerX - rect.left;
+    const localY = metrics.centerY - rect.top;
+    pinchRef.current = {
+      canvasX: (localX - currentView.x) / currentView.scale,
+      canvasY: (localY - currentView.y) / currentView.scale,
+      startDistance: metrics.distance,
+      startScale: currentView.scale,
+    };
+    syncDrag(null);
+    setSelectedConnectionId(null);
+  };
+
+  const updateTouchPinch = () => {
+    const viewport = viewportRef.current;
+    const pinch = pinchRef.current;
+    const metrics = getTouchPinchMetrics();
+    if (!viewport || !pinch || !metrics || metrics.distance <= 0) return false;
+    const rect = viewport.getBoundingClientRect();
+    const localX = metrics.centerX - rect.left;
+    const localY = metrics.centerY - rect.top;
+    const nextScale = clamp(pinch.startScale * (metrics.distance / pinch.startDistance), 0.22, 1.9);
+    setView({
+      scale: nextScale,
+      x: localX - pinch.canvasX * nextScale,
+      y: localY - pinch.canvasY * nextScale,
+    });
+    return true;
   };
 
   const addItem = (nodeId: string, ingredient: LabIngredient) => {
@@ -1443,8 +1490,23 @@ function StyleCanvasWorkspace() {
     syncDrag({ kind: 'materialConnection', fromMaterialId: materialId, pointerX: pointer.x, pointerY: pointer.y, overMaterialId: null });
   };
 
+  const handleViewportPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'touch') return;
+    activeTouchPointersRef.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some mobile browsers can reject capture during multi-touch. Pinch tracking still works through window events.
+    }
+    if (activeTouchPointersRef.current.size >= 2) {
+      event.preventDefault();
+      beginTouchPinch();
+    }
+  };
+
   const handleStartPan = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    if (event.pointerType === 'touch' && activeTouchPointersRef.current.size >= 2) return;
     const target = event.target as HTMLElement;
     if (target.closest('[data-lab-node-id]') || target.closest('[data-lab-material-node]') || target.closest('[data-lab-ingredient-hub]') || target.closest('button')) return;
     event.preventDefault();
@@ -1501,6 +1563,16 @@ function StyleCanvasWorkspace() {
     const previousCursor = document.body.style.cursor;
 
     const handlePointerMove = (event: globalThis.PointerEvent) => {
+      if (event.pointerType === 'touch' && activeTouchPointersRef.current.has(event.pointerId)) {
+        activeTouchPointersRef.current.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      }
+
+      if (pinchRef.current && activeTouchPointersRef.current.size >= 2) {
+        event.preventDefault();
+        updateTouchPinch();
+        return;
+      }
+
       const current = dragRef.current;
       if (!current) return;
       event.preventDefault();
@@ -1530,11 +1602,12 @@ function StyleCanvasWorkspace() {
       }
 
       if (current.kind === 'materialNode') {
+        const material = hierarchyNodes.find((item) => item.id === current.materialId);
         const movement = Math.hypot(event.clientX - current.startClientX, event.clientY - current.startClientY);
-        const moved = current.moved || movement > 5;
+        const dragThreshold = material?.kind === 'styleDetail' ? 14 : 5;
+        const moved = current.moved || movement > dragThreshold;
         if (!moved) return;
         const pointer = clientToCanvas(event.clientX, event.clientY);
-        const material = hierarchyNodes.find((item) => item.id === current.materialId);
         if (material && isSmallDetailMenuToggleNode(material)) {
           syncDrag({ ...current, moved: true });
           return;
@@ -1546,7 +1619,8 @@ function StyleCanvasWorkspace() {
           const parentTarget = getParentDropTarget(material);
           const startDistance = parentTarget ? getCanvasDistance(material, parentTarget) : 0;
           const nextDistance = parentTarget ? getCanvasDistance({ x: nextX, y: nextY }, parentTarget) : 0;
-          const isPullingAwayFromParent = !!parentTarget && nextDistance > startDistance + 10;
+          const pullAwayThreshold = material.kind === 'styleDetail' ? 28 : 10;
+          const isPullingAwayFromParent = !!parentTarget && nextDistance > startDistance + pullAwayThreshold;
           if (isPullingAwayFromParent) {
             // 하위 원을 기존 펼침 위치에서 바깥으로 당기면, 놓기 전부터 연결선이 붙은 채로 분리된다.
             connectMaterialToParentAt(material, { x: nextX, y: nextY }, true);
@@ -1590,6 +1664,18 @@ function StyleCanvasWorkspace() {
     };
 
     const handlePointerUp = (event: globalThis.PointerEvent) => {
+      if (event.pointerType === 'touch') {
+        activeTouchPointersRef.current.delete(event.pointerId);
+        if (pinchRef.current) {
+          event.preventDefault();
+          if (activeTouchPointersRef.current.size < 2) pinchRef.current = null;
+          syncDrag(null);
+          setHoverConnectionPoint(null);
+          setHoverMaterialConnectionPoint(null);
+          return;
+        }
+      }
+
       const current = dragRef.current;
       if (!current) return;
       event.preventDefault();
@@ -1696,11 +1782,22 @@ function StyleCanvasWorkspace() {
 
     const blockContextMenu = (event: MouseEvent) => event.preventDefault();
 
+    const handlePointerCancel = (event: globalThis.PointerEvent) => {
+      if (event.pointerType === 'touch') {
+        activeTouchPointersRef.current.delete(event.pointerId);
+        if (activeTouchPointersRef.current.size < 2) pinchRef.current = null;
+      }
+      if (dragRef.current) syncDrag(null);
+      setHoverConnectionPoint(null);
+      setHoverMaterialConnectionPoint(null);
+    };
+
     document.body.style.userSelect = dragging ? 'none' : previousUserSelect;
     document.body.style.cursor = dragging?.kind === 'ingredient' ? 'grabbing' : dragging?.kind === 'canvasNode' ? 'move' : dragging?.kind === 'materialNode' ? 'move' : dragging?.kind === 'connection' ? 'default' : dragging?.kind === 'materialConnection' ? 'default' : dragging?.kind === 'pan' ? 'grabbing' : previousCursor;
 
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp, { passive: false });
+    window.addEventListener('pointercancel', handlePointerCancel, { passive: false });
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('contextmenu', blockContextMenu);
 
@@ -1709,6 +1806,7 @@ function StyleCanvasWorkspace() {
       document.body.style.cursor = previousCursor;
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerCancel);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('contextmenu', blockContextMenu);
     };
@@ -1754,7 +1852,7 @@ function StyleCanvasWorkspace() {
   return (
     <div className="select-none" onContextMenu={(event) => event.preventDefault()} onDragStart={(event) => event.preventDefault()}>
       <LabWorkspaceGlobalStyle />
-      <section className="relative overflow-hidden rounded-[2.2rem] bg-[#090B10] shadow-2xl" style={{ minHeight: '820px' }}>
+      <section className="relative overflow-hidden rounded-[2.2rem] bg-[#090B10] shadow-2xl" style={{ minHeight: '940px' }}>
         <div className="pointer-events-none absolute inset-0 opacity-45" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.34) 1px, transparent 1px)', backgroundSize: '30px 30px' }} />
         <div className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${tone.coreA}14, transparent 28%), radial-gradient(circle at 72% 30%, ${tone.coreB}13, transparent 30%), linear-gradient(180deg, rgba(255,255,255,0.035), transparent 48%)` }} />
 
@@ -1773,8 +1871,9 @@ function StyleCanvasWorkspace() {
 
         <div
           ref={viewportRef}
+          onPointerDownCapture={handleViewportPointerDownCapture}
           onPointerDown={handleStartPan}
-          className="relative z-10 mx-auto mt-4 h-[650px] w-[calc(100%-3rem)] cursor-grab overflow-hidden rounded-[1.8rem] bg-black/18 active:cursor-grabbing"
+          className="relative z-10 mx-auto mt-4 h-[760px] w-[calc(100%-3rem)] cursor-grab overflow-hidden rounded-[1.8rem] bg-black/18 active:cursor-grabbing"
           style={{ overscrollBehavior: 'contain', touchAction: 'none' }}
         >
           <div

@@ -90,7 +90,7 @@ const SelectionOrderBadge = ({ order }: { order: number }) => {
 
   return (
     <span
-      className="soridraw-language-order-badge absolute right-1.5 top-1.5 z-20 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border px-1.5 text-[11px] font-black leading-none shadow-[0_3px_9px_rgba(0,0,0,0.32)] select-none pointer-events-none"
+      className="soridraw-language-order-badge absolute right-1 top-1 z-20 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border px-1.5 text-[11px] font-black leading-none shadow-[0_3px_9px_rgba(0,0,0,0.32)] select-none pointer-events-none"
       style={{
         backgroundColor,
         borderColor: isPrimary ? 'rgba(255, 187, 34, 0.38)' : 'rgba(5, 5, 5, 0.42)',
@@ -878,13 +878,13 @@ export default function MusicApiGenerateModal({
                                       key={`${target.id}-${lang}`}
                                       type="button"
                                       onClick={() => setPerTargetLyricLanguages((prev) => ({ ...prev, [target.id]: lang }))}
-                                      className={`rounded-xl px-3 py-2.5 border text-left transition-all ${
+                                      className={`rounded-xl px-3 py-2.5 border text-center transition-all ${
                                         selected
                                           ? accentSelected
                                           : optionRest
                                       }`}
                                     >
-                                      <p className="text-xs font-black flex items-center gap-1.5">
+                                      <p className="text-xs font-black flex items-center justify-center gap-1.5">
                                         {selected && <Check className="w-3.5 h-3.5" />}
                                         {meta.short}
                                       </p>
@@ -912,14 +912,14 @@ export default function MusicApiGenerateModal({
                                   type="button"
                                   disabled={disabled}
                                   onClick={() => toggleLyricLanguage(item.id)}
-                                  className={`soridraw-language-option-button relative rounded-xl px-3 py-2.5 pr-8 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                  className={`soridraw-language-option-button relative rounded-xl px-3 py-2.5 sm:py-3 border text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                     selected
                                       ? accentSelected
                                       : optionRest
                                   }`}
                                 >
                                   {selected && <SelectionOrderBadge order={selectedOrder} />}
-                                  <p className="soridraw-language-option-label text-sm font-black flex items-center gap-1.5">
+                                  <p className="soridraw-language-option-label text-sm font-black flex items-center justify-center gap-1.5">
                                     {selected && <Check className="soridraw-language-option-check w-3.5 h-3.5" />}
                                     <span className="soridraw-language-option-text">{item.label}</span>
                                   </p>
@@ -948,14 +948,14 @@ export default function MusicApiGenerateModal({
                                         type="button"
                                         disabled={disabled}
                                         onClick={() => toggleLyricLanguage(item.id)}
-                                        className={`soridraw-language-option-button relative rounded-xl px-3 py-2.5 pr-8 sm:py-3 border text-left transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                                        className={`soridraw-language-option-button relative rounded-xl px-3 py-2.5 sm:py-3 border text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                                           selected
                                             ? accentSelected
                                             : optionRest
                                         }`}
                                       >
                                         {selected && <SelectionOrderBadge order={selectedOrder} />}
-                                        <p className="soridraw-language-option-label text-sm font-black flex items-center gap-1.5">
+                                        <p className="soridraw-language-option-label text-sm font-black flex items-center justify-center gap-1.5">
                                           {selected && <Check className="soridraw-language-option-check w-3.5 h-3.5" />}
                                           <span className="soridraw-language-option-text">{item.label}</span>
                                         </p>

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>SORIDRAW's Studio</title>
     <!-- VERIFICATION COMMENT: IF YOU SEE THIS IN SOURCE, THIS FILE IS BEING SERVED -->
     <meta name="theme-color" content="#0f0f0f" />
@@ -31,6 +31,28 @@
       (function() {
         document.documentElement.classList.add('dark');
         localStorage.setItem('themeMode', 'dark');
+      })();
+    </script>
+
+
+
+    <script>
+      // 모바일 앱 화면에서 두 손가락 확대/축소 흔들림을 막고, 한 손가락 스크롤은 유지합니다.
+      (function() {
+        var preventPinchZoom = function(event) {
+          if (event.touches && event.touches.length > 1) {
+            event.preventDefault();
+          }
+        };
+
+        var preventGestureZoom = function(event) {
+          event.preventDefault();
+        };
+
+        document.addEventListener('touchmove', preventPinchZoom, { passive: false });
+        document.addEventListener('gesturestart', preventGestureZoom, { passive: false });
+        document.addEventListener('gesturechange', preventGestureZoom, { passive: false });
+        document.addEventListener('gestureend', preventGestureZoom, { passive: false });
       })();
     </script>
 

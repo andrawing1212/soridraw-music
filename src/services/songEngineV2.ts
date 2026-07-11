@@ -138,7 +138,30 @@ function valuesForIds(ids: unknown): string[] {
   return unique(Array.isArray(ids) ? ids.map((id) => cleanText(id)) : []);
 }
 
-function summarizeVocal(vocal: any): string {
+function hasV2VocalCharacter(member: any): boolean {
+  const character = member?.character;
+  if (!character || typeof character !== "object") return false;
+  return Object.values(character).some((value: any) => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "number") return value !== 0;
+    return Boolean(cleanText(value));
+  });
+}
+
+function summarizeVocalSongFit(params: any): string {
+  const anchors = unique([
+    labelForId(params?.genre),
+    ...labelsForIds(params?.subGenre).slice(0, 2),
+    ...labelsForIds(params?.moods).slice(0, 3),
+    ...labelsForIds(params?.themes).slice(0, 2),
+    cleanText(params?.customThemeInput),
+    cleanText(params?.userInput),
+  ]).slice(0, 6);
+  if (!anchors.length) return "";
+  return `song-fit: preserve vocal character identity, but let genre/mood/theme direct delivery, phrasing, emotional distance, hook focus, and pressure (${anchors.join(" / ")})`;
+}
+
+function summarizeVocal(vocal: any, params?: any): string {
   if (!vocal || typeof vocal !== "object") return "Natural solo vocal";
   const male = Number(vocal.male || 0);
   const female = Number(vocal.female || 0);
@@ -158,6 +181,10 @@ function summarizeVocal(vocal: any): string {
   if (mode) parts.push(`mode: ${mode}`);
   if (vocal.tonePrompt) parts.push(`tone: ${vocal.tonePrompt}`);
   if (rapMode) parts.push(`rap mode: ${rapMode}`);
+  if (members.some(hasV2VocalCharacter)) {
+    const songFit = summarizeVocalSongFit(params || {});
+    if (songFit) parts.push(songFit);
+  }
   return parts.length ? parts.join("; ") : "Natural solo vocal";
 }
 
@@ -248,7 +275,7 @@ SOUND: ${sound}
 MOOD: ${mood}
 THEME: ${theme}
 TEMPO: ${cleanText(params?.tempo) || (params?.isRandomTempo ? "random/adaptive" : "not selected")}
-VOCAL: ${summarizeVocal(params?.vocal)}
+VOCAL: ${summarizeVocal(params?.vocal, params)}
 STRUCTURE: ${summarizeStructure(params)}
 USER DIRECTOR NOTE: ${cleanText(params?.userInput) || "none"}
 LYRIC DRAFT MODE: ${cleanText(params?.lyricMode || (params?.isLyricMode ? "assist" : "none"))}

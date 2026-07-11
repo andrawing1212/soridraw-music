@@ -3556,6 +3556,35 @@ function buildAtmosphereVocalEmotionCueForSolo(params: GenerateSongParams): stri
   return priority.find((cue) => candidates.includes(cue)) || candidates[0] || '';
 }
 
+function buildVocalSongFitParts(params: GenerateSongParams, maxParts = 3): string[] {
+  const interpreted = buildThemeMoodInterpretation(params);
+  const intent = buildPromptIntent(params);
+  const parts: string[] = [];
+  const add = (value: string) => {
+    const cleaned = cleanupPromptTail(value || '');
+    if (cleaned) parts.push(cleaned);
+  };
+
+  const genreDNA = cleanupPromptTail(getGenreVocalDNAPhrase(params));
+  if (genreDNA) add(`genre-shaped ${genreDNA}`);
+
+  const moodDelivery = cleanupPromptTail(
+    interpreted.vocalCue ||
+    intent.vocalDelivery ||
+    buildAtmosphereVocalEmotionCueForSolo(params),
+  );
+  if (moodDelivery && !/balanced emotional color/i.test(moodDelivery)) {
+    add(`mood-shaped ${moodDelivery}`);
+  }
+
+  const storyCue = cleanupPromptTail(buildSoloVocalSongInterpretationCue(params, interpreted))
+    .replace(/^carrying\s+/i, 'carrying ')
+    .replace(/^story-aware\s+/i, '');
+  if (storyCue) add(`story-aware ${cleanScenePlanPhrase(storyCue, 72)}`);
+
+  return dedupePromptParts(parts, 8).slice(0, maxParts);
+}
+
 type SoloVocalCueGroup = 'tone' | 'special' | 'phrasing' | 'emotion' | 'focus' | 'other';
 
 function classifySoloVocalCuePart(value: string, forcedGroup?: SoloVocalCueGroup): SoloVocalCueGroup {
@@ -3693,8 +3722,10 @@ function buildDedicatedSoloVocalCharacterLine(params: GenerateSongParams): strin
     atmosphereEmotionCue,
     characterSelectionCount: rawCoreCharacterParts.length,
   });
+  const songFitParts = buildVocalSongFitParts(params, 3);
+  const finalParts = dedupePromptParts([...parts, ...songFitParts], 15);
 
-  if (!parts.length) return '';
+  if (!finalParts.length) return '';
 
   const gender = member?.gender === 'female'
     ? 'female'
@@ -3711,7 +3742,7 @@ function buildDedicatedSoloVocalCharacterLine(params: GenerateSongParams): strin
       ? 'Natural male solo vocal'
       : 'Natural solo vocal';
 
-  return cleanupPromptTail(`${subject} with ${parts.join(', ')}`);
+  return cleanupPromptTail(`${subject} with ${finalParts.join(', ')}`);
 }
 
 function forceSoloVocalCharacterInPrompt(prompt: string, params: GenerateSongParams): string {
@@ -3934,10 +3965,12 @@ function buildSelectedMultiVocalRolePrompt(params: GenerateSongParams): string {
   const sharedVocalLineCue = sharedVocalLineTone ? `; all members share ${sharedVocalLineTone} as the group vocal line` : '';
   const specialVoiceToneParts = getSelectedSpecialVoiceToneCues(params);
   const specialVoiceCue = specialVoiceToneParts.length ? `; shared main-voice tone with ${joinPromptPhrase(specialVoiceToneParts, 'and')}` : '';
+  const songFitParts = buildVocalSongFitParts(params, total >= 3 ? 2 : 3);
+  const songFitCue = songFitParts.length ? `; all members adapt to ${joinPromptPhrase(songFitParts, 'and')}` : '';
   const ensembleTail = total >= 3
     ? 'clear role separation, compact harmony support, focused hook delivery'
     : 'clear part separation, gentle harmony, blended hook';
-  return cleanupPromptTail(`${formation}: ${items.join('; ')}${sharedVocalLineCue}${specialVoiceCue}; ${ensembleTail}.`);
+  return cleanupPromptTail(`${formation}: ${items.join('; ')}${sharedVocalLineCue}${specialVoiceCue}${songFitCue}; ${ensembleTail}.`);
 }
 
 function forceSelectedMultiVocalsInPrompt(prompt: string, params: GenerateSongParams): string {
@@ -4085,8 +4118,9 @@ VOCAL RULE (STRICT):
 - Formation: ${formation}
 - Gender: ${genderRule}${memberRolesRule}
 - ${rapRule}${toneRule}${auxiliaryVocalRule}
-- If Vocal Character exists, preserve the selected age/range/delivery/rhythm/emotion/texture/charm/ornament cues in the final [Vocals] line as primary vocal direction, not as optional flavor.
-- For solo or duo vocals, include at least 5 distinct Vocal Character cues per configured singer when available: age/range, delivery/register, timing/rhythm, emotion, texture/charm, and ornament/technique. The [Vocals] line may be longer so the character voice is clear.
+- If Vocal Character exists, preserve the selected age/range/delivery/rhythm/emotion/texture/charm/ornament cues in the final [Vocals] line as the singer identity, not as optional flavor.
+- Vocal Character must not sound isolated from the song. The selected genre and mood are the performance director above the character: they must shape the character's delivery, phrasing, emotional distance, hook focus, and pressure while preserving the character identity.
+- For solo or duo vocals, include at least 5 distinct Vocal Character cues per configured singer when available: age/range, delivery/register, timing/rhythm, emotion, texture/charm, and ornament/technique, then add 1 compact genre/mood/theme adaptation cue so the vocal feels embedded in the track.
 - Do not dump Vocal Character cues as a keyword chain. Rewrite them into one natural singer-direction sentence for each singer. Merge only truly similar cues into compact phrases, but do not silently drop distinct selected cues such as teen/high/chest voice/rushed timing/bright charm/ornament.
 - When Situation roles also exist, use Situation for role/attitude/speech context and Vocal Character for voice color, delivery, timing, texture, charm, and technique. Do not let one erase the other; combine them in the same singer sentence.
 - Apply hard compression only to 3+ member group vocals. For 1-2 characters, prefer clarity and emotional specificity over excessive brevity. Do not wrap Style/Prompt vocal instructions in square brackets.

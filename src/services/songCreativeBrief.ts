@@ -127,6 +127,7 @@ Shared-brief rule:
 Global mood routing rule:
 - The selected Mood is a global seasoning directive for all five prompt lanes, not only Atmosphere/Mood.
 - Genre receives only a small mood color; Sound receives texture/weight/air; Atmosphere receives emotional state; Vocals receive delivery/emotional pressure; Production receives section motion and density.
+- If Vocal Character is selected, do not let the character become a disconnected preset. Treat Genre + Mood + Theme as the upper performance director: the character identity stays, but delivery, phrasing, emotional distance, hook focus, and pressure must melt into the selected song world.
 - Prefer compact music-direction language over object-heavy imagery, and keep each final prompt line short.
 
 Lyric rule:
@@ -296,6 +297,9 @@ ${hasCue ? `Suggested lane translation:
 - Atmosphere/Mood lane: ${cues.mood || 'main emotional design'}
 - Vocals lane: ${cues.vocals || 'delivery/distance/emotional pressure only'}
 - Arrangement/Production lane: ${cues.production || 'section motion/density/pacing only'}` : ''}
+
+VOCAL CHARACTER INTEGRATION:
+If a Vocal Character exists, keep its identity, but the selected Genre/Mood/Theme must direct how that character sings. The [Vocals] line should include one compact adaptation cue such as genre-shaped phrasing, mood-shaped distance, or story-aware pressure. Do not leave the character as a standalone preset voice.
 
 Do not treat Mood as a short fixed prefix before the genre. Do not choose from a tiny fixed list of mood words.
 First synthesize the selected mood combination into one global feeling, then distribute it across the five prompt lanes by role.

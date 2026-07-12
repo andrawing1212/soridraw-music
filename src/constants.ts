@@ -1200,362 +1200,362 @@ export const MOODS: CategoryItem[] = [
   { 
       id: 'emotional', label: 'Emotional', labelKo: '감성적', 
       description: '섬세하고 진한 감정 표현이 살아나는 분위기로 몰입감 있는 무드를 형성합니다', 
-      mood: 'Rich, immersive, raw depth', 
-      arrangement: 'dynamic build, expressive peaks' 
+      mood: 'Emotionally resonant, intimate, deeply felt', 
+      arrangement: 'intimate opening, expanding emotional contour, expressive release' 
     },
   { 
       id: 'hollow', label: 'Hollow', labelKo: '공허한', 
       description: '마음 한쪽이 비어 있는 듯한 거리감과 허전한 여백을 만듭니다', 
-      mood: 'Hollow, empty, distant', 
-      arrangement: 'open space, restrained low movement' 
+      mood: 'Vacant, detached, emotionally hollow', 
+      arrangement: 'sparse gaps, low movement, unresolved decay' 
     },
   { 
       id: 'cute_mood', label: 'Cute', labelKo: '귀여운', 
-      description: '귀엽고 깜찍하며 발랄한 매력을 담아 작고 밝게 튀는 무드를 만듭니다', 
-      mood: 'Cute, adorable, perky, bubbly, sweet', 
-      arrangement: 'small bright hooks, perky phrases, playful motion' 
+      description: '작고 사랑스러운 몸짓과 순수한 밝음이 느껴지는 귀여운 분위기를 만듭니다', 
+      mood: 'Cute, bubbly, innocent, tiny-bright charm', 
+      arrangement: 'small motifs, quick bright replies, buoyant miniature hooks' 
     },
   { 
       id: 'groovy', label: 'Groovy', labelKo: '그루비', 
       description: '리듬의 탄력과 흐름이 살아 있는 질감으로 자연스럽게 몸을 타는 무드를 만듭니다', 
-      mood: 'Elastic, rhythmic, pocketed', 
-      arrangement: 'groovy pocket, consistent drive' 
+      mood: 'Body-led, elastic, pocketed, rhythmically fluid', 
+      arrangement: 'syncopated pocket, steady body motion, groove-led continuity' 
     },
   { 
       id: 'glossy', label: 'Glossy', labelKo: '글로시', 
       description: '윤기 있고 반짝이는 세련된 표면감으로 현대적인 무드를 만듭니다', 
-      mood: 'Glossy, polished, sparkling', 
-      arrangement: 'polished lift, sparkling accents' 
+      mood: 'High-sheen, reflective, polished, sparkling', 
+      arrangement: 'clean transitions, shimmering lifts, immaculate surface detail' 
     },
   { 
       id: 'strange', label: 'Strange', labelKo: '기묘한', 
-      description: '낯설고 묘한 긴장감으로 strange하고 curious한 분위기를 만듭니다', 
-      mood: 'Strange, uncanny, curious', 
-      arrangement: 'curious pauses, eerie small shifts' 
+      description: '익숙한 것이 살짝 어긋난 듯한 낯섦과 호기심이 공존하는 기묘한 분위기를 만듭니다', 
+      mood: 'Uncanny, curious, subtly off, unfamiliar', 
+      arrangement: 'asymmetrical pauses, subtly wrong turns, eerie micro-shifts' 
     },
   { 
       id: 'tense', label: 'Tense', labelKo: '긴장된', 
       description: '서서히 조여오는 긴장감으로 날카롭고 불안정한 무드감을 형성합니다', 
-      mood: 'Sharp, anxious, high-tension', 
-      arrangement: 'tight pacing, sudden shifts' 
+      mood: 'Pressurized, alert, tightly wound, high-stakes', 
+      arrangement: 'compressed pacing, escalating pressure, abrupt release points' 
     },
   { 
       id: 'romantic', label: 'Romantic', labelKo: '낭만적', 
       description: '감미롭고 설레는 정서가 흐르는 분위기로 로맨틱한 무드를 만듭니다', 
-      mood: 'Lush, sweet, intimate', 
-      arrangement: 'smooth flow, graceful builds' 
+      mood: 'Romantic, idealized, tender, softly glowing', 
+      arrangement: 'graceful swells, intimate pauses, warm emotional climax' 
     },
   { 
       id: 'cheeky_deadpan', label: 'Cheeky Deadpan', labelKo: '능청미', 
-      description: '능청스럽고 뻔뻔한 듯한 유머로 말맛 있는 코믹한 무드를 더합니다', 
-      mood: 'Slyly playful, deadpan humor, cheeky', 
-      arrangement: 'dry pauses, witty turnarounds' 
+      description: '진지한 표정으로 슬쩍 비틀어 말하는 능청스럽고 뻔뻔한 유머를 더합니다', 
+      mood: 'Cheeky, deadpan, knowingly shameless, sly', 
+      arrangement: 'dry stops, delayed punchlines, sly rhythmic turnarounds' 
     },
   { 
       id: 'bittersweet', label: 'Bittersweet', labelKo: '달콤씁쓸', 
-      description: '따뜻함과 쓸쓸함이 함께 남는 복합적인 무드와 질감을 형성합니다', 
-      mood: 'Complex, mixed colors', 
-      arrangement: 'balanced, contrasting dynamics' 
+      description: '달콤한 온기 안에 조용한 씁쓸함이 함께 남는 복합적인 분위기를 만듭니다', 
+      mood: 'Sweet on the surface, quietly aching underneath', 
+      arrangement: 'warm phrases undercut by restrained turns, lingering unresolved aftertaste' 
     },
   { 
       id: 'restrained', label: 'Restrained', labelKo: '담담한', 
       description: '감정을 과하게 드러내지 않고 차분히 눌러 담는 무드를 만듭니다', 
-      mood: 'Restrained, calm, understated', 
-      arrangement: 'controlled dynamics, minimal emotional overflow' 
+      mood: 'Emotionally contained, composed, understated, plainspoken', 
+      arrangement: 'low dynamic ceiling, measured build, no emotional spillover' 
     },
   { 
       id: 'urban', label: 'Urban', labelKo: '도시적', 
       description: '차갑고 세련된 도시의 결을 담아 현대적 분위기를 형성합니다', 
-      mood: 'Sleek, urban, metropolitan', 
-      arrangement: 'modern pulse, sharp transitions' 
+      mood: 'Metropolitan, nocturnal, sleek, fast-living', 
+      arrangement: 'sleek pulse, night-city momentum, crisp section changes' 
     },
   { 
       id: 'fairytale', label: 'Fairytale', labelKo: '동화적인', 
       description: '순수하고 이야기책 같은 정서로 맑고 동화적인 분위기를 만듭니다', 
-      mood: 'Fairytale-like, innocent, magical', 
-      arrangement: 'gentle storybook progression' 
+      mood: 'Innocent, storybook-like, childlike wonder', 
+      arrangement: 'chapter-like progression, gentle motifs, soft storybook reveal' 
     },
   { 
       id: 'dreamy_soft', label: 'Dreamy', labelKo: '드리미', 
       description: '소리 질감이 꿈결처럼 부드럽고 몽환적으로 떠 있는 흐릿한 무드를 만듭니다', 
-      mood: 'Dreamy, floating, hazy, dreamlike, soft', 
-      arrangement: 'blurred transitions, ethereal flow, floating movement' 
+      mood: 'Soft-focus, hazy, floating, dream-state', 
+      arrangement: 'blurred section edges, floating repetition, soft dissolves' 
     },
   { 
       id: 'warm', label: 'Warm', labelKo: '따뜻한', 
       description: '온기 있게 감싸는 질감으로 부드럽고 포근한 분위기를 만듭니다', 
-      mood: 'Soft, thick, cozy', 
-      arrangement: 'warm structure, harmonic support' 
+      mood: 'Warm, embracing, human, softly enveloping', 
+      arrangement: 'supportive harmony, rounded dynamics, enveloping progression' 
     },
   { 
       id: 'lofi', label: 'Lo-fi', labelKo: '로파이', 
       description: '먼지 낀 듯 낮은 해상도와 친밀한 빈티지 질감의 무드를 더합니다', 
-      mood: 'Lo-fi, dusty, intimate', 
-      arrangement: 'simple loop feel, close texture' 
+      mood: 'Dusty, imperfect, homemade, close and intimate', 
+      arrangement: 'compact loops, imperfect repetition, close-room pacing' 
     },
   { 
       id: 'relaxing', label: 'Relaxing', labelKo: '릴렉스', 
       description: '편안함과 칠한 여유를 함께 담아 힘을 빼고 자연스럽게 흘러가는 무드를 만듭니다', 
-      mood: 'Relaxed, chill, laid-back, gentle flow', 
-      arrangement: 'easy pacing, relaxed groove, effortless progression' 
+      mood: 'Unhurried, easygoing, loose, pressure-free', 
+      arrangement: 'easy pacing, loose groove, effortless continuation' 
     },
   { 
       id: 'magical', label: 'Magical', labelKo: '마법같은', 
       description: '반짝이고 신기한 사건감으로 magical하고 설레는 분위기를 더합니다', 
-      mood: 'Magical, sparkling, wonder-filled', 
-      arrangement: 'sparkling lifts, magical transitions' 
+      mood: 'Enchanting, sparkling, wonder-filled, eventful', 
+      arrangement: 'sparkling reveals, sudden lifts, wonder-filled transitions' 
     },
   { 
       id: 'zen', label: 'Zen', labelKo: '명상적인', 
       description: '비움과 정적이 느껴지는 절제된 분위기로 맑고 고요한 질감을 만듭니다', 
-      mood: 'Spacious, meditative stillness', 
-      arrangement: 'minimalist, significant space' 
+      mood: 'Centered, contemplative, still, spacious', 
+      arrangement: 'long rests, minimal motion, balanced repetition' 
     },
   { 
       id: 'hypnotic', label: 'Hypnotic', labelKo: '몰입감', 
       description: '반복과 흐름 속에 빨려 들어가듯 깊이 몰입되는 분위기를 만듭니다', 
-      mood: 'Swirling, hypnotic, trance-like', 
-      arrangement: 'repetitive, evolving layers' 
+      mood: 'Absorbing, trance-like, circular, tunnel-focused', 
+      arrangement: 'cyclic motifs, gradual evolution, immersive repetition' 
     },
   { 
       id: 'soft_tender', label: 'Soft Tender', labelKo: '몽글한', 
       description: '부드럽고 말랑하게 피어나는 따뜻한 감정의 질감을 만듭니다', 
-      mood: 'Soft, tender, gently warm', 
-      arrangement: 'rounded flow, gentle lift' 
+      mood: 'Softly blooming, tender-hearted, rounded, cuddly', 
+      arrangement: 'rounded phrases, gentle lift, cushioned landing' 
     },
   { 
       id: 'moody', label: 'Moody', labelKo: '무디', 
       description: '감정의 결이 짙게 배어 있는 분위기로 깊고 미묘한 무드를 만듭니다', 
-      mood: 'Thick, moody, shifting', 
-      arrangement: 'shifting structure, emotive turns' 
+      mood: 'Brooding, emotionally shifting, shadowed, changeable', 
+      arrangement: 'shifting shades, restrained turns, unstable emotional color' 
     },
   { 
       id: 'minimalist', label: 'Minimalist', labelKo: '미니멀', 
       description: '불필요한 요소를 덜어낸 절제된 질감으로 깔끔한 분위기를 만듭니다', 
-      mood: 'Bare, minimalist, essential', 
-      arrangement: 'simple, focused elements' 
+      mood: 'Spare, clean, intentional, essential', 
+      arrangement: 'few elements, deliberate gaps, single-focus progression' 
     },
   { 
       id: 'bright', label: 'Bright', labelKo: '밝은', 
       description: '환하게 열리는 인상으로 선명하고 가벼운 분위기를 형성합니다', 
-      mood: 'Clear, airy, luminous', 
-      arrangement: 'uplifting, forward structure' 
+      mood: 'Sunlit, clear, buoyant, openly luminous', 
+      arrangement: 'open phrasing, upward motion, clear resolution' 
     },
   { 
       id: 'swelling', label: 'Swelling', labelKo: '벅찬', 
       description: '감정이 차오르며 후반으로 갈수록 크게 벅차오르는 무드를 만듭니다', 
-      mood: 'Swelling, emotional, overwhelming', 
-      arrangement: 'gradual build, final emotional bloom' 
+      mood: 'Awe-filled, emotionally rising, overflowing', 
+      arrangement: 'progressive expansion, delayed bloom, climactic emotional release' 
     },
   { 
       id: 'uneasy', label: 'Uneasy', labelKo: '불안한', 
       description: '안정되지 못하고 흔들리는 긴장감으로 불안한 감정의 결을 만듭니다', 
-      mood: 'Uneasy, unstable, tense', 
-      arrangement: 'uneven pacing, unresolved transitions' 
+      mood: 'Uneasy, restless, unstable, unresolved', 
+      arrangement: 'uneven pulse, suspended resolution, small disruptive turns' 
     },
   { 
       id: 'sorrowful', label: 'Sorrowful', labelKo: '비통한', 
       description: '가슴이 찢어질 듯한 슬픔과 비통한 분위기를 만듭니다', 
-      mood: 'Grieving, heartbreaking', 
-      arrangement: 'no climaxes, mourning pace' 
+      mood: 'Grief-stricken, devastated, solemn, heartbroken', 
+      arrangement: 'slow lament, grief-heavy pacing, restrained final release' 
     },
   { 
       id: 'nostalgic', label: 'Nostalgic', labelKo: '빈티지', 
-      description: '빈티지한 추억감과 레트로한 아날로그 질감으로 지나간 시간의 무드를 더합니다', 
-      mood: 'Vintage, retro, analog, misty, faded', 
-      arrangement: 'classic pop movement, bittersweet pacing, longing feel' 
+      description: '오래된 음반처럼 바랜 아날로그 질감과 시간의 흔적이 느껴지는 빈티지 무드를 더합니다', 
+      mood: 'Timeworn, analog, faded, vintage-patina', 
+      arrangement: 'retro phrase shapes, gently faded cadence, analog-era movement' 
     },
   { 
       id: 'chilly', label: 'Chilly', labelKo: '서늘한', 
       description: '차갑게 스며드는 미묘한 긴장감과 서늘한 공기를 더합니다', 
-      mood: 'Cold, subtle tension', 
-      arrangement: 'cool textures, restrained tension' 
+      mood: 'Cool, eerie, quietly threatening, emotionally distant', 
+      arrangement: 'thin textures, restrained suspense, distant release' 
     },
   { 
       id: 'sophisticated', label: 'Sophisticated', labelKo: '세련된', 
       description: '정교하고 다듬어진 인상으로 도시적이고 세련된 무드를 형성합니다', 
-      mood: 'Polished, urban, refined', 
-      arrangement: 'elegant structure, intricate' 
+      mood: 'Refined, tasteful, precise, elegantly controlled', 
+      arrangement: 'elegant section logic, refined detail, controlled complexity' 
     },
   { 
       id: 'soulful', label: 'Soulful', labelKo: '소울풀', 
       description: '보컬과 감정 표현에 깊은 온도와 진한 표현력을 더합니다', 
-      mood: 'Soulful, expressive, warm', 
-      arrangement: 'expressive peaks, warm harmonic support' 
+      mood: 'Soul-deep, lived-in, warm, emotionally expressive', 
+      arrangement: 'harmonic warmth, expressive lift, responsive emotional phrasing' 
     },
   { 
       id: 'smooth', label: 'Smooth', labelKo: '스무스', 
       description: '부드럽고 매끄럽게 이어지는 세련된 흐름으로 걸림 없는 질감을 더합니다', 
-      mood: 'Smooth, mellow, polished, flowing', 
-      arrangement: 'smooth transitions, fluid movement, flowing sections' 
+      mood: 'Silky, seamless, mellow, frictionless', 
+      arrangement: 'seamless transitions, fluid phrasing, continuous groove' 
     },
   { 
       id: 'sad', label: 'Sad', labelKo: '슬픈', 
       description: '슬픔과 상실감이 또렷하게 느껴지는 감정 중심의 무드를 만듭니다', 
-      mood: 'Fragile mourning, heavy weight', 
-      arrangement: 'slow, minimal ornaments' 
+      mood: 'Sad, tenderly wounded, emotionally heavy', 
+      arrangement: 'simple motifs, slow emotional descent, quiet closure' 
     },
   { 
       id: 'cinematic', label: 'Cinematic', labelKo: '시네마틱', 
       description: '장면이 그려지듯 입체적으로 펼쳐지는 무드와 스케일감을 더합니다', 
-      mood: 'Epic, grand, wide-screen', 
-      arrangement: 'dynamic arc, narrative' 
+      mood: 'Visually framed, expansive, dramatic, scene-driven', 
+      arrangement: 'scene-like arc, dramatic escalation, wide final frame' 
     },
   { 
       id: 'cool', label: 'Cool', labelKo: '시원한', 
-      description: '맑고 선선하게 트인 인상으로 차갑고 세련된 무드를 더합니다', 
-      mood: 'Sharp, clear, icy', 
-      arrangement: 'detached flow, crisp sections' 
+      description: '바람이 통하듯 맑고 개방적인 청량감으로 시원하게 트인 분위기를 만듭니다', 
+      mood: 'Refreshing, breezy, clean, wide-open', 
+      arrangement: 'breezy openings, crisp transitions, refreshing release' 
     },
   { 
       id: 'mysterious', label: 'Mysterious', labelKo: '신비로운', 
-      description: '정체를 알 수 없는 끌림과 신비한 공기로 mysterious한 분위기를 만듭니다', 
-      mood: 'Mysterious, mystical, enchanting', 
-      arrangement: 'mystical textures, subtle reveals' 
+      description: '정체를 모두 드러내지 않는 끌림과 숨겨진 기운으로 신비로운 분위기를 만듭니다', 
+      mood: 'Alluring, hidden, mystical, quietly magnetic', 
+      arrangement: 'gradual reveal, concealed motifs, unresolved attraction' 
     },
   { 
       id: 'coziness', label: 'Coziness', labelKo: '아늑한', 
       description: '작고 포근한 공간에 머무는 듯한 따뜻하고 친밀한 분위기를 만듭니다', 
-      mood: 'Close-up, warm, intimate', 
-      arrangement: 'small-space, close-mic feel' 
+      mood: 'Cozy, enclosed, safe, warmly intimate', 
+      arrangement: 'close-mic intimacy, small-room pacing, gentle repetition' 
     },
   { 
       id: 'wistful', label: 'Wistful', labelKo: '아련한', 
       description: '희미한 여운과 조용한 쓸쓸함, 고독한 거리감을 함께 담아 아련한 무드를 만듭니다', 
-      mood: 'Wistful, lonely, quiet, faintly emotional', 
-      arrangement: 'soft lingering flow, sparse movement, gentle emotional pull' 
+      mood: 'Faint, wistful, memory-tinted, quietly lingering', 
+      arrangement: 'lingering phrases, sparse movement, memory-like fade' 
     },
   { 
       id: 'tender', label: 'Tender', labelKo: '애틋한', 
       description: '조심스럽고 다정하지만 어딘가 아픈 애틋한 감정선을 더합니다', 
-      mood: 'Tender, affectionate, bittersweet', 
-      arrangement: 'soft emotional lift, warm lingering sections' 
+      mood: 'Tenderly attached, affectionate, quietly aching', 
+      arrangement: 'careful build, affectionate restraint, warm lingering close' 
     },
   { 
       id: 'ambient', label: 'Ambient', labelKo: '앰비언트', 
       description: '공간감과 여운이 넓게 퍼지는 배경감 중심의 분위기를 더합니다', 
-      mood: 'Ambient, spacious, atmospheric, airy', 
-      arrangement: 'wide space, open reverb, slow evolving layers' 
+      mood: 'Spacious, diffuse, environment-led, atmospheric', 
+      arrangement: 'slow-evolving layers, open space, environment-first flow' 
     },
   { 
       id: 'dark', label: 'Dark', labelKo: '어두운', 
       description: '묵직하고 짙게 가라앉는 분위기로 어둡고 깊은 무드를 만듭니다', 
-      mood: 'Heavy, somber, shadows', 
-      arrangement: 'slow-drag, weighted sections' 
+      mood: 'Dark, somber, shadowed, weighty', 
+      arrangement: 'weighted pacing, low-register tension, shadowed transitions' 
     },
   { 
       id: 'upbeat', label: 'Upbeat', labelKo: '업비트', 
       description: '경쾌하게 밀고 나가는 에너지로 가볍고 활발한 무드를 만듭니다', 
-      mood: 'Crisp, driving, high-energy', 
-      arrangement: 'energetic pulse, forward momentum' 
+      mood: 'Upbeat, propulsive, lively, forward-driving', 
+      arrangement: 'propulsive groove, quick lift, energetic section turnover' 
     },
   { 
       id: 'quirky', label: 'Quirky', labelKo: '엉뚱한', 
       description: '예상 밖의 전개와 엉뚱한 매력으로 독특하고 귀여운 분위기를 만듭니다', 
-      mood: 'Quirky, unexpected, oddball', 
-      arrangement: 'unexpected accents, quirky shifts' 
+      mood: 'Quirky, offbeat, unexpected, oddly charming', 
+      arrangement: 'offbeat accents, playful detours, unexpected miniature breaks' 
     },
   { 
       id: 'airy', label: 'Airy', labelKo: '에어리', 
       description: '가볍고 열린 공기감으로 숨이 트이는 듯한 밝은 여백을 만듭니다', 
-      mood: 'Airy, light, open', 
-      arrangement: 'open space, light movement' 
+      mood: 'Airy, breathable, feather-light, open', 
+      arrangement: 'open spacing, light motion, breathable transitions' 
     },
   { 
       id: 'ethereal', label: 'Ethereal', labelKo: '에테리얼', 
       description: '현실에서 살짝 떠 있는 듯한 가볍고 신비로운 초현실적 분위기를 만듭니다', 
-      mood: 'Ethereal, weightless, otherworldly', 
-      arrangement: 'weightless layers, floating transitions' 
+      mood: 'Ethereal, luminous, weightless, otherworldly', 
+      arrangement: 'suspended layers, floating transitions, luminous release' 
     },
   { 
       id: 'subtle_mystic', label: 'Subtle Mystic', labelKo: '오묘한', 
-      description: '한마디로 정의하기 어려운 미묘함과 신비감을 섞어 오묘한 무드를 만듭니다', 
-      mood: 'Subtle, mysterious, hard to define', 
-      arrangement: 'subtle tension, ambiguous resolution' 
+      description: '뜻을 한 번에 읽기 어려운 미묘함과 숨은 의미가 겹치는 오묘한 분위기를 만듭니다', 
+      mood: 'Enigmatic, subtly layered, hard to read', 
+      arrangement: 'ambiguous turns, hidden tension, delayed interpretation' 
     },
   { 
       id: 'melancholic', label: 'Melancholic', labelKo: '우울한', 
       description: '쓸쓸하고 가라앉은 감정선을 중심으로 무게감 있는 분위기를 만듭니다', 
-      mood: 'Lonely, fragile, blue', 
-      arrangement: 'slow flow, lingering notes' 
+      mood: 'Melancholic, inward, blue, heavy-lidded', 
+      arrangement: 'slow inward flow, lingering minor colors, soft descent' 
     },
   { 
       id: 'comic_but_sad', label: 'Comic But Sad', labelKo: '웃픈', 
       description: '웃기지만 어딘가 짠한 감정을 섞어 funny yet bittersweet한 분위기를 만듭니다', 
-      mood: 'Comic but sad, funny yet bittersweet', 
-      arrangement: 'light groove with bittersweet turns' 
+      mood: 'Wryly funny, sad underneath, everyday irony', 
+      arrangement: 'light surface rhythm, sudden sad turns, wry unresolved ending' 
     },
   { 
       id: 'fragile_edge', label: 'Fragile Edge', labelKo: '위태로운', 
       description: '금방이라도 무너질 듯 흔들리는 섬세하고 위태로운 분위기를 만듭니다', 
-      mood: 'Fragile, unstable, on the edge', 
-      arrangement: 'unstable shifts, delicate tension' 
+      mood: 'Fragile, precarious, near-breaking, exposed', 
+      arrangement: 'delicate buildup, unstable balance, near-break transitions' 
     },
   { 
       id: 'playful_mischief', label: 'Playful Mischief', labelKo: '장난끼', 
-      description: '가볍게 장난치듯 톡톡 튀는 감정으로 playful한 분위기를 만듭니다', 
-      mood: 'Playful, mischievous, lighthearted', 
-      arrangement: 'bouncy accents, playful breaks' 
+      description: '상대를 가볍게 떠보고 놀리는 듯한 짓궂은 장난의 분위기를 만듭니다', 
+      mood: 'Mischievous, teasing, impish, playfully provocative', 
+      arrangement: 'teasing breaks, bouncy feints, surprise returns' 
     },
   { 
       id: 'calm', label: 'Calm', labelKo: '차분한', 
       description: '차분하고 평화롭게 정돈된 감정선으로 고요하고 안정적인 무드를 만듭니다', 
-      mood: 'Calm, peaceful, settled, quiet', 
-      arrangement: 'minimal movement, stable structure, subtle shifts' 
+      mood: 'Calm, steady, emotionally settled, peaceful', 
+      arrangement: 'steady pacing, low contrast, peaceful continuity' 
     },
   { 
       id: 'surreal', label: 'Surreal', labelKo: '초현실적', 
-      description: '현실의 규칙이 살짝 어긋난 듯한 비현실적이고 dreamlike한 분위기를 만듭니다', 
-      mood: 'Surreal, unreal, dreamlike', 
-      arrangement: 'off-kilter space, unreal transitions' 
+      description: '현실의 규칙이 뒤틀리고 꿈의 논리가 스며드는 초현실적인 분위기를 만듭니다', 
+      mood: 'Surreal, reality-bending, dream-logical, uncanny', 
+      arrangement: 'off-kilter section logic, dreamlike jumps, warped resolution' 
     },
   { 
       id: 'healing', label: 'Healing', labelKo: '치유되는', 
       description: '상처를 감싸듯 부드럽게 스며드는 분위기로 위로감 있는 무드를 만듭니다', 
-      mood: 'Warm, comforting, therapeutic', 
-      arrangement: 'gentle flow, nurturing transitions' 
+      mood: 'Healing, reassuring, gently restorative, comforting', 
+      arrangement: 'gradual easing, supportive lift, restorative ending' 
     },
   { 
       id: 'infectious', label: 'Infectious', labelKo: '캐치한', 
       description: '한 번 들으면 귀에 맴도는 강한 인상으로 반복적인 몰입감을 형성합니다', 
-      mood: 'Catchy, repetitive, magnetic', 
-      arrangement: 'infectious, memorable hooks' 
+      mood: 'Magnetic, instantly memorable, earworm-ready', 
+      arrangement: 'hook-first repetition, escalating recall, concise returns' 
     },
   { 
       id: 'comedic', label: 'Comedic', labelKo: '코믹한', 
-      description: '가볍고 유쾌한 코미디 감각으로 상황을 재미있게 풀어내는 무드를 만듭니다', 
-      mood: 'Comedic, playful, humorous', 
-      arrangement: 'comic timing, short playful stops' 
+      description: '상황 자체의 웃음과 과장된 타이밍으로 분명한 코미디 분위기를 만듭니다', 
+      mood: 'Comic, situationally funny, humorous, theatrically timed', 
+      arrangement: 'setup-pause-payoff timing, exaggerated stops, quick reversals' 
     },
   { 
       id: 'cheerful', label: 'Cheerful', labelKo: '쾌활한', 
-      description: '밝고 경쾌하게 튀어 오르는 에너지로 생기 있는 무드를 만듭니다', 
-      mood: 'Bouncy, playful energy', 
-      arrangement: 'energetic flow, lively accents' 
+      description: '사람과 공간을 밝게 끌어올리는 생기와 쾌활한 에너지를 만듭니다', 
+      mood: 'Cheerful, spirited, sociable, buoyant', 
+      arrangement: 'lively flow, buoyant accents, sunny release' 
     },
   { 
       id: 'powerful', label: 'Powerful', labelKo: '파워풀', 
       description: '강한 추진력과 존재감으로 힘 있게 밀어붙이는 분위기를 만듭니다', 
-      mood: 'Bold, grand, massive', 
-      arrangement: 'high-impact, strong emphasis' 
+      mood: 'Powerful, forceful, commanding, high-impact', 
+      arrangement: 'forceful buildup, strong accents, commanding climax' 
     },
   { 
       id: 'fantasy', label: 'Fantasy', labelKo: '판타지', 
       description: '현실에서 벗어난 이야기 세계관처럼 환상적이고 imaginative한 무드를 더합니다', 
-      mood: 'Fantasy-like, magical, storybook', 
-      arrangement: 'storybook arc, magical color shifts' 
+      mood: 'Fantastical, world-building, adventurous, imaginative', 
+      arrangement: 'quest-like arc, world-building transitions, adventurous climax' 
     },
   { 
       id: 'funky', label: 'Funky', labelKo: '펑키', 
       description: '톡톡 튀는 리듬감과 개성 있는 질감으로 활기찬 분위기를 형성합니다', 
-      mood: 'Sharp, funky, rhythmic snap', 
-      arrangement: 'syncopated, energetic drive' 
+      mood: 'Funky, swaggering, syncopated, punchy', 
+      arrangement: 'syncopated breaks, swaggering groove, punchy call-and-response' 
     },
   { 
       id: 'hopeful', label: 'Hopeful', labelKo: '희망찬', 
       description: '앞으로 나아가는 기대감이 느껴지는 밝고 상승감 있는 무드를 형성합니다', 
-      mood: 'Rising shimmer, optimistic', 
-      arrangement: 'gradual build, bright resolution' 
+      mood: 'Hopeful, forward-looking, rising, quietly confident', 
+      arrangement: 'rising progression, widening harmony, affirmative resolution' 
     }
 ];
 

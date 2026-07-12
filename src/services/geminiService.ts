@@ -34,6 +34,7 @@ import { generateSongV2 } from "./songEngineV2";
 import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
 import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
 import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
+import { resolveMoodRoleTranslations, resolveMoodRoleValues, formatMoodRoleTranslationContext } from "./moodRoleTranslator";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -2751,7 +2752,11 @@ function getSelectedVocalEffectSoundCue(params?: GenerateSongParams): string {
   if (/vocoder|보코더/.test(text)) add('vocoder vocal color');
   if (/auto[-_\s]?tune|autotune|hard[-_\s]?tune|오토튠/.test(text)) add('auto-tuned vocal sheen');
   if (/whisper\s*voice|whisper\s*vocal|속삭임|속삭이는\s*보컬/.test(text)) add('whisper vocal texture');
-  if (/choir|콰이어|합창/.test(text)) add('choir-backed vocal blend');
+  if (/choir|콰이어|합창/.test(text)) {
+    add(getVocalModeInfo(params.vocal).isSolo
+      ? 'soft choir backing behind the solo lead'
+      : 'choir-backed vocal blend');
+  }
   if (/humming|허밍|흥얼/.test(text)) add('humming vocal layer');
   if (/chant|chanting|챈트|구호/.test(text)) add('chant-like vocal layer');
   if (/ghost\s*voice|유령\s*목소리/.test(text)) add('ghostly vocal texture');
@@ -3676,6 +3681,9 @@ function buildFullSoloVocalCharacterPrompt(member: any, params?: GenerateSongPar
 
 
 function buildAtmosphereVocalEmotionCueForSolo(params: GenerateSongParams): string {
+  // Classic v1 mood behavior is owned by ResolvedMoodRoleValues. The legacy
+  // keyword bucket must not add a second, broader emotion cue to [Vocals].
+  if (hasV1ResolvedMoodRoleOwnership(params)) return '';
   const interpreted = buildThemeMoodInterpretation(params);
   const intent = buildPromptIntent(params);
   const raw = [
@@ -3829,11 +3837,13 @@ function buildVocalSongFitParts(params: GenerateSongParams, maxParts = 3): strin
 
   // Prefer the compact mood map. Long interpreted cues can contain scene text and
   // should not be copied into [Vocals].
-  const moodDelivery = cleanupPromptTail(
-    buildAtmosphereVocalEmotionCueForSolo(params) ||
-    intent.vocalDelivery ||
-    interpreted.vocalCue,
-  );
+  const moodDelivery = hasV1ResolvedMoodRoleOwnership(params)
+    ? ''
+    : cleanupPromptTail(
+        buildAtmosphereVocalEmotionCueForSolo(params) ||
+        intent.vocalDelivery ||
+        interpreted.vocalCue,
+      );
   add(moodDelivery);
 
   const storyCue = cleanupPromptTail(buildSoloVocalSongInterpretationCue(params, interpreted));
@@ -9685,11 +9695,189 @@ function getGenreMoodConceptHit(params: GenerateSongParams): GenreMoodConceptHit
   };
 }
 
-function deriveGenreMoodConceptTag(params: GenerateSongParams): string {
-  const hit = getGenreMoodConceptHit(params);
+function getSelectedCatalogMoodItemsForGenre(params: GenerateSongParams) {
+  const seen = new Set<string>();
+  return (params.moods ?? [])
+    .map((value) => resolveMoodItem(value))
+    .filter((item): item is NonNullable<ReturnType<typeof resolveMoodItem>> => Boolean(item))
+    .filter((item) => {
+      const key = String(item.id || item.label || '').toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
 
-  // Priority is intentionally musical: strong contrast first, then scene color,
-  // then single mood. The result is the short "what kind of genre" prefix.
+function normalizeCatalogMoodGenreToken(value: string): string {
+  const clean = cleanupPromptTail(String(value || ''))
+    .replace(/mood/gi, '')
+    .replace(/[+|/]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!clean) return '';
+
+  // Multi-word catalog labels are kept as one semantic unit so their exact
+  // distinction survives Genre compression: Playful-Mischief, Cheeky-Deadpan,
+  // Comic-But-Sad, etc. This is data-driven and applies to every catalog mood.
+  return clean.split(/\s+/).length > 1 ? clean.replace(/\s+/g, '-') : clean;
+}
+
+function deriveCatalogGenreMoodConceptTag(params: GenerateSongParams): string {
+  const items = getSelectedCatalogMoodItemsForGenre(params);
+  if (!items.length) return '';
+
+  const tokens = items
+    .map((item) => normalizeCatalogMoodGenreToken(String(item.label || item.mood || item.id || '')))
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  const exact = tokens.filter((token) => {
+    const key = token.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // Mood selection is intentionally allowed to remain visible in Genre.
+  // Up to five mood cards are supported, and their canonical catalog identities
+  // are shorter and more accurate than collapsing them into a tiny fixed bucket.
+  return exact.slice(0, 5).join(' ');
+}
+
+
+function getV1MoodRoleTranslations(params: GenerateSongParams) {
+  return resolveMoodRoleTranslations(params);
+}
+
+function getV1ResolvedMoodRoleValues(params: GenerateSongParams) {
+  return resolveMoodRoleValues(params);
+}
+
+function hasV1ResolvedMoodRoleOwnership(params: GenerateSongParams): boolean {
+  if (isGenerationEngineV2(params)) return false;
+  const resolved = getV1ResolvedMoodRoleValues(params);
+  return Boolean(resolved.genreAccent || resolved.atmosphereCue || resolved.vocalCue || resolved.arrangementCue);
+}
+
+function deriveV1MoodRoleGenreConceptTag(params: GenerateSongParams): string {
+  const resolved = getV1ResolvedMoodRoleValues(params);
+  if (!resolved.identity.sources.length) return deriveCatalogGenreMoodConceptTag(params);
+  return cleanupPromptTail(resolved.genreAccent) || deriveCatalogGenreMoodConceptTag(params);
+}
+
+function buildV1MoodRoleAtmosphereCue(params: GenerateSongParams): string {
+  if (isGenerationEngineV2(params)) return '';
+  return cleanupPromptTail(getV1ResolvedMoodRoleValues(params).atmosphereCue);
+}
+
+function buildV1MoodRoleVocalCue(params: GenerateSongParams): string {
+  if (isGenerationEngineV2(params)) return '';
+  return cleanupPromptTail(getV1ResolvedMoodRoleValues(params).vocalCue);
+}
+
+function buildV1MoodRoleArrangementCue(params: GenerateSongParams): string {
+  if (isGenerationEngineV2(params)) return '';
+  return cleanupPromptTail(getV1ResolvedMoodRoleValues(params).arrangementCue);
+}
+
+const MOOD_ROLE_CUE_STOP_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'with', 'over', 'before', 'then', 'while', 'at', 'of', 'to', 'in', 'on',
+  'atmosphere', 'emotional', 'emotion', 'delivery', 'phrasing', 'phrase', 'undercurrent', 'undertone',
+  'undertones', 'inflection', 'inflections', 'subtle', 'key', 'endings', 'ending', 'deepened', 'intensified',
+]);
+
+function moodRoleCueTokens(value: string): string[] {
+  return cleanupPromptTail(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !MOOD_ROLE_CUE_STOP_WORDS.has(token));
+}
+
+function roleCueCoveredByLine(value: string, cue: string): boolean {
+  const cueTokens = Array.from(new Set(moodRoleCueTokens(cue)));
+  if (!cueTokens.length) return true;
+  const lineTokens = new Set(moodRoleCueTokens(value));
+  const matched = cueTokens.filter((token) => lineTokens.has(token)).length;
+  return matched === cueTokens.length || (cueTokens.length >= 3 && matched / cueTokens.length >= 0.75);
+}
+
+function appendUniqueRoleCue(base: string, cue: string): string {
+  const cleanBase = cleanupPromptTail(base);
+  const cleanCue = cleanupPromptTail(cue);
+  if (!cleanCue || roleCueCoveredByLine(cleanBase, cleanCue)) return cleanBase;
+  return cleanupPromptTail(`${cleanBase}, ${cleanCue}`)
+    .replace(/\bwith\s+with\b/gi, 'with')
+    .replace(/\band\s+and\b/gi, 'and')
+    .replace(/,\s*,+/g, ',');
+}
+
+function applyV1ResolvedMoodAtmosphereOwnership(value: string, params: GenerateSongParams): string {
+  if (isGenerationEngineV2(params) || !hasV1ResolvedMoodRoleOwnership(params)) return cleanupPromptTail(value);
+  const cue = buildV1MoodRoleAtmosphereCue(params);
+  let line = cleanupPromptTail(value)
+    .replace(/\ba concrete human moment shaped by [^,.;]+?(?:\s+with\s+[^,.;]+?)?\s+where\b/gi, 'a concrete human moment where')
+    .replace(/\bshaped by ([^,.;]+?) with \1(?=\b|[,.;])/gi, 'shaped by $1')
+    .replace(/\bwhere(?:\s+where)+\b/gi, 'where')
+    .replace(/\bwith\s+with\b/gi, 'with')
+    .replace(/\band\s+and\b/gi, 'and');
+
+  if (!cue || roleCueCoveredByLine(line, cue)) {
+    return normalizeAtmospherePromptLine(dedupeV1AtmosphereMoodRolePhrases(line));
+  }
+
+  const whereMatch = line.match(/\s+where\s+/i);
+  if (whereMatch && typeof whereMatch.index === 'number') {
+    const whereIndex = whereMatch.index;
+    const head = cleanupPromptTail(line.slice(0, whereIndex));
+    const tail = cleanupPromptTail(line.slice(whereIndex).replace(/^(?:\s*where\s+)+/i, ''));
+    const connector = /\bwith\b/i.test(head) ? 'and' : 'with';
+    line = cleanupPromptTail(`${head} ${connector} ${cue}${tail ? ` where ${tail}` : ''}`);
+  } else {
+    line = cleanupPromptTail(`${line} with ${cue}`);
+  }
+  return normalizeAtmospherePromptLine(dedupeV1AtmosphereMoodRolePhrases(line));
+}
+
+function applyV1ResolvedMoodVocalOwnership(value: string, params: GenerateSongParams): string {
+  if (isGenerationEngineV2(params) || !hasV1ResolvedMoodRoleOwnership(params)) return cleanupPromptTail(value);
+  return appendUniqueRoleCue(value, buildV1MoodRoleVocalCue(params));
+}
+
+function applyV1ResolvedMoodArrangementOwnership(value: string, params: GenerateSongParams): string {
+  if (isGenerationEngineV2(params) || !hasV1ResolvedMoodRoleOwnership(params)) return cleanupPromptTail(value);
+  const cue = buildV1MoodRoleArrangementCue(params);
+  const cleanValue = cleanupPromptTail(value);
+  if (!cue || roleCueCoveredByLine(cleanValue, cue)) return normalizeArrangementLine([cleanValue]);
+
+  const baseParts = cleanValue.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
+  const cueParts = cue.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
+  const tempoParts = baseParts.filter((part) => /^\d{2,3}(?:\s*[–-]\s*\d{2,3})?\s*BPM$/i.test(part));
+  const otherParts = baseParts.filter((part) => !tempoParts.includes(part));
+  return normalizeArrangementLine([...tempoParts, ...cueParts, ...otherParts]);
+}
+
+function dedupeV1AtmosphereMoodRolePhrases(value: string): string {
+  return cleanupPromptTail(String(value || ''))
+    .replace(/\bshaped\s+by\s+([^,.;]+?)\s+with\s+\1(?=\b|[,.;])/gi, 'shaped by $1')
+    .replace(/\bwith\s+([^,.;]+?)\s+with\s+\1(?=\b|[,.;])/gi, 'with $1')
+    .replace(/\bwhere(?:\s+where)+\b/gi, 'where')
+    .replace(/\bwith\s+with\b/gi, 'with')
+    .replace(/\band\s+and\b/gi, 'and')
+    .replace(/,\s*,+/g, ',')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function deriveGenreMoodConceptTag(params: GenerateSongParams): string {
+  const catalogConcept = deriveCatalogGenreMoodConceptTag(params);
+  if (catalogConcept) return catalogConcept;
+
+  // Free/custom mood text has no catalog identity. Keep the existing broad
+  // interpretation only as a fallback for that case; selected catalog moods never
+  // pass through this lossy bucket map.
+  const hit = getGenreMoodConceptHit(params);
   if (hit.urban && hit.romantic && (hit.moody || hit.melancholic || hit.dark)) return 'Moody urban romantic';
   if (hit.urban && hit.romantic && hit.swelling) return 'Swelling urban romantic';
   if (hit.urban && hit.romantic) return 'Urban romantic';
@@ -9802,10 +9990,19 @@ function prefixGenreMoodConcept(concept: string, base: string): string {
   const cleanBase = stripNonGenrePerformancePhrases(base || '').replace(/\s{2,}/g, ' ').trim() || 'Pop';
   const cleanConcept = cleanupPromptTail(concept || '').replace(/\s{2,}/g, ' ').trim();
   if (!cleanConcept) return cleanBase;
-  const lowerBase = cleanBase.toLowerCase();
-  const conceptWords = cleanConcept.toLowerCase().split(/\s+/).filter(Boolean);
-  if (conceptWords.some((word) => word.length > 3 && lowerBase.includes(word))) return cleanBase;
-  return `${cleanConcept} ${cleanBase}`.replace(/\s{2,}/g, ' ').trim();
+
+  const baseKeys = new Set(
+    cleanBase.toLowerCase().split(/\s+/).map((word) => word.replace(/[^a-z0-9]+/g, '')).filter(Boolean),
+  );
+  const novelConceptTokens = cleanConcept.split(/\s+/).filter((token) => {
+    const key = token.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return key && !baseKeys.has(key);
+  });
+
+  // If one selected mood is already part of the genre name, remove only that
+  // duplicate token. Never discard the other selected mood identities.
+  if (!novelConceptTokens.length) return cleanBase;
+  return `${novelConceptTokens.join(' ')} ${cleanBase}`.replace(/\s{2,}/g, ' ').trim();
 }
 
 function renderMoodFusionGenreValue(base: string, accents: string[], concept: string): string {
@@ -10140,15 +10337,15 @@ function buildFiveLineGenreValue(params: GenerateSongParams): string {
 
   const directGenrePhrase = buildDirectGenreProductionPhrase(params);
   if (directGenrePhrase) {
-    const concept = deriveGenreMoodConceptTag(params);
-    const value = renderMoodFusionGenreValue(directGenrePhrase, [], concept && !/magical/i.test(concept) ? concept : '');
+    const concept = deriveV1MoodRoleGenreConceptTag(params) || deriveGenreMoodConceptTag(params);
+    const value = renderMoodFusionGenreValue(directGenrePhrase, [], concept);
     return sanitizePromptGenreArtifacts(stripNonGenrePerformancePhrases(value || directGenrePhrase));
   }
 
   const selectedGenres = getSelectedFusionGenres(params);
   const mainLabels = selectedGenres.map((genre) => compactGenreToken(genre.label)).filter(NON_EMPTY);
   const base = getSpecificSelectedGenreBase(params, mainLabels);
-  const concept = deriveGenreMoodConceptTag(params);
+  const concept = deriveV1MoodRoleGenreConceptTag(params) || deriveGenreMoodConceptTag(params);
   const accents = collectGenreFusionAccentTokens(params, mainLabels, base);
 
   let genreValue = renderMoodFusionGenreValue(base || 'Pop', accents, concept);
@@ -10162,7 +10359,11 @@ function buildFiveLineGenreValue(params: GenerateSongParams): string {
     genreValue = renderMoodFusionGenreValue('J-Electro', accents, concept || 'Submerged digital');
   }
 
-  genreValue = reinforceRepeatedGenreMoodIntent(genreValue, base || mainLabels[0] || '', params);
+  // Catalog moods are already represented by their exact identities above.
+  // Do not let the old theme/style/sound keyword override table replace them.
+  if (!hasV1ResolvedMoodRoleOwnership(params)) {
+    genreValue = reinforceRepeatedGenreMoodIntent(genreValue, base || mainLabels[0] || '', params);
+  }
   const artistAccent = buildArtistReferenceGenreAccent(params);
   if (artistAccent) {
     genreValue = cleanupPromptTail(`${artistAccent} ${stripNonGenrePerformancePhrases(genreValue || 'Pop')}`);
@@ -10849,20 +11050,36 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
   const vocalPoint = bp.vocalPoint;
 
   const directorAtmosphereIntent = buildDirectorSeasoningAtmosphereIntent(params);
-  const selectedKeywordAtmosphere = buildSelectedKeywordAtmosphereStoryline(params);
+  // Classic v1 now uses the ONE Gemini-resolved shared blueprint. The old
+  // keyword/story banks remain isolated from v1 so they cannot override the brief.
+  const selectedKeywordAtmosphere = isGenerationEngineV2(params)
+    ? buildSelectedKeywordAtmosphereStoryline(params)
+    : null;
 
-  const emotion = cleanScenePlanPhrase(directorAtmosphereIntent?.emotion || selectedKeywordAtmosphere?.emotion || buildDirectMoodAngle(params) || buildCompactMoodAngle(params) || buildPromptIntent(params).atmosphereTone || buildPromptIntent(params).emotionalCore || 'balanced emotional temperature', 72);
-  const spaceCues = (selectedKeywordAtmosphere?.styleCues?.length ? selectedKeywordAtmosphere.styleCues : getAtmosphereSpaceCues(params))
+  const emotion = cleanScenePlanPhrase(
+    directorAtmosphereIntent?.emotion
+      || selectedKeywordAtmosphere?.emotion
+      || buildDirectMoodAngle(params)
+      || buildCompactMoodAngle(params)
+      || buildPromptIntent(params).atmosphereTone
+      || buildPromptIntent(params).emotionalCore
+      || 'balanced emotional temperature',
+    96,
+  );
+  const spaceCues = (selectedKeywordAtmosphere?.styleCues?.length
+    ? selectedKeywordAtmosphere.styleCues
+    : getAtmosphereSpaceCues(params))
     .slice(0, 2)
     .map((item) => cleanScenePlanPhrase(item, 52))
     .filter(Boolean);
 
   const airParts = dedupePromptParts([emotion, ...spaceCues], 4).filter(Boolean);
-  const atmosphereCue = selectedKeywordAtmosphere?.line || cleanupPromptTail([
+  const neutralCue = normalizeAtmospherePromptLine(cleanupPromptTail([
     scene,
     airParts.length ? `with ${joinPromptPhrase(airParts, 'and')}` : '',
-    conflict && !/unsaid feeling/i.test(scene) ? `where ${conflict}` : '',
-  ].filter(Boolean).join(' '));
+    conflict ? `where ${conflict}` : '',
+  ].filter(Boolean).join(' ')));
+  const atmosphereCue = selectedKeywordAtmosphere?.line || neutralCue;
 
   const movementCandidates = dedupePromptParts([
     ...splitArrangementParts(deriveIntentArrangement(params).replace(/\band\b/g, ',')),
@@ -10875,12 +11092,10 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
 
   const arrangementCues = movementCandidates.slice(0, 4);
   const lyricDirection = cleanupPromptTail([
-    `Write from ${scene}`,
-    `use ${detail}`,
-    `center the chorus on: ${chorusCore}`,
-    `show ${conflict} through speech, behavior, timing, and one believable lived detail`,
-    vocalPoint ? `vocal performance guidance: ${vocalPoint}` : '',
-  ].filter(Boolean).join('. '));
+    'Use the one shared hidden Scene Blueprint inferred from the story source',
+    'keep the same speaker, place boundary, visible action, desire, conflict, and chorus intention in prompt and lyrics',
+    'show the feeling through speech, behavior, timing, and one believable lived detail',
+  ].join('. '));
 
   return {
     hasDirectorNote,
@@ -10897,7 +11112,7 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
   };
 }
 
-function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
+function buildLegacyV2ScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
   const plan = buildInternalScenePlan(params, detailLayer);
   const bp = buildSceneBlueprint(params);
   const freeTextPrimary = isFreeTextPrimaryMode(params);
@@ -10952,6 +11167,61 @@ Never output internal placeholders such as "actual place implied by the source t
 - Atmosphere must express the scene air and emotional temperature: ${plan.atmosphereCue}
 - Arrangement must express song movement, not just a hook word: ${plan.arrangementCues.join(', ') || 'genre-specific groove, section lift, transition behavior'}
 - Lyrics must follow this plan as character speech with character behavior, varied emotional angle, and lived details, not as explanations of mood/style/sound keywords. Use one coherent angle per song, and avoid defaulting to the most common phone/room/coffee/message scene unless the user selected or wrote it.`;
+}
+
+function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
+  if (isGenerationEngineV2(params)) return buildLegacyV2ScenePlanInstruction(params, detailLayer);
+  const plan = buildInternalScenePlan(params, detailLayer);
+  const bp = buildSceneBlueprint(params);
+  const freeTextPrimary = isFreeTextPrimaryMode(params);
+  const productionShapeOnly = hasProductionShapeOnlyDirectorNote(params);
+  const directorBlock = plan.hasDirectorNote
+    ? freeTextPrimary
+      ? `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command from genre selection through arrangement, vocal attitude, hook design, and lyrics. Interpret it freely as the song concept. If it describes production format rather than a literal scene, do NOT invent a random place or story; turn it into genre, hook, vocal, arrangement, and lyric-writing intent.`
+      : isProductionSeasoningDirectorNote(params)
+        ? `- USER FREE-TEXT DIRECTOR NOTE is an additive production/color seasoning on top of the selected UI choices. Blend its intent into genre color, atmosphere, vocal attitude, arrangement, and lyric tone without replacing the selected genre/menu keywords or turning it into a separate lyric topic.`
+        : `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command for genre, structure, mood, vocal attitude, arrangement, and lyric tone. Preserve its concrete intent; do not compress it into a generic theme.`
+    : `- No free-text director note was provided. Use selected Theme, Mood, and Situation story signals to infer one simple believable human situation.`;
+  const lyricDraftBlock = plan.hasLyricDraft
+    ? `- lyricDraft / AI correction / original-preserve mode affects generated lyrics only. Keep its story and wording as the primary lyrical source while using the same hidden blueprint.`
+    : `- If no lyric draft is provided, create lyrics from the same hidden blueprint used for the production prompt.`;
+
+  const directInputBlock = buildDirectInputProtectionInstruction(params);
+
+  return `ONE SHARED SCENE BLUEPRINT (MANDATORY, INTERNAL ONLY — NEVER OUTPUT THIS LABEL):
+${directorBlock}
+${lyricDraftBlock}${directInputBlock ? `\n${directInputBlock}` : ''}
+- STORY SOURCE TEXT: ${bp.sceneSourceText || 'None'}
+- PRIMARY STORY INTENT: ${bp.primaryIntent || 'None'}
+- SELECTED STORY SIGNALS: ${bp.selectedKeywordIntent || 'None'}
+
+${productionShapeOnly ? `The source is production-shaped rather than story-shaped. Do not force a literal place, object, or plot. Resolve one performance-purpose brief and use it consistently for prompt, title, and lyrics.` : `Before writing productionPrompt, title, or lyrics, silently infer ONE resolved Scene Blueprint directly from the STORY SOURCE TEXT:
+1. speaker and addressee,
+2. allowed place boundary,
+3. one visible action happening now,
+4. desire, conflict, or relationship change,
+5. one believable lived detail,
+6. vocal attitude from inside that same situation,
+7. the emotional desire the chorus repeats.
+
+Use this exact same hidden blueprint for [Atmosphere], [Vocals], [Arrangement], title, and lyrics. Do not create a second or conflicting scene for lyrics.`}
+
+STORY/MUSIC SEPARATION:
+- Direct input, Situation, lyric draft, Theme, and Mood may define or color the story.
+- Genre, Style, Sound, instruments, point sounds, tempo, production, and vocal presets are MUSIC/PERFORMANCE inputs. They must not invent a story place, object, prop, event, or title concept.
+- Never use a canned keyword-to-scene mapping. Do not automatically turn words such as room, drive, rain, office, cafe, street, or night into a stock scene merely because they appear in Style/Sound/production data.
+- A location or object may enter the scene only when it is explicitly present in the STORY SOURCE TEXT or naturally inferred by Gemini from the full story context.
+- If the story source is weak, choose a simple human interaction or decision. Do not fall back to a stock bedroom, drive, cafe, office, bus-stop, message-screen, or rainy-street scene.
+- Preserve an explicit action, decision, desire, or relationship change; do not reduce it to a time/place noun.
+- If the source language is Korean or another language, interpret it internally and output natural English productionPrompt text.
+- Never output meta phrases such as source text, selected story, user core idea, blueprint, visible musical moment, central voice, or compact emotional space.
+
+MUSIC SUPPORT FOR THE SHARED BLUEPRINT:
+- Emotional temperature: ${plan.emotion || 'balanced emotional temperature'}.
+- Arrangement movement: ${plan.arrangementCues.join(', ') || 'genre-specific groove, section lift, transition behavior'}.
+- Mood and music may change delivery, pacing, tension, texture, and hook size, but must not replace the shared story.
+- [Atmosphere] should be one concise scene-emotion sentence from the shared blueprint.
+- Lyrics should sound like character speech and behavior inside that same blueprint, not explanations of mood/style/sound keywords.`;
 }
 
 function hasExplicitSceneOrObjectInput(params: GenerateSongParams, detailLayer = ''): boolean {
@@ -11201,6 +11471,20 @@ function renderStableAtmosphereLine(
   scenePlan: InternalScenePlan,
 ): string {
   const raw = cleanupPromptTail(String(rawAtmosphere || '').replace(/\s+/g, ' '));
+
+  // Classic v1: preserve the model/shared-brief sentence. Do not reconstruct it
+  // with the legacy contextual cue bank or keyword-to-stock-scene mapper.
+  if (!isGenerationEngineV2(params)) {
+    let line = normalizeAtmospherePromptLine(raw);
+    if (!line
+      || containsSceneBlueprintPlaceholderLeak(line)
+      || isBrokenFinalPromptPhrase(line)
+      || isGenericAtmosphereFallbackLine(line)) {
+      line = normalizeAtmospherePromptLine(scenePlan.atmosphereCue || buildGenericAtmosphereRepairFallback(params));
+    }
+    return cleanupPromptTail(line || buildGenericAtmosphereRepairFallback(params));
+  }
+
   const hasUserScene = Boolean(buildUserTextCoreScene(params));
   const allowContextualCue = !hasSituation(params.situation) && !hasUserScene;
   const contextualCue = allowContextualCue ? buildContextualCueBundle(params) : { atmosphereScene: '', arrangementHook: '' };
@@ -11295,6 +11579,39 @@ function buildIntentConnectedAtmosphereLine(params: GenerateSongParams, original
     return normalizeAtmospherePromptLine(buildSituationAtmosphere(params)) || cleanupPromptTail(original) || 'balanced emotional air';
   }
 
+  // Classic v1: do not rebuild a scene from the legacy contextual cue bank.
+  // Keep a valid model sentence; otherwise use only the neutral shared-blueprint scaffold.
+  if (!isGenerationEngineV2(params)) {
+    const originalClean = normalizeAtmospherePromptLine(original);
+    if (originalClean
+      && !containsSceneBlueprintPlaceholderLeak(originalClean)
+      && !isBrokenFinalPromptPhrase(originalClean)
+      && !isGenericAtmosphereFallbackLine(originalClean)) {
+      return originalClean;
+    }
+
+    const plan = buildInternalScenePlan(params, params.userInput || selectedThemeText(params) || selectedMoodText(params) || '');
+    const emotion = cleanScenePlanPhrase(
+      buildDirectMoodAngle(params)
+        || buildCompactMoodAngle(params)
+        || buildPromptIntent(params).atmosphereTone
+        || plan.emotion
+        || 'emotionally specific',
+      96,
+    );
+    const space = getAtmosphereSpaceCues(params)
+      .slice(0, 1)
+      .map((item) => cleanScenePlanPhrase(item, 52))
+      .filter(Boolean);
+    const sentence = cleanupPromptTail([
+      plan.scene,
+      emotion ? `with ${emotion}` : '',
+      space.length ? `and ${space[0]}` : '',
+      plan.conflict ? `where ${plan.conflict}` : '',
+    ].filter(Boolean).join(' '));
+    return normalizeAtmospherePromptLine(sentence) || buildGenericAtmosphereRepairFallback(params);
+  }
+
   if (hasDirectThemeOrMoodInput(params)) {
     return buildNaturalDirectAtmosphereFallback(params);
   }
@@ -11306,13 +11623,13 @@ function buildIntentConnectedAtmosphereLine(params: GenerateSongParams, original
   const layerScene = buildAtmosphereFromSceneLayers(params).replace(/^a\s+/i, '').replace(/,\s+with\s+.*$/i, '');
 
   const scene = cleanScenePlanPhrase(
-    contextual.atmosphereScene ||
-    scenePlan.scene ||
-    intent.sceneCore ||
-    (layerScene && !/one concrete everyday emotional scene/i.test(layerScene) ? `a ${layerScene}` : '') ||
-    deriveIntentScene(params) ||
-    original ||
-    'one concrete emotional scene',
+    contextual.atmosphereScene
+    || scenePlan.scene
+    || intent.sceneCore
+    || (layerScene && !/one concrete everyday emotional scene/i.test(layerScene) ? `a ${layerScene}` : '')
+    || deriveIntentScene(params)
+    || original
+    || 'one concrete emotional scene',
     105,
   );
 
@@ -11327,10 +11644,10 @@ function buildIntentConnectedAtmosphereLine(params: GenerateSongParams, original
     .slice(0, 2);
 
   const conflict = cleanScenePlanPhrase(
-    scenePlan.conflict ||
-    intent.contrast ||
-    (interpreted.vocalCue ? `${interpreted.vocalCue} stays under the surface` : '') ||
-    'one visible detail carries the hidden feeling',
+    scenePlan.conflict
+    || intent.contrast
+    || (interpreted.vocalCue ? `${interpreted.vocalCue} stays under the surface` : '')
+    || 'one visible detail carries the hidden feeling',
     95,
   );
 
@@ -11397,58 +11714,93 @@ function buildFiveLineAtmosphereValue(
   const base = situationActive
     ? buildVariedSituationAtmosphere(params, variation)
     : getAtmosphereForPrompt(params, detailLayer);
-  const spaceCues = joinPromptPhrase(getAtmosphereSpaceCues(params), 'and');
+  const spaceCues = getAtmosphereSpaceCues(params)
+    .map((cue) => cleanupPromptTail(cue))
+    .filter(Boolean)
+    .slice(0, 2);
   const coreGenreGuard = !situationActive && isTrapOrHiphopCoreGenre(params)
-    ? "carried by dark confidence and restrained hip-hop edge"
-    : "";
+    ? 'dark confidence with restrained hip-hop edge'
+    : '';
 
-  const variationLens = !situationActive && !hasUserPrimaryStoryText(params) && !isWarHistoricalContext(params) && shouldUseVariationAtmosphereLens(variation, params, detailLayer)
-    ? variation.atmosphereLens
-    : "";
-
-  const interpreted = buildThemeMoodInterpretation(params);
-  const interpretedCue = interpreted.atmosphereCue;
-  const shouldMergeThemeMood = Boolean(interpretedCue) && !isFreeTextPrimaryMode(params);
-
-  const planAtmosphereCue = !situationActive
-    ? scenePlan.atmosphereCue
-    : "";
   const directorSeasoning = buildDirectorSeasoningProfile(params);
   const directorAtmosphereIntent = buildDirectorSeasoningAtmosphereIntent(params);
   const directorMoodSeasoning = directorAtmosphereIntent
     ? ''
-    : cleanupPromptTail(
-        splitDirectorSeasoningParts(directorSeasoning?.mood || '', 2, 84).join(', '),
-      );
+    : cleanupPromptTail(splitDirectorSeasoningParts(directorSeasoning?.mood || '', 2, 84).join(', '));
+
+  const moodRoleIdentityActive = hasV1ResolvedMoodRoleOwnership(params);
+  if (moodRoleIdentityActive) {
+    const rawSceneCandidate = cleanScenePlanPhrase(
+      situationActive
+        ? base
+        : (scenePlan.scene || deriveIntentScene(params) || base || 'a concrete human moment'),
+      122,
+    );
+    const embeddedWhere = rawSceneCandidate.match(/^(.*?)\s+where\s+(.+)$/i);
+    const sceneBase = cleanScenePlanPhrase(embeddedWhere?.[1] || rawSceneCandidate, 122);
+    const embeddedConflict = cleanScenePlanPhrase(embeddedWhere?.[2] || '', 110);
+    const conflict = cleanScenePlanPhrase(
+      scenePlan.conflict || embeddedConflict || buildPromptIntent(params).contrast || '',
+      110,
+    ).replace(/^(?:where\s+)+/i, '');
+    const textures = dedupePromptParts([
+      directorMoodSeasoning,
+      coreGenreGuard,
+      ...spaceCues,
+    ], 6)
+      .filter((item) => item && !sceneBase.toLowerCase().includes(item.toLowerCase()))
+      .slice(0, 2);
+
+    const sentence = cleanupPromptTail([
+      sceneBase,
+      textures.length ? `with ${joinPromptPhrase(textures, 'and')}` : '',
+      conflict && !sceneBase.toLowerCase().includes(conflict.toLowerCase()) ? `where ${conflict}` : '',
+    ].filter(Boolean).join(' '))
+      .replace(/\bwhere(?:\s+where)+\b/gi, 'where');
+
+    const rendered = renderStableAtmosphereLine(params, sentence, scenePlan);
+    const repaired = isGenericAtmosphereFallbackLine(rendered) && hasAtmosphereInterpretationSignal(params)
+      ? buildIntentConnectedAtmosphereLine(params, rendered)
+      : rendered;
+    return normalizeAtmospherePromptLine(dedupeV1AtmosphereMoodRolePhrases(repaired));
+  }
+
+  const variationLens = !situationActive && !hasUserPrimaryStoryText(params) && !isWarHistoricalContext(params) && shouldUseVariationAtmosphereLens(variation, params, detailLayer)
+    ? variation.atmosphereLens
+    : '';
+  const interpreted = buildThemeMoodInterpretation(params);
+  const interpretedCue = interpreted.atmosphereCue;
+  const shouldMergeThemeMood = Boolean(interpretedCue) && !isFreeTextPrimaryMode(params);
+  const planAtmosphereCue = !situationActive ? scenePlan.atmosphereCue : '';
 
   const atmosphere = situationActive
     ? [
         base,
-        shouldMergeThemeMood ? interpretedCue : "",
+        shouldMergeThemeMood ? interpretedCue : '',
         directorMoodSeasoning,
         coreGenreGuard,
         variationLens,
-        !shouldMergeThemeMood && spaceCues ? `with ${spaceCues}` : "",
-      ]
-        .filter(Boolean)
-        .join(", ")
+        !shouldMergeThemeMood && spaceCues.length ? `with ${joinPromptPhrase(spaceCues, 'and')}` : '',
+      ].filter(Boolean).join(', ')
     : [
         planAtmosphereCue || (shouldMergeThemeMood ? interpretedCue : base),
         directorMoodSeasoning,
         coreGenreGuard,
-        !planAtmosphereCue && !shouldMergeThemeMood && spaceCues ? `with ${spaceCues}` : "",
-        !planAtmosphereCue && !shouldMergeThemeMood ? variationLens : "",
-      ]
-        .filter(Boolean)
-        .join(", ");
+        !planAtmosphereCue && !shouldMergeThemeMood && spaceCues.length ? `with ${joinPromptPhrase(spaceCues, 'and')}` : '',
+        !planAtmosphereCue && !shouldMergeThemeMood ? variationLens : '',
+      ].filter(Boolean).join(', ');
 
   const fallbackAtmosphere = buildIntentConnectedAtmosphereLine(params, atmosphere);
-  const intendedAtmosphere = applyIntentToAtmosphereLine(atmosphere || fallbackAtmosphere, params);
+  const intendedAtmosphere = isGenerationEngineV2(params)
+    ? applyIntentToAtmosphereLine(atmosphere || fallbackAtmosphere, params)
+    : normalizeAtmospherePromptLine(atmosphere || fallbackAtmosphere);
   const rendered = renderStableAtmosphereLine(params, intendedAtmosphere, scenePlan);
   const repaired = isGenericAtmosphereFallbackLine(rendered) && hasAtmosphereInterpretationSignal(params)
     ? buildIntentConnectedAtmosphereLine(params, rendered)
     : rendered;
-  return enforceAbsoluteKeywordAtmosphereGuard(params, repaired);
+  return isGenerationEngineV2(params)
+    ? enforceAbsoluteKeywordAtmosphereGuard(params, repaired)
+    : normalizeAtmospherePromptLine(dedupeV1AtmosphereMoodRolePhrases(repaired));
 }
 
 function removeArrangementTermsFromVocalLine(value: string): string {
@@ -11885,7 +12237,9 @@ function buildSoloInterpretiveVocalLine(baseLine: string, params: GenerateSongPa
 
   const songInterpretationCue = buildSoloVocalSongInterpretationCue(params, interpreted);
   const interpretationParts = dedupePromptParts([
-    interpreted.vocalCue ? `${interpreted.vocalCue}` : '',
+    hasV1ResolvedMoodRoleOwnership(params)
+      ? ''
+      : (interpreted.vocalCue ? `${interpreted.vocalCue}` : ''),
     songInterpretationCue,
   ], 3)
     .map((part) => cleanupPromptTail(part))
@@ -11905,8 +12259,7 @@ function buildSoloInterpretiveVocalLine(baseLine: string, params: GenerateSongPa
 
 function stabilizeSoloCharacterVocalsLine(value: string, params: GenerateSongParams): string {
   const dedicated = buildDedicatedSoloVocalCharacterLine(params);
-  if (dedicated) return dedicated;
-  return value;
+  return dedicated || value;
 }
 
 function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: string): string {
@@ -11917,7 +12270,11 @@ function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: strin
   // V63: base already contains selected Vocal Line cues through
   // buildSelectedVocalPerformancePhrase(). Do not append raw style values again.
   const interpreted = buildThemeMoodInterpretation(params);
-  const moodVocalCue = mergeCompactCue(interpreted.vocalCue, getEraTextureVocalCues(params), 2);
+  const moodVocalCue = mergeCompactCue(
+    hasV1ResolvedMoodRoleOwnership(params) ? '' : interpreted.vocalCue,
+    getEraTextureVocalCues(params),
+    2,
+  );
   const directStyleVocalCue = getDirectStyleVocalCue(params);
   const directorSeasoning = buildDirectorSeasoningProfile(params);
   const directorVocalCue = cleanupPromptTail(splitDirectorSeasoningParts(directorSeasoning?.vocal || '', 4, 150).join(', '));
@@ -12453,7 +12810,12 @@ function buildFiveLineArrangementValue(
     params.songStructure === "custom" && (params.customStructure ?? []).length > 0
       ? "custom section flow"
       : "";
-  const interpretedArrangement = mergeCompactCue(buildThemeMoodInterpretation(params).arrangementCue, getEraTextureArrangementCues(params), 3);
+  const moodRoleIdentityActive = hasV1ResolvedMoodRoleOwnership(params);
+  const interpretedArrangement = mergeCompactCue(
+    moodRoleIdentityActive ? '' : buildThemeMoodInterpretation(params).arrangementCue,
+    getEraTextureArrangementCues(params),
+    3,
+  );
   const directStoryArrangement = getDirectStoryArrangementCues(params).join(', ');
 
   const parts = [
@@ -12467,8 +12829,8 @@ function buildFiveLineArrangementValue(
     genreDNA,
     styleArrangement,
     directStyleArrangement,
-    !situationActive ? scenePlan.arrangementCues.join(', ') : '',
-    reinterpretationLayer.arrangementLens,
+    !situationActive && !moodRoleIdentityActive ? scenePlan.arrangementCues.join(', ') : '',
+    moodRoleIdentityActive ? '' : reinterpretationLayer.arrangementLens,
     interpretedArrangement,
     variationMeaning,
     customFlow,
@@ -12486,7 +12848,10 @@ function buildFiveLineArrangementValue(
     cleanPromptValue(buildArrangement(params, resolvedStructure)),
   ]);
 
-  return applyIntentToArrangementLine(fallback || cleanupPromptTail([tempo, 'genre-led section flow'].filter(Boolean).join(', ')), params);
+  return applyIntentToArrangementLine(
+    fallback || cleanupPromptTail([tempo, 'genre-led section flow'].filter(Boolean).join(', ')),
+    params,
+  );
 }
 
 function compactFiveLinePromptBody(lines: string[]): string[] {
@@ -14618,13 +14983,16 @@ function buildAbsoluteKeywordAtmosphereSentence(
 }
 
 function shouldUseAbsoluteKeywordAtmosphereGuard(params: GenerateSongParams): boolean {
+  // Classic v1 now trusts the one shared Gemini-resolved Scene Blueprint.
+  // The legacy keyword-to-stock-scene guard is isolated from v1.
+  if (!isGenerationEngineV2(params)) return false;
   if (hasSituation(params.situation) || hasDirectThemeOrMoodInput(params) || hasUserPrimaryStoryText(params)) return false;
   return Boolean(
-    (params.moods ?? []).length ||
-    (params.themes ?? []).length ||
-    (params.styles ?? []).length ||
-    (params.instrumentSounds ?? []).length ||
-    getAtmosphereSpaceCues(params).length
+    (params.moods ?? []).length
+    || (params.themes ?? []).length
+    || (params.styles ?? []).length
+    || (params.instrumentSounds ?? []).length
+    || getAtmosphereSpaceCues(params).length
   );
 }
 
@@ -14823,24 +15191,19 @@ function buildCompactMoodAngle(params: GenerateSongParams): string {
 
 function collectSceneBlueprintSource(params: GenerateSongParams): string {
   const parts: string[] = [];
-  
-  if (params.userInput) {
-    parts.push(`User Input: ${params.userInput}`);
-  }
-  if (params.lyricDraft) {
-    parts.push(`Lyric Draft: ${params.lyricDraft}`);
-  }
-  
+
+  // STORY LANE ONLY.
+  // Genre, Style, Sound, instruments, point sounds, tempo, and vocal presets are
+  // musical/performance inputs. They must never choose a story place, object, or action.
+  if (params.userInput) parts.push(`User Input: ${params.userInput}`);
+  if (params.lyricDraft) parts.push(`Lyric Draft: ${params.lyricDraft}`);
+
   const directThemeText = getDirectThemeInputText(params);
-  if (directThemeText) {
-    parts.push(`Direct Theme: ${directThemeText}`);
-  }
-  
+  if (directThemeText) parts.push(`Direct Theme: ${directThemeText}`);
+
   const directMoodText = getDirectMoodInputText(params);
-  if (directMoodText) {
-    parts.push(`Direct Mood: ${directMoodText}`);
-  }
-  
+  if (directMoodText) parts.push(`Direct Mood: ${directMoodText}`);
+
   if (params.situation) {
     const sit = params.situation;
     if (sit.relationship) parts.push(`Situation Relationship: ${sit.relationship}`);
@@ -14851,23 +15214,23 @@ function collectSceneBlueprintSource(params: GenerateSongParams): string {
     if (sit.speakerBStyle) parts.push(`Speaker B Style: ${sit.speakerBStyle}`);
     if (sit.summary) parts.push(`Situation Summary: ${sit.summary}`);
   }
-  
+
   if (params.themes && params.themes.length > 0) {
     parts.push(`Selected Themes: ${params.themes.join(', ')}`);
   }
   if (params.moods && params.moods.length > 0) {
     parts.push(`Selected Moods: ${params.moods.join(', ')}`);
   }
-  if (params.pointSounds && params.pointSounds.length > 0) {
-    parts.push(`Selected Sounds: ${params.pointSounds.join(', ')}`);
+
+  // Keep the experimental v2 input shape unchanged while v1 is stabilized.
+  if (isGenerationEngineV2(params)) {
+    if (params.pointSounds && params.pointSounds.length > 0) {
+      parts.push(`Selected Sounds: ${params.pointSounds.join(', ')}`);
+    }
+    if (params.genre) parts.push(`Selected Genre: ${params.genre}`);
+    if (params.vocal) parts.push(`Selected Vocal: ${JSON.stringify(params.vocal)}`);
   }
-  if (params.genre) {
-    parts.push(`Selected Genre: ${params.genre}`);
-  }
-  if (params.vocal) {
-    parts.push(`Selected Vocal: ${JSON.stringify(params.vocal)}`);
-  }
-  
+
   return parts.join('\n');
 }
 
@@ -14960,23 +15323,55 @@ function buildConcreteDeterministicFallbackBlueprint(params: GenerateSongParams)
   vocalPoint: string;
   chorusCore: string;
 } {
-  const sourceText = collectSceneBlueprintSource(params);
-  const mapped = translateOrMapKoreanToEnglish(sourceText);
-  
-  const moods = getMoodWordsForMusicDirection(params).map(m => stripRemainingKoreanForProductionPrompt(m).trim()).filter(Boolean);
-  const leadMood = moods[0] || "quiet";
+  // Keep the experimental v2 fallback unchanged while Classic v1 is stabilized.
+  if (isGenerationEngineV2(params)) {
+    const sourceText = collectSceneBlueprintSource(params);
+    const mapped = translateOrMapKoreanToEnglish(sourceText);
+    const moods = getMoodWordsForMusicDirection(params)
+      .map((m) => stripRemainingKoreanForProductionPrompt(m).trim())
+      .filter(Boolean);
+    const leadMood = moods[0] || 'quiet';
+    const info = getVocalModeInfo(params.vocal);
+    const gender = info.gender || 'male';
+    const isSolo = info.isSolo;
+    const scene = `a ${leadMood} scene ${mapped.place ? `in ${mapped.place}` : ''} where ${mapped.characters} is ${mapped.action}`.replace(/\s+/g, ' ').trim();
+    const detail = `${mapped.place || 'room'}, a small everyday object, ${leadMood} colors, and natural ambient noises`;
+    const conflict = mapped.conflict;
+    const vocalPoint = `Natural ${gender} ${isSolo ? 'solo' : 'group'} vocal with ${isTrapOrHiphopCoreGenre(params) ? 'rhythmic spoken-melodic flow' : 'clear melodic phrasing'} and honest emotional delivery`;
+    const chorusCore = `the characters' core desire is expressed clearly through a repeatable melodic line`;
+    return {
+      scene: cleanScenePlanPhrase(scene, 180),
+      detail: cleanScenePlanPhrase(detail, 200),
+      conflict: cleanScenePlanPhrase(conflict, 180),
+      vocalPoint: cleanScenePlanPhrase(vocalPoint, 200),
+      chorusCore: cleanScenePlanPhrase(chorusCore, 180),
+    };
+  }
+
+  // Neutral emergency scaffold only.
+  // The real shared Scene Blueprint is inferred by Gemini from Scene Source Text.
+  // Never map a keyword such as room/drive/rain/office to a fixed stock scene here.
+  const moodCandidate = stripRemainingKoreanForProductionPrompt(
+    buildDirectMoodAngle(params)
+      || buildCompactMoodAngle(params)
+      || buildPromptIntent(params).atmosphereTone
+      || buildPromptIntent(params).emotionalCore
+      || 'emotionally specific',
+  );
+  const mood = cleanupPromptTail(moodCandidate || 'emotionally specific')
+    .replace(/\b(?:scene|atmosphere|mood)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim() || 'emotionally specific';
 
   const info = getVocalModeInfo(params.vocal);
-  const gender = info.gender || "male";
-  const isSolo = info.isSolo;
-  
-  const scene = `a ${leadMood} scene ${mapped.place ? `in ${mapped.place}` : ''} where ${mapped.characters} is ${mapped.action}`.replace(/\s+/g, ' ').trim();
-  
-  const detail = `${mapped.place || 'room'}, a small everyday object, ${leadMood} colors, and natural ambient noises`;
-  const conflict = mapped.conflict;
-  
-  const vocalPoint = `Natural ${gender} ${isSolo ? 'solo' : 'group'} vocal with ${isTrapOrHiphopCoreGenre(params) ? 'rhythmic spoken-melodic flow' : 'clear melodic phrasing'} and honest emotional delivery`;
-  const chorusCore = `the characters' core desire is expressed clearly through a repeatable melodic line`;
+  const gender = info.gender === 'female' ? 'female' : info.gender === 'male' ? 'male' : '';
+  const vocalSubject = `Natural ${gender ? `${gender} ` : ''}${info.isSolo ? 'solo ' : ''}vocal`.replace(/\s{2,}/g, ' ').trim();
+
+  const scene = `a concrete human moment shaped by ${mood}`;
+  const detail = 'one visible action, one lived detail, and natural environmental texture';
+  const conflict = 'a clear desire meets hesitation or resistance at the decisive moment';
+  const vocalPoint = `${vocalSubject} with clear genre-appropriate phrasing and honest emotional delivery`;
+  const chorusCore = "the character's central desire expressed as a short repeatable hook";
 
   return {
     scene: cleanScenePlanPhrase(scene, 180),
@@ -14986,7 +15381,6 @@ function buildConcreteDeterministicFallbackBlueprint(params: GenerateSongParams)
     chorusCore: cleanScenePlanPhrase(chorusCore, 180),
   };
 }
-
 
 function hasProductionShapeOnlyDirectorNote(params: GenerateSongParams): boolean {
   const note = getFreeTextDirectorNote(params);
@@ -15100,8 +15494,9 @@ function buildSceneBlueprint(params: GenerateSongParams): {
 
   const selectedThemes = (params.themes || []).join(', ');
   const selectedMoods = (params.moods || []).join(', ');
-  const selectedGenre = params.genre || "";
-  const selectedKeywordIntent = `Themes: ${selectedThemes}, Moods: ${selectedMoods}, Genre: ${selectedGenre}`;
+  const selectedKeywordIntent = isGenerationEngineV2(params)
+    ? `Themes: ${selectedThemes}, Moods: ${selectedMoods}, Genre: ${params.genre || ''}`
+    : `Themes: ${selectedThemes || 'none'}, Moods: ${selectedMoods || 'none'}`;
 
   const productionOnly = hasProductionShapeOnlyDirectorNote(params);
   const sceneRequirement = productionOnly
@@ -15857,6 +16252,21 @@ function isBrokenFinalPromptPhrase(value: string): boolean {
 }
 
 function buildNaturalDirectAtmosphereFallback(params: GenerateSongParams): string {
+  if (!isGenerationEngineV2(params)) {
+    const mood = cleanupPromptTail(
+      buildDirectMoodAngle(params)
+        || buildCompactMoodAngle(params)
+        || buildPromptIntent(params).atmosphereTone
+        || 'emotionally specific',
+    );
+    const space = compactSpaceAndTransitionCue(params);
+    return normalizeAtmospherePromptLine(cleanupPromptTail([
+      `a concrete human moment shaped by ${mood}`,
+      space ? `with ${space}` : '',
+      'where one visible action carries the unresolved feeling',
+    ].filter(Boolean).join(' ')));
+  }
+
   const scene = buildUserTextCoreScene(params)?.scene || deriveIntentScene(params) || 'a concrete personal scene where small visible actions carry the emotion';
   const mood = buildDirectMoodAngle(params) || buildCompactMoodAngle(params);
   const space = compactSpaceAndTransitionCue(params);
@@ -16851,6 +17261,25 @@ function buildThemeMoodInterpretation(params: GenerateSongParams): ThemeMoodInte
 }
 
 function buildThemeMoodLyricInstruction(params: GenerateSongParams): string {
+  if (!isGenerationEngineV2(params)) {
+    const hasStorySignals = Boolean(
+      hasSituation(params.situation)
+      || hasDirectThemeOrMoodInput(params)
+      || hasUserPrimaryStoryText(params)
+      || (params.themes ?? []).length
+      || (params.moods ?? []).length
+    );
+    if (!hasStorySignals) return '';
+    return `THEME + MOOD LYRIC BOUNDARY (MANDATORY):
+- Use the ONE shared hidden Scene Blueprint from the COMMON SONG CREATIVE BRIEF. Do not build a second lyric-only scene.
+- Situation, direct input, lyric draft, and Theme define the story. Mood controls speech attitude, hesitation, joke, silence, sentence length, emotional pressure, and section curve.
+- Genre, Style, Sound, instruments, point sounds, tempo, production, and vocal presets must not invent lyric places, objects, props, events, relationships, or title concepts.
+- Do not use a canned room/drive/cafe/office/rain/message scene. A concrete place or object is allowed only when it exists in the story source or is naturally inferred from the full shared blueprint.
+- Keep [Atmosphere], title, and lyrics aligned to the same speaker, place boundary, visible action, desire/conflict, lived detail, and chorus intention.
+- Do not copy mood labels, genre/style names, sound names, instrument names, or production words into lyric lines or section-tag cues.
+- Section tags describe how the section is sung or emotionally performed; real SFX remain standalone square-bracket cues under the section tag.`;
+  }
+
   const ctx = buildThemeMoodInterpretation(params);
   if (!ctx.lyricSceneCue && !ctx.lyricDetailCue && !ctx.atmosphereCue) return "";
   const situationMode = ctx.strength === "weak";
@@ -20172,7 +20601,7 @@ function rescueBrokenDirectAtmosphereLine(value: string, params: GenerateSongPar
     const textureParts = dedupePromptParts([
       ...getAtmosphereSpaceCues(params),
       buildDirectMoodAngle(params),
-      buildCompactMoodAngle(params),
+      hasV1ResolvedMoodRoleOwnership(params) ? '' : buildCompactMoodAngle(params),
     ], 5)
       .map((part) => cleanScenePlanPhrase(part, 42))
       .filter(Boolean)
@@ -20192,7 +20621,12 @@ function rescueBrokenDirectAtmosphereLine(value: string, params: GenerateSongPar
   if (hasDirectThemeOrMoodInput(params)) {
     const userScene = buildUserTextCoreScene(params);
     const scene = cleanScenePlanPhrase(userScene?.scene || deriveIntentScene(params) || 'the user\'s direct scene', 95);
-    const mood = cleanScenePlanPhrase(buildDirectMoodAngle(params) || buildCompactMoodAngle(params) || '', 60);
+    const mood = cleanScenePlanPhrase(
+      buildDirectMoodAngle(params)
+        || buildCompactMoodAngle(params)
+        || '',
+      96,
+    );
     const conflict = cleanScenePlanPhrase(directConflictFallback(params), 95);
     const rescued = cleanupPromptTail([
       scene,
@@ -20233,7 +20667,7 @@ function validateFinalAtmosphereLine(value: string, params: GenerateSongParams):
   if (isGenericAtmosphereFallbackLine(rescued)) {
     rescued = buildGenericAtmosphereRepairFallback(params);
   }
-  return cleanupPromptTail(rescued);
+  return applyV1ResolvedMoodAtmosphereOwnership(cleanupPromptTail(rescued), params);
 }
 
 function lowerCaseVocalCueWords(value: string): string {
@@ -20460,7 +20894,9 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
       .slice(0, 2);
     if (addParts.length) finalLine = normalizeArrangementLine([finalLine, ...addParts]);
   }
-  finalLine = strengthenArrangementInterpretiveMovement(finalLine, params);
+  finalLine = hasV1ResolvedMoodRoleOwnership(params)
+    ? applyV1ResolvedMoodArrangementOwnership(finalLine, params)
+    : strengthenArrangementInterpretiveMovement(finalLine, params);
   return removeDanglingPromptConnector(stripFinalInternalProtectionLanguage(finalLine));
 }
 
@@ -20851,18 +21287,14 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
   map.atmosphere = sanitizeBackgroundOnlyBgmAtmosphereLine(validateFinalAtmosphereLine(map.atmosphere || 'balanced emotional air', validationParams), validationParams);
   map.vocals = sanitizeBackgroundOnlyBgmVocalsLine(validateFinalVocalsLine(map.vocals || 'Natural solo vocal with human breath', validationParams), validationParams);
   const dedicatedSoloVocals = buildDedicatedSoloVocalCharacterLine(validationParams);
-  if (dedicatedSoloVocals) {
-    map.vocals = dedicatedSoloVocals;
-  }
+  if (dedicatedSoloVocals) map.vocals = dedicatedSoloVocals;
   // In 2+ vocal mode, keep the final [Vocals] line rule-based instead of letting
   // Gemini freely re-summarize it. This preserves storyboard roles and selected
   // vocal-character details while still staying under the 1000-character ceiling.
   const stableMultiVocals = getVocalModeInfo(validationParams.vocal).isMulti
     ? buildRuleBasedCompressedMultiVocals(validationParams)
     : '';
-  if (stableMultiVocals) {
-    map.vocals = stableMultiVocals;
-  }
+  if (stableMultiVocals) map.vocals = stableMultiVocals;
   map.arrangement = sanitizeBackgroundOnlyBgmArrangementLine(validateFinalArrangementLine(map.arrangement || 'clear sectional contrast', validationParams), validationParams);
 
   // Final guard: if the current selection is a normal song, stale Instrumental BGM language
@@ -20872,6 +21304,7 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
   if (isStaleInstrumentalBgmVocalLine(map.vocals)) {
     map.vocals = cleanupPromptTail(buildFiveLineVocalsValue(validationParams, '')) || 'Natural solo vocal with human breath';
   }
+  map.vocals = applyV1ResolvedMoodVocalOwnership(map.vocals, validationParams);
 
   const finalPromptLines = [
     `[Genre] ${map.genre}`,
@@ -21018,7 +21451,8 @@ function buildFinalPrompt(
         .replace(/\bno balanced call-response with a call-response hook\b/gi, "single-owner hook, no balanced call-response")
         .replace(/\bMixed Vocal Duo\b/gi, "separated vocal roles")
         .replace(/\bTogether\b/gi, "All Vocals")
-        .replace(/\[Genre\]\s+(lonely|relaxing|infectious|upbeat|bright|sad|warm|calm|dark|hopeful|tense)\s+/gi, "[Genre] ")
+        // Selected Mood is now a legitimate Genre identity modifier. Do not strip
+        // exact catalog mood words such as Dark, Bright, Upbeat, or Tense.
         .replace(/\bfused with ((?:early|mid|late)\s+\d{2}s|\d{2}s|\d{4}s|Y2K|modern)\b/gi, "$1")
         .replace(/\b(as the core|fused with|influence|based on|rooted in)\b/gi, "")
         .replace(/\[Vocals\]([^\n]*)\bsingalong chorus point\b/gi, (_m, pre) => `[Vocals]${pre}`)
@@ -28783,7 +29217,7 @@ export async function generateSong(
     const selected = getSelectedFusionGenres(params);
     const safeMain = selected[0]?.label || (params.genre ? (getGenreMeta(params.genre)?.label ?? sentenceCase(params.genre)) : "Pop Fusion");
     const safeEra = getEraTextureGenreAccents(params)[0] || '';
-    const safeMood = interpretMoodGenreModifier(params);
+    const safeMood = deriveV1MoodRoleGenreConceptTag(params) || interpretMoodGenreModifier(params);
     const safeGenre = attachGenreAccents(compactGenreToken(safeMain), [safeEra, safeMood].filter(Boolean));
     const safeInstruments = cleanupPromptTail(dedupeInstrumentSemantic([
       ...getDirectSoundInstrumentCues(params),
@@ -28795,8 +29229,16 @@ export async function generateSong(
       'melodic core instruments',
     ]).slice(0, 7).join(', '));
     const safeAtmosphere = buildThemeMoodInterpretation(params).atmosphereCue || "balanced emotional scene";
-    const safeVocalCue = mergeCompactCue(getSelectedGenreVocalCue(params), getEraTextureVocalCues(params), 2);
-    const safeArrangementCue = mergeCompactCue(getSpecificGenreArrangementCue(params) || getGenreArrangementDNA(params), getEraTextureArrangementCues(params), 3);
+    const safeVocalCue = mergeCompactCue(
+      mergeCompactCue(getSelectedGenreVocalCue(params), [buildV1MoodRoleVocalCue(params)].filter(Boolean), 2),
+      getEraTextureVocalCues(params),
+      2,
+    );
+    const safeArrangementCue = mergeCompactCue(
+      mergeCompactCue(getSpecificGenreArrangementCue(params) || getGenreArrangementDNA(params), [buildV1MoodRoleArrangementCue(params)].filter(Boolean), 3),
+      getEraTextureArrangementCues(params),
+      3,
+    );
     finalPrompt = removeAudioQualityLineWhenPromptIsNearLimit([
       `[Genre] ${safeGenre || 'Pop Fusion'}`,
       `[Instruments] ${safeInstruments || 'balanced drums, bass, and melodic core instruments'}`,
@@ -28896,6 +29338,8 @@ export async function generateSong(
   const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params.recentMoodThemeMemory ?? [], params);
   const songCreativeBriefInstruction = buildSongCreativeBriefInstruction(params);
   const globalMoodDistributionInstruction = buildGlobalMoodDistributionInstruction(params);
+  const moodRoleTranslationInstruction = formatMoodRoleTranslationContext(getV1MoodRoleTranslations(params))
+    .split('\n\n[LYRICS MOOD ROLE]')[0];
   const lyricStoryBriefInstruction = buildLyricStoryBriefInstruction(params);
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
@@ -29134,6 +29578,8 @@ ${buildRecentStoryMemoryInstruction(params)}
 ${songCreativeBriefInstruction}
 
 ${globalMoodDistributionInstruction}
+
+${moodRoleTranslationInstruction}
 
 ${recentTitleAntiRepeatInstruction}
 

@@ -678,7 +678,7 @@ export default function FavoritesPage({
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
-  updateFavorite: (id: string, updates: Partial<any>) => void | Promise<void>;
+  updateFavorite: (id: string, updates: Partial<any>) => void | boolean | Promise<void | boolean>;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
   lockAllFavorites: () => void;
@@ -1807,12 +1807,17 @@ export default function FavoritesPage({
       hidden: true,
       favoriteHidden: true,
       isPublic: false,
-      deletedAt: serverTimestamp(),
+      // Keep deletion markers as plain numbers. Passing serverTimestamp() through the
+      // generic Firestore sanitizer turns the FieldValue into a plain object.
+      deletedAt: trashedAt,
       trashedAt,
     };
 
     try {
-      await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
+      const results = await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
+      if (results.some((result) => result === false)) {
+        throw new Error('favorite-trash-update-failed');
+      }
       showFavoriteToast(`${safeSongIds.length}곡을 휴지통으로 이동했습니다.`);
       return true;
     } catch (error) {
@@ -1835,7 +1840,10 @@ export default function FavoritesPage({
     };
 
     try {
-      await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
+      const results = await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
+      if (results.some((result) => result === false)) {
+        throw new Error('favorite-trash-restore-failed');
+      }
       showFavoriteToast(`${safeSongIds.length}곡을 복구했습니다.`);
       return true;
     } catch (error) {
@@ -1890,10 +1898,9 @@ export default function FavoritesPage({
       return false;
     }
 
-    if (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') {
-      return removeSongsFromCurrentMusicNoteFolder(deletableSongs.map((song) => song.id), musicNoteViewMode);
-    }
-
+    // The UI action is labelled “삭제” in every private Music Note tab.
+    // It must therefore move the actual saved document to Trash, not merely clear
+    // its folder id and leave an invisible/orphaned server document behind.
     return moveSongsToFavoriteTrash(deletableSongs.map((song) => song.id));
   };
 

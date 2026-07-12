@@ -2594,24 +2594,215 @@ function getSelectedTrotRhythmDescriptor(params?: GenerateSongParams): string {
     .toLowerCase();
 }
 
+function getGenreVocalEvidenceText(params?: GenerateSongParams): string {
+  if (!params) return '';
+  const fusion = getSelectedFusionGenres(params)
+    .map((item) => `${item.id || ''} ${item.label || ''}`)
+    .join(' ');
+
+  // Vocal genre DNA must be decided from the actual genre menu only.
+  // Do NOT read selected sounds/styles here: electric bass, future-bass sound FX,
+  // trap drums, synths, guitars, etc. belong to [Instruments]/[Arrangement], not [Vocals].
+  return [
+    params.genre || '',
+    ...(params.subGenre ?? []),
+    fusion,
+    getSelectedLeafGenreLabel(params),
+    params.customGenreInput || '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+type GenreVocalDNARule = {
+  pattern: RegExp;
+  cue: string;
+  family: string;
+};
+
+const GENRE_VOCAL_DNA_RULES: GenreVocalDNARule[] = [
+  { pattern: /shoegaz|슈게이즈|슈게이징/, cue: 'hazy reverb-blended shoegaze vocal distance', family: 'shoegaze' },
+  { pattern: /dream[_\s-]?pop|드림팝/, cue: 'soft dream-pop breath and blurred melodic phrasing', family: 'dream-pop' },
+  { pattern: /bedroom[_\s-]?pop|베드룸\s*팝/, cue: 'close bedroom-pop vocal intimacy', family: 'bedroom-pop' },
+  { pattern: /indie[_\s-]?pop|인디\s*팝|인디팝/, cue: 'plain indie-pop melodic phrasing', family: 'indie-pop' },
+  { pattern: /k[_\s-]?indie[_\s-]?pop[_\s-]?2000s|2000s\s*k[_\s-]?indie|2000년대.*인디/, cue: 'airy 2000s K-indie phrasing', family: 'k-indie-pop' },
+  { pattern: /k[_\s-]?indie\b|korean\s*indie|k-인디|한국\s*인디/, cue: 'natural K-indie conversational phrasing', family: 'k-indie' },
+  { pattern: /j[_\s-]?indie[_\s-]?pop|japanese\s*indie|j-인디|일본\s*인디/, cue: 'clear J-indie melodic diction', family: 'j-indie' },
+
+  { pattern: /japanese\s*folk|j[_\s-]?folk|일본\s*포크/, cue: 'plain Japanese-folk storytelling phrasing', family: 'folk' },
+  { pattern: /korean\s*folk|k[_\s-]?folk|한국\s*포크|k-포크|케이\s*포크/, cue: 'plain K-folk storytelling phrasing', family: 'folk' },
+  { pattern: /7080[_\s-]?folk|7080\s*포크/, cue: 'plain 7080 folk vocal sincerity', family: 'folk' },
+  { pattern: /singer[_\s-]?songwriter|싱어송라이터/, cue: 'intimate singer-songwriter storytelling', family: 'folk' },
+  { pattern: /country|컨트리/, cue: 'plain country storytelling twang', family: 'country' },
+  { pattern: /bluegrass|블루그래스/, cue: 'bright bluegrass harmony diction', family: 'country' },
+  { pattern: /folk|포크|acoustic[_\s-]?folk/, cue: 'plain folk storytelling phrasing', family: 'folk' },
+
+  { pattern: /trap[_\s-]?soul|트랩\s*소울/, cue: 'melodic trap-soul vocal flow', family: 'hiphop' },
+  { pattern: /city[_\s-]?r&b|city[_\s-]?rnb|시티\s*r&b|시티\s*알앤비/, cue: 'smooth city-R&B close phrasing', family: 'rnb' },
+  { pattern: /uk[_\s-]?garage[_\s-]?r&b|uk\s*개러지\s*r&b/, cue: 'light UK-garage R&B rhythmic phrasing', family: 'rnb' },
+  { pattern: /alternative[_\s-]?r&b|얼터너티브\s*r&b|얼터너티브\s*알앤비/, cue: 'dark alternative-R&B intimate phrasing', family: 'rnb' },
+  { pattern: /contemporary[_\s-]?r&b|컨템퍼러리\s*r&b/, cue: 'smooth contemporary-R&B pocket phrasing', family: 'rnb' },
+  { pattern: /neo[_\s-]?soul|네오\s*소울/, cue: 'warm neo-soul pocket phrasing', family: 'soul' },
+  { pattern: /slow[_\s-]?jam|슬로우\s*잼/, cue: 'slow-jam close breath phrasing', family: 'rnb' },
+  { pattern: /soul[_\s-]?blues|소울\s*블루스/, cue: 'bluesy soul vocal ache', family: 'soul' },
+  { pattern: /classic\s*soul|soulful|\bsoul\b|소울/, cue: 'soft soulful lift', family: 'soul' },
+  { pattern: /r&b|rnb|알앤비/, cue: 'smooth R&B pocket phrasing', family: 'rnb' },
+  { pattern: /new[_\s-]?jack|뉴잭/, cue: 'punchy new-jack vocal swing', family: 'rnb' },
+  { pattern: /funk|펑크|펑키/, cue: 'loose funk-pocket phrasing', family: 'funk' },
+
+  { pattern: /boom\s*bap|boombap|붐뱁/, cue: 'classic boom-bap rap diction', family: 'hiphop' },
+  { pattern: /drill|드릴/, cue: 'dark drill rap pressure', family: 'hiphop' },
+  { pattern: /chill[_\s-]?trap|칠\s*트랩/, cue: 'laid-back chill-trap melodic flow', family: 'hiphop' },
+  { pattern: /melodic[_\s-]?rap|멜로딕\s*랩/, cue: 'melodic rap-sung flow', family: 'hiphop' },
+  { pattern: /emo[_\s-]?rap|이모랩/, cue: 'fragile emo-rap melodic pressure', family: 'hiphop' },
+  { pattern: /g[_\s-]?funk|g-펑크|g\s*펑크/, cue: 'laid-back G-funk vocal pocket', family: 'hiphop' },
+  { pattern: /jazz[_\s-]?hip[_\s-]?hop|재즈힙합/, cue: 'relaxed jazz-rap phrasing', family: 'hiphop' },
+  { pattern: /comedy[_\s-]?hip[_\s-]?hop|코미디\s*힙합/, cue: 'comic talk-rap timing', family: 'hiphop' },
+  { pattern: /jersey[_\s-]?club|저지\s*클럽/, cue: 'short Jersey-club hook chant', family: 'hiphop' },
+  { pattern: /hip[_\s-]?hop|hiphop|랩|rap|trap|트랩/, cue: 'rhythmic hip-hop phrasing', family: 'hiphop' },
+
+  { pattern: /jazz[_\s-]?ballad|재즈\s*발라드/, cue: 'soft jazz-ballad vocal timing', family: 'jazz' },
+  { pattern: /jazz[_\s-]?vocal|재즈\s*보컬/, cue: 'classic jazz-vocal phrasing', family: 'jazz' },
+  { pattern: /bossa|보사/, cue: 'soft bossa phrasing', family: 'jazz' },
+  { pattern: /swing[_\s-]?jazz|스윙\s*재즈/, cue: 'swinging jazz vocal bounce', family: 'jazz' },
+  { pattern: /cool[_\s-]?jazz|쿨\s*재즈/, cue: 'cool restrained jazz phrasing', family: 'jazz' },
+  { pattern: /smooth[_\s-]?jazz|스무스\s*재즈/, cue: 'smooth jazz vocal ease', family: 'jazz' },
+  { pattern: /lounge[_\s-]?jazz|라운지\s*재즈/, cue: 'lounge-jazz relaxed diction', family: 'jazz' },
+  { pattern: /nu[_\s-]?jazz|누\s*재즈/, cue: 'nu-jazz flexible pocket', family: 'jazz' },
+  { pattern: /hard[_\s-]?bop|하드\s*밥/, cue: 'hard-bop soulful jazz phrasing', family: 'jazz' },
+  { pattern: /jazz|재즈/, cue: 'flexible jazz phrasing', family: 'jazz' },
+
+  { pattern: /idol[_\s-]?dance|아이돌\s*댄스|j[_\s-]?idol|아이돌\s*팝/, cue: 'polished idol-pop hook diction', family: 'idol' },
+  { pattern: /k[_\s-]?pop|케이팝|k-pop|아이돌/, cue: 'clean K-pop hook diction', family: 'idol' },
+  { pattern: /j[_\s-]?pop|j-pop|제이팝/, cue: 'clear J-pop melodic diction', family: 'jpop' },
+  { pattern: /anisong|애니송|anime/, cue: 'bright anisong chorus push', family: 'jpop' },
+  { pattern: /utaite|우타이테/, cue: 'expressive utaite-style vocal agility', family: 'jpop' },
+  { pattern: /vocaloid|보컬로이드/, cue: 'precise vocaloid-style rhythmic clarity', family: 'jpop' },
+  { pattern: /visual[_\s-]?kei|비주얼계/, cue: 'dramatic visual-kei vocal flair', family: 'rock' },
+
+  { pattern: /k[_\s-]?city[_\s-]?pop|j[_\s-]?city[_\s-]?pop|modern[_\s-]?city[_\s-]?pop|city[_\s-]?pop|시티팝/, cue: 'smooth city-pop vocal polish', family: 'citypop' },
+  { pattern: /synth[_\s-]?pop|신스팝|synthpop/, cue: 'clean synth-pop hook diction', family: 'synthpop' },
+  { pattern: /electropop|일렉트로팝/, cue: 'clean electropop topline clarity', family: 'electropop' },
+  { pattern: /future[_\s-]?bass|퓨처\s*베이스/, cue: 'airy future-bass pop topline', family: 'electronic' },
+  { pattern: /hyperpop|하이퍼팝/, cue: 'high-gloss hyperpop vocal snap', family: 'electronic' },
+  { pattern: /y2k[_\s-]?pop|y2k\s*팝/, cue: 'bright Y2K pop hook tone', family: 'pop' },
+  { pattern: /dance[_\s-]?pop|댄스팝/, cue: 'clear dance-pop hook delivery', family: 'pop' },
+  { pattern: /teen[_\s-]?pop|틴팝/, cue: 'bright teen-pop vocal lift', family: 'pop' },
+  { pattern: /funk[_\s-]?pop|펑크팝/, cue: 'bouncy funk-pop vocal diction', family: 'pop' },
+  { pattern: /acoustic[_\s-]?pop|어쿠스틱팝/, cue: 'plain acoustic-pop vocal warmth', family: 'pop' },
+  { pattern: /alternative[_\s-]?pop|얼터너티브\s*팝/, cue: 'off-center alternative-pop delivery', family: 'pop' },
+  { pattern: /pop\b|팝/, cue: 'clean pop hook diction', family: 'pop' },
+
+  { pattern: /post[_\s-]?punk|포스트\s*펑크/, cue: 'dry post-punk vocal restraint', family: 'rock' },
+  { pattern: /emo[_\s-]?rock|이모\s*록/, cue: 'urgent emo-rock vocal ache', family: 'rock' },
+  { pattern: /indie[_\s-]?rock|인디\s*록/, cue: 'natural indie-rock vocal push', family: 'rock' },
+  { pattern: /band[_\s-]?ballad|밴드\s*발라드/, cue: 'emotional band-ballad vocal rise', family: 'rock' },
+  { pattern: /pop[_\s-]?punk|팝\s*펑크/, cue: 'bright pop-punk vocal attack', family: 'rock' },
+  { pattern: /hard[_\s-]?rock|하드\s*록/, cue: 'strong hard-rock vocal drive', family: 'rock' },
+  { pattern: /soft[_\s-]?rock|소프트\s*록/, cue: 'soft-rock melodic vocal ease', family: 'rock' },
+  { pattern: /folk[_\s-]?rock|포크\s*록/, cue: 'folk-rock storytelling push', family: 'rock' },
+  { pattern: /k[_\s-]?rock|k-록|한국\s*록/, cue: 'K-rock emotional vocal drive', family: 'rock' },
+  { pattern: /rock|록|band|밴드/, cue: 'band-driven vocal push', family: 'rock' },
+  { pattern: /opera[_\s-]?rock|오페라\s*록/, cue: 'operatic rock vocal drama', family: 'opera' },
+
+  { pattern: /metalcore|메탈코어/, cue: 'metalcore clean-to-rough vocal pressure', family: 'metal' },
+  { pattern: /nu[_\s-]?metal|뉴메탈/, cue: 'nu-metal rhythmic vocal attack', family: 'metal' },
+  { pattern: /power[_\s-]?metal|파워\s*메탈/, cue: 'heroic power-metal vocal lift', family: 'metal' },
+  { pattern: /symphonic[_\s-]?metal|심포닉\s*메탈/, cue: 'symphonic-metal dramatic vocal scale', family: 'metal' },
+  { pattern: /death[_\s-]?metal|데스메탈/, cue: 'extreme metal vocal grit', family: 'metal' },
+  { pattern: /metal|메탈/, cue: 'strong metal vocal pressure', family: 'metal' },
+
+  { pattern: /traditional[_\s-]?trot|정통\s*트로트/, cue: 'deep trot vibrato and bending', family: 'trot' },
+  { pattern: /semi[_\s-]?trot|세미\s*트로트/, cue: 'light semi-trot vocal bounce', family: 'trot' },
+  { pattern: /disco[_\s-]?trot|디스코\s*트로트/, cue: 'bright disco-trot vocal lift', family: 'trot' },
+  { pattern: /ballad[_\s-]?trot|발라드\s*트로트/, cue: 'trot-ballad emotional vibrato', family: 'trot' },
+  { pattern: /trot|트로트/, cue: 'Korean trot vibrato color', family: 'trot' },
+  { pattern: /enka|엔카/, cue: 'enka-style emotional bending', family: 'trot' },
+
+  { pattern: /gugak[_\s-]?fusion|국악\s*퓨전/, cue: 'fusion gugak breath with modern crossover phrasing', family: 'gugak' },
+  { pattern: /pansori|판소리/, cue: 'Korean gugak breath and pansori chest resonance', family: 'gugak' },
+  { pattern: /choral|합창|church[_\s-]?hymn|교회\s*성가/, cue: 'choir-like choral blend', family: 'classical' },
+  { pattern: /opera|오페라|gothic[_\s-]?opera|고딕\s*오페라/, cue: 'operatic projection and dramatic phrasing', family: 'opera' },
+  { pattern: /classical|baroque|클래식|바로크/, cue: 'classical vocal poise', family: 'classical' },
+
+  { pattern: /reggae|레게/, cue: 'loose reggae pocket', family: 'reggae' },
+  { pattern: /latin|라틴|flamenco|플라멩코/, cue: 'expressive latin vocal rhythm', family: 'latin' },
+  { pattern: /world[_\s-]?music|월드\s*뮤직/, cue: 'world-music melodic ornament', family: 'world' },
+  { pattern: /chiptune|칩튠|video[_\s-]?game|게임\s*음악/, cue: 'clear game-theme vocal hook', family: 'theme' },
+  { pattern: /cinematic|theme|score|trailer|시네마틱|테마|스코어|트레일러/, cue: 'cinematic vocal scale and clear motif delivery', family: 'theme' },
+];
+
+function getSelectedVocalEffectSoundCue(params?: GenerateSongParams): string {
+  if (!params) return '';
+  const text = selectedSoundText(params);
+  if (!text) return '';
+  const cues: string[] = [];
+  const add = (value: string) => {
+    const cleaned = cleanupPromptTail(value);
+    if (cleaned && !cues.some((cue) => cue.toLowerCase() === cleaned.toLowerCase())) cues.push(cleaned);
+  };
+
+  // Only actual voice/vocal-effect sounds may reach [Vocals].
+  // Instruments and production sounds such as electric bass, guitar, future-bass synths,
+  // trap drums, 808, risers, pads, etc. stay out of the vocal line.
+  if (/radio\s*voice|radio\s*vocal|라디오\s*보컬|라디오\s*목소리/.test(text)) add('radio vocal texture');
+  if (/telephone\s*voice|phone\s*voice|전화\s*목소리|전화\s*보컬/.test(text)) add('telephone vocal texture');
+  if (/vocoder|보코더/.test(text)) add('vocoder vocal color');
+  if (/auto[-_\s]?tune|autotune|hard[-_\s]?tune|오토튠/.test(text)) add('auto-tuned vocal sheen');
+  if (/whisper\s*voice|whisper\s*vocal|속삭임|속삭이는\s*보컬/.test(text)) add('whisper vocal texture');
+  if (/choir|콰이어|합창/.test(text)) add('choir-backed vocal blend');
+  if (/humming|허밍|흥얼/.test(text)) add('humming vocal layer');
+  if (/chant|chanting|챈트|구호/.test(text)) add('chant-like vocal layer');
+  if (/ghost\s*voice|유령\s*목소리/.test(text)) add('ghostly vocal texture');
+
+  return cleanupPromptTail(cues.slice(0, 1).join(', '));
+}
+
 function getGenreVocalDNAPhrase(params?: GenerateSongParams): string {
   const key = getSelectedPrimaryGenreKey(params);
   if (key === 'trot') {
     const specific = getSelectedTrotVocalDescriptor(params);
     return `${specific} vibrato color with stage-like emotional lift`;
   }
-  const map: Record<string, string> = {
-    gugak_fusion: 'fusion gugak breath with modern crossover phrasing',
-    pansori: 'Korean gugak breath and pansori chest resonance',
-    citypop: 'smooth bittersweet city-pop polish',
-    neo_soul: 'warm neo-soul pocket with intimate harmonic weight',
-    soul: 'gospel-rooted soul weight with warm human resonance',
-    jazz: 'jazz phrasing with flexible timing and warm harmonic color',
-    idol: 'polished idol-pop clarity with clean hook focus',
-    rnb: 'smooth R&B phrasing with close late-night intimacy',
-    rock: 'live rock projection with band-driven urgency',
+
+  const evidence = getGenreVocalEvidenceText(params);
+  const cues: string[] = [];
+  const families = new Set<string>();
+  const add = (value: string, family = '') => {
+    const cleaned = cleanupPromptTail(value);
+    if (!cleaned) return;
+    if (family && families.has(family)) return;
+    if (!cues.some((cue) => cue.toLowerCase() === cleaned.toLowerCase())) {
+      cues.push(cleaned);
+      if (family) families.add(family);
+    }
   };
-  return map[key] || '';
+
+  // Apply actual genre-menu DNA only. This keeps a selected Shoegazing/Indie Pop song
+  // from borrowing hip-hop/electropop vocal habits just because a sound chip mentions
+  // trap drums, electric bass, or future-bass synths.
+  for (const rule of GENRE_VOCAL_DNA_RULES) {
+    if (rule.pattern.test(evidence)) add(rule.cue, rule.family);
+    if (cues.length >= 2) break;
+  }
+
+  if (!cues.length) {
+    const map: Record<string, string> = {
+      gugak_fusion: 'fusion gugak breath with modern crossover phrasing',
+      pansori: 'Korean gugak breath and pansori chest resonance',
+      citypop: 'smooth city-pop vocal polish',
+      neo_soul: 'warm neo-soul pocket phrasing',
+      soul: 'soft soulful lift',
+      jazz: 'flexible jazz phrasing',
+      idol: 'clean pop hook diction',
+      rnb: 'smooth R&B pocket phrasing',
+      rock: 'band-driven vocal push',
+    };
+    if (map[key]) add(map[key], key);
+  }
+
+  return cleanupPromptTail(cues.slice(0, 2).join(', '));
 }
 
 function getGenreDefaultVocalPhrase(params?: GenerateSongParams): string {
@@ -3531,6 +3722,9 @@ function buildAtmosphereVocalEmotionCueForSolo(params: GenerateSongParams): stri
   if (has(/도시|urban|city|groovy|weekend|주말/)) {
     add('relaxed urban feeling');
   }
+  if (has(/소울풀|soulful/)) {
+    add('soft soulful emotion');
+  }
   if (has(/치유|회복|healing|calm|peaceful|soft/)) {
     add('soft healing emotion');
   }
@@ -3549,6 +3743,7 @@ function buildAtmosphereVocalEmotionCueForSolo(params: GenerateSongParams): stri
     'lonely restrained softness',
     'controlled sharp emotion',
     'tender protective warmth',
+    'soft soulful emotion',
     'bright playful warmth',
     'soft healing emotion',
     'relaxed urban feeling',
@@ -3556,31 +3751,93 @@ function buildAtmosphereVocalEmotionCueForSolo(params: GenerateSongParams): stri
   return priority.find((cue) => candidates.includes(cue)) || candidates[0] || '';
 }
 
+function compactVocalSongFitCue(value: string): string {
+  let line = cleanupPromptTail(String(value || '')
+    .replace(/\bgenre[-\s]?shaped\s+/gi, '')
+    .replace(/\bmood[-\s]?shaped\s+/gi, '')
+    .replace(/\bstory[-\s]?aware\s+(?:carrying|delivery|expression|pressure)?\s*/gi, '')
+    .replace(/\bselected\s+(?:genre|mood|theme)\b/gi, '')
+    .replace(/\binside\s+[^,.;]+/gi, '')
+    .replace(/\bwhere\s+[^,.;]+/gi, '')
+    .replace(/\bwith\s+story[-\s]?aware\s+delivery\b/gi, '')
+    .replace(/\band\s+story[-\s]?aware\s+delivery\b/gi, '')
+    .replace(/\bstory[-\s]?aware\b/gi, '')
+    .replace(/\bcarrying\s+/gi, '')
+    .replace(/\s{2,}/g, ' '));
+
+  line = line
+    .replace(/\bfeeling\s+and\s+delivery\b/gi, 'delivery')
+    .replace(/\bfeeling\b/gi, 'emotion')
+    .replace(/\s+,/g, ',')
+    .replace(/,\s*,/g, ',')
+    .replace(/,\s*$/g, '')
+    .trim();
+
+  if (line.length > 58) {
+    const parts = line.split(/,\s*|\s+and\s+/i).map((part) => cleanupPromptTail(part)).filter(Boolean);
+    line = cleanupPromptTail(parts.slice(0, 2).join(', '));
+  }
+  return cleanupPromptTail(line);
+}
+
+function semanticVocalCueKey(value: string): string {
+  return cleanupPromptTail(value)
+    .toLowerCase()
+    .replace(/\b(?:natural|solo|female|male|vocal|voice|with|and|tone|phrasing|delivery|emotion|feeling|color|focus|diction|clarity|lift|polish)\b/g, ' ')
+    .replace(/\blazy\s+relaxed\b|\blaid[-\s]?back\b/g, 'relaxed')
+    .replace(/\bfolk[-\s]?storytelling\b|\bstorytelling\s+phrasing\b/g, 'folkstory')
+    .replace(/\bclean\s+pop\s+hook\b|\bclean\s+synth[-\s]?pop\s+hook\b/g, 'pophook')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function dedupeFinalSoloVocalCueParts(parts: string[], limit = 9): string[] {
+  const result: string[] = [];
+  const keys = new Set<string>();
+  const hasRelaxed = () => result.some((part) => /lazy\s+relaxed|laid[-\s]?back|relaxed/i.test(part));
+
+  for (const part of parts.map((value) => compactVocalSongFitCue(value)).filter(Boolean)) {
+    if (/lazy\s+relaxed/i.test(part) && hasRelaxed()) continue;
+    if (/laid[-\s]?back/i.test(part) && hasRelaxed()) continue;
+
+    const key = semanticVocalCueKey(part);
+    if (!key) continue;
+    const isDuplicate = Array.from(keys).some((existing) => existing === key || (key.length > 5 && existing.includes(key)) || (existing.length > 5 && key.includes(existing)));
+    if (isDuplicate) continue;
+    keys.add(key);
+    result.push(part);
+    if (result.length >= limit) break;
+  }
+
+  return result;
+}
+
 function buildVocalSongFitParts(params: GenerateSongParams, maxParts = 3): string[] {
   const interpreted = buildThemeMoodInterpretation(params);
   const intent = buildPromptIntent(params);
   const parts: string[] = [];
   const add = (value: string) => {
-    const cleaned = cleanupPromptTail(value || '');
-    if (cleaned) parts.push(cleaned);
+    const cleaned = compactVocalSongFitCue(value || '');
+    if (cleaned && !/balanced emotional color/i.test(cleaned)) parts.push(cleaned);
   };
 
   const genreDNA = cleanupPromptTail(getGenreVocalDNAPhrase(params));
-  if (genreDNA) add(`genre-shaped ${genreDNA}`);
+  if (genreDNA) add(genreDNA);
 
+  const vocalEffectSoundCue = getSelectedVocalEffectSoundCue(params);
+  if (vocalEffectSoundCue) add(vocalEffectSoundCue);
+
+  // Prefer the compact mood map. Long interpreted cues can contain scene text and
+  // should not be copied into [Vocals].
   const moodDelivery = cleanupPromptTail(
-    interpreted.vocalCue ||
+    buildAtmosphereVocalEmotionCueForSolo(params) ||
     intent.vocalDelivery ||
-    buildAtmosphereVocalEmotionCueForSolo(params),
+    interpreted.vocalCue,
   );
-  if (moodDelivery && !/balanced emotional color/i.test(moodDelivery)) {
-    add(`mood-shaped ${moodDelivery}`);
-  }
+  add(moodDelivery);
 
-  const storyCue = cleanupPromptTail(buildSoloVocalSongInterpretationCue(params, interpreted))
-    .replace(/^carrying\s+/i, 'carrying ')
-    .replace(/^story-aware\s+/i, '');
-  if (storyCue) add(`story-aware ${cleanScenePlanPhrase(storyCue, 72)}`);
+  const storyCue = cleanupPromptTail(buildSoloVocalSongInterpretationCue(params, interpreted));
+  add(storyCue);
 
   return dedupePromptParts(parts, 8).slice(0, maxParts);
 }
@@ -3723,7 +3980,11 @@ function buildDedicatedSoloVocalCharacterLine(params: GenerateSongParams): strin
     characterSelectionCount: rawCoreCharacterParts.length,
   });
   const songFitParts = buildVocalSongFitParts(params, 3);
-  const finalParts = dedupePromptParts([...parts, ...songFitParts], 15);
+  const characterBudget = rawCoreCharacterParts.length >= 5 ? 6 : 7;
+  const finalParts = dedupeFinalSoloVocalCueParts([
+    ...parts.slice(0, characterBudget),
+    ...songFitParts,
+  ], 9);
 
   if (!finalParts.length) return '';
 
@@ -6241,6 +6502,7 @@ function cleanPromptValue(value: string | null | undefined): string {
 
 function cleanupPromptTail(value: string): string {
   return cleanPromptValue(value)
+    .replace(/\b([a-z][a-z-]{2,})\b,\s+\1\b/gi, "$1")
     .replace(/\bwhere\s+(?:words|feelings|memories|promises|silence)\s+that\s+never\s*$/i, "where unresolved feelings stay present")
     .replace(/\bwhere\s+[^,]{1,48}\s+(?:that|who|which|when|while|with|in|and|or|to|of|for|from|through|around)\s*$/i, "")
     .replace(/\bwhere\s+the\s+story\s+moves\s+through\s*$/i, "where the story turns through a concrete detail")
@@ -7009,7 +7271,7 @@ function buildSituationAtmosphere(params: GenerateSongParams): string {
 
   // Atmosphere must read as a sentence, not a raw comma list such as "lonely, dreamy".
   const sentence = `${moodClause} ${scene}${versionClause}`;
-  return cleanupPromptTail(limitText(sentence, 145));
+  return smartTrimProductionPhrase(sentence, 145, 20);
 }
 
 function inferSituationVocalTone(role: string, index: number): string {
@@ -8577,7 +8839,7 @@ function buildVariedSituationAtmosphere(
 
   // The user's Situation text can be long or vague, so do not copy it directly.
   // Reinterpret it into one fresh dramatic angle each generation.
-  return cleanupPromptTail(limitText(`${moodClause} ${scene} ${angle}`, 210));
+  return smartTrimProductionPhrase(`${moodClause} ${scene} ${angle}`, 210, 24);
 }
 
 
@@ -9722,6 +9984,7 @@ function stripNonGenrePerformancePhrases(value: string): string {
 function attachGenreAccents(base: string, tokens: string[] = [], fallback = ''): string {
   const cleanBase = stripNonGenrePerformancePhrases(base).replace(/\s{2,}/g, ' ').trim();
   const baseLower = cleanBase.toLowerCase();
+  const baseEraKeys = extractGenreEraKeys(cleanBase);
   const rawAccents = dedupeGenreAccentTokens([
     ...tokens.map(genreStyleTokenToNatural),
     ...(fallback ? [fallback] : []),
@@ -9733,6 +9996,8 @@ function attachGenreAccents(base: string, tokens: string[] = [], fallback = ''):
     // same family as another vague accent. Era-specific forms like 90s R&B stay.
     .filter((accent) => {
       const lower = accent.toLowerCase();
+      const accentEraKeys = extractGenreEraKeys(accent);
+      if (accentEraKeys.size > 0 && Array.from(accentEraKeys).some((key) => baseEraKeys.has(key))) return false;
       if (/\b\d{2,4}s\b|y2k|hyperpop/.test(lower)) return true;
       if (/r&b|rnb/.test(baseLower) && /r&b|rnb/.test(lower)) return false;
       if (/trot/.test(baseLower) && /trot/.test(lower)) return false;
@@ -10345,13 +10610,92 @@ type InternalScenePlan = {
   lyricDirection: string;
 };
 
+function removeDanglingPromptConnector(value: string): string {
+  let cleaned = cleanupPromptTail(String(value || ''))
+    .replace(/[,:;\-–—]+\s*$/g, '')
+    .trim();
+
+  // A bounded phrase must never finish on an article, preposition, or conjunction.
+  // Roll back only the unfinished tail; do not invent replacement story content.
+  const dangling = /\b(?:a|an|the|with|where|while|when|because|although|though|and|or|but|to|of|for|from|through|around|into|inside|beside|between|under|over|as|by|in|on)\s*$/i;
+  for (let i = 0; i < 4 && dangling.test(cleaned); i += 1) {
+    cleaned = cleaned
+      .replace(dangling, '')
+      .replace(/[,:;\-–—]+\s*$/g, '')
+      .trim();
+  }
+  return cleanupPromptTail(cleaned);
+}
+
+function smartTrimProductionPhrase(value: string, softLimit: number, graceLength = 20): string {
+  const cleaned = cleanupPromptTail(String(value || '').replace(/\s{2,}/g, ' ').trim());
+  if (!cleaned || cleaned.length <= softLimit) return removeDanglingPromptConnector(cleaned);
+
+  const hardLimit = Math.min(cleaned.length, Math.max(softLimit, softLimit + Math.max(0, graceLength)));
+  const window = cleaned.slice(0, hardLimit + 1);
+  const afterSoft = window.slice(softLimit);
+
+  // Prefer a natural ending just beyond the soft limit. This allows a complete
+  // sentence or clause to use the grace window instead of being cut abruptly.
+  const boundaryPatterns = [/[.!?](?=\s|$)/, /[;:](?=\s|$)/, /,(?=\s|$)/];
+  let cutAt = -1;
+  for (const pattern of boundaryPatterns) {
+    const match = afterSoft.match(pattern);
+    if (match && typeof match.index === 'number') {
+      cutAt = softLimit + match.index + match[0].length;
+      break;
+    }
+  }
+
+  // If no boundary appears in the grace window, step back to the last complete
+  // clause or word before the hard limit. Never slice through an alphabetic word.
+  if (cutAt < 0) {
+    const safeWindow = cleaned.slice(0, hardLimit);
+    const lowerBound = Math.max(24, Math.floor(softLimit * 0.62));
+    const punctuationCut = Math.max(
+      safeWindow.lastIndexOf('.'),
+      safeWindow.lastIndexOf('!'),
+      safeWindow.lastIndexOf('?'),
+      safeWindow.lastIndexOf(';'),
+      safeWindow.lastIndexOf(':'),
+      safeWindow.lastIndexOf(','),
+    );
+    if (punctuationCut >= lowerBound) cutAt = punctuationCut + 1;
+    else {
+      // A subordinate clause that starts near the limit is safer to drop whole
+      // than to keep only its first few words (for example: "where the speaker wants").
+      const clausePattern = /\s+(?:where|while|when|because|although|though|but|as)\s+/gi;
+      let clauseCut = -1;
+      for (const match of safeWindow.matchAll(clausePattern)) {
+        if (typeof match.index === 'number' && match.index >= lowerBound) clauseCut = match.index;
+      }
+      if (clauseCut >= lowerBound) cutAt = clauseCut;
+      else {
+        const wordCut = safeWindow.lastIndexOf(' ');
+        cutAt = wordCut >= lowerBound ? wordCut : hardLimit;
+      }
+    }
+  }
+
+  // A defensive word-boundary rollback protects against any unusual no-space token.
+  if (cutAt < cleaned.length && /[A-Za-z0-9]/.test(cleaned.charAt(cutAt - 1)) && /[A-Za-z0-9]/.test(cleaned.charAt(cutAt))) {
+    const rollback = cleaned.slice(0, cutAt).lastIndexOf(' ');
+    if (rollback > 24) cutAt = rollback;
+  }
+
+  const trimmed = removeDanglingPromptConnector(cleaned.slice(0, cutAt));
+  return trimmed || removeDanglingPromptConnector(cleaned.slice(0, hardLimit));
+}
+
 function cleanScenePlanPhrase(value: string, max = 120): string {
-  return cleanupPromptTail(
+  const cleaned = cleanupPromptTail(
     stripRemainingKoreanForProductionPrompt(String(value || ''))
       .replace(/\b(?:theme|mood|style|sound)\s*:\s*/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim(),
-  ).slice(0, max).trim();
+  );
+  const grace = Math.max(10, Math.min(22, Math.round(max * 0.16)));
+  return smartTrimProductionPhrase(cleaned, max, grace);
 }
 
 function buildScenePlanConflictCue(params: GenerateSongParams, scene: string): string {
@@ -11007,23 +11351,42 @@ function buildIntentConnectedAtmosphereLine(params: GenerateSongParams, original
 }
 
 function buildSoloVocalSongInterpretationCue(params: GenerateSongParams, interpreted: ThemeMoodInterpretation): string {
-  const intent = buildPromptIntent(params);
-  const contextual = !hasUserPrimaryStoryText(params) && !hasSituation(params.situation)
-    ? buildContextualCueBundle(params)
-    : { atmosphereScene: '', arrangementHook: '' };
-  const scenePlan = buildInternalScenePlan(params, params.userInput || selectedThemeText(params) || selectedMoodText(params) || '');
-  const scene = cleanScenePlanPhrase(contextual.atmosphereScene || scenePlan.scene || intent.sceneCore || '', 70);
-  const emotion = cleanScenePlanPhrase(intent.emotionalCore || interpreted.vocalCue || interpreted.atmosphereCue || '', 62);
-  const delivery = cleanScenePlanPhrase(interpreted.vocalCue || intent.vocalDelivery || '', 52);
+  // Use only the current user/keyword evidence for the situation cue.
+  // Do not read interpreted.atmosphereCue here: it may contain generated scene wording
+  // or recent-memory avoidance text, which caused stale cues such as family-scene delivery
+  // to leak into unrelated [Vocals] lines.
+  const raw = [
+    params.userInput || '',
+    getDirectThemeInputText(params) || '',
+    selectedThemeText(params) || '',
+    ...(params.themes ?? []),
+    hasSituation(params.situation) ? compactSituationScene(params) : '',
+  ].join(' ').toLowerCase();
 
-  if (scene && emotion && !/balanced emotional color/i.test(emotion)) {
-    return cleanupPromptTail(`carrying ${emotion} inside ${scene}`);
-  }
-  if (delivery && scene) return cleanupPromptTail(`${delivery} shaped by ${scene}`);
-  if (emotion && !/balanced emotional color/i.test(emotion)) return cleanupPromptTail(`carrying ${emotion}`);
-  return '';
+  if (!raw.trim()) return '';
+
+  const has = (pattern: RegExp) => pattern.test(raw);
+  const candidates: string[] = [];
+  const add = (value: string) => {
+    const cleaned = cleanupPromptTail(value);
+    if (cleaned && !candidates.includes(cleaned)) candidates.push(cleaned);
+  };
+
+  // This cue is for [Vocals], not [Atmosphere]. Keep it as a short delivery
+  // direction and never copy full scenes such as "inside a family-table silence".
+  if (has(/가족|부모|엄마|아빠|집밥|식탁|family|parent|home[-\s]?table/)) add('conversational family-scene delivery');
+  if (has(/이별|헤어|떠난|breakup|parting|farewell|ex[-\s]?lover/)) add('restrained breakup confession');
+  if (has(/고백|말하지 못|못한 말|confession|unsaid/)) add('held-back confession pressure');
+  if (has(/퇴근|직장|회사|야근|office|workday|commute/)) add('dry workday speech');
+  if (has(/주말|일요일|휴일|weekend|sunday/)) add('ordinary-weekend conversational tone');
+  if (has(/고향|집으로|향수|hometown|homecoming|homesick/)) add('warm homesick delivery');
+  if (has(/문자|화면|커서|전송|신호|연결|메시지|screen|cursor|signal|message|connection|standby/)) add('quiet message-screen tension');
+  if (has(/마법|요정|별|판타지|fantasy|fairy|magic|starry/)) add('tender fantasy warmth');
+  if (has(/성장|변화|다시 시작|change|growth|new start/)) add('small growth lift');
+  if (has(/풍자|비꼼|냉소|sarcastic|satire|deadpan/)) add('dry ironic delivery');
+
+  return candidates[0] || '';
 }
-
 function buildFiveLineAtmosphereValue(
   params: GenerateSongParams,
   detailLayer: string,
@@ -11187,6 +11550,11 @@ function normalizeVocalPromptEmotion(value: string, params: GenerateSongParams):
       .replace(/\bwith\s+story-aware\s+delivery\s+and\s+/gi, 'with ')
       .replace(/\band\s+story-aware\s+delivery\b/gi, 'and story-aware expression')
       .replace(/\bstory-aware\s+delivery\b/gi, 'story-aware expression')
+      .replace(/\bgenre[-\s]?shaped\s+/gi, '')
+      .replace(/\bmood[-\s]?shaped\s+/gi, '')
+      .replace(/\bstory[-\s]?aware\s+(?:carrying|pressure|delivery|expression)?\s*/gi, '')
+      .replace(/\binside\s+[^,.;]+/gi, '')
+      .replace(/\bwhere\s+[^,.;]+/gi, '')
       .replace(/\b(phrasing|tone|delivery)\s+with\s+(warm calm emotion|calm smooth delivery|upbeat warmth|powerful cinematic delivery|emotional catchy delivery)\b/gi, '$1, $2')
       .replace(/\bwarm\s+and\s+feeling\b/gi, 'warm feeling')
       .replace(/\bmood\s+feeling\b/gi, 'moody feeling')
@@ -12325,7 +12693,7 @@ function buildGenreReinterpretationLayer(
   return {
     genreLens: cleanupPromptTail(limitText(genreLens, 115)),
     productionLens: cleanupPromptTail(limitText(productionLens, 105)),
-    arrangementLens: cleanupPromptTail(limitText(arrangementLens, 85)),
+    arrangementLens: smartTrimProductionPhrase(arrangementLens, 85, 16),
   };
 }
 function getEnglishMoodPhrase(params: GenerateSongParams): string {
@@ -14510,10 +14878,11 @@ function translateOrMapKoreanToEnglish(text: string): { characters: string; plac
   // Do NOT map broad words such as "어이", "사소", or "소원" into a specific test scene.
   // The real Scene Blueprint is inferred by Gemini from sceneSourceText; this function only
   // provides a safe deterministic backup when the model returns an unusable/generic scene.
-  let characters = "the central voice";
-  let place = "a compact emotional space";
-  let action = "turning the user's core idea into a visible musical moment";
-  let conflict = "the main feeling pushing toward a repeatable hook";
+  // These defaults must always be usable final-prompt language, never internal/meta wording.
+  let characters = "someone carrying the song's central feeling";
+  let place = "a familiar everyday setting";
+  let action = "moving through a small visible moment";
+  let conflict = "hope and hesitation pressing against each other";
 
   const has = (pattern: RegExp) => pattern.test(lower);
 
@@ -14694,7 +15063,7 @@ function resolveConcreteSceneBlueprint(params: GenerateSongParams): {
 
 function containsSceneBlueprintPlaceholderLeak(value: string): boolean {
   const line = String(value || '').toLowerCase();
-  return /actual\s+place\s+implied|source\s+situation|concrete\s+scene\s+inferred|user['’]s\s+source\s+text|source\s+text\s+where|moving\s+through\s+the\s+source|main\s+character\s+is\s+moving\s+through|actual\s+characters,\s*place,\s*visible\s+action/i.test(line);
+  return /actual\s+place\s+implied|source\s+situation|concrete\s+scene\s+inferred|user['’]s\s+source\s+text|source\s+text\s+where|moving\s+through\s+the\s+source|main\s+character\s+is\s+moving\s+through|actual\s+characters,\s*place,\s*visible\s+action|the\s+central\s+voice|a\s+compact\s+emotional\s+space|the\s+user['’]s\s+core\s+idea|visible\s+musical\s+moment|the\s+main\s+feeling\s+pushing\s+toward\s+a\s+repeatable\s+hook/i.test(line);
 }
 
 function buildSceneBlueprint(params: GenerateSongParams): {
@@ -16472,9 +16841,9 @@ function buildThemeMoodInterpretation(params: GenerateSongParams): ThemeMoodInte
   );
 
   return {
-    atmosphereCue: limitText(atmosphereCue, situationActive ? 90 : 145),
+    atmosphereCue: smartTrimProductionPhrase(atmosphereCue, situationActive ? 90 : 145, situationActive ? 16 : 20),
     vocalCue: limitText(vocalCue, 90),
-    arrangementCue: limitText(arrangementCue, 95),
+    arrangementCue: smartTrimProductionPhrase(arrangementCue, 95, 18),
     lyricSceneCue: theme.scene,
     lyricDetailCue: theme.detail,
     strength,
@@ -17003,9 +17372,15 @@ function buildDirectorSeasoningProfile(params: GenerateSongParams): FreeTextDire
 }
 
 function splitDirectorSeasoningParts(value: string, maxItems = 2, maxChars = 80): string[] {
-  return takeCommaItems(value || '', maxItems, maxChars)
+  const picked = cleanPromptValue(value || '')
     .split(',')
     .map((part) => cleanupPromptTail(part.trim()))
+    .filter(Boolean)
+    .slice(0, maxItems)
+    .join(', ');
+  return smartTrimProductionPhrase(picked || cleanPromptValue(value || ''), maxChars, Math.max(10, Math.min(18, Math.round(maxChars * 0.18))))
+    .split(',')
+    .map((part) => removeDanglingPromptConnector(part.trim()))
     .filter(Boolean);
 }
 
@@ -18539,8 +18914,66 @@ function phraseListForPrompt(items: string[]): string {
   return `${unique.slice(0, -1).join(", ")}, and ${unique[unique.length - 1]}`;
 }
 
+
+const GENRE_ERA_TOKEN_SOURCE = String.raw`(?:(?:early|mid|late)\s+)?(?:y2k|(?:19|20)?\d{2}s)`;
+const GENRE_ERA_TOKEN_REGEX = new RegExp(`\\b${GENRE_ERA_TOKEN_SOURCE}\\b`, 'gi');
+
+function normalizeGenreEraKey(value: string): string {
+  const cleaned = String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (/\by2k\b/.test(cleaned)) return '2000s';
+
+  const token = cleaned.replace(/^(?:early|mid|late)\s+/, '');
+  const match = token.match(/^((?:19|20)?)(\d{2})s$/i);
+  if (!match) return token;
+
+  const century = match[1] || '';
+  const decade = match[2];
+  if (century === '19') return `${decade}s`;
+  if (century === '20') return `${century}${decade}s`;
+  return `${decade}s`;
+}
+
+function extractGenreEraKeys(value: string): Set<string> {
+  const keys = new Set<string>();
+  const source = String(value || '');
+  for (const match of source.matchAll(new RegExp(GENRE_ERA_TOKEN_REGEX.source, 'gi'))) {
+    const key = normalizeGenreEraKey(match[0]);
+    if (key) keys.add(key);
+  }
+  return keys;
+}
+
+function dedupeBareGenreEraSegments(value: string): string {
+  let line = String(value || '').replace(/\bfusion\s+fusion\b/gi, 'fusion');
+  const parts = line.split(/\s*,\s*/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 1) {
+    return cleanupPromptTail(line
+      .replace(/\b(fusion|with|and|color|texture|warmth|groove|polish|mood)\s+\1\b/gi, '$1')
+      .replace(/\s{2,}/g, ' '));
+  }
+
+  const allKeys = parts.map((part) => extractGenreEraKeys(part));
+  const kept = parts.filter((part, index) => {
+    const bareMatch = part.match(new RegExp(`^(?:and\\s+|with\\s+)?(${GENRE_ERA_TOKEN_SOURCE})$`, 'i'));
+    if (!bareMatch) return true;
+    const key = normalizeGenreEraKey(bareMatch[1]);
+    if (!key) return true;
+    return !allKeys.some((keys, otherIndex) => otherIndex !== index && keys.has(key));
+  });
+
+  line = kept.join(', ')
+    .replace(/\bfusion\s+fusion\b/gi, 'fusion')
+    .replace(/\b(fusion|with|and|color|texture|warmth|groove|polish|mood)\s+\1\b/gi, '$1')
+    .replace(/,\s*,/g, ', ')
+    .replace(/^,\s*|,\s*$/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleanupPromptTail(line);
+}
+
 function sanitizePromptGenreArtifacts(line: string): string {
-  return cleanupPromptTail(
+  return dedupeBareGenreEraSegments(cleanupPromptTail(
     String(line || "")
       .replace(/\bK-Pop\s*[-/]\s*Kpop\b/gi, "K-Pop")
       .replace(/\bKpop\s*[-/]\s*K-Pop\b/gi, "K-Pop")
@@ -18553,7 +18986,7 @@ function sanitizePromptGenreArtifacts(line: string): string {
       .replace(/\b(?:with|and|fusion with|multi-fusion with)\s+(?:timeless|emotional|moody|bright|dark|warm|cool)\s*$/gi, "")
       .replace(/,\s*(?:and\s*)?(?:timeless|emotional|moody|bright|dark|warm|cool)\s*$/gi, "")
       .replace(/\s{2,}/g, " "),
-  );
+  ));
 }
 
 
@@ -19154,6 +19587,146 @@ function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string):
   finalLines.push('[Audio quality improved to masterpiece]');
   return removeAudioQualityLineWhenPromptIsNearLimit(finalLines.join('\n'));
 }
+
+function buildGenericAtmosphereRepairFallback(params: GenerateSongParams): string {
+  const moodCandidate = stripRemainingKoreanForProductionPrompt(
+    buildDirectMoodAngle(params)
+      || buildCompactMoodAngle(params)
+      || buildPromptIntent(params).atmosphereTone
+      || buildPromptIntent(params).emotionalCore
+      || 'emotionally specific',
+  );
+  const mood = cleanupPromptTail(moodCandidate || 'emotionally specific')
+    .replace(/\b(?:scene|atmosphere|mood)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim() || 'emotionally specific';
+  return normalizeAtmospherePromptLine(
+    `a ${mood} scene where one concrete action brings an unresolved feeling into the open`,
+  );
+}
+
+function getClassicAtmosphereValueFromPrompt(prompt: string): string {
+  const map = parseFinalPromptLineMap(prompt || '');
+  return cleanupPromptTail(map.atmosphere || '');
+}
+
+function replaceClassicAtmosphereLine(prompt: string, atmosphere: string): string {
+  const replacement = cleanupPromptTail(atmosphere || '');
+  if (!replacement) return prompt;
+
+  const lines = normalizeProductionPromptSectionBreaks(prompt || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const next: string[] = [];
+  let replaced = false;
+
+  for (const line of lines) {
+    if (/^\[(?:Atmosphere|Mood)\]\s*/i.test(line)) {
+      if (!replaced) {
+        next.push(`[Atmosphere] ${replacement}`);
+        replaced = true;
+      }
+      continue;
+    }
+    next.push(line);
+  }
+
+  if (!replaced) {
+    const audioIndex = next.findIndex((line) => /^\[Audio quality improved to masterpiece\]$/i.test(line));
+    if (audioIndex >= 0) next.splice(audioIndex, 0, `[Atmosphere] ${replacement}`);
+    else next.push(`[Atmosphere] ${replacement}`);
+  }
+
+  return next.join('\n');
+}
+
+function shouldRepairClassicAtmosphereFromSource(value: string, params: GenerateSongParams): boolean {
+  if (isGenerationEngineV2(params)) return false;
+  const source = collectSceneBlueprintSource(params).trim();
+  if (!source) return false;
+  const clean = cleanupPromptTail(value || '');
+  return containsSceneBlueprintPlaceholderLeak(clean)
+    || isBrokenFinalPromptPhrase(clean)
+    || isGenericAtmosphereFallbackLine(clean);
+}
+
+async function repairClassicAtmosphereFromSourceWithGemini(
+  ai: GoogleGenAI,
+  rawPrompt: string,
+  fallbackPrompt: string,
+  params: GenerateSongParams,
+): Promise<string> {
+  if (isGenerationEngineV2(params)) return rawPrompt;
+
+  const sourceText = collectSceneBlueprintSource(params).trim();
+  if (!sourceText) return rawPrompt;
+
+  const currentAtmosphere = getClassicAtmosphereValueFromPrompt(rawPrompt)
+    || getClassicAtmosphereValueFromPrompt(fallbackPrompt);
+  if (!shouldRepairClassicAtmosphereFromSource(currentAtmosphere, params)) return rawPrompt;
+
+  const repairContext = [
+    'Repair only the [Atmosphere] line of a five-line music production prompt.',
+    'Infer the scene directly from the supplied user source. This must work for any topic; do not use a canned scenario or keyword-specific template.',
+    'Preserve the source\'s central action, desire, change, or conflict—not only its nouns, time, or location.',
+    'Translate Korean or other source languages internally and return natural English only.',
+    'Write one concise, vivid sentence suitable after [Atmosphere].',
+    'Do not mention the user, source text, core idea, blueprint, prompt, interpretation, or visible musical moment.',
+    'Do not copy internal instructions or output brackets.',
+    '',
+    'User source:',
+    sourceText.slice(0, 3600),
+    '',
+    'Current production prompt for musical context:',
+    String(rawPrompt || fallbackPrompt || '').slice(0, 2200),
+    '',
+    'Return JSON only: {"atmosphere":"..."}',
+  ].join('\n');
+
+  try {
+    const response = await generateContentWithModelFallback(
+      ai,
+      {
+        model: GEMINI_TEXT_MODEL_CHAIN[0],
+        contents: repairContext,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              atmosphere: { type: Type.STRING },
+            },
+            required: ['atmosphere'],
+          },
+        },
+      },
+      'repairClassicAtmosphereFromSource',
+    );
+
+    const parsed = JSON.parse(response.text || '{}');
+    let repaired = cleanupPromptTail(String(parsed?.atmosphere || '')
+      .replace(/^\[(?:Atmosphere|Mood)\]\s*/i, '')
+      .replace(/[\r\n]+/g, ' '));
+    repaired = stripRemainingKoreanForProductionPrompt(repaired);
+    repaired = stripInternalPromptLeakPhrases(repaired);
+    repaired = normalizeAtmospherePromptLine(repaired);
+
+    if (!repaired
+      || containsSceneBlueprintPlaceholderLeak(repaired)
+      || isBrokenFinalPromptPhrase(repaired)
+      || isGenericAtmosphereFallbackLine(repaired)
+      || /\b(?:user|source text|core idea|blueprint|prompt|interpretation)\b/i.test(repaired)) {
+      return replaceClassicAtmosphereLine(rawPrompt, buildGenericAtmosphereRepairFallback(params));
+    }
+
+    return replaceClassicAtmosphereLine(rawPrompt, repaired);
+  } catch (error) {
+    console.warn('[SORIDRAW Atmosphere Repair] skipped:', error);
+    return replaceClassicAtmosphereLine(rawPrompt, buildGenericAtmosphereRepairFallback(params));
+  }
+}
+
 function reconcileFiveLinePromptRoles(prompt: string): string {
   const lines = String(prompt || '').split('\n');
   const genreLine = lines.find((line) => /^\[Genre\]/i.test(line)) || '';
@@ -19487,7 +20060,7 @@ function validateFinalGenreLine(value: string, params: GenerateSongParams): stri
     genre = attachGenreAccents(genre, buildFinalGenreValidatorAccents(params));
   }
 
-  return hardenPromptOpenTail(genre) || 'Genre-led pop fusion';
+  return hardenPromptOpenTail(sanitizePromptGenreArtifacts(genre)) || 'Genre-led pop fusion';
 }
 
 function compressAtmosphereForFinalValidator(value: string, params: GenerateSongParams): string {
@@ -19511,7 +20084,7 @@ function compressAtmosphereForFinalValidator(value: string, params: GenerateSong
   }
 
   if (line.length > maxLength) {
-    line = cleanupPromptTail(limitText(line, maxLength));
+    line = smartTrimProductionPhrase(line, maxLength, 20);
   }
 
   return hardenAtmosphereValidatorText(line, params) || 'balanced emotional air';
@@ -19633,7 +20206,11 @@ function rescueBrokenDirectAtmosphereLine(value: string, params: GenerateSongPar
 }
 
 function validateFinalAtmosphereLine(value: string, params: GenerateSongParams): string {
-  let line = compressAtmosphereForFinalValidator(value, params)
+  // By this point any placeholder leak should already have received a generic
+  // Gemini repair pass. If that pass failed, discard only the broken line and
+  // let the ordinary source-aware fallback rebuild it without a topic-specific case.
+  const sourceValue = containsSceneBlueprintPlaceholderLeak(value) ? '' : value;
+  let line = compressAtmosphereForFinalValidator(sourceValue, params)
     .replace(/\bwith\s+([^,]+?),\s*([^,]+?)\s+where\b/gi, 'with $1 and $2 where')
     .replace(/\bwith\s+(upbeat|open|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful)\s+and\s+(upbeat|open|dreamy|moody|warm|soft|bright|dark|calm|hopeful|playful)\s+where\b/gi, 'with $1 $2 air where')
     .replace(/\bwith\s+upbeat,\s*open\s+where\s+one\s+unsaid\s+feeling\s+pushes\s+against\s+an\s+ordinary\s+moment\b/gi, 'where one unsaid feeling pushes against an ordinary moment with upbeat warmth')
@@ -19651,9 +20228,10 @@ function validateFinalAtmosphereLine(value: string, params: GenerateSongParams):
   const protectedLine = stripUnsupportedDirectCueBankPhrases(stripFinalInternalProtectionLanguage(line || 'balanced emotional air'), params) || 'balanced emotional air';
   let rescued = rescueBrokenDirectAtmosphereLine(protectedLine, params);
   rescued = stripFinalInternalProtectionLanguage(rescued);
-  if (isBrokenFinalPromptPhrase(rescued)) rescued = buildNaturalDirectAtmosphereFallback(params);
+  if (containsSceneBlueprintPlaceholderLeak(rescued)) rescued = buildGenericAtmosphereRepairFallback(params);
+  if (isBrokenFinalPromptPhrase(rescued)) rescued = buildGenericAtmosphereRepairFallback(params);
   if (isGenericAtmosphereFallbackLine(rescued)) {
-    rescued = buildAbsoluteScenePlanSentence(params);
+    rescued = buildGenericAtmosphereRepairFallback(params);
   }
   return cleanupPromptTail(rescued);
 }
@@ -19883,7 +20461,7 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
     if (addParts.length) finalLine = normalizeArrangementLine([finalLine, ...addParts]);
   }
   finalLine = strengthenArrangementInterpretiveMovement(finalLine, params);
-  return cleanupPromptTail(stripFinalInternalProtectionLanguage(finalLine));
+  return removeDanglingPromptConnector(stripFinalInternalProtectionLanguage(finalLine));
 }
 
 function dedupeFinalInstrumentLine(value: string): string {
@@ -27617,7 +28195,7 @@ function normalizeGenreEraTexturePrefix(line: string, params: GenerateSongParams
 
   if (!eraTerms.length) return normalizeGenreLineDisplayCase(base);
 
-  const isTemporalEra = (term: string) => /\b(?:modern|early|mid|late|70s|80s|90s|2000s|2010s|2020s|19\d0s|20\d0s)\b/i.test(term)
+  const isTemporalEra = (term: string) => new RegExp(`\\b(?:modern|${GENRE_ERA_TOKEN_SOURCE})\\b`, 'i').test(term)
     && !/analog|vintage|cassette|radio|vinyl|tape/i.test(term);
 
   const stripSelectedEraTermFromGenreBase = (text: string, term: string): string => {
@@ -29599,7 +30177,13 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   const aiProductionPrompt = typeof (result as any).productionPrompt === "string" ? (result as any).productionPrompt : "";
-  const normalizedAiPrompt = normalizeAiProductionPrompt(aiProductionPrompt, finalPrompt);
+  const sourceRepairedAiPrompt = await repairClassicAtmosphereFromSourceWithGemini(
+    ai,
+    aiProductionPrompt,
+    finalPrompt,
+    params,
+  );
+  const normalizedAiPrompt = normalizeAiProductionPrompt(sourceRepairedAiPrompt, finalPrompt);
   const validatedProductionPrompt = finalOutputPromptValidator(normalizedAiPrompt, params);
   
   // Apply Style Keyword Router to the validated production prompt

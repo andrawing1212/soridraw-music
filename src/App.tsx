@@ -4193,6 +4193,7 @@ function App() {
       'id', 'uid', 'title', 'koreanTitle', 'englishTitle', 'genre', 'lyrics', 'prompt', 'appliedKeywords',
       'userInput', 'situationSummary', 'favoriteKey', 'searchTokens', 'createdAtMs', 'updatedAtMs',
       'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',
+      'deletedAt', 'trashedAt', 'unlikedAt', 'unsavedAt', 'restoredAt',
       'color', 'colorTag', 'favoriteColorTag', 'isPublic', 'shareId', 'shareType',
       'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl',
       'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
@@ -4370,51 +4371,74 @@ function App() {
     if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
     lastFavoriteSyncSignalIdRef.current = signal.id;
 
-    const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
-      if (!savedFavorite?.id) return;
-      if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
-      const normalizedFavorite = sanitizeForFirestore({
-        ...savedFavorite,
-        uid: savedFavorite.uid || uid,
-        hidden: false,
-        favoriteHidden: false,
-        favoriteRemoved: false,
-        favoriteRemovedAt: null,
-        saved: true,
-        favoriteKey: savedFavorite.favoriteKey || signal.favoriteKey || buildFavoriteIdentityKey(savedFavorite),
-        createdAtMs: Number(savedFavorite.createdAtMs || 0) || signal.at || Date.now(),
-        updatedAtMs: signal.at || Date.now(),
-        searchTokens: savedFavorite.searchTokens || buildFavoriteSearchTokens(savedFavorite),
-      });
+    const mergeFavoriteSyncIntoCache = (syncFavorite: any, forceSavedState: boolean) => {
+      if (!syncFavorite?.id) return;
+      if (isFavoriteDeletedTombstoned(uid, String(syncFavorite.id))) return;
+
+      const mergeIntoList = (list: any[]) => {
+        const existingFavorite = (list || []).find((favorite) => favorite?.id === syncFavorite.id);
+        const mergedFavorite = sanitizeForFirestore({
+          ...(existingFavorite || {}),
+          ...syncFavorite,
+          uid: syncFavorite.uid || existingFavorite?.uid || uid,
+          ...(forceSavedState ? {
+            hidden: false,
+            favoriteHidden: false,
+            favoriteRemoved: false,
+            favoriteRemovedAt: null,
+            saved: true,
+          } : {}),
+          lyrics: syncFavorite.lyrics
+            ? { ...(existingFavorite?.lyrics || {}), ...(syncFavorite.lyrics || {}) }
+            : existingFavorite?.lyrics,
+          appliedKeywords: syncFavorite.appliedKeywords
+            ? { ...(existingFavorite?.appliedKeywords || {}), ...(syncFavorite.appliedKeywords || {}) }
+            : existingFavorite?.appliedKeywords,
+          favoriteKey: syncFavorite.favoriteKey
+            || existingFavorite?.favoriteKey
+            || signal.favoriteKey
+            || buildFavoriteIdentityKey({ ...(existingFavorite || {}), ...syncFavorite }),
+          createdAtMs: Number(syncFavorite.createdAtMs || existingFavorite?.createdAtMs || 0)
+            || signal.at
+            || Date.now(),
+          updatedAtMs: signal.at || Number(syncFavorite.updatedAtMs || 0) || Date.now(),
+          searchTokens: syncFavorite.searchTokens
+            || existingFavorite?.searchTokens
+            || buildFavoriteSearchTokens({ ...(existingFavorite || {}), ...syncFavorite }),
+        });
+
+        const withoutSame = (list || []).filter((favorite) => {
+          if (!favorite?.id) return false;
+          if (favorite.id === mergedFavorite.id) return false;
+          if (forceSavedState && isSameFavoriteSong(favorite, mergedFavorite, mergedFavorite.favoriteKey)) return false;
+          return true;
+        });
+        return mergeFavoritePages([mergedFavorite], withoutSame);
+      };
 
       try {
         const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
-        const withoutSame = cachedList.filter((favorite) => {
-          if (!favorite?.id) return false;
-          if (favorite.id === normalizedFavorite.id) return false;
-          if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
-          return true;
-        });
-        writeFavoritesCache(uid, mergeFavoritePages([normalizedFavorite], withoutSame));
+        writeFavoritesCache(uid, mergeIntoList(cachedList));
       } catch (cacheSaveError) {
-        console.warn('Favorite save sync cache update failed:', cacheSaveError);
+        console.warn('Favorite sync cache update failed:', cacheSaveError);
       }
 
       setFavorites((prev) => {
-        const withoutSame = (prev || []).filter((favorite) => {
-          if (!favorite?.id) return false;
-          if (favorite.id === normalizedFavorite.id) return false;
-          if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
-          return true;
-        });
-        const next = mergeFavoritePages([normalizedFavorite], withoutSame);
+        const next = mergeIntoList(prev || []);
         writeFavoritesCache(uid, next);
         return next;
       });
     };
 
-    if (signal.action === 'save' || signal.action === 'update') {
-      mergeSavedFavoriteIntoCache(signal.favorite || signal);
+    if (signal.action === 'save') {
+      mergeFavoriteSyncIntoCache(signal.favorite || signal, true);
+      return;
+    }
+
+    if (signal.action === 'update') {
+      // Preserve update-state flags exactly as published. In particular, trash updates must keep
+      // hidden/favoriteHidden/deletedAt/trashedAt instead of being normalized back to a saved row.
+      mergeFavoriteSyncIntoCache(signal.favorite || signal, false);
       return;
     }
 
@@ -6902,9 +6926,10 @@ const toggleCycleVariantSelection = (
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
     const songIdentityKey = buildFavoriteIdentityKey(song);
     const findLocalExistingFavorite = () => {
-      const byId = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
+      const currentFavorites = favoritesStore.getFavorites();
+      const byId = favoriteDeleteId ? currentFavorites.find(f => f.id === favoriteDeleteId) : null;
       if (byId) return byId;
-      return findBestMatchingFavorite(favorites, song, songIdentityKey);
+      return findBestMatchingFavorite(currentFavorites, song, songIdentityKey);
     };
 
     const findServerMatchingFavorites = async (includeFullScan = false): Promise<any[]> => {
@@ -7214,8 +7239,8 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  const updateFavorite = async (id: string, updates: Partial<any>) => {
-    const currentFavorite = favorites.find((favorite) => favorite.id === id);
+  const updateFavorite = async (id: string, updates: Partial<any>): Promise<boolean> => {
+    const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
     let sanitizedUpdates = sanitizeForFirestore(updates);
     if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
       const mergedForSearch = {
@@ -7343,6 +7368,7 @@ const toggleCycleVariantSelection = (
       } else {
         showToast('수정되었습니다.');
       }
+      return true;
     } catch (error: any) {
       const code = String(error?.code || '');
       const message = String(error?.message || error || '');
@@ -7363,14 +7389,14 @@ const toggleCycleVariantSelection = (
             const localIdsToRemove = serverIds.includes(id) ? [] : [id];
             applyFavoriteUpdateToLocalState(serverIds, localIdsToRemove);
             showToast('수정되었습니다.');
-            return;
+            return true;
           }
 
           // 이전 저장 오류 중 생긴 로컬 캐시 찌꺼기는 서버 문서가 없어서 updateDoc이 실패한다.
           // 이런 곡은 사용자가 삭제를 눌렀을 때 실패로 남기지 말고 현재 기기의 캐시에서 제거한다.
           removeLocalFavoriteOnly(id);
           showToast('삭제되었습니다.');
-          return;
+          return true;
         } catch (recoveryError) {
           console.warn('Favorite orphan cleanup failed.', recoveryError);
         }
@@ -7382,6 +7408,7 @@ const toggleCycleVariantSelection = (
       }
 
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
+      return false;
     }
   };
 

@@ -1,3 +1,6 @@
+import { MOODS } from "../constants";
+import type { CategoryItem } from "../types";
+
 function cleanText(value: unknown): string {
   return String(value ?? '')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
@@ -38,14 +41,154 @@ function summarizeSituation(situation: any): string {
     .join(' / ') || 'none';
 }
 
+
+type ResolvedMoodProfiles = {
+  known: CategoryItem[];
+  custom: string[];
+};
+
+function normalizeMoodLookupKey(value: unknown): string {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/[()\[\]{}]/g, ' ')
+    .replace(/[\s_\-–—/.,:;]+/g, '')
+    .trim();
+}
+
+function moodSourceValue(value: unknown): string {
+  if (value && typeof value === 'object') {
+    const candidate = value as Record<string, unknown>;
+    return cleanText(candidate.id || candidate.labelKo || candidate.label || candidate.mood);
+  }
+  return cleanText(value);
+}
+
+const MOOD_CATALOG_LOOKUP = (() => {
+  const lookup = new Map<string, CategoryItem>();
+  MOODS.forEach((item) => {
+    [item.id, item.label, item.labelKo].forEach((value) => {
+      const key = normalizeMoodLookupKey(value);
+      if (key && !lookup.has(key)) lookup.set(key, item);
+    });
+  });
+  return lookup;
+})();
+
+function findMoodCatalogItem(value: unknown): CategoryItem | undefined {
+  const key = normalizeMoodLookupKey(moodSourceValue(value));
+  return key ? MOOD_CATALOG_LOOKUP.get(key) : undefined;
+}
+
+function collectMoodSourceValues(params: any): string[] {
+  const values = [
+    ...(Array.isArray(params?.moods) ? params.moods : []),
+    params?.mood,
+    params?.customMoodInput,
+    params?.customMoodText,
+    params?.directMoodInput,
+    params?.directMoodText,
+  ]
+    .map(moodSourceValue)
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = normalizeMoodLookupKey(value);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function resolveSelectedMoodProfiles(params: any): ResolvedMoodProfiles {
+  const known: CategoryItem[] = [];
+  const custom: string[] = [];
+  const knownIds = new Set<string>();
+  const customKeys = new Set<string>();
+
+  collectMoodSourceValues(params).forEach((value) => {
+    const item = findMoodCatalogItem(value);
+    if (item) {
+      if (!knownIds.has(item.id)) {
+        knownIds.add(item.id);
+        known.push(item);
+      }
+      return;
+    }
+
+    const key = normalizeMoodLookupKey(value);
+    if (key && !customKeys.has(key)) {
+      customKeys.add(key);
+      custom.push(value);
+    }
+  });
+
+  return { known, custom };
+}
+
+function formatSelectedMoodSource(params: any, fallback = 'none'): string {
+  const { known, custom } = resolveSelectedMoodProfiles(params);
+  const values = [
+    ...known.map((item) => item.labelKo ? `${item.labelKo} (${item.label})` : item.label),
+    ...custom,
+  ];
+  return values.length ? values.join(' / ') : fallback;
+}
+
+function buildMoodCatalogProfileContext(params: any): string {
+  const { known, custom } = resolveSelectedMoodProfiles(params);
+  const lines: string[] = [];
+
+  if (known.length) {
+    lines.push('Resolved catalog mood profiles (use meaning, not just the visible label):');
+    known.forEach((item) => {
+      const identity = item.labelKo ? `${item.labelKo} (${item.label})` : item.label;
+      lines.push(`- ${identity}: emotional character=${compact(item.mood, item.label)}; section movement=${compact(item.arrangement, 'adaptive movement')}; meaning=${compact(item.description, 'use the catalog meaning')}`);
+    });
+  }
+
+  if (custom.length) {
+    lines.push(`Custom/free mood direction (interpret freely in context): ${custom.join(' / ')}`);
+  }
+
+  return lines.length
+    ? lines.join('\n')
+    : 'Resolved catalog mood profiles: none';
+}
+
+function formatSelectedThemeSource(params: any, fallback = 'none'): string {
+  const values = [
+    ...(Array.isArray(params?.themes) ? params.themes : []),
+    params?.theme,
+    params?.customThemeInput,
+    params?.customThemeText,
+    params?.directThemeInput,
+    params?.directThemeText,
+  ]
+    .map(cleanText)
+    .filter(Boolean);
+
+  const seen = new Set<string>();
+  const unique = values.filter((value) => {
+    const key = value.toLowerCase().replace(/[\s_\-–—/.,:;]+/g, '');
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return unique.length ? unique.join(' / ') : fallback;
+}
+
 export function buildMoodDirectorBrief(params: any): string {
-  const selectedMood = listValues(params?.moods, 10) || compact(params?.mood, 'none');
-  const selectedTheme = listValues(params?.themes, 8) || compact(params?.theme, 'none');
+  const selectedMood = formatSelectedMoodSource(params);
+  const selectedTheme = formatSelectedThemeSource(params);
   const directorText = compact(params?.userInput, 'none');
   const situation = summarizeSituation(params?.situation);
+  const moodProfileContext = buildMoodCatalogProfileContext(params);
 
   return `GLOBAL MOOD DIRECTIVE (MANDATORY, INTERNAL ONLY):
-Selected mood keywords: ${selectedMood}
+Selected mood source: ${selectedMood}
+${moodProfileContext}
 Related story signals: theme=${selectedTheme} / director=${directorText} / situation=${situation}
 
 Treat Mood as a compressed global direction for the whole song, not as the [Atmosphere]/[Mood] line only.
@@ -72,10 +215,17 @@ Compression rule:
 - The hidden directive may be detailed, but final prompt lines must stay short and clear.
 - Do not repeat the same mood adjective in every line. Each line should receive only the mood aspect that fits its role.
 - If many moods conflict, blend them into one clear intent rather than listing every selected keyword.
+- Merge multiple arrangement profiles into ONE coherent section curve. Do not paste separate movement phrases that fight each other.
 - If mood is weak or absent, keep the song emotionally simple rather than inventing decorative atmosphere.
+
+Theme/action anchor guard:
+- Preserve the semantic action, decision, desire, or relationship change in a direct/custom Theme. Do not reduce a phrase such as "a night to begin again" to the setting word "night" alone.
+- [Atmosphere]/[Mood] should retain the core human action or intention when one is explicitly supplied, while remaining concise and music-friendly.
 
 Leak guard:
 - Prompt should not become a screenplay. Lyrics should not become a list of production words.
+- Never output internal/meta phrases such as "the user's core idea", "visible musical moment", "the central voice", or "a compact emotional space".
+- Never output helper templates such as "sonic texture with ... qualities", "vocal delivery with ... character", or a repeated "... emotional color" suffix.
 - Mood is a seasoning directive, not a pile of words to paste. Think bibimbap sesame oil: it touches the whole bowl, but it does not become every ingredient.`;
 }
 
@@ -84,8 +234,8 @@ export function buildCreativeBriefSourceSummary(params: any): string {
     `director/free text: ${compact(params?.userInput, 'none')}`,
     `situation: ${summarizeSituation(params?.situation)}`,
     `lyric draft: ${compact(params?.lyricDraft, 'none')}`,
-    `selected theme: ${listValues(params?.themes, 8) || compact(params?.theme, 'none')}`,
-    `selected mood: ${listValues(params?.moods, 8) || 'none'}`,
+    `selected theme: ${formatSelectedThemeSource(params)}`,
+    `selected mood: ${formatSelectedMoodSource(params)}`,
   ];
   const musicInputs = [
     `genre: ${compact(params?.genre, 'none')}`,
@@ -127,7 +277,12 @@ Shared-brief rule:
 Global mood routing rule:
 - The selected Mood is a global seasoning directive for all five prompt lanes, not only Atmosphere/Mood.
 - Genre receives only a small mood color; Sound receives texture/weight/air; Atmosphere receives emotional state; Vocals receive delivery/emotional pressure; Production receives section motion and density.
-- If Vocal Character is selected, do not let the character become a disconnected preset. Treat Genre + Mood + Theme as the upper performance director: the character identity stays, but delivery, phrasing, emotional distance, hook focus, and pressure must melt into the selected song world.
+- If Vocal Character is selected, do not let the character become a disconnected preset. Treat the selected Genre menu choice + Mood + Theme as the upper performance director: the character identity stays, but delivery, phrasing, emotional distance, hook focus, and pressure must melt into the selected song world.
+- Genre-specific vocal habits must come from the actual selected genre/subgenre only. Do not infer vocal style from Sound/Instruments chips such as electric bass, electric guitar, future-bass synths, trap drums, 808, risers, or pads. Those belong to Sound/Production unless they are explicit vocal effects.
+- Only explicit vocal-effect sounds may affect [Vocals], such as radio voice, telephone voice, vocoder, auto-tune, whisper voice, choir, humming, chant, or ghost voice.
+- Preserve the action/decision/desire in direct or custom Theme input; do not keep only its time/place noun.
+- Merge mood movement cues into one compatible arrangement curve instead of listing conflicting phrases side by side.
+- Before final output, remove internal/meta wording: the user's core idea, visible musical moment, the central voice, a compact emotional space.
 - Prefer compact music-direction language over object-heavy imagery, and keep each final prompt line short.
 
 Lyric rule:
@@ -138,13 +293,10 @@ Lyric rule:
 }
 
 function collectMoodDirectiveText(params: any): string {
+  const { known, custom } = resolveSelectedMoodProfiles(params);
   return [
-    ...(Array.isArray(params?.moods) ? params.moods : []),
-    params?.mood,
-    params?.customMoodInput,
-    params?.customMoodText,
-    params?.directMoodInput,
-    params?.directMoodText,
+    ...known.flatMap((item) => [item.id, item.label, item.labelKo, item.mood, item.arrangement, item.description]),
+    ...custom,
   ]
     .map(cleanText)
     .filter(Boolean)
@@ -159,6 +311,36 @@ type GlobalMoodLaneCues = {
   vocals: string;
   production: string;
 };
+
+
+function splitCatalogCueParts(value: unknown, limit = 3): string[] {
+  return cleanText(value)
+    .split(/[,;/|]+/)
+    .map((part) => part.replace(/[.]+$/g, '').trim())
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function lowerCueStart(value: string): string {
+  if (!value) return '';
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function buildCatalogMoodLaneCues(item: CategoryItem): GlobalMoodLaneCues {
+  const moodParts = splitCatalogCueParts(item.mood || item.label, 3);
+  const movementParts = splitCatalogCueParts(item.arrangement, 2);
+  const primary = lowerCueStart(moodParts[0] || item.label || 'balanced');
+  const secondary = lowerCueStart(moodParts[1] || '');
+  const character = [primary, secondary].filter(Boolean).join(' and ');
+
+  return {
+    genre: primary,
+    sound: character,
+    mood: moodParts.join(', '),
+    vocals: character,
+    production: movementParts.join(', '),
+  };
+}
 
 function joinCueParts(parts: string[], limit = 3): string {
   const seen = new Set<string>();
@@ -176,6 +358,7 @@ function joinCueParts(parts: string[], limit = 3): string {
 }
 
 export function buildGlobalMoodLaneCues(params: any): GlobalMoodLaneCues {
+  const resolved = resolveSelectedMoodProfiles(params);
   const text = collectMoodDirectiveText(params);
   if (!text) return { genre: '', sound: '', mood: '', vocals: '', production: '' };
 
@@ -275,6 +458,18 @@ export function buildGlobalMoodLaneCues(params: any): GlobalMoodLaneCues {
     productionParts.push('wide cinematic section spread');
   }
 
+  // Catalog-derived fallback: every registered mood is recognized even when it does not
+  // belong to one of the broad stability archetypes above. Gemini receives the full
+  // profile; these compact cues only protect final five-lane coverage after generation.
+  resolved.known.forEach((item) => {
+    const cue = buildCatalogMoodLaneCues(item);
+    if (cue.genre) genreParts.push(cue.genre);
+    if (cue.sound) soundParts.push(cue.sound);
+    if (cue.mood) moodParts.push(cue.mood);
+    if (cue.vocals) vocalParts.push(cue.vocals);
+    if (cue.production) productionParts.push(cue.production);
+  });
+
   return {
     genre: joinCueParts(genreParts, 1),
     sound: joinCueParts(soundParts, 2),
@@ -285,21 +480,23 @@ export function buildGlobalMoodLaneCues(params: any): GlobalMoodLaneCues {
 }
 
 export function buildGlobalMoodDistributionInstruction(params: any): string {
-  const selectedMood = listValues(params?.moods, 10) || compact(params?.mood, 'none');
-  const cues = buildGlobalMoodLaneCues(params);
-  const hasCue = Object.values(cues).some(Boolean);
+  const selectedMood = formatSelectedMoodSource(params);
+  const moodProfileContext = buildMoodCatalogProfileContext(params);
 
   return `GLOBAL MOOD 5-LANE DISTRIBUTION (MANDATORY):
 Selected mood source: ${selectedMood}
-${hasCue ? `Suggested lane translation:
-- Genre lane: ${cues.genre || 'subtle mood color only'}
-- Sound/Instruments lane: ${cues.sound || 'texture/weight/air only'}
-- Atmosphere/Mood lane: ${cues.mood || 'main emotional design'}
-- Vocals lane: ${cues.vocals || 'delivery/distance/emotional pressure only'}
-- Arrangement/Production lane: ${cues.production || 'section motion/density/pacing only'}` : ''}
+${moodProfileContext}
+
+Use the resolved profiles as semantic references, not phrases to paste verbatim.
+Distribute one blended mood direction by role:
+- Genre: only a light identity color.
+- Sound/Instruments: texture, weight, air, polish, dryness, bounce, or density.
+- Atmosphere/Mood: the central emotional state plus any explicit theme action.
+- Vocals: delivery, distance, diction, restraint, confidence, breath, or pressure.
+- Arrangement/Production: one coherent section curve, pacing, lift, contrast, and release.
 
 VOCAL CHARACTER INTEGRATION:
-If a Vocal Character exists, keep its identity, but the selected Genre/Mood/Theme must direct how that character sings. The [Vocals] line should include one compact adaptation cue such as genre-shaped phrasing, mood-shaped distance, or story-aware pressure. Do not leave the character as a standalone preset voice.
+If a Vocal Character exists, keep its identity, but the selected Genre/Mood/Theme must sit above it as the song director. The [Vocals] line must visibly include: one genre-menu-specific singing habit, one mood distance/emotion cue, and one current-theme/situation delivery cue when available. Keep these as final Suno-ready phrases, not internal labels. Do not copy full Atmosphere scenes into [Vocals]. Do not output internal words such as genre-shaped, mood-shaped, story-aware, lane, or directive. Never derive genre vocal habits from instrument/sound chips; allow only explicit vocal-effect sounds in the vocal lane.
 
 Do not treat Mood as a short fixed prefix before the genre. Do not choose from a tiny fixed list of mood words.
 First synthesize the selected mood combination into one global feeling, then distribute it across the five prompt lanes by role.
@@ -335,6 +532,21 @@ function splitPromptParts(value: string): string[] {
     .filter(Boolean);
 }
 
+const MAX_PROMPT_PARTS_BY_LANE: Record<string, number> = {
+  genre: 3,
+  instruments: 6,
+  sound: 6,
+  atmosphere: 4,
+  mood: 4,
+  vocals: 5,
+  arrangement: 5,
+  production: 5,
+};
+
+function maxPromptPartsForLane(label: string): number {
+  return MAX_PROMPT_PARTS_BY_LANE[label.toLowerCase()] || 5;
+}
+
 function compactPromptLineValue(label: string, value: string): string {
   const clean = cleanText(value)
     .replace(/\s{2,}/g, ' ')
@@ -343,17 +555,7 @@ function compactPromptLineValue(label: string, value: string): string {
   const parts = splitPromptParts(clean);
   if (parts.length <= 1) return clean;
 
-  const maxPartsByLane: Record<string, number> = {
-    genre: 3,
-    instruments: 6,
-    sound: 6,
-    atmosphere: 4,
-    mood: 4,
-    vocals: 5,
-    arrangement: 5,
-    production: 5,
-  };
-  const maxParts = maxPartsByLane[label.toLowerCase()] || 5;
+  const maxParts = maxPromptPartsForLane(label);
   const kept: string[] = [];
 
   for (const part of parts) {
@@ -371,36 +573,156 @@ function compactPromptLineValue(label: string, value: string): string {
   return (kept.length ? kept : parts.slice(0, maxParts)).join(', ').replace(/\s{2,}/g, ' ').trim();
 }
 
+const INTERNAL_PROMPT_LEAK_PATTERN = /\b(?:the user's core idea|visible musical moment|the central voice|a compact emotional space|story lane|music lane|expression bridge|global mood directive|mood-shaped|genre-shaped|story-aware)\b/i;
+const MECHANICAL_MOOD_TEMPLATE_PATTERN = /^(?:sonic texture with\b.*\bqualities|vocal delivery with\b.*\bcharacter)$/i;
+
+function promptPartTokenSet(value: string): Set<string> {
+  return new Set(
+    normalizePromptPartKey(value)
+      .split(/\s+/)
+      .filter((token) => token.length >= 3),
+  );
+}
+
+function promptPartsOverlapStrongly(a: string, b: string): boolean {
+  const aTokens = promptPartTokenSet(a);
+  const bTokens = promptPartTokenSet(b);
+  if (!aTokens.size || !bTokens.size) return false;
+  let overlap = 0;
+  bTokens.forEach((token) => {
+    if (aTokens.has(token)) overlap += 1;
+  });
+  const smaller = Math.min(aTokens.size, bTokens.size);
+  return overlap >= 2 && overlap / smaller >= 0.66;
+}
+
+function sanitizePromptLaneValue(label: string, value: string): string {
+  let clean = cleanText(value)
+    .replace(/\bwith\s+urban\s+where\b/gi, 'in an urban setting where')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const leaked = INTERNAL_PROMPT_LEAK_PATTERN.test(clean);
+  if (leaked) return '';
+
+  const rawParts = splitPromptParts(clean);
+  const nonMechanical = rawParts.filter((part) => !MECHANICAL_MOOD_TEMPLATE_PATTERN.test(part));
+  if (rawParts.length && !nonMechanical.length) return '';
+  const sourceParts = nonMechanical.length ? nonMechanical : rawParts;
+  const kept: string[] = [];
+
+  for (const part of sourceParts) {
+    const isRepeatedColorSuffix = /\bemotional color$/i.test(part)
+      && kept.some((existing) => promptPartsOverlapStrongly(existing, part));
+    const duplicate = kept.some((existing) => {
+      const existingKey = normalizePromptPartKey(existing);
+      const key = normalizePromptPartKey(part);
+      return existingKey === key
+        || existingKey.includes(key)
+        || key.includes(existingKey)
+        || promptPartsOverlapStrongly(existing, part);
+    });
+    if (isRepeatedColorSuffix || duplicate) continue;
+    kept.push(part);
+  }
+
+  clean = (kept.length ? kept : sourceParts)
+    .join(', ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return compactPromptLineValue(label, clean);
+}
+
+function isWeakPromptLaneValue(label: string, value: string): boolean {
+  const clean = cleanText(value);
+  if (!clean || INTERNAL_PROMPT_LEAK_PATTERN.test(clean)) return true;
+
+  const normalized = normalizePromptPartKey(clean);
+  const generic = [
+    'subtle mood color only',
+    'texture weight air only',
+    'main emotional design',
+    'delivery distance emotional pressure only',
+    'section motion density pacing only',
+    'clear emotional scene',
+    'balanced mood',
+    'adaptive movement',
+  ];
+  if (generic.some((item) => normalized === normalizePromptPartKey(item))) return true;
+
+  const meaningfulTokens = normalized.split(/\s+/).filter((token) => token.length >= 3);
+  const minimum = label === 'genre' ? 2 : 3;
+  return meaningfulTokens.length < minimum;
+}
+
+function fallbackMoodCueForLane(label: string, cues: GlobalMoodLaneCues, params: any): string {
+  if (label === 'genre') return cues.genre;
+  if (label === 'instruments' || label === 'sound') return cues.sound;
+  if (label === 'atmosphere' || label === 'mood') {
+    const theme = formatSelectedThemeSource(params, '');
+    const compactTheme = theme.length > 96 ? `${theme.slice(0, 93).trim()}...` : theme;
+    return joinCueParts([compactTheme, cues.mood], 3);
+  }
+  if (label === 'vocals') return cues.vocals;
+  if (label === 'arrangement' || label === 'production') return cues.production;
+  return '';
+}
+
 function appendCue(value: string, cue: string, label = ''): string {
   const base = compactPromptLineValue(label, value);
   const cleanCue = cleanText(cue);
   if (!cleanCue) return base;
+
+  const baseKey = normalizePromptPartKey(base);
   const baseLower = base.toLowerCase();
   const cueParts = splitPromptParts(cleanCue);
   const missing = cueParts.filter((part) => {
     const key = normalizePromptPartKey(part);
     if (!key) return false;
     return !baseLower.includes(part.toLowerCase().slice(0, Math.min(part.length, 24)))
-      && !normalizePromptPartKey(base).includes(key);
+      && !baseKey.includes(key);
   });
   if (!missing.length) return base;
-  return compactPromptLineValue(label, `${base}, ${missing.join(', ')}`.replace(/,\s*,/g, ',').replace(/\s{2,}/g, ' ').trim());
+
+  const maxParts = maxPromptPartsForLane(label);
+  const compactBaseParts = splitPromptParts(base);
+  const protectedCueParts = missing.slice(0, Math.max(1, maxParts - 1));
+  const baseSlots = Math.max(1, maxParts - protectedCueParts.length);
+  const combined = [
+    ...compactBaseParts.slice(0, baseSlots),
+    ...protectedCueParts,
+  ];
+
+  return compactPromptLineValue(label, combined.join(', '));
 }
 
 export function applyGlobalMoodDirectiveToProductionPrompt(prompt: string, params: any): string {
-  const cues = buildGlobalMoodLaneCues(params);
-  if (!Object.values(cues).some(Boolean)) return prompt;
+  // Classic(v1) already has a long-established validator/router chain.
+  // Keep the shared mood profile in the Gemini instructions, but do not run the
+  // new fallback replacement layer over Classic output because it can collapse
+  // a full Atmosphere sentence into a short catalog cue.
+  const engineVersion = cleanText(params?.generationEngineVersion || 'classic').toLowerCase();
+  if (engineVersion !== 'v2') return prompt;
 
+  const cues = buildGlobalMoodLaneCues(params);
   const lines = parsePromptLines(prompt);
+
   const mapped = lines.map((line) => {
     const label = line.label.toLowerCase();
     if (!line.label) return line.raw;
-    if (label === 'genre') return `[${line.label}] ${appendCue(line.value, cues.genre, label)}`;
-    if (label === 'instruments' || label === 'sound') return `[${line.label}] ${appendCue(line.value, cues.sound, label)}`;
-    if (label === 'atmosphere' || label === 'mood') return `[${line.label}] ${appendCue(line.value, cues.mood, label)}`;
-    if (label === 'vocals') return `[${line.label}] ${appendCue(line.value, cues.vocals, label)}`;
-    if (label === 'arrangement' || label === 'production') return `[${line.label}] ${appendCue(line.value, cues.production, label)}`;
-    return line.raw;
+
+    const cue = fallbackMoodCueForLane(label, cues, params);
+    const sanitized = sanitizePromptLaneValue(label, line.value);
+
+    // Common v1/v2 safety rule: Gemini's natural sentence is the primary result.
+    // Catalog cues are used only when the lane is empty, leaked, or clearly generic.
+    if (cue && isWeakPromptLaneValue(label, sanitized)) {
+      const fallback = appendCue('', cue, label);
+      return `[${line.label}] ${fallback || sanitized}`.trim();
+    }
+
+    return `[${line.label}] ${sanitized || line.value}`.trim();
   });
 
   return mapped.join('\n');

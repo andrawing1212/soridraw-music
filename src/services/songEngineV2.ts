@@ -148,6 +148,56 @@ function hasV2VocalCharacter(member: any): boolean {
   });
 }
 
+function summarizeV2GenreVocalHabit(params: any): string {
+  const text = unique([
+    cleanText(params?.genre),
+    ...valuesForIds(params?.subGenre),
+    labelForId(params?.genre),
+    ...labelsForIds(params?.subGenre),
+    cleanText(params?.customGenreInput),
+  ]).join(' ').toLowerCase();
+
+  const rules: Array<[RegExp, string]> = [
+    [/shoegaz|슈게이즈|슈게이징/, 'hazy reverb-blended shoegaze vocal distance'],
+    [/indie[_\s-]?pop|인디\s*팝|인디팝/, 'plain indie-pop melodic phrasing'],
+    [/k[_\s-]?indie|k-인디|한국\s*인디/, 'natural K-indie conversational phrasing'],
+    [/j[_\s-]?indie|j-인디|일본\s*인디/, 'clear J-indie melodic diction'],
+    [/japanese\s*folk|j[_\s-]?folk|일본\s*포크/, 'plain Japanese-folk storytelling phrasing'],
+    [/korean\s*folk|k[_\s-]?folk|한국\s*포크|k-포크/, 'plain K-folk storytelling phrasing'],
+    [/folk|포크/, 'plain folk storytelling phrasing'],
+    [/city[_\s-]?pop|시티팝/, 'smooth city-pop vocal polish'],
+    [/synth[_\s-]?pop|신스팝/, 'clean synth-pop hook diction'],
+    [/future[_\s-]?bass|퓨처\s*베이스/, 'airy future-bass pop topline'],
+    [/r&b|rnb|알앤비/, 'smooth R&B pocket phrasing'],
+    [/neo[_\s-]?soul|네오\s*소울/, 'warm neo-soul pocket phrasing'],
+    [/soul|소울/, 'soft soulful lift'],
+    [/jazz|재즈/, 'flexible jazz phrasing'],
+    [/hip[_\s-]?hop|hiphop|rap|랩|trap|트랩/, 'rhythmic hip-hop phrasing'],
+    [/rock|록|band|밴드/, 'band-driven vocal push'],
+    [/metal|메탈/, 'strong metal vocal pressure'],
+    [/trot|트로트/, 'Korean trot vibrato color'],
+    [/opera|오페라/, 'operatic projection and dramatic phrasing'],
+    [/gugak|국악|pansori|판소리/, 'gugak breath with modern crossover phrasing'],
+  ];
+  return rules.find(([pattern]) => pattern.test(text))?.[1] || '';
+}
+
+function summarizeV2VocalEffectSoundCue(params: any): string {
+  const text = unique([
+    ...labelsForIds(params?.instrumentSounds),
+    ...labelsForIds(params?.pointSounds),
+    cleanText(params?.customSoundInput),
+  ]).join(' ').toLowerCase();
+  if (/radio\s*voice|radio\s*vocal|라디오/.test(text)) return 'radio vocal texture';
+  if (/telephone\s*voice|phone\s*voice|전화/.test(text)) return 'telephone vocal texture';
+  if (/vocoder|보코더/.test(text)) return 'vocoder vocal color';
+  if (/auto[-_\s]?tune|autotune|오토튠/.test(text)) return 'auto-tuned vocal sheen';
+  if (/whisper\s*voice|whisper\s*vocal|속삭/.test(text)) return 'whisper vocal texture';
+  if (/choir|콰이어|합창/.test(text)) return 'choir-backed vocal blend';
+  if (/humming|허밍|흥얼/.test(text)) return 'humming vocal layer';
+  return '';
+}
+
 function summarizeVocalSongFit(params: any): string {
   const anchors = unique([
     labelForId(params?.genre),
@@ -157,8 +207,10 @@ function summarizeVocalSongFit(params: any): string {
     cleanText(params?.customThemeInput),
     cleanText(params?.userInput),
   ]).slice(0, 6);
-  if (!anchors.length) return "";
-  return `song-fit: preserve vocal character identity, but let genre/mood/theme direct delivery, phrasing, emotional distance, hook focus, and pressure (${anchors.join(" / ")})`;
+  const genreHabit = summarizeV2GenreVocalHabit(params);
+  const vocalEffect = summarizeV2VocalEffectSoundCue(params);
+  if (!anchors.length && !genreHabit && !vocalEffect) return "";
+  return `song-fit: preserve vocal character identity, but make the singer obey the current song. Use genre-menu vocal habit only${genreHabit ? ` (${genreHabit})` : ''}, one mood distance/emotion cue, and one current-theme delivery cue when available${vocalEffect ? `; allowed vocal-effect sound: ${vocalEffect}` : ''}. Do not derive vocal genre from instrument/sound chips such as electric bass, guitar, trap drums, 808, risers, pads, or synth FX. Anchors: ${anchors.join(" / ")}`;
 }
 
 function summarizeVocal(vocal: any, params?: any): string {
@@ -295,7 +347,7 @@ function defaultPromptLine(label: typeof V2_PRODUCTION_LABELS[number], params: a
   const genre = unique([labelForId(params?.genre), ...labelsForIds(params?.subGenre), cleanText(params?.customGenreInput)]).join(" with ") || "genre-led pop fusion";
   const sound = unique([...labelsForIds(params?.instrumentSounds), ...labelsForIds(params?.styles), cleanText(params?.customSoundInput)]).slice(0, 6).join(", ") || "balanced core instruments, clean texture";
   const mood = unique([...labelsForIds(params?.moods), ...labelsForIds(params?.themes), cleanText(params?.customThemeInput), cleanText(params?.userInput)]).slice(0, 4).join(", ") || "clear emotional scene";
-  const vocals = params?.isNoLyrics ? "Instrumental only, no vocals, no humming" : "natural vocal with story-aware delivery";
+  const vocals = params?.isNoLyrics ? "Instrumental only, no vocals, no humming" : "natural vocal with emotional delivery";
   const production = unique([cleanText(params?.tempo), summarizeStructure(params), params?.vocal?.rap ? "rap-aware section flow" : "focused hook flow"]).join(", ") || "clear sectional contrast";
   if (label === "Genre") return genre;
   if (label === "Sound") return sound;

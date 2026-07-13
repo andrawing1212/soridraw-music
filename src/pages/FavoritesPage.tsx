@@ -678,7 +678,7 @@ export default function FavoritesPage({
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void; 
-  updateFavorite: (id: string, updates: Partial<any>) => void | boolean | Promise<void | boolean>;
+  updateFavorite: (id: string, updates: Partial<any>) => void | Promise<void>;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
   lockAllFavorites: () => void;
@@ -696,7 +696,6 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
-  const selectedSongRef = useRef<any | null>(null);
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
   const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
   const [sharedMusicNoteLoading, setSharedMusicNoteLoading] = useState(false);
@@ -822,10 +821,6 @@ export default function FavoritesPage({
   const detailSunoUrlSectionRef = useRef<HTMLElement | null>(null);
   const pendingDetailSunoUrlScrollRef = useRef(false);
   const [isDetailSunoUrlHighlighted, setIsDetailSunoUrlHighlighted] = useState(false);
-
-  useEffect(() => {
-    selectedSongRef.current = selectedSong;
-  }, [selectedSong]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1807,17 +1802,12 @@ export default function FavoritesPage({
       hidden: true,
       favoriteHidden: true,
       isPublic: false,
-      // Keep deletion markers as plain numbers. Passing serverTimestamp() through the
-      // generic Firestore sanitizer turns the FieldValue into a plain object.
-      deletedAt: trashedAt,
+      deletedAt: serverTimestamp(),
       trashedAt,
     };
 
     try {
-      const results = await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
-      if (results.some((result) => result === false)) {
-        throw new Error('favorite-trash-update-failed');
-      }
+      await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
       showFavoriteToast(`${safeSongIds.length}곡을 휴지통으로 이동했습니다.`);
       return true;
     } catch (error) {
@@ -1840,10 +1830,7 @@ export default function FavoritesPage({
     };
 
     try {
-      const results = await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
-      if (results.some((result) => result === false)) {
-        throw new Error('favorite-trash-restore-failed');
-      }
+      await Promise.all(safeSongIds.map((id) => Promise.resolve(updateFavorite(id, updates))));
       showFavoriteToast(`${safeSongIds.length}곡을 복구했습니다.`);
       return true;
     } catch (error) {
@@ -1898,9 +1885,10 @@ export default function FavoritesPage({
       return false;
     }
 
-    // The UI action is labelled “삭제” in every private Music Note tab.
-    // It must therefore move the actual saved document to Trash, not merely clear
-    // its folder id and leave an invisible/orphaned server document behind.
+    if (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') {
+      return removeSongsFromCurrentMusicNoteFolder(deletableSongs.map((song) => song.id), musicNoteViewMode);
+    }
+
     return moveSongsToFavoriteTrash(deletableSongs.map((song) => song.id));
   };
 
@@ -2237,10 +2225,8 @@ export default function FavoritesPage({
 
       await updateFavorite(song.id, updates);
 
-      const currentSelectedSong = selectedSongRef.current;
-      const shouldUpdateOpenDetail = currentSelectedSong?.id === song.id;
-      const nextSong = { ...(shouldUpdateOpenDetail ? currentSelectedSong : song), ...updates };
-      if (shouldUpdateOpenDetail) {
+      const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
+      if (selectedSong?.id === song.id) {
         setSelectedSong(nextSong);
         const nextState = buildFavoriteSunoEditorState(nextSong);
         setDetailSunoUrlInputs(nextState.inputs);

@@ -6,13 +6,13 @@ import {
   MOODS,
   SOUND_STYLES,
   THEMES,
-} from "../constants";
-import type { SongResult } from "../types";
+} from "../../../constants";
+import type { SongResult } from "../../../types";
 import { buildPromptEngineV2OutputInstruction } from "./promptEngineV2";
 import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
-import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
-import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
-import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
+import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../../../constants/lyricClicheGuard";
+import { buildLyricStoryBriefInstruction } from "../../lyricStoryBrief";
+import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "../../songCreativeBrief";
 
 export interface GenerateSongV2Deps {
   getAI: (apiKeyOverride?: string | null) => any;

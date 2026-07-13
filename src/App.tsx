@@ -3835,7 +3835,6 @@ function App() {
   const [recentSongEditDraft, setRecentSongEditDraft] = useState<RecentSongEditDraft | null>(null);
   const [recentSongEditFocus, setRecentSongEditFocus] = useState<RecentSongEditFocus>('title');
   const [isSavingRecentSongEdit, setIsSavingRecentSongEdit] = useState(false);
-  const [isStudioFavoriteSaving, setIsStudioFavoriteSaving] = useState(false);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
   // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change
   const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
@@ -4193,7 +4192,6 @@ function App() {
       'id', 'uid', 'title', 'koreanTitle', 'englishTitle', 'genre', 'lyrics', 'prompt', 'appliedKeywords',
       'userInput', 'situationSummary', 'favoriteKey', 'searchTokens', 'createdAtMs', 'updatedAtMs',
       'hidden', 'favoriteHidden', 'favoriteRemoved', 'favoriteRemovedAt', 'saved', 'isLocked',
-      'deletedAt', 'trashedAt', 'unlikedAt', 'unsavedAt', 'restoredAt',
       'color', 'colorTag', 'favoriteColorTag', 'isPublic', 'shareId', 'shareType',
       'coverUrl', 'imageUrl', 'thumbnailUrl', 'audioUrl', 'sunoUrl', 'sourceUrl',
       'sunoLinks', 'mainSunoIndex', 'sunoLinkCount', 'sunoShareUrl', 'sunoShareUrlUpdatedAt',
@@ -4371,74 +4369,51 @@ function App() {
     if (lastFavoriteSyncSignalIdRef.current === signal.id) return;
     lastFavoriteSyncSignalIdRef.current = signal.id;
 
-    const mergeFavoriteSyncIntoCache = (syncFavorite: any, forceSavedState: boolean) => {
-      if (!syncFavorite?.id) return;
-      if (isFavoriteDeletedTombstoned(uid, String(syncFavorite.id))) return;
-
-      const mergeIntoList = (list: any[]) => {
-        const existingFavorite = (list || []).find((favorite) => favorite?.id === syncFavorite.id);
-        const mergedFavorite = sanitizeForFirestore({
-          ...(existingFavorite || {}),
-          ...syncFavorite,
-          uid: syncFavorite.uid || existingFavorite?.uid || uid,
-          ...(forceSavedState ? {
-            hidden: false,
-            favoriteHidden: false,
-            favoriteRemoved: false,
-            favoriteRemovedAt: null,
-            saved: true,
-          } : {}),
-          lyrics: syncFavorite.lyrics
-            ? { ...(existingFavorite?.lyrics || {}), ...(syncFavorite.lyrics || {}) }
-            : existingFavorite?.lyrics,
-          appliedKeywords: syncFavorite.appliedKeywords
-            ? { ...(existingFavorite?.appliedKeywords || {}), ...(syncFavorite.appliedKeywords || {}) }
-            : existingFavorite?.appliedKeywords,
-          favoriteKey: syncFavorite.favoriteKey
-            || existingFavorite?.favoriteKey
-            || signal.favoriteKey
-            || buildFavoriteIdentityKey({ ...(existingFavorite || {}), ...syncFavorite }),
-          createdAtMs: Number(syncFavorite.createdAtMs || existingFavorite?.createdAtMs || 0)
-            || signal.at
-            || Date.now(),
-          updatedAtMs: signal.at || Number(syncFavorite.updatedAtMs || 0) || Date.now(),
-          searchTokens: syncFavorite.searchTokens
-            || existingFavorite?.searchTokens
-            || buildFavoriteSearchTokens({ ...(existingFavorite || {}), ...syncFavorite }),
-        });
-
-        const withoutSame = (list || []).filter((favorite) => {
-          if (!favorite?.id) return false;
-          if (favorite.id === mergedFavorite.id) return false;
-          if (forceSavedState && isSameFavoriteSong(favorite, mergedFavorite, mergedFavorite.favoriteKey)) return false;
-          return true;
-        });
-        return mergeFavoritePages([mergedFavorite], withoutSame);
-      };
+    const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
+      if (!savedFavorite?.id) return;
+      if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
+      const normalizedFavorite = sanitizeForFirestore({
+        ...savedFavorite,
+        uid: savedFavorite.uid || uid,
+        hidden: false,
+        favoriteHidden: false,
+        favoriteRemoved: false,
+        favoriteRemovedAt: null,
+        saved: true,
+        favoriteKey: savedFavorite.favoriteKey || signal.favoriteKey || buildFavoriteIdentityKey(savedFavorite),
+        createdAtMs: Number(savedFavorite.createdAtMs || 0) || signal.at || Date.now(),
+        updatedAtMs: signal.at || Date.now(),
+        searchTokens: savedFavorite.searchTokens || buildFavoriteSearchTokens(savedFavorite),
+      });
 
       try {
         const cachedList = getFavoritesCacheInMemoryOrLocalStorage(uid);
-        writeFavoritesCache(uid, mergeIntoList(cachedList));
+        const withoutSame = cachedList.filter((favorite) => {
+          if (!favorite?.id) return false;
+          if (favorite.id === normalizedFavorite.id) return false;
+          if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+          return true;
+        });
+        writeFavoritesCache(uid, mergeFavoritePages([normalizedFavorite], withoutSame));
       } catch (cacheSaveError) {
-        console.warn('Favorite sync cache update failed:', cacheSaveError);
+        console.warn('Favorite save sync cache update failed:', cacheSaveError);
       }
 
       setFavorites((prev) => {
-        const next = mergeIntoList(prev || []);
+        const withoutSame = (prev || []).filter((favorite) => {
+          if (!favorite?.id) return false;
+          if (favorite.id === normalizedFavorite.id) return false;
+          if (signal.action === 'save' && isSameFavoriteSong(favorite, normalizedFavorite, normalizedFavorite.favoriteKey)) return false;
+          return true;
+        });
+        const next = mergeFavoritePages([normalizedFavorite], withoutSame);
         writeFavoritesCache(uid, next);
         return next;
       });
     };
 
-    if (signal.action === 'save') {
-      mergeFavoriteSyncIntoCache(signal.favorite || signal, true);
-      return;
-    }
-
-    if (signal.action === 'update') {
-      // Preserve update-state flags exactly as published. In particular, trash updates must keep
-      // hidden/favoriteHidden/deletedAt/trashedAt instead of being normalized back to a saved row.
-      mergeFavoriteSyncIntoCache(signal.favorite || signal, false);
+    if (signal.action === 'save' || signal.action === 'update') {
+      mergeSavedFavoriteIntoCache(signal.favorite || signal);
       return;
     }
 
@@ -6926,10 +6901,9 @@ const toggleCycleVariantSelection = (
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
     const songIdentityKey = buildFavoriteIdentityKey(song);
     const findLocalExistingFavorite = () => {
-      const currentFavorites = favoritesStore.getFavorites();
-      const byId = favoriteDeleteId ? currentFavorites.find(f => f.id === favoriteDeleteId) : null;
+      const byId = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
       if (byId) return byId;
-      return findBestMatchingFavorite(currentFavorites, song, songIdentityKey);
+      return findBestMatchingFavorite(favorites, song, songIdentityKey);
     };
 
     const findServerMatchingFavorites = async (includeFullScan = false): Promise<any[]> => {
@@ -7239,8 +7213,8 @@ const toggleCycleVariantSelection = (
     }
   };
 
-  const updateFavorite = async (id: string, updates: Partial<any>): Promise<boolean> => {
-    const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
+  const updateFavorite = async (id: string, updates: Partial<any>) => {
+    const currentFavorite = favorites.find((favorite) => favorite.id === id);
     let sanitizedUpdates = sanitizeForFirestore(updates);
     if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
       const mergedForSearch = {
@@ -7368,7 +7342,6 @@ const toggleCycleVariantSelection = (
       } else {
         showToast('수정되었습니다.');
       }
-      return true;
     } catch (error: any) {
       const code = String(error?.code || '');
       const message = String(error?.message || error || '');
@@ -7389,14 +7362,14 @@ const toggleCycleVariantSelection = (
             const localIdsToRemove = serverIds.includes(id) ? [] : [id];
             applyFavoriteUpdateToLocalState(serverIds, localIdsToRemove);
             showToast('수정되었습니다.');
-            return true;
+            return;
           }
 
           // 이전 저장 오류 중 생긴 로컬 캐시 찌꺼기는 서버 문서가 없어서 updateDoc이 실패한다.
           // 이런 곡은 사용자가 삭제를 눌렀을 때 실패로 남기지 말고 현재 기기의 캐시에서 제거한다.
           removeLocalFavoriteOnly(id);
           showToast('삭제되었습니다.');
-          return true;
+          return;
         } catch (recoveryError) {
           console.warn('Favorite orphan cleanup failed.', recoveryError);
         }
@@ -7408,7 +7381,6 @@ const toggleCycleVariantSelection = (
       }
 
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
-      return false;
     }
   };
 
@@ -10702,40 +10674,33 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const handleToggleCurrentStudioFavorite = async () => {
-    if (isStudioFavoriteSaving) return;
-
     const snapshot = getStudioFavoriteSaveSnapshot();
     if (!snapshot) return;
 
-    setIsStudioFavoriteSaving(true);
-    try {
-      const currentIndex = historyIndexRef.current;
-      if (recentSongEditDraft && currentIndex >= 0) {
-        const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
-        setResult(snapshot);
-        setHistory(nextHistory);
-        setHistoryIndex(currentIndex);
-        resultRef.current = snapshot;
-        historyRef.current = nextHistory;
-        historyIndexRef.current = currentIndex;
-        preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
-        recentSongsReadyToCacheRef.current = true;
-        setIsRecentSongEditOpen(false);
-        setRecentSongInlineEditMode(null);
-        setRecentSongEditDraft(null);
+    const currentIndex = historyIndexRef.current;
+    if (recentSongEditDraft && currentIndex >= 0) {
+      const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
+      setResult(snapshot);
+      setHistory(nextHistory);
+      setHistoryIndex(currentIndex);
+      resultRef.current = snapshot;
+      historyRef.current = nextHistory;
+      historyIndexRef.current = currentIndex;
+      preserveHistoryIndexOnNextSnapshotRef.current = currentIndex;
+      recentSongsReadyToCacheRef.current = true;
+      setIsRecentSongEditOpen(false);
+      setRecentSongInlineEditMode(null);
+      setRecentSongEditDraft(null);
 
-        if (user) {
-          const ref = doc(db, "user_recent_songs", user.uid);
-          setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {
-            console.error('Failed to persist studio edit before favorite save:', error);
-          });
-        }
+      if (user) {
+        const ref = doc(db, "user_recent_songs", user.uid);
+        setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {
+          console.error('Failed to persist studio edit before favorite save:', error);
+        });
       }
-
-      await toggleFavorite(snapshot);
-    } finally {
-      setIsStudioFavoriteSaving(false);
     }
+
+    await toggleFavorite(snapshot);
   };
 
   const isRecentSongSectionEditing = (focus: RecentSongEditFocus) => recentSongInlineEditMode === focus && !!recentSongEditDraft;
@@ -13501,25 +13466,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={handleToggleCurrentStudioFavorite}
-                      disabled={isStudioFavoriteSaving}
-                      aria-label={isStudioFavoriteSaving ? '뮤직노트 저장 처리 중' : '뮤직노트 저장'}
-                      className={cn(
-                        "p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0",
-                        isStudioFavoriteSaving && "cursor-wait opacity-90"
-                      )}
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0"
                     >
-                      {isStudioFavoriteSaving ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-[#cd8c31]" />
-                      ) : (
-                        <Heart
-                          className={cn(
-                            "w-6 h-6 transition-all",
-                            isSongFavorited(result)
-                              ? "fill-[#cd8c31] text-[#cd8c31]"
-                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
-                          )}
-                        />
-                      )}
+                      <Heart 
+                        className={cn(
+                          "w-6 h-6 transition-all",
+                          isSongFavorited(result)
+                            ? "fill-[#cd8c31] text-[#cd8c31]"
+                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                        )} 
+                      />
                     </button>
                   </div>
                 </div>
@@ -13698,25 +13654,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={handleToggleCurrentStudioFavorite}
-                      disabled={isStudioFavoriteSaving}
-                      aria-label={isStudioFavoriteSaving ? '뮤직노트 저장 처리 중' : '뮤직노트 저장'}
-                      className={cn(
-                        "p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart",
-                        isStudioFavoriteSaving && "cursor-wait opacity-90"
-                      )}
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart"
                     >
-                      {isStudioFavoriteSaving ? (
-                        <Loader2 className="w-5 h-5 animate-spin text-[#cd8c31]" />
-                      ) : (
-                        <Heart
-                          className={cn(
-                            "w-5 h-5 transition-all",
-                            isSongFavorited(result)
-                              ? "fill-[#cd8c31] text-[#cd8c31]"
-                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
-                          )}
-                        />
-                      )}
+                      <Heart 
+                        className={cn(
+                          "w-5 h-5 transition-all",
+                          isSongFavorited(result)
+                            ? "fill-[#cd8c31] text-[#cd8c31]"
+                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                        )} 
+                      />
                     </button>
                   </div>
                 </div>

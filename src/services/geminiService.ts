@@ -28,13 +28,25 @@ import {
   CustomSectionKind,
 } from "../types";
 import { buildPromptEngineV1OutputInstruction } from "./promptEngineV1";
-import { buildPromptEngineV2OutputInstruction, isPromptEngineV2 } from "./promptEngineV2";
-import { sanitizeV2GeneratedLyrics } from "./lyricEngineV2";
-import { generateSongV2 } from "./songEngineV2";
+import { buildPromptEngineV2OutputInstruction, isPromptEngineV2 } from "./generation/v2/promptEngineV2";
+import { sanitizeV2GeneratedLyrics } from "./generation/v2/lyricEngineV2";
+import { generateSongV2 } from "./generation/v2/songEngineV2";
+import { resolveGenerationEngineRoute, runV1Engine, runV2Engine } from "./generation";
 import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
 import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
 import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
 import { resolveMoodRoleTranslations, resolveMoodRoleValues, formatMoodRoleTranslationContext } from "./moodRoleTranslator";
+import {
+  buildV1ArrangementSectionPlanInstruction,
+  buildV1ArrangementSectionSkeleton,
+  buildV1CommonSectionRoleReference,
+  compactV1SectionStructuredArrangement,
+  ensureV1ArrangementSectionCoverage,
+  isV1SectionStructuredArrangement,
+  normalizeV1SectionStructuredArrangement,
+  buildV1SharedSceneAlignmentInstruction,
+  mergeV1ForcedVocalIdentityWithGeneratedPerformance,
+} from "./generation/v1/rules";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -4021,16 +4033,18 @@ function forceSoloVocalCharacterInPrompt(prompt: string, params: GenerateSongPar
   const soloLine = buildDedicatedSoloVocalCharacterLine(params);
   if (!soloLine) return prompt;
   const normalizedPrompt = normalizeProductionPromptSectionBreaks(prompt);
+  const currentVocals = parseFinalPromptLineMap(normalizedPrompt).vocals;
+  const mergedSoloLine = mergeV1ForcedVocalIdentityWithGeneratedPerformance(soloLine, currentVocals);
   if (/^\s*\[Vocals\]/im.test(normalizedPrompt)) {
-    return normalizeProductionPromptSectionBreaks(normalizedPrompt.replace(/^\s*\[Vocals\][^\n]*/im, `[Vocals] ${soloLine}`));
+    return normalizeProductionPromptSectionBreaks(normalizedPrompt.replace(/^\s*\[Vocals\][^\n]*/im, `[Vocals] ${mergedSoloLine}`));
   }
   const lines = String(normalizedPrompt || '').split('\n');
   const arrangementIndex = lines.findIndex((line) => /^\s*\[Arrangement\]/i.test(line));
   if (arrangementIndex >= 0) {
-    lines.splice(arrangementIndex, 0, `[Vocals] ${soloLine}`);
+    lines.splice(arrangementIndex, 0, `[Vocals] ${mergedSoloLine}`);
     return lines.join('\n');
   }
-  return normalizeProductionPromptSectionBreaks(`${String(normalizedPrompt || '').trim()}\n[Vocals] ${soloLine}`);
+  return normalizeProductionPromptSectionBreaks(`${String(normalizedPrompt || '').trim()}\n[Vocals] ${mergedSoloLine}`);
 }
 
 
@@ -4249,31 +4263,35 @@ function forceSelectedMultiVocalsInPrompt(prompt: string, params: GenerateSongPa
     const storyboardVocals = buildSituationVocals(params);
     if (!storyboardVocals) return prompt;
     const normalizedPrompt = normalizeProductionPromptSectionBreaks(prompt);
+    const currentVocals = parseFinalPromptLineMap(normalizedPrompt).vocals;
+    const mergedStoryboardVocals = mergeV1ForcedVocalIdentityWithGeneratedPerformance(storyboardVocals, currentVocals);
     if (/^\s*\[Vocals\]/im.test(normalizedPrompt)) {
-      return normalizeProductionPromptSectionBreaks(normalizedPrompt.replace(/^\s*\[Vocals\][^\n]*/im, `[Vocals] ${storyboardVocals}`));
+      return normalizeProductionPromptSectionBreaks(normalizedPrompt.replace(/^\s*\[Vocals\][^\n]*/im, `[Vocals] ${mergedStoryboardVocals}`));
     }
     const lines = String(normalizedPrompt || '').split('\n');
     const arrangementIndex = lines.findIndex((line) => /^\s*\[Arrangement\]/i.test(line));
     if (arrangementIndex >= 0) {
-      lines.splice(arrangementIndex, 0, `[Vocals] ${storyboardVocals}`);
+      lines.splice(arrangementIndex, 0, `[Vocals] ${mergedStoryboardVocals}`);
       return lines.join('\n');
     }
-    return normalizeProductionPromptSectionBreaks(`${String(normalizedPrompt || '').trim()}\n[Vocals] ${storyboardVocals}`);
+    return normalizeProductionPromptSectionBreaks(`${String(normalizedPrompt || '').trim()}\n[Vocals] ${mergedStoryboardVocals}`);
   }
 
   const selectedVocals = buildSelectedMultiVocalRolePrompt(params);
   if (!selectedVocals) return prompt;
   const normalizedPrompt = normalizeProductionPromptSectionBreaks(prompt);
+  const currentVocals = parseFinalPromptLineMap(normalizedPrompt).vocals;
+  const mergedSelectedVocals = mergeV1ForcedVocalIdentityWithGeneratedPerformance(selectedVocals, currentVocals);
   if (/^\s*\[Vocals\]/im.test(normalizedPrompt)) {
-    return normalizeProductionPromptSectionBreaks(normalizedPrompt.replace(/^\s*\[Vocals\][^\n]*/im, `[Vocals] ${selectedVocals}`));
+    return normalizeProductionPromptSectionBreaks(normalizedPrompt.replace(/^\s*\[Vocals\][^\n]*/im, `[Vocals] ${mergedSelectedVocals}`));
   }
   const lines = String(normalizedPrompt || '').split('\n');
   const arrangementIndex = lines.findIndex((line) => /^\s*\[Arrangement\]/i.test(line));
   if (arrangementIndex >= 0) {
-    lines.splice(arrangementIndex, 0, `[Vocals] ${selectedVocals}`);
+    lines.splice(arrangementIndex, 0, `[Vocals] ${mergedSelectedVocals}`);
     return lines.join('\n');
   }
-  return normalizeProductionPromptSectionBreaks(`${String(normalizedPrompt || '').trim()}\n[Vocals] ${selectedVocals}`);
+  return normalizeProductionPromptSectionBreaks(`${String(normalizedPrompt || '').trim()}\n[Vocals] ${mergedSelectedVocals}`);
 }
 
 function buildExtraTechniqueLyricTagInstruction(params: GenerateSongParams): string {
@@ -5864,41 +5882,20 @@ function buildStableGenreStructure(params: GenerateSongParams): string {
 }
 
 function buildExperimentalStructureInspiration(params: GenerateSongParams): string {
-  const sourceText = [
-    params.genre || '',
-    ...getSubGenreLabels(params.subGenre ?? []),
-    selectedStyleText(params),
-    selectedSoundText(params),
-    (params.moods ?? []).join(' '),
-    buildThemeSentence(params.themes ?? []),
-    params.userInput || '',
-    params.situation?.summary || '',
-    params.situation?.description || '',
-  ].filter(Boolean).join(' ').toLowerCase();
-
+  void params;
   const directions: string[] = [
     'change the role, placement, repetition, or energy path of at least one major section instead of copying the stable skeleton',
-    'use contrast through silence, interruption, reversed energy, unexpected return, repeated short motif, speech-like turn, time-warp, genre-shift, or other newly invented structural movement when it fits',
-    'treat section names as flexible building blocks, not as a fixed pop order',
-    'make the experimental difference audible in the section flow, not only in one small cue word',
+    'use contrast through silence, interruption, reversed energy, unexpected return, repeated short motif, speech-like turn, time-warp, genre-shift, or another coherent structural movement when it fits',
+    'treat section names as functional building blocks rather than a fixed pop order',
+    'make the experimental difference audible through section behavior, not only through a renamed tag or one generic cue word',
+    'give every used section a clear role and 1–2 current-song directions from genre, style, sound, mood, vocals, scene, or story development',
+    'when Hook, Refrain, Build-Up, Pre-Drop, Drop, Breakdown, Interlude, Instrumental, Break, Stop, or Climax is used, preserve that section’s distinct musical function',
+    'keep all structural experiments inside one song scene and one emotional progression',
+    'preserve a complete lyric backbone unless the user selected instrumental or no-lyrics mode',
   ];
 
-  if (/comic|comedy|quirky|bizarre|짜파게티|음식|요리|장난/.test(sourceText)) {
-    directions.push('for comic or absurd concepts, structure the song around timing, interruption, deadpan contrast, or an unexpected spoken/scene turn if it fits');
-  }
-  if (/horror|ghost|귀신|저승|dark|spooky|gothic|creepy|thriller/.test(sourceText)) {
-    directions.push('for eerie concepts, use space, delay, sudden absence, distorted return, or uncanny section contrast if it fits');
-  }
-  if (/edm|house|techno|glitch|electro|drop|bass/.test(sourceText)) {
-    directions.push('for electronic concepts, the old drop-centered flow Intro → Build-Up → Drop → Verse → Build-Up → Drop → Break → Drop → Bridge → Outro may be used as experimental inspiration only when it clearly fits; otherwise invent another coherent experimental flow');
-  }
-  if (/jazz|folk|ballad|r&b|rnb|soul|acoustic|새벽|그리움|이별|intimate/.test(sourceText)) {
-    directions.push('for intimate concepts, experiment through refrain placement, sparse contrast, spoken bridge, delayed chorus, or emotional misdirection if it fits');
-  }
-
-  return Array.from(new Set(directions)).slice(0, 10).join('; ');
+  return Array.from(new Set(directions)).join('; ');
 }
-
 function buildStructureText(
   songStructure: SongStructure | undefined,
   resolvedStructure: SongStructure,
@@ -11281,60 +11278,20 @@ EXPLICIT SOURCES:
 
 function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
   if (isGenerationEngineV2(params)) return buildLegacyV2ScenePlanInstruction(params, detailLayer);
-  if (!shouldUseKeywordSharedSceneBlueprint(params)) {
-    return buildExplicitSourceFreedomInstruction(params, detailLayer);
-  }
-  const plan = buildInternalScenePlan(params, detailLayer);
-  const bp = buildSceneBlueprint(params);
-  const freeTextPrimary = isFreeTextPrimaryMode(params);
-  const productionShapeOnly = hasProductionShapeOnlyDirectorNote(params);
-  const directorBlock = plan.hasDirectorNote
-    ? freeTextPrimary
-      ? `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command from genre selection through arrangement, vocal attitude, hook design, and lyrics. Interpret it freely as the song concept. If it describes production format rather than a literal scene, do NOT invent a random place or story; turn it into genre, hook, vocal, arrangement, and lyric-writing intent.`
-      : isProductionSeasoningDirectorNote(params)
-        ? `- USER FREE-TEXT DIRECTOR NOTE is an additive production/color seasoning on top of the selected UI choices. Blend its intent into genre color, atmosphere, vocal attitude, arrangement, and lyric tone without replacing the selected genre/menu keywords or turning it into a separate lyric topic.`
-        : `- USER FREE-TEXT DIRECTOR NOTE is the top-level director command for genre, structure, mood, vocal attitude, arrangement, and lyric tone. Preserve its concrete intent; do not compress it into a generic theme.`
-    : `- No free-text director note was provided. Use selected Theme, Mood, and Situation story signals to infer one simple believable human situation.`;
-  const lyricDraftBlock = plan.hasLyricDraft
-    ? `- lyricDraft / AI correction / original-preserve mode affects generated lyrics only. Keep its story and wording as the primary lyrical source while using the same hidden blueprint.`
-    : `- If no lyric draft is provided, create lyrics from the same hidden blueprint used for the production prompt.`;
 
-  const directInputBlock = buildDirectInputProtectionInstruction(params);
-
-  return `ONE SHARED SCENE BLUEPRINT (MANDATORY, INTERNAL ONLY — NEVER OUTPUT THIS LABEL):
-${directorBlock}
-${lyricDraftBlock}${directInputBlock ? `\n${directInputBlock}` : ''}
-- STORY SOURCE TEXT: ${bp.sceneSourceText || 'None'}
-- PRIMARY STORY INTENT: ${bp.primaryIntent || 'None'}
-- SELECTED STORY SIGNALS: ${bp.selectedKeywordIntent || 'None'}
-
-${productionShapeOnly ? `The source is production-shaped rather than story-shaped. Do not force a literal place, object, or plot. Resolve one performance-purpose brief and use it consistently for prompt, title, and lyrics.` : `Before writing productionPrompt, title, or lyrics, silently infer ONE resolved Scene Blueprint directly from the STORY SOURCE TEXT:
-1. speaker and addressee,
-2. allowed place boundary,
-3. one visible action happening now,
-4. desire, conflict, or relationship change,
-5. one believable lived detail,
-6. vocal attitude from inside that same situation,
-7. the emotional desire the chorus repeats.
-
-Use this exact same hidden blueprint for [Atmosphere], [Vocals], [Arrangement], title, and lyrics. Do not create a second or conflicting scene for lyrics.`}
-
-STORY/MUSIC SEPARATION:
-- Direct input, Situation, lyric draft, Theme, and Mood may define or color the story.
-- Genre, Style, Sound, instruments, point sounds, tempo, production, and vocal presets are MUSIC/PERFORMANCE inputs. They must not invent a story place, object, prop, event, or title concept.
-- Never use a canned keyword-to-scene mapping. Do not automatically turn words such as room, drive, rain, office, cafe, street, or night into a stock scene merely because they appear in Style/Sound/production data.
-- A location or object may enter the scene only when it is explicitly present in the STORY SOURCE TEXT or naturally inferred by Gemini from the full story context.
-- If the story source is weak, choose a simple human interaction or decision. Do not fall back to a stock bedroom, drive, cafe, office, bus-stop, message-screen, or rainy-street scene.
-- Preserve an explicit action, decision, desire, or relationship change; do not reduce it to a time/place noun.
-- If the source language is Korean or another language, interpret it internally and output natural English productionPrompt text.
-- Never output meta phrases such as source text, selected story, user core idea, blueprint, visible musical moment, central voice, or compact emotional space.
-
-MUSIC SUPPORT FOR THE SHARED BLUEPRINT:
-- Emotional temperature: ${plan.emotion || 'balanced emotional temperature'}.
-- Arrangement movement: ${plan.arrangementCues.join(', ') || 'genre-specific groove, section lift, transition behavior'}.
-- Mood and music may change delivery, pacing, tension, texture, and hook size, but must not replace the shared story.
-- [Atmosphere] should be one concise scene-emotion sentence from the shared blueprint.
-- Lyrics should sound like character speech and behavior inside that same blueprint, not explanations of mood/style/sound keywords.`;
+  return buildV1SharedSceneAlignmentInstruction({
+    directorNote: String(params.userInput || '').trim(),
+    directTheme: getDirectThemeInputText(params),
+    directMood: getDirectMoodInputText(params),
+    storyboard: hasSituation(params.situation)
+      ? buildSituationRenderingContext(params.situation)
+      : '',
+    lyricDraft: params.isLyricMode ? String(params.lyricDraft || '').trim() : '',
+    selectedThemes: params.themes || [],
+    selectedMoods: params.moods || [],
+    additionalDetail: String(detailLayer || '').trim(),
+    productionOnlyDirectorNote: hasProductionShapeOnlyDirectorNote(params),
+  });
 }
 
 function hasExplicitSceneOrObjectInput(params: GenerateSongParams, detailLayer = ''): boolean {
@@ -11781,6 +11738,9 @@ function buildIntentConnectedAtmosphereLine(params: GenerateSongParams, original
 }
 
 function buildSoloVocalSongInterpretationCue(params: GenerateSongParams, interpreted: ThemeMoodInterpretation): string {
+  // V1 scene meaning is authored by Gemini from the shared one-scene contract.
+  // Do not inject topic-specific local story phrases into the vocal line.
+  if (!isGenerationEngineV2(params)) return '';
   // Use only the current user/keyword evidence for the situation cue.
   // Do not read interpreted.atmosphereCue here: it may contain generated scene wording
   // or recent-memory avoidance text, which caused stale cues such as family-scene delivery
@@ -12018,8 +11978,6 @@ function normalizeVocalPromptEmotion(value: string, params: GenerateSongParams):
       .replace(/\bgenre[-\s]?shaped\s+/gi, '')
       .replace(/\bmood[-\s]?shaped\s+/gi, '')
       .replace(/\bstory[-\s]?aware\s+(?:carrying|pressure|delivery|expression)?\s*/gi, '')
-      .replace(/\binside\s+[^,.;]+/gi, '')
-      .replace(/\bwhere\s+[^,.;]+/gi, '')
       .replace(/\b(phrasing|tone|delivery)\s+with\s+(warm calm emotion|calm smooth delivery|upbeat warmth|powerful cinematic delivery|emotional catchy delivery)\b/gi, '$1, $2')
       .replace(/\bwarm\s+and\s+feeling\b/gi, 'warm feeling')
       .replace(/\bmood\s+feeling\b/gi, 'moody feeling')
@@ -12374,7 +12332,9 @@ function buildSoloInterpretiveVocalLine(baseLine: string, params: GenerateSongPa
 
 function stabilizeSoloCharacterVocalsLine(value: string, params: GenerateSongParams): string {
   const dedicated = buildDedicatedSoloVocalCharacterLine(params);
-  return dedicated || value;
+  return dedicated
+    ? mergeV1ForcedVocalIdentityWithGeneratedPerformance(dedicated, value)
+    : value;
 }
 
 function buildFiveLineVocalsValue(params: GenerateSongParams, detailLayer: string): string {
@@ -12681,6 +12641,11 @@ function compactArrangementSemanticParts(parts: string[]): string[] {
 }
 
 function normalizeArrangementLine(parts: string[]): string {
+  const rawJoined = parts.map((part) => String(part || '').trim()).filter(Boolean).join(', ');
+  if (isV1SectionStructuredArrangement(rawJoined)) {
+    return normalizeV1SectionStructuredArrangement(rawJoined);
+  }
+
   const normalized = parts
     .flatMap((part) => String(part || '').split(','))
     .map(normalizeArrangementPart)
@@ -12808,59 +12773,22 @@ or [Chorus]
 function buildSectionCueMusicalVarietyInstruction(params: GenerateSongParams, exactStructureText: string): string {
   if (params.isNoLyrics || isBackgroundOnlyBgmGenre(params)) return "";
 
-  const sourceText = [
-    params.genre || '',
-    ...getSubGenreLabels(params.subGenre ?? []),
-    selectedStyleText(params),
-    selectedSoundText(params),
-    buildThemeSentence(params.themes ?? []),
-    params.userInput || '',
-    params.situation?.summary || '',
-    params.situation?.description || '',
-    params.situation?.targetA || '',
-    params.situation?.targetB || '',
-  ].filter(Boolean).join(' ').toLowerCase();
-
-  const flavorExamples = (() => {
-    if (/짜파게티|라면|음식|요리|코믹|장난|playful|comic|comedy|sarcastic|quirky|bizarre/.test(sourceText)) {
-      return `Intro tense kitchen suspense / Verse deadpan comedy delivery with tight bassline / Pre-Chorus sarcastic pressure with boiling drum build / Chorus playful chant hook with kitchen-party groove / Bridge melodramatic turn with stripped percussion`;
-    }
-    if (/horror|ghost|귀신|저승|dark|spooky|carnival|thriller|gothic|creepy/.test(sourceText)) {
-      return `Intro carnival horror vibe with theremin swells / Verse low intimate spoken tension / Pre-Chorus rising dread with sparse drums / Chorus explosive dark release with distorted choir / Bridge dark atmospheric shift with sudden silence`;
-    }
-    if (/cute|whimsical|toy|anime|요정|귀여|아기|child|bouncy/.test(sourceText)) {
-      return `Intro whimsical toy percussion / Verse cheeky talk-singing with pizzicato strings / Pre-Chorus bright rising handclaps / Chorus sweet airy melodic hook with bouncy children's choir / Outro whistling into distance`;
-    }
-    if (/ballad|r&b|rnb|jazz|dream|lo[-\s]?fi|새벽|쓸쓸|그리움|이별|lonely|vulnerable|intimate/.test(sourceText)) {
-      return `Intro soft fade-in with warm Rhodes / Verse low register intimate with sparse piano / Pre-Chorus vulnerable rise with distant echoes / Chorus sweet airy melodic hook with soft drum lift / Bridge stripped back emotional turn`;
-    }
-    if (/edm|house|dance|drop|future|techno|disco|funk|city\s*pop|groove/.test(sourceText)) {
-      return `Intro filtered synth fade-in / Verse rhythmic and sharp with bass groove / Pre-Chorus syncopated drum build / Chorus funky bounce high energy with full beat lift / Refrain catchy rhythmic repetition`;
-    }
-    if (/rap|hip[-\s]?hop|trap|drill|boom[-\s]?bap/.test(sourceText)) {
-      return `Intro tense beat fade-in / Verse deadpan rap-delivery with bass and drums only / Pre-Chorus rising tension with snare rolls / Chorus chant-like hook with 808 lift / Bridge cold drop with sparse sub-bass`;
-    }
-    if (/rock|band|punk|emo|metal/.test(sourceText)) {
-      return `Intro full band burst / Verse gritty low-register vocal with tight drums / Pre-Chorus layered harmonies with drum build / Chorus explosive full band anthemic hook / Bridge vulnerable stripped back before final lift`;
-    }
-    return `Intro atmospheric opening with a clear production cue / Verse character-specific delivery with restrained instrumentation / Pre-Chorus rising tension with changing rhythm / Chorus memorable hook with a fuller sound state / Bridge contrasting emotional or sonic turn / Outro a clear ending texture`;
-  })();
-
   const structureLine = exactStructureText ? `- Current section skeleton to preserve: ${exactStructureText}` : '';
+  const roleReference = buildV1CommonSectionRoleReference(exactStructureText);
 
   return `SECTION TAG MUSICAL DIRECTION RULE (MANDATORY):
 - Section tags are not only structure markers. They must act as compact musical direction for Suno/Udio.
-- Keep the selected section order stable, but make each section cue musically interpreted from the final prompt, genre, lyrics concept, Situation, vocal character, style, and sound choices.
-- Use the principle of unity + contrast + balance: keep one coherent song mood, but vary section energy, vocal attitude, instrument state, and production motion so the song does not feel flat.
-- Default tag shape: [Section: emotion/style, instrument or production state]. For multi-vocal songs, keep the required Vocal A/B/C anchor first, then add one compact musical cue.
-- Do not repeat the same generic cues across sections such as emotional build, controlled emotional turn, high-energy hook, or clear hook unless they are musically justified. Make them more specific to the song.
-- Good cue ingredients: vocal attitude, rhythmic feel, instrument state, production texture, tension/release, silence/drop, hook function.
-- Refrain must mean a short, catchy repeated phrase with the same lyric and melody returning. If Refrain is used anywhere in the song structure, use it at least twice so it functions as a real returning refrain. Interlude must be no-vocal instrumental transition.
-- Do not add new sections just to use these cues. Keep normal performance/energy cues inside the section tag after the colon, but real sound effects or environmental SFX must be standalone square-bracket cue lines directly under the section tag.
+- Keep the selected section order stable, but interpret every section from the final prompt, shared scene, genre, style, selected sound, mood, vocal character, and story development.
+- Use unity + contrast + balance: all sections belong to one song and one scene, while energy, vocal attitude, instrument state, space, rhythm, and production motion change by section role.
+- Each sung section tag should carry only 1–2 current-song cues. Prefer one performance cue and one musical-state cue when both are useful.
+- Do not repeat generic cues such as emotional build, controlled emotional turn, high-energy hook, or clear hook across several sections. State the actual section action instead.
+- Refrain must be a short recognizable phrase and melodic idea that truly returns. Interlude is a no-vocal instrumental transition. Hook, Drop, Breakdown, Build-Up, Break, Stop, Instrumental, and other special sections must perform their own structural role rather than behaving like renamed Verse or Chorus.
+- Do not add a new section only to use a cue. Keep performance/energy cues inside the section tag after the colon. Real sound effects and environmental SFX stay as standalone square-bracket cue lines under the relevant section tag.
 ${structureLine}
-- Example flavor for this generation family: ${flavorExamples}`.trim();
-}
 
+COMMON SECTION ROLE REFERENCE:
+${roleReference}`.trim();
+}
 function mergeHookArrangementParts(parts: string[]): string[] {
   const hookParts = parts.filter((part) => /\b(hook|chorus)\b/i.test(part));
   if (hookParts.length <= 1) return parts;
@@ -12955,7 +12883,19 @@ function buildFiveLineArrangementValue(
     .replace(/\bstage[-\s]?light\s+collapse\s+imagery\b/gi, 'soft collapse turn')
     .replace(/\bcollapse\s+imagery\b/gi, 'soft collapse turn');
 
-  if (line) return applyIntentToArrangementLine(line, params);
+  const exactStructureForArrangement = buildStructureText(
+    params.songStructure,
+    resolvedStructure,
+    params.customStructure ?? [],
+    params,
+  );
+
+  if (line) {
+    const intentAligned = applyIntentToArrangementLine(line, params);
+    return !params.isNoLyrics && !isBackgroundOnlyBgmGenre(params) && exactStructureForArrangement
+      ? buildV1ArrangementSectionSkeleton(exactStructureForArrangement, intentAligned)
+      : intentAligned;
+  }
 
   const fallback = normalizeArrangementLine([
     tempo,
@@ -12963,10 +12903,13 @@ function buildFiveLineArrangementValue(
     cleanPromptValue(buildArrangement(params, resolvedStructure)),
   ]);
 
-  return applyIntentToArrangementLine(
+  const intentAlignedFallback = applyIntentToArrangementLine(
     fallback || cleanupPromptTail([tempo, 'genre-led section flow'].filter(Boolean).join(', ')),
     params,
   );
+  return !params.isNoLyrics && !isBackgroundOnlyBgmGenre(params) && exactStructureForArrangement
+    ? buildV1ArrangementSectionSkeleton(exactStructureForArrangement, intentAlignedFallback)
+    : intentAlignedFallback;
 }
 
 function compactFiveLinePromptBody(lines: string[]): string[] {
@@ -16840,7 +16783,14 @@ function finalizeAtmosphereSentence(value: string): string {
 }
 
 function splitArrangementParts(value: string): string[] {
-  return String(value || '')
+  const raw = String(value || '');
+  if (isV1SectionStructuredArrangement(raw)) {
+    return normalizeV1SectionStructuredArrangement(raw)
+      .split(/\s*;\s*/)
+      .map((part) => cleanupPromptTail(part))
+      .filter(Boolean);
+  }
+  return raw
     .split(',')
     .map((part) => cleanupPromptTail(part))
     .filter(Boolean);
@@ -16939,6 +16889,9 @@ function arrangementSemanticFamily(part: string): string {
 }
 
 function balanceNormalArrangementLength(line: string, stabilizerParts: string[], params: GenerateSongParams): string {
+  if (isV1SectionStructuredArrangement(line)) {
+    return compactV1SectionStructuredArrangement(line);
+  }
   // Keep this only for normal prompt mode. Situation mode has a different structure
   // and should not inherit normal-mode compression rules.
   if (hasSituation(params.situation)) return cleanupPromptTail(line);
@@ -17034,6 +16987,7 @@ function deriveExtraArrangementMotionCues(params: GenerateSongParams): string[] 
 }
 
 function strengthenArrangementMinimum(line: string, params: GenerateSongParams, stabilizerParts: string[], intentParts: string[]): string {
+  if (isV1SectionStructuredArrangement(line)) return compactV1SectionStructuredArrangement(line);
   if (hasSituation(params.situation)) return cleanupPromptTail(line);
   const parts = splitArrangementParts(line);
   if (!parts.length) return cleanupPromptTail(line);
@@ -17078,6 +17032,9 @@ function strengthenArrangementMinimum(line: string, params: GenerateSongParams, 
 }
 
 function applyIntentToArrangementLine(line: string, params: GenerateSongParams): string {
+  if (isV1SectionStructuredArrangement(line)) {
+    return compactV1SectionStructuredArrangement(line);
+  }
   const intent = buildPromptIntent(params);
   let cleaned = stripFinalInternalProtectionLanguage(cleanupPromptTail(String(line || '')));
   const stabilizerParts = buildArrangementStabilizerParts(params);
@@ -19842,38 +19799,11 @@ function normalizeAtmosphereLayerSyntax(value: string): string {
     .replace(/(room\s+echoes)(a\s+)/gi, '$1 $2')
     .replace(/(urban\s+reflections)(a\s+)/gi, '$1 $2');
 
-  const lower = line.toLowerCase();
-  const hasOldFriendshipCityMemory =
-    /old[-\s]?friendship/.test(lower) &&
-    /everyday\s+city\s+memor/.test(lower);
-
-  if (hasOldFriendshipCityMemory) {
-    const intensityMatch = line.match(/\b(fragile|warm|calm|quiet|lonely|wistful|tense|hopeful|anxious|soft)\b/i);
-    const intensity = intensityMatch?.[1]?.toLowerCase() || 'fragile';
-    const tailParts = dedupePromptParts([
-      /quiet\s+change/i.test(line) ? 'quiet change' : '',
-      /calm\s+tone|calm\s+tension|\bcalm\b/i.test(line) ? 'calm tone' : '',
-      /spatial\s+echoes?/i.test(line) ? 'spatial echoes' : '',
-      /lonely\s+air/i.test(line) ? 'lonely air' : '',
-      /cautious\s+hope/i.test(line) ? 'cautious hope' : '',
-    ].filter(Boolean), 12).slice(0, 3);
-
-    return cleanupPromptTail(
-      `a ${intensity} old-friendship scene in everyday city memories${tailParts.length ? `, with ${joinPromptPhrase(tailParts, 'and')}` : ''}`
-    );
-  }
 
   // The generic layer builder sometimes produced a valid set of layers but joined
   // them without connectors: "old friendship ... city memories quiet change scene".
   // Keep the chosen layers, but turn them into one readable atmosphere sentence.
-  line = line.replace(
-    /\ba\s+(fragile|warm|calm|quiet|lonely|wistful|tense|hopeful)\s+old friendship seen through everyday city memories quiet change scene with calm tone with spatial echoes\b/gi,
-    'a $1 old-friendship scene in everyday city memories, with quiet change, calm tone, and spatial echoes'
-  );
-
   line = line
-    .replace(/\beveryday city memories quiet change scene\b/gi, 'everyday city-memory scene with quiet change')
-    .replace(/\bold friendship seen through everyday city memories\b/gi, 'old-friendship scene in everyday city memories')
     .replace(/\bwith\s+([^,]+?)\s+with\s+spatial echoes\b/gi, 'with $1 and spatial echoes')
     .replace(/\bwith calm tone and spatial echoes\b/gi, 'with calm tone and spatial echoes')
     .replace(/\s+,/g, ',')
@@ -19888,24 +19818,6 @@ function forceSingleAtmosphereSentence(prompt: string): string {
   return String(prompt || '').split('\n').map((rawLine) => {
     if (!/^\[Atmosphere\]/i.test(rawLine)) return rawLine;
     const content = String(rawLine || '').replace(/^\[Atmosphere\]\s*/i, '').replace(/\s+/g, ' ').trim();
-    const lower = content.toLowerCase();
-
-    // Absolute last guard for the old-friendship/city-memory duplicate bug.
-    // If both layers are present, replace the whole Atmosphere value with one sentence.
-    if (/old[-\s]?friendship/.test(lower) && /everyday\s+city\s+memor/.test(lower)) {
-      const intensityMatch = content.match(/\b(fragile|warm|calm|quiet|lonely|wistful|tense|hopeful|anxious|soft)\b/i);
-      const intensity = intensityMatch?.[1]?.toLowerCase() || 'fragile';
-      const tailParts = dedupePromptParts([
-        /quiet\s+change/i.test(content) ? 'quiet change' : '',
-        /calm\s+tone|calm\s+tension|\bcalm\b/i.test(content) ? 'calm tone' : '',
-        /spatial\s+echoes?/i.test(content) ? 'spatial echoes' : '',
-        /lonely\s+air/i.test(content) ? 'lonely air' : '',
-        /cautious\s+hope/i.test(content) ? 'cautious hope' : '',
-      ].filter(Boolean), 12).slice(0, 3);
-      return cleanupPromptTail(
-        `[Atmosphere] a ${intensity} old-friendship scene in everyday city memories${tailParts.length ? `, with ${joinPromptPhrase(tailParts, 'and')}` : ''}`
-      );
-    }
 
     // Generic adjacent-duplicate guard: "... echoesa fragile ...".
     const fixed = normalizeAtmosphereLayerSyntax(
@@ -20205,6 +20117,7 @@ async function repairClassicAtmosphereFromSourceWithGemini(
   rawPrompt: string,
   fallbackPrompt: string,
   params: GenerateSongParams,
+  lyrics?: any,
 ): Promise<string> {
   if (isGenerationEngineV2(params)) return rawPrompt;
 
@@ -20217,12 +20130,17 @@ async function repairClassicAtmosphereFromSourceWithGemini(
 
   const repairContext = [
     'Repair only the [Atmosphere] line of a five-line music production prompt.',
-    'Infer the scene directly from the supplied user source. This must work for any topic; do not use a canned scenario or keyword-specific template.',
-    'Preserve the source\'s central action, desire, change, or conflict—not only its nouns, time, or location.',
+    'Repair the Atmosphere so it describes the exact same scene already used by the generated lyrics and the supplied user source.',
+    'Use the generated lyrics as the primary scene evidence: keep the same speaker/addressee, place boundary, visible action, desire/conflict, lived detail, and emotional turn.',
+    'Use the supplied user source only to resolve ambiguity. This must work for any topic; do not use a canned scenario or keyword-specific template.',
+    'Do not invent a second scene or replace the lyric scene with a generic mood sentence.',
     'Translate Korean or other source languages internally and return natural English only.',
     'Write one concise, vivid sentence suitable after [Atmosphere].',
     'Do not mention the user, source text, core idea, blueprint, prompt, interpretation, or visible musical moment.',
     'Do not copy internal instructions or output brackets.',
+    '',
+    'Generated lyrics / same-scene evidence:',
+    lyricTextForPromptRefinement(lyrics).slice(0, 3600) || 'None',
     '',
     'User source:',
     sourceText.slice(0, 3600),
@@ -20842,7 +20760,12 @@ function validateFinalVocalsLine(value: string, params: GenerateSongParams): str
   );
   let line = lowerCaseVocalCueWords(normalizeVocalPromptEmotion(value, params));
   if (preserveSoloCharacter) {
-    return cleanupPromptTail(buildDedicatedSoloVocalCharacterLine(params) || stabilizeSoloCharacterVocalsLine(line, params));
+    const dedicated = buildDedicatedSoloVocalCharacterLine(params);
+    return cleanupPromptTail(
+      dedicated
+        ? mergeV1ForcedVocalIdentityWithGeneratedPerformance(dedicated, line)
+        : stabilizeSoloCharacterVocalsLine(line, params),
+    );
   }
   line = compactFiveLineVocalsValue(line, params);
   line = lowerCaseVocalCueWords(line)
@@ -20929,6 +20852,14 @@ function hasEvidenceForGenericCue(cue: string, params: GenerateSongParams): bool
 
 
 function buildInterpretiveArrangementMovementParts(params: GenerateSongParams): string[] {
+  if (!isGenerationEngineV2(params)) {
+    return [
+      'verse holds the opening action in close focus',
+      'pre-chorus increases pressure around the same conflict',
+      'chorus releases the central desire without changing the scene',
+      'Bridge reframes the same situation before the final return',
+    ];
+  }
   const text = [
     selectedThemeText(params),
     selectedMoodText(params),
@@ -20961,6 +20892,7 @@ function buildInterpretiveArrangementMovementParts(params: GenerateSongParams): 
 }
 
 function strengthenArrangementInterpretiveMovement(value: string, params: GenerateSongParams): string {
+  if (isV1SectionStructuredArrangement(value)) return compactV1SectionStructuredArrangement(value);
   if (hasSituation(params.situation)) return value;
   const currentParts = splitArrangementParts(value);
   const nonTempo = currentParts.filter((part) => !/^\d{2,3}\s*[–-]\s*\d{2,3}\s*BPM$/i.test(part) && !/^\d{2,3}\s*BPM$/i.test(part));
@@ -20976,8 +20908,34 @@ function strengthenArrangementInterpretiveMovement(value: string, params: Genera
 }
 
 function validateFinalArrangementLine(value: string, params: GenerateSongParams): string {
+  const selectedStructureMode = (params.songStructure ?? '1') as SongStructure;
+  const resolvedStructure = (
+    selectedStructureMode === 'custom'
+      ? 'custom'
+      : selectedStructureMode === '1'
+        ? '1'
+        : selectedStructureMode
+  ) as SongStructure;
+  const exactStructureText = buildStructureText(
+    params.songStructure,
+    resolvedStructure,
+    params.customStructure ?? [],
+    params,
+  );
+  const shouldUseSectionTimeline = !params.isNoLyrics && !isBackgroundOnlyBgmGenre(params) && Boolean(exactStructureText);
+  const rawValue = stripUnsupportedDirectCueBankPhrases(cleanupPromptTail(value), params);
+  if (shouldUseSectionTimeline && isV1SectionStructuredArrangement(rawValue)) {
+    const tempo = normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params);
+    let structured = normalizeV1SectionStructuredArrangement(rawValue);
+    if (tempo && !/\b\d{2,3}\s*(?:–|-|~)\s*\d{2,3}\s*BPM\b|\b\d{2,3}\s*BPM\b/i.test(structured)) {
+      structured = `${tempo}; ${structured}`;
+    }
+    structured = ensureV1ArrangementSectionCoverage(structured, exactStructureText);
+    return removeDanglingPromptConnector(stripFinalInternalProtectionLanguage(compactV1SectionStructuredArrangement(structured)));
+  }
+
   const contextual = hasDirectThemeOrMoodInput(params) ? { atmosphereScene: '', arrangementHook: '' } : buildContextualCueBundle(params);
-  const rawParts = stripUnsupportedDirectCueBankPhrases(cleanupPromptTail(value), params).split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
+  const rawParts = rawValue.split(',').map((part) => cleanupPromptTail(part)).filter(Boolean);
   let parts = rawParts.filter((part) => hasEvidenceForGenericCue(part, params));
   if (parts.length < rawParts.length && contextual.arrangementHook) parts.push(contextual.arrangementHook);
 
@@ -21020,6 +20978,17 @@ function validateFinalArrangementLine(value: string, params: GenerateSongParams)
   finalLine = hasV1ResolvedMoodRoleOwnership(params)
     ? applyV1ResolvedMoodArrangementOwnership(finalLine, params)
     : strengthenArrangementInterpretiveMovement(finalLine, params);
+
+  if (shouldUseSectionTimeline) {
+    const structured = ensureV1ArrangementSectionCoverage(
+      buildV1ArrangementSectionSkeleton(exactStructureText, finalLine),
+      exactStructureText,
+    );
+    return removeDanglingPromptConnector(
+      stripFinalInternalProtectionLanguage(compactV1SectionStructuredArrangement(structured)),
+    );
+  }
+
   return removeDanglingPromptConnector(stripFinalInternalProtectionLanguage(finalLine));
 }
 
@@ -26202,6 +26171,9 @@ function compressVocalsLine(line: string, shouldCombineCallAndResponseSlogan: bo
 
 function compressArrangementLine(line: string, shouldCombineCallAndResponseSlogan: boolean): string {
   if (!line) return '';
+  if (isV1SectionStructuredArrangement(line)) {
+    return compactV1SectionStructuredArrangement(line);
+  }
 
   let firstBpm = '';
   const bpmRegex = /\b\d+\s*BPM\b/gi;
@@ -29241,8 +29213,24 @@ function enforceRepeatedSloganInHook(lyrics: string, title: string): string {
   return processedLines.join('\n');
 }
 
-// SORIDRAW_V49_MIX_RATIO_SAFE_FIX
+// SORIDRAW_ENGINE_FOLDER_ROUTER_STEP_28
 export async function generateSong(
+  ...args: GenerateSongInput
+): Promise<SongResult> {
+  const route = resolveGenerationEngineRoute(normalizeArgs(args).generationEngineVersion);
+
+  // Step 28 only introduces isolated engine boundaries. Both routes delegate
+  // to the untouched legacy body so generated output remains byte-for-byte
+  // governed by the same normalization, prompt, lyric, and postprocess code.
+  if (route === "v2") {
+    return runV2Engine(() => generateSongLegacy(...args));
+  }
+
+  return runV1Engine(() => generateSongLegacy(...args));
+}
+
+// SORIDRAW_V49_MIX_RATIO_SAFE_FIX
+async function generateSongLegacy(
   ...args: GenerateSongInput
 ): Promise<SongResult> {
   const params = normalizeArgs(args);
@@ -29467,6 +29455,22 @@ export async function generateSong(
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
   const sectionCueMusicalVarietyInstruction = buildSectionCueMusicalVarietyInstruction(params, exactStructureText);
+  const arrangementDirectUserDirectives = [
+    params.userInput,
+    params.specialPrompt,
+    params.songPrompt,
+    params.customThemeInput,
+    params.customMoodInput,
+    params.customStyleInput,
+    params.customSoundInput,
+  ]
+    .map((value) => String(value || '').replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join(' | ');
+  const arrangementSectionPlanInstruction = buildV1ArrangementSectionPlanInstruction(
+    exactStructureText,
+    arrangementDirectUserDirectives,
+  );
   const rapModeInstruction = buildRapModeInstruction(params);
   const scenePlanInstruction = buildScenePlanInstruction(params, detailLayer);
   const stableMultiVocalLyricLabels = getStableMultiVocalLyricTagLabels(params);
@@ -29883,6 +29887,8 @@ ${requestedLanguageInstruction}
 
 ${rapModeInstruction}
 
+${arrangementSectionPlanInstruction}
+
 FINAL PRODUCTION PROMPT OUTPUT RULE (MANDATORY):
 - Return productionPrompt as the final 6-line Suno production prompt.
 - Never output two production prompts in one response. Do not write a one-line prompt containing multiple labels and then repeat the labels again below.
@@ -30084,6 +30090,8 @@ ${lyricGuidancePrompt}
 ${lyricDensityInstruction}
 
 ${sectionCueMusicalVarietyInstruction}
+
+${arrangementSectionPlanInstruction}
 
 [ANTI-TEMPLATE RULE]
 - Same keywords must still produce a different attempt angle each generation. Never treat selected buttons as a fixed lyric/prompt template.
@@ -30751,6 +30759,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     aiProductionPrompt,
     finalPrompt,
     params,
+    result.lyrics,
   );
   const normalizedAiPrompt = normalizeAiProductionPrompt(sourceRepairedAiPrompt, finalPrompt);
   const validatedProductionPrompt = finalOutputPromptValidator(normalizedAiPrompt, params);

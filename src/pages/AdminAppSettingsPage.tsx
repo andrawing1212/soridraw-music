@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
@@ -7,7 +7,10 @@ import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import {
   DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
   getNavigationFirestorePayload,
+  getNavigationMenuAccessMode,
   normalizeNavigationVisibilitySettings,
+  setNavigationMenuAccessMode,
+  type NavigationMenuAccessMode,
   type NavigationMenuKey,
   type NavigationVisibilitySettings,
   readStoredNavigationVisibilitySettings,
@@ -30,48 +33,62 @@ const DEFAULT_CLICHE_DRAFT: LyricClicheDraft = {
 const parseTerms = (value: string) => normalizeClicheTermList(value, 120);
 const formatTerms = (value: unknown) => normalizeClicheTermList(value, 120).join('\n');
 
-type SavingTarget = NavigationMenuKey | 'libraryAdminOnly' | null;
+const ACCESS_OPTIONS: Array<{ mode: NavigationMenuAccessMode; label: string }> = [
+  { mode: 'public', label: '전체공개' },
+  { mode: 'admin', label: '관리자만' },
+  { mode: 'hidden', label: '숨김' },
+];
 
-function ToggleSwitch({
-  isOn,
-  isSaving,
-  onClick,
-  label,
+function AccessModeSelector({
+  value,
+  disabled,
+  onChange,
 }: {
-  isOn: boolean;
-  isSaving: boolean;
-  onClick: () => void;
-  label: string;
+  value: NavigationMenuAccessMode;
+  disabled: boolean;
+  onChange: (mode: NavigationMenuAccessMode) => void;
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5">
-      <span className="text-[10px] font-black text-[var(--text-secondary)]">{label}</span>
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={isSaving}
-        className={`relative flex h-9 w-16 shrink-0 items-center rounded-full px-1 transition-all disabled:cursor-wait disabled:opacity-60 ${isOn ? 'bg-[#BBA8CA]' : 'bg-white/12'}`}
-        aria-pressed={isOn}
-      >
-        <span
-          className={`flex h-7 w-7 items-center justify-center rounded-full bg-white text-[10px] font-black text-[#1b1b1b] shadow-sm transition-transform ${isOn ? 'translate-x-7' : 'translate-x-0'}`}
-        >
-          {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isOn ? 'ON' : 'OFF'}
-        </span>
-      </button>
+    <div className="grid w-full grid-cols-3 gap-1 rounded-2xl bg-black/20 p-1 sm:w-auto sm:min-w-[252px]">
+      {ACCESS_OPTIONS.map((option) => {
+        const active = value === option.mode;
+        return (
+          <button
+            key={option.mode}
+            type="button"
+            onClick={() => onChange(option.mode)}
+            disabled={disabled}
+            aria-pressed={active}
+            className={`rounded-xl px-3 py-2 text-[11px] font-black transition-all disabled:cursor-wait disabled:opacity-60 ${
+              active
+                ? 'bg-[#BBA8CA] text-[#1b161d] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:bg-white/[0.06] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 export default function AdminAppSettingsPage() {
-  const [settings, setSettings] = useState<NavigationVisibilitySettings>(readStoredNavigationVisibilitySettings);
+  const initialNavigationSettings = readStoredNavigationVisibilitySettings();
+  const [savedSettings, setSavedSettings] = useState<NavigationVisibilitySettings>(initialNavigationSettings);
+  const [draftSettings, setDraftSettings] = useState<NavigationVisibilitySettings>(initialNavigationSettings);
   const [isLoading, setIsLoading] = useState(true);
-  const [savingTarget, setSavingTarget] = useState<SavingTarget>(null);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [message, setMessage] = useState('');
   const [clicheDraft, setClicheDraft] = useState<LyricClicheDraft>(DEFAULT_CLICHE_DRAFT);
   const [isClicheLoading, setIsClicheLoading] = useState(true);
   const [isSavingCliche, setIsSavingCliche] = useState(false);
   const [clicheMessage, setClicheMessage] = useState('');
+
+  const hasUnsavedNavigationChanges = useMemo(
+    () => JSON.stringify(savedSettings) !== JSON.stringify(draftSettings),
+    [draftSettings, savedSettings],
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -83,12 +100,14 @@ export default function AdminAppSettingsPage() {
 
         const data = snapshot.exists() ? snapshot.data() : null;
         const nextSettings = normalizeNavigationVisibilitySettings(data, readStoredNavigationVisibilitySettings());
-        setSettings(nextSettings);
+        setSavedSettings(nextSettings);
+        setDraftSettings(nextSettings);
         writeStoredNavigationVisibilitySettings(nextSettings);
       } catch (error) {
         console.error('Failed to load app settings:', error);
         if (isMounted) {
-          setSettings(DEFAULT_NAVIGATION_VISIBILITY_SETTINGS);
+          setSavedSettings(DEFAULT_NAVIGATION_VISIBILITY_SETTINGS);
+          setDraftSettings(DEFAULT_NAVIGATION_VISIBILITY_SETTINGS);
           setMessage('설정값을 불러오지 못했습니다. Firestore 권한을 확인해주세요.');
         }
       } finally {
@@ -130,61 +149,38 @@ export default function AdminAppSettingsPage() {
     };
   }, []);
 
-  const persistSettings = async (nextSettings: NavigationVisibilitySettings, target: SavingTarget, successMessage: string) => {
-    const previous = settings;
-    setSettings(nextSettings);
-    setSavingTarget(target);
+  const updateMenuAccessMode = (key: NavigationMenuKey, mode: NavigationMenuAccessMode) => {
+    setDraftSettings((current) => setNavigationMenuAccessMode(current, key, mode));
+    setMessage('');
+  };
+
+  const saveNavigationSettings = async () => {
+    if (!hasUnsavedNavigationChanges || isSavingSettings) return;
+
+    setIsSavingSettings(true);
     setMessage('');
 
     try {
       await setDoc(
         NAVIGATION_VISIBILITY_DOC,
         {
-          ...getNavigationFirestorePayload(nextSettings),
+          ...getNavigationFirestorePayload(draftSettings),
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        { merge: true },
       );
-      writeStoredNavigationVisibilitySettings(nextSettings);
+      setSavedSettings(draftSettings);
+      writeStoredNavigationVisibilitySettings(draftSettings);
       window.dispatchEvent(new CustomEvent('soridraw:navigation-visibility-updated', {
-        detail: nextSettings,
+        detail: draftSettings,
       }));
-      setMessage(successMessage);
+      setMessage('메뉴 설정을 한 번에 적용했습니다.');
     } catch (error) {
       console.error('Failed to save app settings:', error);
-      setSettings(previous);
       setMessage('저장에 실패했습니다. 관리자 권한 또는 Firestore 규칙을 확인해주세요.');
     } finally {
-      setSavingTarget(null);
+      setIsSavingSettings(false);
     }
-  };
-
-  const updateAdminOnlyVisibility = () => {
-    const nextValue = !settings.sunoLibraryMenuAdminOnly;
-    const nextSettings = { ...settings, sunoLibraryMenuAdminOnly: nextValue };
-    persistSettings(
-      nextSettings,
-      'libraryAdminOnly',
-      nextValue
-        ? '라이브러리를 관리자에게만 보이게 설정했습니다.'
-        : '라이브러리의 관리자 전용 제한을 해제했습니다.'
-    );
-  };
-
-  const updateMenuVisibility = (key: NavigationMenuKey, label: string) => {
-    const nextValue = !settings.menuVisibility[key];
-    const nextSettings: NavigationVisibilitySettings = {
-      ...settings,
-      menuVisibility: {
-        ...settings.menuVisibility,
-        [key]: nextValue,
-      },
-    };
-    persistSettings(
-      nextSettings,
-      key,
-      nextValue ? `${label} 메뉴를 켰습니다.` : `${label} 메뉴를 껐습니다.`
-    );
   };
 
   const saveClicheGuard = async () => {
@@ -215,36 +211,35 @@ export default function AdminAppSettingsPage() {
     }
   };
 
-  const isSavingAdminOnly = savingTarget === 'libraryAdminOnly';
   const menuRows: Array<{
     key: NavigationMenuKey;
     label: string;
     description: string;
     icon: React.ElementType;
   }> = [
-    { key: 'home', label: '홈', description: '메인 홈 화면과 홈 메뉴를 표시합니다.', icon: Home },
-    { key: 'studio', label: '스튜디오', description: '가사·프롬프트 제작 화면을 표시합니다.', icon: Zap },
-    { key: 'musicNote', label: '뮤직노트', description: '저장한 곡과 제작 데이터를 관리하는 화면을 표시합니다.', icon: Heart },
-    { key: 'library', label: '라이브러리', description: 'Music API 생성곡과 재생 목록 화면을 표시합니다.', icon: Library },
-    { key: 'lab', label: '실험실', description: '실험 기능과 개발 중인 도구 화면을 표시합니다.', icon: FlaskConical },
-    { key: 'myPage', label: '마이페이지', description: '회원정보·API·플랜·개인 설정 화면을 표시합니다.', icon: UserIcon },
+    { key: 'home', label: '홈', description: '메인 홈 화면과 홈 메뉴를 관리합니다.', icon: Home },
+    { key: 'studio', label: '스튜디오', description: '가사·프롬프트 제작 화면을 관리합니다.', icon: Zap },
+    { key: 'musicNote', label: '뮤직노트', description: '저장한 곡과 제작 데이터 관리 화면을 관리합니다.', icon: Heart },
+    { key: 'library', label: '라이브러리', description: 'Music API 생성곡과 재생 목록 화면을 관리합니다.', icon: Library },
+    { key: 'lab', label: '실험실', description: '실험 기능과 개발 중인 도구 화면을 관리합니다.', icon: FlaskConical },
+    { key: 'myPage', label: '마이페이지', description: '회원정보·API·플랜·개인 설정 화면을 관리합니다.', icon: UserIcon },
   ];
 
   return (
     <AdminPageLayout
       title="앱 설정"
-      description="상단 메뉴처럼 사용자에게 보이는 앱 기능을 관리합니다."
+      description="상단 메뉴와 페이지 이용 범위를 한 번에 관리합니다."
     >
       <div className="space-y-5">
-        <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6 shadow-sm">
+        <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 shadow-sm md:p-6">
           <div className="mb-5 flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
               <SlidersHorizontal className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-black text-[var(--text-primary)]">상단 메뉴·페이지 표시</h3>
+              <h3 className="text-base font-black text-[var(--text-primary)]">상단 메뉴·페이지 이용 설정</h3>
               <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                OFF로 설정하면 일반 사용자 메뉴에서 숨겨지고 해당 주소의 페이지 진입도 차단됩니다. 관리자는 점검을 위해 직접 주소로 진입할 수 있습니다.
+                전체공개는 모든 회원, 관리자만은 관리자 계정만 이용할 수 있습니다. 숨김은 메뉴에서 제거되며 일반 회원의 직접 주소 진입도 차단됩니다.
               </p>
             </div>
           </div>
@@ -252,9 +247,9 @@ export default function AdminAppSettingsPage() {
           <div className="grid gap-3 lg:grid-cols-2">
             {menuRows.map((item) => {
               const Icon = item.icon;
-              const isLibrary = item.key === 'library';
+              const accessMode = getNavigationMenuAccessMode(draftSettings, item.key);
               return (
-                <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl bg-black/15 px-4 py-4">
+                <div key={item.key} className="flex flex-col gap-4 rounded-2xl bg-black/15 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-[#BBA8CA]">
                       <Icon className="h-[18px] w-[18px]" />
@@ -264,31 +259,35 @@ export default function AdminAppSettingsPage() {
                       <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-secondary)]">{item.description}</p>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-4">
-                    {isLibrary && (
-                      <ToggleSwitch
-                        label="관리자만"
-                        isOn={settings.sunoLibraryMenuAdminOnly}
-                        isSaving={isLoading || isSavingAdminOnly}
-                        onClick={updateAdminOnlyVisibility}
-                      />
-                    )}
-                    <ToggleSwitch
-                      label="메뉴 표시"
-                      isOn={settings.menuVisibility[item.key]}
-                      isSaving={isLoading || savingTarget === item.key}
-                      onClick={() => updateMenuVisibility(item.key, item.label)}
-                    />
-                  </div>
+                  <AccessModeSelector
+                    value={accessMode}
+                    disabled={isLoading || isSavingSettings}
+                    onChange={(mode) => updateMenuAccessMode(item.key, mode)}
+                  />
                 </div>
               );
             })}
           </div>
+
+          <div className="mt-5 flex flex-col gap-3 border-t border-white/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs leading-relaxed text-[var(--text-secondary)]">
+              여러 메뉴를 변경해도 아래 버튼을 누를 때 Firestore 쓰기 1회로 저장됩니다.
+            </p>
+            <button
+              type="button"
+              onClick={saveNavigationSettings}
+              disabled={isLoading || isSavingSettings || !hasUnsavedNavigationChanges}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#BBA8CA] px-5 py-3 text-sm font-black text-[#1b161d] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {isSavingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              설정 적용
+            </button>
+          </div>
         </div>
 
-        <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6 shadow-sm">
+        <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 shadow-sm md:p-6">
           <div className="flex flex-col gap-5">
-            <div className="flex items-start gap-3 min-w-0">
+            <div className="flex min-w-0 items-start gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
                 <ShieldAlert className="h-5 w-5" />
               </div>
@@ -307,7 +306,7 @@ export default function AdminAppSettingsPage() {
                   value={clicheDraft.hardBanText}
                   onChange={(event) => setClicheDraft((prev) => ({ ...prev, hardBanText: event.target.value }))}
                   disabled={isClicheLoading || isSavingCliche}
-                  placeholder={"미로\n궤도\n신기루"}
+                  placeholder={'미로\n궤도\n신기루'}
                   className="mt-2 h-44 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none transition-all placeholder:text-white/20 focus:border-[#D8A4A2]/55 disabled:opacity-60"
                 />
               </label>
@@ -317,7 +316,7 @@ export default function AdminAppSettingsPage() {
                   value={clicheDraft.softBanText}
                   onChange={(event) => setClicheDraft((prev) => ({ ...prev, softBanText: event.target.value }))}
                   disabled={isClicheLoading || isSavingCliche}
-                  placeholder={"비\n바람\n그림자"}
+                  placeholder={'비\n바람\n그림자'}
                   className="mt-2 h-44 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none transition-all placeholder:text-white/20 focus:border-[#BBA8CA]/55 disabled:opacity-60"
                 />
               </label>

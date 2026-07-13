@@ -284,6 +284,7 @@ import {
   getFirstEnabledNavigationPath,
   normalizeNavigationVisibilitySettings,
   readStoredNavigationVisibilitySettings,
+  type NavigationMenuAdminOnly,
   type NavigationMenuKey,
   type NavigationMenuVisibility,
   type NavigationVisibilitySettings,
@@ -3000,7 +3001,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, menuVisibility, sunoLibraryMenuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; menuVisibility: NavigationMenuVisibility; sunoLibraryMenuAdminOnly: boolean; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -3015,7 +3016,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
   const canShowMenu = (key: NavigationMenuKey) => {
     if (!menuVisibility[key]) return false;
-    if (key === 'library' && sunoLibraryMenuAdminOnly && !isAdminUser) return false;
+    if (menuAdminOnly[key] && !isAdminUser) return false;
     return true;
   };
 
@@ -4484,7 +4485,7 @@ function App() {
     readStoredNavigationVisibilitySettings,
   );
   const menuVisibility = navigationVisibilitySettings.menuVisibility;
-  const sunoLibraryMenuAdminOnly = navigationVisibilitySettings.sunoLibraryMenuAdminOnly;
+  const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
   const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
     hardBanTerms: [],
     softBanTerms: [],
@@ -6309,16 +6310,28 @@ const toggleCycleVariantSelection = (
   const canAccessNavigationMenu = useCallback((key: NavigationMenuKey) => {
     if (isAdminUser) return true;
     if (!menuVisibility[key]) return false;
-    if (key === 'library' && sunoLibraryMenuAdminOnly) return false;
+    if (menuAdminOnly[key]) return false;
     return true;
-  }, [isAdminUser, menuVisibility, sunoLibraryMenuAdminOnly]);
+  }, [isAdminUser, menuAdminOnly, menuVisibility]);
+  const menuVisibilityForCurrentUser = useMemo<NavigationMenuVisibility>(() => ({
+    home: menuVisibility.home && (!menuAdminOnly.home || isAdminMenuUser),
+    studio: menuVisibility.studio && (!menuAdminOnly.studio || isAdminMenuUser),
+    musicNote: menuVisibility.musicNote && (!menuAdminOnly.musicNote || isAdminMenuUser),
+    library: menuVisibility.library && (!menuAdminOnly.library || isAdminMenuUser),
+    lab: menuVisibility.lab && (!menuAdminOnly.lab || isAdminMenuUser),
+    myPage: menuVisibility.myPage && (!menuAdminOnly.myPage || isAdminMenuUser),
+  }), [isAdminMenuUser, menuAdminOnly, menuVisibility]);
   const navigationFallbackPath = useMemo(() => {
     const accessibleVisibility: NavigationMenuVisibility = {
-      ...menuVisibility,
-      library: menuVisibility.library && !sunoLibraryMenuAdminOnly,
+      home: menuVisibility.home && !menuAdminOnly.home,
+      studio: menuVisibility.studio && !menuAdminOnly.studio,
+      musicNote: menuVisibility.musicNote && !menuAdminOnly.musicNote,
+      library: menuVisibility.library && !menuAdminOnly.library,
+      lab: menuVisibility.lab && !menuAdminOnly.lab,
+      myPage: menuVisibility.myPage && !menuAdminOnly.myPage,
     };
     return getFirstEnabledNavigationPath(accessibleVisibility);
-  }, [menuVisibility, sunoLibraryMenuAdminOnly]);
+  }, [menuAdminOnly, menuVisibility]);
   const effectiveUserTier: TagTier = useMemo(() => {
     if (userRole === 'admin' || userRole === 'pro') return 'pro';
     if (userRole === 'basic') return 'basic';
@@ -12339,13 +12352,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} menuVisibility={menuVisibility} sunoLibraryMenuAdminOnly={sunoLibraryMenuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       <Routes>
         <Route path="/" element={
           canAccessNavigationMenu('home') ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
-              <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} menuVisibility={menuVisibility} />
+              <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} menuVisibility={menuVisibilityForCurrentUser} />
             </Suspense>
           ) : (
             <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />

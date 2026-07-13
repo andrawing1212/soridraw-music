@@ -1,4 +1,5 @@
-export const NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_visibility_v2';
+export const NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_visibility_v3';
+export const LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_visibility_v2';
 export const LEGACY_LIBRARY_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
 export const LEGACY_LIBRARY_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
 
@@ -6,10 +7,12 @@ export const NAVIGATION_MENU_KEYS = ['home', 'studio', 'musicNote', 'library', '
 export type NavigationMenuKey = typeof NAVIGATION_MENU_KEYS[number];
 
 export type NavigationMenuVisibility = Record<NavigationMenuKey, boolean>;
+export type NavigationMenuAdminOnly = Record<NavigationMenuKey, boolean>;
+export type NavigationMenuAccessMode = 'public' | 'admin' | 'hidden';
 
 export type NavigationVisibilitySettings = {
   menuVisibility: NavigationMenuVisibility;
-  sunoLibraryMenuAdminOnly: boolean;
+  menuAdminOnly: NavigationMenuAdminOnly;
 };
 
 export const DEFAULT_NAVIGATION_MENU_VISIBILITY: NavigationMenuVisibility = {
@@ -21,9 +24,18 @@ export const DEFAULT_NAVIGATION_MENU_VISIBILITY: NavigationMenuVisibility = {
   myPage: true,
 };
 
+export const DEFAULT_NAVIGATION_MENU_ADMIN_ONLY: NavigationMenuAdminOnly = {
+  home: false,
+  studio: false,
+  musicNote: false,
+  library: false,
+  lab: false,
+  myPage: false,
+};
+
 export const DEFAULT_NAVIGATION_VISIBILITY_SETTINGS: NavigationVisibilitySettings = {
   menuVisibility: DEFAULT_NAVIGATION_MENU_VISIBILITY,
-  sunoLibraryMenuAdminOnly: false,
+  menuAdminOnly: DEFAULT_NAVIGATION_MENU_ADMIN_ONLY,
 };
 
 const asBooleanOrFallback = (value: unknown, fallback: boolean) => (
@@ -34,34 +46,47 @@ export const normalizeNavigationVisibilitySettings = (
   data: any,
   fallback: NavigationVisibilitySettings = DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
 ): NavigationVisibilitySettings => {
-  const source = data?.menuVisibility && typeof data.menuVisibility === 'object'
+  const visibilitySource = data?.menuVisibility && typeof data.menuVisibility === 'object'
     ? data.menuVisibility
+    : {};
+  const adminOnlySource = data?.menuAdminOnly && typeof data.menuAdminOnly === 'object'
+    ? data.menuAdminOnly
     : {};
 
   return {
     menuVisibility: {
-      home: asBooleanOrFallback(source.home, fallback.menuVisibility.home),
-      studio: asBooleanOrFallback(source.studio, fallback.menuVisibility.studio),
-      musicNote: asBooleanOrFallback(source.musicNote, fallback.menuVisibility.musicNote),
+      home: asBooleanOrFallback(visibilitySource.home, fallback.menuVisibility.home),
+      studio: asBooleanOrFallback(visibilitySource.studio, fallback.menuVisibility.studio),
+      musicNote: asBooleanOrFallback(visibilitySource.musicNote, fallback.menuVisibility.musicNote),
       library: asBooleanOrFallback(
-        source.library,
+        visibilitySource.library,
         typeof data?.showSunoLibraryMenu === 'boolean'
           ? data.showSunoLibraryMenu
           : fallback.menuVisibility.library,
       ),
-      lab: asBooleanOrFallback(source.lab, fallback.menuVisibility.lab),
-      myPage: asBooleanOrFallback(source.myPage, fallback.menuVisibility.myPage),
+      lab: asBooleanOrFallback(visibilitySource.lab, fallback.menuVisibility.lab),
+      myPage: asBooleanOrFallback(visibilitySource.myPage, fallback.menuVisibility.myPage),
     },
-    sunoLibraryMenuAdminOnly: asBooleanOrFallback(
-      data?.sunoLibraryMenuAdminOnly,
-      fallback.sunoLibraryMenuAdminOnly,
-    ),
+    menuAdminOnly: {
+      home: asBooleanOrFallback(adminOnlySource.home, fallback.menuAdminOnly.home),
+      studio: asBooleanOrFallback(adminOnlySource.studio, fallback.menuAdminOnly.studio),
+      musicNote: asBooleanOrFallback(adminOnlySource.musicNote, fallback.menuAdminOnly.musicNote),
+      library: asBooleanOrFallback(
+        adminOnlySource.library,
+        typeof data?.sunoLibraryMenuAdminOnly === 'boolean'
+          ? data.sunoLibraryMenuAdminOnly
+          : fallback.menuAdminOnly.library,
+      ),
+      lab: asBooleanOrFallback(adminOnlySource.lab, fallback.menuAdminOnly.lab),
+      myPage: asBooleanOrFallback(adminOnlySource.myPage, fallback.menuAdminOnly.myPage),
+    },
   };
 };
 
 export const readStoredNavigationVisibilitySettings = (): NavigationVisibilitySettings => {
   try {
-    const raw = localStorage.getItem(NAVIGATION_VISIBILITY_STORAGE_KEY);
+    const raw = localStorage.getItem(NAVIGATION_VISIBILITY_STORAGE_KEY)
+      || localStorage.getItem(LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY);
     if (raw) {
       return normalizeNavigationVisibilitySettings(JSON.parse(raw));
     }
@@ -73,7 +98,10 @@ export const readStoredNavigationVisibilitySettings = (): NavigationVisibilitySe
         ...DEFAULT_NAVIGATION_MENU_VISIBILITY,
         library: legacyLibraryVisible,
       },
-      sunoLibraryMenuAdminOnly: legacyLibraryAdminOnly,
+      menuAdminOnly: {
+        ...DEFAULT_NAVIGATION_MENU_ADMIN_ONLY,
+        library: legacyLibraryAdminOnly,
+      },
     };
   } catch {
     return DEFAULT_NAVIGATION_VISIBILITY_SETTINGS;
@@ -83,13 +111,17 @@ export const readStoredNavigationVisibilitySettings = (): NavigationVisibilitySe
 export const writeStoredNavigationVisibilitySettings = (settings: NavigationVisibilitySettings) => {
   try {
     localStorage.setItem(NAVIGATION_VISIBILITY_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(LEGACY_NAVIGATION_VISIBILITY_STORAGE_KEY, JSON.stringify({
+      menuVisibility: settings.menuVisibility,
+      sunoLibraryMenuAdminOnly: settings.menuAdminOnly.library,
+    }));
     localStorage.setItem(
       LEGACY_LIBRARY_VISIBILITY_STORAGE_KEY,
       settings.menuVisibility.library ? 'true' : 'false',
     );
     localStorage.setItem(
       LEGACY_LIBRARY_ADMIN_ONLY_STORAGE_KEY,
-      settings.sunoLibraryMenuAdminOnly ? 'true' : 'false',
+      settings.menuAdminOnly.library ? 'true' : 'false',
     );
   } catch {
     // localStorage may be unavailable. Firestore remains the source of truth.
@@ -98,9 +130,33 @@ export const writeStoredNavigationVisibilitySettings = (settings: NavigationVisi
 
 export const getNavigationFirestorePayload = (settings: NavigationVisibilitySettings) => ({
   menuVisibility: settings.menuVisibility,
-  // Keep the legacy fields so older deployed clients continue to behave correctly.
+  menuAdminOnly: settings.menuAdminOnly,
+  // Keep legacy library fields so older deployed clients continue to behave correctly.
   showSunoLibraryMenu: settings.menuVisibility.library,
-  sunoLibraryMenuAdminOnly: settings.sunoLibraryMenuAdminOnly,
+  sunoLibraryMenuAdminOnly: settings.menuAdminOnly.library,
+});
+
+export const getNavigationMenuAccessMode = (
+  settings: NavigationVisibilitySettings,
+  key: NavigationMenuKey,
+): NavigationMenuAccessMode => {
+  if (!settings.menuVisibility[key]) return 'hidden';
+  return settings.menuAdminOnly[key] ? 'admin' : 'public';
+};
+
+export const setNavigationMenuAccessMode = (
+  settings: NavigationVisibilitySettings,
+  key: NavigationMenuKey,
+  mode: NavigationMenuAccessMode,
+): NavigationVisibilitySettings => ({
+  menuVisibility: {
+    ...settings.menuVisibility,
+    [key]: mode !== 'hidden',
+  },
+  menuAdminOnly: {
+    ...settings.menuAdminOnly,
+    [key]: mode === 'admin',
+  },
 });
 
 export const NAVIGATION_MENU_PATHS: Record<NavigationMenuKey, string> = {

@@ -155,20 +155,147 @@ function readRuntimeClicheSettings(params?: any): RuntimeClicheGuardSettings {
   };
 }
 
-function buildRuntimeTermBlocks(params?: any) {
+function normalizeClicheTermKey(value: unknown): string {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\s"'“”‘’.,!?…·:;()[\]{}<>/\\|_\-]+/g, '')
+    .trim();
+}
+
+function builtInHardBanStrings(): string[] {
+  return HARD_BAN_CLICHE_TERMS.flatMap((term) => [term.ko, ...(term.en ?? [])]);
+}
+
+function builtInSoftBanStrings(): string[] {
+  return SOFT_BAN_CLICHE_TERMS.flatMap((term) => [term.ko, ...(term.en ?? [])]);
+}
+
+function expandKnownClicheAliases(terms: string[]): string[] {
+  const requestedKeys = new Set(terms.map(normalizeClicheTermKey).filter(Boolean));
+  const known = [...HARD_BAN_CLICHE_TERMS, ...SOFT_BAN_CLICHE_TERMS];
+  const expanded = [...terms];
+
+  known.forEach((entry) => {
+    const aliases = [entry.ko, ...(entry.en ?? [])];
+    if (aliases.some((alias) => requestedKeys.has(normalizeClicheTermKey(alias)))) {
+      expanded.push(...aliases);
+    }
+  });
+
+  return expanded;
+}
+
+export function resolveLyricClicheGuardTerms(params?: any): {
+  hardBanTerms: string[];
+  softBanTerms: string[];
+  globalHard: string[];
+  globalSoft: string[];
+  userHard: string[];
+  userSoft: string[];
+} {
   const runtime = readRuntimeClicheSettings(params);
   const globalHard = normalizeClicheTermList(runtime.global?.hardBanTerms ?? []);
   const globalSoft = normalizeClicheTermList(runtime.global?.softBanTerms ?? []);
   const userHard = normalizeClicheTermList(runtime.user?.hardBanTerms ?? []);
   const userSoft = normalizeClicheTermList(runtime.user?.softBanTerms ?? []);
 
+  const dynamicHardWithAliases = expandKnownClicheAliases([...globalHard, ...userHard]);
+  const hardBanTerms = normalizeClicheTermList([
+    ...builtInHardBanStrings(),
+    ...dynamicHardWithAliases,
+  ], 240);
+  const hardKeys = new Set(hardBanTerms.map(normalizeClicheTermKey).filter(Boolean));
+  const softBanTerms = normalizeClicheTermList([
+    ...builtInSoftBanStrings(),
+    ...globalSoft,
+    ...userSoft,
+  ], 240).filter((term) => !hardKeys.has(normalizeClicheTermKey(term)));
+
   return {
+    hardBanTerms,
+    softBanTerms,
     globalHard,
-    globalSoft,
+    globalSoft: globalSoft.filter((term) => !hardKeys.has(normalizeClicheTermKey(term))),
     userHard,
-    userSoft,
-    hasDynamicTerms: Boolean(globalHard.length || globalSoft.length || userHard.length || userSoft.length),
+    userSoft: userSoft.filter((term) => !hardKeys.has(normalizeClicheTermKey(term))),
   };
+}
+
+export type LyricHardBanViolation = {
+  lineIndex: number;
+  term: string;
+  line: string;
+};
+
+function isLyricSectionTagLine(value: string): boolean {
+  return /^\s*\[[^\]]+\]\s*$/.test(String(value || ''));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsLatinHardBanTerm(line: string, term: string): boolean {
+  const normalizedLine = String(line || '').normalize('NFKC').toLowerCase();
+  const normalizedTerm = String(term || '').normalize('NFKC').toLowerCase().trim();
+  if (!normalizedTerm) return false;
+  const phrasePattern = normalizedTerm
+    .split(/\s+/g)
+    .map(escapeRegExp)
+    .join('[\\s_\\-]+');
+  return new RegExp(`(^|[^a-z0-9])${phrasePattern}($|[^a-z0-9])`, 'i').test(normalizedLine);
+}
+
+function containsHardBanTerm(line: string, term: string): boolean {
+  const rawTerm = String(term || '').normalize('NFKC').trim();
+  if (!rawTerm) return false;
+  const isLatinOnly = /[a-z]/i.test(rawTerm) && !/[가-힣ㄱ-ㅎㅏ-ㅣ一-龥ぁ-ゟ゠-ヿ]/.test(rawTerm);
+  if (isLatinOnly) return containsLatinHardBanTerm(line, rawTerm);
+
+  const normalizedLine = String(line || '').normalize('NFKC').toLowerCase();
+  const normalizedTerm = rawTerm.toLowerCase();
+  if (normalizedLine.includes(normalizedTerm)) return true;
+
+  // Multi-part phrases such as "시계 초침" may contain variable whitespace.
+  // Single short words such as "네온" must not match across unrelated words
+  // (for example "네 온기가"), so compact matching is limited to longer compounds.
+  if (/\s/.test(normalizedTerm)) {
+    const phrasePattern = normalizedTerm
+      .split(/\s+/g)
+      .map(escapeRegExp)
+      .join('[\\s"\'“”‘’.,!?…·:;()\\[\\]{}<>/\\\\|_\\-]*');
+    return new RegExp(phrasePattern, 'i').test(normalizedLine);
+  }
+
+  const termKey = normalizeClicheTermKey(normalizedTerm);
+  return termKey.length >= 4 && normalizeClicheTermKey(normalizedLine).includes(termKey);
+}
+
+export function findLyricHardBanViolations(lyrics: unknown, params?: any): LyricHardBanViolation[] {
+  const source = String(lyrics ?? '').replace(/\r\n?/g, '\n');
+  if (!source.trim()) return [];
+  const { hardBanTerms } = resolveLyricClicheGuardTerms(params);
+  if (!hardBanTerms.length) return [];
+
+  const violations: LyricHardBanViolation[] = [];
+  source.split('\n').forEach((line, lineIndex) => {
+    const trimmed = line.trim();
+    if (!trimmed || isLyricSectionTagLine(trimmed)) return;
+    hardBanTerms.forEach((term) => {
+      if (containsHardBanTerm(line, term)) {
+        violations.push({ lineIndex, term, line });
+      }
+    });
+  });
+
+  const seen = new Set<string>();
+  return violations.filter((item) => {
+    const key = `${item.lineIndex}:${normalizeClicheTermKey(item.term)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function normalizeRecentTitleForGuard(value: unknown): string {
@@ -237,20 +364,20 @@ Do not force strange replacement words. Keep lyrics natural and let Gemini write
 }
 
 export function buildLyricClicheGuardInstruction(params?: any): string {
-  const dynamic = buildRuntimeTermBlocks(params);
-  const extraLines = [
-    dynamic.globalHard.length ? `Admin hard avoid for all users: ${formatDynamicTermList(dynamic.globalHard)}.` : '',
-    dynamic.globalSoft.length ? `Admin soft avoid for all users unless explicitly selected: ${formatDynamicTermList(dynamic.globalSoft)}.` : '',
-    dynamic.userHard.length ? `User personal hard avoid: ${formatDynamicTermList(dynamic.userHard)}.` : '',
-    dynamic.userSoft.length ? `User personal soft avoid unless explicitly selected: ${formatDynamicTermList(dynamic.userSoft)}.` : '',
-  ].filter(Boolean).join('\n');
+  const resolved = resolveLyricClicheGuardTerms(params);
+  const hardText = formatDynamicTermList(resolved.hardBanTerms, 240) || 'none';
+  const softText = formatDynamicTermList(resolved.softBanTerms, 240) || 'none';
 
-  return `BASIC AI CLICHE GUARD (LIGHTWEIGHT):
-Avoid obvious AI lyric/poetry clichés as automatic metaphors.
-Hard avoid: ${formatTermList(HARD_BAN_CLICHE_TERMS)}.
-Soft avoid unless the user explicitly made it the real subject/background: ${formatTermList(SOFT_BAN_CLICHE_TERMS)}.
-${extraLines ? `${extraLines}\n` : ''}HardBan means do not use it as a lyric word unless it is absolutely required by the user's direct input. SoftBan means do not let Gemini introduce it by habit; allow it when the user selected or typed that exact subject.
-This is not a general word blacklist. Do not replace natural Korean with weird evasive words. If a term is truly required by the user's explicit theme, keep it natural.`;
+  return `LYRIC CLICHE GUARD — ABSOLUTE HARD BAN:
+- HARD BAN TERMS: ${hardText}.
+- None of the hard-ban terms may appear in lyric-body lines. This rule also applies when the same term is present in the user draft, director note, selected theme, or another instruction.
+- Preserve the intended meaning by rewriting the whole phrase naturally with a context-appropriate alternative. Never merely delete the word, leave a broken particle/ending, or create an awkward evasive sentence.
+- Avoid spacing variants and obvious direct variants of the same hard-ban expression.
+- HardBan always overrides SoftBan when a term appears in both lists.
+
+SOFT AVOID TERMS: ${softText}.
+- Do not introduce soft-avoid terms by habit. They may be used only when they are the user's genuine selected subject/background and no natural alternative preserves the intended specificity.
+- Keep Korean and every selected lyric language natural, singable, and connected. Do not expose this rule in the lyrics.`;
 }
 
 export function normalizeRecentLyricSnippetForGuard(value: unknown): string {

@@ -431,6 +431,7 @@ function buildAppliedKeywords(params: any, geminiModelInfo: any): any {
     lyricDraft: params?.lyricDraft,
     isLyricMode: params?.isLyricMode,
     lyricMode: params?.lyricMode,
+    lyricClicheGuard: params?.lyricClicheGuard ?? null,
     generationEngineVersion: "v2",
     geminiUsedModel: geminiModelInfo?.usedModel,
     geminiFallbackUsed: Boolean(geminiModelInfo?.fallbackUsed),

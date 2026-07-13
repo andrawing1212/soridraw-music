@@ -32,7 +32,12 @@ import { buildPromptEngineV2OutputInstruction, isPromptEngineV2 } from "./genera
 import { sanitizeV2GeneratedLyrics } from "./generation/v2/lyricEngineV2";
 import { generateSongV2 } from "./generation/v2/songEngineV2";
 import { resolveGenerationEngineRoute, runV1Engine, runV2Engine } from "./generation";
-import { buildRecentLyricAntiRepeatInstruction, buildRecentTitleAntiRepeatInstruction } from "../constants/lyricClicheGuard";
+import {
+  buildLyricClicheGuardInstruction,
+  buildRecentLyricAntiRepeatInstruction,
+  buildRecentTitleAntiRepeatInstruction,
+  findLyricHardBanViolations,
+} from "../constants/lyricClicheGuard";
 import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
 import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
 import { resolveMoodRoleTranslations, resolveMoodRoleValues, formatMoodRoleTranslationContext } from "./moodRoleTranslator";
@@ -5590,6 +5595,7 @@ function buildAppliedKeywordPayload(
     isLyricMode: params.isLyricMode ?? false,
     lyricMode: params.lyricMode ?? "assist",
     userInput: params.userInput ?? "",
+    lyricClicheGuard: params.lyricClicheGuard ?? null,
   };
 }
 
@@ -26822,7 +26828,7 @@ function needsLyricDensityRepair(lyrics: string, params: GenerateSongParams): bo
   return false;
 }
 
-function lyricDensityRepairInstruction(languageLabel: string): string {
+function lyricDensityRepairInstruction(languageLabel: string, params: GenerateSongParams): string {
   return `Repair the lyrics in ${languageLabel} only.
 Rules:
 - Preserve the existing section order and core story.
@@ -26836,7 +26842,9 @@ Rules:
 - Break and Stop must remain lyric-free transition tags, but they need a short cue after the colon.
 - Keep section tag bodies compact. Never put full story/situation sentences inside tags; use 1-2 short performance/emotion cues.
 - Do not add unrelated new plot. Expand using the existing lyric images, theme, and atmosphere.
-- Return JSON only: {"lyrics":"..."}`;
+- Return JSON only: {"lyrics":"..."}.
+
+${buildLyricClicheGuardInstruction(params)}`;
 }
 
 async function repairSparseLyricsWithGemini(
@@ -26857,7 +26865,7 @@ async function repairSparseLyricsWithGemini(
     return enforceLyricSectionBlockSpacing(source || originalSource, params);
   }
 
-  const instruction = lyricDensityRepairInstruction(languageLabel);
+  const instruction = lyricDensityRepairInstruction(languageLabel, params);
   const context = [
     instruction,
     '',
@@ -29213,20 +29221,185 @@ function enforceRepeatedSloganInHook(lyrics: string, title: string): string {
   return processedLines.join('\n');
 }
 
+
+const HARD_BAN_REWRITE_MAX_PASSES = 2;
+
+function hardBanLanguageLabelForCard(params: GenerateSongParams, card: 'korean' | 'secondary'): string {
+  if (card === 'korean') return 'Korean lyric card in natural Hangul';
+  const requested = Array.isArray(params.lyricLanguages) ? params.lyricLanguages : [];
+  const secondary = requested.find((lang) => lang && lang !== 'ko') || 'en';
+  const names: Record<string, string> = {
+    en: 'English lyric card',
+    ja: 'Japanese lyric card in natural Japanese script',
+    zh: 'Chinese lyric card in natural Chinese script',
+    es: 'Spanish lyric card',
+    fr: 'French lyric card',
+    de: 'German lyric card',
+    ru: 'Russian lyric card in Cyrillic',
+    th: 'Thai lyric card in Thai script',
+  };
+  return names[String(secondary)] || `${String(secondary)} lyric card`;
+}
+
+function cleanHardBanReplacementLine(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+async function rewriteHardBanLyricLinesWithGemini(
+  ai: GoogleGenAI,
+  lyrics: string,
+  params: GenerateSongParams | any,
+  languageLabel: string,
+  productionPrompt = '',
+): Promise<string> {
+  let current = String(lyrics || '').replace(/\r\n?/g, '\n').trim();
+  if (!current) return current;
+
+  for (let pass = 0; pass < HARD_BAN_REWRITE_MAX_PASSES; pass += 1) {
+    const violations = findLyricHardBanViolations(current, params);
+    if (!violations.length) return current;
+
+    const lines = current.split('\n');
+    const targetMap = new Map<number, Set<string>>();
+    violations.forEach((violation) => {
+      const terms = targetMap.get(violation.lineIndex) || new Set<string>();
+      terms.add(violation.term);
+      targetMap.set(violation.lineIndex, terms);
+    });
+    const targetLineNumbers = Array.from(targetMap.keys()).sort((a, b) => a - b);
+    const targetSummary = targetLineNumbers.map((lineIndex) => {
+      const previous = lineIndex > 0 ? lines[lineIndex - 1] : '';
+      const next = lineIndex + 1 < lines.length ? lines[lineIndex + 1] : '';
+      return {
+        lineNumber: lineIndex + 1,
+        bannedTerms: Array.from(targetMap.get(lineIndex) || []),
+        previousLine: previous,
+        currentLine: lines[lineIndex] || '',
+        nextLine: next,
+      };
+    });
+
+    const systemInstruction = `You are SORIDRAW's final lyric hard-ban line editor.
+Rewrite only the listed lyric-body lines in ${languageLabel}.
+
+ABSOLUTE RULES:
+- Every listed banned term must disappear from the rewritten line, including spacing variants and direct equivalents that merely repeat the same banned expression.
+- Preserve the original line's meaning, speaker attitude, tense, grammatical connection to the previous/next line, rhyme, and singable breath.
+- Replace the whole phrase naturally. Never simply delete the banned word, leave a dangling Korean particle/ending, or make an awkward evasive sentence.
+- Example principle only: when a common word is banned inside a phrase such as "키가 커서", rewrite the thought naturally, such as "키가 자라서" or another context-fitting phrase. Do not copy this example unless it fits.
+- Return exactly one single-line replacement for each requested lineNumber. Do not add/remove section tags or lyric lines.
+- Do not include explanations, markdown, or banned terms in the response.`;
+
+    const response = await generateContentWithModelFallback(
+      ai,
+      {
+        model: GEMINI_TEXT_MODEL_CHAIN[0],
+        contents: JSON.stringify({
+          productionDirection: String(productionPrompt || '').slice(0, 1600),
+          fullLyrics: current.slice(0, 7000),
+          linesToRewrite: targetSummary,
+        }),
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              replacements: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    lineNumber: { type: Type.INTEGER },
+                    text: { type: Type.STRING },
+                  },
+                  required: ['lineNumber', 'text'],
+                },
+              },
+            },
+            required: ['replacements'],
+          },
+        },
+      },
+      pass === 0 ? 'rewriteLyricHardBanLines' : 'rewriteLyricHardBanLinesSecondPass',
+    );
+
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(response?.text || '{}');
+    } catch (error) {
+      console.warn('[SORIDRAW HardBan] replacement JSON parse failed:', error, response?.text);
+    }
+
+    const allowedLineNumbers = new Set(targetLineNumbers.map((index) => index + 1));
+    const replacements = Array.isArray(parsed?.replacements) ? parsed.replacements : [];
+    replacements.forEach((replacement: any) => {
+      const lineNumber = Number(replacement?.lineNumber);
+      if (!Number.isInteger(lineNumber) || !allowedLineNumbers.has(lineNumber)) return;
+      const nextLine = cleanHardBanReplacementLine(replacement?.text);
+      if (!nextLine || /^\s*\[[^\]]+\]\s*$/.test(nextLine)) return;
+      lines[lineNumber - 1] = nextLine;
+    });
+
+    current = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  const remaining = findLyricHardBanViolations(current, params);
+  if (remaining.length) {
+    const terms = Array.from(new Set(remaining.map((item) => item.term))).slice(0, 12).join(', ');
+    throw new Error(`가사 강한 금지어를 자연스럽게 교정하지 못했습니다: ${terms}. 다시 생성해주세요.`);
+  }
+  return current;
+}
+
+async function applySharedLyricHardBanGuard(
+  result: SongResult,
+  params: GenerateSongParams,
+): Promise<SongResult> {
+  if (params.isNoLyrics || !result?.lyrics) return result;
+
+  const korean = String(result.lyrics.korean || '').trim();
+  const secondary = String(result.lyrics.english || '').trim();
+  const koreanViolations = findLyricHardBanViolations(korean, params);
+  const secondaryViolations = findLyricHardBanViolations(secondary, params);
+  if (!koreanViolations.length && !secondaryViolations.length) return result;
+
+  const ai = getAI(params.geminiApiKey);
+  const productionPrompt = String((result as any).productionPrompt || result.prompt || '');
+  const correctedKorean = koreanViolations.length
+    ? await rewriteHardBanLyricLinesWithGemini(ai, korean, params, hardBanLanguageLabelForCard(params, 'korean'), productionPrompt)
+    : korean;
+  const correctedSecondary = secondaryViolations.length
+    ? await rewriteHardBanLyricLinesWithGemini(ai, secondary, params, hardBanLanguageLabelForCard(params, 'secondary'), productionPrompt)
+    : secondary;
+
+  return {
+    ...result,
+    lyrics: {
+      ...result.lyrics,
+      korean: correctedKorean,
+      english: correctedSecondary,
+    },
+  };
+}
+
 // SORIDRAW_ENGINE_FOLDER_ROUTER_STEP_28
 export async function generateSong(
   ...args: GenerateSongInput
 ): Promise<SongResult> {
-  const route = resolveGenerationEngineRoute(normalizeArgs(args).generationEngineVersion);
+  const params = normalizeArgs(args);
+  const route = resolveGenerationEngineRoute(params.generationEngineVersion);
 
-  // Step 28 only introduces isolated engine boundaries. Both routes delegate
-  // to the untouched legacy body so generated output remains byte-for-byte
-  // governed by the same normalization, prompt, lyric, and postprocess code.
-  if (route === "v2") {
-    return runV2Engine(() => generateSongLegacy(...args));
-  }
+  // All connected generation engines pass through the same technical hard-ban
+  // boundary. This does not share creative logic between V1/V2/V3.
+  const generated = route === "v2"
+    ? await runV2Engine(() => generateSongLegacy(...args))
+    : await runV1Engine(() => generateSongLegacy(...args));
 
-  return runV1Engine(() => generateSongLegacy(...args));
+  return applySharedLyricHardBanGuard(generated, params);
 }
 
 // SORIDRAW_V49_MIX_RATIO_SAFE_FIX
@@ -30892,6 +31065,7 @@ export interface RegenerateLyricsOnlyParams {
   currentLyrics?: string;
   siblingLyrics?: string;
   appliedKeywords?: any;
+  lyricClicheGuard?: any;
   geminiApiKey?: string;
 }
 
@@ -30921,6 +31095,10 @@ export async function regenerateLyricsOnly(
     th: "Thai script",
   };
   const applied = params.appliedKeywords || {};
+  const clicheGuardParams = {
+    ...applied,
+    lyricClicheGuard: params.lyricClicheGuard || applied.lyricClicheGuard || null,
+  };
   const targetLanguage = params.targetLanguage || "ko";
   const targetLanguageName = params.targetLanguageName || targetLanguageNameMap[targetLanguage] || targetLanguage;
   const lyricLanguages = Array.isArray(applied.lyricLanguages) ? applied.lyricLanguages.filter(Boolean).slice(0, 2) : [targetLanguage];
@@ -30970,6 +31148,8 @@ ${isMixed ? `- Keep the same mix condition: about ${100 - mixRatio}% ${targetLan
 - Mixed language must be short rhythm points, hook fragments, ad-libs, or punchlines. Do not turn the whole lyric into the mixed language.` : `- Do NOT add mixed-language lyric lines, foreign ad-libs, or foreign hook phrases.
 - For Korean lyrics, keep the lyric body in Korean only. English section tags such as [Verse : warm delivery] may stay, but lyric lines like Oh baby / alright / Just take your time are forbidden.`}
 ${targetLanguage === "ko" && !allowLatinScriptFragments ? `- The Korean lyric body must not contain Latin-script words or English ad-libs. Keep only Korean text in lyric lines, except existing Suno section tags.` : ""}
+
+${buildLyricClicheGuardInstruction(clicheGuardParams)}
 
 [QUALITY RULES]
 - Preserve the existing song identity: genre, mood, theme, vocal roles, tempo feel, section structure, and production prompt context.
@@ -31084,6 +31264,14 @@ ${targetLanguage === "ko" && !allowLatinScriptFragments ? `- The Korean lyric bo
   } else if (targetLanguage === "ko" && isMixed && mixTargets.includes("en")) {
     lyrics = limitEnglishMixRatioInKoreanLyrics(lyrics, mixRatio);
   }
+
+  lyrics = await rewriteHardBanLyricLinesWithGemini(
+    ai,
+    lyrics,
+    clicheGuardParams,
+    `${targetLanguageName} lyric card`,
+    params.prompt || '',
+  );
 
   if (!lyrics) {
     throw new Error("정상적인 가사를 다시 생성하지 못했습니다. 다시 시도해주세요.");

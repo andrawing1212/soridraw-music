@@ -4491,6 +4491,9 @@ function App() {
     softBanTerms: [],
   });
   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
+  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(false);
+  const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
+  const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -4501,10 +4504,12 @@ function App() {
           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
         });
+        setIsGlobalLyricClicheGuardReady(true);
       },
       (error) => {
         console.warn('Lyric cliche guard setting read failed. Keeping built-in defaults:', error);
         setGlobalLyricClicheGuard({ hardBanTerms: [], softBanTerms: [] });
+        setIsGlobalLyricClicheGuardReady(true);
       },
     );
 
@@ -6466,7 +6471,12 @@ const toggleCycleVariantSelection = (
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
-      if (!currentUser) setUserLyricClicheGuard(null);
+      if (!currentUser) {
+        setUserLyricClicheGuard(null);
+        setIsUserLyricClicheGuardReady(true);
+      } else {
+        setIsUserLyricClicheGuardReady(false);
+      }
       setIsForcedLogoutModalOpen(false);
       setForcedLogoutCountdown(10);
       lastForcedLogoutTimeRef.current = 0;
@@ -6499,11 +6509,18 @@ const toggleCycleVariantSelection = (
           try {
             const userSnap = await getDoc(userRef);
             if (!userSnap.exists()) {
+              setUserLyricClicheGuard(null);
+              setIsUserLyricClicheGuardReady(true);
               hasCompletedForceLogoutReentryCheckRef.current = true;
               return;
             }
 
             const data = userSnap.data();
+            setUserLyricClicheGuard({
+              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
+              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
+            });
+            setIsUserLyricClicheGuardReady(true);
             {
               const verifiedRole = (data.role || 'free') as UserRole;
               setUserRole(verifiedRole);
@@ -6547,6 +6564,7 @@ const toggleCycleVariantSelection = (
               hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
               softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
             });
+            setIsUserLyricClicheGuardReady(true);
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
             
             // Check for Banned status
@@ -6574,9 +6592,12 @@ const toggleCycleVariantSelection = (
             writeCachedUserRole(currentUser.uid, 'free');
             setUserStatus('active');
             setUserLyricClicheGuard(null);
+            setIsUserLyricClicheGuardReady(true);
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
+          setUserLyricClicheGuard(null);
+          setIsUserLyricClicheGuardReady(true);
         });
 
         const syncUserDoc = async () => {
@@ -8929,6 +8950,11 @@ const saveRecentSong = async (newSong: any) => {
       return;
     }
 
+    if (!isLyricClicheGuardReady) {
+      showToast('가사 금지어 설정을 불러오는 중입니다. 잠시 후 다시 눌러주세요.');
+      return;
+    }
+
     if (userStatus !== 'active' && !isAdminUser) {
       if (userStatus === 'paused') {
         showToast('계정이 일시 제한되었습니다. 관리자에게 문의하세요.');
@@ -10275,6 +10301,10 @@ ${normalizePromptForDisplay(result.prompt)}
       generationIndex: 1,
       generationCount: 1,
       recentStoryMemory: [],
+      lyricClicheGuard: {
+        global: globalLyricClicheGuard,
+        user: userLyricClicheGuard,
+      },
     } as any;
   };
 
@@ -10306,6 +10336,10 @@ ${normalizePromptForDisplay(result.prompt)}
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
+      return;
+    }
+    if (!isLyricClicheGuardReady) {
+      showToast('가사 금지어 설정을 불러오는 중입니다. 잠시 후 다시 눌러주세요.');
       return;
     }
 
@@ -10350,6 +10384,10 @@ ${normalizePromptForDisplay(result.prompt)}
           currentLyrics,
           siblingLyrics,
           appliedKeywords: previousApplied,
+          lyricClicheGuard: {
+            global: globalLyricClicheGuard,
+            user: userLyricClicheGuard,
+          },
           geminiApiKey: personalGeminiApiKey,
         }),
         55000,
@@ -10387,6 +10425,10 @@ ${normalizePromptForDisplay(result.prompt)}
           lyricsByLanguage: nextLyricsByLanguage,
           regeneratedLyricsAt: Date.now(),
           regeneratedLyricsLanguage: targetLang,
+          lyricClicheGuard: {
+            global: globalLyricClicheGuard,
+            user: userLyricClicheGuard,
+          },
           geminiUsedModel: geminiModelInfo?.usedModel || previousApplied.geminiUsedModel,
           geminiFallbackUsed: geminiModelInfo?.fallbackUsed ?? previousApplied.geminiFallbackUsed,
           geminiFallbackFrom: geminiModelInfo?.fallbackFrom ?? previousApplied.geminiFallbackFrom,

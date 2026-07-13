@@ -655,6 +655,8 @@ const isFavoriteSoftRemoved = (song: any): boolean => Boolean(
 
 const isFavoriteInTrash = (song: any): boolean => Boolean(song?.hidden === true || song?.favoriteHidden === true || song?.deletedAt || song?.trashedAt);
 
+const getFavoriteDocumentId = (song: any): string => String(song?.firestoreId || song?.id || '').trim();
+
 
 export default function FavoritesPage({ 
   favorites, 
@@ -677,7 +679,7 @@ export default function FavoritesPage({
   onLogin
 }: { 
   favorites: any[]; 
-  toggleFavorite: (song: any) => void; 
+  toggleFavorite: (song: any) => void | Promise<void>; 
   updateFavorite: (id: string, updates: Partial<any>) => void | Promise<void>;
   clearAllFavorites: () => void;
   unlockAllFavorites: () => void;
@@ -1071,11 +1073,13 @@ export default function FavoritesPage({
     );
   };
       const getCombinedFavoriteCopyText = (song: any): string => {
+        const genre = getDisplaySubGenre(song);
+        const genreLabel = genre ? `[${genre}] ` : '';
         const { korean, english } = getNormalizedTitles(song);
         const { korean: ko, foreign } = cleanTitlePair(korean, english);
 
         if (ko && foreign) {
-          return `${ko} | ${foreign}`;
+          return `${genreLabel}${ko} | ${foreign}`.trim();
         }
 
         const fallback = cleanTitlePart(ko || foreign || song?.title || 'Untitled');
@@ -1083,12 +1087,13 @@ export default function FavoritesPage({
           const parts = fallback.split(/[|│]/).map(cleanTitlePart).filter(Boolean);
           if (parts.length >= 2) {
             const { korean: first, foreign: second } = cleanTitlePair(parts[0], parts[1]);
-            return first && second ? `${first} | ${second}` : first || second || parts[0];
+            const combined = first && second ? `${first} | ${second}` : first || second || parts[0];
+            return `${genreLabel}${combined}`.trim();
           }
-          if (parts.length === 1) return parts[0];
+          if (parts.length === 1) return `${genreLabel}${parts[0]}`.trim();
         }
 
-        return fallback || 'Untitled';
+        return `${genreLabel}${fallback || 'Untitled'}`.trim();
       };
 
       const getFavoriteTitleCopyWithGenre = (song: any, language: 'ko' | 'en'): string => {
@@ -1129,6 +1134,7 @@ export default function FavoritesPage({
   const [isShaking, setIsShaking] = useState(false);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const [activeFavoriteMenuId, setActiveFavoriteMenuId] = useState<string | null>(null);
+  const [favoriteContextMenuPosition, setFavoriteContextMenuPosition] = useState<{ songId: string; top: number; left: number } | null>(null);
   const [favoriteColorMap, setFavoriteColorMap] = useState<Record<string, string>>({});
   const [activeFavoriteColorMenuId, setActiveFavoriteColorMenuId] = useState<string | null>(null);
   const [favoriteColorFilter, setFavoriteColorFilter] = useState<string>('all');
@@ -1846,9 +1852,13 @@ export default function FavoritesPage({
     if (safeSongIds.length === 0) return false;
 
     try {
-      await Promise.all(
-        safeSongIds.map((id) => Promise.resolve(toggleFavorite({ id, isLocked: false, __forceDeleteFavoriteById: true } as any)))
-      );
+      const targetSongs = safeSongIds.map((id) => {
+        const sourceSong = activeFavoriteSource.find((song) => getFavoriteDocumentId(song) === id || song?.id === id);
+        return sourceSong
+          ? { ...sourceSong, id: getFavoriteDocumentId(sourceSong) || id, isLocked: false, __forceDeleteFavoriteById: true }
+          : { id, isLocked: false, __forceDeleteFavoriteById: true };
+      });
+      await Promise.all(targetSongs.map((song) => Promise.resolve(toggleFavorite(song as any))));
       showFavoriteToast(`${safeSongIds.length}곡을 영구 삭제했습니다.`);
       return true;
     } catch (error) {
@@ -1879,17 +1889,15 @@ export default function FavoritesPage({
   };
 
   const deleteSongsByMusicNoteContext = async (songs: any[]): Promise<boolean> => {
-    const deletableSongs = songs.filter((song) => song?.id && !song.isLocked);
+    const deletableSongs = songs.filter((song) => getFavoriteDocumentId(song) && !song.isLocked);
     if (deletableSongs.length === 0) {
       showFavoriteToast(songs.length === 0 ? '삭제할 곡을 선택해주세요.' : '잠긴 곡은 삭제할 수 없습니다.');
       return false;
     }
 
-    if (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote') {
-      return removeSongsFromCurrentMusicNoteFolder(deletableSongs.map((song) => song.id), musicNoteViewMode);
-    }
-
-    return moveSongsToFavoriteTrash(deletableSongs.map((song) => song.id));
+    // The Delete action always means moving the owned Music Note to Trash.
+    // Folder removal is a separate folder-management action and must not intercept Delete.
+    return moveSongsToFavoriteTrash(deletableSongs.map(getFavoriteDocumentId));
   };
 
 
@@ -3197,8 +3205,41 @@ export default function FavoritesPage({
     setSelectedSongIds(allSongIds);
   };
 
+  const openFavoriteMenuAtPointer = (event: React.MouseEvent<HTMLElement>, song: any) => {
+    event.preventDefault();
+    event.stopPropagation();
+    handleCardLongPressEnd();
+
+    const card = event.currentTarget;
+    const menuButton = card.querySelector<HTMLElement>('[data-more-menu-button="true"]');
+    const anchor = menuButton?.parentElement;
+    if (!anchor) return;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const margin = 12;
+    const estimatedWidth = 160;
+    const estimatedHeight = 400;
+    const viewportLeft = Math.min(
+      Math.max(margin, event.clientX),
+      Math.max(margin, window.innerWidth - estimatedWidth - margin)
+    );
+    const viewportTop = Math.min(
+      Math.max(margin, event.clientY),
+      Math.max(margin, window.innerHeight - estimatedHeight - margin)
+    );
+
+    setFavoriteContextMenuPosition({
+      songId: song.id,
+      left: viewportLeft - anchorRect.left,
+      top: viewportTop - anchorRect.top,
+    });
+    setActiveFavoriteMenuId(song.id);
+    setActiveFavoriteColorMenuId(null);
+  };
+
   const handleCardLongPressStart = (event: React.MouseEvent | React.TouchEvent, song: any) => {
     clearSelectionLongPressTimer();
+    if ('button' in event && event.button !== 0) return;
     if (isMusicNoteSharedView) return;
     if (isSelectionMode) return;
 
@@ -4473,12 +4514,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
 
     if (action === 'restore') {
-      restoreSongsFromFavoriteTrash([song.id]);
+      restoreSongsFromFavoriteTrash([getFavoriteDocumentId(song)]);
       return;
     }
 
     if (action === 'permanentDelete') {
-      permanentlyDeleteFavoriteSongs([song.id]);
+      permanentlyDeleteFavoriteSongs([getFavoriteDocumentId(song)]);
       return;
     }
 
@@ -5130,6 +5171,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
         if (activeFavoriteMenuId && !target.closest('[data-more-menu-panel="true"]') && !isMoreMenuButtonTarget) {
           setActiveFavoriteMenuId(null);
+          setFavoriteContextMenuPosition(null);
           if (!target.closest('[data-selection-action-bar="true"], [data-floating-menu="true"]')) {
             e.preventDefault();
             e.stopPropagation();
@@ -5406,9 +5448,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   onTouchMove={handleCardLongPressMove}
                   onTouchEnd={handleCardLongPressEnd}
                   onTouchCancel={handleCardLongPressEnd}
-                  onContextMenu={(event) => {
-                    if (isSelectionMode) event.preventDefault();
-                  }}
+                  onContextMenu={(event) => openFavoriteMenuAtPointer(event, song)}
                   onClickCapture={(event) => {
                     if (!isSelectionMode) return;
                     const target = event.target as HTMLElement | null;
@@ -5646,6 +5686,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
+                            setFavoriteContextMenuPosition(null);
                             setActiveFavoriteMenuId(activeFavoriteMenuId === song.id ? null : song.id);
                             setActiveFavoriteColorMenuId(null);
                           }}
@@ -5662,7 +5703,15 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               animate={{ opacity: 1, scale: 1, y: 0 }}
                               exit={{ opacity: 0, scale: 0.9, y: -10 }}
                               transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                              className="absolute right-0 top-11 z-[260] w-40 overflow-hidden rounded-xl border border-black/15 bg-[#2a2a2a] py-1 text-sm shadow-2xl"
+                              className={cn(
+                                "absolute z-[260] w-40 max-h-[calc(100vh-24px)] overflow-y-auto rounded-xl border border-black/15 bg-[#2a2a2a] py-1 text-sm shadow-2xl",
+                                favoriteContextMenuPosition?.songId === song.id ? "" : "right-0 top-11"
+                              )}
+                              style={favoriteContextMenuPosition?.songId === song.id ? {
+                                top: favoriteContextMenuPosition.top,
+                                left: favoriteContextMenuPosition.left,
+                              } : undefined}
+                              onContextMenu={(event) => event.preventDefault()}
                               onClick={(event) => event.stopPropagation()}
                             >
                             {isMusicNoteSharedView ? (

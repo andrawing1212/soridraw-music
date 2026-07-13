@@ -641,6 +641,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   }
   const [activeMenuState, setActiveMenuState] = useState<MenuState | null>(null);
   const [activePlaylistItemMenu, setActivePlaylistItemMenu] = useState<string | null>(null);
+  const [playlistItemContextMenuPosition, setPlaylistItemContextMenuPosition] = useState<{ id: string; top: number; left: number } | null>(null);
   const [activeColorMenu, setActiveColorMenu] = useState<string | null>(null);
   type MultiSelectContext = 'workspace' | 'playlist' | 'sharedPlaylist';
   type MultiSelectedTrack = {
@@ -796,6 +797,63 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     };
   };
 
+  const computePointerMenuPosition = (clientX: number, clientY: number, estimatedHeight = 300, estimatedWidth = 192) => {
+    const rootRect = libraryPageRootRef.current?.getBoundingClientRect();
+    const margin = 12;
+    const viewportLeft = Math.min(
+      Math.max(margin, clientX),
+      Math.max(margin, window.innerWidth - estimatedWidth - margin)
+    );
+    const viewportTop = Math.min(
+      Math.max(margin, clientY),
+      Math.max(margin, window.innerHeight - estimatedHeight - margin)
+    );
+
+    return {
+      top: viewportTop - (rootRect?.top ?? 0),
+      left: viewportLeft - (rootRect?.left ?? 0),
+    };
+  };
+
+  const computePointerBulkMenuPosition = (clientX: number, clientY: number, estimatedHeight = 300, estimatedWidth = 224) => {
+    const margin = 12;
+    const viewportLeft = Math.min(
+      Math.max(margin, clientX),
+      Math.max(margin, window.innerWidth - estimatedWidth - margin)
+    );
+    const top = Math.min(
+      Math.max(margin, clientY),
+      Math.max(margin, window.innerHeight - estimatedHeight - margin)
+    );
+
+    return {
+      top,
+      right: Math.max(margin, window.innerWidth - viewportLeft - estimatedWidth),
+    };
+  };
+
+  const computeInlinePointerMenuPosition = (card: HTMLElement, clientX: number, clientY: number, estimatedHeight = 340, estimatedWidth = 160) => {
+    const menuButton = card.querySelector<HTMLElement>('[data-playlist-more-menu-button="true"]');
+    const anchor = menuButton?.parentElement;
+    if (!anchor) return null;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const margin = 12;
+    const viewportLeft = Math.min(
+      Math.max(margin, clientX),
+      Math.max(margin, window.innerWidth - estimatedWidth - margin)
+    );
+    const viewportTop = Math.min(
+      Math.max(margin, clientY),
+      Math.max(margin, window.innerHeight - estimatedHeight - margin)
+    );
+
+    return {
+      left: viewportLeft - anchorRect.left,
+      top: viewportTop - anchorRect.top,
+    };
+  };
+
   interface DeleteAction {
     groupId: string;
     itemIndex: number;
@@ -885,6 +943,24 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     } catch (e) {
       console.error('Failed to save suno_tracks to cache:', e);
     }
+  };
+
+  const removeWorkspaceTracksLocally = (trackIds: string[]) => {
+    const removedIds = new Set(
+      trackIds
+        .map((id) => String(id || '').trim())
+        .filter(Boolean)
+    );
+    if (removedIds.size === 0) return;
+
+    setTracks((prev) => {
+      const next = (Array.isArray(prev) ? prev : []).filter(
+        (track: any) => !removedIds.has(String(track?.id || '').trim())
+      );
+      const uid = user?.uid || appUser?.uid || auth.currentUser?.uid;
+      if (uid) saveWorkspaceTrackCache(uid, next);
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -3227,6 +3303,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   const handleLibraryCardLongPressStart = (event: any, selection: MultiSelectedTrack) => {
     clearLibraryLongPressTimer();
+    if (typeof event?.button === 'number' && event.button !== 0) return;
     if (multiSelectMode) return;
 
     const target = event.target as HTMLElement | null;
@@ -4669,11 +4746,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           const nextSunoData = items.filter((_: any, entryIndex: number) => !payload.indices.has(entryIndex));
           if (nextSunoData.length === 0) {
             await deleteDoc(trackRef);
+            removeWorkspaceTracksLocally([groupId]);
           } else {
             await updateDoc(trackRef, { sunoData: nextSunoData });
           }
         } else {
           await deleteDoc(trackRef);
+          removeWorkspaceTracksLocally([groupId]);
         }
       }
 
@@ -4780,6 +4859,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       const items = extractSunoData(deleteTarget.group);
       let newSunoData = [...items];
+      let deletedTrackDocument = false;
 
       if (items.length > 0 && !(!deleteTarget.group.sunoData?.length && newSunoData.length === 1 && !newSunoData[0].audioUrl && !newSunoData[0].streamAudioUrl)) {
         // Normal case: treat extracted items as the root sunoData array.
@@ -4793,6 +4873,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         if (deleteTarget.action === 'permanentDelete' && newSunoData.length === 0) {
             await deleteDoc(trackRef);
+            deletedTrackDocument = true;
         } else {
             const allHidden = newSunoData.length > 0 && newSunoData.every(i => i.hidden === true);
             const updatePayload: any = { sunoData: newSunoData };
@@ -4813,9 +4894,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             await updateDoc(trackRef, { hidden: false });
         } else if (deleteTarget.action === 'permanentDelete') {
             await deleteDoc(trackRef);
+            deletedTrackDocument = true;
         }
       }
 
+      if (deletedTrackDocument) {
+        removeWorkspaceTracksLocally([deleteTarget.groupId]);
+      }
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
@@ -5599,6 +5684,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           e.stopPropagation();
           setActiveMenuState(null);
           setActivePlaylistItemMenu(null);
+          setPlaylistItemContextMenuPosition(null);
           setBulkMenuState(null);
           return;
         }
@@ -5614,6 +5700,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (activeMenuState || activePlaylistItemMenu || activeColorMenu || bulkMenuState) {
           setActiveMenuState(null);
           setActivePlaylistItemMenu(null);
+          setPlaylistItemContextMenuPosition(null);
           setActiveColorMenu(null);
           setBulkMenuState(null);
         }
@@ -6146,6 +6233,32 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           onTouchMove={handleLibraryCardLongPressMove}
                           onTouchEnd={handleLibraryCardLongPressEnd}
                           onTouchCancel={handleLibraryCardLongPressEnd}
+                          onContextMenu={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleLibraryCardLongPressEnd();
+                            setActiveColorMenu(null);
+                            setActivePlaylistItemMenu(null);
+                            setPlaylistItemContextMenuPosition(null);
+
+                            if (multiSelectMode) {
+                              setActiveMenuState(null);
+                              setBulkMenuState({ ...computePointerBulkMenuPosition(event.clientX, event.clientY, 300, 224), anchorEl: null });
+                              return;
+                            }
+
+                            const id = `${group.id}-${idx}`;
+                            setBulkMenuState(null);
+                            setActiveMenuState({
+                              id,
+                              position: computePointerMenuPosition(event.clientX, event.clientY, getWorkspaceMoreMenuEstimatedHeight(group), 192),
+                              anchorEl: null,
+                              group,
+                              item,
+                              idx,
+                              audioUrl,
+                            });
+                          }}
                           onMouseEnter={(event) => {
                             handleLibraryDragSelectEnter(event, selection);
                             event.currentTarget.style.backgroundColor = '#171717';
@@ -6289,6 +6402,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                               onMouseDown={(e) => e.stopPropagation()}
                               onClick={(e) => { 
                                 e.stopPropagation();
+                                setPlaylistItemContextMenuPosition(null);
                                 if (multiSelectMode) {
                                   openBulkMenuFromButton(e.currentTarget);
                                   return;
@@ -6553,6 +6667,26 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       onTouchMove={handleLibraryCardLongPressMove}
                       onTouchEnd={handleLibraryCardLongPressEnd}
                       onTouchCancel={handleLibraryCardLongPressEnd}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handleLibraryCardLongPressEnd();
+                        setActiveMenuState(null);
+                        setActiveColorMenu(null);
+
+                        if (multiSelectMode) {
+                          setActivePlaylistItemMenu(null);
+                          setPlaylistItemContextMenuPosition(null);
+                          setBulkMenuState({ ...computePointerBulkMenuPosition(event.clientX, event.clientY, 300, 224), anchorEl: null });
+                          return;
+                        }
+
+                        const position = computeInlinePointerMenuPosition(event.currentTarget, event.clientX, event.clientY, 340, 160);
+                        if (!position || !item.id) return;
+                        setBulkMenuState(null);
+                        setPlaylistItemContextMenuPosition({ id: item.id, ...position });
+                        setActivePlaylistItemMenu(item.id);
+                      }}
                       onClick={(event) => {
                         if (consumeLibrarySuppressedClick(event, selection.key)) return;
                         if (consumeLibraryDragSelectClick(event)) return;
@@ -6774,9 +6908,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div className="relative">
                           <button 
                             data-floating-menu="true"
+                            data-playlist-more-menu-button="true"
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
                               e.stopPropagation();
+                              setPlaylistItemContextMenuPosition(null);
                               if (multiSelectMode) {
                                 openBulkMenuFromButton(e.currentTarget);
                                 return;
@@ -6789,7 +6925,16 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <MoreVertical className="w-4 h-4" />
                           </button>
                           {activePlaylistItemMenu === item.id && (
-                            <div data-floating-menu="true" data-more-menu-panel="true" className="absolute right-0 top-8 w-40 bg-[#2a2a2a] rounded-xl shadow-xl overflow-hidden z-20 border border-black/15 text-sm py-1">
+                            <div
+                              data-floating-menu="true"
+                              data-more-menu-panel="true"
+                              className={`absolute w-40 max-h-[calc(100vh-24px)] bg-[#2a2a2a] rounded-xl shadow-xl overflow-y-auto z-20 border border-black/15 text-sm py-1 ${playlistItemContextMenuPosition?.id === item.id ? '' : 'right-0 top-8'}`}
+                              style={playlistItemContextMenuPosition?.id === item.id ? {
+                                top: playlistItemContextMenuPosition.top,
+                                left: playlistItemContextMenuPosition.left,
+                              } : undefined}
+                              onContextMenu={(event) => event.preventDefault()}
+                            >
                               <button 
                                 disabled={isUnavailable}
                                 onClick={(e) => { 
@@ -7502,6 +7647,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,
               }}
+              onContextMenu={(e) => e.preventDefault()}
               onClick={(e) => e.stopPropagation()}
             >
               {(() => {

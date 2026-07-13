@@ -3835,6 +3835,9 @@ function App() {
   const [recentSongEditDraft, setRecentSongEditDraft] = useState<RecentSongEditDraft | null>(null);
   const [recentSongEditFocus, setRecentSongEditFocus] = useState<RecentSongEditFocus>('title');
   const [isSavingRecentSongEdit, setIsSavingRecentSongEdit] = useState(false);
+  const [isTogglingCurrentStudioFavorite, setIsTogglingCurrentStudioFavorite] = useState(false);
+  const [, setFavoriteUiVersion] = useState(0);
+  useEffect(() => favoritesStore.subscribe(() => setFavoriteUiVersion((version) => version + 1)), []);
   const [generationModelNotice, setGenerationModelNotice] = useState<string | null>(null);
   // Decoupled favorites store adapter to prevent Studio UI from re-rendering when favorites change
   const setFavorites = useCallback((list: any[] | ((prev: any[]) => any[])) => {
@@ -3868,6 +3871,16 @@ function App() {
       const bTime = b.createdAtMs || getTimestampMs(b.createdAt);
       return bTime - aTime;
     });
+  };
+
+  const mapFavoriteFirestoreDoc = (docSnap: any) => {
+    const data = docSnap?.data?.() || {};
+    const firestoreId = String(docSnap?.id || '').trim();
+    return {
+      ...data,
+      id: firestoreId,
+      firestoreId,
+    };
   };
   const mergeFavoritePages = (current: any[], incoming: any[]) => {
     const map = new Map<string, any>();
@@ -4372,14 +4385,17 @@ function App() {
     const mergeSavedFavoriteIntoCache = (savedFavorite: any) => {
       if (!savedFavorite?.id) return;
       if (isFavoriteDeletedTombstoned(uid, String(savedFavorite.id))) return;
+      const isExplicitSaveSignal = signal.action === 'save';
       const normalizedFavorite = sanitizeForFirestore({
         ...savedFavorite,
         uid: savedFavorite.uid || uid,
-        hidden: false,
-        favoriteHidden: false,
-        favoriteRemoved: false,
-        favoriteRemovedAt: null,
-        saved: true,
+        ...(isExplicitSaveSignal ? {
+          hidden: false,
+          favoriteHidden: false,
+          favoriteRemoved: false,
+          favoriteRemovedAt: null,
+          saved: true,
+        } : {}),
         favoriteKey: savedFavorite.favoriteKey || signal.favoriteKey || buildFavoriteIdentityKey(savedFavorite),
         createdAtMs: Number(savedFavorite.createdAtMs || 0) || signal.at || Date.now(),
         updatedAtMs: signal.at || Date.now(),
@@ -6614,7 +6630,7 @@ const toggleCycleVariantSelection = (
 
           const legacyQuery = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
           unsubFavs = onSnapshot(legacyQuery, (legacySnapshot) => {
-            const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+            const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
             setFavorites(legacyFavs);
             writeFavoritesCache(currentUser.uid, legacyFavs);
             setIsFavoritesLoading(false);
@@ -6640,7 +6656,7 @@ const toggleCycleVariantSelection = (
 
             try {
               const fullSnapshot = await getDocs(query(collection(db, 'favorites'), where('uid', '==', currentUser.uid)));
-              const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+              const fullFavorites = sortFavoriteList(fullSnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
               if (fullFavorites.length === 0) {
                 try {
                   localStorage.setItem(recoveryKey, 'done');
@@ -6696,7 +6712,7 @@ const toggleCycleVariantSelection = (
 
         unsubFavs = onSnapshot(q, (snapshot) => {
           const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-          const firstPageFavs = firstPageDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
           favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
           favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
           favoritePaginationFallbackModeRef.current = false;
@@ -6770,7 +6786,7 @@ const toggleCycleVariantSelection = (
       );
       const snapshot = await getDocs(q);
       const nextDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const nextFavs = nextDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const nextFavs = nextDocs.map(mapFavoriteFirestoreDoc);
       if (nextDocs.length > 0) {
         favoritePaginationCursorRef.current = nextDocs[nextDocs.length - 1];
       }
@@ -6811,7 +6827,7 @@ const toggleCycleVariantSelection = (
         limit(FAVORITE_SERVER_SEARCH_LIMIT)
       );
       const snapshot = await getDocs(q);
-      const serverResults = sortFavoriteList(snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
+      const serverResults = sortFavoriteList(snapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
       favoriteServerSearchCacheRef.current[normalizedSearch] = serverResults;
       if (serverResults.length > 0) {
         setFavorites((prev) => {
@@ -6855,7 +6871,7 @@ const toggleCycleVariantSelection = (
       );
       const snapshot = await getDocs(q);
       const firstPageDocs = snapshot.docs.slice(0, FAVORITES_PAGE_SIZE);
-      const firstPageFavs = firstPageDocs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      const firstPageFavs = firstPageDocs.map(mapFavoriteFirestoreDoc);
 
       favoritePaginationCursorRef.current = firstPageDocs[firstPageDocs.length - 1] || null;
       favoritePaginationExhaustedRef.current = snapshot.docs.length <= FAVORITES_PAGE_SIZE;
@@ -6897,13 +6913,14 @@ const toggleCycleVariantSelection = (
     // Activity indicator
     updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
 
-    const favoriteDeleteId = (song as any)?.id;
+    const favoriteDeleteId = (song as any)?.firestoreId || (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
     const songIdentityKey = buildFavoriteIdentityKey(song);
     const findLocalExistingFavorite = () => {
-      const byId = favoriteDeleteId ? favorites.find(f => f.id === favoriteDeleteId) : null;
+      const latestFavorites = favoritesStore.getFavorites();
+      const byId = favoriteDeleteId ? latestFavorites.find(f => f.id === favoriteDeleteId || f.firestoreId === favoriteDeleteId) : null;
       if (byId) return byId;
-      return findBestMatchingFavorite(favorites, song, songIdentityKey);
+      return findBestMatchingFavorite(latestFavorites, song, songIdentityKey);
     };
 
     const findServerMatchingFavorites = async (includeFullScan = false): Promise<any[]> => {
@@ -6919,7 +6936,7 @@ const toggleCycleVariantSelection = (
 
       if (forceDeleteFavoriteById && favoriteDeleteId) {
         const snap = await getDoc(doc(db, 'favorites', favoriteDeleteId));
-        if (snap.exists()) addCandidates([{ id: snap.id, ...snap.data() }]);
+        if (snap.exists()) addCandidates([mapFavoriteFirestoreDoc(snap)]);
       }
 
       if (songIdentityKey) {
@@ -6930,7 +6947,7 @@ const toggleCycleVariantSelection = (
             where('favoriteKey', '==', songIdentityKey),
             limit(20)
           ));
-          addCandidates(keySnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+          addCandidates(keySnap.docs.map(mapFavoriteFirestoreDoc));
         } catch (error) {
           console.warn('Favorite identity lookup by key failed. Falling back to title/prompt comparison.', error);
         }
@@ -6945,7 +6962,7 @@ const toggleCycleVariantSelection = (
             where('title', '==', titleCandidate),
             limit(30)
           ));
-          addCandidates(titleSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+          addCandidates(titleSnap.docs.map(mapFavoriteFirestoreDoc));
         } catch (error) {
           console.warn('Favorite identity lookup by title failed.', error);
         }
@@ -6958,7 +6975,7 @@ const toggleCycleVariantSelection = (
       for (const recentQuery of recentQueries) {
         try {
           const recentSnap = await getDocs(recentQuery);
-          addCandidates(recentSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+          addCandidates(recentSnap.docs.map(mapFavoriteFirestoreDoc));
         } catch (error) {
           console.warn('Favorite recent server lookup failed.', error);
         }
@@ -6967,7 +6984,7 @@ const toggleCycleVariantSelection = (
       if (includeFullScan) {
         try {
           const fullSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
-          addCandidates(fullSnap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() })));
+          addCandidates(fullSnap.docs.map(mapFavoriteFirestoreDoc));
         } catch (error) {
           console.warn('Favorite full duplicate lookup failed. Continuing with targeted matches only.', error);
         }
@@ -6977,7 +6994,7 @@ const toggleCycleVariantSelection = (
     };
 
     const findServerExistingFavorite = async () => {
-      const matches = await findServerMatchingFavorites(false);
+      const matches = await findServerMatchingFavorites(forceDeleteFavoriteById);
       return findBestMatchingFavorite(matches, song, songIdentityKey);
     };
 
@@ -7183,6 +7200,7 @@ const toggleCycleVariantSelection = (
         ...song,
         ...favoritePayload,
         id: favoriteDocRef.id,
+        firestoreId: favoriteDocRef.id,
         uid: user.uid,
         genre: resolvedGenre,
         createdAtMs,
@@ -7210,11 +7228,12 @@ const toggleCycleVariantSelection = (
       showToast('저장되었습니다.');
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
+      throw error;
     }
   };
 
   const updateFavorite = async (id: string, updates: Partial<any>) => {
-    const currentFavorite = favorites.find((favorite) => favorite.id === id);
+    const currentFavorite = favoritesStore.getFavorites().find((favorite) => favorite.id === id);
     let sanitizedUpdates = sanitizeForFirestore(updates);
     if (currentFavorite && shouldRefreshFavoriteSearchTokens(updates)) {
       const mergedForSearch = {
@@ -7281,15 +7300,22 @@ const toggleCycleVariantSelection = (
       throw new Error('favorite-deleted-tombstone');
     }
 
+    const previousFavoritesSnapshot = isRemovalLikeUpdate ? [...favoritesStore.getFavorites()] : null;
+    if (isRemovalLikeUpdate && currentFavorite) {
+      applyFavoriteUpdateToLocalState([id]);
+    }
+
     const findServerMatchesForCurrentFavorite = async (): Promise<any[]> => {
       if (!user?.uid || !currentFavorite) return [];
       const matches = new Map<string, any>();
       const targetKey = currentFavorite.favoriteKey || buildFavoriteIdentityKey(currentFavorite);
       const addMatches = (docs: any[]) => {
         docs.forEach((docSnap: any) => {
-          const candidate = { id: docSnap.id, ...docSnap.data() };
+          const storedData = docSnap?.data?.() || {};
+          const candidate = mapFavoriteFirestoreDoc(docSnap);
           const candidateKey = candidate.favoriteKey || buildFavoriteIdentityKey(candidate);
-          if ((targetKey && candidateKey && targetKey === candidateKey) || isSameFavoriteSong(candidate, currentFavorite, targetKey)) {
+          const isExactLegacyStoredId = Boolean(storedData?.id && String(storedData.id) === String(id));
+          if (isExactLegacyStoredId || (targetKey && candidateKey && targetKey === candidateKey) || isSameFavoriteSong(candidate, currentFavorite, targetKey)) {
             matches.set(candidate.id, candidate);
           }
         });
@@ -7306,6 +7332,17 @@ const toggleCycleVariantSelection = (
           addMatches(keySnap.docs);
         } catch (error) {
           console.warn('Favorite recovery lookup by key failed.', error);
+        }
+      }
+
+      if (matches.size === 0 && id) {
+        try {
+          // Legacy favorites could store a generated song id inside the document's `id` field.
+          // Read the user's favorites only after an exact update fails, then recover the real docSnap.id.
+          const legacyIdSnap = await getDocs(query(collection(db, 'favorites'), where('uid', '==', user.uid)));
+          addMatches(legacyIdSnap.docs);
+        } catch (error) {
+          console.warn('Favorite recovery lookup by legacy stored id failed.', error);
         }
       }
 
@@ -7328,7 +7365,7 @@ const toggleCycleVariantSelection = (
         favoriteKey: (currentFavorite?.favoriteKey || buildFavoriteIdentityKey({ ...(currentFavorite || {}), ...sanitizedUpdates, id })),
         searchTokens: (sanitizedUpdates.searchTokens || (currentFavorite ? buildFavoriteSearchTokens({ ...currentFavorite, ...sanitizedUpdates, id }) : undefined)),
       });
-      applyFavoriteUpdateToLocalState([id]);
+      if (!isRemovalLikeUpdate) applyFavoriteUpdateToLocalState([id]);
       if (user?.uid) {
         patchFavoriteCacheImmediately(user.uid, id, updates);
         const updateSignal = buildFavoriteSyncSignal('update', updatedFavoriteSnapshot, [updatedFavoriteSnapshot], favoriteUpdatedAtMs);
@@ -7380,7 +7417,12 @@ const toggleCycleVariantSelection = (
         showToast('이미 삭제된 뮤직노트입니다. 목록을 새로고침해 주세요.');
       }
 
+      if (previousFavoritesSnapshot) {
+        favoritesStore.setFavorites(previousFavoritesSnapshot);
+        if (user?.uid) writeFavoritesCache(user.uid, previousFavoritesSnapshot);
+      }
       handleFirestoreError(error, OperationType.UPDATE, 'favorites');
+      throw error;
     }
   };
 
@@ -10674,9 +10716,12 @@ ${normalizePromptForDisplay(result.prompt)}
   };
 
   const handleToggleCurrentStudioFavorite = async () => {
+    if (isTogglingCurrentStudioFavorite) return;
     const snapshot = getStudioFavoriteSaveSnapshot();
     if (!snapshot) return;
 
+    setIsTogglingCurrentStudioFavorite(true);
+    const favoriteToggleStartedAt = Date.now();
     const currentIndex = historyIndexRef.current;
     if (recentSongEditDraft && currentIndex >= 0) {
       const nextHistory = historyRef.current.map((song, index) => index === currentIndex ? snapshot : song);
@@ -10700,7 +10745,17 @@ ${normalizePromptForDisplay(result.prompt)}
       }
     }
 
-    await toggleFavorite(snapshot);
+    try {
+      await toggleFavorite(snapshot);
+    } catch (error) {
+      console.warn('Studio favorite toggle failed.', error);
+    } finally {
+      const elapsed = Date.now() - favoriteToggleStartedAt;
+      if (elapsed < 450) {
+        await new Promise((resolve) => window.setTimeout(resolve, 450 - elapsed));
+      }
+      setIsTogglingCurrentStudioFavorite(false);
+    }
   };
 
   const isRecentSongSectionEditing = (focus: RecentSongEditFocus) => recentSongInlineEditMode === focus && !!recentSongEditDraft;
@@ -13466,16 +13521,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={handleToggleCurrentStudioFavorite}
-                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0"
+                      disabled={isTogglingCurrentStudioFavorite}
+                      title={isTogglingCurrentStudioFavorite ? '저장 상태 처리 중' : undefined}
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0 disabled:cursor-wait disabled:opacity-70"
                     >
-                      <Heart 
-                        className={cn(
-                          "w-6 h-6 transition-all",
-                          isSongFavorited(result)
-                            ? "fill-[#cd8c31] text-[#cd8c31]"
-                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
-                        )} 
-                      />
+                      {isTogglingCurrentStudioFavorite ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-[#cd8c31]" />
+                      ) : (
+                        <Heart 
+                          className={cn(
+                            "w-6 h-6 transition-all",
+                            isSongFavorited(result)
+                              ? "fill-[#cd8c31] text-[#cd8c31]"
+                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                          )} 
+                        />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -13654,16 +13715,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                     <button
                       onClick={handleToggleCurrentStudioFavorite}
-                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart"
+                      disabled={isTogglingCurrentStudioFavorite}
+                      title={isTogglingCurrentStudioFavorite ? '저장 상태 처리 중' : undefined}
+                      className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart disabled:cursor-wait disabled:opacity-70"
                     >
-                      <Heart 
-                        className={cn(
-                          "w-5 h-5 transition-all",
-                          isSongFavorited(result)
-                            ? "fill-[#cd8c31] text-[#cd8c31]"
-                            : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
-                        )} 
-                      />
+                      {isTogglingCurrentStudioFavorite ? (
+                        <Loader2 className="w-5 h-5 animate-spin text-[#cd8c31]" />
+                      ) : (
+                        <Heart 
+                          className={cn(
+                            "w-5 h-5 transition-all",
+                            isSongFavorited(result)
+                              ? "fill-[#cd8c31] text-[#cd8c31]"
+                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                          )} 
+                        />
+                      )}
                     </button>
                   </div>
                 </div>

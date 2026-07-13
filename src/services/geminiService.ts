@@ -10965,6 +10965,23 @@ function hasDirectThemeOrMoodInput(params: GenerateSongParams): boolean {
   return Boolean(getDirectThemeInputText(params) || getDirectMoodInputText(params) || String(params.userInput || "").trim());
 }
 
+function hasExplicitNonKeywordStorySource(params: GenerateSongParams): boolean {
+  return Boolean(
+    String(params.userInput || '').trim() ||
+    getDirectThemeInputText(params) ||
+    getDirectMoodInputText(params) ||
+    hasSituation(params.situation) ||
+    (params.isLyricMode && String(params.lyricDraft || '').trim())
+  );
+}
+
+function shouldUseKeywordSharedSceneBlueprint(params: GenerateSongParams): boolean {
+  // The shared blueprint exists only to turn selected keyword cards into one
+  // coherent scene. Explicit user sources already contain their own direction
+  // and must keep full freedom instead of being compressed into that blueprint.
+  return !hasExplicitNonKeywordStorySource(params);
+}
+
 function directTextAllowsCueFamily(params: GenerateSongParams, family: "message" | "confession" | "breakup" | "street" | "ordinaryUnsaid"): boolean {
   const raw = rawDirectThemeMoodText(params).toLowerCase();
   if (!raw) return false;
@@ -11004,6 +11021,9 @@ function directConflictFallback(params: GenerateSongParams): string {
 function buildDirectStoryPromptProfile(params: GenerateSongParams): DirectStoryPromptProfile {
   const raw = rawDirectStoryPriorityText(params);
   if (!raw) return { strength: "none", scene: "", conflict: "", instrumentCues: [], arrangementCues: [], genreAccent: "" };
+  if (!isGenerationEngineV2(params) && hasExplicitNonKeywordStorySource(params)) {
+    return { strength: "none", scene: "", conflict: "", instrumentCues: [], arrangementCues: [], genreAccent: "" };
+  }
 
   // Do not hard-code topic-specific fallback scenes here. Direct text can be
   // personal, strange, tiny, or very specific, so the production prompt should
@@ -11038,7 +11058,66 @@ function getDirectStoryArrangementCues(params: GenerateSongParams): string[] {
   return profile.arrangementCues.filter(Boolean).slice(0, profile.strength === "strong" ? 3 : 2);
 }
 
+function buildExplicitSourceScenePlan(params: GenerateSongParams, detailLayer = ''): InternalScenePlan {
+  const hasDirectorNote = Boolean(String(params.userInput || '').trim());
+  const hasLyricDraft = Boolean(params.isLyricMode && String(params.lyricDraft || '').trim());
+  const situationActive = hasSituation(params.situation);
+  const directorProfile = hasDirectorNote
+    ? buildFreeTextDirectorProfile(detailLayer || String(params.userInput || ''))
+    : null;
+  const directorAtmosphereIntent = buildDirectorSeasoningAtmosphereIntent(params);
+
+  const situationAtmosphere = situationActive ? buildSituationAtmosphere(params) : '';
+  const directorAtmosphere = stripRemainingKoreanForProductionPrompt(directorProfile?.mood || '');
+  const interpretedAtmosphere = buildThemeMoodInterpretation(params).atmosphereCue || '';
+  const emotion = cleanScenePlanPhrase(
+    directorAtmosphereIntent?.emotion
+      || buildDirectMoodAngle(params)
+      || buildCompactMoodAngle(params)
+      || buildPromptIntent(params).atmosphereTone
+      || buildPromptIntent(params).emotionalCore
+      || 'emotionally specific',
+    96,
+  );
+
+  const scene = cleanScenePlanPhrase(
+    situationAtmosphere
+      || (!isGenericAtmosphereFallbackLine(directorAtmosphere) ? directorAtmosphere : '')
+      || interpretedAtmosphere
+      || deriveIntentScene(params)
+      || emotion,
+    170,
+  );
+  const atmosphereCue = normalizeAtmospherePromptLine(scene || emotion);
+
+  const movementCandidates = dedupePromptParts([
+    ...splitArrangementParts(deriveIntentArrangement(params).replace(/\band\b/g, ',')),
+    ...buildArrangementStabilizerParts(params),
+  ], 12)
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .filter((part) => !isInstrumentPerformanceArrangementPart(part))
+    .filter((part) => !isGenericArrangementPart(part));
+
+  return {
+    hasDirectorNote,
+    hasLyricDraft,
+    scene,
+    detail: '',
+    emotion,
+    conflict: '',
+    vocalPoint: '',
+    chorusCore: '',
+    atmosphereCue,
+    arrangementCues: movementCandidates.slice(0, 4),
+    lyricDirection: 'Preserve the explicit source freely; do not compress it into a shared scene blueprint.',
+  };
+}
+
 function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): InternalScenePlan {
+  if (!isGenerationEngineV2(params) && !shouldUseKeywordSharedSceneBlueprint(params)) {
+    return buildExplicitSourceScenePlan(params, detailLayer);
+  }
   const hasDirectorNote = Boolean((params.userInput || '').trim());
   const hasLyricDraft = Boolean(params.isLyricMode && (params.lyricDraft || '').trim());
 
@@ -11169,8 +11248,42 @@ Never output internal placeholders such as "actual place implied by the source t
 - Lyrics must follow this plan as character speech with character behavior, varied emotional angle, and lived details, not as explanations of mood/style/sound keywords. Use one coherent angle per song, and avoid defaulting to the most common phone/room/coffee/message scene unless the user selected or wrote it.`;
 }
 
+function buildExplicitSourceFreedomInstruction(params: GenerateSongParams, detailLayer = ''): string {
+  const userNote = String(params.userInput || '').trim();
+  const directTheme = getDirectThemeInputText(params);
+  const directMood = getDirectMoodInputText(params);
+  const lyricDraft = params.isLyricMode ? String(params.lyricDraft || '').trim() : '';
+  const situationContext = hasSituation(params.situation)
+    ? buildSituationRenderingContext(params.situation)
+    : '';
+  const productionShapeOnly = hasProductionShapeOnlyDirectorNote(params);
+
+  return `EXPLICIT SOURCE MODE (MANDATORY — NO SHARED SCENE BLUEPRINT):
+- Do NOT create, infer, summarize, or force a shared Scene Blueprint for this generation.
+- Preserve the user's explicit source at full freedom and full priority. Do not compress unusual characters, places, actions, relationships, jokes, production goals, or story details into a generic scene.
+- Free-text director note is a top-level command for genre, structure, vocal attitude, hook design, arrangement, lyric tone, and story only when the note itself asks for story.
+- Direct theme/mood input is an explicit creative source. Interpret it naturally and broadly; do not replace it with selected keyword-card defaults.
+- Storyboard/Situation is already a designed scenario. Use its characters, relationship, speech attitude, development, and details directly. Do not rebuild it through an automatic keyword scene.
+- A lyric draft remains the primary lyric source in correction/preserve mode. Do not make the production prompt rewrite or narrow it.
+- Selected keyword cards may support the explicit source, but they must never override or shrink it.
+- The production prompt and lyrics may express the same explicit source in role-appropriate ways, but they are NOT required to copy one compressed hidden scene. Keep consistency with explicit facts while allowing natural creative expansion.
+- Never output internal labels or meta language such as source text, user core idea, blueprint, visible musical moment, central voice, or compact emotional space.
+${productionShapeOnly ? '- This command is production-shaped. Do not invent a literal place, object, or plot unless the user wrote one.' : '- When the explicit source contains a concrete scene, preserve its actual characters, place, action, desire, and conflict instead of generalizing them.'}
+
+EXPLICIT SOURCES:
+- Director note: ${userNote || 'None'}
+- Direct theme: ${directTheme || 'None'}
+- Direct mood: ${directMood || 'None'}
+- Storyboard/Situation: ${situationContext || 'None'}
+- Lyric draft source: ${lyricDraft || 'None'}
+- Additional director detail: ${String(detailLayer || '').trim() || 'None'}`;
+}
+
 function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
   if (isGenerationEngineV2(params)) return buildLegacyV2ScenePlanInstruction(params, detailLayer);
+  if (!shouldUseKeywordSharedSceneBlueprint(params)) {
+    return buildExplicitSourceFreedomInstruction(params, detailLayer);
+  }
   const plan = buildInternalScenePlan(params, detailLayer);
   const bp = buildSceneBlueprint(params);
   const freeTextPrimary = isFreeTextPrimaryMode(params);
@@ -12085,7 +12198,9 @@ function isGenericVocalFallbackLine(value: string): boolean {
 
 function reconstructStrongVocalsLine(params: GenerateSongParams, originalLine = ""): string {
   const info = getVocalModeInfo(params.vocal);
-  const bp = buildSceneBlueprint(params);
+  const bp = (isGenerationEngineV2(params) || shouldUseKeywordSharedSceneBlueprint(params))
+    ? buildSceneBlueprint(params)
+    : null;
   
   // 1. Determine formation (solo / multi / duet) and gender
   const isSolo = info.isSolo;
@@ -12109,7 +12224,7 @@ function reconstructStrongVocalsLine(params: GenerateSongParams, originalLine = 
   const genreDefault = compactVocalCueAfterSubject(getGenreDefaultVocalPhrase(params)) || "clear melodic phrasing";
   
   // 3. Scene Blueprint vocalPoint
-  const bpVocalPoint = bp.vocalPoint ? bp.vocalPoint.replace(/^dual\s+conversational\s+roles;\s*/i, '').replace(/^natural\s+emotional\s+delivery\s+that\s+/i, '') : "";
+  const bpVocalPoint = bp?.vocalPoint ? bp.vocalPoint.replace(/^dual\s+conversational\s+roles;\s*/i, '').replace(/^natural\s+emotional\s+delivery\s+that\s+/i, '') : "";
 
   // 4. Emotional cue from moods/theme
   const moods = getMoodWordsForMusicDirection(params).map(m => stripRemainingKoreanForProductionPrompt(m).trim()).filter(Boolean);
@@ -16253,17 +16368,22 @@ function isBrokenFinalPromptPhrase(value: string): boolean {
 
 function buildNaturalDirectAtmosphereFallback(params: GenerateSongParams): string {
   if (!isGenerationEngineV2(params)) {
+    if (hasSituation(params.situation)) {
+      return normalizeAtmospherePromptLine(buildSituationAtmosphere(params));
+    }
     const mood = cleanupPromptTail(
       buildDirectMoodAngle(params)
         || buildCompactMoodAngle(params)
         || buildPromptIntent(params).atmosphereTone
+        || buildPromptIntent(params).emotionalCore
         || 'emotionally specific',
     );
+    const scene = cleanupPromptTail(deriveIntentScene(params));
     const space = compactSpaceAndTransitionCue(params);
     return normalizeAtmospherePromptLine(cleanupPromptTail([
-      `a concrete human moment shaped by ${mood}`,
-      space ? `with ${space}` : '',
-      'where one visible action carries the unresolved feeling',
+      scene || mood,
+      scene && mood && !scene.toLowerCase().includes(mood.toLowerCase()) ? `with ${mood}` : '',
+      space ? `and ${space}` : '',
     ].filter(Boolean).join(' ')));
   }
 
@@ -20619,6 +20739,9 @@ function rescueBrokenDirectAtmosphereLine(value: string, params: GenerateSongPar
   }
 
   if (hasDirectThemeOrMoodInput(params)) {
+    if (!isGenerationEngineV2(params) && hasExplicitNonKeywordStorySource(params)) {
+      return buildNaturalDirectAtmosphereFallback(params);
+    }
     const userScene = buildUserTextCoreScene(params);
     const scene = cleanScenePlanPhrase(userScene?.scene || deriveIntentScene(params) || 'the user\'s direct scene', 95);
     const mood = cleanScenePlanPhrase(

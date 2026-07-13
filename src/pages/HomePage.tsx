@@ -2,15 +2,18 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Wand2, Library, Heart, User as UserIcon, ArrowRight, Music2, Mic2 } from 'lucide-react';
 import type { User } from 'firebase/auth';
+import type { NavigationMenuVisibility } from '../constants/navigationVisibility';
 
 type HomePageProps = {
   user: User | null;
   onLogin: () => void;
   isLoggingIn?: boolean;
+  menuVisibility: NavigationMenuVisibility;
 };
 
 const quickCards = [
   {
+    key: 'studio' as const,
     title: '스튜디오',
     desc: '가사와 5단 프롬프트를 설계하는 메인 작업실',
     path: '/studio',
@@ -18,6 +21,7 @@ const quickCards = [
     accent: 'from-[#D8B88C]/90 via-[#A47048]/88 to-[#965B77]/78',
   },
   {
+    key: 'musicNote' as const,
     title: '뮤직노트',
     desc: '저장한 가사, 프롬프트, 설정값을 다시 꺼내 쓰기',
     path: '/history',
@@ -25,6 +29,7 @@ const quickCards = [
     accent: 'from-[#AC6B69]/88 to-[#965B77]/82',
   },
   {
+    key: 'library' as const,
     title: '라이브러리',
     desc: 'Music API로 만든 곡과 재생 가능한 URL 확인',
     path: '/suno-library',
@@ -32,6 +37,7 @@ const quickCards = [
     accent: 'from-[#877198]/82 to-[#5E7FA8]/78',
   },
   {
+    key: 'myPage' as const,
     title: '마이페이지',
     desc: 'API 연결, 플랜, 사용량, 개인 설정 관리',
     path: '/my-page',
@@ -40,7 +46,7 @@ const quickCards = [
   },
 ];
 
-export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) {
+export default function HomePage({ user, onLogin, isLoggingIn, menuVisibility }: HomePageProps) {
   const navigate = useNavigate();
 
   const go = (path: string) => {
@@ -72,26 +78,32 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
                 떠오른 장면을 정리하고, 다시 꺼내 쓰기 좋은 제작 데이터로 남겨둡니다.
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <button
-                  type="button"
-                  onClick={() => go('/studio')}
-                  disabled={isLoggingIn}
-                  className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#D56C7F] px-5 py-3 text-sm font-black text-white shadow-[0_16px_42px_rgba(164,112,72,0.22)] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
-                >
-                  스튜디오 시작하기
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => go('/history')}
-                  disabled={isLoggingIn}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-5 py-3 text-sm font-black text-white/85 transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-70"
-                >
-                  <Heart className="h-4 w-4 text-[#D8B88C]" />
-                  뮤직노트 보기
-                </button>
-              </div>
+              {(menuVisibility.studio || menuVisibility.musicNote) && (
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  {menuVisibility.studio && (
+                    <button
+                      type="button"
+                      onClick={() => go('/studio')}
+                      disabled={isLoggingIn}
+                      className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#D56C7F] px-5 py-3 text-sm font-black text-white shadow-[0_16px_42px_rgba(164,112,72,0.22)] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+                    >
+                      스튜디오 시작하기
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+                  )}
+                  {menuVisibility.musicNote && (
+                    <button
+                      type="button"
+                      onClick={() => go('/history')}
+                      disabled={isLoggingIn}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-5 py-3 text-sm font-black text-white/85 transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-70"
+                    >
+                      <Heart className="h-4 w-4 text-[#D8B88C]" />
+                      뮤직노트 보기
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -116,14 +128,16 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
                   <span className="rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-black text-zinc-200">마이페이지 확인</span>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => go('/my-page')}
-                disabled={isLoggingIn}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#A47048]/24 bg-[#A47048]/12 px-4 py-3 text-xs font-black text-[#D8B88C] transition-all hover:bg-[#A47048]/18 disabled:cursor-wait disabled:opacity-70"
-              >
-                API / 플랜 관리
-              </button>
+              {menuVisibility.myPage && (
+                <button
+                  type="button"
+                  onClick={() => go('/my-page')}
+                  disabled={isLoggingIn}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#A47048]/24 bg-[#A47048]/12 px-4 py-3 text-xs font-black text-[#D8B88C] transition-all hover:bg-[#A47048]/18 disabled:cursor-wait disabled:opacity-70"
+                >
+                  API / 플랜 관리
+                </button>
+              )}
             </div>
 
             <div className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-[#F7D66E]/8 via-[#A47048]/10 to-[#5E7FA8]/8 p-5 backdrop-blur-xl">
@@ -141,7 +155,7 @@ export default function HomePage({ user, onLogin, isLoggingIn }: HomePageProps) 
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {quickCards.map((card) => {
+          {quickCards.filter((card) => menuVisibility[card.key]).map((card) => {
             const Icon = card.icon;
             return (
               <button

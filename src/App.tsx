@@ -280,6 +280,15 @@ import {
 import { VOCAL_TONES } from './constants/vocalTones';
 import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
+import {
+  getFirstEnabledNavigationPath,
+  normalizeNavigationVisibilitySettings,
+  readStoredNavigationVisibilitySettings,
+  type NavigationMenuKey,
+  type NavigationMenuVisibility,
+  type NavigationVisibilitySettings,
+  writeStoredNavigationVisibilitySettings,
+} from './constants/navigationVisibility';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
 
@@ -2922,6 +2931,65 @@ const formatGeneratedDateTimeLabel = (value: any): string => {
 import { GlobalPlayerProvider } from './contexts/GlobalPlayerContext';
 import GlobalPlayer from './components/GlobalPlayer';
 
+const CACHED_USER_ROLE_STORAGE_KEY = 'soridraw_cached_user_role_v1';
+
+type CachedUserRole = {
+  uid: string;
+  role: UserRole;
+};
+
+const readCachedUserRole = (): CachedUserRole | null => {
+  try {
+    const raw = localStorage.getItem(CACHED_USER_ROLE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const role = parsed?.role;
+    if (!parsed?.uid || !['free', 'basic', 'pro', 'admin'].includes(role)) return null;
+    return { uid: String(parsed.uid), role: role as UserRole };
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedUserRole = (uid: string, role: UserRole) => {
+  try {
+    localStorage.setItem(CACHED_USER_ROLE_STORAGE_KEY, JSON.stringify({ uid, role }));
+  } catch {
+    // Menu rendering can safely fall back to the server-confirmed role.
+  }
+};
+
+const clearCachedUserRole = () => {
+  try {
+    localStorage.removeItem(CACHED_USER_ROLE_STORAGE_KEY);
+  } catch {
+    // Ignore unavailable storage.
+  }
+};
+
+function FeatureUnavailablePage({ label, fallbackPath }: { label: string; fallbackPath: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return (
+    <main className="min-h-screen bg-[var(--bg-primary)] px-4 pt-28 text-[var(--text-primary)]">
+      <div className="mx-auto max-w-lg rounded-3xl bg-[var(--bg-secondary)] p-7 text-center shadow-sm">
+        <AlertTriangle className="mx-auto h-9 w-9 text-[#BBA8CA]" />
+        <h1 className="mt-4 text-xl font-black">{label} 기능이 현재 꺼져 있습니다.</h1>
+        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">관리자가 다시 켜면 이용할 수 있습니다.</p>
+        {fallbackPath !== location.pathname && (
+          <button
+            type="button"
+            onClick={() => navigate(fallbackPath, { replace: true })}
+            className="mt-5 rounded-2xl bg-[#BBA8CA] px-5 py-3 text-sm font-black text-[#1b161d] transition-all hover:brightness-110"
+          >
+            이용 가능한 메뉴로 이동
+          </button>
+        )}
+      </div>
+    </main>
+  );
+}
+
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
@@ -2932,7 +3000,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, showSunoLibraryMenu, sunoLibraryMenuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; showSunoLibraryMenu: boolean; sunoLibraryMenuAdminOnly: boolean; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, menuVisibility, sunoLibraryMenuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; menuVisibility: NavigationMenuVisibility; sunoLibraryMenuAdminOnly: boolean; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -2945,7 +3013,11 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
 
-  const canShowSunoLibraryMenu = showSunoLibraryMenu && (!sunoLibraryMenuAdminOnly || isAdminUser);
+  const canShowMenu = (key: NavigationMenuKey) => {
+    if (!menuVisibility[key]) return false;
+    if (key === 'library' && sunoLibraryMenuAdminOnly && !isAdminUser) return false;
+    return true;
+  };
 
   const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
     if (!user) {
@@ -2962,14 +3034,17 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     setIsProfileOpen(false);
   };
 
-  const topNavItems: Array<{ path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
-    { path: '/', label: '홈', icon: HomeIcon },
-    { path: '/studio', label: '스튜디오', icon: Zap },
-    { path: '/history', label: '뮤직노트', icon: HeartIcon },
-    ...(canShowSunoLibraryMenu ? [{ path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true }] : []),
-    { path: '/lab', label: '실험실', icon: FlaskConical },
-    { path: '/my-page', label: '마이페이지', icon: UserIcon },
-  ];
+  const topNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
+    { key: 'home', path: '/', label: '홈', icon: HomeIcon },
+    { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },
+    { key: 'musicNote', path: '/history', label: '뮤직노트', icon: HeartIcon },
+    { key: 'library', path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
+    { key: 'lab', path: '/lab', label: '실험실', icon: FlaskConical },
+    { key: 'myPage', path: '/my-page', label: '마이페이지', icon: UserIcon },
+  ].filter((item) => canShowMenu(item.key));
+  const preferredLandingPath = menuVisibility.home
+    ? '/'
+    : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -3022,44 +3097,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleHomeClick = () => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
-    if (location.pathname === '/') {
-      scrollToTop();
-    } else {
-      navigate('/');
-    }
-    setIsExpanded(false);
-  };
 
-  const handleStudioClick = () => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
-    if (location.pathname === '/studio') {
-      scrollToTop();
-    } else {
-      navigate('/studio');
-    }
-    setIsExpanded(false);
-  };
-
-  const handleHistoryClick = () => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
-    if (location.pathname === '/history') {
-      scrollToTop();
-    } else {
-      navigate('/history');
-    }
-    setIsExpanded(false);
-  };
 
   return (
     <>
@@ -3069,7 +3107,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
       >
         <button
           type="button"
-          onClick={() => goToTopNav('/')}
+          onClick={() => goToTopNav(preferredLandingPath)}
           className="flex min-w-[176px] shrink-0 items-center rounded-xl px-3 py-2 text-left transition-all hover:bg-white/[0.04]"
         >
           <span className="font-display text-[22px] font-black leading-none tracking-tight bg-gradient-to-r from-[#FFE08A] via-[#FF9A80] to-[#F06CA4] bg-clip-text text-transparent drop-shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
@@ -3223,75 +3261,27 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
-            <button
-              type="button"
-              onClick={handleHomeClick}
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                isActivePath('/') && "bg-[#FFB400]/18 text-[#FFB400]"
-              )}
-              aria-label="홈"
-              title="홈"
-            >
-              <HomeIcon className="h-6 w-6" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleStudioClick}
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                isActivePath('/studio') && "bg-[#FFB400]/18 text-[#FFB400]"
-              )}
-              aria-label="스튜디오"
-              title="스튜디오"
-            >
-              <Zap className="h-6 w-6" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleHistoryClick}
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                isActivePath('/history') && "bg-[#FFB400]/18 text-[#FFB400]"
-              )}
-              aria-label="뮤직노트"
-              title="뮤직노트"
-            >
-              <HeartIcon className="h-6 w-6" />
-            </button>
-
-            {canShowSunoLibraryMenu && (
-              <button
-                type="button"
-                onClick={() => goToTopNav('/suno-library', { clearSuno: true })}
-                className={cn(
-                  "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                  isActivePath('/suno-library') && "bg-[#FFB400]/18 text-[#FFB400]"
-                )}
-                aria-label="라이브러리"
-                title="라이브러리"
-              >
-                {sunoLibrarySignal && (
-                  <span className={`absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full ${sunoLibrarySignalDotClass}`} />
-                )}
-                <Library className="h-6 w-6" />
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={() => goToTopNav('/lab')}
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                isActivePath('/lab') && "bg-[#FFB400]/18 text-[#FFB400]"
-              )}
-              aria-label="실험실"
-              title="실험실"
-            >
-              <FlaskConical className="h-6 w-6" />
-            </button>
+            {topNavItems.filter((item) => item.key !== 'myPage').map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
+                  className={cn(
+                    "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                    isActivePath(item.path) && "bg-[#FFB400]/18 text-[#FFB400]"
+                  )}
+                  aria-label={item.label}
+                  title={item.label}
+                >
+                  {item.key === 'library' && sunoLibrarySignal && (
+                    <span className={`absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full ${sunoLibrarySignalDotClass}`} />
+                  )}
+                  <Icon className="h-6 w-6" />
+                </button>
+              );
+            })}
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -3307,8 +3297,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                     "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
                     isProfileOpen && "bg-[#FFB400]/18"
                   )}
-                  aria-label="마이페이지 메뉴"
-                  title="마이페이지"
+                  aria-label="계정 메뉴"
+                  title="계정 메뉴"
                 >
                   <img
                     src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
@@ -3353,18 +3343,20 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                         관리자메뉴
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigate('/my-page');
-                        setIsProfileOpen(false);
-                        setIsExpanded(false);
-                      }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
-                    >
-                      <UserIcon className="h-5 w-5" />
-                      마이페이지
-                    </button>
+                    {canShowMenu('myPage') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate('/my-page');
+                          setIsProfileOpen(false);
+                          setIsExpanded(false);
+                        }}
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                      >
+                        <UserIcon className="h-5 w-5" />
+                        마이페이지
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -3786,6 +3778,7 @@ function App() {
     }
   });
   const [userRole, setUserRole] = useState<UserRole>('free');
+  const [cachedUserRoleHint, setCachedUserRoleHint] = useState<CachedUserRole | null>(readCachedUserRole);
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
@@ -4487,25 +4480,11 @@ function App() {
   });
 
 
-  const NAVIGATION_VISIBILITY_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
-  const NAVIGATION_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
-  const readStoredSunoLibraryMenuVisibility = () => {
-    try {
-      return localStorage.getItem(NAVIGATION_VISIBILITY_STORAGE_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  };
-  const readStoredSunoLibraryMenuAdminOnly = () => {
-    try {
-      return localStorage.getItem(NAVIGATION_ADMIN_ONLY_STORAGE_KEY) === 'true';
-    } catch {
-      return false;
-    }
-  };
-
-  const [showSunoLibraryMenu, setShowSunoLibraryMenu] = useState(readStoredSunoLibraryMenuVisibility);
-  const [sunoLibraryMenuAdminOnly, setSunoLibraryMenuAdminOnly] = useState(readStoredSunoLibraryMenuAdminOnly);
+  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(
+    readStoredNavigationVisibilitySettings,
+  );
+  const menuVisibility = navigationVisibilitySettings.menuVisibility;
+  const sunoLibraryMenuAdminOnly = navigationVisibilitySettings.sunoLibraryMenuAdminOnly;
   const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
     hardBanTerms: [],
     softBanTerms: [],
@@ -4539,39 +4518,28 @@ function App() {
         const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));
         if (!isMounted) return;
 
-        const data = snapshot.exists() ? snapshot.data() : null;
-        const nextValue = data?.showSunoLibraryMenu === true;
-        const nextAdminOnly = data?.sunoLibraryMenuAdminOnly === true;
-        setShowSunoLibraryMenu(nextValue);
-        setSunoLibraryMenuAdminOnly(nextAdminOnly);
-
-        try {
-          localStorage.setItem(NAVIGATION_VISIBILITY_STORAGE_KEY, nextValue ? 'true' : 'false');
-          localStorage.setItem(NAVIGATION_ADMIN_ONLY_STORAGE_KEY, nextAdminOnly ? 'true' : 'false');
-        } catch {
-          // localStorage may be blocked in some browsers. Ignore and keep the app alive.
-        }
+        const nextSettings = normalizeNavigationVisibilitySettings(
+          snapshot.exists() ? snapshot.data() : null,
+          readStoredNavigationVisibilitySettings(),
+        );
+        setNavigationVisibilitySettings(nextSettings);
+        writeStoredNavigationVisibilitySettings(nextSettings);
       } catch (error) {
-        console.warn('Navigation visibility setting read failed. Keeping safe fallback:', error);
+        console.warn('Navigation visibility setting read failed. Keeping cached fallback:', error);
         if (isMounted) {
-          setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
-          setSunoLibraryMenuAdminOnly(readStoredSunoLibraryMenuAdminOnly());
+          setNavigationVisibilitySettings(readStoredNavigationVisibilitySettings());
         }
       }
     };
 
     const handleLocalVisibilityUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<{ showSunoLibraryMenu?: boolean; sunoLibraryMenuAdminOnly?: boolean }>).detail;
-      if (typeof detail?.showSunoLibraryMenu === 'boolean') {
-        setShowSunoLibraryMenu(detail.showSunoLibraryMenu);
-      }
-      if (typeof detail?.sunoLibraryMenuAdminOnly === 'boolean') {
-        setSunoLibraryMenuAdminOnly(detail.sunoLibraryMenuAdminOnly);
-      }
-      if (typeof detail?.showSunoLibraryMenu !== 'boolean' && typeof detail?.sunoLibraryMenuAdminOnly !== 'boolean') {
-        setShowSunoLibraryMenu(readStoredSunoLibraryMenuVisibility());
-        setSunoLibraryMenuAdminOnly(readStoredSunoLibraryMenuAdminOnly());
-      }
+      const detail = (event as CustomEvent<NavigationVisibilitySettings>).detail;
+      const nextSettings = normalizeNavigationVisibilitySettings(
+        detail,
+        readStoredNavigationVisibilitySettings(),
+      );
+      setNavigationVisibilitySettings(nextSettings);
+      writeStoredNavigationVisibilitySettings(nextSettings);
     };
 
     window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
@@ -5230,6 +5198,8 @@ function App() {
       setResult(null);
       setHistoryIndex(-1);
 
+      clearCachedUserRole();
+      setCachedUserRoleHint(null);
       console.log('[ForceLogout Client] handleLogout - Calling signOut(auth)');
       await signOut(auth);
       console.log('[ForceLogout Client] handleLogout - signOut(auth) successful');
@@ -5258,11 +5228,15 @@ function App() {
         });
       }
 
+      clearCachedUserRole();
+      setCachedUserRoleHint(null);
       await signOut(auth);
       navigate('/', { replace: true });
     } catch (error) {
       console.error("[ForceLogout Client] Error during forced logout:", error);
       // Even if updateDoc fails, we should try to sign out
+      clearCachedUserRole();
+      setCachedUserRoleHint(null);
       await signOut(auth).catch(() => {});
       navigate('/', { replace: true });
     }
@@ -6327,6 +6301,24 @@ const toggleCycleVariantSelection = (
   }, [unlockGlobalSearchScrollLock]);
   
   const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
+  const isAdminMenuUser = useMemo(() => {
+    if (isAdminUser) return true;
+    if (cachedUserRoleHint?.role !== 'admin') return false;
+    return !user || cachedUserRoleHint.uid === user.uid;
+  }, [cachedUserRoleHint, isAdminUser, user]);
+  const canAccessNavigationMenu = useCallback((key: NavigationMenuKey) => {
+    if (isAdminUser) return true;
+    if (!menuVisibility[key]) return false;
+    if (key === 'library' && sunoLibraryMenuAdminOnly) return false;
+    return true;
+  }, [isAdminUser, menuVisibility, sunoLibraryMenuAdminOnly]);
+  const navigationFallbackPath = useMemo(() => {
+    const accessibleVisibility: NavigationMenuVisibility = {
+      ...menuVisibility,
+      library: menuVisibility.library && !sunoLibraryMenuAdminOnly,
+    };
+    return getFirstEnabledNavigationPath(accessibleVisibility);
+  }, [menuVisibility, sunoLibraryMenuAdminOnly]);
   const effectiveUserTier: TagTier = useMemo(() => {
     if (userRole === 'admin' || userRole === 'pro') return 'pro';
     if (userRole === 'basic') return 'basic';
@@ -6481,6 +6473,13 @@ const toggleCycleVariantSelection = (
       }
 
       if (currentUser) {
+        const cachedRole = readCachedUserRole();
+        if (!cachedRole || cachedRole.uid !== currentUser.uid) {
+          setCachedUserRoleHint(null);
+          setUserRole('free');
+        } else {
+          setCachedUserRoleHint(cachedRole);
+        }
         const userRef = doc(db, 'users', currentUser.uid);
 
         const runInitialForceLogoutCheck = async () => {
@@ -6492,7 +6491,13 @@ const toggleCycleVariantSelection = (
             }
 
             const data = userSnap.data();
-            if (data.role) setUserRole(data.role as UserRole);
+            {
+              const verifiedRole = (data.role || 'free') as UserRole;
+              setUserRole(verifiedRole);
+              const roleCache = { uid: currentUser.uid, role: verifiedRole };
+              setCachedUserRoleHint(roleCache);
+              writeCachedUserRole(currentUser.uid, verifiedRole);
+            }
             if (data.accountStatus) {
               const status = data.accountStatus as AccountStatus;
               setUserStatus(status);
@@ -6518,7 +6523,13 @@ const toggleCycleVariantSelection = (
           console.log('[ForceLogout Client] User document snapshot received');
           if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data.role) setUserRole(data.role as UserRole);
+            {
+              const verifiedRole = (data.role || 'free') as UserRole;
+              setUserRole(verifiedRole);
+              const roleCache = { uid: currentUser.uid, role: verifiedRole };
+              setCachedUserRoleHint(roleCache);
+              writeCachedUserRole(currentUser.uid, verifiedRole);
+            }
             setUserLyricClicheGuard({
               hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
               softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
@@ -6545,6 +6556,9 @@ const toggleCycleVariantSelection = (
           } else {
             // Initial signup fallback
             setUserRole('free');
+            const roleCache = { uid: currentUser.uid, role: 'free' as UserRole };
+            setCachedUserRoleHint(roleCache);
+            writeCachedUserRole(currentUser.uid, 'free');
             setUserStatus('active');
             setUserLyricClicheGuard(null);
           }
@@ -6754,6 +6768,8 @@ const toggleCycleVariantSelection = (
         favoritePaginationLoadingRef.current = false;
         favoritePaginationFallbackModeRef.current = false;
         setIsFavoritesLoading(false);
+        clearCachedUserRole();
+        setCachedUserRoleHint(null);
         setUserRole('free');
       }
     });
@@ -12323,15 +12339,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} showSunoLibraryMenu={showSunoLibraryMenu} sunoLibraryMenuAdminOnly={sunoLibraryMenuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} menuVisibility={menuVisibility} sunoLibraryMenuAdminOnly={sunoLibraryMenuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       <Routes>
         <Route path="/" element={
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
-            <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} />
-          </Suspense>
+          canAccessNavigationMenu('home') ? (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
+              <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} menuVisibility={menuVisibility} />
+            </Suspense>
+          ) : (
+            <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
+          )
         } />
         <Route path="/studio" element={
+          canAccessNavigationMenu('studio') ? (
           <>
 
               {/* Header */}
@@ -14096,11 +14117,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
             </main>
           </>
+          ) : (
+            <FeatureUnavailablePage label="스튜디오" fallbackPath={navigationFallbackPath} />
+          )
         } />
         <Route
           path="/history"
           element={
-            !isAuthReady ? (
+            !canAccessNavigationMenu('musicNote') ? (
+              <FeatureUnavailablePage label="뮤직노트" fallbackPath={navigationFallbackPath} />
+            ) : !isAuthReady ? (
               <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
                 <div className="flex flex-col items-center gap-4">
                   <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
@@ -14134,17 +14160,27 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/library" element={<Navigate to="/history" replace />} />
         
         <Route path="/suno-library" element={
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
-            <SunoLibraryPageLazy appUser={user || auth.currentUser} />
-          </Suspense>
+          canAccessNavigationMenu('library') ? (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
+              <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+            </Suspense>
+          ) : (
+            <FeatureUnavailablePage label="라이브러리" fallbackPath={navigationFallbackPath} />
+          )
         } />
         <Route path="/suno-api-settings" element={
-          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
-            <SunoApiSettingsPageLazy />
-          </Suspense>
+          canAccessNavigationMenu('myPage') ? (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
+              <SunoApiSettingsPageLazy />
+            </Suspense>
+          ) : (
+            <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+          )
         } />
         <Route path="/my-page" element={
-          user ? (
+          !canAccessNavigationMenu('myPage') ? (
+            <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+          ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
               <MyPageLazy />
             </Suspense>
@@ -14153,7 +14189,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           )
         } />
         <Route path="/lab" element={
-          user ? (
+          !canAccessNavigationMenu('lab') ? (
+            <FeatureUnavailablePage label="실험실" fallbackPath={navigationFallbackPath} />
+          ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-[#BBA8CA] animate-spin" /></div>}>
               <LabPageLazy />
             </Suspense>

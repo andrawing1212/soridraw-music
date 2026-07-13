@@ -1,24 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Loader2, ShieldAlert, SlidersHorizontal } from 'lucide-react';
+import { FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { db } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
+import {
+  DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
+  getNavigationFirestorePayload,
+  normalizeNavigationVisibilitySettings,
+  type NavigationMenuKey,
+  type NavigationVisibilitySettings,
+  readStoredNavigationVisibilitySettings,
+  writeStoredNavigationVisibilitySettings,
+} from '../constants/navigationVisibility';
 
 const NAVIGATION_VISIBILITY_DOC = doc(db, 'app_settings', 'navigation_visibility');
 const LYRIC_CLICHE_GUARD_DOC = doc(db, 'app_settings', 'lyric_cliche_guard');
-const LIBRARY_MENU_STORAGE_KEY = 'soridraw_navigation_show_suno_library_menu';
-const LIBRARY_ADMIN_ONLY_STORAGE_KEY = 'soridraw_navigation_suno_library_admin_only';
-
-type NavigationVisibilitySettings = {
-  showSunoLibraryMenu: boolean;
-  sunoLibraryMenuAdminOnly: boolean;
-};
-
-const DEFAULT_SETTINGS: NavigationVisibilitySettings = {
-  showSunoLibraryMenu: false,
-  sunoLibraryMenuAdminOnly: false,
-};
 
 type LyricClicheDraft = {
   hardBanText: string;
@@ -33,7 +30,7 @@ const DEFAULT_CLICHE_DRAFT: LyricClicheDraft = {
 const parseTerms = (value: string) => normalizeClicheTermList(value, 120);
 const formatTerms = (value: unknown) => normalizeClicheTermList(value, 120).join('\n');
 
-type SavingTarget = 'visibility' | 'adminOnly' | null;
+type SavingTarget = NavigationMenuKey | 'libraryAdminOnly' | null;
 
 function ToggleSwitch({
   isOn,
@@ -67,7 +64,7 @@ function ToggleSwitch({
 }
 
 export default function AdminAppSettingsPage() {
-  const [settings, setSettings] = useState<NavigationVisibilitySettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<NavigationVisibilitySettings>(readStoredNavigationVisibilitySettings);
   const [isLoading, setIsLoading] = useState(true);
   const [savingTarget, setSavingTarget] = useState<SavingTarget>(null);
   const [message, setMessage] = useState('');
@@ -85,14 +82,13 @@ export default function AdminAppSettingsPage() {
         if (!isMounted) return;
 
         const data = snapshot.exists() ? snapshot.data() : null;
-        setSettings({
-          showSunoLibraryMenu: data?.showSunoLibraryMenu === true,
-          sunoLibraryMenuAdminOnly: data?.sunoLibraryMenuAdminOnly === true,
-        });
+        const nextSettings = normalizeNavigationVisibilitySettings(data, readStoredNavigationVisibilitySettings());
+        setSettings(nextSettings);
+        writeStoredNavigationVisibilitySettings(nextSettings);
       } catch (error) {
         console.error('Failed to load app settings:', error);
         if (isMounted) {
-          setSettings(DEFAULT_SETTINGS);
+          setSettings(DEFAULT_NAVIGATION_VISIBILITY_SETTINGS);
           setMessage('설정값을 불러오지 못했습니다. Firestore 권한을 확인해주세요.');
         }
       } finally {
@@ -144,20 +140,15 @@ export default function AdminAppSettingsPage() {
       await setDoc(
         NAVIGATION_VISIBILITY_DOC,
         {
-          ...nextSettings,
+          ...getNavigationFirestorePayload(nextSettings),
           updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
-      try {
-        localStorage.setItem(LIBRARY_MENU_STORAGE_KEY, nextSettings.showSunoLibraryMenu ? 'true' : 'false');
-        localStorage.setItem(LIBRARY_ADMIN_ONLY_STORAGE_KEY, nextSettings.sunoLibraryMenuAdminOnly ? 'true' : 'false');
-        window.dispatchEvent(new CustomEvent('soridraw:navigation-visibility-updated', {
-          detail: nextSettings,
-        }));
-      } catch {
-        // Ignore localStorage errors. Firestore remains the source of truth.
-      }
+      writeStoredNavigationVisibilitySettings(nextSettings);
+      window.dispatchEvent(new CustomEvent('soridraw:navigation-visibility-updated', {
+        detail: nextSettings,
+      }));
       setMessage(successMessage);
     } catch (error) {
       console.error('Failed to save app settings:', error);
@@ -173,20 +164,26 @@ export default function AdminAppSettingsPage() {
     const nextSettings = { ...settings, sunoLibraryMenuAdminOnly: nextValue };
     persistSettings(
       nextSettings,
-      'adminOnly',
+      'libraryAdminOnly',
       nextValue
-        ? '라이브러리 메뉴를 관리자에게만 보이게 설정했습니다.'
-        : '라이브러리 메뉴의 관리자 전용 제한을 해제했습니다.'
+        ? '라이브러리를 관리자에게만 보이게 설정했습니다.'
+        : '라이브러리의 관리자 전용 제한을 해제했습니다.'
     );
   };
 
-  const updateLibraryVisibility = () => {
-    const nextValue = !settings.showSunoLibraryMenu;
-    const nextSettings = { ...settings, showSunoLibraryMenu: nextValue };
+  const updateMenuVisibility = (key: NavigationMenuKey, label: string) => {
+    const nextValue = !settings.menuVisibility[key];
+    const nextSettings: NavigationVisibilitySettings = {
+      ...settings,
+      menuVisibility: {
+        ...settings.menuVisibility,
+        [key]: nextValue,
+      },
+    };
     persistSettings(
       nextSettings,
-      'visibility',
-      nextValue ? '라이브러리 메뉴를 보이게 했습니다.' : '라이브러리 메뉴를 숨겼습니다.'
+      key,
+      nextValue ? `${label} 메뉴를 켰습니다.` : `${label} 메뉴를 껐습니다.`
     );
   };
 
@@ -218,8 +215,21 @@ export default function AdminAppSettingsPage() {
     }
   };
 
-  const isSavingAdminOnly = savingTarget === 'adminOnly';
-  const isSavingVisibility = savingTarget === 'visibility';
+  const isSavingAdminOnly = savingTarget === 'libraryAdminOnly';
+  const menuRows: Array<{
+    key: NavigationMenuKey;
+    label: string;
+    description: string;
+    icon: React.ElementType;
+  }> = [
+    { key: 'home', label: '홈', description: '메인 홈 화면과 홈 메뉴를 표시합니다.', icon: Home },
+    { key: 'studio', label: '스튜디오', description: '가사·프롬프트 제작 화면을 표시합니다.', icon: Zap },
+    { key: 'musicNote', label: '뮤직노트', description: '저장한 곡과 제작 데이터를 관리하는 화면을 표시합니다.', icon: Heart },
+    { key: 'library', label: '라이브러리', description: 'Music API 생성곡과 재생 목록 화면을 표시합니다.', icon: Library },
+    { key: 'lab', label: '실험실', description: '실험 기능과 개발 중인 도구 화면을 표시합니다.', icon: FlaskConical },
+    { key: 'myPage', label: '마이페이지', description: '회원정보·API·플랜·개인 설정 화면을 표시합니다.', icon: UserIcon },
+  ];
+
   return (
     <AdminPageLayout
       title="앱 설정"
@@ -227,33 +237,52 @@ export default function AdminAppSettingsPage() {
     >
       <div className="space-y-5">
         <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 md:p-6 shadow-sm">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
-                <SlidersHorizontal className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-base font-black text-[var(--text-primary)]">라이브러리 메뉴</h3>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  메뉴 표시가 ON이면 상단 메뉴에 노출됩니다. 관리자만 ON이면 관리자 계정에만 보입니다.
-                </p>
-              </div>
+          <div className="mb-5 flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
+              <SlidersHorizontal className="h-5 w-5" />
             </div>
+            <div className="min-w-0">
+              <h3 className="text-base font-black text-[var(--text-primary)]">상단 메뉴·페이지 표시</h3>
+              <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+                OFF로 설정하면 일반 사용자 메뉴에서 숨겨지고 해당 주소의 페이지 진입도 차단됩니다. 관리자는 점검을 위해 직접 주소로 진입할 수 있습니다.
+              </p>
+            </div>
+          </div>
 
-            <div className="flex shrink-0 items-center justify-end gap-5">
-              <ToggleSwitch
-                label="관리자만"
-                isOn={settings.sunoLibraryMenuAdminOnly}
-                isSaving={isLoading || isSavingAdminOnly}
-                onClick={updateAdminOnlyVisibility}
-              />
-              <ToggleSwitch
-                label="메뉴 표시"
-                isOn={settings.showSunoLibraryMenu}
-                isSaving={isLoading || isSavingVisibility}
-                onClick={updateLibraryVisibility}
-              />
-            </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {menuRows.map((item) => {
+              const Icon = item.icon;
+              const isLibrary = item.key === 'library';
+              return (
+                <div key={item.key} className="flex items-center justify-between gap-4 rounded-2xl bg-black/15 px-4 py-4">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-[#BBA8CA]">
+                      <Icon className="h-[18px] w-[18px]" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-black text-[var(--text-primary)]">{item.label}</h4>
+                      <p className="mt-1 text-[11px] leading-relaxed text-[var(--text-secondary)]">{item.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-4">
+                    {isLibrary && (
+                      <ToggleSwitch
+                        label="관리자만"
+                        isOn={settings.sunoLibraryMenuAdminOnly}
+                        isSaving={isLoading || isSavingAdminOnly}
+                        onClick={updateAdminOnlyVisibility}
+                      />
+                    )}
+                    <ToggleSwitch
+                      label="메뉴 표시"
+                      isOn={settings.menuVisibility[item.key]}
+                      isSaving={isLoading || savingTarget === item.key}
+                      onClick={() => updateMenuVisibility(item.key, item.label)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

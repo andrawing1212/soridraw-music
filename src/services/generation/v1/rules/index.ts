@@ -1,9 +1,10 @@
 /** V1 engine-specific rules are kept in this folder. */
 export {
+  buildV1StoryContextInstruction,
   buildV1SharedSceneAlignmentInstruction,
   mergeV1ForcedVocalIdentityWithGeneratedPerformance,
 } from './sharedSceneAlignment';
-export type { V1SharedSceneAlignmentContext } from './sharedSceneAlignment';
+export type { V1StoryContextInput, V1SharedSceneAlignmentContext } from './sharedSceneAlignment';
 
 export {
   buildV1ArrangementSectionPlanInstruction,

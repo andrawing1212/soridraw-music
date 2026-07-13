@@ -38,8 +38,7 @@ import {
   buildRecentTitleAntiRepeatInstruction,
   findLyricHardBanViolations,
 } from "../constants/lyricClicheGuard";
-import { buildLyricStoryBriefInstruction } from "./lyricStoryBrief";
-import { buildGlobalMoodDistributionInstruction, buildSongCreativeBriefInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
+import { buildGlobalMoodDistributionInstruction, applyGlobalMoodDirectiveToProductionPrompt } from "./songCreativeBrief";
 import { resolveMoodRoleTranslations, resolveMoodRoleValues, formatMoodRoleTranslationContext } from "./moodRoleTranslator";
 import {
   buildV1ArrangementSectionPlanInstruction,
@@ -49,7 +48,7 @@ import {
   ensureV1ArrangementSectionCoverage,
   isV1SectionStructuredArrangement,
   normalizeV1SectionStructuredArrangement,
-  buildV1SharedSceneAlignmentInstruction,
+  buildV1StoryContextInstruction,
   mergeV1ForcedVocalIdentityWithGeneratedPerformance,
 } from "./generation/v1/rules";
 
@@ -11113,7 +11112,7 @@ function buildExplicitSourceScenePlan(params: GenerateSongParams, detailLayer = 
     chorusCore: '',
     atmosphereCue,
     arrangementCues: movementCandidates.slice(0, 4),
-    lyricDirection: 'Preserve the explicit source freely; do not compress it into a shared scene blueprint.',
+    lyricDirection: 'Preserve the explicit source freely inside one Story Context; do not compress a broad situation into a compulsory visual scene.',
   };
 }
 
@@ -11173,11 +11172,17 @@ function buildInternalScenePlan(params: GenerateSongParams, detailLayer = ''): I
     .filter((part) => !isGenericArrangementPart(part));
 
   const arrangementCues = movementCandidates.slice(0, 4);
-  const lyricDirection = cleanupPromptTail([
-    'Use the one shared hidden Scene Blueprint inferred from the story source',
-    'keep the same speaker, place boundary, visible action, desire, conflict, and chorus intention in prompt and lyrics',
-    'show the feeling through speech, behavior, timing, and one believable lived detail',
-  ].join('. '));
+  const lyricDirection = cleanupPromptTail(isGenerationEngineV2(params)
+    ? [
+        'Use the one shared hidden Scene Blueprint inferred from the story source',
+        'keep the same speaker, place boundary, visible action, desire, conflict, and chorus intention in prompt and lyrics',
+        'show the feeling through speech, behavior, timing, and one believable lived detail',
+      ].join('. ')
+    : [
+        'Use the one shared V1 Story Context inferred from the complete story source',
+        'preserve its natural scope whether it is a scene, wider situation, relationship, time progression, emotional condition, or abstract image',
+        'keep prompt, title, and lyrics inside that context without compulsory missing-field invention',
+      ].join('. '));
 
   return {
     hasDirectorNote,
@@ -11282,10 +11287,10 @@ EXPLICIT SOURCES:
 - Additional director detail: ${String(detailLayer || '').trim() || 'None'}`;
 }
 
-function buildScenePlanInstruction(params: GenerateSongParams, detailLayer = ''): string {
+function buildStoryContextInstruction(params: GenerateSongParams, detailLayer = ''): string {
   if (isGenerationEngineV2(params)) return buildLegacyV2ScenePlanInstruction(params, detailLayer);
 
-  return buildV1SharedSceneAlignmentInstruction({
+  return buildV1StoryContextInstruction({
     directorNote: String(params.userInput || '').trim(),
     directTheme: getDirectThemeInputText(params),
     directMood: getDirectMoodInputText(params),
@@ -12784,7 +12789,7 @@ function buildSectionCueMusicalVarietyInstruction(params: GenerateSongParams, ex
 
   return `SECTION TAG MUSICAL DIRECTION RULE (MANDATORY):
 - Section tags are not only structure markers. They must act as compact musical direction for Suno/Udio.
-- Keep the selected section order stable, but interpret every section from the final prompt, shared scene, genre, style, selected sound, mood, vocal character, and story development.
+- Keep the selected section order stable, but interpret every section from the final prompt, Story Context, genre, style, selected sound, mood, vocal character, and story development.
 - Use unity + contrast + balance: all sections belong to one song and one scene, while energy, vocal attitude, instrument state, space, rhythm, and production motion change by section role.
 - Each sung section tag should carry only 1–2 current-song cues. Prefer one performance cue and one musical-state cue when both are useful.
 - Do not repeat generic cues such as emotional build, controlled emotional turn, high-energy hook, or clear hook across several sections. State the actual section action instead.
@@ -17354,11 +17359,12 @@ function buildThemeMoodLyricInstruction(params: GenerateSongParams): string {
     );
     if (!hasStorySignals) return '';
     return `THEME + MOOD LYRIC BOUNDARY (MANDATORY):
-- Use the ONE shared hidden Scene Blueprint from the COMMON SONG CREATIVE BRIEF. Do not build a second lyric-only scene.
-- Situation, direct input, lyric draft, and Theme define the story. Mood controls speech attitude, hesitation, joke, silence, sentence length, emotional pressure, and section curve.
+- Use the ONE V1 Story Context already resolved for this generation. Do not build a second lyric-only narrative.
+- Situation, direct input, lyric draft, and Theme define the narrative center. Mood controls speech attitude, hesitation, joke, silence, sentence length, emotional pressure, and section curve.
+- Preserve the source's natural scope. It may be a single scene, a wider situation, a relationship, a day-long progression, an emotional condition, a premise, or an abstract image.
 - Genre, Style, Sound, instruments, point sounds, tempo, production, and vocal presets must not invent lyric places, objects, props, events, relationships, or title concepts.
-- Do not use a canned room/drive/cafe/office/rain/message scene. A concrete place or object is allowed only when it exists in the story source or is naturally inferred from the full shared blueprint.
-- Keep [Atmosphere], title, and lyrics aligned to the same speaker, place boundary, visible action, desire/conflict, lived detail, and chorus intention.
+- Do not force a concrete place, object, action, character, or conflict merely because a lyric-writing checklist expects one. Add only details that naturally belong to the Story Context.
+- Keep [Atmosphere], title, and lyrics aligned to the same central meaning and progression without requiring one frozen visual frame.
 - Do not copy mood labels, genre/style names, sound names, instrument names, or production words into lyric lines or section-tag cues.
 - Section tags describe how the section is sung or emotionally performed; real SFX remain standalone square-bracket cues under the section tag.`;
   }
@@ -20055,6 +20061,33 @@ function normalizeAiProductionPrompt(rawPrompt: string, fallbackPrompt: string):
   return removeAudioQualityLineWhenPromptIsNearLimit(finalLines.join('\n'));
 }
 
+function normalizeV1StoryContextResult(value: unknown, params: GenerateSongParams): string {
+  const cleanContext = (input: unknown): string => String(input || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/^\s*(?:story\s*context|context|narrative\s*core)\s*[:：-]\s*/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  let resolved = cleanContext(value);
+  if (!resolved) {
+    resolved = cleanContext(collectSceneBlueprintSource(params));
+  }
+  if (!resolved) {
+    const fallbackParts = [
+      ...(params.themes || []),
+      ...(params.moods || []),
+      params.userInput || '',
+    ].map((part) => String(part || '').trim()).filter(Boolean);
+    resolved = fallbackParts.join(' / ');
+  }
+
+  if (resolved.length > 1600) {
+    const clipped = resolved.slice(0, 1600);
+    resolved = clipped.replace(/\s+\S*$/, '').trim() || clipped.trim();
+  }
+  return resolved;
+}
+
 function buildGenericAtmosphereRepairFallback(params: GenerateSongParams): string {
   const moodCandidate = stripRemainingKoreanForProductionPrompt(
     buildDirectMoodAngle(params)
@@ -20068,7 +20101,7 @@ function buildGenericAtmosphereRepairFallback(params: GenerateSongParams): strin
     .replace(/\s{2,}/g, ' ')
     .trim() || 'emotionally specific';
   return normalizeAtmospherePromptLine(
-    `a ${mood} scene where one concrete action brings an unresolved feeling into the open`,
+    `a ${mood} emotional situation with unresolved pressure and a clear sense of progression`,
   );
 }
 
@@ -20124,11 +20157,13 @@ async function repairClassicAtmosphereFromSourceWithGemini(
   fallbackPrompt: string,
   params: GenerateSongParams,
   lyrics?: any,
+  storyContext?: string,
 ): Promise<string> {
   if (isGenerationEngineV2(params)) return rawPrompt;
 
   const sourceText = collectSceneBlueprintSource(params).trim();
-  if (!sourceText) return rawPrompt;
+  const resolvedStoryContext = normalizeV1StoryContextResult(storyContext, params);
+  if (!sourceText && !resolvedStoryContext) return rawPrompt;
 
   const currentAtmosphere = getClassicAtmosphereValueFromPrompt(rawPrompt)
     || getClassicAtmosphereValueFromPrompt(fallbackPrompt);
@@ -20136,20 +20171,24 @@ async function repairClassicAtmosphereFromSourceWithGemini(
 
   const repairContext = [
     'Repair only the [Atmosphere] line of a five-line music production prompt.',
-    'Repair the Atmosphere so it describes the exact same scene already used by the generated lyrics and the supplied user source.',
-    'Use the generated lyrics as the primary scene evidence: keep the same speaker/addressee, place boundary, visible action, desire/conflict, lived detail, and emotional turn.',
-    'Use the supplied user source only to resolve ambiguity. This must work for any topic; do not use a canned scenario or keyword-specific template.',
-    'Do not invent a second scene or replace the lyric scene with a generic mood sentence.',
+    'The authoritative narrative center is the V1 Story Context below. Preserve its natural scope exactly.',
+    'Story Context may be one visual scene, a broader situation, a relationship, a whole-day progression, an emotional condition, a premise, or an abstract image. Do not force it into speaker/place/object/action slots when those are not present.',
+    'Use the original user source as the highest-priority factual evidence. Use the generated lyrics only as the current musical rendering of the same context; lyrics must never override explicit user meaning.',
+    'Write an Atmosphere sentence that makes the same situation and emotional pressure clear without inventing a second story or falling back to a generic mood sentence.',
+    'Do not use canned scenarios, topic-specific templates, or compulsory concrete props.',
     'Translate Korean or other source languages internally and return natural English only.',
-    'Write one concise, vivid sentence suitable after [Atmosphere].',
-    'Do not mention the user, source text, core idea, blueprint, prompt, interpretation, or visible musical moment.',
+    'Write one concise sentence suitable after [Atmosphere]. It may describe a broader progression rather than one frozen image when the Story Context is situation-shaped.',
+    'Do not mention Story Context, the user, source text, core idea, blueprint, prompt, interpretation, or visible musical moment.',
     'Do not copy internal instructions or output brackets.',
     '',
-    'Generated lyrics / same-scene evidence:',
-    lyricTextForPromptRefinement(lyrics).slice(0, 3600) || 'None',
+    'V1 Story Context:',
+    resolvedStoryContext.slice(0, 3600) || 'None',
     '',
-    'User source:',
-    sourceText.slice(0, 3600),
+    'Original user source:',
+    sourceText.slice(0, 3600) || 'None',
+    '',
+    'Generated lyrics / same-context evidence:',
+    lyricTextForPromptRefinement(lyrics).slice(0, 3600) || 'None',
     '',
     'Current production prompt for musical context:',
     String(rawPrompt || fallbackPrompt || '').slice(0, 2200),
@@ -26829,8 +26868,12 @@ function needsLyricDensityRepair(lyrics: string, params: GenerateSongParams): bo
 }
 
 function lyricDensityRepairInstruction(languageLabel: string, params: GenerateSongParams): string {
+  const storyContext = String((params as any).__v1StoryContext || '').trim();
   return `Repair the lyrics in ${languageLabel} only.
-Rules:
+${storyContext ? `V1 STORY CONTEXT (LOCKED):
+${storyContext}
+- Preserve this exact narrative center and its natural scope. Do not turn a broad situation into one forced visual scene, and do not invent a different story while filling sparse sections.
+` : ''}Rules:
 - Preserve the existing section order and core story.
 - This is a lyric song, not BGM. Do not turn Drop into an instrumental gap unless the source explicitly says instrumental/no vocal.
 - Do not hard-code long lines. Short lines, fragments, one-word emotional lines, and repeated hook lines are allowed when intentional.
@@ -29620,11 +29663,9 @@ async function generateSongLegacy(
         : `Return the title as: '${languageNameMap[secondaryLanguage]} Title'. Do not create Korean or English titles unless that language is selected.`;
   const recentTitleAntiRepeatInstruction = buildRecentTitleAntiRepeatInstruction(params.recentGeneratedTitles ?? []);
   const recentLyricAntiRepeatInstruction = buildRecentLyricAntiRepeatInstruction(params.recentMoodThemeMemory ?? [], params);
-  const songCreativeBriefInstruction = buildSongCreativeBriefInstruction(params);
   const globalMoodDistributionInstruction = buildGlobalMoodDistributionInstruction(params);
   const moodRoleTranslationInstruction = formatMoodRoleTranslationContext(getV1MoodRoleTranslations(params))
     .split('\n\n[LYRICS MOOD ROLE]')[0];
-  const lyricStoryBriefInstruction = buildLyricStoryBriefInstruction(params);
   const pointSoundSectionInstruction = buildPointSoundSectionInstruction(params);
   const moodTransitionSectionInstruction = buildMoodTransitionSectionInstruction(params, exactStructureText);
   const sectionCueMusicalVarietyInstruction = buildSectionCueMusicalVarietyInstruction(params, exactStructureText);
@@ -29645,7 +29686,7 @@ async function generateSongLegacy(
     arrangementDirectUserDirectives,
   );
   const rapModeInstruction = buildRapModeInstruction(params);
-  const scenePlanInstruction = buildScenePlanInstruction(params, detailLayer);
+  const storyContextInstruction = buildStoryContextInstruction(params, detailLayer);
   const stableMultiVocalLyricLabels = getStableMultiVocalLyricTagLabels(params);
   const multiVocalLyricTagAnchorInstruction = stableMultiVocalLyricLabels.length >= 2
     ? `MULTI-VOCAL LYRIC TAG ANCHOR RULE (MANDATORY):
@@ -29867,15 +29908,14 @@ CREATIVE VARIATION SEED (MANDATORY, DO NOT OUTPUT AS A SECTION):
 - If USER TEXT PRIORITY LOCK is active, variation is secondary only. Do not let it create confession, relationship, object-reveal, micro-conflict, or random story arcs not present in the user's text.
 - Same keywords on a later run may choose another angle; do not treat current keywords as a fixed template.
 - "Same keywords" includes button selections AND the user's Situation text fields: target A/B, relationship, description, development, speaker style, attitude, and details.
-- Even if the exact same Situation sentence is reused, create a sibling version, not a clone: shift the focus, hook owner, flaw, detail, scene angle, or section ownership.
-- Keep the same world and genre identity, but change the interpretation angle enough that the prompt describes a similar-but-different song.
+- Even if the exact same Situation sentence is reused, create a sibling version rather than a clone by shifting emphasis, viewpoint, hook owner, section ownership, or the order of emotional development inside the same Story Context.
+- Keep the same Story Context and genre identity. Variation may reorganize emphasis, but it must not add a new place, object, event, relationship, flaw, or conflict that the source does not support.
 - Reflect the chosen variation inside the opening track sentence and [Production], not only in hidden instructions.
 - Do NOT append variation wording to [Vocals]. [Vocals] must contain only natural singer direction and role persona.
-- When Situation text is long, vague, or repeated, compress it into a fresh dramatic angle rather than copying the user's wording. Same Situation can become ghost regret focus, reaper fatigue focus, negotiation focus, object/detail focus, role reversal, or unresolved comedy depending on this generation.
+- When Situation text is long, vague, or repeated, preserve its full meaning in Story Context and vary only the internal emphasis or section ownership. Do not convert it into a stock scenario or an unrelated dramatic device.
 
 ${buildRecentStoryMemoryInstruction(params)}
 
-${songCreativeBriefInstruction}
 
 ${globalMoodDistributionInstruction}
 
@@ -29885,13 +29925,12 @@ ${recentTitleAntiRepeatInstruction}
 
 ${recentLyricAntiRepeatInstruction}
 
-${lyricStoryBriefInstruction}
 
 SITUATION NUANCE VARIATION RULE (MANDATORY):
-- Before writing lyrics, reinterpret the Situation through the current Attempt ID.
-- Choose whose desire leads the song, whose flaw is exposed first, which concrete detail becomes the hook, and who owns the chorus.
-- Do not let identical Situation text always produce the same track sentence, [Vocals], [Production], or chorus ownership.
-- Examples of valid sibling versions: ghost-regret focus, reaper-fatigue focus, negotiation focus, parallel-conflict focus, late-reveal focus, chorus-takeover focus, unresolved-comedy focus, memory-detail focus.
+- Before writing lyrics, preserve the active Situation inside the resolved Story Context.
+- Variation may choose a different viewpoint, emotional emphasis, opening owner, hook owner, interruption timing, section ownership, or order of revelation only when that option already belongs to the Situation.
+- Do not invent a concrete detail, flaw, relationship, place, event, or ending merely to make the attempt different.
+- Identical Situation text may produce a different musical and sectional interpretation, but its central meaning must remain unchanged.
 
 GENRE COHERENCE RULE (MANDATORY):
 - The final song must still be coherent as one concept, not a loose list of tags.
@@ -29998,7 +30037,7 @@ ${(params.moods ?? []).join(", ") || "No explicit mood layer selected."}
 VOCAL EXPRESSION STYLE LAYER (VOICE EMOTION / ATTITUDE / PHRASING):
 ${buildSelectedVocalExpressionInstruction(params)}
 
-${scenePlanInstruction}
+${storyContextInstruction}
 
 ${lyricDensityInstruction}
 
@@ -30098,6 +30137,7 @@ ${buildGenerationEngineOutputInstruction(params)}
 
 Return JSON:
 {
+  "storyContext": "1-3 concise natural-language sentences preserving the user's narrative center without a compulsory checklist",
   "title": "Title text following the selected title language rule above",
   "productionPrompt": "Final 6-line production prompt using the required labels"${
     params.isNoLyrics
@@ -30268,9 +30308,9 @@ ${arrangementSectionPlanInstruction}
 
 [ANTI-TEMPLATE RULE]
 - Same keywords must still produce a different attempt angle each generation. Never treat selected buttons as a fixed lyric/prompt template.
-- First choose ONE fresh story angle for this attempt: a different lived detail, physical place, object, action, relationship distance, confession state, or ending direction. Then make title, hook, lyrics, [Atmosphere], and [Vocals] share that one angle.
-- Variation must happen BETWEEN songs, not inside one song. Do not scatter multiple unrelated scenes in one lyric.
-- If a recent or earlier same-keyword generation used a similar concrete image, object, setting, or unresolved action, choose a different angle that still belongs to the same emotion. Do not name or import the earlier image as lyric material.
+- First choose ONE fresh emphasis inside the resolved Story Context: viewpoint, sentence attitude, emotional phase, hook function, section ownership, or order of development. Do not require a new place, object, action, conflict, or ending.
+- Variation must happen BETWEEN songs, not inside one song. Do not scatter multiple unrelated narratives in one lyric.
+- If an earlier generation used a similar image or detail, choose another expression only when it naturally belongs to the same Story Context. Never import a replacement detail merely for novelty.
 - Do not use a fixed duet template. The singer who owns Verse, Pre-Chorus, Chorus, Bridge, and Outro must change according to genre and situation.
 - If the previous section was A→B, the next lyrical section should not automatically repeat A→B. Change ownership, interruption timing, solo focus, or hook function.
 - The goal is a different dramatic song design, not only different words.
@@ -30401,10 +30441,10 @@ Write lyrics that feel like they were written by a real person, not an AI.
 - Keywords (theme, mood) must NOT be directly repeated as words.
 
 [WRITING STYLE]
-- Focus on specific moments, not general emotions.
-- Show feelings through actions and scenes.
-- Use small, relatable details (behavior, places, objects, time, gestures), rotating the angle so the same Theme does not always become the same phone/room/coffee/message scene.
-- Write like someone recalling a memory, not describing a concept.
+- Use specific moments when the Story Context naturally contains them. When the source is broader, express its progression through speech, behavior, changing pressure, or recurring thought without forcing one visual scene.
+- Show feeling through the forms already available in the Story Context: actions, speech, silence, relationship tension, time flow, memory, or image.
+- Use small relatable details only when they naturally belong to the source. Do not invent a place or object to satisfy a detail checklist.
+- Write like a person living through or recalling the Story Context, not explaining a concept.
 - Slight imperfection is okay — natural > perfect.
 
 [LANGUAGE STYLE]
@@ -30414,10 +30454,8 @@ Write lyrics that feel like they were written by a real person, not an AI.
 - Do NOT repeat the same structure every line.
 
 [EMOTION EXPRESSION]
-Instead of:
-"I feel lonely in the darkness"
-Write like:
-"The streetlight stayed on longer than usual, and I didn’t go home"
+- Replace flat emotion explanation with natural speech, behavior, timing, relationship pressure, or imagery that already belongs to the Story Context.
+- Do not add an unrelated object or setting solely to make the emotion look concrete.
 
 [KEYWORD USAGE RULE]
 - Theme and mood should guide the situation, not appear as direct words.
@@ -30438,7 +30476,7 @@ Write like:
 - Do not ignore lyricDraft.
 - Do not rewrite it with a completely new lyric idea.
 - The lyrics should follow the selected theme(s) and explicit narrative details provided by the user.
-- If no explicit theme exists, create a simple original everyday emotional scene without using genre, vocal, sound, tempo, hook, or arrangement instructions as the lyrical topic.
+- If no explicit theme exists, create a simple coherent Story Context without using genre, vocal, sound, tempo, hook, or arrangement instructions as the lyrical topic.
 - Themes define the situation, scene, or story.
 - Moods define only the emotional tone or feeling around that story.
 - The lyrics must clearly reflect the exact arrangement and section order provided above.
@@ -30466,18 +30504,19 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   const generateParams = {
     model,
     contents:
-      "Generate the song title and lyrics based on the locked instructions.",
+      "Resolve the V1 storyContext first, then generate the song title, production prompt, and lyrics from that same context.",
     config: {
       systemInstruction,
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
         properties: {
+          storyContext: { type: Type.STRING },
           title: { type: Type.STRING },
           productionPrompt: { type: Type.STRING },
           ...lyricsResponseSchema,
         },
-        required: ["title", "productionPrompt", ...lyricsRequired],
+        required: ["storyContext", "title", "productionPrompt", ...lyricsRequired],
       },
     },
   };
@@ -30536,6 +30575,12 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   if (!params.isNoLyrics && (!result.lyrics || typeof result.lyrics !== "object")) {
     throw new Error("정상적인 곡 가사를 생성하지 못했습니다. 다시 생성 버튼을 눌러주세요.");
   }
+
+  const resolvedV1StoryContext = normalizeV1StoryContextResult((result as any).storyContext, params);
+  (result as any).storyContext = resolvedV1StoryContext;
+  // V1-only transient value used by lyric density repair and final Atmosphere repair.
+  // It is not part of V2/V3 creative logic.
+  (params as any).__v1StoryContext = resolvedV1StoryContext;
 
   const geminiModelInfo: GeminiModelUsageInfo = (response as any)?.__soridrawGeminiModelInfo || {
     usedModel: GEMINI_TEXT_MODEL_CHAIN[0],
@@ -30933,6 +30978,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     finalPrompt,
     params,
     result.lyrics,
+    resolvedV1StoryContext,
   );
   const normalizedAiPrompt = normalizeAiProductionPrompt(sourceRepairedAiPrompt, finalPrompt);
   const validatedProductionPrompt = finalOutputPromptValidator(normalizedAiPrompt, params);
@@ -30972,6 +31018,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     isNoLyrics: params.isNoLyrics as any,
     instrumentalBgmMode: Boolean((params as any).instrumentalBgmMode) as any,
     userInput: params.userInput ?? "",
+    storyContext: resolvedV1StoryContext,
     generationEngineVersion: params.generationEngineVersion || "classic",
     geminiUsedModel: geminiModelInfo.usedModel,
     geminiFallbackUsed: geminiModelInfo.fallbackUsed,
@@ -31005,6 +31052,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   (result as any).userInput = params.userInput ?? "";
+  // Keep Story Context in appliedKeywords for V1 lyric refresh, but do not expose
+  // the internal top-level field to visible song result consumers.
+  delete (result as any).storyContext;
+  delete (params as any).__v1StoryContext;
 
   return result as SongResult;
 }
@@ -31095,6 +31146,9 @@ export async function regenerateLyricsOnly(
     th: "Thai script",
   };
   const applied = params.appliedKeywords || {};
+  const storedV1StoryContext = String(applied.storyContext || '').replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  const storedGenerationEngine = String(applied.generationEngineVersion || 'classic').toLowerCase();
+  const useStoredV1StoryContext = Boolean(storedV1StoryContext) && storedGenerationEngine !== 'v2' && storedGenerationEngine !== 'v3';
   const clicheGuardParams = {
     ...applied,
     lyricClicheGuard: params.lyricClicheGuard || applied.lyricClicheGuard || null,
@@ -31151,7 +31205,11 @@ ${targetLanguage === "ko" && !allowLatinScriptFragments ? `- The Korean lyric bo
 
 ${buildLyricClicheGuardInstruction(clicheGuardParams)}
 
-[QUALITY RULES]
+${useStoredV1StoryContext ? `[V1 STORY CONTEXT - LOCKED]
+${storedV1StoryContext}
+- Regenerate a fresh lyric version inside this exact narrative center. Preserve its natural scope whether it is a scene, broad situation, relationship, day-long progression, emotional condition, premise, or abstract image.
+- Do not invent a second story, force missing people/places/objects/actions, or narrow a broad situation into one unrelated still image.
+` : ''}[QUALITY RULES]
 - Preserve the existing song identity: genre, mood, theme, vocal roles, tempo feel, section structure, and production prompt context.
 - Create a fresh lyric version, not a minor synonym edit.
 - Follow the CURRENT SECTION TEMPLATE exactly: same section order, same number of sections, and the same approximate line count per section.

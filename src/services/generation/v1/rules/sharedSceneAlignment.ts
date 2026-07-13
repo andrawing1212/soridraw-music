@@ -1,4 +1,4 @@
-export interface V1SharedSceneAlignmentContext {
+export interface V1StoryContextInput {
   directorNote: string;
   directTheme: string;
   directMood: string;
@@ -18,14 +18,15 @@ const formatList = (values: string[]): string => {
 };
 
 /**
- * V1 creative contract.
+ * V1 Story Context contract.
  *
- * This file deliberately contains no topic-to-scene mapping and no example story.
- * It only defines how Gemini must keep one user-driven scene consistent across
- * the production prompt and lyrics.
+ * Story Context is intentionally flexible. It may be a single scene, a broad
+ * situation, a relationship, a day-long progression, an emotional condition,
+ * an abstract image, a premise, or a production-shaped direction. It is never
+ * completed with topic-specific templates or compulsory story slots.
  */
-export function buildV1SharedSceneAlignmentInstruction(
-  context: V1SharedSceneAlignmentContext,
+export function buildV1StoryContextInstruction(
+  context: V1StoryContextInput,
 ): string {
   const directorNote = clean(context.directorNote);
   const directTheme = clean(context.directTheme);
@@ -39,49 +40,60 @@ export function buildV1SharedSceneAlignmentInstruction(
   const hasExplicitStorySource = Boolean(
     directTheme || storyboard || lyricDraft || (directorNote && !context.productionOnlyDirectorNote),
   );
-  const directorStoryRule = context.productionOnlyDirectorNote
-    ? '- The director note is production/performance-shaped, so it may shape genre, sound, vocal attitude, pacing, and hook design, but it must not invent a separate story. Resolve the shared scene from the direct theme, storyboard, lyric draft, or selected Theme/Mood signals.'
-    : '- When the director note contains people, actions, places, relationships, conflict, humor, or plot, treat those facts as part of the shared scene at full priority. Do not reduce them to a generic summary.';
+  const directorRule = context.productionOnlyDirectorNote
+    ? '- The director note is production/performance-shaped. Apply it to music, pacing, hook behavior, vocal attitude, and section motion, but do not force a literal place, object, character, or plot that the user did not provide.'
+    : '- The director note may contain a scene, a situation, a relationship, a whole-day premise, an emotional state, a social observation, a joke, an abstract image, or a plot. Preserve whichever form the user actually wrote instead of converting it into a fixed scene checklist.';
 
-  return `V1 ONE-SCENE ALIGNMENT CONTRACT (MANDATORY, INTERNAL ONLY — NEVER OUTPUT THIS LABEL):
-- Before writing the title, productionPrompt, or lyrics, silently resolve ONE coherent song scene from the sources below.
-- The production prompt and lyrics must describe the SAME speaker/addressee, place boundary, visible action, desire/conflict, lived detail, and emotional turn. Do not create a second scene for any output lane.
-- Preserve explicit user facts exactly in meaning. Do not replace unusual details with a stock romance, breakup, bedroom, cafe, office, road, phone-screen, space, food, or other canned scenario.
-- Do not use topic-specific code logic or keyword-to-scene templates. Gemini must infer the scene from the full source combination each time.
-- If several sources are present, reconcile them into one scene instead of letting each source create a different story.
-- Explicit direct input and the free-text director note outrank automatic keyword-card inference.
-- Storyboard/Situation character, relationship, and scenario facts are locked unless the user's direct instruction explicitly changes them.
-- In lyric preserve/correction mode, the lyric draft remains the primary lyrical story source; align the production prompt to that scene instead of rewriting the draft into a different story.
-- Selected Theme signals may fill missing story gaps only when explicit sources do not define them. Mood only colors emotional temperature and must not invent new objects/events.
-${directorStoryRule}
-- ${hasExplicitStorySource ? 'An explicit story source exists. Keep its actual characters, action, relationship, place, and conflict; selected keywords may support it but may not replace it.' : 'No explicit story source is locked. Create one fresh believable scene from the selected Theme signals and use the selected Mood only as emotional color.'}
+  return `V1 STORY CONTEXT CONTRACT (MANDATORY, INTERNAL ONLY):
+- Before writing JSON, resolve ONE concise Story Context that preserves the user's overall meaning.
+- Story Context is the song's shared narrative center. It may be a single visual scene, a wider situation, a relationship, a period of time, a character condition, a desire, a conflict, an emotional progression, an abstract image, or a production-shaped premise.
+- Story Context is NOT a form to complete. Do not require speaker, addressee, place, object, visible action, conflict, or ending when the source does not naturally provide them.
+- Do not convert every input into an image-like scene. A phrase such as a person's difficult day, a relationship dynamic, or a wish that lasts across time must remain that wider situation.
+- Preserve explicit user facts exactly in meaning. Do not replace unusual material with stock romance, breakup, bedroom, cafe, office, road, phone-screen, food, space, or any other canned scenario.
+- Do not use topic-specific mappings, keyword-to-scene templates, or compulsory narrative slots.
+- When information is missing, keep the context naturally open or add only the minimum connective tissue needed for coherence. Never invent props, places, events, characters, or conflicts merely to make the context look detailed.
+- When several sources exist, combine only compatible meanings. Higher-priority direct input must not be diluted by lower-priority cards.
+- Direct input, active Situation/Storyboard, and lyric draft facts are locked. Selected Theme may fill a genuine gap; selected Mood may color emotional temperature and expression only.
+- Creative variation may change viewpoint, section emphasis, hook ownership, or the order of emotional development inside the SAME Story Context. It must not replace the context with a different story.
+- This Story Context contract overrides older V1 wording that asks for a compulsory Scene Blueprint, fixed speaker/addressee slots, a mandatory place/object/action, or one frozen visual frame.
+${directorRule}
+- ${hasExplicitStorySource ? 'An explicit narrative source exists. Preserve its full intent and shape; do not shrink it into a generic summary.' : 'No explicit narrative source is locked. Build a simple coherent Story Context from selected Theme signals, while Mood remains expression color rather than plot.'}
 
-SHARED SCENE SOURCES:
-- Director note: ${directorNote || 'None'}
-- Direct theme/input: ${directTheme || 'None'}
-- Direct mood/input: ${directMood || 'None'}
-- Storyboard/Situation: ${storyboard || 'None'}
-- Lyric draft source: ${lyricDraft || 'None'}
-- Selected Themes: ${selectedThemes}
-- Selected Moods: ${selectedMoods}
-- Additional detail: ${additionalDetail || 'None'}
+STORY CONTEXT SOURCES BY PRIORITY:
+1. Director/free-text note: ${directorNote || 'None'}
+2. Direct theme/input: ${directTheme || 'None'}
+3. Storyboard/Situation: ${storyboard || 'None'}
+4. Lyric draft source: ${lyricDraft || 'None'}
+5. Selected Themes: ${selectedThemes}
+6. Direct/selected Mood as expression color: ${directMood || selectedMoods}
+7. Additional interpreted detail: ${additionalDetail || 'None'}
 
-CROSS-LANE SCENE OWNERSHIP:
-- [Genre]: express the musical identity and selected mood color. It may frame the scene musically, but it must not invent or replace the scene.
-- [Instruments]: preserve user-selected sound anchors, then describe how the instruments play in response to the SAME visible action, tension, intimacy, humor, distance, or emotional pressure. Instrument performance must support the scene without inventing new plot facts.
-- [Atmosphere]: state the SAME concrete scene and emotional air clearly enough that the listener understands the situation even without seeing the lyrics.
-- [Vocals]: the singer(s) must perform from inside the SAME scene. Delivery, phrasing, distance, restraint, urgency, humor, or conflict must feel like the character's immediate reaction to that scene. Preserve selected vocal identity and technique without replacing the scene.
-- [Arrangement]: section movement must follow the SAME action/relationship/emotional progression. Verse establishes what is happening, later sections increase or redirect pressure, the chorus releases the central desire, and the bridge/final section changes or resolves the same situation. Do not introduce a second story arc.
-- Lyrics: write character speech and behavior inside the SAME scene. Reuse the same factual anchors and emotional turn without merely copying the production-prompt wording.
-- Title: derive from the same scene, action, detail, or central line; do not introduce an unrelated image.
+JSON STORY CONTEXT FIELD:
+- Return a top-level JSON field named storyContext.
+- Write storyContext as 1-3 concise natural-language sentences, not a checklist, labels, or JSON inside JSON.
+- Keep the source's natural scope. Do not add mandatory people, places, actions, objects, or conclusions.
+- This field is internal application data. Never mention the label Story Context inside title, productionPrompt, or lyrics.
 
-FINAL CONSISTENCY CHECK BEFORE JSON:
-1. Could [Instruments], [Atmosphere], [Vocals], [Arrangement], title, and lyrics all belong to one exact song scene?
-2. Do the production prompt and lyrics agree on who is present, what is happening, what is wanted, and what changes?
-3. Did any selected sound, style, mood, genre, or validator phrase invent a different object, place, event, relationship, or conflict?
-4. If any lane points to a different scene, rewrite that lane before returning JSON.
-- Never output meta phrases such as shared scene, source text, blueprint, user intent, core idea, or scene alignment.`;
+ONE-CONTEXT OUTPUT OWNERSHIP:
+- [Genre]: musical identity only. It may carry a light emotional color but must not invent or replace the Story Context.
+- [Instruments]: selected sound anchors and how the music responds to the Story Context's pressure, movement, intimacy, humor, scale, or restraint. Do not invent plot facts.
+- [Atmosphere]: express the Story Context as musical air and a clear situation. It may describe one scene when the source is scene-shaped, or a broader state/progression when the source is situation-shaped. Do not force a single still image.
+- [Vocals]: perform from inside the same Story Context. Vocal identity and technique remain musical directions; attitude and phrasing should react to the same situation.
+- [Arrangement]: unfold the same Story Context through the selected sections. Each section may reveal a different phase or pressure, but must not introduce a separate narrative.
+- Lyrics: naturally develop the same Story Context through speech, thought, behavior, progression, or image. Do not copy production wording and do not create a parallel story.
+- Title: come from the same central meaning, desire, situation, phrase, or emotional turn. Do not introduce an unrelated image.
+
+FINAL CHECK BEFORE RETURNING JSON:
+1. Does storyContext faithfully preserve the strongest user input without compulsory missing-field invention?
+2. Could Atmosphere, lyrics, title, vocals, and arrangement all belong to that exact Story Context, even when it spans multiple moments rather than one visual frame?
+3. Did any genre, sound, style, mood, variation, validator phrase, or selected card introduce a different object, place, relationship, event, or conflict?
+4. If any output lane drifts, rewrite that lane before returning JSON.
+- Never output meta phrases such as Story Context, shared scene, source text, blueprint, user intent, core idea, or alignment inside visible song content.`;
 }
+
+// Compatibility aliases for older V1 imports. New V1 code should use Story Context names.
+export type V1SharedSceneAlignmentContext = V1StoryContextInput;
+export const buildV1SharedSceneAlignmentInstruction = buildV1StoryContextInstruction;
 
 function stripVocalSubject(value: string): string {
   return clean(value)

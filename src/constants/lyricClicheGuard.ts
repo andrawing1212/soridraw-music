@@ -272,14 +272,40 @@ function containsHardBanTerm(line: string, term: string): boolean {
   return termKey.length >= 4 && normalizeClicheTermKey(normalizedLine).includes(termKey);
 }
 
+const KOREAN_HARD_BAN_PHRASE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: '설명형 종결: ~때문이야/~때문이었어', pattern: /(?:때문|탓)(?:이야|이었어|이었지|이네|이지|인가\s*봐|이었나\s*봐)?[.!?…]*$/ },
+  { label: '설명형 종결: ~했기 때문이야', pattern: /기\s*때문(?:이야|이었어|이지|이네|이다)?[.!?…]*$/ },
+  { label: '핑계형 종결: ~라서야/~어서야/~해서야', pattern: /(?:라서야|이라서야|어서야|아서야|해서야|여서야|[가-힣]+서야)[.!?…]*$/ },
+  { label: '축소·변명형 종결: ~뿐이야/~일 뿐이야', pattern: /(?:했|한|할|인|일|였|될|있는|없는|본|간|온|준|된|던)?\s*뿐(?:이야|이었어|이었지|이지|이네|인데|이다)?[.!?…]*$/ },
+];
+
+function findKoreanPhrasePatternViolations(lines: string[]): LyricHardBanViolation[] {
+  const result: LyricHardBanViolation[] = [];
+  lines.forEach((line, lineIndex) => {
+    const trimmed = String(line || '').trim();
+    if (!trimmed || isLyricSectionTagLine(trimmed) || !/[가-힣]/.test(trimmed)) return;
+    KOREAN_HARD_BAN_PHRASE_PATTERNS.forEach(({ label, pattern }) => {
+      if (pattern.test(trimmed)) result.push({ lineIndex, term: label, line });
+    });
+
+    // Pair pattern: one line raises a fact with "~한 건/~인 건" and the next line explains it away.
+    const next = String(lines[lineIndex + 1] || '').trim();
+    if (/\s건[,.!?…]*$/.test(trimmed)
+      && /(?:때문|탓)(?:이야|이었어|이지|이네|이다)?[.!?…]*$|[가-힣]+서(?:야|였어|지|네|다)?[.!?…]*$/.test(next)) {
+      result.push({ lineIndex, term: '2줄 원인→결과 해설 구조', line });
+      result.push({ lineIndex: lineIndex + 1, term: '2줄 원인→결과 해설 구조', line: next });
+    }
+  });
+  return result;
+}
+
 export function findLyricHardBanViolations(lyrics: unknown, params?: any): LyricHardBanViolation[] {
   const source = String(lyrics ?? '').replace(/\r\n?/g, '\n');
   if (!source.trim()) return [];
   const { hardBanTerms } = resolveLyricClicheGuardTerms(params);
-  if (!hardBanTerms.length) return [];
-
+  const lines = source.split('\n');
   const violations: LyricHardBanViolation[] = [];
-  source.split('\n').forEach((line, lineIndex) => {
+  lines.forEach((line, lineIndex) => {
     const trimmed = line.trim();
     if (!trimmed || isLyricSectionTagLine(trimmed)) return;
     hardBanTerms.forEach((term) => {
@@ -288,6 +314,7 @@ export function findLyricHardBanViolations(lyrics: unknown, params?: any): Lyric
       }
     });
   });
+  violations.push(...findKoreanPhrasePatternViolations(lines));
 
   const seen = new Set<string>();
   return violations.filter((item) => {
@@ -374,6 +401,13 @@ export function buildLyricClicheGuardInstruction(params?: any): string {
 - Preserve the intended meaning by rewriting the whole phrase naturally with a context-appropriate alternative. Never merely delete the word, leave a broken particle/ending, or create an awkward evasive sentence.
 - Avoid spacing variants and obvious direct variants of the same hard-ban expression.
 - HardBan always overrides SoftBan when a term appears in both lists.
+
+PHRASE PATTERN HARD BAN (KOREAN):
+- Do not use the recurring explanatory endings ~때문이야/~했기 때문이야/~라서야/~어서야/~해서야.
+- Do not use the minimizing or excuse-like endings ~뿐이야/~일 뿐이야/~했을 뿐이야.
+- Do not write a two-line formula where the first line presents a fact with ~한 건/~인 건 and the next line explains its cause or excuse.
+- Show the event, reaction, or change directly in connected lyric language instead of explaining why the previous line happened.
+- This bans the repeated sentence architecture, not only the exact spelling. Do not evade it with a near-synonym ending.
 
 SOFT AVOID TERMS: ${softText}.
 - Do not introduce soft-avoid terms by habit. They may be used only when they are the user's genuine selected subject/background and no natural alternative preserves the intended specificity.

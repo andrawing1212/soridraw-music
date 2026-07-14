@@ -1630,7 +1630,7 @@ export const BASE_PROMPTS = [
 ];
 
 export const BASIC_STRUCTURE =
-  'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Chorus → Outro';
+  'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro';
 
 export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {
@@ -3074,6 +3074,10 @@ export const SECTION_META: Record<string, { tier: TagTier, descriptionKo?: strin
     tier: 'basic', 
     descriptionKo: "곡의 핵심 후렴구. 가장 강한 감정과 멜로디가 반복되며 기억에 남는 부분입니다." 
   },
+  'Final Chorus': {
+    tier: 'basic',
+    descriptionKo: "기존 후렴의 핵심을 유지하면서 가사, 음역, 화음, 에너지 중 하나 이상을 확장해 마지막 절정을 만드는 구간입니다."
+  },
   'Hook': { 
     tier: 'basic', 
     descriptionKo: "귀에 꽂히는 핵심 포인트. 짧지만 강한 반복 요소로 곡의 중독성을 만듭니다." 
@@ -3285,6 +3289,17 @@ export const ALLOWED_TAGS_BY_SECTION: Record<string, string[]> = {
     "Wide Impact",
     "Powerful Delivery",
     "Hook Emphasis"
+  ],
+
+  'Final Chorus': [
+    "Hook Emphasis",
+    "Wide Impact",
+    "Powerful Delivery",
+    "Full Arrangement",
+    "Anthemic",
+    "Dynamic Increase",
+    "Harmony",
+    "Adlib"
   ],
 
   'Hook': [

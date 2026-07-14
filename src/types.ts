@@ -231,7 +231,7 @@ export interface TempoConfig {
 
 export type CustomSectionType = 
   | 'Intro' | 'Verse 1' | 'Verse 2' | 'Pre-Chorus' | 'Chorus' | 'Hook' | 'Drop' 
-  | 'Bridge' | 'Breakdown' | 'Instrumental' | 'Rap Verse' | 'Outro' | 'Refrain' | 'Interlude'
+  | 'Bridge' | 'Breakdown' | 'Instrumental' | 'Rap Verse' | 'Rap Section' | 'Final Chorus' | 'Final Hook' | 'Outro' | 'Refrain' | 'Interlude'
   | 'Theme A' | 'Theme B' | 'Build-up' | 'Main Theme' | 'Climax' | 'Break' | 'Stop';
 
 

@@ -383,10 +383,14 @@ const normalizeUserCustomSectionTags = (input: any): UserCustomSectionTagDefinit
 };
 
 const normalizeSectionName = (section: string): string => {
-  const normalized = String(section || '').trim();
-  if (/^Verse\s*\d+$/i.test(normalized)) return 'Verse';
+  const normalized = String(section || '')
+    .replace(/[\[\]\n\r]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (/^Rap\s*Verse$/i.test(normalized)) return 'Rap Section';
-  if (/^Final\s*Chorus$/i.test(normalized)) return 'Chorus';
+  if (/^Build\s*up$/i.test(normalized)) return 'Build-Up';
+  // Custom mode is an exact user blueprint. Preserve Verse 1/2, Final Chorus,
+  // Final Hook, Theme A/B, and user-created section names instead of flattening them.
   return normalized;
 };
 
@@ -476,7 +480,7 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
 
 const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
   'instrumental_bgm',
@@ -5092,6 +5096,7 @@ function App() {
     rapMode?: RapMode;
     rapEnabled: boolean;
     generationEngineVersion?: GenerationEngineVersion;
+    lyricWritingStyle?: V1LyricWritingStyle;
   } | null>(null);
   const [isAddingLyricsLanguage, setIsAddingLyricsLanguage] = useState(false);
   const [addingLyricsLanguageTarget, setAddingLyricsLanguageTarget] = useState<LanguageCode | null>(null);
@@ -5915,19 +5920,54 @@ function App() {
   const [isLyricMode, setIsLyricMode] = useState(false);
   const [lyricDraft, setLyricDraft] = useState('');
   const [lyricMode, setLyricMode] = useState<'assist' | 'preserve'>('assist');
+  type StudioGenerationOptions = {
+    includeLyrics: boolean;
+    lyricLanguages: LanguageCode[];
+    generationCount?: number;
+    isKoreanEnglishMix?: boolean;
+    englishMixRatio?: number;
+    languageMixTargetLanguages?: LanguageCode[];
+    rapMode?: RapMode;
+    rapEnabled?: boolean;
+    generationEngineVersion?: GenerationEngineVersion;
+    lyricWritingStyle?: V1LyricWritingStyle;
+    queueGenerationIndex?: number;
+    queueGenerationTotal?: number;
+  };
+
+  type StudioGenerationQueueDetail = {
+    label: string;
+    value: string;
+  };
+
+  type StudioGenerationRunResult = {
+    generationBatchId: string;
+    generatedCount: number;
+  };
+
+  type StudioGenerationQueueItem = {
+    id: string;
+    status: 'queued' | 'running' | 'completed' | 'failed';
+    summary: string;
+    generationCount: number;
+    queuedAt: number;
+    details: StudioGenerationQueueDetail[];
+    generationBatchId?: string;
+    completedAt?: number;
+  };
+
+  type StudioGenerationQueueTask = StudioGenerationQueueItem & {
+    run: () => Promise<StudioGenerationRunResult | null | undefined>;
+  };
+
   const [isGenerating, setIsGenerating] = useState(false);
-  const generationProgressLabels = [
-    '방향 잡는 중',
-    '키워드 정리 중',
-    '가사 쓰는 중',
-    '프롬프트 정리 중',
-    '마무리 중',
-  ];
-  const generationProgressDotSteps = ['.', '..', '...'];
-  const GENERATION_DOT_CYCLES_PER_LABEL = 2;
-  const GENERATION_DOT_INTERVAL_MS = 1000;
-  const [generationProgressIndex, setGenerationProgressIndex] = useState(0);
-  const [generationProgressStep, setGenerationProgressStep] = useState(0);
+  const [generationQueueItems, setGenerationQueueItems] = useState<StudioGenerationQueueItem[]>([]);
+  const [selectedGenerationQueueItemId, setSelectedGenerationQueueItemId] = useState<string | null>(null);
+  const generationQueueRef = useRef<StudioGenerationQueueTask[]>([]);
+  const generationRunningTasksRef = useRef<Map<string, StudioGenerationQueueTask>>(new Map());
+  const resultAreaRef = useRef<HTMLDivElement | null>(null);
+  const MAX_STUDIO_GENERATION_QUEUE_JOBS = 5;
+  const MAX_CONCURRENT_STUDIO_GENERATIONS = 3;
   const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
   const [isHomeMusicApiMenuCollapsed, setIsHomeMusicApiMenuCollapsed] = useState(true);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
@@ -6369,7 +6409,6 @@ const toggleCycleVariantSelection = (
   }, [rememberLogin]);
 
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
-  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!generationModelNotice) return;
@@ -7777,8 +7816,20 @@ const toggleCycleVariantSelection = (
     if (appliedKeywords.songStructure) setSongStructure(appliedKeywords.songStructure);
     if (appliedKeywords.maleCount !== undefined) setMaleCount(appliedKeywords.maleCount);
     if (appliedKeywords.femaleCount !== undefined) setFemaleCount(appliedKeywords.femaleCount);
-    if ((appliedKeywords as any).rapMode) setRapMode((appliedKeywords as any).rapMode);
-    if (appliedKeywords.rapEnabled !== undefined) setRapEnabled(appliedKeywords.rapEnabled);
+    const storedRapMode = String((appliedKeywords as any).rapMode || '').trim().toLowerCase();
+    const restoredRapMode: RapMode = storedRapMode === 'on' || storedRapMode === 'off' || storedRapMode === 'auto'
+      ? storedRapMode as RapMode
+      : appliedKeywords.rapEnabled === true
+        ? 'on'
+        : 'auto';
+    setRapMode(restoredRapMode);
+    setRapEnabled(restoredRapMode === 'on');
+
+    const storedLyricWritingStyle = (appliedKeywords as any).lyricWritingStyle;
+    if (storedLyricWritingStyle === 'default' || storedLyricWritingStyle === 'kimEana') {
+      writeStoredV1LyricWritingStyle(storedLyricWritingStyle);
+    }
+
     if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
 
     if (appliedKeywords.vocal) {
@@ -8830,21 +8881,8 @@ const toggleCycleVariantSelection = (
       setSituation(createEmptySituation());
       setIsSituationExpanded(false);
     }
-    if (!isMenuLocked('vocal')) {
-      // 생성하기 옆 무작위는 보컬을 그룹으로 만들지 않고,
-      // 장르 힌트에 어울리는 솔로 남성/여성 중 하나만 추천 적용한다.
-      const vocalGenreHints = [...g, ...sg, ...s, ...expandedRandomSoundSelection];
-      const gender = pickRecommendedSoloVocalGender(vocalGenreHints);
-      const nextMember = createRandomVocalMember(gender, 0, 1, vocalGenreHints);
-
-      setVocalMode('solo');
-      setSelectedVocalToneId(undefined);
-      setRapEnabled(false);
-      setMaleCount(gender === 'male' ? 1 : 0);
-      setFemaleCount(gender === 'female' ? 1 : 0);
-      setVocalMembers([nextMember]);
-      setVocalRandomActivationKey((key) => key + 1);
-    }
+    // The global random button must never change vocal composition or character settings.
+    // Vocal randomization is available only from the random button inside the Vocal menu.
     if (!isMenuLocked('structure')) {
       setLyricsLength('normal');
       setSongStructure('1');
@@ -8883,33 +8921,6 @@ const saveRecentSong = async (newSong: any) => {
   }
 };
 
-  useEffect(() => {
-    if (!isGenerating) {
-      setGenerationProgressIndex(0);
-      setGenerationProgressStep(0);
-      return;
-    }
-
-    setGenerationProgressIndex(0);
-    setGenerationProgressStep(0);
-    const stepsPerLabel = generationProgressDotSteps.length * GENERATION_DOT_CYCLES_PER_LABEL;
-    const timer = window.setInterval(() => {
-      setGenerationProgressStep((prev) => {
-        const next = prev + 1;
-        if (next % stepsPerLabel === 0) {
-          setGenerationProgressIndex((current) => (current + 1) % generationProgressLabels.length);
-        }
-        return next;
-      });
-    }, GENERATION_DOT_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [isGenerating, generationProgressLabels.length, generationProgressDotSteps.length]);
-
-  const generationProgressBaseLabel = generationProgressLabels[generationProgressIndex] || generationProgressLabels[0];
-  const generationProgressDots = generationProgressDotSteps[generationProgressStep % generationProgressDotSteps.length] || '...';
-  const generationProgressLabel = `${generationProgressBaseLabel}${generationProgressDots}`;
-
   /* 
   useEffect(() => {
     const q = query(collection(db, 'vocalTones'), orderBy('sortOrder', 'asc'));
@@ -8933,17 +8944,7 @@ const saveRecentSong = async (newSong: any) => {
   }, []);
   */
 
-  const handleGenerate = async (generationOptions?: {
-    includeLyrics: boolean;
-    lyricLanguages: LanguageCode[];
-    generationCount?: number;
-    isKoreanEnglishMix?: boolean;
-    englishMixRatio?: number;
-    languageMixTargetLanguages?: LanguageCode[];
-    rapMode?: RapMode;
-    rapEnabled?: boolean;
-    generationEngineVersion?: GenerationEngineVersion;
-  }) => {
+  const executeGeneration = async (generationOptions?: StudioGenerationOptions) => {
     if (!user) {
       showToast('로그인이 필요합니다.');
       handleLogin();
@@ -8970,23 +8971,13 @@ const saveRecentSong = async (newSong: any) => {
       }
     }
 
-    if (isGenerating) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-      setIsGenerating(false);
-      return;
-    }
-
     // Show the loading state immediately on click.
     // The Gemini API key lookup can take 1-2 seconds, so it must not block the button feedback.
     setIsRecentSongEditOpen(false);
     setRecentSongInlineEditMode(null);
     setRecentSongEditDraft(null);
 
-    setIsGenerating(true);
-    abortControllerRef.current = new AbortController();
+    const jobAbortController = new AbortController();
 
     let personalGeminiApiKey = '';
     try {
@@ -8996,8 +8987,6 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     if (!personalGeminiApiKey) {
-      setIsGenerating(false);
-      abortControllerRef.current = null;
       showToast('마이페이지에서 Google Gemini API Key를 먼저 등록해주세요.');
       navigate('/my-page');
       return;
@@ -9010,6 +8999,8 @@ const saveRecentSong = async (newSong: any) => {
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko']).filter(Boolean))).slice(0, 2) as LanguageCode[]
       : [];
     const requestedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions?.generationCount) || 1)));
+    const queueGenerationIndex = Math.max(1, Math.floor(Number(generationOptions?.queueGenerationIndex) || 1));
+    const queueGenerationTotal = Math.max(requestedGenerationCount, Math.floor(Number(generationOptions?.queueGenerationTotal) || requestedGenerationCount));
     const requestedKoreanEnglishMix = requestedIncludeLyrics
       ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix)
       : false;
@@ -9026,12 +9017,11 @@ const saveRecentSong = async (newSong: any) => {
       ? requestedRapMode === 'on'
       : rapEnabled;
     const requestedGenerationEngineVersion: GenerationEngineVersion = generationOptions?.generationEngineVersion === 'v2' ? 'v2' : 'classic';
+    const requestedLyricWritingStyle: V1LyricWritingStyle = requestedGenerationEngineVersion === 'classic' && generationOptions?.lyricWritingStyle === 'kimEana' ? 'kimEana' : 'default';
 
     const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
 
     if (!hasAnySelectedGenre && !hasFreeTextDirectorNote) {
-      setIsGenerating(false);
-      abortControllerRef.current = null;
       showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
       return;
     }
@@ -9337,28 +9327,7 @@ const saveRecentSong = async (newSong: any) => {
         ].join(' ').toLowerCase();
         const hasStructureSignal = (...terms: string[]) => terms.some((term) => structureSignalText.includes(term.toLowerCase()));
         const buildAdaptiveDefaultStructureGuide = () => {
-          const hasRapFlow = requestedRapEnabled || hasStructureSignal('rap', 'hip-hop', 'hiphop', 'drill', 'trap', 'boom bap', 'boombap', 'uk garage', 'garage r&b');
-          const hasDanceFlow = hasStructureSignal('edm', 'house', 'techno', 'disco', 'dance', 'club', 'garage', 'breakbeat', 'future bass', 'electro', 'funk') || hasStyleId('dance', 'modern-edm', 'electronic', 'techno-style', 'house-style', 'classic-disco', 'funk');
-          const hasBandFlow = hasStructureSignal('rock', 'band', 'emo', 'punk', 'metal', 'j-rock', 'k-band', 'anime rock', 'anisong') || hasStyleId('rock-style', 'anime-style');
-          const hasCinematicFlow = hasStructureSignal('cinematic', 'score', 'opera', 'musical', 'orchestra', 'theme a', 'theme b', 'climax', 'ambient');
-          const hasBreathingFlow = hasBalladStyle || hasStructureSignal('ballad', 'jazz', 'r&b', 'rnb', 'dream pop', 'dreampop', 'city pop', 'citypop', 'lo-fi', 'lofi', 'folk', 'acoustic', 'soul') || finalMoods.some((id) => ['calm', 'peaceful', 'sad', 'lonely', 'nostalgic', 'dreamy', 'warm'].includes(id));
-
-          if (hasRapFlow) {
-            return 'Default adaptive structure: choose a polished rap/hook variation such as Intro → Rap Section → Hook → Rap Section → Break → Hook → Bridge → Final Hook → Outro; keep the Hook memorable, let Rap Sections carry denser detail, and close with a clear final payoff.';
-          }
-          if (hasDanceFlow) {
-            return 'Default adaptive structure: choose a polished hook/drop variation such as Intro → Hook → Verse A → Pre-Chorus → Chorus → Break → Verse B → Chorus → Bridge → Chorus → Outro; keep the flow popular and stable while using Break or Drop as a refined twist.';
-          }
-          if (hasBandFlow) {
-            return 'Default adaptive structure: choose a polished band-build variation such as Intro → Verse A → Build-up → Chorus → Verse B → Chorus → Bridge → Chorus → Outro; keep the chorus singable, let the build-up raise pressure, and use the Bridge as the emotional turn.';
-          }
-          if (hasCinematicFlow) {
-            return 'Default adaptive structure: choose a cinematic variation such as Intro → Theme A → Verse A → Theme B → Chorus → Instrumental → Bridge → Climax → Outro; keep it experimental but still finish with a clear climax and outro.';
-          }
-          if (hasBreathingFlow) {
-            return 'Default adaptive structure: choose a spacious emotional variation such as Intro → Verse A → Pre-Chorus → Chorus → Instrumental → Verse B → Bridge → Chorus → Outro; leave room for breath, image, and melodic payoff.';
-          }
-          return 'Default adaptive structure: choose one stable modern-pop variation with a small twist, using Hook, Break, Drop, Instrumental, or Bridge only where it supports the story; never end after Stop, Break, or Instrumental.';
+          return 'Use the exact V1 recommended section blueprint supplied by the generation engine. Do not invent, rename, flatten, or reuse an older section sequence. Keep every section in its assigned lyrical role, and keep instrument or sound-event cues on separate bracket lines below the structural tag.';
         };
 
         const bpm = tempoInfo
@@ -9444,12 +9413,12 @@ const saveRecentSong = async (newSong: any) => {
 
         const arrangement = [
           songStructure === 'custom'
-            ? `Custom structure: ${formatStoredCustomStructureText(customStructure)}`
+            ? `Use this exact custom structure without renaming or flattening any section: ${formatStoredCustomStructureText(customStructure)}`
             : songStructure === '1'
               ? buildAdaptiveDefaultStructureGuide()
               : songStructure === '2'
-                ? 'Stable genre-standard structure with fresh section cues'
-                : 'Experimental structure with genre-aware variation and fresh section cues',
+                ? 'Use the exact stable V1 blueprint: Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro. Do not flatten Verse 1/2 or Final Chorus.'
+                : 'Use the exact experimental V1 blueprint supplied by the generation engine. Do not replace it with a stable or previously used sequence.',
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
         ].filter(Boolean).join(', ');
@@ -9598,6 +9567,7 @@ const saveRecentSong = async (newSong: any) => {
         lyricMode: isLyricMode ? lyricMode : undefined,
         geminiApiKey: personalGeminiApiKey,
         generationEngineVersion: requestedGenerationEngineVersion,
+        lyricWritingStyle: requestedLyricWritingStyle,
         lyricClicheGuard: {
           global: globalLyricClicheGuard,
           user: userLyricClicheGuard,
@@ -9612,7 +9582,7 @@ const saveRecentSong = async (newSong: any) => {
       const generationBatchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       for (let i = 0; i < requestedGenerationCount; i += 1) {
-        if (abortControllerRef.current?.signal.aborted) return;
+        if (jobAbortController.signal.aborted) return;
 
         const inBatchStoryMemory = generatedResults
           .map(compactGeneratedStoryMemory)
@@ -9629,8 +9599,8 @@ const saveRecentSong = async (newSong: any) => {
 
         const song = await generateSong({
           ...payload,
-          generationIndex: i + 1,
-          generationCount: requestedGenerationCount,
+          generationIndex: generationOptions?.queueGenerationIndex ? queueGenerationIndex : i + 1,
+          generationCount: generationOptions?.queueGenerationTotal ? queueGenerationTotal : requestedGenerationCount,
           recentStoryMemory: [
             ...inBatchStoryMemory,
             ...recentStoryMemoryBase,
@@ -9649,7 +9619,7 @@ const saveRecentSong = async (newSong: any) => {
           ].slice(0, 5),
         } as any);
 
-        if (abortControllerRef.current?.signal.aborted) return;
+        if (jobAbortController.signal.aborted) return;
 
         const secondaryLyricLanguage = requestedLyricLanguages.find((lang) => lang !== 'ko') as LanguageCode | undefined;
         let songWithLanguageFallback = song;
@@ -9739,9 +9709,10 @@ const saveRecentSong = async (newSong: any) => {
             rapEnabled: requestedRapEnabled,
             isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
             lyricLanguages: isFinalInstrumentalBgm ? [] : requestedLyricLanguages,
-            generationCount: requestedGenerationCount,
-            generationIndex: i + 1,
+            generationCount: generationOptions?.queueGenerationTotal ? queueGenerationTotal : requestedGenerationCount,
+            generationIndex: generationOptions?.queueGenerationIndex ? queueGenerationIndex : i + 1,
             generationBatchId,
+            lyricWritingStyle: requestedLyricWritingStyle,
             isKoreanEnglishMix: requestedKoreanEnglishMix,
             englishMixRatio: requestedEnglishMixRatio,
             kpopMode,
@@ -9785,6 +9756,10 @@ const saveRecentSong = async (newSong: any) => {
       }
 
       setHistoryIndex(0);
+      return {
+        generationBatchId,
+        generatedCount: generatedResults.length,
+      } as StudioGenerationRunResult;
     } catch (error: any) {
       if (error.name === 'AbortError') {
         console.log('Generation cancelled');
@@ -9799,11 +9774,234 @@ const saveRecentSong = async (newSong: any) => {
           showToast(errorMessage);
         }
       }
-    } finally {
-      setIsGenerating(false);
-      abortControllerRef.current = null;
+      return null;
     }
   };
+
+
+  const processGenerationQueue = () => {
+    while (
+      generationRunningTasksRef.current.size < MAX_CONCURRENT_STUDIO_GENERATIONS
+      && generationQueueRef.current.length > 0
+    ) {
+      const nextTask = generationQueueRef.current.shift();
+      if (!nextTask) continue;
+
+      generationRunningTasksRef.current.set(nextTask.id, nextTask);
+      setGenerationQueueItems((current) => current.map((item) => (
+        item.id === nextTask.id ? { ...item, status: 'running' } : item
+      )));
+
+      void (async () => {
+        let outcome: StudioGenerationRunResult | null | undefined;
+        try {
+          outcome = await nextTask.run();
+        } catch (error) {
+          console.error('Concurrent studio generation failed:', error);
+          outcome = null;
+        } finally {
+          generationRunningTasksRef.current.delete(nextTask.id);
+          setGenerationQueueItems((current) => current.map((item) => (
+            item.id === nextTask.id
+              ? {
+                  ...item,
+                  status: outcome ? 'completed' : 'failed',
+                  generationBatchId: outcome?.generationBatchId,
+                  completedAt: Date.now(),
+                }
+              : item
+          )));
+          processGenerationQueue();
+        }
+      })();
+    }
+
+    setIsGenerating(generationRunningTasksRef.current.size > 0);
+  };
+
+  const enqueueGeneration = (generationOptions: StudioGenerationOptions) => {
+    if (!user) {
+      showToast('로그인이 필요합니다.');
+      handleLogin();
+      return;
+    }
+
+    if (!isLyricClicheGuardReady) {
+      showToast('가사 금지어 설정을 불러오는 중입니다. 잠시 후 다시 눌러주세요.');
+      return;
+    }
+
+    if (userStatus !== 'active' && !isAdminUser) {
+      if (userStatus === 'paused') showToast('계정이 일시 제한되었습니다. 관리자에게 문의하세요.');
+      else if (userStatus === 'expired') showToast('이용 기간이 만료되었습니다. 플랜을 갱신해주세요.');
+      else if (userStatus === 'banned') showToast('접근이 차단된 계정입니다. 기능을 사용할 수 없습니다.');
+      return;
+    }
+
+    const hasAnySelectedGenre = selectedGenres.length > 0 || subGenre.length > 0;
+    if (!hasAnySelectedGenre && !userInput.trim()) {
+      showToast('장르를 선택하거나 명령창에 곡 방향을 입력해주세요.');
+      return;
+    }
+
+    const activeAndQueuedCount = generationQueueRef.current.length + generationRunningTasksRef.current.size;
+    const generationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions.generationCount) || 1)));
+    const remainingQueueCapacity = MAX_STUDIO_GENERATION_QUEUE_JOBS - activeAndQueuedCount;
+    if (generationCount > remainingQueueCapacity) {
+      showToast(`현재 추가할 수 있는 곡은 ${Math.max(0, remainingQueueCapacity)}곡입니다. 진행·대기는 최대 ${MAX_STUDIO_GENERATION_QUEUE_JOBS}곡까지 가능합니다.`);
+      return;
+    }
+
+    const genreLabels = Array.from(new Set([...selectedGenres, ...subGenre]))
+      .map((id) => getGenreKeywordLabel(id))
+      .filter(Boolean);
+    const moodLabels = selectedMoods.map(getMoodKeywordLabel).filter(Boolean);
+    const themeLabelsForQueue = selectedThemes.map(getThemeKeywordLabel).filter(Boolean);
+    const styleLabels = filterSelectableIds(selectedStyles).map(getStyleVariantLabelById).filter(Boolean);
+    const soundLabels = [
+      ...filterSelectableIds(selectedInstrumentSounds).map(getSoundVariantLabelById),
+      ...filterSelectableIds(selectedPointSounds).map(getSoundVariantLabelById),
+    ].filter(Boolean);
+    const queueCustomGenreInput = [...selectedGenres, ...subGenre]
+      .map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX))
+      .find(Boolean) || '';
+    const queueCustomMoodInput = selectedMoods
+      .map((id) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX))
+      .find(Boolean) || '';
+    const queueCustomThemeInput = selectedThemes
+      .map((id) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX))
+      .find(Boolean) || '';
+    const queueCustomStyleInput = selectedStyles
+      .map((id) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX))
+      .find(Boolean) || '';
+    const queueCustomSoundInput = [...selectedInstrumentSounds, ...selectedPointSounds]
+      .map((id) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX))
+      .find(Boolean) || '';
+    const roleLabelMap: Record<VocalRole, string> = {
+      main: '메인',
+      lead: '리드',
+      sub: '서브',
+      rapper: '래퍼',
+    };
+    const vocalSummary = vocalMembers.length > 0
+      ? vocalMembers.map((member, index) => {
+          const gender = member.gender === 'male' ? '남성' : '여성';
+          const roles = member.roles.map((role) => roleLabelMap[role]).filter(Boolean).join('/');
+          return `${gender} ${String.fromCharCode(65 + index)}${roles ? ` ${roles}` : ''}`;
+        }).join(' · ')
+      : maleCount > 0
+        ? '남성 솔로'
+        : femaleCount > 0
+          ? '여성 솔로'
+          : '성별 미지정 솔로';
+    const details: StudioGenerationQueueDetail[] = [
+      { label: '장르', value: [...genreLabels, queueCustomGenreInput].filter(Boolean).join(', ') },
+      { label: '분위기', value: [...moodLabels, queueCustomMoodInput].filter(Boolean).join(', ') },
+      { label: '주제', value: [...themeLabelsForQueue, queueCustomThemeInput].filter(Boolean).join(', ') },
+      { label: '스타일', value: [...styleLabels, queueCustomStyleInput].filter(Boolean).join(', ') },
+      { label: '사운드', value: [...soundLabels, queueCustomSoundInput].filter(Boolean).join(', ') },
+      { label: '보컬', value: vocalSummary },
+      { label: '랩 모드', value: String(generationOptions.rapMode || rapMode || 'auto').toUpperCase() },
+      { label: '명령문', value: userInput.trim() },
+    ].filter((item) => Boolean(item.value));
+
+    const primaryGenreLabel = genreLabels[0] || queueCustomGenreInput || '직접 설정 곡';
+    const primaryThemeLabel = themeLabelsForQueue[0] || queueCustomThemeInput;
+    const summary = [primaryGenreLabel, primaryThemeLabel].filter(Boolean).join(' · ');
+    const queueTimestamp = Date.now();
+    const tasks: StudioGenerationQueueTask[] = Array.from({ length: generationCount }, (_, index) => {
+      const id = `studio-generation-${queueTimestamp}-${index + 1}-${Math.random().toString(36).slice(2, 8)}`;
+      const taskDetails = generationCount > 1
+        ? [...details, { label: '세트 순서', value: `${index + 1}/${generationCount}` }]
+        : details;
+      return {
+        id,
+        status: 'queued',
+        summary,
+        generationCount: 1,
+        queuedAt: queueTimestamp + index,
+        details: taskDetails,
+        // Each requested song becomes an independent task. Up to three tasks run at the same time.
+        run: async () => await executeGeneration({
+          ...generationOptions,
+          generationCount: 1,
+          queueGenerationIndex: index + 1,
+          queueGenerationTotal: generationCount,
+        }),
+      };
+    });
+
+    generationQueueRef.current.push(...tasks);
+    setGenerationQueueItems((current) => [
+      ...current,
+      ...tasks.map((task) => ({
+        id: task.id,
+        status: task.status,
+        summary: task.summary,
+        generationCount: task.generationCount,
+        queuedAt: task.queuedAt,
+        details: task.details,
+      })),
+    ]);
+
+    const availableSlotCount = Math.max(0, MAX_CONCURRENT_STUDIO_GENERATIONS - generationRunningTasksRef.current.size);
+    const immediateStartCount = Math.min(availableSlotCount, tasks.length);
+    const queuedAfterStartCount = tasks.length - immediateStartCount;
+    if (queuedAfterStartCount > 0) {
+      showToast(`${immediateStartCount}곡 생성 시작 · ${queuedAfterStartCount}곡 대기`);
+    } else {
+      showToast(`${tasks.length}곡 생성을 시작했습니다.`);
+    }
+
+    processGenerationQueue();
+  };
+
+  const cancelQueuedGeneration = (id: string) => {
+    const queuedItem = generationQueueItems.find((item) => item.id === id && item.status === 'queued');
+    if (!queuedItem) return;
+    generationQueueRef.current = generationQueueRef.current.filter((task) => task.id !== id);
+    setGenerationQueueItems((current) => current.filter((item) => item.id !== id));
+    setSelectedGenerationQueueItemId(null);
+    showToast('대기 중인 생성 작업을 취소했습니다.');
+  };
+
+  const removeGenerationQueueItem = (id: string) => {
+    setGenerationQueueItems((current) => current.filter((item) => item.id !== id));
+    setSelectedGenerationQueueItemId((current) => current === id ? null : current);
+  };
+
+  const revealCompletedGeneration = (item: StudioGenerationQueueItem) => {
+    const matchedHistoryIndex = item.generationBatchId
+      ? history.findIndex((song) => (song.appliedKeywords as any)?.generationBatchId === item.generationBatchId)
+      : -1;
+
+    if (matchedHistoryIndex < 0) {
+      showToast('완료 결과를 반영 중입니다. 잠시 후 다시 눌러주세요.');
+      return;
+    }
+
+    setHistoryIndex(matchedHistoryIndex);
+    setResult(history[matchedHistoryIndex]);
+    setLatestGenerationBatchId(item.generationBatchId || null);
+    removeGenerationQueueItem(item.id);
+    window.requestAnimationFrame(() => {
+      resultAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleGenerationQueueItemClick = (item: StudioGenerationQueueItem) => {
+    if (item.status === 'completed') {
+      revealCompletedGeneration(item);
+      return;
+    }
+    setSelectedGenerationQueueItemId((current) => current === item.id ? null : item.id);
+  };
+
+  const runningGenerationItems = generationQueueItems.filter((item) => item.status === 'running');
+  const queuedGenerationItems = generationQueueItems.filter((item) => item.status === 'queued');
+  const runningGenerationCount = runningGenerationItems.length;
+  const queuedGenerationCount = queuedGenerationItems.length;
+  const selectedGenerationQueueItem = generationQueueItems.find((item) => item.id === selectedGenerationQueueItemId) || null;
 
   const navigateHistory = (direction: 'prev' | 'next') => {
     setIsConfirmingDeleteHistory(false);
@@ -11920,38 +12118,47 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       <div className="relative flex-1">
         <button
           onClick={() => {
-            if (isGenerating) {
-              setActionButtonHint({ id: 'generate', label: generationProgressLabel, description: '곡을 만들고 있습니다. 잠시만 기다려주세요.' });
-              return;
-            }
             setShowMainGenerationModal(true);
-            setActionButtonHint({ id: 'generate', label: '생성하기', description: '생성 옵션을 선택한 뒤 곡을 생성합니다.' });
+            setActionButtonHint({
+              id: 'generate',
+              label: '생성하기',
+              description: isGenerating
+                ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+            });
           }}
-          onMouseEnter={() => setActionButtonHint({ id: 'generate', label: isGenerating ? generationProgressLabel : '생성하기', description: isGenerating ? '곡을 만들고 있습니다. 잠시만 기다려주세요.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+          onMouseEnter={() => setActionButtonHint({
+            id: 'generate',
+            label: '생성하기',
+            description: isGenerating
+              ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+              : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+          })}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({ id: 'generate', label: isGenerating ? generationProgressLabel : '생성하기', description: isGenerating ? '곡을 만들고 있습니다. 잠시만 기다려주세요.' : '생성 옵션을 선택한 뒤 곡을 생성합니다.' })}
+          onTouchStart={() => handleLongPressStart({
+            id: 'generate',
+            label: '생성하기',
+            description: isGenerating
+              ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+              : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+          })}
           onTouchEnd={handleLongPressEnd}
-          className={cn(
-            "w-full py-4 md:py-5 rounded-2xl text-white font-black shadow-lg transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
-            isGenerating 
-              ? "bg-[#E45F59]/74 text-[#171717] border border-black/20 cursor-wait min-h-[64px] md:min-h-[76px] text-[18px] sm:text-[20px] md:text-[21px] tracking-[-0.03em] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(228,95,89,0.24)]" 
-              : "soridraw-generate-heartbeat bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70]"
-          )}
+          className="soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
-          {isGenerating ? (
-            <>
-              <Loader2 className="block w-4 h-4 sm:w-5 sm:h-5 md:w-5 md:h-5 animate-spin shrink-0" />
-              <span className="whitespace-nowrap leading-none">{generationProgressLabel}</span>
-            </>
-          ) : (
-            <>
-              <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
-              <span>생성하기</span>
-            </>
+          {isGenerating && (
+            <span
+              className="pointer-events-none absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-black/20 bg-[#171717] px-1.5 text-[10px] font-black text-[#FFC15A] shadow-lg"
+              aria-label={`${runningGenerationCount}곡 생성 중`}
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {runningGenerationCount > 1 && <span className="ml-0.5">{runningGenerationCount}</span>}
+            </span>
           )}
+          <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
+          <span>생성하기</span>
         </button>
       </div>
 
@@ -13237,6 +13444,110 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     className="soridraw-studio-action-bar fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
                   >
                     <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
+                      {generationQueueItems.length > 0 && (
+                        <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
+                          <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
+                            {generationQueueItems.map((item, index) => {
+                              const statusTitle = item.status === 'running'
+                                ? '생성 중'
+                                : item.status === 'queued'
+                                  ? '대기 중'
+                                  : item.status === 'completed'
+                                    ? '완료 · 누르면 결과로 이동'
+                                    : '생성 실패';
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  onClick={() => handleGenerationQueueItemClick(item)}
+                                  className={cn(
+                                    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
+                                    item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
+                                    item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
+                                    item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
+                                    item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
+                                  )}
+                                  title={`${index + 1}. ${item.summary} · ${statusTitle}`}
+                                  aria-label={`${index + 1}번 생성 작업 ${statusTitle}`}
+                                >
+                                  {item.status === 'running' ? (
+                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                  ) : item.status === 'completed' ? (
+                                    <Check className="h-4 w-4" strokeWidth={3} />
+                                  ) : item.status === 'failed' ? (
+                                    <AlertCircle className="h-4 w-4" />
+                                  ) : (
+                                    <span>{index + 1}</span>
+                                  )}
+                                  {item.status === 'running' && (
+                                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
+                                      {index + 1}
+                                    </span>
+                                  )}
+                                  {item.generationCount > 1 && (
+                                    <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#111] px-1 text-[8px] text-white/85">
+                                      {item.generationCount}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedGenerationQueueItem && selectedGenerationQueueItem.status !== 'completed' && (
+                        <div className="absolute bottom-[calc(100%+60px)] left-0 z-[147] w-[min(340px,calc(100vw-40px))] rounded-2xl border border-white/12 bg-[#1D1D1D]/98 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                {selectedGenerationQueueItem.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-[#FFB400]" />}
+                                {selectedGenerationQueueItem.status === 'queued' && <span className="h-2 w-2 rounded-full bg-white/35" />}
+                                {selectedGenerationQueueItem.status === 'failed' && <AlertCircle className="h-4 w-4 text-red-300" />}
+                                <span className="text-xs font-black text-white">
+                                  {selectedGenerationQueueItem.status === 'running' ? '생성 중' : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
+                                </span>
+                              </div>
+                              <p className="mt-1 truncate text-[11px] font-bold text-white/65">{selectedGenerationQueueItem.summary}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedGenerationQueueItemId(null)}
+                              className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/5 hover:text-white/75"
+                              aria-label="작업 정보 닫기"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <div className="max-h-52 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                            {selectedGenerationQueueItem.details.map((detail) => (
+                              <div key={`${selectedGenerationQueueItem.id}-${detail.label}`} className="grid grid-cols-[52px_1fr] gap-2 text-[11px] leading-relaxed">
+                                <span className="font-bold text-[#FFB400]/85">{detail.label}</span>
+                                <span className="break-words text-white/72">{detail.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {selectedGenerationQueueItem.status === 'queued' && (
+                            <button
+                              type="button"
+                              onClick={() => cancelQueuedGeneration(selectedGenerationQueueItem.id)}
+                              className="mt-3 w-full rounded-xl border border-red-400/25 bg-red-500/10 py-2 text-[11px] font-bold text-red-300 transition-colors hover:bg-red-500/15"
+                            >
+                              대기 작업 취소
+                            </button>
+                          )}
+                          {selectedGenerationQueueItem.status === 'failed' && (
+                            <button
+                              type="button"
+                              onClick={() => removeGenerationQueueItem(selectedGenerationQueueItem.id)}
+                              className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 py-2 text-[11px] font-bold text-white/65 transition-colors hover:bg-white/10"
+                            >
+                              목록에서 지우기
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {generationModelNotice && (
                         <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
                           {generationModelNotice}
@@ -13330,6 +13641,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <AnimatePresence>
           {user && result && (
             <motion.div
+              ref={resultAreaRef}
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
@@ -14521,7 +14833,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setRapMode(nextRapMode);
                 setRapEnabled(nextRap);
                 closeMainGenerationModal();
-                handleGenerate({
+                enqueueGeneration({
                   includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
                   lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
                   generationCount,
@@ -14531,6 +14843,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   rapMode: nextRapMode,
                   rapEnabled: nextRap,
                   generationEngineVersion: options?.generationEngineVersion === 'v2' ? 'v2' : 'classic',
+                  lyricWritingStyle: options?.generationEngineVersion === 'v2' ? 'default' : (options?.lyricWritingStyle === 'kimEana' ? 'kimEana' : 'default'),
                 });
               }}
             />
@@ -17865,7 +18178,7 @@ function SongStructureIntegratedControlComponent({
   }
 
   const getStableStructureGuide = useCallback(() => {
-    return 'Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus → Chorus → Bridge → Chorus → Outro';
+    return 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro';
   }, []);
 
   const stableStructureGuide = getStableStructureGuide();
@@ -18295,7 +18608,7 @@ function SongStructureIntegratedControlComponent({
             className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
           >
             <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
-            섹션구조
+            가사
           </h3>
           <div className="flex items-center gap-2">
             {onToggleLock && (
@@ -18389,7 +18702,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 3. 섹션 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션</p>
+                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -19801,6 +20114,7 @@ export const CUSTOM_STRUCTURE_SECTIONS = [
   'Verse',
   'Pre-Chorus',
   'Chorus',
+  'Final Chorus',
   'Refrain',
   'Interlude',
   'Hook',

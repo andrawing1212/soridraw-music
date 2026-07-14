@@ -6,12 +6,14 @@ declare global {
   interface Window {
     __soridrawMusicApiSunoModelVersion?: 'V5_5' | 'V5' | 'V4_5';
     __soridrawGenerationEngineVersion?: 'classic' | 'v2';
+    __soridrawV1LyricWritingStyle?: 'default' | 'kimEana';
   }
 }
 
 export type LanguageCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'fr' | 'de' | 'ru' | 'th';
 export type SunoModelVersion = 'V5_5' | 'V5' | 'V4_5';
 export type GenerationEngineVersion = 'classic' | 'v2';
+export type V1LyricWritingStyle = 'default' | 'kimEana';
 
 type ModalVariant = 'main' | 'musicApi';
 type MusicApiTargetMode = 'current' | 'batch';
@@ -48,6 +50,7 @@ type MusicApiGenerateModalProps = {
       rapEnabled?: boolean;
       sunoModelVersion?: SunoModelVersion;
       generationEngineVersion?: GenerationEngineVersion;
+      lyricWritingStyle?: V1LyricWritingStyle;
     }
   ) => void;
   isKoreanEnglishMix?: boolean;
@@ -65,6 +68,7 @@ type MusicApiGenerateModalProps = {
     rapMode?: RapMode;
     rapEnabled?: boolean;
     generationEngineVersion?: GenerationEngineVersion;
+    lyricWritingStyle?: V1LyricWritingStyle;
   }) => void;
   suspendHistoryHandling?: boolean;
 };
@@ -149,6 +153,7 @@ const GENERATION_ENGINE_OPTIONS: { id: GenerationEngineVersion; label: string; s
 ];
 
 const GENERATION_ENGINE_STORAGE_KEY = 'soridraw.main.generationEngineVersion';
+const V1_LYRIC_WRITING_STYLE_STORAGE_KEY = 'soridraw.main.v1LyricWritingStyle';
 const SUNO_MODEL_STORAGE_KEY = 'soridraw.musicApi.sunoModelVersion';
 
 const isSunoModelVersion = (value: unknown): value is SunoModelVersion =>
@@ -209,6 +214,33 @@ const writeStoredGenerationEngineVersion = (value: GenerationEngineVersion) => {
     window.localStorage.setItem(GENERATION_ENGINE_STORAGE_KEY, value);
   } catch {
     // Runtime copy above is enough for the current page session.
+  }
+};
+
+
+const isV1LyricWritingStyle = (value: unknown): value is V1LyricWritingStyle =>
+  value === 'default' || value === 'kimEana';
+
+const readStoredV1LyricWritingStyle = (): V1LyricWritingStyle => {
+  if (typeof window === 'undefined') return 'default';
+  try {
+    const stored = window.localStorage.getItem(V1_LYRIC_WRITING_STYLE_STORAGE_KEY);
+    if (isV1LyricWritingStyle(stored)) return stored;
+  } catch {
+    // Keep the default when storage is unavailable.
+  }
+  return isV1LyricWritingStyle(window.__soridrawV1LyricWritingStyle)
+    ? window.__soridrawV1LyricWritingStyle
+    : 'default';
+};
+
+export const writeStoredV1LyricWritingStyle = (value: V1LyricWritingStyle) => {
+  if (typeof window === 'undefined') return;
+  window.__soridrawV1LyricWritingStyle = value;
+  try {
+    window.localStorage.setItem(V1_LYRIC_WRITING_STYLE_STORAGE_KEY, value);
+  } catch {
+    // Runtime copy keeps the selection for the current page session.
   }
 };
 
@@ -335,6 +367,7 @@ export default function MusicApiGenerateModal({
   const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => (isMain ? 'V5_5' : readStoredSunoModelVersion()));
   const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
   const [generationEngineVersion, setGenerationEngineVersion] = useState<GenerationEngineVersion>(() => (isMain ? readStoredGenerationEngineVersion() : 'classic'));
+  const [lyricWritingStyle, setLyricWritingStyle] = useState<V1LyricWritingStyle>(() => (isMain ? readStoredV1LyricWritingStyle() : 'default'));
   const [isGenerationEngineOpen, setIsGenerationEngineOpen] = useState(false);
   const generationEngineMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -610,6 +643,7 @@ export default function MusicApiGenerateModal({
       rapEnabled: isMain && includeLyrics ? localRapMode === 'on' : undefined,
       sunoModelVersion: !isMain ? sunoModelVersion : undefined,
       generationEngineVersion: isMain ? generationEngineVersion : undefined,
+      lyricWritingStyle: isMain && includeLyrics && generationEngineVersion === 'classic' ? lyricWritingStyle : 'default',
     });
   };
 
@@ -1022,6 +1056,39 @@ export default function MusicApiGenerateModal({
                               </div>
                             </div>
                           </div>
+                          {generationEngineVersion === 'classic' && (
+                            <div className={`rounded-xl px-3 py-3 border ${optionRest}`}>
+                              <div className="mb-2 flex items-center justify-between">
+                                <p className="text-sm font-black">작사 스타일</p>
+                                <p className={`text-[10px] font-bold ${accentText}`}>V1 전용</p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {([
+                                  { id: 'default', label: '기본' },
+                                  { id: 'kimEana', label: '김이나식' },
+                                ] as Array<{ id: V1LyricWritingStyle; label: string }>).map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => {
+                                      writeStoredV1LyricWritingStyle(item.id);
+                                      setLyricWritingStyle(item.id);
+                                    }}
+                                    className={`rounded-lg px-2 py-2 text-[12px] font-black transition-all ${
+                                      lyricWritingStyle === item.id
+                                        ? accentSelected
+                                        : 'bg-black/10 text-[var(--text-secondary)] hover:bg-white/[0.06]'
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-secondary)]/75">
+                                기본은 Story Context와 장르에 맞춰 자유 작사합니다. 김이나식은 캐릭터·말맛·생활감 작법만 보조 적용합니다.
+                              </p>
+                            </div>
+                          )}
                           <AnimatePresence initial={false}>
                             {localKoreanEnglishMix && (
                               <motion.div
@@ -1144,6 +1211,7 @@ export default function MusicApiGenerateModal({
                           rapMode: includeLyrics ? localRapMode : 'auto',
                           rapEnabled: includeLyrics ? localRapMode === 'on' : false,
                           generationEngineVersion,
+                          lyricWritingStyle: includeLyrics && generationEngineVersion === 'classic' ? lyricWritingStyle : 'default',
                         });
                       }}
                       className="basis-[33%] w-[33%] h-14 sm:h-16 rounded-2xl border border-white/10 bg-black hover:bg-white text-white hover:text-black font-black text-[15px] sm:text-[20px] transition-all flex items-center justify-center shrink-0 whitespace-nowrap outline-none select-none"
@@ -1205,7 +1273,7 @@ export default function MusicApiGenerateModal({
                     <div className={`flex items-center justify-between px-5 py-4 border-t ${dividerClass}`}>
                       <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
                       <span className={`text-sm font-black ${accentText} text-right`}>
-                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'} · 랩 {localRapMode.toUpperCase()}
+                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'} · 랩 {localRapMode.toUpperCase()}{generationEngineVersion === 'classic' ? ` · ${lyricWritingStyle === 'kimEana' ? '김이나식' : '기본 작사'}` : ''}
                       </span>
                     </div>
                   )}

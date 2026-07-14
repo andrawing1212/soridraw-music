@@ -70,14 +70,22 @@ STORY CONTEXT SOURCES BY PRIORITY:
 
 JSON STORY CONTEXT FIELD:
 - Return a top-level JSON field named storyContext.
-- Write storyContext as 1-3 concise natural-language sentences, not a checklist, labels, or JSON inside JSON.
+- Write storyContext in concise natural English as 1-3 sentences, not a checklist, labels, or JSON inside JSON.
 - Keep the source's natural scope. Do not add mandatory people, places, actions, objects, or conclusions.
+- The narrative/topic meaning from Direct Theme, selected Theme, Situation, lyric draft, or story-shaped director text is the content core. Mood is only emotional color around that core and must never replace it.
 - This field is internal application data. Never mention the label Story Context inside title, productionPrompt, or lyrics.
+
+JSON STORY ATMOSPHERE FIELD:
+- Return a top-level JSON field named storyAtmosphere.
+- Write storyAtmosphere in natural English as the final content for the visible [Atmosphere] lane, without the [Atmosphere] label.
+- Start from the same Story Context and preserve its recognizable topic, situation, relationship, condition, or progression. Then add the selected/direct Mood only as emotional temperature, tone, or texture.
+- Do not replace a specific or unusual Story Context with a generic human moment, generic emotional scene, mood list, compulsory prop, or stock scenario.
+- Keep it concise and music-friendly, but never compress away the narrative core.
 
 ONE-CONTEXT OUTPUT OWNERSHIP:
 - [Genre]: musical identity only. It may carry a light emotional color but must not invent or replace the Story Context.
 - [Instruments]: selected sound anchors and how the music responds to the Story Context's pressure, movement, intimacy, humor, scale, or restraint. Do not invent plot facts.
-- [Atmosphere]: express the Story Context as musical air and a clear situation. It may describe one scene when the source is scene-shaped, or a broader state/progression when the source is situation-shaped. Do not force a single still image.
+- [Atmosphere]: use storyAtmosphere as the authoritative lane. Express the Story Context as musical air and a clear situation, with Theme/story meaning first and Mood as added color. It may describe one scene when the source is scene-shaped, or a broader state/progression when the source is situation-shaped. Do not force a single still image.
 - [Vocals]: perform from inside the same Story Context. Vocal identity and technique remain musical directions; attitude and phrasing should react to the same situation.
 - [Arrangement]: unfold the same Story Context through the selected sections. Each section may reveal a different phase or pressure, but must not introduce a separate narrative.
 - Lyrics: naturally develop the same Story Context through speech, thought, behavior, progression, or image. Do not copy production wording and do not create a parallel story.

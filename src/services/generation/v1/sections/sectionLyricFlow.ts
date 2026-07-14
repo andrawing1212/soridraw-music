@@ -1,0 +1,54 @@
+import type {
+  V1SectionBlueprint,
+  V1SectionBlueprintEntry,
+  V1SectionEngineParams,
+} from './sectionBlueprint';
+import { describeV1SectionMass } from './sectionRoleEngine';
+
+function sectionLoadLines(blueprint: V1SectionBlueprint): string {
+  return blueprint.entries.map((entry, index) => {
+    const lyricPolicy = !entry.allowsLyrics
+      ? 'no lyric body'
+      : entry.requiresLyrics
+        ? 'must carry role-appropriate lyric or vocal content'
+        : 'may stay lyric-free or use only role-appropriate sparse vocal content';
+    return `${index + 1}. ${entry.name} — ${describeV1SectionMass(entry.massClass)}; ${lyricPolicy}; ${entry.lyricRole}`;
+  }).join('\n');
+}
+
+function vocalOwnershipInstruction(vocalCount: number): string {
+  if (vocalCount <= 1) {
+    return `- Solo ownership: keep structural numbering independent from the singer. Every tag must start with the exact section name. Add a local performance cue only when the section genuinely changes; [Verse 1] and [Rap Section: tight rhythmic flow] are valid. Never output any group-member identity or a singer-first bracket tag. RAP MODE keeps the same solo singer and changes only that section's delivery.`;
+  }
+  return `- Multi-vocal ownership (${vocalCount} active voices): structural numbers show song chronology, never singer identity. Every tag must start with the exact section name. Use only the exact active anchors declared by the blueprint. [Vocals] and lyric tags must keep the same gender + letter + current role identity, for example [Verse 1 : Male A Main, conversational] or [Rap Section : Male D Rap, tight flow]. Never reverse this into [Male A Main : Conversational Verse].
+- Every declared A/B/C/D voice must own at least one meaningful lead, answer, overlap, or harmony moment outside an All Voices tag. Do not let one valid voice occupy the entire song while the other selected voices disappear.
+- Put the singer anchor first and one short local performance cue second. Do not repeat the full character description from [Vocals] in every lyric tag.
+- Do not create Verse A/B/C, Verse 1A/1B, Chorus 2A/2B, or similar singer-based section names in Recommended, Stable, or Experimental mode. Keep one structural tag and describe the interaction inside it. Custom mode keeps the user's exact names.
+- A real instrument, ambience, foley, environmental sound, or effect must be a standalone square-bracket cue below the structural tag. Parenthesized non-lexical human sounds such as (음, 음...), (우-), or (아...) are vocal ad-libs/humming, not sound effects.
+- Never leak singer instructions into the lyric body as (Male A Main), (Female D Sub), or similar parenthetical text.`;
+}
+
+export function buildV1AdaptiveLyricFlowInstruction(
+  blueprint: V1SectionBlueprint,
+  params: V1SectionEngineParams,
+): string {
+  const lyricAllowed = blueprint.entries.filter((entry) => entry.allowsLyrics).length;
+  const lyricRequired = blueprint.entries.filter((entry) => entry.requiresLyrics).length;
+  const lyricFree = blueprint.entries.filter((entry) => !entry.allowsLyrics).length;
+  const optional = Math.max(0, lyricAllowed - lyricRequired);
+  const tempoText = String(params.tempo || '').trim() || 'not explicitly fixed';
+  const lengthMode = String(params.lyricsLength || 'normal');
+
+  return `V1 SECTION ROLE & ADAPTIVE LYRIC MASS PLAN (MANDATORY, DO NOT OUTPUT THIS LABEL):
+- Selected overall length mode: ${lengthMode}. Tempo input: ${tempoText}. Blueprint contains ${lyricRequired} required sung sections, ${optional} optional/sparse vocal sections, and ${lyricFree} lyric-free sections.
+- Do not use fixed line counts, syllable quotas, character quotas, or a genre-name lyric-density table. Judge every section relative to the other sections in this exact song.
+- First decide the song's natural verbal density from tempo articulation, melodic sustain, rhythmic speech load, hook repetition, arrangement space, Story Context, and vocal formation. Then distribute that mass according to each section's structural role.
+- Tempo is a phrasing constraint, not a word-count multiplier. Fast music may use short rapid fragments or spacious chants; slow music may use sparse held notes or detailed storytelling.
+- Verse and Rap Section are the main homes for new information. Pre-Chorus and Build-Up compress and raise pressure. Chorus and Hook preserve the memorable center. Refrain is a brief recurring phrase identity, not another Verse. Bridge changes viewpoint or meaning. Drop releases; Breakdown strips back; Outro closes.
+- Structures with many Break, Stop, Instrumental, Interlude, Drop, Breakdown, or Theme spaces must not become accidentally incomplete. When the selected overall length calls for fuller storytelling, move genuine new substance into Verse, Rap Section, Bridge, Theme, or another development-capable role instead of padding every section.
+- Do not compensate for lyric-free space by copying Chorus/Hook bodies, overfilling Intro or Outro, or converting production cues into lyrics.
+- Repeated sections obey identity rules: later Verse/Rap advances; later Chorus/Hook returns the recognisable core with purposeful variation; later Refrain returns the same brief phrase identity.
+${vocalOwnershipInstruction(blueprint.vocalCount)}
+SECTION ROLE / RELATIVE MASS MAP:
+${sectionLoadLines(blueprint)}`;
+}

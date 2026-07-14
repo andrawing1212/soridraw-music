@@ -7,6 +7,7 @@ export {
 export type { V1StoryContextInput, V1SharedSceneAlignmentContext } from './sharedSceneAlignment';
 
 export {
+  buildV1GuaranteedProducerDirectionMap,
   buildV1ArrangementSectionPlanInstruction,
   buildV1ArrangementSectionSkeleton,
   buildV1CommonSectionRoleReference,
@@ -16,3 +17,4 @@ export {
   isV1SectionStructuredArrangement,
   normalizeV1SectionStructuredArrangement,
 } from './sectionArrangementRoles';
+export type { V1ProducerDirectionContext } from './sectionArrangementRoles';

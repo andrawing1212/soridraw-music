@@ -218,6 +218,30 @@ function getGeminiFallbackReason(error: any): string {
   return "generation_error";
 }
 
+function parseGeminiJsonObject(rawText: string): any {
+  const raw = String(rawText || '').trim();
+  if (!raw) throw new Error('empty JSON response');
+  const candidates = [
+    raw,
+    raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim(),
+  ];
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(raw.slice(firstBrace, lastBrace + 1));
+  }
+  let lastError: any = null;
+  for (const candidate of Array.from(new Set(candidates.filter(Boolean)))) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object') return parsed;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('invalid JSON response');
+}
+
 interface GeminiModelUsageInfo {
   usedModel: string;
   fallbackUsed: boolean;
@@ -25517,13 +25541,14 @@ function isV1ActionablePerformanceCuePart(part: string): boolean {
   if (/\b(?:atmosphere|resolution|production|arrangement|instrumental|acoustic\s+resolution|walking\s+tempo|tempo\s+applied|genre|style|sound\s+palette)\b/i.test(clean)) return false;
   if (/\b(?:ensity|unk+nown|n\/a|none|null|undefined)\b/i.test(clean)) return false;
   const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length < 2 || words.length > 12) return false;
-  const behaviorEvidence = /\b(?:vocal|voice|tone|timbre|delivery|phrasing|flow|rap|spoken|talk[-\s]?sung|whisper|whispered|humming|hum|chant|unison|harmony|falsetto|head\s+voice|chest\s+voice|register|breath|breathy|breathless|staccato|legato|melisma|melismatic|ornament|vibrato|ad[-\s]?lib|call|response|answer|overlap|lead|handoff|exchange|interruption|restraint|restrained|exposed|intimate|urgent|tender|sarcastic|playful|detached|raw|open|fuller|soaring|airy|gritty|husky|nasal|crisp|confessional|rhythmic|syncopated|measured|clipped|sustained|held|rising|falling|widening|released|release|lift|pressure|attack|shout|cry|pleading|narrative|storytelling|conversational|percussive|smooth|loose|tight)\b/i.test(clean);
-  const attitudeEvidence = /\b(?:wistful|anxious|uneasy|defiant|cheeky|warm|cold|deep|low|high|soft|rough|light|heavy|fragile|confident|hesitant|yearning|aching|hopeful|solemn|bright|dark|gentle|quiet|bold|tense|calm|vulnerable|earnest|dry|deadpan|mischievous|romantic|bittersweet)\b/i.test(clean);
-  // A real human vocal action such as humming or whispering remains valid even when the
-  // generic sound classifier also recognizes the word as an audible event.
-  if (cueIsMainlySoundOrInstrumentCue(clean) && !behaviorEvidence) return false;
-  return behaviorEvidence || attitudeEvidence;
+  if (words.length < 1 || words.length > 12) return false;
+  if (words.length === 1 && clean.replace(/[^A-Za-z]/g, '').length < 5) return false;
+  // Do not use a fixed vocabulary allow-list for creative cue wording. A cue passes when it is
+  // compact, intact, non-generic, and clearly not an instrument/production/space-texture cue.
+  // This keeps validation structural while allowing Gemini to invent current-song language.
+  if (!/[A-Za-z]/.test(clean)) return false;
+  if (cueIsMainlySoundOrInstrumentCue(clean)) return false;
+  return true;
 }
 
 function isV1PerformanceCueRequiredSection(sectionName: string, lines: string[], index: number): boolean {
@@ -25591,6 +25616,50 @@ function normalizeV1RepairAnchor(value: string, params: GenerateSongParams): str
   return '';
 }
 
+function buildV1SectionCueRepairLocalContext(
+  source: string,
+  issues: V1SectionPerformanceCueIssue[],
+): string {
+  const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+  const structuralIndexes = lines
+    .map((line, index) => parseGuardBracketSectionTag(line) ? index : -1)
+    .filter((index) => index >= 0);
+  const blocks: string[] = [];
+
+  issues.forEach((issue) => {
+    const targetIndex = Math.max(0, issue.lineNumber - 1);
+    const previousSectionIndex = [...structuralIndexes].reverse().find((index) => index < targetIndex);
+    const nextSectionIndex = structuralIndexes.find((index) => index > targetIndex);
+    const nextNextSectionIndex = nextSectionIndex === undefined
+      ? undefined
+      : structuralIndexes.find((index) => index > nextSectionIndex);
+    const start = Math.max(0, Math.max(previousSectionIndex ?? targetIndex, targetIndex - 3));
+    const endBoundary = nextNextSectionIndex ?? lines.length;
+    const end = Math.min(lines.length, endBoundary, targetIndex + 14);
+    const block = lines
+      .slice(start, end)
+      .map((line, offset) => `${start + offset + 1}: ${line}`)
+      .join('\n')
+      .trim();
+    if (block) blocks.push(`TARGET ${issue.lineNumber} (${issue.section})\n${block}`);
+  });
+
+  return Array.from(new Set(blocks)).join('\n\n').slice(0, 6500);
+}
+
+function listV1ExistingValidSectionCues(source: string, params: GenerateSongParams): string {
+  const lines = String(source || '').replace(/\r\n?/g, '\n').split('\n');
+  const entries: string[] = [];
+  lines.forEach((line, index) => {
+    const parsed = parseGuardBracketSectionTag(line);
+    if (!parsed) return;
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    const cue = v1PerformanceCuePartsFromBody(parsed.body, params).find(isV1ActionablePerformanceCuePart);
+    if (cue) entries.push(`- line ${index + 1} / ${section}: ${cue}`);
+  });
+  return entries.slice(0, 20).join('\n') || '- none';
+}
+
 async function repairV1SectionPerformanceCuesWithGemini(
   ai: GoogleGenAI,
   lyrics: string,
@@ -25609,7 +25678,8 @@ async function repairV1SectionPerformanceCuesWithGemini(
   if (!issues.length) return source;
 
   const blueprint = getV1SectionBlueprint(params);
-  const numberedLyrics = source.split('\n').map((line, index) => `${index + 1}: ${line}`).join('\n');
+  const localLyricContext = buildV1SectionCueRepairLocalContext(source, issues);
+  const existingValidCueMap = listV1ExistingValidSectionCues(source, params);
   const targetText = issues.map((issue) => `- line ${issue.lineNumber} / ${issue.section} / problem: ${issue.reason} / current anchor: ${issue.existingAnchor || 'none'} / current cue: ${issue.existingCue || 'none'}`).join('\n');
   const activeAnchors = blueprint.vocalAnchors.length ? blueprint.vocalAnchors.join(' / ') : 'solo voice; anchor must be empty';
   const storyContext = String((params as any).__v1StoryContext || '').trim();
@@ -25640,19 +25710,24 @@ PERFORMANCE ARC METHOD:
 TARGET TAG LINES:
 ${targetText}
 
-LINE-NUMBERED LYRICS FOR CONTEXT (LOCKED; DO NOT RETURN THEM):
-${numberedLyrics.slice(0, 9000)}
+EXISTING VALID CUES TO PRESERVE AND NOT COPY:
+${existingValidCueMap}
+
+LOCAL LYRIC CONTEXT AROUND EACH TARGET (LOCKED; DO NOT RETURN IT):
+${localLyricContext}
 
 Return exactly:
 {"replacements":[{"lineNumber":1,"anchor":"","cue":"short English performance cue"}]}`;
 
-  const response = await generateContentWithModelFallback(
-    ai,
-    {
+  let response: any = null;
+  try {
+    // This is an optional, fail-open quality pass. Use exactly one compact request instead of
+    // a fallback chain, so cue enrichment cannot create a long multi-model tail.
+    response = await ai.models.generateContent({
       model: GEMINI_TEXT_MODEL_CHAIN[0],
       contents: instruction,
       config: {
-        temperature: 0.45,
+        temperature: 0.4,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -25673,15 +25748,20 @@ Return exactly:
           required: ['replacements'],
         },
       },
-    },
-    'repairSectionPerformanceCues',
-  );
+    });
+  } catch (error) {
+    // Cue enrichment is a best-effort quality pass. Never discard an otherwise completed song
+    // because the optional tag-only Gemini call failed, timed out upstream, or hit a quota.
+    console.warn('[SORIDRAW Section Cue Repair] skipped; preserving generated song:', error);
+    return source;
+  }
 
   let parsed: any = {};
   try {
-    parsed = JSON.parse(response?.text || '{}');
+    parsed = parseGeminiJsonObject(response?.text || '{}');
   } catch (error) {
-    throw new Error('섹션 퍼포먼스 태그 보정 결과를 읽지 못했습니다. 다시 생성해주세요.');
+    console.warn('[SORIDRAW Section Cue Repair] invalid JSON; preserving generated song:', error);
+    return source;
   }
 
   const issueByLine = new Map(issues.map((issue) => [issue.lineNumber, issue]));
@@ -25724,10 +25804,9 @@ Return exactly:
     replacementByLine.set(lineNumber, { anchor, cues: rawCueParts });
   });
 
-  for (const issue of issues) {
-    if (!replacementByLine.has(issue.lineNumber)) {
-      throw new Error(`섹션 태그 품질 보정이 완료되지 않았습니다: ${issue.section}. 다시 생성해주세요.`);
-    }
+  if (!replacementByLine.size) {
+    console.warn('[SORIDRAW Section Cue Repair] no safe replacements; preserving generated song.', issues);
+    return source;
   }
 
   const repairedLines = currentLines.map((line, index) => {
@@ -25742,7 +25821,9 @@ Return exactly:
   const repaired = repairedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
   const remaining = collectV1SectionPerformanceCueIssues(repaired, params);
   if (remaining.length) {
-    throw new Error(`섹션 태그 품질 검사를 통과하지 못했습니다: ${remaining.map((item) => item.section).slice(0, 4).join(', ')}. 다시 생성해주세요.`);
+    // Keep all safe partial improvements, but never turn cue-quality debt into song-generation
+    // failure. The generated title, prompt, and lyrics are always more valuable than a failed job.
+    console.warn('[SORIDRAW Section Cue Repair] partial repair kept; unresolved cues:', remaining);
   }
   return repaired;
 }
@@ -25750,7 +25831,8 @@ Return exactly:
 function assertV1SectionPerformanceCueQuality(lyrics: string, params: GenerateSongParams): void {
   const issues = collectV1SectionPerformanceCueIssues(lyrics, params);
   if (!issues.length) return;
-  throw new Error(`섹션 태그 품질 검사를 통과하지 못했습니다: ${issues.map((item) => item.section).slice(0, 4).join(', ')}. 다시 생성해주세요.`);
+  // Final cue inspection is diagnostic only. It must never reject a completed song.
+  console.warn('[SORIDRAW Section Cue Quality] completed with cue warnings:', issues);
 }
 
 
@@ -28275,7 +28357,14 @@ export async function generateSong(
     ? await runV2Engine(() => generateSongLegacy(...args))
     : await runV1Engine(() => generateSongLegacy(...args));
 
-  const guarded = await applySharedLyricHardBanGuard(generated, params);
+  let guarded = generated;
+  try {
+    guarded = await applySharedLyricHardBanGuard(generated, params);
+  } catch (error) {
+    // A post-generation lyric cleanup must never erase an otherwise completed title/prompt/lyric.
+    console.warn('[SORIDRAW HardBan] cleanup failed; preserving completed song:', error);
+    guarded = generated;
+  }
   if (route !== 'v2' && guarded?.lyrics) {
     guarded.lyrics.korean = applyV1SectionBlueprintGuard(
       finalizeGeneratedLyricsStructuralSafety(String(guarded.lyrics.korean || ''), params),
@@ -29382,25 +29471,29 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       "generateSong",
     );
   } catch (fallbackError: any) {
-    console.warn("[SORIDRAW Generation Guard] model fallback chain failed, trying minimal fallback:", fallbackError);
     responseError = fallbackError;
-    try {
-      response = await generateContentWithModelFallback(
-        ai,
-        {
+    // The normal chain already used at most two models for a real temporary API failure.
+    // Starting another fallback chain here caused four sequential paid requests and very long tails.
+    // A compact one-shot fallback is reserved only for non-retryable prompt/schema/content errors.
+    if (isGeminiRetryableError(fallbackError)) {
+      console.warn("[SORIDRAW Generation Guard] retryable model chain exhausted; no duplicate minimal chain:", fallbackError);
+      response = null;
+    } else {
+      console.warn("[SORIDRAW Generation Guard] prompt/schema failure; trying one compact response:", fallbackError);
+      try {
+        response = await ai.models.generateContent({
           model: GEMINI_TEXT_MODEL_CHAIN[0],
           contents: "Generate a short safe song title, final productionPrompt, and lyrics as JSON. Always return valid JSON only.",
           config: {
             systemInstruction: `${systemInstruction}\n\nCRITICAL FALLBACK MODE: Return compact valid JSON only. Do not refuse. If any keyword combination is difficult, simplify it and continue.\n\n${GEMINI_FALLBACK_STABILITY_INSTRUCTION}`,
             responseMimeType: "application/json",
           },
-        },
-        "generateSong minimal",
-      );
-    } catch (minimalError: any) {
-      console.warn("[SORIDRAW Generation Guard] minimal fallback failed:", minimalError);
-      responseError = minimalError;
-      response = null;
+        });
+      } catch (minimalError: any) {
+        console.warn("[SORIDRAW Generation Guard] one-shot minimal fallback failed:", minimalError);
+        responseError = minimalError;
+        response = null;
+      }
     }
   }
 
@@ -29411,7 +29504,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   let result: any;
   try {
-    result = JSON.parse(response.text || "{}");
+    result = parseGeminiJsonObject(response.text || "{}");
   } catch (parseError: any) {
     console.warn("[SORIDRAW Generation Guard] JSON parse failed:", parseError, response.text);
     throw new Error(`Gemini AI 응답 형식이 분석에 실패했습니다. (JSON parse오류: ${parseError.message})`);

@@ -5939,8 +5939,10 @@ function App() {
   };
 
   type StudioGenerationRunResult = {
-    generationBatchId: string;
+    success: boolean;
+    generationBatchId?: string;
     generatedCount: number;
+    errorMessage?: string;
   };
 
   type StudioGenerationQueueItem = {
@@ -5953,6 +5955,7 @@ function App() {
     details: StudioGenerationQueueDetail[];
     generationBatchId?: string;
     completedAt?: number;
+    errorMessage?: string;
   };
 
   type StudioGenerationQueueTask = StudioGenerationQueueItem & {
@@ -9771,24 +9774,32 @@ const saveRecentSong = async (newSong: any) => {
 
       setHistoryIndex(0);
       return {
+        success: true,
         generationBatchId,
         generatedCount: generatedResults.length,
       } as StudioGenerationRunResult;
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      const rawErrorMessage = String(error?.message || '곡 생성 중 오류가 발생했습니다.').trim();
+      let errorMessage = rawErrorMessage || '곡 생성 중 오류가 발생했습니다.';
+      if (error?.name === 'AbortError') {
+        errorMessage = '생성 요청이 중단되었습니다.';
         console.log('Generation cancelled');
       } else {
         console.error(error);
-        const errorMessage = error.message || '곡 생성 중 오류가 발생했습니다.';
-        if (errorMessage.includes('VITE_GEMINI_API_KEY')) {
-          showToast('API 키가 설정되지 않았습니다. 설정을 확인해주세요.');
-        } else if (errorMessage.toLowerCase().includes('quota') || errorMessage.toLowerCase().includes('limit')) {
-          showToast('무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.');
-        } else {
-          showToast(errorMessage);
+        if (rawErrorMessage.includes('VITE_GEMINI_API_KEY')) {
+          errorMessage = 'API 키가 설정되지 않았습니다. 설정을 확인해주세요.';
+        } else if (/quota|rate.?limit|resource_exhausted|429/i.test(rawErrorMessage)) {
+          errorMessage = 'Gemini 사용 한도 또는 요청 제한에 도달했습니다. 잠시 후 다시 시도해주세요.';
+        } else if (/network|fetch|unavailable|overloaded|503|504/i.test(rawErrorMessage)) {
+          errorMessage = 'Gemini 서버 또는 네트워크 응답이 불안정합니다. 잠시 후 다시 시도해주세요.';
         }
+        showToast(errorMessage);
       }
-      return null;
+      return {
+        success: false,
+        generatedCount: 0,
+        errorMessage: errorMessage.slice(0, 320),
+      } as StudioGenerationRunResult;
     }
   };
 
@@ -9804,25 +9815,34 @@ const saveRecentSong = async (newSong: any) => {
       generationRunningTasksRef.current.set(nextTask.id, nextTask);
       const startedAt = Date.now();
       setGenerationQueueItems((current) => current.map((item) => (
-        item.id === nextTask.id ? { ...item, status: 'running', startedAt } : item
+        item.id === nextTask.id ? { ...item, status: 'running', startedAt, errorMessage: undefined } : item
       )));
 
       void (async () => {
-        let outcome: StudioGenerationRunResult | null | undefined;
+        let outcome: StudioGenerationRunResult = {
+          success: false,
+          generatedCount: 0,
+          errorMessage: '알 수 없는 생성 오류가 발생했습니다.',
+        };
         try {
-          outcome = await nextTask.run();
-        } catch (error) {
+          outcome = await nextTask.run() || outcome;
+        } catch (error: any) {
           console.error('Concurrent studio generation failed:', error);
-          outcome = null;
+          outcome = {
+            success: false,
+            generatedCount: 0,
+            errorMessage: String(error?.message || '동시 생성 작업에서 오류가 발생했습니다.').slice(0, 320),
+          };
         } finally {
           generationRunningTasksRef.current.delete(nextTask.id);
           setGenerationQueueItems((current) => current.map((item) => (
             item.id === nextTask.id
               ? {
                   ...item,
-                  status: outcome ? 'completed' : 'failed',
-                  generationBatchId: outcome?.generationBatchId,
+                  status: outcome.success ? 'completed' : 'failed',
+                  generationBatchId: outcome.generationBatchId,
                   completedAt: Date.now(),
+                  errorMessage: outcome.success ? undefined : (outcome.errorMessage || '생성에 실패했습니다.'),
                 }
               : item
           )));
@@ -13455,7 +13475,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   ? '대기 중'
                                   : item.status === 'completed'
                                     ? '완료 · 누르면 결과로 이동'
-                                    : '생성 실패';
+                                    : `생성 실패${item.errorMessage ? ` · ${item.errorMessage}` : ''}`;
                               return (
                                 <button
                                   key={item.id}
@@ -13536,6 +13556,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             ))}
                           </div>
+                          {selectedGenerationQueueItem.status === 'failed' && selectedGenerationQueueItem.errorMessage && (
+                            <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/8 px-3 py-2.5">
+                              <p className="text-[10px] font-black text-red-300/90">실패 사유</p>
+                              <p className="mt-1 break-words text-[11px] leading-relaxed text-red-100/75">
+                                {selectedGenerationQueueItem.errorMessage}
+                              </p>
+                            </div>
+                          )}
                           {selectedGenerationQueueItem.status === 'queued' && (
                             <button
                               type="button"

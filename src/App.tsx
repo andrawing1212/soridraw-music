@@ -5931,8 +5931,6 @@ function App() {
     rapEnabled?: boolean;
     generationEngineVersion?: GenerationEngineVersion;
     lyricWritingStyle?: V1LyricWritingStyle;
-    queueGenerationIndex?: number;
-    queueGenerationTotal?: number;
   };
 
   type StudioGenerationQueueDetail = {
@@ -5951,6 +5949,7 @@ function App() {
     summary: string;
     generationCount: number;
     queuedAt: number;
+    startedAt?: number;
     details: StudioGenerationQueueDetail[];
     generationBatchId?: string;
     completedAt?: number;
@@ -5963,11 +5962,21 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationQueueItems, setGenerationQueueItems] = useState<StudioGenerationQueueItem[]>([]);
   const [selectedGenerationQueueItemId, setSelectedGenerationQueueItemId] = useState<string | null>(null);
+  const [generationQueueClock, setGenerationQueueClock] = useState(() => Date.now());
   const generationQueueRef = useRef<StudioGenerationQueueTask[]>([]);
   const generationRunningTasksRef = useRef<Map<string, StudioGenerationQueueTask>>(new Map());
+  const recentSongSaveChainRef = useRef<Promise<void>>(Promise.resolve());
   const resultAreaRef = useRef<HTMLDivElement | null>(null);
   const MAX_STUDIO_GENERATION_QUEUE_JOBS = 5;
-  const MAX_CONCURRENT_STUDIO_GENERATIONS = 3;
+  const MAX_CONCURRENT_STUDIO_GENERATIONS = 2;
+  const STUDIO_GENERATION_DELAY_NOTICE_MS = 90_000;
+  const hasRunningStudioGeneration = generationQueueItems.some((item) => item.status === 'running');
+  useEffect(() => {
+    if (!hasRunningStudioGeneration) return;
+    setGenerationQueueClock(Date.now());
+    const timer = window.setInterval(() => setGenerationQueueClock(Date.now()), 10_000);
+    return () => window.clearInterval(timer);
+  }, [hasRunningStudioGeneration]);
   const [isMusicApiGenerating, setIsMusicApiGenerating] = useState(false);
   const [isHomeMusicApiMenuCollapsed, setIsHomeMusicApiMenuCollapsed] = useState(true);
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
@@ -8902,23 +8911,30 @@ const toggleCycleVariantSelection = (
 const saveRecentSong = async (newSong: any) => {
   if (!user) return;
 
-  try {
-    const ref = doc(db, "user_recent_songs", user.uid);
-    const snap = await getDoc(ref);
-    const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
-    const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-    const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
+  const saveOperation = async () => {
+    try {
+      const ref = doc(db, "user_recent_songs", user.uid);
+      const snap = await getDoc(ref);
+      const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
+      const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
+      const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
 
-    await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
-    recentSongsReadyToCacheRef.current = true;
-    applyRecentSongsState(updatedSongs, {
-      preferredIndex: 0,
-      latestBatchId: (updatedSongs[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
-    });
+      await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
+      recentSongsReadyToCacheRef.current = true;
+      applyRecentSongsState(updatedSongs, {
+        preferredIndex: 0,
+        latestBatchId: (updatedSongs[0]?.appliedKeywords as any)?.generationBatchId || latestGenerationBatchId || null,
+      });
+    } catch (e) {
+      console.error("Failed to save recent songs:", e);
+    }
+  };
 
-  } catch (e) {
-    console.error("Failed to save recent songs:", e);
-  }
+  // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
+  // read-merge-write sequence in completion order so one finished song cannot overwrite another.
+  const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
+  recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
+  await chainedSave;
 };
 
   /* 
@@ -8999,8 +9015,6 @@ const saveRecentSong = async (newSong: any) => {
       ? Array.from(new Set((generationOptions?.lyricLanguages?.length ? generationOptions.lyricLanguages : ['ko']).filter(Boolean))).slice(0, 2) as LanguageCode[]
       : [];
     const requestedGenerationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions?.generationCount) || 1)));
-    const queueGenerationIndex = Math.max(1, Math.floor(Number(generationOptions?.queueGenerationIndex) || 1));
-    const queueGenerationTotal = Math.max(requestedGenerationCount, Math.floor(Number(generationOptions?.queueGenerationTotal) || requestedGenerationCount));
     const requestedKoreanEnglishMix = requestedIncludeLyrics
       ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix)
       : false;
@@ -9599,8 +9613,8 @@ const saveRecentSong = async (newSong: any) => {
 
         const song = await generateSong({
           ...payload,
-          generationIndex: generationOptions?.queueGenerationIndex ? queueGenerationIndex : i + 1,
-          generationCount: generationOptions?.queueGenerationTotal ? queueGenerationTotal : requestedGenerationCount,
+          generationIndex: i + 1,
+          generationCount: requestedGenerationCount,
           recentStoryMemory: [
             ...inBatchStoryMemory,
             ...recentStoryMemoryBase,
@@ -9709,8 +9723,8 @@ const saveRecentSong = async (newSong: any) => {
             rapEnabled: requestedRapEnabled,
             isNoLyrics: isFinalInstrumentalBgm ? true : !requestedIncludeLyrics,
             lyricLanguages: isFinalInstrumentalBgm ? [] : requestedLyricLanguages,
-            generationCount: generationOptions?.queueGenerationTotal ? queueGenerationTotal : requestedGenerationCount,
-            generationIndex: generationOptions?.queueGenerationIndex ? queueGenerationIndex : i + 1,
+            generationCount: requestedGenerationCount,
+            generationIndex: i + 1,
             generationBatchId,
             lyricWritingStyle: requestedLyricWritingStyle,
             isKoreanEnglishMix: requestedKoreanEnglishMix,
@@ -9788,8 +9802,9 @@ const saveRecentSong = async (newSong: any) => {
       if (!nextTask) continue;
 
       generationRunningTasksRef.current.set(nextTask.id, nextTask);
+      const startedAt = Date.now();
       setGenerationQueueItems((current) => current.map((item) => (
-        item.id === nextTask.id ? { ...item, status: 'running' } : item
+        item.id === nextTask.id ? { ...item, status: 'running', startedAt } : item
       )));
 
       void (async () => {
@@ -9845,13 +9860,12 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     const activeAndQueuedCount = generationQueueRef.current.length + generationRunningTasksRef.current.size;
-    const generationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions.generationCount) || 1)));
-    const remainingQueueCapacity = MAX_STUDIO_GENERATION_QUEUE_JOBS - activeAndQueuedCount;
-    if (generationCount > remainingQueueCapacity) {
-      showToast(`현재 추가할 수 있는 곡은 ${Math.max(0, remainingQueueCapacity)}곡입니다. 진행·대기는 최대 ${MAX_STUDIO_GENERATION_QUEUE_JOBS}곡까지 가능합니다.`);
+    if (activeAndQueuedCount >= MAX_STUDIO_GENERATION_QUEUE_JOBS) {
+      showToast(`진행·대기 작업은 최대 ${MAX_STUDIO_GENERATION_QUEUE_JOBS}개까지 등록할 수 있습니다.`);
       return;
     }
 
+    const generationCount = Math.min(5, Math.max(1, Math.floor(Number(generationOptions.generationCount) || 1)));
     const genreLabels = Array.from(new Set([...selectedGenres, ...subGenre]))
       .map((id) => getGenreKeywordLabel(id))
       .filter(Boolean);
@@ -9908,49 +9922,33 @@ const saveRecentSong = async (newSong: any) => {
     const primaryGenreLabel = genreLabels[0] || queueCustomGenreInput || '직접 설정 곡';
     const primaryThemeLabel = themeLabelsForQueue[0] || queueCustomThemeInput;
     const summary = [primaryGenreLabel, primaryThemeLabel].filter(Boolean).join(' · ');
-    const queueTimestamp = Date.now();
-    const tasks: StudioGenerationQueueTask[] = Array.from({ length: generationCount }, (_, index) => {
-      const id = `studio-generation-${queueTimestamp}-${index + 1}-${Math.random().toString(36).slice(2, 8)}`;
-      const taskDetails = generationCount > 1
-        ? [...details, { label: '세트 순서', value: `${index + 1}/${generationCount}` }]
-        : details;
-      return {
-        id,
-        status: 'queued',
-        summary,
-        generationCount: 1,
-        queuedAt: queueTimestamp + index,
-        details: taskDetails,
-        // Each requested song becomes an independent task. Up to three tasks run at the same time.
-        run: async () => await executeGeneration({
-          ...generationOptions,
-          generationCount: 1,
-          queueGenerationIndex: index + 1,
-          queueGenerationTotal: generationCount,
-        }),
-      };
-    });
+    const id = `studio-generation-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const task: StudioGenerationQueueTask = {
+      id,
+      status: 'queued',
+      summary,
+      generationCount,
+      queuedAt: Date.now(),
+      details,
+      // The queued callback keeps the selections from this render, so later UI edits do not alter this job.
+      run: async () => await executeGeneration(generationOptions),
+    };
 
-    generationQueueRef.current.push(...tasks);
-    setGenerationQueueItems((current) => [
-      ...current,
-      ...tasks.map((task) => ({
-        id: task.id,
-        status: task.status,
-        summary: task.summary,
-        generationCount: task.generationCount,
-        queuedAt: task.queuedAt,
-        details: task.details,
-      })),
-    ]);
+    generationQueueRef.current.push(task);
+    setGenerationQueueItems((current) => [...current, {
+      id: task.id,
+      status: task.status,
+      summary: task.summary,
+      generationCount: task.generationCount,
+      queuedAt: task.queuedAt,
+      details: task.details,
+    }]);
 
     const availableSlotCount = Math.max(0, MAX_CONCURRENT_STUDIO_GENERATIONS - generationRunningTasksRef.current.size);
-    const immediateStartCount = Math.min(availableSlotCount, tasks.length);
-    const queuedAfterStartCount = tasks.length - immediateStartCount;
-    if (queuedAfterStartCount > 0) {
-      showToast(`${immediateStartCount}곡 생성 시작 · ${queuedAfterStartCount}곡 대기`);
+    if (availableSlotCount > 0) {
+      showToast('생성 작업을 시작했습니다.');
     } else {
-      showToast(`${tasks.length}곡 생성을 시작했습니다.`);
+      showToast(`동시 생성 2곡이 진행 중입니다. 대기 ${generationQueueRef.current.length}건`);
     }
 
     processGenerationQueue();
@@ -13448,8 +13446,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
                           <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
                             {generationQueueItems.map((item, index) => {
+                              const isDelayed = item.status === 'running'
+                                && Boolean(item.startedAt)
+                                && generationQueueClock - Number(item.startedAt) >= STUDIO_GENERATION_DELAY_NOTICE_MS;
                               const statusTitle = item.status === 'running'
-                                ? '생성 중'
+                                ? (isDelayed ? '생성 지연 중 · 계속 진행 중' : '생성 중')
                                 : item.status === 'queued'
                                   ? '대기 중'
                                   : item.status === 'completed'
@@ -13463,6 +13464,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   className={cn(
                                     "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
                                     item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
+                                    isDelayed && "border-amber-300/80 shadow-[0_0_0_3px_rgba(251,191,36,0.10)]",
                                     item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
                                     item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
                                     item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
@@ -13483,6 +13485,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                     <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
                                       {index + 1}
                                     </span>
+                                  )}
+                                  {isDelayed && (
+                                    <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.75)]" />
                                   )}
                                   {item.generationCount > 1 && (
                                     <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#111] px-1 text-[8px] text-white/85">
@@ -13505,7 +13510,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 {selectedGenerationQueueItem.status === 'queued' && <span className="h-2 w-2 rounded-full bg-white/35" />}
                                 {selectedGenerationQueueItem.status === 'failed' && <AlertCircle className="h-4 w-4 text-red-300" />}
                                 <span className="text-xs font-black text-white">
-                                  {selectedGenerationQueueItem.status === 'running' ? '생성 중' : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
+                                  {selectedGenerationQueueItem.status === 'running'
+                                    ? (selectedGenerationQueueItem.startedAt && generationQueueClock - selectedGenerationQueueItem.startedAt >= STUDIO_GENERATION_DELAY_NOTICE_MS
+                                      ? '생성 지연 중 · 계속 진행 중'
+                                      : '생성 중')
+                                    : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
                                 </span>
                               </div>
                               <p className="mt-1 truncate text-[11px] font-bold text-white/65">{selectedGenerationQueueItem.summary}</p>

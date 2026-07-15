@@ -362,7 +362,7 @@ export default function MusicApiGenerateModal({
   const [localLanguageMixTargets, setLocalLanguageMixTargets] = useState<LanguageCode[]>(() =>
     normalizeLanguageMixTargets(initialLangs[0], initialLangs, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)),
   );
-  const [localRapMode, setLocalRapMode] = useState<RapMode>(() => rapMode || (rapEnabled ? 'on' : 'auto'));
+  const [localRapMode, setLocalRapMode] = useState<RapMode>(() => rapMode || (rapEnabled ? 'on' : 'off'));
   const [showMoreLanguages, setShowMoreLanguages] = useState(false);
   const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => (isMain ? 'V5_5' : readStoredSunoModelVersion()));
   const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
@@ -519,7 +519,7 @@ export default function MusicApiGenerateModal({
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
     setLocalEnglishMixRatio(Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
     setLocalLanguageMixTargets(normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)));
-    setLocalRapMode(rapMode || (rapEnabled ? 'on' : 'auto'));
+    setLocalRapMode(rapMode || (rapEnabled ? 'on' : 'off'));
   }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled, rapMode]);
 
   useEffect(() => {
@@ -1054,6 +1054,9 @@ export default function MusicApiGenerateModal({
                                   </button>
                                 ))}
                               </div>
+                              <p className="mt-1.5 text-[9px] font-semibold leading-relaxed text-[var(--text-secondary)]/70">
+                                OFF 없음 · AUTO 래퍼 선택 시 · ON 래퍼 없이도 적용
+                              </p>
                             </div>
                           </div>
                           {generationEngineVersion === 'classic' && (

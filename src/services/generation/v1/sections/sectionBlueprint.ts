@@ -128,6 +128,11 @@ function hasRapSignal(params: V1SectionEngineParams): boolean {
   return /(?:^|[^a-z])(?:rap|rapper|hip[-\s]?hop|drill|trap|boom[-\s]?bap|phonk|grime|g[-\s]?funk)(?:$|[^a-z])|랩|래퍼|힙합|드릴|트랩/i.test(rapStructureSignalText(params));
 }
 
+function hasExplicitRapSectionRequest(params: V1SectionEngineParams): boolean {
+  const text = String(params.userInput || '').toLowerCase();
+  return /(?:랩|rap)(?:\s*section|\s*파트|\s*구간)?[^\r\n]{0,20}(?:넣|추가|포함|사용|include|add|use)|(?:include|add|use)[^\r\n]{0,20}(?:rap|랩)/i.test(text);
+}
+
 function shouldUseRapSection(params: V1SectionEngineParams): boolean {
   const mode = normalizedRapMode(params);
   if (mode === 'off') return false;
@@ -136,7 +141,9 @@ function shouldUseRapSection(params: V1SectionEngineParams): boolean {
     return (params.customStructure || []).some((item) => /rap|랩/i.test(String(item?.section || '')));
   }
   if (hasNoRapSignal(params)) return false;
-  return hasSelectedRapRole(params) || hasRapSignal(params);
+  // AUTO means "use the selected rapper role automatically". A rap-like genre alone must not
+  // silently rewrite the user's visible section structure. Explicit director-note requests remain valid.
+  return hasSelectedRapRole(params) || hasExplicitRapSectionRequest(params);
 }
 
 function scoreProfiles(params: V1SectionEngineParams): Array<[V1SectionProfile, number]> {
@@ -182,7 +189,11 @@ function hasExplicitRapStructure(params: V1SectionEngineParams): boolean {
 function resolveProfile(params: V1SectionEngineParams): V1SectionProfile {
   const scores = scoreProfiles(params);
   const first = scores[0]?.[0] || 'mainstream';
-  if (first !== 'rap' || hasExplicitRapStructure(params)) return first;
+  if (first !== 'rap') return first;
+
+  // AUTO adds one rap part while preserving the underlying song profile. Only an explicit ON
+  // may promote a strongly rap-led genre into the dedicated rap structure (Recommended/Experimental).
+  if (normalizedRapMode(params) === 'on' && hasRapSignal(params)) return 'rap';
   return scores.find(([profile, score]) => profile !== 'rap' && score > 0)?.[0] || 'mainstream';
 }
 
@@ -346,11 +357,9 @@ function resolveSequence(params: V1SectionEngineParams): { profile: V1SectionPro
 
   const profile = resolveProfile(params);
   if (params.songStructure === '2') {
-    const sections = profile === 'rap'
-      ? STABLE_RAP
-      : shouldUseRapSection(params)
-        ? STABLE_VOCAL_WITH_RAP
-        : STABLE_VOCAL;
+    // Stable is a visible user promise. Never swap it for the hidden rap-only blueprint.
+    // Rap OFF keeps the exact stable vocal structure; AUTO/ON replace only Verse 2 with one Rap Section.
+    const sections = shouldUseRapSection(params) ? STABLE_VOCAL_WITH_RAP : STABLE_VOCAL;
     return { profile, mode: 'stable', rawEntries: sections.map((name) => ({ name, customTags: [] })) };
   }
   if (params.songStructure === '3') {

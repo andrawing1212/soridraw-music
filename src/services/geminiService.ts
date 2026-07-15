@@ -25573,7 +25573,8 @@ function isV1ActionablePerformanceCuePart(part: string): boolean {
   // compact, intact, non-generic, and clearly not an instrument/production/space-texture cue.
   // This keeps validation structural while allowing Gemini to invent current-song language.
   if (!/[A-Za-z]/.test(clean)) return false;
-  if (cueIsMainlySoundOrInstrumentCue(clean)) return false;
+  const explicitVocalPerformance = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|raspy|husky|restrained|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|open|clipped|syncopated|laid[-\s]?back|loose|urgent|tension|release|lift)\b/i.test(clean);
+  if (cueIsMainlySoundOrInstrumentCue(clean) && !explicitVocalPerformance) return false;
   return true;
 }
 
@@ -25692,24 +25693,80 @@ type V1GeneratedSectionPerformancePlanItem = {
   sectionName?: string;
   vocalAnchor?: string;
   performanceCue?: string;
+  alternatePerformanceCue?: string;
   soundCue?: string;
 };
 
-function sanitizeV1GeneratedPlanPerformanceCue(value: unknown): string {
-  const parts = String(value ?? '')
+function cleanV1GeneratedPlanCueText(value: unknown): string {
+  // Plan cue fields are already English-only typed fields. Use a deliberately non-destructive
+  // cleaner here: never run broad prompt cleanup that can alter letters inside short phrases.
+  return String(value ?? '')
     .replace(/[\[\]\n\r]/g, ' ')
-    .split(/[,，]/)
-    .map((part) => cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim())
+    .replace(/[“”"'`]/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,.;:|/\-]+|[\s,.;:|/\-]+$/g, '')
+    .trim();
+}
+
+function hasV1IncompleteCueEnding(value: string): boolean {
+  return /\b(?:with|and|or|to|of|for|from|into|over|under|through|by|as|a|an|the)\s*$/i.test(value);
+}
+
+function scoreV1GeneratedPlanPerformanceCue(value: string): number {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean || hasV1IncompleteCueEnding(clean)) return -100;
+  if (/\b(?:ums|uild|ension|arm-up)\b/i.test(clean)) return -90;
+  let score = 0;
+  const hasVocalSignal = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|raspy|husky|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|clipped|syncopated|laid[-\s]?back|loose|warm[-\s]?up)\b/i.test(clean);
+  const hasDynamicSignal = /\b(?:airy|soft|warm|bright|wistful|tense|tension|urgent|restrained|playful|confident|passionate|fading|rising|building|build|swell|crescendo|decrescendo|lifted|open|deep|gentle|dry|fuller|free|freer)\b/i.test(clean);
+  if (hasVocalSignal) score += 4;
+  if (hasDynamicSignal) score += 2;
+  if (!hasVocalSignal && !hasDynamicSignal) score -= 3;
+  if (/\b(?:more|very|rich|dynamic|emotional)\b/i.test(clean) && clean.split(/\s+/).length <= 2) score -= 2;
+  if (containsV1ConcreteProductionCue(clean) || isDirectorProductionCueLeakForLyricSectionTag(clean)) score -= 8;
+  return score;
+}
+
+function selectV1GeneratedPlanPerformanceCue(...values: Array<unknown>): string {
+  const candidates = values
+    .map((value) => sanitizeV1GeneratedPlanPerformanceCue(value))
     .filter(Boolean)
-    .filter(isV1ActionablePerformanceCuePart)
+    .map((value, index) => ({ value, index, score: scoreV1GeneratedPlanPerformanceCue(value) }))
+    .filter((item) => item.score > -100)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  return candidates[0]?.value || '';
+}
+
+function sanitizeV1GeneratedPlanPerformanceCue(value: unknown): string {
+  const parts = cleanV1GeneratedPlanCueText(value)
+    .split(/[,，]/)
+    .map((part) => cleanV1GeneratedPlanCueText(part))
+    .filter(Boolean)
+    .filter((part) => {
+      if (!/[A-Za-z]/.test(part)) return false;
+      if (cueLooksLikeVerboseStorySentence(part)) return false;
+      if (isDirectorProductionCueLeakForLyricSectionTag(part)) return false;
+      if (isLyricSectionSpaceTextureCue(part)) return false;
+      if (isGenericFallbackOnlyLyricSectionCue(part)) return false;
+      if (/\b(?:ensity|unk+nown|n\/a|none|null|undefined|atmosphere|production|arrangement|instrumental|sound\s+palette)\b/i.test(part)) return false;
+      const words = part.split(/\s+/).filter(Boolean);
+      if (words.length < 1 || words.length > 12) return false;
+
+      // sectionPerformancePlan.performanceCue is already a typed vocal-performance field.
+      // Trust rhythmic and non-lexical vocal language such as "groove pocket" or "low humming";
+      // reject it only when concrete instruments / production operations clearly dominate.
+      const concreteProduction = containsV1ConcreteProductionCue(part)
+        || isDirectorProductionCueLeakForLyricSectionTag(part);
+      const vocalAction = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|groove|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|airy|raspy|husky|restrained|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|open|clipped|syncopated|laid[-\s]?back|loose|urgent|tension|release|lift)\b/i.test(part);
+      if (concreteProduction && !vocalAction) return false;
+      return true;
+    })
     .slice(0, 2);
   return parts.join(', ');
 }
 
 function sanitizeV1GeneratedPlanSoundCue(value: unknown): string {
-  const clean = cleanupPromptTail(
-    cleanEnglishOnlyLyricTagPart(String(value ?? '').replace(/[\[\]\n\r]/g, ' ')),
-  ).trim();
+  const clean = cleanV1GeneratedPlanCueText(value);
   if (!clean || !/[A-Za-z]/.test(clean)) return '';
   const words = clean.split(/\s+/).filter(Boolean);
   if (words.length > 16) return '';
@@ -25722,6 +25779,61 @@ function sanitizeV1GeneratedPlanSoundCue(value: unknown): string {
 
 function normalizeV1GeneratedPlanSectionName(value: unknown): string {
   return normalizeLyricSectionDisplayName(String(value ?? '').replace(/[\[\]]/g, '').trim());
+}
+
+function baseV1GeneratedPlanSectionName(value: string): string {
+  return normalizeLyricSectionDisplayName(value || '')
+    .replace(/\s+(?:\d+|[A-Z])$/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function isV1StandaloneBracketCueLine(value: string, customNames: string[]): boolean {
+  const clean = String(value || '').trim();
+  return /^\[[^\]\n]{1,220}\]$/.test(clean) && !isV1StructuralSectionTag(clean, customNames);
+}
+
+function insideV1StandaloneCueLine(value: string): string {
+  return String(value || '').trim().replace(/^\[|\]$/g, '').trim();
+}
+
+function v1CueSemanticTokens(value: string): string[] {
+  const stop = new Set([
+    'the', 'a', 'an', 'and', 'with', 'into', 'over', 'under', 'only', 'more', 'full', 'slowly',
+    'soft', 'softly', 'gentle', 'gently', 'becomes', 'become', 'takes', 'take', 'leaving', 'while',
+  ]);
+  return normalizeV1PerformanceCueKey(value)
+    .split(/\s+/)
+    .map((token) => token.replace(/(?:ing|ed|es|s)$/i, ''))
+    .filter((token) => token.length >= 3 && !stop.has(token));
+}
+
+function areV1StandaloneCuesSemanticallyDuplicate(a: string, b: string): boolean {
+  const keyA = normalizeV1PerformanceCueKey(a);
+  const keyB = normalizeV1PerformanceCueKey(b);
+  if (!keyA || !keyB) return false;
+  if (keyA === keyB || keyA.includes(keyB) || keyB.includes(keyA)) return true;
+  const tokensA = new Set(v1CueSemanticTokens(a));
+  const tokensB = new Set(v1CueSemanticTokens(b));
+  if (!tokensA.size || !tokensB.size) return false;
+  const intersection = [...tokensA].filter((token) => tokensB.has(token));
+  const union = new Set([...tokensA, ...tokensB]);
+  const overlap = intersection.length / Math.max(1, union.size);
+  const sameMotion = /\b(?:enter|open|swell|rise|lift|drop|thin|withdraw|pull|fade|return|take\s+over|solo)\b/i.test(a)
+    && /\b(?:enter|open|swell|rise|lift|drop|thin|withdraw|pull|fade|return|take\s+over|solo)\b/i.test(b);
+  const sharedConcreteSource = intersection.some((token) => /^(?:guitar|piano|rhode|synth|pad|string|brass|drum|bass|duduk|flute|choir|groove|beat|vocal)$/.test(token));
+  return overlap >= 0.46 || (sameMotion && sharedConcreteSource && intersection.length >= 2);
+}
+
+function dedupeV1StandaloneCues(values: string[], limit = 2): string[] {
+  const out: string[] = [];
+  values.forEach((value) => {
+    const clean = cleanupPromptTail(cleanEnglishOnlyLyricTagPart(value || '')).trim();
+    if (!clean) return;
+    if (out.some((existing) => areV1StandaloneCuesSemanticallyDuplicate(existing, clean))) return;
+    out.push(clean);
+  });
+  return out.slice(0, limit);
 }
 
 function applyV1GeneratedSectionPerformancePlan(
@@ -25749,10 +25861,11 @@ function applyV1GeneratedSectionPerformancePlan(
       sectionName: normalizeV1GeneratedPlanSectionName(item?.sectionName),
       vocalAnchor: normalizeV1RepairAnchor(String(item?.vocalAnchor || ''), params),
       performanceCue: sanitizeV1GeneratedPlanPerformanceCue(item?.performanceCue),
+      alternatePerformanceCue: sanitizeV1GeneratedPlanPerformanceCue(item?.alternatePerformanceCue),
       soundCue: sanitizeV1GeneratedPlanSoundCue(item?.soundCue),
     }))
     .sort((a, b) => a.sectionIndex - b.sectionIndex);
-  const planByIndex = new Map(normalizedPlan.map((item) => [item.sectionIndex, item]));
+
   const usedPlanIndexes = new Set<number>();
   const lines = source.split('\n');
   const output: string[] = [];
@@ -25760,21 +25873,32 @@ function applyV1GeneratedSectionPerformancePlan(
 
   const pickPlanItem = (section: string) => {
     structuralOrdinal += 1;
-    const indexed = planByIndex.get(structuralOrdinal);
-    const blueprintName = normalizeLyricSectionDisplayName(blueprint.entries[structuralOrdinal - 1]?.name || '');
-    if (indexed && (!indexed.sectionName
-      || indexed.sectionName.toLowerCase() === section.toLowerCase()
-      || blueprintName.toLowerCase() === section.toLowerCase())) {
-      usedPlanIndexes.add(indexed.sectionIndex);
-      return indexed;
-    }
-    const fallback = normalizedPlan.find((item) =>
+    const exact = normalizedPlan.find((item) =>
       !usedPlanIndexes.has(item.sectionIndex)
       && item.sectionName
       && item.sectionName.toLowerCase() === section.toLowerCase(),
     );
-    if (fallback) usedPlanIndexes.add(fallback.sectionIndex);
-    return fallback || indexed;
+    if (exact) {
+      usedPlanIndexes.add(exact.sectionIndex);
+      return exact;
+    }
+
+    const base = baseV1GeneratedPlanSectionName(section);
+    const sameFamily = normalizedPlan.find((item) =>
+      !usedPlanIndexes.has(item.sectionIndex)
+      && item.sectionName
+      && baseV1GeneratedPlanSectionName(item.sectionName) === base,
+    );
+    if (sameFamily) {
+      usedPlanIndexes.add(sameFamily.sectionIndex);
+      return sameFamily;
+    }
+
+    const indexed = normalizedPlan.find((item) =>
+      !usedPlanIndexes.has(item.sectionIndex) && item.sectionIndex === structuralOrdinal,
+    );
+    if (indexed) usedPlanIndexes.add(indexed.sectionIndex);
+    return indexed;
   };
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -25790,39 +25914,72 @@ function applyV1GeneratedSectionPerformancePlan(
       output.push(line);
       continue;
     }
-    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+
+    const displaySection = String(parsed.rawSection || '').trim();
+    const section = normalizeLyricSectionDisplayName(displaySection);
     const item = pickPlanItem(section);
-    if (!item) {
-      output.push(line);
-      continue;
+    const adjacentCueLines: string[] = [];
+    let cursor = index + 1;
+    while (cursor < lines.length) {
+      const candidate = String(lines[cursor] || '').trim();
+      if (!candidate) {
+        cursor += 1;
+        continue;
+      }
+      if (!isV1StandaloneBracketCueLine(candidate, blueprint.customNames)) break;
+      adjacentCueLines.push(insideV1StandaloneCueLine(candidate));
+      cursor += 1;
     }
 
-    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index);
     const existingAnchor = extractV1AnchorFromCueBody(parsed.body, params);
-    const existingCue = v1PerformanceCuePartsFromBody(parsed.body, params)
-      .filter(isV1ActionablePerformanceCuePart)
-      .slice(0, 2)
-      .join(', ');
-    const performanceCue = item.performanceCue || existingCue;
+    const existingTagCues = v1PerformanceCuePartsFromBody(parsed.body, params)
+      .map(sanitizeV1GeneratedPlanPerformanceCue)
+      .filter(Boolean);
+    const adjacentPerformance = adjacentCueLines
+      .map(sanitizeV1GeneratedPlanPerformanceCue)
+      .filter(Boolean);
+    const adjacentProduction = adjacentCueLines
+      .map(sanitizeV1GeneratedPlanSoundCue)
+      .filter(Boolean);
+
+    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index);
+    const performanceCue = selectV1GeneratedPlanPerformanceCue(
+      item?.performanceCue,
+      item?.alternatePerformanceCue,
+      existingTagCues[0],
+      adjacentPerformance[0],
+    );
     const anchor = blueprint.vocalAnchors.length >= 2
-      ? (item.vocalAnchor || existingAnchor)
+      ? (item?.vocalAnchor || existingAnchor)
       : '';
 
     if (requiresCue && performanceCue && (blueprint.vocalAnchors.length < 2 || anchor)) {
       const body = [anchor, performanceCue].filter(Boolean).join(', ');
-      output.push(`[${section} : ${body}]`);
+      output.push(`[${displaySection || section} : ${body}]`);
     } else {
       output.push(line);
     }
 
-    const soundCue = item.soundCue;
-    if (soundCue) {
-      const nextNonEmpty = lines.slice(index + 1).find((candidate) => String(candidate || '').trim());
-      const nextCue = nextNonEmpty && /^\[[^\]]+\]$/.test(String(nextNonEmpty).trim())
-        ? String(nextNonEmpty).trim().slice(1, -1)
-        : '';
-      const sameNextCue = normalizeV1PerformanceCueKey(nextCue) === normalizeV1PerformanceCueKey(soundCue);
-      if (!sameNextCue) output.push(`[${soundCue}]`);
+    // The shared plan is the final authority for local production movement. When it contains
+    // a soundCue, use exactly that cue on both language cards and discard older generated
+    // duplicates. If it is empty, preserve at most two distinct existing production cues.
+    const finalProduction = item?.soundCue
+      ? [item.soundCue]
+      : dedupeV1StandaloneCues(adjacentProduction, 2);
+    finalProduction.forEach((cue) => output.push(`[${cue}]`));
+
+    if (adjacentCueLines.length) {
+      // A matched shared plan is the final authority for both local performance and production.
+      // Discard all older standalone bracket instructions so they cannot stack, contradict, or
+      // duplicate the plan. Only preserve legacy/unclassified lines when no plan item matched.
+      if (!item) {
+        adjacentCueLines.forEach((cue) => {
+          const isPerformance = Boolean(sanitizeV1GeneratedPlanPerformanceCue(cue));
+          const isProduction = Boolean(sanitizeV1GeneratedPlanSoundCue(cue));
+          if (!isPerformance && !isProduction) output.push(`[${cue}]`);
+        });
+      }
+      index = cursor - 1;
     }
   }
 
@@ -28704,9 +28861,10 @@ ${selectedNativeScriptInstruction}
               sectionName: { type: Type.STRING },
               vocalAnchor: { type: Type.STRING },
               performanceCue: { type: Type.STRING },
+              alternatePerformanceCue: { type: Type.STRING },
               soundCue: { type: Type.STRING },
             },
-            required: ["sectionIndex", "sectionName", "vocalAnchor", "performanceCue", "soundCue"],
+            required: ["sectionIndex", "sectionName", "vocalAnchor", "performanceCue", "alternatePerformanceCue", "soundCue"],
           },
         },
       }
@@ -28861,7 +29019,8 @@ ${exactStructureText}
 - Design ONE shared Section Performance Plan before writing either lyric card. The plan, [Arrangement], and both lyric cards must come from the same Story Context and the same whole-song performance arc.
 - Return exactly one plan item for every structural section in this exact order: ${exactStructureText}.
 - sectionIndex is 1-based and follows that exact order. sectionName must use the exact visible section name for that position.
-- For every sung or vocal-ad-lib section, performanceCue is REQUIRED and must be a short current-song English cue describing the locally dominant vocal behavior, phrasing/rhythm, emotional attitude, or dynamic movement. Never leave it empty.
+- For every sung or vocal-ad-lib section, performanceCue is REQUIRED and must be a complete 2–8 word current-song English phrase describing the locally dominant vocal behavior, phrasing/rhythm, emotional attitude, or dynamic movement. Never leave it empty, never truncate a word, and never end with a dangling connector such as with/and/to/of.
+- alternatePerformanceCue is also REQUIRED for every sung or vocal-ad-lib section. Write a second complete 2–8 word cue with different wording but the same local function, so the application can safely use it if the primary cue is incomplete. For non-vocal sections, both cue fields may be empty.
 - For a solo song, vocalAnchor must be an empty string. For a multi-vocal song, vocalAnchor must be one exact active anchor from [Vocals], or All Voices only for a genuine shared payoff.
 - soundCue is optional. Use an empty string when no local production event is needed. When used, write one short audible instrument/effect/texture action in English, separate from the vocal cue.
 - Non-vocal sections such as Instrumental, Interlude, Break, Stop, or an actual solo section may use an empty performanceCue and a useful soundCue.
@@ -29964,15 +30123,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       kor = finalizeGeneratedLyricsStructuralSafety(kor, params);
       eng = finalizeGeneratedLyricsStructuralSafety(eng, params);
 
-      // Bind the Section Performance Plan generated in the SAME primary Gemini response.
-      // This replaces the old tag-only follow-up Gemini request, so [Arrangement], tags, and
-      // lyrics stay coherent and normal generation does not gain another paid/slow call.
-      const sectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
-        ? (result as any).sectionPerformancePlan
-        : [];
-      kor = applyV1GeneratedSectionPerformancePlan(kor, sectionPerformancePlan, params);
-      eng = applyV1GeneratedSectionPerformancePlan(eng, sectionPerformancePlan, params);
-
+      // Keep structural cleanup independent from performance-plan binding. The shared plan is
+      // applied once at the true final lyric boundary, after every legacy renderer/guard has
+      // finished, so no later pass can strip a valid cue or duplicate a sound event.
       result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(kor, params);
       result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(eng, params);
     }
@@ -30064,11 +30217,30 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         });
       }
     } else {
+      const finalSectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
+        ? (result as any).sectionPerformancePlan
+        : [];
       if (typeof result.lyrics.korean === 'string') {
-        result.lyrics.korean = applyV1SectionBlueprintGuard(finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params), params);
+        const structurallyFinalKorean = applyV1SectionBlueprintGuard(
+          finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params),
+          params,
+        );
+        result.lyrics.korean = applyV1GeneratedSectionPerformancePlan(
+          structurallyFinalKorean,
+          finalSectionPerformancePlan,
+          params,
+        );
       }
       if (typeof result.lyrics.english === 'string') {
-        result.lyrics.english = applyV1SectionBlueprintGuard(finalizeGeneratedLyricsStructuralSafety(result.lyrics.english, params), params);
+        const structurallyFinalEnglish = applyV1SectionBlueprintGuard(
+          finalizeGeneratedLyricsStructuralSafety(result.lyrics.english, params),
+          params,
+        );
+        result.lyrics.english = applyV1GeneratedSectionPerformancePlan(
+          structurallyFinalEnglish,
+          finalSectionPerformancePlan,
+          params,
+        );
       }
     }
   }
@@ -30475,3 +30647,6 @@ Translate the provided text into ${targetLanguage}.
 
   return response.text || "";
 }
+
+
+

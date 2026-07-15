@@ -5589,7 +5589,24 @@ function App() {
   const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([]);
   const [vocalRandomActivationKey, setVocalRandomActivationKey] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
-  const [rapMode, setRapMode] = useState<RapMode>('auto');
+  const [rapMode, setRapMode] = useState<RapMode>('off');
+  const hasSelectedRapperRole = useMemo(
+    () => vocalMembers.some((member) => member.roles.includes('rapper')),
+    [vocalMembers],
+  );
+  const previousRapperPresenceRef = useRef(hasSelectedRapperRole);
+  useEffect(() => {
+    const previous = previousRapperPresenceRef.current;
+    if (hasSelectedRapperRole !== previous) {
+      setRapMode((current) => {
+        if (hasSelectedRapperRole && current === 'off') return 'auto';
+        if (!hasSelectedRapperRole && current === 'auto') return 'off';
+        return current;
+      });
+      if (!hasSelectedRapperRole) setRapEnabled(false);
+      previousRapperPresenceRef.current = hasSelectedRapperRole;
+    }
+  }, [hasSelectedRapperRole]);
   useEffect(() => {
     const total = maleCount + femaleCount;
     if (total === 0) {
@@ -5636,11 +5653,6 @@ function App() {
             else roles = ['sub'];
           }
 
-          // If rap is enabled and it's a solo or we need a rapper in group
-          if (rapEnabled && (vocalMode === 'solo' || (vocalMode === 'group' && i === total - 1) || (vocalMode === 'duo' && i === 1))) {
-            if (!roles.includes('rapper')) roles.push('rapper');
-          }
-
           newMembers.push({
             id: `member_${Date.now()}_${i}`,
             gender,
@@ -5650,7 +5662,7 @@ function App() {
       }
       return newMembers;
     });
-  }, [maleCount, femaleCount, vocalMode, rapEnabled]);
+  }, [maleCount, femaleCount, vocalMode]);
 
   const [pinnedGenres, setPinnedGenres] = useState<string[]>(() => {
     const saved = sessionStorage.getItem('soridraw_pinned_genres');
@@ -6050,7 +6062,7 @@ function App() {
     setMaleCount(template.maleCount ?? 0);
     setFemaleCount(template.femaleCount ?? 0);
     setRapEnabled(template.rapEnabled ?? false);
-    setRapMode((template as any).rapMode || (template.rapEnabled ? 'on' : 'auto'));
+    setRapMode((template as any).rapMode || (template.rapEnabled ? 'on' : 'off'));
     
     const isValidVocalTone = VOCAL_TONES.some(tone => tone.id === template.vocalToneId);
     setSelectedVocalToneId(isValidVocalTone ? template.vocalToneId : undefined);
@@ -7833,7 +7845,7 @@ const toggleCycleVariantSelection = (
       ? storedRapMode as RapMode
       : appliedKeywords.rapEnabled === true
         ? 'on'
-        : 'auto';
+        : 'off';
     setRapMode(restoredRapMode);
     setRapEnabled(restoredRapMode === 'on');
 
@@ -10477,7 +10489,7 @@ ${normalizePromptForDisplay(result.prompt)}
           male: Number(applied.maleCount || 0),
           female: Number(applied.femaleCount || 0),
           rap: Boolean(applied.rapEnabled),
-          rapMode: applied.rapMode || (applied.rapEnabled ? 'on' : 'auto'),
+          rapMode: applied.rapMode || (applied.rapEnabled ? 'on' : 'off'),
         };
 
     return {

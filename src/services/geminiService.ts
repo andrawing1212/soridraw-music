@@ -25311,6 +25311,25 @@ function isProtectedLyricPreserveMode(params: GenerateSongParams): boolean {
   );
 }
 
+
+function hasCatastrophicV1LyricStructureFailure(lyrics: string, params: GenerateSongParams): boolean {
+  const source = String(lyrics || '').trim();
+  if (!source) return true;
+  const blocks = splitLyricBlocksForDensity(source);
+  if (!blocks.length) return true;
+  const bodyLines = lyricDensityBodyLines(source, params);
+  if (bodyLines.length < 2) return true;
+
+  let emptyRequiredBlocks = 0;
+  blocks.forEach((block) => {
+    const normalized = normalizeLyricSectionDisplayName(block.section || '');
+    const required = /^(?:Verse(?:\s+\d+)?|Pre[-\s]?Chorus(?:\s+\d+)?|Chorus(?:\s+\d+)?|Final\s+Chorus|Hook(?:\s+\d+)?|Final\s+Hook|Refrain(?:\s+\d+)?|Rap\s+Section(?:\s+\d+)?|Bridge)$/i.test(normalized);
+    if (!required) return;
+    if (!sectionMeaningScoreForDensity(block.lines, params).bodyLines.length) emptyRequiredBlocks += 1;
+  });
+  return emptyRequiredBlocks > 0;
+}
+
 async function repairSparseLyricsWithGemini(
   ai: GoogleGenAI,
   lyrics: string,
@@ -25331,10 +25350,17 @@ async function repairSparseLyricsWithGemini(
   // Clean tag-only fallback Intro/Verse shells before deciding whether a second Gemini pass
   // is needed. This prevents the repair pass from creating a second, competing lyric version.
   const source = cleanupGhostOpeningIntroAndEmptySungTags(originalSource, params);
-  const roleIssues = source
+  const roleIssues = source && isGenerationEngineV2(params)
     ? filterV1SectionRoleIssuesForUserIntent(inspectV1LyricsForRoleIssues(source, params), params).map((issue) => issue.message)
     : [];
-  const densityRepairNeeded = source ? needsLyricDensityRepair(source, params) : false;
+  // V1 no longer spends another Gemini call on soft quality preferences such as a modest
+  // Final Chorus, Intro mass, or section-role nuance. A full lyric rewrite is reserved only
+  // for catastrophic structural failure (missing/empty required sung blocks or no usable body).
+  const densityRepairNeeded = source
+    ? (isGenerationEngineV2(params)
+      ? needsLyricDensityRepair(source, params)
+      : hasCatastrophicV1LyricStructureFailure(source, params))
+    : false;
   if (!source || (!densityRepairNeeded && !roleIssues.length)) {
     return enforceLyricSectionBlockSpacing(source || originalSource, params);
   }
@@ -25660,172 +25686,152 @@ function listV1ExistingValidSectionCues(source: string, params: GenerateSongPara
   return entries.slice(0, 20).join('\n') || '- none';
 }
 
-async function repairV1SectionPerformanceCuesWithGemini(
-  ai: GoogleGenAI,
-  lyrics: string,
-  params: GenerateSongParams,
-  productionPrompt: string,
-  languageLabel: string,
-): Promise<string> {
-  const source = String(lyrics || '').trim();
-  if (!source || isGenerationEngineV2(params) || !isVocalLyricSong(params)) return lyrics;
-  if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return lyrics;
-  // Custom mode preserves explicit user-authored section/tag design. The main prompt still
-  // requests strong cues, but automatic tag replacement must not rewrite those user cues.
-  if (params.songStructure === 'custom') return lyrics;
 
-  const issues = collectV1SectionPerformanceCueIssues(source, params);
-  if (!issues.length) return source;
+type V1GeneratedSectionPerformancePlanItem = {
+  sectionIndex?: number;
+  sectionName?: string;
+  vocalAnchor?: string;
+  performanceCue?: string;
+  soundCue?: string;
+};
+
+function sanitizeV1GeneratedPlanPerformanceCue(value: unknown): string {
+  const parts = String(value ?? '')
+    .replace(/[\[\]\n\r]/g, ' ')
+    .split(/[,，]/)
+    .map((part) => cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim())
+    .filter(Boolean)
+    .filter(isV1ActionablePerformanceCuePart)
+    .slice(0, 2);
+  return parts.join(', ');
+}
+
+function sanitizeV1GeneratedPlanSoundCue(value: unknown): string {
+  const clean = cleanupPromptTail(
+    cleanEnglishOnlyLyricTagPart(String(value ?? '').replace(/[\[\]\n\r]/g, ' ')),
+  ).trim();
+  if (!clean || !/[A-Za-z]/.test(clean)) return '';
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length > 16) return '';
+  const soundsLikeProduction = containsV1ConcreteProductionCue(clean)
+    || cueIsMainlySoundOrInstrumentCue(clean)
+    || isDirectorProductionCueLeakForLyricSectionTag(clean)
+    || Boolean(findSoundCueEnglish(clean));
+  return soundsLikeProduction ? clean : '';
+}
+
+function normalizeV1GeneratedPlanSectionName(value: unknown): string {
+  return normalizeLyricSectionDisplayName(String(value ?? '').replace(/[\[\]]/g, '').trim());
+}
+
+function applyV1GeneratedSectionPerformancePlan(
+  lyrics: string,
+  rawPlan: unknown,
+  params: GenerateSongParams,
+): string {
+  const source = String(lyrics || '').replace(/\r\n?/g, '\n').trim();
+  if (!source || isGenerationEngineV2(params) || !isVocalLyricSong(params)) return source;
+  if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return source;
+  if (params.songStructure === 'custom') return source;
+
+  const plan = Array.isArray(rawPlan) ? rawPlan as V1GeneratedSectionPerformancePlanItem[] : [];
+  if (!plan.length) {
+    console.warn('[SORIDRAW Section Performance Plan] missing in primary response; preserving generated tags.');
+    return source;
+  }
 
   const blueprint = getV1SectionBlueprint(params);
-  const localLyricContext = buildV1SectionCueRepairLocalContext(source, issues);
-  const existingValidCueMap = listV1ExistingValidSectionCues(source, params);
-  const targetText = issues.map((issue) => `- line ${issue.lineNumber} / ${issue.section} / problem: ${issue.reason} / current anchor: ${issue.existingAnchor || 'none'} / current cue: ${issue.existingCue || 'none'}`).join('\n');
-  const activeAnchors = blueprint.vocalAnchors.length ? blueprint.vocalAnchors.join(' / ') : 'solo voice; anchor must be empty';
-  const storyContext = String((params as any).__v1StoryContext || '').trim();
+  const normalizedPlan = plan
+    .map((item, originalIndex) => ({
+      sectionIndex: Number.isInteger(Number(item?.sectionIndex)) && Number(item?.sectionIndex) > 0
+        ? Number(item?.sectionIndex)
+        : originalIndex + 1,
+      sectionName: normalizeV1GeneratedPlanSectionName(item?.sectionName),
+      vocalAnchor: normalizeV1RepairAnchor(String(item?.vocalAnchor || ''), params),
+      performanceCue: sanitizeV1GeneratedPlanPerformanceCue(item?.performanceCue),
+      soundCue: sanitizeV1GeneratedPlanSoundCue(item?.soundCue),
+    }))
+    .sort((a, b) => a.sectionIndex - b.sectionIndex);
+  const planByIndex = new Map(normalizedPlan.map((item) => [item.sectionIndex, item]));
+  const usedPlanIndexes = new Set<number>();
+  const lines = source.split('\n');
+  const output: string[] = [];
+  let structuralOrdinal = 0;
 
-  const instruction = `You are repairing ONLY the performance cue text inside selected SORIDRAW lyric section tags.
-Return JSON only. Do not rewrite, paraphrase, add, remove, reorder, or translate any lyric line or section.
+  const pickPlanItem = (section: string) => {
+    structuralOrdinal += 1;
+    const indexed = planByIndex.get(structuralOrdinal);
+    const blueprintName = normalizeLyricSectionDisplayName(blueprint.entries[structuralOrdinal - 1]?.name || '');
+    if (indexed && (!indexed.sectionName
+      || indexed.sectionName.toLowerCase() === section.toLowerCase()
+      || blueprintName.toLowerCase() === section.toLowerCase())) {
+      usedPlanIndexes.add(indexed.sectionIndex);
+      return indexed;
+    }
+    const fallback = normalizedPlan.find((item) =>
+      !usedPlanIndexes.has(item.sectionIndex)
+      && item.sectionName
+      && item.sectionName.toLowerCase() === section.toLowerCase(),
+    );
+    if (fallback) usedPlanIndexes.add(fallback.sectionIndex);
+    return fallback || indexed;
+  };
 
-LOCKED SONG INFORMATION:
-- Language card: ${languageLabel}.
-- Exact section order: ${formatV1SectionBlueprintOrder(params)}.
-- Active vocal anchors: ${activeAnchors}.
-${storyContext ? `- Story Context: ${storyContext}` : ''}
-- Whole-song production prompt including [Arrangement]:
-${String(productionPrompt || '').slice(0, 2200)}
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = String(line || '').trim();
+    if (!isV1StructuralSectionTag(trimmed, blueprint.customNames)) {
+      output.push(line);
+      continue;
+    }
 
-PERFORMANCE ARC METHOD:
-- Read [Arrangement] as the whole-song energy and producer map.
-- Read each target section's actual lyric body plus the preceding and following sections.
-- Preserve unity of singer identity, genre, and Story Context, but create a clear local change in every target section.
-- Choose one primary cue from vocal behavior, phrasing/rhythm, emotional attitude, or dynamic change.
-- Add a second comma-separated element only when it describes a different audible local change. Maximum 12 English words total.
-- Sparse input is not a reason to omit a cue: use genre phrasing, tempo, vocal identity, lyric body, section role, and neighbour contrast.
-- Dense input must be routed: do not copy all keywords. Instruments/effects/ambience/room/reverb/production belong outside the section tag.
-- Do not use generic or abstract answers such as emotional delivery, dynamic contrast, rich atmosphere, acoustic resolution, clear hook, high-energy hook, or story-aware delivery.
-- Do not repeat an unchanged cue used by another sung section. Returning sections must express the new execution or payoff.
-- For multi-vocal songs, anchor must be one exact active anchor or All Voices for a genuine shared payoff. For solo songs, anchor must be an empty string.
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (!parsed) {
+      output.push(line);
+      continue;
+    }
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    const item = pickPlanItem(section);
+    if (!item) {
+      output.push(line);
+      continue;
+    }
 
-TARGET TAG LINES:
-${targetText}
-
-EXISTING VALID CUES TO PRESERVE AND NOT COPY:
-${existingValidCueMap}
-
-LOCAL LYRIC CONTEXT AROUND EACH TARGET (LOCKED; DO NOT RETURN IT):
-${localLyricContext}
-
-Return exactly:
-{"replacements":[{"lineNumber":1,"anchor":"","cue":"short English performance cue"}]}`;
-
-  let response: any = null;
-  try {
-    // This is an optional, fail-open quality pass. Use exactly one compact request instead of
-    // a fallback chain, so cue enrichment cannot create a long multi-model tail.
-    response = await ai.models.generateContent({
-      model: GEMINI_TEXT_MODEL_CHAIN[0],
-      contents: instruction,
-      config: {
-        temperature: 0.4,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            replacements: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  lineNumber: { type: Type.INTEGER },
-                  anchor: { type: Type.STRING },
-                  cue: { type: Type.STRING },
-                },
-                required: ['lineNumber', 'anchor', 'cue'],
-              },
-            },
-          },
-          required: ['replacements'],
-        },
-      },
-    });
-  } catch (error) {
-    // Cue enrichment is a best-effort quality pass. Never discard an otherwise completed song
-    // because the optional tag-only Gemini call failed, timed out upstream, or hit a quota.
-    console.warn('[SORIDRAW Section Cue Repair] skipped; preserving generated song:', error);
-    return source;
-  }
-
-  let parsed: any = {};
-  try {
-    parsed = parseGeminiJsonObject(response?.text || '{}');
-  } catch (error) {
-    console.warn('[SORIDRAW Section Cue Repair] invalid JSON; preserving generated song:', error);
-    return source;
-  }
-
-  const issueByLine = new Map(issues.map((issue) => [issue.lineNumber, issue]));
-  const replacementByLine = new Map<number, { anchor: string; cues: string[] }>();
-  const usedCueKeys = new Set<string>();
-  const currentLines = source.split('\n');
-
-  currentLines.forEach((line, index) => {
-    if (issueByLine.has(index + 1)) return;
-    const tag = parseGuardBracketSectionTag(line);
-    if (!tag) return;
-    const section = normalizeLyricSectionDisplayName(tag.rawSection);
-    if (!isV1PerformanceCueRequiredSection(section, currentLines, index)) return;
-    const firstValid = v1PerformanceCuePartsFromBody(tag.body, params).find(isV1ActionablePerformanceCuePart);
-    const key = normalizeV1PerformanceCueKey(firstValid || '');
-    if (key) usedCueKeys.add(key);
-  });
-
-  const replacements = Array.isArray(parsed?.replacements) ? parsed.replacements : [];
-  replacements.forEach((replacement: any) => {
-    const lineNumber = Number(replacement?.lineNumber);
-    const issue = issueByLine.get(lineNumber);
-    if (!issue) return;
-    const rawCueParts = String(replacement?.cue || '')
-      .replace(/[\[\]\n\r]/g, ' ')
-      .split(/[,，]/)
-      .map((part) => cleanupPromptTail(cleanEnglishOnlyLyricTagPart(part || '')).trim())
-      .filter(Boolean)
+    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index);
+    const existingAnchor = extractV1AnchorFromCueBody(parsed.body, params);
+    const existingCue = v1PerformanceCuePartsFromBody(parsed.body, params)
       .filter(isV1ActionablePerformanceCuePart)
-      .slice(0, 2);
-    if (!rawCueParts.length) return;
-    const primaryKey = normalizeV1PerformanceCueKey(rawCueParts[0]);
-    if (!primaryKey || usedCueKeys.has(primaryKey)) return;
-    usedCueKeys.add(primaryKey);
-
+      .slice(0, 2)
+      .join(', ');
+    const performanceCue = item.performanceCue || existingCue;
     const anchor = blueprint.vocalAnchors.length >= 2
-      ? (issue.existingAnchor || normalizeV1RepairAnchor(replacement?.anchor, params))
+      ? (item.vocalAnchor || existingAnchor)
       : '';
-    if (blueprint.vocalAnchors.length >= 2 && !anchor) return;
-    replacementByLine.set(lineNumber, { anchor, cues: rawCueParts });
-  });
 
-  if (!replacementByLine.size) {
-    console.warn('[SORIDRAW Section Cue Repair] no safe replacements; preserving generated song.', issues);
-    return source;
+    if (requiresCue && performanceCue && (blueprint.vocalAnchors.length < 2 || anchor)) {
+      const body = [anchor, performanceCue].filter(Boolean).join(', ');
+      output.push(`[${section} : ${body}]`);
+    } else {
+      output.push(line);
+    }
+
+    const soundCue = item.soundCue;
+    if (soundCue) {
+      const nextNonEmpty = lines.slice(index + 1).find((candidate) => String(candidate || '').trim());
+      const nextCue = nextNonEmpty && /^\[[^\]]+\]$/.test(String(nextNonEmpty).trim())
+        ? String(nextNonEmpty).trim().slice(1, -1)
+        : '';
+      const sameNextCue = normalizeV1PerformanceCueKey(nextCue) === normalizeV1PerformanceCueKey(soundCue);
+      if (!sameNextCue) output.push(`[${soundCue}]`);
+    }
   }
 
-  const repairedLines = currentLines.map((line, index) => {
-    const replacement = replacementByLine.get(index + 1);
-    if (!replacement) return line;
-    const parsedTag = parseGuardBracketSectionTag(line);
-    if (!parsedTag) return line;
-    const section = normalizeLyricSectionDisplayName(parsedTag.rawSection);
-    const bodyParts = [replacement.anchor, ...replacement.cues].filter(Boolean);
-    return `[${section} : ${bodyParts.join(', ')}]`;
-  });
-  const repaired = repairedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  const remaining = collectV1SectionPerformanceCueIssues(repaired, params);
-  if (remaining.length) {
-    // Keep all safe partial improvements, but never turn cue-quality debt into song-generation
-    // failure. The generated title, prompt, and lyrics are always more valuable than a failed job.
-    console.warn('[SORIDRAW Section Cue Repair] partial repair kept; unresolved cues:', remaining);
+  const merged = output.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const issues = collectV1SectionPerformanceCueIssues(merged, params);
+  if (issues.length) {
+    console.warn('[SORIDRAW Section Performance Plan] completed with local cue warnings; preserving one-call result:', issues);
   }
-  return repaired;
+  return merged;
 }
 
 function assertV1SectionPerformanceCueQuality(lyrics: string, params: GenerateSongParams): void {
@@ -28687,6 +28693,27 @@ ${selectedNativeScriptInstruction}
           required: ["english", "korean"],
         },
       };
+  const sectionPerformancePlanResponseSchema = (!params.isNoLyrics && !isGenerationEngineV2(params))
+    ? {
+        sectionPerformancePlan: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              sectionIndex: { type: Type.INTEGER },
+              sectionName: { type: Type.STRING },
+              vocalAnchor: { type: Type.STRING },
+              performanceCue: { type: Type.STRING },
+              soundCue: { type: Type.STRING },
+            },
+            required: ["sectionIndex", "sectionName", "vocalAnchor", "performanceCue", "soundCue"],
+          },
+        },
+      }
+    : {};
+  const sectionPerformancePlanRequired = (!params.isNoLyrics && !isGenerationEngineV2(params))
+    ? ["sectionPerformancePlan"]
+    : [];
   const v1StoryAtmosphereResponseSchema = isGenerationEngineV2(params)
     ? {}
     : { storyAtmosphere: { type: Type.STRING } };
@@ -28829,8 +28856,24 @@ ${exactStructureText}
 - Final Chorus, Final Hook, and Hook are valid only when they appear in the required blueprint. Keep them distinct from earlier Chorus or Hook sections.
 - Do not invent Solo/solo, Guitar Solo/guitar solo, Instrumental Solo/instrumental solo, or Movement as structural section names; use Instrumental or another blueprint section instead.`;
 
+  const sectionPerformancePlanOutputInstruction = (!params.isNoLyrics && !isGenerationEngineV2(params))
+    ? `SECTION PERFORMANCE PLAN OUTPUT (MANDATORY, JSON FIELD sectionPerformancePlan):
+- Design ONE shared Section Performance Plan before writing either lyric card. The plan, [Arrangement], and both lyric cards must come from the same Story Context and the same whole-song performance arc.
+- Return exactly one plan item for every structural section in this exact order: ${exactStructureText}.
+- sectionIndex is 1-based and follows that exact order. sectionName must use the exact visible section name for that position.
+- For every sung or vocal-ad-lib section, performanceCue is REQUIRED and must be a short current-song English cue describing the locally dominant vocal behavior, phrasing/rhythm, emotional attitude, or dynamic movement. Never leave it empty.
+- For a solo song, vocalAnchor must be an empty string. For a multi-vocal song, vocalAnchor must be one exact active anchor from [Vocals], or All Voices only for a genuine shared payoff.
+- soundCue is optional. Use an empty string when no local production event is needed. When used, write one short audible instrument/effect/texture action in English, separate from the vocal cue.
+- Non-vocal sections such as Instrumental, Interlude, Break, Stop, or an actual solo section may use an empty performanceCue and a useful soundCue.
+- Build the plan as one coherent arc: opening state → development → rise → payoff → turn → final payoff → ending. CHANGE is primary, BALANCE prevents every section from becoming maximal, and UNITY keeps one singer identity and genre.
+- Do not design each section independently. Repeated sections must preserve identity while changing local execution or payoff.
+- The lyrics fields must keep the same exact section order and lyric ownership. Do not output the plan as lyric lines. The application will bind the plan cues to the matching section tags.`
+    : '';
+
   const systemInstruction = `
 You are a professional music composer and lyricist.
+
+${sectionPerformancePlanOutputInstruction}
 
 USER FREE-TEXT DIRECTOR NOTE (HIGH PRIORITY):
 ${detailLayer || "No extra user description."}
@@ -29456,9 +29499,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           ...v1StoryAtmosphereResponseSchema,
           title: { type: Type.STRING },
           productionPrompt: { type: Type.STRING },
+          ...sectionPerformancePlanResponseSchema,
           ...lyricsResponseSchema,
         },
-        required: ["storyContext", ...v1StoryAtmosphereRequired, "title", "productionPrompt", ...lyricsRequired],
+        required: ["storyContext", ...v1StoryAtmosphereRequired, "title", "productionPrompt", ...sectionPerformancePlanRequired, ...lyricsRequired],
       },
     },
   };
@@ -29920,27 +29964,14 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       kor = finalizeGeneratedLyricsStructuralSafety(kor, params);
       eng = finalizeGeneratedLyricsStructuralSafety(eng, params);
 
-      // Performance-tag quality is repaired at most once and only on the primary populated
-      // lyric card. The validated tag map is then mirrored to the secondary card, avoiding
-      // two extra Gemini calls for bilingual generation.
-      if (String(kor || '').trim()) {
-        kor = await repairV1SectionPerformanceCuesWithGemini(
-          ai,
-          kor,
-          params,
-          result.productionPrompt || result.prompt || finalPrompt,
-          'Korean using Hangul',
-        );
-        eng = alignSectionTagsBetweenLanguages(kor, eng);
-      } else if (String(eng || '').trim()) {
-        eng = await repairV1SectionPerformanceCuesWithGemini(
-          ai,
-          eng,
-          params,
-          result.productionPrompt || result.prompt || finalPrompt,
-          secondaryRepairLanguageLabel,
-        );
-      }
+      // Bind the Section Performance Plan generated in the SAME primary Gemini response.
+      // This replaces the old tag-only follow-up Gemini request, so [Arrangement], tags, and
+      // lyrics stay coherent and normal generation does not gain another paid/slow call.
+      const sectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
+        ? (result as any).sectionPerformancePlan
+        : [];
+      kor = applyV1GeneratedSectionPerformancePlan(kor, sectionPerformancePlan, params);
+      eng = applyV1GeneratedSectionPerformancePlan(eng, sectionPerformancePlan, params);
 
       result.lyrics.korean = finalizeGeneratedLyricsStructuralSafety(kor, params);
       result.lyrics.english = finalizeGeneratedLyricsStructuralSafety(eng, params);
@@ -30047,6 +30078,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   // the internal top-level field to visible song result consumers.
   delete (result as any).storyContext;
   delete (result as any).storyAtmosphere;
+  delete (result as any).sectionPerformancePlan;
   delete (params as any).__v1StoryContext;
   delete (params as any).__v1StoryAtmosphere;
 

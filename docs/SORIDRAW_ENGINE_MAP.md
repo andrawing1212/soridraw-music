@@ -1,6 +1,6 @@
 # SORIDRAW 엔진 구조 지도
 
-기준: 27차 `section_cue_integrity_engine_map_fix`
+기준: 28차 `structured_cue_arrangement_timeline_fix`
 
 이 문서는 앱 안에서 실제로 동작하는 생성 엔진, 보조 엔진, 검수 계층을 구분해 정리한다.
 “엔진”은 반드시 파일 하나를 뜻하지 않는다. 하나의 목적을 위해 여러 함수와 파일이 묶인 기능 계층도 엔진으로 분류한다.
@@ -10,7 +10,7 @@
 - 현재 서비스 주 엔진: **V1 Classic**
 - 선택 가능한 별도 엔진: **V2**
 - 구조만 존재하고 아직 연결되지 않은 엔진: **V3**
-- V1 내부 핵심 생성 엔진/보호 계층: **16개**
+- V1 내부 핵심 생성 엔진/보호 계층: **17개**
 - 앱 공통 실행·저장·미리보기 엔진: **4개**
 
 ## 2. 전체 처리 순서
@@ -58,7 +58,7 @@
 - 위치: `src/services/generation/v3/`
 - 상태: 아직 실제 생성 경로에 연결되지 않음.
 
-## 4. V1 핵심 생성 엔진 16개
+## 4. V1 핵심 생성 엔진 17개
 
 ### 4.1 Story Context / Shared Scene Engine
 
@@ -145,23 +145,35 @@
 
 ### 4.14 Section Performance Plan Engine
 
-- 역할: 첫 Gemini 호출에서 Arrangement와 가사를 함께 보고 섹션별 보컬 큐와 사운드 큐를 설계한다.
+- 역할: 첫 Gemini 호출에서 Arrangement와 가사를 함께 보고 섹션별 보컬 실행과 지역 사운드 변화를 하나의 공통 계획으로 설계한다.
 - 위치: `src/services/geminiService.ts`
-- 적용: 모든 가창 섹션의 퍼포먼스 변화와 지역 사운드 변화.
-- 원칙: 변화 우선, 균형 보조, 통일 유지.
+- 적용: 모든 가창 섹션의 변화, 균형, 통일.
+- 출력 필드:
+  - 자유형 주 큐/예비 큐
+  - `delivery`, `phrasing`, `register`, `dynamicDirection`
+  - `arrangementRole`, `arrangementAction`, `soundCue`
 
-### 4.15 Cue Integrity & Response Vocabulary Engine
+### 4.15 Structured Cue Reconstruction & Shared Language Binding Engine
 
-- 역할: 특정 오류 단어 목록을 사용하지 않고, 같은 응답의 주 큐·예비 큐·Arrangement·전체 계획 어휘를 비교해 앞/뒤 글자가 잘린 토큰을 복구한다.
+- 역할: 자유형 큐가 손상되거나 비어도 같은 최초 응답의 구조화 필드로 안전한 큐 전체를 다시 조립한다.
 - 위치: `src/services/geminiService.ts`
-- 적용: 퍼포먼스 큐와 사운드 큐의 문자 무결성.
-- 27차 변경 핵심:
-  - 오류 단어 하드코딩 제거
-  - 같은 섹션 후보 우선 비교
-  - Arrangement 어휘를 신뢰 기준으로 사용
-  - 전체 계획에서는 완전한 형태가 반복될 때만 보조 복구
+- 적용: 한국어·외국어 카드의 공통 퍼포먼스 태그.
+- 원칙:
+  - 실제 감정 문구를 코드에 고정하지 않는다.
+  - 전달 방식·프레이징·성구·다이내믹 같은 기술 필드만 형식으로 고정한다.
+  - 공통 계획을 한 번 확정한 뒤 두 언어 카드에 동일하게 적용한다.
+  - 언어별 원본 태그로 따로 후퇴해 서로 달라지는 것을 막는다.
 
-### 4.16 Output Integrity / Fail-open Engine
+### 4.16 Arrangement Timeline Alignment Engine
+
+- 역할: 섹션별 `arrangementAction`을 최종 `[Arrangement]`에 다시 반영하여 전체 프롬프트와 가사 태그가 같은 시간표를 사용하게 한다.
+- 위치: `src/services/geminiService.ts`
+- 적용: Hook 진입, 반주 축소, Bridge 전환, Final lift, Ending.
+- 원칙:
+  - 한 사건은 한 섹션에만 배치한다.
+  - 최종 `[Arrangement]`와 해당 섹션의 `soundCue`/보컬 반응이 서로 모순되지 않게 한다.
+
+### 4.17 Output Integrity / Fail-open Engine
 
 - 역할: 다중 줄 태그, 비정상 가사 과분할, 중복 Intro/Outro, 빈 골격을 정리한다.
 - 위치: `src/services/geminiService.ts`

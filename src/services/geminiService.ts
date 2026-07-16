@@ -9358,7 +9358,7 @@ function getStyleGenreInfluenceLabels(params: GenerateSongParams, mainLabels: st
     .filter((label) => label && !mainLabels.some((main) => isSameGenreFamily(main, label)))
     .filter(NON_EMPTY)
     .filter((label, index, arr) => arr.findIndex((item) => item.toLowerCase() === label.toLowerCase()) === index)
-    .slice(0, 3);
+    .slice(0, Math.max(0, Math.min(2, 3 - mainLabels.length)));
 }
 
 function isTrapOrHiphopCoreGenre(params: GenerateSongParams): boolean {
@@ -25786,7 +25786,16 @@ type V1GeneratedSectionPerformancePlanItem = {
   vocalAnchor?: string;
   performanceCue?: string;
   alternatePerformanceCue?: string;
+  delivery?: string;
+  phrasing?: string;
+  register?: string;
+  dynamicDirection?: string;
+  arrangementRole?: string;
+  arrangementAction?: string;
   soundCue?: string;
+  // Internal-only marker. Once set, the item is the canonical single source used by
+  // Korean lyrics, secondary-language lyrics, and the visible [Arrangement] line.
+  __canonicalLocked?: boolean;
 };
 
 function cleanV1GeneratedPlanCueText(value: unknown): string {
@@ -25802,6 +25811,205 @@ function cleanV1GeneratedPlanCueText(value: unknown): string {
 
 function hasV1IncompleteCueEnding(value: string): boolean {
   return /\b(?:with|and|or|to|of|for|from|into|over|under|through|by|as|a|an|the)\s*$/i.test(value);
+}
+
+function normalizeV1EnglishCueGrammar(value: unknown): string {
+  let clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return '';
+
+  // Output-only grammar repair. Preserve the model's current-song vocabulary and event meaning;
+  // only repair agreement, compound-noun form, and phrasal-verb particles inside English cue lines.
+  clean = clean
+    .replace(/\bdrums\s+beat\b/gi, 'drum beat')
+    .replace(/\b(drop|drops|dropped|dropping)\s+outro\b/gi, (_match, verb: string) => `${verb} out`)
+    .replace(/\b(fade|fades|faded|fading)\s+outro\b/gi, (_match, verb: string) => `${verb} out`)
+    .replace(/\bfully\s+strength\b/gi, 'at full strength');
+
+  const singularVerbToBase: Record<string, string> = {
+    enters: 'enter',
+    opens: 'open',
+    swells: 'swell',
+    rises: 'rise',
+    lifts: 'lift',
+    drops: 'drop',
+    thins: 'thin',
+    withdraws: 'withdraw',
+    pulls: 'pull',
+    fades: 'fade',
+    returns: 'return',
+    takes: 'take',
+    carries: 'carry',
+    marks: 'mark',
+    exposes: 'expose',
+    expands: 'expand',
+    builds: 'build',
+    holds: 'hold',
+    resolves: 'resolve',
+    leads: 'lead',
+    drives: 'drive',
+    remains: 'remain',
+    leaves: 'leave',
+    supports: 'support',
+  };
+  const singularVerbPattern = Object.keys(singularVerbToBase).join('|');
+  const pluralHead = String.raw`(?:pads|drums|keys|synths|guitars|vocals|strings|chords|textures|layers|hi[-\s]?hats|cymbals|808s|rhodes)`;
+  const pluralSubjectPattern = new RegExp(
+    String.raw`\b((?:[A-Za-z][A-Za-z-]*\s+){0,3}${pluralHead})\s+(${singularVerbPattern})\b`,
+    'gi',
+  );
+  clean = clean.replace(pluralSubjectPattern, (_match, subject: string, verb: string) => {
+    return `${subject} ${singularVerbToBase[String(verb).toLowerCase()] || verb}`;
+  });
+
+  const coordinatedSubjectPattern = new RegExp(
+    String.raw`\b((?:[A-Za-z][A-Za-z-]*\s+){0,3}[A-Za-z][A-Za-z-]*\s+and\s+(?:[A-Za-z][A-Za-z-]*\s+){0,3}[A-Za-z][A-Za-z-]*)\s+(${singularVerbPattern})\b`,
+    'gi',
+  );
+  clean = clean.replace(coordinatedSubjectPattern, (_match, subject: string, verb: string) => {
+    return `${subject} ${singularVerbToBase[String(verb).toLowerCase()] || verb}`;
+  });
+
+  // Repair a corrupted conjunction only when it sits between two concrete sound-object phrases.
+  // This is intentionally structural rather than phrase-specific: a four-letter token ending in
+  // "and" (for example, an accidental extra leading letter) is treated as the conjunction only
+  // in an enumeration context. Legitimate uses such as "full band instrumentation" remain intact.
+  const soundObjectHead = String.raw`(?:pads|drums|keys|synths|guitars|vocals|strings|chords|textures|layers|hi[-\s]?hats|cymbals|808s|rhodes|bass|guitar|synth|piano|beat|percussion|instrumentation|daegeum|duduk)`;
+  const corruptedAndBetweenSoundObjects = new RegExp(
+    String.raw`\b(${soundObjectHead})\s+([A-Za-z]and)\s+((?:[A-Za-z][A-Za-z-]*\s+){0,3}${soundObjectHead})\b`,
+    'gi',
+  );
+  clean = clean.replace(
+    corruptedAndBetweenSoundObjects,
+    (_match, leftObject: string, _corruptedAnd: string, rightObject: string) => `${leftObject} and ${rightObject}`,
+  );
+
+  return clean.replace(/\s+/g, ' ').trim();
+}
+
+const V1_STRUCTURED_REGISTER_CANONICAL = new Map<string, string>([
+  ['low register', 'low register'],
+  ['low-mid register', 'low-mid register'],
+  ['mid register', 'mid register'],
+  ['mid-high register', 'mid-high register'],
+  ['upper register', 'upper register'],
+  ['high register', 'high register'],
+  ['neutral register', 'neutral register'],
+  ['spoken range', 'spoken range'],
+  ['chest voice', 'chest voice'],
+  ['head voice', 'head voice'],
+  ['mixed voice', 'mixed voice'],
+  ['falsetto', 'falsetto'],
+]);
+
+const V1_STRUCTURED_DYNAMIC_CANONICAL = new Map<string, string>([
+  ['hold', 'hold'],
+  ['rise', 'rise'],
+  ['open', 'open'],
+  ['intensify', 'intensify'],
+  ['pull-back', 'pull-back'],
+  ['pull back', 'pull-back'],
+  ['expose', 'expose'],
+  ['peak', 'peak'],
+  ['release', 'release'],
+  ['fade', 'fade'],
+  ['resolve', 'resolve'],
+  ['sustain', 'sustain'],
+  ['soften', 'soften'],
+]);
+
+const V1_STRUCTURED_DYNAMIC_RENDER = new Map<string, string>([
+  ['hold', 'held dynamic'],
+  ['rise', 'rising dynamic'],
+  ['open', 'opening dynamic'],
+  ['intensify', 'intensifying dynamic'],
+  ['pull-back', 'pulled-back dynamic'],
+  ['expose', 'exposed dynamic'],
+  ['peak', 'peak dynamic'],
+  ['release', 'releasing dynamic'],
+  ['fade', 'fading dynamic'],
+  ['resolve', 'resolving dynamic'],
+  ['sustain', 'sustained dynamic'],
+  ['soften', 'softening dynamic'],
+]);
+
+const V1_ARRANGEMENT_ROLE_CANONICAL = new Map<string, string>([
+  ['opening', 'opening'],
+  ['development', 'development'],
+  ['rise', 'rise'],
+  ['payoff', 'payoff'],
+  ['variation', 'variation'],
+  ['pull-back', 'pull-back'],
+  ['pull back', 'pull-back'],
+  ['turn', 'turn'],
+  ['final-lift', 'final-lift'],
+  ['final lift', 'final-lift'],
+  ['ending', 'ending'],
+  ['transition', 'transition'],
+  ['none', 'none'],
+]);
+
+function normalizeV1StructuredDelivery(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value).toLowerCase();
+  if (!clean || hasV1IncompleteCueEnding(clean)) return '';
+  // Typed vocal fields may legitimately contain rhythm/texture adjectives such as
+  // groove or ambient. Reject only a true production-domain phrase, not a vocal phrase
+  // merely carrying one of those adjectives.
+  if (classifyV1GeneratedPlanCueDomain(clean) === 'production') return '';
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length < 1 || words.length > 5) return '';
+  // Gemini occasionally returns the useful descriptor without the requested typed suffix.
+  // Preserve its current-song wording and add only the structural field label.
+  return /\bdelivery$/.test(clean) ? clean : `${clean} delivery`;
+}
+
+function normalizeV1StructuredPhrasing(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value).toLowerCase();
+  if (!clean || hasV1IncompleteCueEnding(clean)) return '';
+  if (classifyV1GeneratedPlanCueDomain(clean) === 'production') return '';
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length < 1 || words.length > 5) return '';
+  return /\bphrasing$/.test(clean) ? clean : `${clean} phrasing`;
+}
+
+function normalizeV1StructuredRegister(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value).toLowerCase().replace(/\s+/g, ' ').trim();
+  return V1_STRUCTURED_REGISTER_CANONICAL.get(clean) || '';
+}
+
+function normalizeV1StructuredDynamicDirection(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value).toLowerCase().replace(/[_\s]+/g, ' ').trim();
+  return V1_STRUCTURED_DYNAMIC_CANONICAL.get(clean) || '';
+}
+
+function normalizeV1ArrangementRole(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value).toLowerCase().replace(/[_\s]+/g, ' ').trim();
+  return V1_ARRANGEMENT_ROLE_CANONICAL.get(clean) || 'none';
+}
+
+function composeV1StructuredPerformanceCue(item: V1GeneratedSectionPerformancePlanItem): string {
+  const delivery = normalizeV1StructuredDelivery(item.delivery);
+  const phrasing = normalizeV1StructuredPhrasing(item.phrasing);
+  const register = normalizeV1StructuredRegister(item.register);
+  const dynamic = V1_STRUCTURED_DYNAMIC_RENDER.get(normalizeV1StructuredDynamicDirection(item.dynamicDirection)) || '';
+  const section = baseV1GeneratedPlanSectionName(String(item.sectionName || ''));
+
+  const ordered = /^(?:pre-chorus)$/.test(section)
+    ? [phrasing, dynamic, delivery, register]
+    : /^(?:chorus|hook|refrain)$/.test(v1GeneratedPlanCueFamily(section))
+      ? [delivery, register, dynamic, phrasing]
+      : /^(?:bridge|outro|intro)$/.test(section)
+        ? [delivery, dynamic, phrasing, register]
+        : [phrasing, register, delivery, dynamic];
+
+  const out: string[] = [];
+  ordered.forEach((value) => {
+    const clean = cleanV1GeneratedPlanCueText(value);
+    if (!clean) return;
+    const key = normalizeV1PerformanceCueKey(clean);
+    if (!key || out.some((existing) => normalizeV1PerformanceCueKey(existing) === key)) return;
+    out.push(clean);
+  });
+  return out.slice(0, 2).join(', ');
 }
 
 type V1CueRepairContext = {
@@ -25915,17 +26123,100 @@ function repairV1CueTextFromResponseVocabulary(
   });
 }
 
+type V1GeneratedPlanCueDomain = 'performance' | 'production' | 'ambiguous' | 'none';
+
+function hasV1ExplicitVocalExecutionSignal(value: string): boolean {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return false;
+  // These words describe how a human voice is executed. Rhythm/texture adjectives may
+  // coexist, but they do not turn the phrase into a production cue by themselves.
+  return /\b(?:delivery|phrasing|register|head\s+voice|chest\s+voice|mixed\s+voice|falsetto|whisper|whispered|whispers|hush|hushed|hum|humming|hums|chant|spoken|conversational|legato|staccato|breath|breathy|raspy|husky|ad[-\s]?libs?|improvis(?:ation|ations)?|speech[-\s]?like|wordless|belting|croon|crooning|sing[-\s]?rap|melisma|vibrato)\b/i.test(clean);
+}
+
+function hasV1ConcreteProductionObjectSignal(value: string): boolean {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return false;
+  return /\b(?:pads?|guitar|bass|synth(?:esizer)?s?|keys?|piano|rhodes|drums?|beat|percussion|strings?|brass|choir|duduk|daegeum|haegeum|gayageum|janggu|808|hi[-\s]?hats?|foley|crackle|hiss|room\s+tone|vinyl|reverb|delay|arpeggio|counterline|riff|stabs?|chords?|melody|groove\s+section)\b/i.test(clean);
+}
+
+function hasV1ProductionMovementSignal(value: string): boolean {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return false;
+  return /\b(?:enter|enters|entry|drop|drops|drop[-\s]?out|thin|thins|withdraw|withdraws|pulls?\s+back|fade|fades|return|returns|swell|swells|wash|washes|pulse|pulses|drive|drives|strum|strums|arpeggiat|riff|riffs|solo|decay|layer|layers|open|opens|build|builds|hold|holds|remain|remains|leave|leaves|leaving|kick|kicks|mark|marks|take|takes\s+over|support|supports)\b/i.test(clean);
+}
+
+function hasV1StrongPerformanceCueSignal(value: string): boolean {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return false;
+  return hasV1ExplicitVocalExecutionSignal(clean)
+    || /\b(?:intimate|expressive|melodic|syncopated|laid[-\s]?back|restrained|passionate|airy|warm|soft|bright|dark|playful|urgent|tender|dry|open|soaring|dreamy|rhythmic)\b/i.test(clean);
+}
+
+function hasV1StrongProductionCueSignal(value: string): boolean {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return false;
+  const concreteObject = hasV1ConcreteProductionObjectSignal(clean);
+  const movement = hasV1ProductionMovementSignal(clean);
+  const legacyProductionSignal = containsV1ConcreteProductionCue(clean)
+    || cueIsMainlySoundOrInstrumentCue(clean)
+    || isDirectorProductionCueLeakForLyricSectionTag(clean)
+    || Boolean(findSoundCueEnglish(clean));
+  return concreteObject && (movement || legacyProductionSignal);
+}
+
+function classifyV1GeneratedPlanCueDomain(value: unknown): V1GeneratedPlanCueDomain {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return 'none';
+  const explicitVocalExecution = hasV1ExplicitVocalExecutionSignal(clean);
+  const concreteProductionObject = hasV1ConcreteProductionObjectSignal(clean);
+  const productionMovement = hasV1ProductionMovementSignal(clean);
+  const productionEvent = concreteProductionObject && (productionMovement || hasV1StrongProductionCueSignal(clean) === false);
+  const performance = hasV1StrongPerformanceCueSignal(clean);
+
+  // A real sound object performing an audible action is always production, even when the
+  // object name contains "vocal" (for example, vocal pads swell). Conversely, groove or
+  // ambient adjectives inside a phrase ending in phrasing/delivery remain vocal execution.
+  if (productionEvent && productionMovement) return 'production';
+  if (explicitVocalExecution && !productionEvent) return 'performance';
+  if (productionEvent && !explicitVocalExecution) return 'production';
+  if (explicitVocalExecution && concreteProductionObject) return productionMovement ? 'production' : 'ambiguous';
+  if (performance) return 'performance';
+  if (hasV1StrongProductionCueSignal(clean)) return 'production';
+  return 'ambiguous';
+}
+
+function hasV1MalformedPerformanceCueGrammar(value: string): boolean {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return false;
+  // Structural grammar only: an adverb cannot directly modify a cue-field noun, and a bare
+  // dynamic command cannot act as an adjective before a vocal-style phrase. The actual creative
+  // vocabulary remains open.
+  if (/\b[A-Za-z-]+ly\s+(?:register|phrasing|delivery|tone|voice|hook)\b/i.test(clean)) return true;
+  if (/\b(?:soften|intensify|resolve|expose|peak|fade)\s+(?:spoken|whispered|conversational|melodic|expressive|restrained|passionate|airy|warm|bright|dark|playful|tense|gentle|hushed)\b/i.test(clean)) return true;
+  return false;
+}
+
 function scoreV1GeneratedPlanPerformanceCue(value: string): number {
   const clean = cleanV1GeneratedPlanCueText(value);
-  if (!clean || hasV1IncompleteCueEnding(clean)) return -100;
+  if (!clean || hasV1IncompleteCueEnding(clean) || hasV1MalformedPerformanceCueGrammar(clean)) return -100;
+  const domain = classifyV1GeneratedPlanCueDomain(clean);
+  if (domain === 'production') return -100;
+
   let score = 0;
-  const hasVocalSignal = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|raspy|husky|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|clipped|syncopated|laid[-\s]?back|loose|warm[-\s]?up)\b/i.test(clean);
-  const hasDynamicSignal = /\b(?:airy|soft|warm|bright|wistful|tense|tension|urgent|restrained|playful|confident|passionate|fading|rising|building|build|swell|crescendo|decrescendo|lifted|open|deep|gentle|dry|fuller|free|freer|release|payoff|climax|dynamic|dynamics)\b/i.test(clean);
+  const hasVocalSignal = hasV1StrongPerformanceCueSignal(clean);
+  const hasDynamicSignal = /\b(?:airy|soft|warm|bright|wistful|tense|tension|urgent|restrained|playful|confident|passionate|fading|rising|building|build|swell|crescendo|decrescendo|lifted|open|deep|gentle|dry|fuller|free|freer|release|payoff|climax|dynamic|dynamics|softening|intensifying|resolving|exposed|held)\b/i.test(clean);
+  const typedPerformanceEnding = /\b(?:vocal|delivery|phrasing|register|voice|falsetto|whisper|whispers|humming|hums|chant|ad[-\s]?libs?)\s*$/i.test(clean);
+  const wordCount = clean.split(/\s+/).filter(Boolean).length;
+
+  if (domain === 'performance') score += 6;
   if (hasVocalSignal) score += 4;
+  if (typedPerformanceEnding) score += 3;
   if (hasDynamicSignal) score += 2;
+  if (hasVocalSignal && hasDynamicSignal) score += 2;
   if (!hasVocalSignal && !hasDynamicSignal) score -= 3;
-  if (/\b(?:more|very|rich|dynamic|emotional)\b/i.test(clean) && clean.split(/\s+/).length <= 2) score -= 2;
-  if (containsV1ConcreteProductionCue(clean) || isDirectorProductionCueLeakForLyricSectionTag(clean)) score -= 8;
+  if (!hasVocalSignal && /\bdynamic\b/i.test(clean)) score -= 3;
+  if (/\b(?:more|very|rich|dynamic|emotional)\b/i.test(clean) && wordCount <= 2) score -= 2;
+  if (wordCount >= 2 && wordCount <= 8) score += 1;
   return score;
 }
 
@@ -25936,16 +26227,18 @@ function sanitizeV1GeneratedPlanPerformanceCue(
   const repaired = repairV1CueTextFromResponseVocabulary(value, context);
   const parts = cleanV1GeneratedPlanCueText(repaired)
     .split(/[,，]/)
-    .map((part) => cleanV1GeneratedPlanCueText(part))
+    .map((part) => cleanV1GeneratedPlanCueText(part).replace(/^(?:with|and|plus)\s+/i, '').trim())
     .filter(Boolean)
     .filter((part) => {
       if (!/[A-Za-z]/.test(part)) return false;
       if (hasV1IncompleteCueEnding(part)) return false;
+      if (hasV1MalformedPerformanceCueGrammar(part)) return false;
       if (cueLooksLikeVerboseStorySentence(part)) return false;
-      if (isDirectorProductionCueLeakForLyricSectionTag(part)) return false;
-      if (isLyricSectionSpaceTextureCue(part)) return false;
+      if (isDirectorProductionCueLeakForLyricSectionTag(part) && classifyV1GeneratedPlanCueDomain(part) !== 'performance') return false;
       if (isGenericFallbackOnlyLyricSectionCue(part)) return false;
+      if (classifyV1GeneratedPlanCueDomain(part) === 'production') return false;
       if (/\b(?:unk+nown|n\/a|none|null|undefined|atmosphere|production|arrangement|instrumental|sound\s+palette)\b/i.test(part)) return false;
+      if (/^(?:vocal|voice|delivery|phrasing|register|dynamic)$/i.test(part)) return false;
       const words = part.split(/\s+/).filter(Boolean);
       if (words.length < 1 || words.length > 12) return false;
 
@@ -25971,10 +26264,16 @@ function selectV1GeneratedPlanPerformanceCue(
   };
   const candidates = values
     .map((value) => sanitizeV1GeneratedPlanPerformanceCue(value, candidateContext))
-    .filter(Boolean)
-    .map((value, index) => ({ value, index, score: scoreV1GeneratedPlanPerformanceCue(value) }))
-    .filter((item) => item.score > -100)
-    .sort((a, b) => b.score - a.score || a.index - b.index);
+    .map((value, index) => {
+      const score = value ? scoreV1GeneratedPlanPerformanceCue(value) : -100;
+      // Earlier candidates are local to the section (plan, existing tag, adjacent cue).
+      // Later candidates are progressively broader fallbacks such as the global [Vocals] line.
+      // Keep quality first, but give local evidence enough weight to beat a longer generic fallback.
+      const sourcePriority = Math.max(0, (values.length - index - 1) * 2);
+      return { value, index, score, adjustedScore: score + sourcePriority };
+    })
+    .filter((item) => Boolean(item.value) && item.score > -100)
+    .sort((a, b) => b.adjustedScore - a.adjustedScore || b.score - a.score || a.index - b.index);
   return candidates[0]?.value || '';
 }
 
@@ -25982,21 +26281,124 @@ function sanitizeV1GeneratedPlanSoundCue(
   value: unknown,
   context: V1CueRepairContext = {},
 ): string {
-  const clean = repairV1CueTextFromResponseVocabulary(value, context);
+  const clean = normalizeV1EnglishCueGrammar(repairV1CueTextFromResponseVocabulary(value, context));
   if (!clean || !/[A-Za-z]/.test(clean)) return '';
   const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length > 16) return '';
-  const soundsLikeProduction = containsV1ConcreteProductionCue(clean)
+  if (words.length > 20) return '';
+  const domain = classifyV1GeneratedPlanCueDomain(clean);
+  if (domain === 'performance') return '';
+  const soundsLikeProduction = domain === 'production'
+    || containsV1ConcreteProductionCue(clean)
     || cueIsMainlySoundOrInstrumentCue(clean)
     || isDirectorProductionCueLeakForLyricSectionTag(clean)
     || Boolean(findSoundCueEnglish(clean));
   return soundsLikeProduction ? clean : '';
 }
 
+
+function scoreV1GeneratedPlanProductionCue(value: string): number {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean || classifyV1GeneratedPlanCueDomain(clean) !== 'production') return -100;
+  const wordCount = clean.split(/\s+/).filter(Boolean).length;
+  const objectMatches = clean.match(/\b(?:pads?|guitar|bass|synth(?:esizer)?s?|keys?|piano|rhodes|drums?|beat|percussion|strings?|brass|choir|duduk|daegeum|808|hi[-\s]?hats?|foley|crackle|hiss|room\s+tone|vinyl|arpeggio|counterline|riff|stabs?|chords?)\b/gi) || [];
+  let score = 5;
+  if (hasV1ProductionMovementSignal(clean)) score += 5;
+  score += Math.min(5, new Set(objectMatches.map((item) => item.toLowerCase())).size * 2);
+  if (wordCount >= 3 && wordCount <= 18) score += 2;
+  if (/\b(?:only|leaving|while|under|over|with|into)\b/i.test(clean)) score += 1;
+  return score;
+}
+
+function selectV1GeneratedPlanProductionCue(
+  context: V1CueRepairContext,
+  ...values: Array<unknown>
+): string {
+  const candidates = values
+    .map((value, index) => {
+      const clean = sanitizeV1GeneratedPlanSoundCue(value, context);
+      const score = clean ? scoreV1GeneratedPlanProductionCue(clean) : -100;
+      // Earlier values are the section's complete arrangementAction; later values are
+      // shorter model summaries or legacy cues. Preserve the richer owning event when valid.
+      const sourcePriority = Math.max(0, values.length - index - 1);
+      return { clean, index, score, adjustedScore: score + sourcePriority };
+    })
+    .filter((item) => item.clean && item.score > -100)
+    .sort((a, b) => b.adjustedScore - a.adjustedScore || b.score - a.score || a.index - b.index);
+  return candidates[0]?.clean || '';
+}
+
+function sanitizeV1GeneratedPlanArrangementAction(
+  value: unknown,
+  context: V1CueRepairContext = {},
+): string {
+  const clean = normalizeV1EnglishCueGrammar(repairV1CueTextFromResponseVocabulary(value, context));
+  if (!clean || !/[A-Za-z]/.test(clean) || hasV1IncompleteCueEnding(clean)) return '';
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length < 3 || words.length > 18) return '';
+  const hasMovement = /\b(?:enter|enters|open|opens|swell|swells|rise|rises|lift|lifts|drop|drops|thin|thins|withdraw|withdraws|pull|pulls|fade|fades|return|returns|take|takes|carry|carries|mark|marks|expose|exposes|expand|expands|build|builds|hold|holds|resolve|resolves|lead|leads)\b/i.test(clean);
+  const hasProducerSignal = containsV1ConcreteProductionCue(clean)
+    || cueIsMainlySoundOrInstrumentCue(clean)
+    || /\b(?:hook|chorus|bridge|final|opening|transition|payoff|vocal|lead|upper\s+range|lower\s+range)\b/i.test(clean);
+  return hasMovement && hasProducerSignal ? clean : '';
+}
+
 function extractV1ArrangementReference(value: unknown): string {
   const source = String(value || '').replace(/\r\n?/g, '\n');
   const line = source.split('\n').find((entry) => /^\s*\[Arrangement\]/i.test(entry));
   return cleanV1GeneratedPlanCueText(String(line || '').replace(/^\s*\[Arrangement\]\s*/i, ''));
+}
+
+function extractV1VocalsReference(value: unknown): string {
+  const map = parseFinalPromptLineMap(String(value || ''));
+  return cleanV1GeneratedPlanCueText(map.vocals || '');
+}
+
+function extractV1ArrangementVocalPerformanceCue(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return '';
+  const matches = clean.match(/(?:[A-Za-z][A-Za-z'-]*\s+){0,2}(?:vocal|voice|register|delivery|phrasing)\b/gi) || [];
+  return matches
+    .map((part) => cleanV1GeneratedPlanCueText(part).replace(/^(?:(?:with|under|over|into|through|back|while|as|the|a|an)\s+)+/i, '').trim())
+    .map((part) => sanitizeV1GeneratedPlanPerformanceCue(part, { local: [clean] }))
+    .filter(Boolean)
+    .sort((a, b) => scoreV1GeneratedPlanPerformanceCue(b) - scoreV1GeneratedPlanPerformanceCue(a))[0] || '';
+}
+
+function buildV1PromptDerivedPerformanceCue(
+  productionPrompt: unknown,
+  item: V1GeneratedSectionPerformancePlanItem | undefined,
+  context: V1CueRepairContext,
+): string {
+  const vocalsReference = extractV1VocalsReference(productionPrompt);
+  if (!vocalsReference) return '';
+
+  const compact = cleanDefaultSoloVocalCueTail(vocalsReference)
+    || compactVocalCueAfterSubject(vocalsReference)
+    || vocalsReference;
+  const actionVocalCue = extractV1ArrangementVocalPerformanceCue(item?.arrangementAction);
+  const fragments = [
+    actionVocalCue,
+    compact,
+    ...compact.split(/\s*[,;]\s*|\s+with\s+|\s+and\s+/i),
+  ]
+    .map((part) => cleanV1GeneratedPlanCueText(part).replace(/^(?:with|and|plus)\s+/i, '').trim())
+    .filter(Boolean);
+
+  return selectV1GeneratedPlanPerformanceCue(
+    {
+      ...context,
+      local: [
+        ...(context.local || []),
+        item?.delivery,
+        item?.phrasing,
+        item?.register,
+        item?.dynamicDirection,
+        item?.arrangementAction,
+        ...fragments,
+      ],
+    },
+    ...fragments,
+  );
 }
 
 function normalizeV1GeneratedPlanSectionName(value: unknown): string {
@@ -26008,6 +26410,217 @@ function baseV1GeneratedPlanSectionName(value: string): string {
     .replace(/\s+(?:\d+|[A-Z])$/i, '')
     .trim()
     .toLowerCase();
+}
+
+
+function v1GeneratedPlanCueFamily(sectionName: string): string {
+  const base = baseV1GeneratedPlanSectionName(sectionName);
+  if (/^(?:final\s+chorus|chorus)$/.test(base)) return 'chorus';
+  if (/^(?:final\s+hook|hook|refrain)$/.test(base)) return 'hook';
+  if (/^pre[-\s]?chorus$/.test(base)) return 'pre-chorus';
+  if (/^rap\s+section$/.test(base)) return 'rap-section';
+  if (/^verse$/.test(base)) return 'verse';
+  return base;
+}
+
+function resolveV1SharedSectionPerformancePlan(
+  rawPlan: unknown,
+  params: GenerateSongParams,
+  productionPrompt: unknown = '',
+): V1GeneratedSectionPerformancePlanItem[] {
+  const plan = Array.isArray(rawPlan) ? rawPlan as V1GeneratedSectionPerformancePlanItem[] : [];
+  if (!plan.length) return [];
+  const arrangementReference = extractV1ArrangementReference(productionPrompt);
+  const vocalsReference = extractV1VocalsReference(productionPrompt);
+  const rawItems = plan.map((item, originalIndex) => ({
+    sectionIndex: Number.isInteger(Number(item?.sectionIndex)) && Number(item?.sectionIndex) > 0
+      ? Number(item?.sectionIndex)
+      : originalIndex + 1,
+    sectionName: normalizeV1GeneratedPlanSectionName(item?.sectionName),
+    vocalAnchor: normalizeV1RepairAnchor(String(item?.vocalAnchor || ''), params),
+    performanceCue: cleanV1GeneratedPlanCueText(item?.performanceCue),
+    alternatePerformanceCue: cleanV1GeneratedPlanCueText(item?.alternatePerformanceCue),
+    delivery: cleanV1GeneratedPlanCueText(item?.delivery),
+    phrasing: cleanV1GeneratedPlanCueText(item?.phrasing),
+    register: cleanV1GeneratedPlanCueText(item?.register),
+    dynamicDirection: cleanV1GeneratedPlanCueText(item?.dynamicDirection),
+    arrangementRole: normalizeV1ArrangementRole(item?.arrangementRole),
+    arrangementAction: cleanV1GeneratedPlanCueText(item?.arrangementAction),
+    soundCue: cleanV1GeneratedPlanCueText(item?.soundCue),
+  }));
+  const globalReferences: unknown[] = [
+    arrangementReference,
+    vocalsReference,
+    ...rawItems.flatMap((item) => [
+      item.performanceCue,
+      item.alternatePerformanceCue,
+      item.delivery,
+      item.phrasing,
+      item.register,
+      item.dynamicDirection,
+      item.arrangementAction,
+      item.soundCue,
+    ]),
+  ];
+
+  const normalized = rawItems.map((item) => {
+    const context: V1CueRepairContext = {
+      local: [
+        item.performanceCue,
+        item.alternatePerformanceCue,
+        item.delivery,
+        item.phrasing,
+        item.register,
+        item.dynamicDirection,
+        item.arrangementAction,
+        item.soundCue,
+      ],
+      arrangement: [arrangementReference],
+      global: globalReferences,
+    };
+    const normalizedDelivery = normalizeV1StructuredDelivery(item.delivery);
+    const normalizedPhrasing = normalizeV1StructuredPhrasing(item.phrasing);
+    const normalizedRegister = normalizeV1StructuredRegister(item.register);
+    const normalizedDynamicDirection = normalizeV1StructuredDynamicDirection(item.dynamicDirection);
+    const normalizedArrangementRole = normalizeV1ArrangementRole(item.arrangementRole);
+    const structuredCue = composeV1StructuredPerformanceCue({
+      ...item,
+      delivery: normalizedDelivery,
+      phrasing: normalizedPhrasing,
+      register: normalizedRegister,
+      dynamicDirection: normalizedDynamicDirection,
+    });
+    const creativeCue = selectV1GeneratedPlanPerformanceCue(
+      context,
+      item.performanceCue,
+      item.alternatePerformanceCue,
+      item.soundCue,
+    );
+    const promptDerivedCue = buildV1PromptDerivedPerformanceCue(productionPrompt, item, context);
+    // Section-local evidence is authoritative. The whole-song [Vocals] line is a completeness
+    // fallback only; it must not replace a valid section-specific cue with the same generic vocal
+    // identity across several sections.
+    const localPerformanceCue = selectV1GeneratedPlanPerformanceCue(
+      context,
+      creativeCue,
+      structuredCue,
+    );
+    const selectedPerformanceCue = localPerformanceCue || promptDerivedCue;
+    const alternatePerformanceCue = selectV1GeneratedPlanPerformanceCue(
+      context,
+      normalizeV1PerformanceCueKey(creativeCue) !== normalizeV1PerformanceCueKey(selectedPerformanceCue) ? creativeCue : '',
+      normalizeV1PerformanceCueKey(structuredCue) !== normalizeV1PerformanceCueKey(selectedPerformanceCue) ? structuredCue : '',
+      normalizeV1PerformanceCueKey(promptDerivedCue) !== normalizeV1PerformanceCueKey(selectedPerformanceCue) ? promptDerivedCue : '',
+    );
+    const arrangementAction = sanitizeV1GeneratedPlanArrangementAction(item.arrangementAction, context);
+    const directSoundCue = sanitizeV1GeneratedPlanSoundCue(item.soundCue, context);
+    // Canonical event contract: choose the final local production event once here.
+    // The richer section-owned arrangementAction competes with the short soundCue, and the winner
+    // is then reused verbatim by both lyric cards and the visible [Arrangement] timeline.
+    const canonicalSoundCue = selectV1GeneratedPlanProductionCue(
+      context,
+      arrangementAction,
+      directSoundCue,
+    );
+    return {
+      ...item,
+      delivery: normalizedDelivery,
+      phrasing: normalizedPhrasing,
+      register: normalizedRegister,
+      dynamicDirection: normalizedDynamicDirection,
+      arrangementRole: normalizedArrangementRole,
+      performanceCue: selectedPerformanceCue,
+      alternatePerformanceCue,
+      arrangementAction,
+      soundCue: canonicalSoundCue,
+      __canonicalLocked: true,
+    };
+  }).sort((a, b) => Number(a.sectionIndex || 0) - Number(b.sectionIndex || 0));
+
+  return normalized.map((item) => {
+    if (item.performanceCue) return item;
+    const family = v1GeneratedPlanCueFamily(String(item.sectionName || ''));
+    const fallback = normalized
+      .filter((candidate) => candidate !== item && v1GeneratedPlanCueFamily(String(candidate.sectionName || '')) === family)
+      .sort((a, b) => Math.abs(Number(a.sectionIndex || 0) - Number(item.sectionIndex || 0)) - Math.abs(Number(b.sectionIndex || 0) - Number(item.sectionIndex || 0)))
+      .map((candidate) => candidate.alternatePerformanceCue || candidate.performanceCue || '')
+      .find(Boolean) || '';
+    return { ...item, performanceCue: fallback, __canonicalLocked: true };
+  });
+}
+
+function isV1CanonicalSectionPerformancePlan(value: unknown): value is V1GeneratedSectionPerformancePlanItem[] {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every((item) => Boolean(item && typeof item === 'object' && (item as V1GeneratedSectionPerformancePlanItem).__canonicalLocked));
+}
+
+function readV1CanonicalPerformanceCue(value: unknown): string {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  return clean && scoreV1GeneratedPlanPerformanceCue(clean) > -100 ? clean : '';
+}
+
+function readV1CanonicalProductionCue(value: unknown): string {
+  const clean = normalizeV1EnglishCueGrammar(value);
+  return clean && scoreV1GeneratedPlanProductionCue(clean) > -100 ? clean : '';
+}
+
+function alignV1FinalArrangementWithSectionPlan(
+  prompt: string,
+  rawPlan: unknown,
+  params: GenerateSongParams,
+): string {
+  if (isGenerationEngineV2(params) || isBackgroundOnlyBgmGenre(params)) return prompt;
+  const plan = isV1CanonicalSectionPerformancePlan(rawPlan)
+    ? rawPlan
+    : resolveV1SharedSectionPerformancePlan(rawPlan, params, prompt);
+  const timelineItems = plan
+    .map((item) => ({
+      item,
+      event: readV1CanonicalProductionCue(item.soundCue)
+        || readV1CanonicalProductionCue(item.arrangementAction),
+    }))
+    .filter(({ event }) => Boolean(event))
+    .sort((a, b) => Number(a.item.sectionIndex || 0) - Number(b.item.sectionIndex || 0));
+  if (!timelineItems.length) return prompt;
+
+  const map = parseFinalPromptLineMap(prompt);
+  const existingClauses = String(map.arrangement || '').split(/\s*;\s*/).map((part) => cleanupPromptTail(part)).filter(Boolean);
+  const baseClause = existingClauses.find((part) => /\b(?:BPM|tempo|groove|pocket|pulse|flow)\b/i.test(part)) || existingClauses[0] || 'genre-shaped rhythmic flow';
+  const rapClause = existingClauses.find((part) => /\b(?:no\s+rap|rap\s+section|rap\s+delivery)\b/i.test(part)) || '';
+
+  // Use every canonical section event. Earlier implementations selected a capped subset, which
+  // allowed a valid Final Chorus or Bridge event to appear in lyrics but disappear from
+  // [Arrangement]. The same event string now feeds both outputs.
+  const familyTotals = new Map<string, number>();
+  timelineItems.forEach(({ item }) => {
+    const key = baseV1GeneratedPlanSectionName(String(item.sectionName || 'Section'));
+    familyTotals.set(key, (familyTotals.get(key) || 0) + 1);
+  });
+  const familySeen = new Map<string, number>();
+  const timelineClauses = timelineItems.map(({ item, event }) => {
+    const rawName = String(item.sectionName || 'Section').trim() || 'Section';
+    const family = baseV1GeneratedPlanSectionName(rawName);
+    const occurrence = (familySeen.get(family) || 0) + 1;
+    familySeen.set(family, occurrence);
+    const hasExplicitSuffix = /\s+(?:\d+|[A-Z])$/i.test(rawName);
+    const displayName = !hasExplicitSuffix && (familyTotals.get(family) || 0) > 1
+      ? `${rawName} ${occurrence}`
+      : rawName;
+    return `${displayName}: ${cleanupPromptTail(normalizeV1EnglishCueGrammar(event))}`;
+  });
+  map.arrangement = cleanupPromptTail([baseClause, ...timelineClauses, rapClause].filter(Boolean).join('; '));
+
+  const hasAudioQuality = /\[Audio quality improved to masterpiece\]/i.test(String(prompt || ''));
+  const lines = [
+    `[Genre] ${cleanupPromptTail(map.genre || 'Genre-led pop fusion')}`,
+    `[Instruments] ${cleanupPromptTail(map.instruments || 'balanced band and synth texture')}`,
+    `[Atmosphere] ${cleanupPromptTail(map.atmosphere || 'balanced emotional air')}`,
+    `[Vocals] ${cleanupPromptTail(map.vocals || 'Natural solo vocal with human breath')}`,
+    `[Arrangement] ${cleanupPromptTail(map.arrangement || 'genre-shaped rhythmic flow')}`,
+  ];
+  if (hasAudioQuality) lines.push('[Audio quality improved to masterpiece]');
+  return removeAudioQualityLineWhenPromptIsNearLimit(enforceEnglishProductionPrompt(lines.join('\n')));
 }
 
 function isV1StandaloneBracketCueLine(value: string, customNames: string[]): boolean {
@@ -26058,6 +26671,38 @@ function dedupeV1StandaloneCues(values: string[], limit = 2): string[] {
   return out.slice(0, limit);
 }
 
+function splitV1StandaloneMixedCue(
+  value: unknown,
+  context: V1CueRepairContext = {},
+): { performance: string; production: string } {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return { performance: '', production: '' };
+
+  // A combined line such as "gentle hums over ambient textures" contains a vocal action
+  // followed by its production bed. Split only at a relationship boundary and only when the
+  // leading clause is independently actionable as vocal performance. No song-specific wording
+  // is invented here; both outputs come from the same generated line.
+  const relation = clean.match(/^(.+?)\s+(?:over|under|with|against|alongside|through)\s+(.+)$/i);
+  if (relation) {
+    const leading = sanitizeV1GeneratedPlanPerformanceCue(relation[1], {
+      ...context,
+      local: [...(context.local || []), clean, relation[1], relation[2]],
+    });
+    const trailing = sanitizeV1GeneratedPlanSoundCue(relation[2], {
+      ...context,
+      local: [...(context.local || []), clean, relation[1], relation[2]],
+    });
+    if (leading) {
+      return { performance: leading, production: trailing };
+    }
+  }
+
+  return {
+    performance: sanitizeV1GeneratedPlanPerformanceCue(clean, context),
+    production: sanitizeV1GeneratedPlanSoundCue(clean, context),
+  };
+}
+
 function promoteV1AdjacentPerformanceCueIntoSectionTags(
   lyrics: string,
   params: GenerateSongParams,
@@ -26078,7 +26723,7 @@ function promoteV1AdjacentPerformanceCueIntoSectionTags(
       .find(Boolean);
     if (existingCue) continue;
 
-    const adjacentCandidates: Array<{ index: number; cue: string }> = [];
+    const adjacentCandidates: Array<{ index: number; cue: string; production: string }> = [];
     let cursor = index + 1;
     while (cursor < lines.length) {
       const candidate = String(lines[cursor] || '').trim();
@@ -26089,8 +26734,10 @@ function promoteV1AdjacentPerformanceCueIntoSectionTags(
       if (isV1StructuralSectionTag(candidate, blueprint.customNames)) break;
       if (!isV1StandaloneBracketCueLine(candidate, blueprint.customNames)) break;
       const inside = insideV1StandaloneCueLine(candidate);
-      const cue = sanitizeV1GeneratedPlanPerformanceCue(inside, { local: [inside] });
-      if (cue) adjacentCandidates.push({ index: cursor, cue });
+      const splitCue = splitV1StandaloneMixedCue(inside, { local: [inside] });
+      if (splitCue.performance) {
+        adjacentCandidates.push({ index: cursor, cue: splitCue.performance, production: splitCue.production });
+      }
       cursor += 1;
     }
 
@@ -26100,7 +26747,11 @@ function promoteV1AdjacentPerformanceCueIntoSectionTags(
     if (blueprint.vocalAnchors.length >= 2 && !anchor) continue;
     const displaySection = String(parsed.rawSection || section).trim();
     lines[index] = `[${displaySection} : ${[anchor, promoted.cue].filter(Boolean).join(', ')}]`;
-    removeIndexes.add(promoted.index);
+    if (promoted.production) {
+      lines[promoted.index] = `[${normalizeV1EnglishCueGrammar(promoted.production)}]`;
+    } else {
+      removeIndexes.add(promoted.index);
+    }
   }
 
   return lines
@@ -26131,7 +26782,11 @@ function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSo
       return;
     }
     if (/^\[[^\]\n]+\]$/.test(trimmed)) {
-      out.push(trimmed.replace(/\s+/g, ' '));
+      const inside = insideV1StandaloneCueLine(trimmed);
+      const normalizedInside = classifyV1GeneratedPlanCueDomain(inside) === 'production'
+        ? normalizeV1EnglishCueGrammar(inside)
+        : inside;
+      out.push(`[${normalizedInside.replace(/\s+/g, ' ')}]`);
       return;
     }
     out.push(trimmed);
@@ -26154,75 +26809,46 @@ function applyV1GeneratedSectionPerformancePlan(
   if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return source;
   if (params.songStructure === 'custom') return source;
 
-  const plan = Array.isArray(rawPlan) ? rawPlan as V1GeneratedSectionPerformancePlanItem[] : [];
-  if (!plan.length) {
+  const normalizedPlan = isV1CanonicalSectionPerformancePlan(rawPlan)
+    ? rawPlan
+    : resolveV1SharedSectionPerformancePlan(rawPlan, params, productionPrompt);
+  if (!normalizedPlan.length) {
     console.warn('[SORIDRAW Section Performance Plan] missing in primary response; preserving generated tags.');
     return source;
   }
 
   const blueprint = getV1SectionBlueprint(params);
   const arrangementReference = extractV1ArrangementReference(productionPrompt);
-  const rawPlanItems = plan.map((item, originalIndex) => ({
-    sectionIndex: Number.isInteger(Number(item?.sectionIndex)) && Number(item?.sectionIndex) > 0
-      ? Number(item?.sectionIndex)
-      : originalIndex + 1,
-    sectionName: normalizeV1GeneratedPlanSectionName(item?.sectionName),
-    vocalAnchor: normalizeV1RepairAnchor(String(item?.vocalAnchor || ''), params),
-    performanceCue: cleanV1GeneratedPlanCueText(item?.performanceCue),
-    alternatePerformanceCue: cleanV1GeneratedPlanCueText(item?.alternatePerformanceCue),
-    soundCue: cleanV1GeneratedPlanCueText(item?.soundCue),
-  }));
-  const sourceCueReferences = (source.match(/\[[^\]\n]+\]/g) || []).map((entry) => entry.replace(/^\[|\]$/g, ''));
+  const vocalsReference = extractV1VocalsReference(productionPrompt);
   const globalCueReferences: unknown[] = [
     arrangementReference,
-    ...sourceCueReferences,
-    ...rawPlanItems.flatMap((item) => [item.performanceCue, item.alternatePerformanceCue, item.soundCue]),
+    vocalsReference,
+    ...normalizedPlan.flatMap((item) => [item.performanceCue, item.alternatePerformanceCue, item.arrangementAction, item.soundCue]),
   ];
-  const normalizedPlan = rawPlanItems
-    .map((item) => {
-      const repairContext: V1CueRepairContext = {
-        local: [item.performanceCue, item.alternatePerformanceCue, item.soundCue],
-        arrangement: [arrangementReference],
-        global: globalCueReferences,
-      };
-      return {
-        ...item,
-        performanceCue: sanitizeV1GeneratedPlanPerformanceCue(item.performanceCue, repairContext),
-        alternatePerformanceCue: sanitizeV1GeneratedPlanPerformanceCue(item.alternatePerformanceCue, repairContext),
-        soundCue: sanitizeV1GeneratedPlanSoundCue(item.soundCue, repairContext),
-      };
-    })
-    .sort((a, b) => a.sectionIndex - b.sectionIndex);
-
-  const cueFamily = (sectionName: string): string => {
-    const base = baseV1GeneratedPlanSectionName(sectionName);
-    if (/^(?:final\s+chorus|chorus)$/.test(base)) return 'chorus';
-    if (/^(?:final\s+hook|hook|refrain)$/.test(base)) return 'hook';
-    if (/^pre[-\s]?chorus$/.test(base)) return 'pre-chorus';
-    if (/^rap\s+section$/.test(base)) return 'rap-section';
-    if (/^verse$/.test(base)) return 'verse';
-    return base;
-  };
   const usedPerformanceCueKeys = new Set<string>();
   const findFamilyFallbackCue = (section: string, currentItem?: (typeof normalizedPlan)[number]): string => {
-    const family = cueFamily(section);
+    const family = v1GeneratedPlanCueFamily(section);
     const currentIndex = currentItem?.sectionIndex ?? Number.MAX_SAFE_INTEGER;
     const candidates = normalizedPlan
-      .filter((candidate) => candidate !== currentItem && cueFamily(candidate.sectionName) === family)
+      .filter((candidate) => candidate !== currentItem && v1GeneratedPlanCueFamily(String(candidate.sectionName || '')) === family)
       .flatMap((candidate) => [
-        { value: candidate.alternatePerformanceCue, distance: Math.abs(candidate.sectionIndex - currentIndex), order: 0 },
-        { value: candidate.performanceCue, distance: Math.abs(candidate.sectionIndex - currentIndex), order: 1 },
+        { value: candidate.alternatePerformanceCue, distance: Math.abs(Number(candidate.sectionIndex || 0) - Number(currentIndex)), order: 0 },
+        { value: candidate.performanceCue, distance: Math.abs(Number(candidate.sectionIndex || 0) - Number(currentIndex)), order: 1 },
       ])
       .filter((candidate) => Boolean(candidate.value))
-      .filter((candidate) => {
-        const key = normalizeV1PerformanceCueKey(candidate.value);
-        return key && !usedPerformanceCueKeys.has(key);
-      })
       .sort((a, b) => a.distance - b.distance || a.order - b.order);
-    return candidates[0]?.value || '';
+    const unused = candidates.find((candidate) => {
+      const key = normalizeV1PerformanceCueKey(candidate.value);
+      return key && !usedPerformanceCueKeys.has(key);
+    });
+    // A repeated family cue is a last-resort completeness fallback. It is preferable to an empty
+    // sung tag and still uses only the same song's first-response vocabulary.
+    return unused?.value || candidates[0]?.value || '';
   };
 
-  const usedPlanIndexes = new Set<number>();
+  // Do not use model-supplied sectionIndex as identity: duplicate or missing indexes are valid
+  // malformed-output cases and previously caused a later Refrain/Chorus plan item to disappear.
+  const usedPlanItems = new Set<(typeof normalizedPlan)[number]>();
   const lines = source.split('\n');
   const output: string[] = [];
   let structuralOrdinal = 0;
@@ -26230,30 +26856,30 @@ function applyV1GeneratedSectionPerformancePlan(
   const pickPlanItem = (section: string) => {
     structuralOrdinal += 1;
     const exact = normalizedPlan.find((item) =>
-      !usedPlanIndexes.has(item.sectionIndex)
+      !usedPlanItems.has(item)
       && item.sectionName
       && item.sectionName.toLowerCase() === section.toLowerCase(),
     );
     if (exact) {
-      usedPlanIndexes.add(exact.sectionIndex);
+      usedPlanItems.add(exact);
       return exact;
     }
 
     const base = baseV1GeneratedPlanSectionName(section);
     const sameFamily = normalizedPlan.find((item) =>
-      !usedPlanIndexes.has(item.sectionIndex)
+      !usedPlanItems.has(item)
       && item.sectionName
       && baseV1GeneratedPlanSectionName(item.sectionName) === base,
     );
     if (sameFamily) {
-      usedPlanIndexes.add(sameFamily.sectionIndex);
+      usedPlanItems.add(sameFamily);
       return sameFamily;
     }
 
     const indexed = normalizedPlan.find((item) =>
-      !usedPlanIndexes.has(item.sectionIndex) && item.sectionIndex === structuralOrdinal,
+      !usedPlanItems.has(item) && item.sectionIndex === structuralOrdinal,
     );
-    if (indexed) usedPlanIndexes.add(indexed.sectionIndex);
+    if (indexed) usedPlanItems.add(indexed);
     return indexed;
   };
 
@@ -26312,15 +26938,27 @@ function applyV1GeneratedSectionPerformancePlan(
 
     const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index)
       || (/^Intro$/i.test(section) && Boolean(item?.performanceCue || item?.alternatePerformanceCue || adjacentPerformance[0]));
-    let performanceCue = selectV1GeneratedPlanPerformanceCue(
+    const promptDerivedCue = buildV1PromptDerivedPerformanceCue(
+      productionPrompt,
+      item || { sectionName: section },
       sectionRepairContext,
-      item?.performanceCue,
-      item?.alternatePerformanceCue,
+    );
+    const canonicalPerformanceCue = item
+      ? readV1CanonicalPerformanceCue(item.performanceCue)
+        || readV1CanonicalPerformanceCue(item.alternatePerformanceCue)
+        || readV1CanonicalPerformanceCue(composeV1StructuredPerformanceCue(item))
+        || promptDerivedCue
+      : '';
+    // A matched canonical plan is the single source of truth. Language-specific generated tags
+    // are consulted only when the canonical item truly has no usable cue. This prevents Korean
+    // and secondary-language cards from re-ranking different local candidates.
+    let performanceCue = canonicalPerformanceCue || selectV1GeneratedPlanPerformanceCue(
+      sectionRepairContext,
       existingTagCues[0],
       adjacentPerformance[0],
     );
     const selectedKey = normalizeV1PerformanceCueKey(performanceCue);
-    if (!performanceCue || (selectedKey && usedPerformanceCueKeys.has(selectedKey))) {
+    if (!performanceCue || (!item && selectedKey && usedPerformanceCueKeys.has(selectedKey))) {
       performanceCue = findFamilyFallbackCue(section, item) || performanceCue;
     }
     const anchor = blueprint.vocalAnchors.length >= 2
@@ -26339,8 +26977,16 @@ function applyV1GeneratedSectionPerformancePlan(
     // The shared plan is the final authority for local production movement. When it contains
     // a soundCue, use exactly that cue on both language cards and discard older generated
     // duplicates. If it is empty, preserve at most two distinct existing production cues.
-    const finalProduction = item?.soundCue
-      ? [item.soundCue]
+    const canonicalPlanProduction = item
+      ? readV1CanonicalProductionCue(item.soundCue)
+        || readV1CanonicalProductionCue(item.arrangementAction)
+      : '';
+    const selectedPlanProduction = item
+      ? canonicalPlanProduction
+        || selectV1GeneratedPlanProductionCue(sectionRepairContext, ...adjacentProduction)
+      : '';
+    const finalProduction = item
+      ? dedupeV1StandaloneCues([selectedPlanProduction].filter(Boolean), 1)
       : dedupeV1StandaloneCues(adjacentProduction, 2);
     finalProduction.forEach((cue) => output.push(`[${cue}]`));
 
@@ -28297,6 +28943,89 @@ function normalizeGenreEraTexturePrefix(line: string, params: GenerateSongParams
   return cleanupPromptTail(`${mainGenre}, ${suffixParts.slice(0, -1).join(', ')}, and ${suffixParts[suffixParts.length - 1]}`);
 }
 
+
+function getCanonicalGenreMoodAccents(params: GenerateSongParams): string[] {
+  const resolved = getV1ResolvedMoodRoleValues(params) as ReturnType<typeof getV1ResolvedMoodRoleValues> & { genreAccents?: string[] };
+  const raw = Array.isArray(resolved.genreAccents) && resolved.genreAccents.length
+    ? resolved.genreAccents
+    : String(resolved.genreAccent || '').split(/\s*(?:,|\+|\/|\band\b)\s*/i);
+  const seen = new Set<string>();
+  const accents: string[] = [];
+  raw.forEach((value) => {
+    const cleaned = compactGenreToken(String(value || ''))
+      .replace(/\b(?:mood|atmosphere|movement|build|bloom|transition)\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (!cleaned) return;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    accents.push(cleaned);
+  });
+  return accents.slice(0, 2);
+}
+
+function getCanonicalHybridGenreLabels(params: GenerateSongParams, occupiedSlots: number): string[] {
+  const limit = Math.max(0, Math.min(2, 3 - occupiedSlots));
+  if (!limit) return [];
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  (params.styles ?? []).forEach((id) => {
+    const item = resolveStyleItem(id);
+    if (!item || STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] !== 'hybrid') return;
+    const label = compactGenreToken(String(item.label || item.style || '')).trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    labels.push(label);
+  });
+  return labels.slice(0, limit);
+}
+
+function buildCanonicalGenreIdentityValue(params: GenerateSongParams): string {
+  const directRaw = getDirectGenreInputText(params);
+  const directParts = directRaw
+    ? splitDirectMusicParts(directRaw).map((part) => compactGenreToken(part)).filter(Boolean).slice(0, 3)
+    : [];
+  const selectedGenreLabels = directParts.length
+    ? directParts
+    : getSelectedFusionGenres(params).map((item) => compactGenreToken(item.label)).filter(Boolean).slice(0, 2);
+
+  const coreGenres = selectedGenreLabels.length ? selectedGenreLabels : ['Pop'];
+  const hybridLabels = getCanonicalHybridGenreLabels(params, coreGenres.length);
+  const identities = [...coreGenres, ...hybridLabels].slice(0, 3);
+  const primary = identities[0] || 'Pop';
+  const influences = identities.slice(1).filter((label) => !isSameGenreFamily(primary, label));
+
+  let genreCore = primary;
+  if (influences.length === 1) genreCore = `${primary} with ${influences[0]} influence`;
+  else if (influences.length > 1) genreCore = `${primary} with ${joinPromptPhrase(influences, 'and')} influences`;
+
+  const eraPrefix = getSelectedEraTextureItems(params)
+    .map((item) => compactGenreToken(String(item.label || item.style || '')))
+    .filter(Boolean)[0] || '';
+  const moodAccents = getCanonicalGenreMoodAccents(params)
+    .filter((accent) => !isTermIncluded(genreCore, accent))
+    .slice(0, 2);
+
+  return cleanupPromptTail([eraPrefix, ...moodAccents, genreCore].filter(Boolean).join(' ')) || 'Pop';
+}
+
+function enforceFinalGenreIdentityCompression(prompt: string, params: GenerateSongParams): string {
+  if (!prompt || isGenerationEngineV2(params)) return prompt;
+  const canonicalGenre = buildCanonicalGenreIdentityValue(params);
+  const lines = normalizeProductionPromptSectionBreaks(prompt).split('\n');
+  let replaced = false;
+  const next = lines.map((line) => {
+    if (!/^\s*\[Genre\]/i.test(line)) return line;
+    replaced = true;
+    return `[Genre] ${canonicalGenre}`;
+  });
+  if (!replaced) next.unshift(`[Genre] ${canonicalGenre}`);
+  return next.filter(Boolean).join('\n');
+}
+
 function routeStyleKeywordsToPrompt(prompt: string, params: GenerateSongParams): string {
   const selectedStyleIds = params.styles ?? [];
   if (selectedStyleIds.length === 0) return prompt;
@@ -28317,11 +29046,13 @@ function routeStyleKeywordsToPrompt(prompt: string, params: GenerateSongParams):
     .filter((item): item is ResolvedStyleItem => Boolean(item));
 
   const hybridItems = selectedStyleItems.filter((item) => STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === 'hybrid');
+  const visibleGenreIdentityCount = Math.min(2, getSelectedFusionGenres(params).length);
+  const hybridIdentityLimit = Math.max(0, Math.min(2, 3 - visibleGenreIdentityCount));
   const hybridLabels = hybridItems
     .map((item) => formatGenreInfluence(String(item.label || item.style || '').trim()))
     .filter((label) => label && !isTermIncluded(map.genre || '', label))
     .filter((label, index, arr) => arr.findIndex((item) => item.toLowerCase() === label.toLowerCase()) === index)
-    .slice(0, 3);
+    .slice(0, hybridIdentityLimit);
 
   if (hybridLabels.length) {
     const baseGenre = cleanupPromptTail(map.genre || '');
@@ -28346,6 +29077,18 @@ function routeStyleKeywordsToPrompt(prompt: string, params: GenerateSongParams):
   selectedStyleItems.forEach((item) => {
     const cycleId = STYLE_CYCLE_ID_BY_VARIANT_ID[item.id];
     const role = STYLE_ROLE_BY_VARIANT_ID[item.id];
+
+    if (item.id === 'fusion-musical-theater') {
+      const theatricalVocalCue = 'staged expressive vocal movement';
+      const theatricalArrangementCue = getRoleScopedArrangementCueForStyleItem(item) || 'theatrical scene turns and ensemble lift';
+      if (!isTermIncluded(map.vocals || '', theatricalVocalCue)) {
+        map.vocals = map.vocals ? `${map.vocals}, ${theatricalVocalCue}` : theatricalVocalCue;
+        changed = true;
+      }
+      addPriorityArrangementCue(theatricalArrangementCue);
+      changed = true;
+      return;
+    }
 
     if (cycleId === 'hybrid') {
       // Hybrid has already been applied above as a weak genre influence.
@@ -29241,9 +29984,15 @@ ${selectedNativeScriptInstruction}
               vocalAnchor: { type: Type.STRING },
               performanceCue: { type: Type.STRING },
               alternatePerformanceCue: { type: Type.STRING },
+              delivery: { type: Type.STRING },
+              phrasing: { type: Type.STRING },
+              register: { type: Type.STRING },
+              dynamicDirection: { type: Type.STRING },
+              arrangementRole: { type: Type.STRING },
+              arrangementAction: { type: Type.STRING },
               soundCue: { type: Type.STRING },
             },
-            required: ["sectionIndex", "sectionName", "vocalAnchor", "performanceCue", "alternatePerformanceCue", "soundCue"],
+            required: ["sectionIndex", "sectionName", "vocalAnchor", "performanceCue", "alternatePerformanceCue", "delivery", "phrasing", "register", "dynamicDirection", "arrangementRole", "arrangementAction", "soundCue"],
           },
         },
       }
@@ -29398,16 +30147,28 @@ ${exactStructureText}
 - Design ONE shared Section Performance Plan before writing either lyric card. The plan, [Arrangement], and both lyric cards must come from the same Story Context and the same whole-song performance arc.
 - Return exactly one plan item for every structural section in this exact order: ${exactStructureText}.
 - sectionIndex is 1-based and follows that exact order. sectionName must use the exact visible section name for that position.
-- For every sung or vocal-ad-lib section, performanceCue is REQUIRED and must be a complete 2–8 word current-song English phrase describing the locally dominant vocal behavior, phrasing/rhythm, emotional attitude, or dynamic movement. Never leave it empty, never truncate a word, and never end with a dangling connector such as with/and/to/of.
-- alternatePerformanceCue is also REQUIRED for every sung or vocal-ad-lib section. Write a second complete 2–8 word cue with different wording but the same local function, so the application can safely use it if the primary cue is incomplete. For non-vocal sections, both cue fields may be empty.
+- For every sung or vocal-ad-lib section, performanceCue and alternatePerformanceCue are REQUIRED complete 2–8 word current-song English cues. Never truncate a word or end with a dangling connector.
+- FIELD COMPLETENESS CONTRACT: every sung/ad-lib item must contain at least one non-empty delivery or phrasing field, plus a valid register or dynamicDirection when musically relevant. Never return an anchor-only or section-name-only item.
+- Also return FOUR structured vocal fields for every sung or vocal-ad-lib section. These are safety fields used to rebuild a damaged free cue without another model call:
+  1) delivery: 2–5 English words and MUST end with the literal word "delivery".
+  2) phrasing: 2–5 English words and MUST end with the literal word "phrasing".
+  3) register: use EXACTLY one of: low register / low-mid register / mid register / mid-high register / upper register / high register / neutral register / spoken range / chest voice / head voice / mixed voice / falsetto.
+  4) dynamicDirection: use EXACTLY one of: hold / rise / open / intensify / pull-back / expose / peak / release / fade / resolve / sustain / soften.
+- At least two structured vocal fields must be meaningful for each sung section. For non-vocal sections, the vocal cue and structured vocal fields may be empty.
 - For a solo song, vocalAnchor must be an empty string. For a multi-vocal song, vocalAnchor must be one exact active anchor from [Vocals], or All Voices only for a genuine shared payoff.
-- soundCue is optional. Use an empty string when no local production event is needed. When used, write one short audible instrument/effect/texture action in English, separate from the vocal cue.
-- Treat [Arrangement] as a binding timeline, not a loose mood description. Assign each hook entry, pull-back, bridge drop, instrumental takeover, and final lift to the exact structural section where it happens. Do not move an Arrangement event to a different section.
-- performanceCue must respond to that same local Arrangement event: a pull-back should expose or restrain the vocal, a rise should build or open it, and a final lift should expand the payoff without changing the singer identity.
-- Non-vocal sections such as Instrumental, Interlude, Break, Stop, or an actual solo section may use an empty performanceCue and a useful soundCue.
+- arrangementRole is REQUIRED and must use EXACTLY one of: opening / development / rise / payoff / variation / pull-back / turn / final-lift / ending / transition / none.
+- arrangementAction is REQUIRED as a string. Use an empty string only when that section has no local Arrangement event. Otherwise write one complete 3–18 word producer action describing the exact event assigned to THIS section.
+- soundCue is the short audible local subset of arrangementAction, suitable as one standalone square-bracket cue below the section. If arrangementAction contains an audible production event, soundCue MUST be non-empty and belong to the same section. Use an empty string only when the action is purely vocal or no local audible event exists.
+- Treat [Arrangement] as a binding timeline, not a loose mood description. Every hook entry, pull-back, bridge drop, instrumental takeover, and final lift named in [Arrangement] must appear in exactly one matching plan item. Do not move an event to another section.
+- performanceCue and the structured vocal fields must respond to that same local Arrangement event: a pull-back exposes or restrains the vocal, a rise builds or opens it, and a final lift expands the payoff without changing singer identity.
+- TYPE SEPARATION CONTRACT: delivery/phrasing/register/voice/humming directions belong only to performanceCue or structured vocal fields. Instruments, beats, pads, synths, foley, entries, drop-outs, swells, and fades belong only to arrangementAction/soundCue. A texture or rhythm adjective such as ambient or groove does not turn a phrase ending in delivery or phrasing into a sound cue. A concrete sound object performing an audible action remains production even when its name contains vocal, as in vocal pads swelling.
+- ARRANGEMENT FIDELITY CONTRACT: soundCue must preserve the complete audible event owned by this section from arrangementAction. Do not shorten away named remaining instruments, entries, drop-outs, or the event result merely to make a generic cue.
+- OUTPUT GRAMMAR CONTRACT: arrangementAction and soundCue must be complete, concise present-tense English cue clauses with correct subject-verb agreement and complete phrasal verbs. Preserve all event information, but do not emit fragments such as a plural sound object with a singular verb or an incomplete out/fade particle.
+- QUALITY CONTRACT: do not use a generic dynamic-only phrase when a more specific current-song delivery or phrasing cue is available. The free cue and structured fields must describe the same local vocal action, not compete with each other.
 - Build the plan as one coherent arc: opening state → development → rise → payoff → turn → final payoff → ending. CHANGE is primary, BALANCE prevents every section from becoming maximal, and UNITY keeps one singer identity and genre.
-- Do not design each section independently. Repeated sections must preserve identity while changing local execution or payoff.
-- The lyrics fields must keep the same exact section order and lyric ownership. Do not output the plan as lyric lines. The application will bind the plan cues to the matching section tags.`
+- Do not design each section independently. Repeated sections preserve identity while changing local execution or payoff.
+- SINGLE-SOURCE CONTRACT: the Korean lyric card, the secondary-language lyric card, and the final [Arrangement] timeline MUST consume the same sectionPerformancePlan items. Do not invent or re-rank language-specific performance cues or production events.
+- The lyrics fields must keep the same exact section order and lyric ownership. Do not output the plan as lyric lines. The application binds the shared plan to both cards.`
     : '';
 
   const systemInstruction = `
@@ -30549,9 +31310,19 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   // Rebuild [Arrangement] here so legacy section-by-section timelines can never leak back into
   // the visible prompt in Korean-only, dual-language, or mixed-language generation.
   const finalProducerMappedPrompt = enforceV1FinalProducerDirectionMapPrompt(cleanedPromptStr, params);
-  const enginePromptStr = renderProductionPromptForGenerationEngine(finalProducerMappedPrompt, params);
-  result.prompt = enginePromptStr;
-  result.productionPrompt = enginePromptStr;
+  const provisionalEnginePromptStr = renderProductionPromptForGenerationEngine(finalProducerMappedPrompt, params);
+  const rawSectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
+    ? (result as any).sectionPerformancePlan
+    : [];
+  const resolvedSectionPerformancePlan = isGenerationEngineV2(params)
+    ? rawSectionPerformancePlan
+    : resolveV1SharedSectionPerformancePlan(rawSectionPerformancePlan, params, provisionalEnginePromptStr);
+  const enginePromptStr = isGenerationEngineV2(params)
+    ? provisionalEnginePromptStr
+    : alignV1FinalArrangementWithSectionPlan(provisionalEnginePromptStr, resolvedSectionPerformancePlan, params);
+  const finalGenreCompressedPrompt = enforceFinalGenreIdentityCompression(enginePromptStr, params);
+  result.prompt = finalGenreCompressedPrompt;
+  result.productionPrompt = finalGenreCompressedPrompt;
   result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
@@ -30598,9 +31369,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         });
       }
     } else {
-      const finalSectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
-        ? (result as any).sectionPerformancePlan
-        : [];
+      const finalSectionPerformancePlan = resolvedSectionPerformancePlan;
       if (typeof result.lyrics.korean === 'string') {
         const structurallyFinalKorean = applyV1SectionBlueprintGuard(
           finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params),

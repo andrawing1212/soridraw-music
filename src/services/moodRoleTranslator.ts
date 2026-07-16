@@ -22,6 +22,7 @@ export interface ResolvedMoodRoleValues {
   identity: MoodIdentity;
   identityKey: string;
   genreAccent: string;
+  genreAccents: string[];
   atmosphereCue: string;
   vocalCue: string;
   arrangementCue: string;
@@ -379,6 +380,7 @@ function resolvedRoleValues(identity: MoodIdentity): ResolvedMoodRoleValues {
       identity,
       identityKey: key,
       genreAccent: '',
+      genreAccents: [],
       atmosphereCue: '',
       vocalCue: '',
       arrangementCue: '',
@@ -388,10 +390,44 @@ function resolvedRoleValues(identity: MoodIdentity): ResolvedMoodRoleValues {
 
   const descriptors = roleSources.map(firstRoleDescriptor).filter(Boolean);
   const movements = roleSources.map(firstMovementPhrase).filter(Boolean);
-  const genreAccent = dedupeGenreAccents(
-    roleSources.map((source) => titleGenreToken(source.label || source.emotionalCharacter || source.id)),
-    5,
-  ).join(' ');
+
+  // Genre Mood Accent Compressor:
+  // keep one surface/texture identity and one emotional identity at most.
+  // Spatial air, scene wording, and time-based movement belong to Atmosphere/Arrangement.
+  const genreMoodCandidates = roleSources.map((source, index) => {
+    const accent = titleGenreToken(source.label || source.emotionalCharacter || source.id);
+    const text = cleanText(`${source.label} ${source.emotionalCharacter} ${source.meaning}`).toLowerCase();
+    const movementText = cleanText(source.movement).toLowerCase();
+    const surface = /\b(?:glossy|polished|sleek|refined|vintage|retro|lo[- ]?fi|raw|organic|modern|classic|minimal(?:ist)?|smooth)\b/.test(text);
+    const emotion = /\b(?:soulful|romantic|melancholic|wistful|sad|sorrow|warm|tender|dark|bright|hopeful|playful|cute|tense|uneasy|emotional|bittersweet|restrained|mysterious|magical)\b/.test(text);
+    const spatial = /\b(?:airy|open|breezy|spacious|wide|cinematic|floating|hazy|cold|chilly|urban|metropolitan|room|space|scene|atmosphere)\b/.test(text);
+    const movementHeavy = /\b(?:build|bloom|rise|rising|swell|swelling|fade|fading|transition|shift|drop|climax|peak|pacing|progression|movement|lift)\b/.test(text);
+    const bucket = surface ? 'surface' : emotion ? 'emotion' : 'other';
+    const score = (surface ? 6 : 0) + (emotion ? 5 : 0) - (spatial && !surface && !emotion ? 5 : 0) - (movementHeavy && !surface && !emotion ? 6 : 0) - index * 0.01;
+    return { accent, bucket, score, excluded: !accent || movementHeavy || (score < 0 && bucket === 'other') };
+  }).filter((candidate) => !candidate.excluded);
+
+  const selectedGenreAccents: string[] = [];
+  const takeBest = (bucket: 'surface' | 'emotion') => {
+    const candidate = genreMoodCandidates
+      .filter((item) => item.bucket === bucket && !selectedGenreAccents.includes(item.accent))
+      .sort((a, b) => b.score - a.score)[0];
+    if (candidate) selectedGenreAccents.push(candidate.accent);
+  };
+  takeBest('surface');
+  takeBest('emotion');
+  if (selectedGenreAccents.length < 2) {
+    genreMoodCandidates
+      .sort((a, b) => b.score - a.score)
+      .forEach((candidate) => {
+        if (selectedGenreAccents.length >= 2) return;
+        if (!selectedGenreAccents.some((value) => genreAccentTokens(value).size && isSubsetTokens(genreAccentTokens(value), genreAccentTokens(candidate.accent)))) {
+          selectedGenreAccents.push(candidate.accent);
+        }
+      });
+  }
+  const genreAccents = dedupeGenreAccents(selectedGenreAccents, 2);
+  const genreAccent = genreAccents.join(' ');
 
   const primary = descriptors[0] || 'emotionally specific';
   const secondary = descriptors[1] || '';
@@ -424,6 +460,7 @@ function resolvedRoleValues(identity: MoodIdentity): ResolvedMoodRoleValues {
     identity,
     identityKey: key,
     genreAccent: cleanText(genreAccent),
+    genreAccents: genreAccents.map(cleanText).filter(Boolean).slice(0, 2),
     atmosphereCue: cleanText(atmosphereCue),
     vocalCue: cleanText(vocalCue),
     arrangementCue: cleanText(arrangementCue),

@@ -2565,18 +2565,32 @@ function isSelectableKeywordItem(item: any): boolean {
   return Boolean(item && item.kind !== 'separator' && !isSeparatorKeywordId(item.id));
 }
 
-const MAX_RANDOM_HYBRID_STYLES = 2;
+const MAX_VISIBLE_GENRE_IDENTITIES = 3;
+const MAX_HYBRID_STYLE_SELECTIONS = 2;
 const HYBRID_STYLE_ID_SET = new Set(
   ((STYLE_CYCLES.find((cycle: any) => cycle.id === 'hybrid')?.variants ?? []) as any[])
     .filter(isSelectableKeywordItem)
     .map((item: any) => String(item.id))
 );
+const MOVED_STYLE_TO_SOUND_ID_SET = new Set([
+  'fusion-acoustic-piano',
+  'retro-synth',
+  'acoustic-band',
+  'indie-band',
+  'band',
+  'fusion-orchestral',
+]);
 
 function isHybridStyleId(id: string): boolean {
   return HYBRID_STYLE_ID_SET.has(String(id));
 }
 
-function limitRandomHybridStyleIds(ids: string[] = [], maxCount: number = MAX_RANDOM_HYBRID_STYLES): string[] {
+function getHybridStyleLimitForGenreCount(genreCount: number): number {
+  const occupiedGenreSlots = Math.max(0, Math.min(2, Number(genreCount) || 0));
+  return Math.max(0, Math.min(MAX_HYBRID_STYLE_SELECTIONS, MAX_VISIBLE_GENRE_IDENTITIES - occupiedGenreSlots));
+}
+
+function limitHybridStyleIds(ids: string[] = [], maxCount: number = MAX_HYBRID_STYLE_SELECTIONS): string[] {
   let hybridCount = 0;
   return ids.filter((id) => {
     if (!isHybridStyleId(id)) return true;
@@ -2595,6 +2609,14 @@ function resolveStyleIds(labelsOrIds: string[] = []) {
 
 function resolveSoundTextureIds(labelsOrIds: string[] = []) {
   return Array.from(new Set(labelsOrIds.map((value) => SOUND_LABEL_TO_ID[value] ?? (SOUND_VARIANT_LOOKUP[value] && !isSeparatorKeywordId(value) ? value : null)).filter(Boolean) as string[]));
+}
+
+function resolveMovedStyleSoundIds(labelsOrIds: string[] = []) {
+  return Array.from(new Set(labelsOrIds.map((value) => {
+    const raw = String(value || '').trim();
+    const resolved = SOUND_LABEL_TO_ID[raw] ?? (SOUND_VARIANT_LOOKUP[raw] && !isSeparatorKeywordId(raw) ? raw : null);
+    return resolved && MOVED_STYLE_TO_SOUND_ID_SET.has(resolved) ? resolved : null;
+  }).filter(Boolean) as string[]));
 }
 
 function getStyleVariantLabelById(id: string) {
@@ -6013,6 +6035,11 @@ function App() {
   );
   const MAX_FUSION_GENRES = 2;
   const limitFusionGenreIds = (ids: string[]) => Array.from(new Set(ids.filter(Boolean))).slice(0, MAX_FUSION_GENRES);
+  const activeGenreIdentityCount = Math.min(
+    MAX_FUSION_GENRES,
+    new Set([...selectedGenres, ...subGenre].filter(Boolean)).size,
+  );
+  const maxHybridStyleSelections = getHybridStyleLimitForGenreCount(activeGenreIdentityCount);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleLongPressStart = (item: CategoryItem) => {
@@ -6055,8 +6082,16 @@ function App() {
     setSelectedThemes(filterValid(template.themes, THEMES));
 
     // 3. Styles & Sounds
-    setSelectedStyles(filterValid(template.styles, SOUND_STYLES));
-    setSelectedInstrumentSounds(filterValid(template.instrumentSounds, INSTRUMENT_SOUNDS));
+    // Items that used to live in Hybrid but are now true Sound/Ensemble choices
+    // are migrated by ID so older templates keep the same audible intent.
+    const migratedTemplateSoundIds = resolveMovedStyleSoundIds(template.styles ?? []);
+    const templateStyles = filterValid(template.styles, SOUND_STYLES);
+    const templateSounds = Array.from(new Set([
+      ...filterValid(template.instrumentSounds, INSTRUMENT_SOUNDS),
+      ...migratedTemplateSoundIds,
+    ]));
+    setSelectedStyles(limitHybridStyleIds(templateStyles, getHybridStyleLimitForGenreCount(Math.min(MAX_FUSION_GENRES, new Set([...validGenres, ...validSubGenres]).size))));
+    setSelectedInstrumentSounds(templateSounds);
 
     // 4. Vocal Settings
     setMaleCount(template.maleCount ?? 0);
@@ -7014,6 +7049,27 @@ const toggleCycleVariantSelection = (
     setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 2000);
   }, []);
 
+  useEffect(() => {
+    const movedSoundIds = selectedStyles.filter((id) => MOVED_STYLE_TO_SOUND_ID_SET.has(id));
+    if (movedSoundIds.length === 0) return;
+
+    // Backward compatibility for saved sessions created before Hybrid was role-cleaned.
+    // Preserve the audible choice by moving the same stable IDs into Sound/Ensemble.
+    setSelectedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+    setPinnedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
+    setSelectedInstrumentSounds((prev) => Array.from(new Set([...prev, ...movedSoundIds])));
+  }, [selectedStyles]);
+
+  useEffect(() => {
+    const normalizedStyles = limitHybridStyleIds(selectedStyles, maxHybridStyleSelections);
+    if (normalizedStyles.length === selectedStyles.length && normalizedStyles.every((id, index) => id === selectedStyles[index])) return;
+
+    setSelectedStyles(normalizedStyles);
+    showToast(activeGenreIdentityCount >= 2
+      ? '장르 2개 기준으로 하이브리드를 1개만 유지했습니다.'
+      : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
+  }, [activeGenreIdentityCount, maxHybridStyleSelections, selectedStyles, showToast]);
+
   const toggleFavorite = async (song: SongResult) => {
     song = normalizeFavoriteTitleFields(song as any) as SongResult;
 
@@ -7764,12 +7820,20 @@ const toggleCycleVariantSelection = (
     } else {
       setSituation(createEmptySituation());
     }
+    const rawAppliedStyleValues = normalizeStringList(appliedKeywords.style ?? appliedKeywords.theme ?? []);
+    const migratedStyleSoundIds = explicitCustomStyleInput ? [] : resolveMovedStyleSoundIds(rawAppliedStyleValues);
     const styleIds = explicitCustomStyleInput
       ? [makeCustomKeywordId(CUSTOM_STYLE_PREFIX, explicitCustomStyleInput)]
-      : resolveStyleIds(appliedKeywords.style ?? appliedKeywords.theme ?? []);
+      : limitHybridStyleIds(
+          resolveStyleIds(rawAppliedStyleValues),
+          getHybridStyleLimitForGenreCount(Math.min(MAX_FUSION_GENRES, restoredGenreIds.length || (explicitCustomGenreInput ? 1 : 0))),
+        );
     const rawInstrumentSoundIds = explicitCustomSoundInput
       ? [makeCustomKeywordId(CUSTOM_SOUND_PREFIX, explicitCustomSoundInput)]
-      : resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []);
+      : Array.from(new Set([
+          ...resolveSoundTextureIds(appliedKeywords.instrumentSound ?? []),
+          ...migratedStyleSoundIds,
+        ]));
 
     // SORIDRAW_RECOMMENDED_SOUND_COMBO_NEXT_APPLY_FIX: 다음곡 적용 시 추천조합으로 자동 선택된 실제 악기들을 UI 강조 상태까지 복원
     const restoreRecommendedSoundComboFromAppliedKeywords = (ids: string[]) => {
@@ -7971,7 +8035,7 @@ const toggleCycleVariantSelection = (
     }
     
     const final = category === 'style'
-      ? limitRandomHybridStyleIds([...result, ...pickedIds])
+      ? limitHybridStyleIds([...result, ...pickedIds], maxHybridStyleSelections)
       : [...result, ...pickedIds];
     
     if (category === 'genre') {
@@ -8850,7 +8914,7 @@ const toggleCycleVariantSelection = (
     // Limits: Style 3, Sound 3, Mood 5, Theme 4
     let s = isMenuLocked('style')
       ? selectedStyles
-      : limitRandomHybridStyleIds(getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3));
+      : limitHybridStyleIds(getRandomForCategory(SOUND_STYLES.filter(isSelectableKeywordItem), pinnedStyles, 3), getHybridStyleLimitForGenreCount(sg.length));
     let snd = isMenuLocked('sound') ? selectedInstrumentSounds : getRandomForCategory(INSTRUMENT_SOUNDS.filter(isSelectableKeywordItem), pinnedInstrumentSounds, 3);
     let m = isMenuLocked('mood') ? selectedMoods : getRandomForCategory(MOODS, [], 5);
     let t = isMenuLocked('theme') ? selectedThemes : getRandomForCategory(THEMES, [], 4);
@@ -9099,26 +9163,22 @@ const saveRecentSong = async (newSong: any) => {
         const count = Math.floor(Math.random() * 11) + 5; // 5-15
         const picked = allItems.sort(() => 0.5 - Math.random()).slice(0, count);
 
-        let randomHybridStyleCount = 0;
         picked.forEach(p => {
           if (p.cat === 'genre') finalGenres.push(p.id);
           if (p.cat === 'mood') finalMoods.push(p.id);
           if (p.cat === 'theme') finalThemes.push(p.id);
-          if (p.cat === 'style') {
-            if (isHybridStyleId(p.id)) {
-              randomHybridStyleCount += 1;
-              if (randomHybridStyleCount > MAX_RANDOM_HYBRID_STYLES) return;
-            }
-            finalStyles.push(p.id);
-          }
+          if (p.cat === 'style') finalStyles.push(p.id);
           if (p.cat === 'sound') finalInstrumentSounds.push(p.id);
           randomKeywords.push(p.label);
         });
         finalGenres = limitFusionGenreIds(finalGenres);
+        finalStyles = limitHybridStyleIds(finalStyles, getHybridStyleLimitForGenreCount(finalGenres.length));
         finalInstrumentSounds = filterSelectableIds(
           expandRecommendedSoundComboSelection(finalInstrumentSounds, { syncRef: false })
         );
       }
+
+      finalStyles = limitHybridStyleIds(finalStyles, getHybridStyleLimitForGenreCount(finalGenres.length));
 
       let currentMinBPM = minBPM;
       let currentMaxBPM = maxBPM;
@@ -12767,8 +12827,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             selected={selectedStyles}
             onCycleToggle={(cycleId, variantId) => {
               const baseStyles = selectedStyles.filter((id) => !isCustomStyleKeyword(id));
-              if (variantId) toggleCycleVariantSelection(variantId, baseStyles, setSelectedStyles);
-              else cycleFamilySelection(cycleId, baseStyles, setSelectedStyles, STYLE_CYCLES);
+              if (variantId) {
+                const isAddingHybrid = cycleId === 'hybrid' && !baseStyles.includes(variantId);
+                const selectedHybridCount = baseStyles.filter(isHybridStyleId).length;
+                if (isAddingHybrid && selectedHybridCount >= maxHybridStyleSelections) {
+                  showToast(activeGenreIdentityCount >= 2
+                    ? '장르를 2개 선택한 경우 하이브리드는 1개까지 사용할 수 있습니다.'
+                    : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
+                  return;
+                }
+                toggleCycleVariantSelection(variantId, baseStyles, setSelectedStyles);
+              } else {
+                cycleFamilySelection(cycleId, baseStyles, setSelectedStyles, STYLE_CYCLES);
+              }
             }}
             onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
             onRandom={() => randomizeCategory('style')}

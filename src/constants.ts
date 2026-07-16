@@ -244,11 +244,10 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
     id: 'hybrid',
     title: 'Hybrid',
     titleKo: '하이브리드',
-    description: 'Blends another musical color into the selected genre.',
-    descriptionKo: '선택한 장르에 다른 음악색을 섞어 개성을 더해요.',
+    description: 'Adds a true genre identity to the selected main/sub genre within the three-slot Genre limit.',
+    descriptionKo: '선택한 메인·서브 장르에 실제 장르 정체성을 더합니다. 장르 1개 선택 시 최대 2개, 장르 2개 선택 시 최대 1개까지 사용할 수 있어요.',
     variants: [
       { id: 'separator-style-hybrid-global-pop', kind: 'separator', label: '글로벌 POP', labelKo: '글로벌 POP', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-acoustic-piano', label: 'Acoustic Piano', labelKo: '어쿠스틱 피아노', description: '피아노 중심의 어쿠스틱 감성과 가까운 멜로디 무게감을 더하는 스타일입니다.', descriptionKo: '피아노 중심의 어쿠스틱 감성과 선율 중심 무게감을 더합니다. (Acoustic Piano)', style: 'Acoustic Piano fusion', sound: 'acoustic piano, soft room tone, gentle sustain', mood: 'intimate, emotional' },
       { id: 'fusion-bedroom-pop', label: 'Bedroom Pop', labelKo: '베드룸 팝', description: '작은 방에서 직접 만든 듯한 가까운 온기의 DIY 팝 색채입니다.', descriptionKo: '방 안에서 녹음한 듯한 밀착감과 DIY 팝 감성을 더합니다. (Bedroom Pop)', style: 'Bedroom Pop fusion', sound: 'close-mic vocals, soft synths, small-room warmth', mood: 'intimate, lo-fi' },
       { id: 'fusion-shoegaze', label: 'Shoegaze', labelKo: '슈게이즈', description: '흐릿한 기타 레이어와 넓은 소리의 벽 질감이 중심인 스타일입니다.', descriptionKo: '기타 노이즈와 넓은 공간감이 쌓이는 슈게이즈 질감입니다. (Shoegaze)', style: 'Shoegaze fusion', sound: 'washed guitars, wide reverb, layered noise wall', mood: 'hazy, immersive' },
       { id: 'fusion-ambient-pop', label: 'Ambient Pop', labelKo: '앰비언트 팝', description: '팝 구조에 앰비언트한 공간감과 넓은 질감을 더한 스타일입니다.', descriptionKo: '팝 구조에 앰비언트한 공간감과 부드러운 질감을 더합니다. (Ambient Pop)', style: 'Ambient Pop fusion', sound: 'ambient pads, soft pulses, spacious texture', mood: 'floating, calm' },
@@ -298,16 +297,12 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
       { id: 'fusion-synthwave', label: 'Synthwave', labelKo: '신스웨이브', description: 'Retro-futuristic synth color with neon night-drive energy.', descriptionKo: '네온빛 야간 주행 같은 레트로 퓨처 신스 감성입니다. (Synthwave)', style: 'Synthwave fusion', sound: 'analog synth arps, gated drums, neon pads', mood: 'cinematic, nocturnal' },
       { id: 'fusion-dreamwave', label: 'Dreamwave', labelKo: '드림웨이브', description: 'Dreamy synth atmosphere with soft retro-futuristic space.', descriptionKo: '몽환적인 신스 공간감과 부드러운 레트로 퓨처 감성입니다. (Dreamwave)', style: 'Dreamwave fusion', sound: 'soft synth haze, floating pads, gentle electronic pulse', mood: 'dreamy, floating' },
       { id: 'fusion-outrun', label: 'Outrun', labelKo: '아웃런', description: 'Fast neon retro drive with cinematic electronic energy.', descriptionKo: '빠른 네온 드라이브감과 영화적인 전자음 에너지를 더합니다. (Outrun)', style: 'Outrun fusion', sound: 'driving synth bass, pulsing arps, retro electronic drums', mood: 'fast, nocturnal' },
-      { id: 'retro-synth', label: 'Retro Synth', labelKo: '레트로 신스', description: 'retro synth - Retro synth color with nostalgic electronic warmth.', descriptionKo: '복고적인 신스 감성과 따뜻한 전자 질감입니다. (retro synth)', style: 'retro synth color', sound: 'analog-style synth lines', mood: 'nostalgic, neon' },
       { id: 'future-bass', label: 'Future Bass', labelKo: '퓨처 베이스', description: 'Wide future bass chords and elastic synth movement.', descriptionKo: '넓게 퍼지는 퓨처 베이스 코드와 탄력 있는 신스입니다. (Future Bass)', style: 'future bass synth movement', sound: 'wide chords, elastic bass synth', mood: 'bright, emotional' },
       { id: 'fusion-hyperpop', label: 'Hyperpop', labelKo: '하이퍼팝', description: 'Exaggerated digital pop color with glitchy high-energy texture.', descriptionKo: '과장된 디지털 질감과 글리치한 고에너지 팝 감성입니다. (Hyperpop)', style: 'Hyperpop fusion', sound: 'glitchy synths, bright distortion, pitched vocal texture', mood: 'hyper, synthetic' },
-      { id: 'deep-electronic', label: 'Deep Electronic Mood', labelKo: '딥 일렉트로닉 무드', description: 'Deep electronic layers and immersive low atmosphere.', descriptionKo: '깊게 잠기는 전자음 레이어와 몰입감입니다. (Deep Electronic Mood)', style: 'deep electronic mood', sound: 'dark pads, low electronic pressure', mood: 'immersive, moody' },
 
       { id: 'separator-style-hybrid-band-rock', kind: 'separator', label: '밴드 / 록', labelKo: '밴드 / 록', description: '', descriptionKo: '', promptCore: '' },
       { id: 'fusion-britpop', label: 'Britpop', labelKo: '브릿팝', description: '기타 중심의 상승감과 영국식 멜로딕 밴드팝 색채가 살아있는 스타일입니다.', descriptionKo: '영국식 멜로디와 기타 중심 밴드팝 감성을 더합니다. (Britpop)', style: 'Britpop fusion', sound: 'jangly guitars, live drums, melodic bass', mood: 'confident, nostalgic' },
       { id: 'fusion-rock', label: 'Rock', labelKo: '록', description: '기타 중심 편곡의 힘과 록 밴드 에너지가 살아있는 스타일입니다.', descriptionKo: '기타 중심의 밴드 에너지와 강한 전개감을 더합니다. (Rock)', style: 'Rock fusion', sound: 'electric guitars, live drums, driving bass', mood: 'energetic, raw' },
-      { id: 'acoustic-band', label: 'Acoustic Band', labelKo: '어쿠스틱 밴드', description: 'Acoustic band texture with natural warmth.', descriptionKo: '자연스러운 따뜻함의 어쿠스틱 밴드 질감입니다. (Acoustic Band)', style: 'acoustic band', sound: 'acoustic guitar, soft drums, warm bass', mood: 'warm, organic' },
-      { id: 'indie-band', label: 'Indie Band', labelKo: '인디 밴드', description: 'Loose indie band character and warm performance.', descriptionKo: '인디 밴드 특유의 자연스럽고 따뜻한 연주감입니다. (Indie Band)', style: 'indie band', sound: 'raw guitars, natural room drums', mood: 'warm, sincere' },
       { id: 'k-band-emotional-rock', label: 'K-Band Emotional Rock', labelKo: 'K-밴드 감성 록', description: 'Korean emotional rock band style with dramatic melodic vocals.', descriptionKo: '한국 밴드 발라드록처럼 서정적인 멜로디와 감정적인 록 에너지를 더합니다. (K-Band Emotional Rock)', style: 'K-band emotional rock', sound: 'emotional guitar band, driving drums', mood: 'emotional, anthemic' },
       { id: 'k-band-pop-rock', label: 'K-Band Pop Rock', labelKo: 'K-밴드 팝록', description: 'Bright Korean pop-rock band style with clear hooks.', descriptionKo: '밝고 선명한 멜로디 중심의 한국 밴드 팝록 감각을 더합니다. (K-Band Pop Rock)', style: 'K-band pop rock', sound: 'bright guitars, pop-rock drums', mood: 'fresh, energetic' },
       { id: 'modern-k-band-alt-rock', label: 'Modern K-Band Alt Rock', labelKo: '모던 K-밴드 얼터록', description: 'Modern Korean alternative rock band style with polished vocals and guitars.', descriptionKo: '세련된 보컬과 감성적인 기타 라인이 중심인 현대 한국 얼터너티브 록 밴드 스타일입니다. (Modern K-Band Alt Rock)', style: 'modern K-band alt rock', sound: 'polished guitars, modern band drums', mood: 'stylish, emotional' },
@@ -321,7 +316,6 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
       { id: 'anime-rock-band', label: 'Anime Rock Band', labelKo: '애니 록 밴드', description: 'Anime opening-like bright and driving rock band style.', descriptionKo: '애니메이션 오프닝처럼 밝고 질주감 있는 밴드 록 스타일입니다. (Anime Rock Band)', style: 'anime rock band', sound: 'driving guitars, fast drums, bright hooks', mood: 'exciting, heroic' },
       { id: 'emo-rock-band', label: 'Emo Rock Band', labelKo: '이모 록 밴드', description: 'Emotional rock band style with expressive vocals and melodic guitars.', descriptionKo: '감정적인 보컬과 서정적인 기타 진행이 중심인 이모 록 밴드 스타일입니다. (Emo Rock Band)', style: 'emo rock band', sound: 'emotional guitars, dynamic drums', mood: 'vulnerable, intense' },
       { id: 'post-rock-band', label: 'Post-Rock Band', labelKo: '포스트록 밴드', description: 'Post-rock band style with layered guitars and gradual crescendos.', descriptionKo: '긴 여운과 점층적인 기타 레이어가 중심인 포스트록 밴드 스타일입니다. (Post-Rock Band)', style: 'post-rock band', sound: 'layered guitars, gradual crescendos', mood: 'expansive, cinematic' },
-      { id: 'band', label: 'Full Band Sound', labelKo: '풀 밴드 사운드', description: 'Balanced full band ensemble feeling.', descriptionKo: '드럼, 베이스, 기타, 건반이 어우러지는 기본 풀 밴드감입니다. (Full Band Sound)', style: 'full band sound', sound: 'drums, bass, guitar, keys in balance', mood: 'organic, live' },
 
       { id: 'separator-style-hybrid-world-latin', kind: 'separator', label: '월드 / 라틴', labelKo: '월드 / 라틴', description: '', descriptionKo: '', promptCore: '' },
       { id: 'fusion-bollywood-pop', label: 'Bollywood Pop', labelKo: '볼리우드 팝', description: '밝은 리듬과 영화적인 멜로디 상승감이 있는 인도 팝 색채입니다.', descriptionKo: '인도 팝 특유의 밝은 리듬과 영화적인 멜로디 상승감을 더합니다. (Bollywood Pop)', style: 'Bollywood Pop fusion', sound: 'tabla accents, bright strings, cinematic pop drums', mood: 'colorful, dramatic' },
@@ -336,9 +330,7 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
       { id: 'fusion-flamenco-pop', label: 'Flamenco Pop', labelKo: '플라멩코 팝', description: 'Flamenco guitar and handclap rhythm blended with pop structure.', descriptionKo: '플라멩코 기타와 손뼉 리듬을 팝 구조에 섞습니다. (Flamenco Pop)', style: 'Flamenco Pop fusion', sound: 'flamenco guitar, handclaps, percussive footwork accents', mood: 'passionate, rhythmic' },
 
       { id: 'separator-style-hybrid-orchestral-cinematic', kind: 'separator', label: '오케스트라 / 시네마틱', labelKo: '오케스트라 / 시네마틱', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'fusion-orchestral', label: 'Orchestral', labelKo: '오케스트라', description: '오케스트라의 스케일과 영화적인 화성 깊이를 더하는 스타일입니다.', descriptionKo: '오케스트라의 웅장함과 영화적인 화성감을 더합니다. (Orchestral)', style: 'Orchestral fusion', sound: 'strings, brass, cinematic percussion', mood: 'grand, dramatic' },
       { id: 'fusion-cinematic-pop', label: 'Cinematic Pop', labelKo: '시네마틱 팝', description: 'Pop structure with cinematic scale and emotional lift.', descriptionKo: '팝 구조에 영화적인 스케일과 감정 상승감을 더합니다. (Cinematic Pop)', style: 'Cinematic Pop fusion', sound: 'wide strings, cinematic drums, glowing synth layers', mood: 'emotional, expansive' },
-      { id: 'fusion-musical-theater', label: 'Musical Theater', labelKo: '뮤지컬 터치', description: 'Musical-theater drama and staged vocal movement.', descriptionKo: '뮤지컬처럼 장면감 있는 전개와 극적인 보컬 움직임을 더합니다. (Musical Theater)', style: 'Musical Theater fusion', sound: 'theater piano, ensemble lift, dramatic section turns', mood: 'theatrical, expressive' },
       { id: 'fusion-operatic-pop', label: 'Operatic Pop', labelKo: '오페라틱 팝', description: 'Operatic vocal drama blended into pop structure.', descriptionKo: '오페라적인 극적 보컬감과 팝 구조를 섞습니다. (Operatic Pop)', style: 'Operatic Pop fusion', sound: 'dramatic strings, choir-like layers, grand vocal space', mood: 'grand, dramatic' },
       { id: 'fusion-string-pop', label: 'String Pop', labelKo: '스트링 팝', description: 'Pop arrangement with string-led emotional color.', descriptionKo: '스트링 중심의 감정선과 팝 편곡감을 더합니다. (String Pop)', style: 'String Pop fusion', sound: 'emotional strings, soft piano, warm pop drums', mood: 'emotional, polished' },
     ],
@@ -567,6 +559,7 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
       { id: 'dream-space', label: 'Dream-space Haze', labelKo: '꿈속 공간감', description: 'Blurred, surreal space like a scene inside a dream.', descriptionKo: '꿈속 장면처럼 흐릿하고 비현실적인 공간감입니다. (Dream-space Haze)', style: 'dream-space haze', sound: 'blurred reverb and soft delay', mood: 'surreal, floating' },
       { id: 'foggy-space', label: 'Foggy Space', labelKo: '안개 낀 공간감', description: 'Soft foggy ambience with blurred edges.', descriptionKo: '안개가 낀 듯 윤곽이 흐려지는 공간감입니다. (Foggy Space)', style: 'foggy atmospheric space', sound: 'soft blurred ambience', mood: 'mysterious, muted' },
       { id: 'helmet-muffle', label: 'Inside-helmet Muffle', labelKo: '헬멧 안 먹먹함', description: 'Muffled close breathing and sealed helmet space.', descriptionKo: '헬멧 안에서 숨소리와 목소리가 먹먹하게 울리는 질감입니다. (Inside-helmet Muffle)', style: 'inside-helmet muffled space', sound: 'close breath, sealed resonance', mood: 'isolated, claustrophobic' },
+      { id: 'deep-electronic', label: 'Deep Electronic Texture', labelKo: '딥 일렉트로닉 질감', description: 'Deep electronic layers with immersive low-frequency space and dark digital depth.', descriptionKo: '깊게 잠기는 전자음 레이어와 낮은 공간 압력의 디지털 질감입니다. (Deep Electronic Texture)', style: 'deep electronic spatial texture', sound: 'dark pads, low electronic pressure', mood: 'immersive, moody' },
       { id: 'dream-reverb', label: 'Dream Reverb', labelKo: '꿈속 리버브', description: 'dream reverb - 몽환적으로 번지는 리버브입니다.', descriptionKo: '몽환적으로 번지는 리버브입니다. (dream reverb)', style: 'dream reverb haze', sound: 'soft washed reverb', mood: 'dreamy, floating' },
     ],
   },
@@ -583,6 +576,7 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
       { id: 'cinematic', label: 'Cinematic', labelKo: '시네마틱', description: 'Film-like dramatic atmosphere and scale.', descriptionKo: '영화적인 장면감과 스케일을 더합니다. (Cinematic)', style: 'cinematic atmosphere', sound: 'wide dramatic production', mood: 'visual, dramatic' },
       { id: 'dark-film-feel', label: 'Dark Film Feel', labelKo: '어두운 영화감', description: 'Dark film-like tone and shadowy production.', descriptionKo: '어두운 영화 장면 같은 질감을 더합니다. (Dark Film Feel)', style: 'dark cinematic film tone', sound: 'shadowy pads, low pulses', mood: 'dark, brooding' },
       { id: 'slowmotion-scene', label: 'Slow-motion Scene', labelKo: '슬로모션 장면감', description: 'Music that feels like a slow-motion visual moment.', descriptionKo: '슬로모션 장면처럼 감정이 길게 늘어지는 느낌입니다. (Slow-motion Scene)', style: 'slow-motion cinematic feel', sound: 'stretched transitions, long reverb tails', mood: 'dramatic, suspended' },
+      { id: 'fusion-musical-theater', label: 'Musical Theater Direction', labelKo: '뮤지컬 터치', description: 'Staged dramatic storytelling with expressive vocal movement and theatrical section turns.', descriptionKo: '뮤지컬처럼 장면감 있는 전개, 극적인 보컬 움직임, 무대식 섹션 전환을 더합니다. (Musical Theater Direction)', style: 'musical-theater narrative direction', sound: 'theater piano, ensemble lift, dramatic section turns', mood: 'theatrical, expressive' },
       { id: 'separator-style-theme-build-tension', kind: 'separator', label: '빌드업/긴장', labelKo: '빌드업/긴장', description: '', descriptionKo: '', promptCore: '' },
       { id: 'emotional-build', label: 'Emotional Build-up', labelKo: '감정적인 빌드업', description: 'Emotional build that grows section by section.', descriptionKo: '섹션마다 감정이 차오르는 빌드업입니다. (Emotional Build-up)', style: 'emotional build-up', sound: 'gradual layering and lift', mood: 'rising, heartfelt' },
       { id: 'tense-development', label: 'Tense Development', labelKo: '긴장감 있는 전개', description: 'Tense progression with suspense and pressure.', descriptionKo: '불안과 압박이 느껴지는 긴장감 있는 전개입니다. (Tense Development)', style: 'tense cinematic development', sound: 'pulsing low strings or dark accents', mood: 'suspenseful, anxious' },
@@ -672,7 +666,7 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
 export const STYLE_GROUPS = [
   // SORIDRAW_STYLE_HYBRID_MENU_V1: 장르성 보조 스타일 메뉴를 하이브리드 하나로 통합합니다.
   // 기존 keyword id / prompt value / variants는 유지하고 화면용 묶음만 정리합니다.
-  { id: 'hybrid', label: 'Hybrid', labelKo: '하이브리드', descriptionKo: '선택한 장르에 다른 음악색을 섞어 개성을 더해요.', cycleIds: ['hybrid'] },
+  { id: 'hybrid', label: 'Hybrid', labelKo: '하이브리드', descriptionKo: '실제 장르 색을 추가합니다. 장르 1개 선택 시 최대 2개, 장르 2개 선택 시 최대 1개까지 사용할 수 있어요.', cycleIds: ['hybrid'] },
   { id: 'vocal-expression', label: 'Vocal Line', labelKo: '보컬 라인', descriptionKo: '보컬의 표현 방식, 파트감, 감정 전달 방식을 보강해요.', cycleIds: ['vocal-expression'] },
   { id: 'special-effects', label: 'Special Effects', labelKo: '특수 효과', descriptionKo: '메인 보컬 목소리 자체에 특수한 보이스 톤을 더해요.', cycleIds: ['special-effects'] },
 
@@ -697,94 +691,6 @@ export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
 // SORIDRAW_SOUND_KEYWORD_PREFIX_V6_1_FIXED: sound menu descriptions show the English prompt keyword before Korean explanation.
 // SORIDRAW_SOUND_INSTRUMENT_SEPARATORS_V19: 사운드 악기 메뉴 구분선 + 압축 키워드 + 설명 정리
 export const SOUND_TEXTURE_CYCLES = [
-  {
-    id: 'recommended-sound-combos',
-    title: 'Recommended Combos',
-    titleKo: '추천 조합',
-    description: 'Recommended sound combinations that bundle instruments and textures together.',
-    descriptionKo: '악기와 질감을 한 번에 묶은 추천 사운드 조합이에요.',
-    variants: [
-      {
-        id: 'rec-heavy-808-bass',
-        label: 'Heavy 808 Bass',
-        labelKo: '묵직한 808 베이스',
-        description: 'Heavy 808 Bass - 808과 트랩 리듬을 한 번에 잡는 저역 중심 조합입니다. 어두운 힙합, K-Trap, 강한 아이돌곡에 잘 어울립니다.',
-        descriptionKo: 'Heavy 808 Bass - 808과 트랩 리듬을 한 번에 잡는 저역 중심 조합입니다. 어두운 힙합, K-Trap, 강한 아이돌곡에 잘 어울립니다.',
-        promptCore: '',
-        applyPools: [
-          ['heavy-808', 'trap-hi-hats', 'hard-snare', 'dark-synth', 'glitch-fx'],
-          ['808-bass', 'drill-hi-hats', 'punchy-kick', 'cyber-synth', 'static-noise'],
-          ['sub-bass', 'fast-hi-hats', 'industrial-percussion', 'metallic-synth', 'impact-hit'],
-        ],
-      },
-      {
-        id: 'rec-cyber-synth-texture',
-        label: 'Cyber Synth Texture',
-        labelKo: '사이버 신스 질감',
-        description: 'Cyber Synth Texture - 차갑고 디지털한 신스와 글리치 효과를 묶은 조합입니다. 사이버, 미래적, 긴장감 있는 곡에 어울립니다.',
-        descriptionKo: 'Cyber Synth Texture - 차갑고 디지털한 신스와 글리치 효과를 묶은 조합입니다. 사이버, 미래적, 긴장감 있는 곡에 어울립니다.',
-        promptCore: '',
-        applyPools: [
-          ['cyber-synth', 'dark-pad', 'metallic-percussion', 'glitch-fx', 'sub-bass'],
-          ['cold-lead-synth', 'wide-pad', 'static-noise', 'mechanical-noise', 'punchy-kick'],
-          ['fm-synth', 'digital-noise', 'dark-synth', 'impact-hit', 'deep-sub-bass'],
-        ],
-      },
-      {
-        id: 'rec-warm-live-band',
-        label: 'Warm Live Band',
-        labelKo: '따뜻한 라이브 밴드',
-        description: 'Warm Live Band - 기타, 베이스, 드럼, 건반이 자연스럽게 섞이는 밴드 조합입니다. 팝, 포크, 시티팝, R&B에 잘 어울립니다.',
-        descriptionKo: 'Warm Live Band - 기타, 베이스, 드럼, 건반이 자연스럽게 섞이는 밴드 조합입니다. 팝, 포크, 시티팝, R&B에 잘 어울립니다.',
-        promptCore: '',
-        applyPools: [
-          ['clean-electric-guitar', 'electric-bass', 'live-drums', 'rhodes-keys', 'warm-pad'],
-          ['acoustic-guitar', 'fretless-bass', 'brush-drums', 'upright-piano', 'room-reverb'],
-          ['funk-guitar', 'smooth-bass', 'soft-drums', 'electric-piano', 'analog-warmth'],
-        ],
-      },
-      {
-        id: 'rec-korean-instrument-color',
-        label: 'Korean Instrument Color',
-        labelKo: '전통악기 질감',
-        description: 'Korean Instrument Color - 한국 전통악기의 선율과 리듬을 중심으로 한 조합입니다. 국악 팝, 사극풍, 퓨전 계열에 어울립니다.',
-        descriptionKo: 'Korean Instrument Color - 한국 전통악기의 선율과 리듬을 중심으로 한 조합입니다. 국악 팝, 사극풍, 퓨전 계열에 어울립니다.',
-        promptCore: '',
-        applyPools: [
-          ['gayageum', 'haegeum', 'janggu', 'room-reverb', 'warm-pad'],
-          ['daegeum', 'haegeum', 'buk', 'strings', 'cathedral-reverb'],
-          ['geomungo', 'gayageum', 'janggu', 'deep-sub-bass', 'dark-pad'],
-        ],
-      },
-      {
-        id: 'rec-magic-texture-fx',
-        label: 'Magic Texture FX',
-        labelKo: '마법 질감 효과',
-        description: 'Magic Texture FX - 반짝이는 효과음, 벨, 패드가 섞인 환상적인 조합입니다. 몽환, 판타지, 귀여운 곡에 잘 어울립니다.',
-        descriptionKo: 'Magic Texture FX - 반짝이는 효과음, 벨, 패드가 섞인 환상적인 조합입니다. 몽환, 판타지, 귀여운 곡에 잘 어울립니다.',
-        promptCore: '',
-        applyPools: [
-          ['bell-synth', 'celesta', 'magic-sparkle-fx', 'wide-pad', 'dream-reverb'],
-          ['music-box', 'shimmer-fx', 'vocal-pad', 'soft-pluck-synth', 'room-reverb'],
-          ['choir-pad', 'reverse-fx', 'magic-sparkle-fx', 'warm-pad', 'deep-sub-bass'],
-        ],
-      },
-      {
-        id: 'rec-cinematic-strings',
-        label: 'Cinematic Strings',
-        labelKo: '시네마틱 현악',
-        description: 'Cinematic Strings - 현악과 타격감을 중심으로 감정선과 스케일을 키우는 조합입니다. 웅장함, 긴장감, 서사적인 곡에 어울립니다.',
-        descriptionKo: 'Cinematic Strings - 현악과 타격감을 중심으로 감정선과 스케일을 키우는 조합입니다. 웅장함, 긴장감, 서사적인 곡에 어울립니다.',
-        promptCore: '',
-        applyPools: [
-          ['cinematic-strings', 'cello', 'timpani', 'cinematic-hit', 'choir-pad'],
-          ['staccato-strings', 'french-horn', 'orchestral-percussion', 'impact-hit', 'cathedral-reverb'],
-          ['solo-violin', 'deep-cello', 'trailer-rise', 'timpani', 'wide-reverb'],
-        ],
-      }
-    ],
-  },
-
   {
     // SORIDRAW_SOUND_DRUM_DETAIL_EXPAND_V18: 드럼 메뉴에 킥/스네어/하이햇/드럼 연주 방식 추가 및 설명 형식 통일
     id: 'rhythm-instruments',
@@ -920,6 +826,7 @@ export const SOUND_TEXTURE_CYCLES = [
       { id: 'upright-piano', label: 'Upright Piano', labelKo: '업라이트 피아노', description: 'upright piano - 소박하고 따뜻한 세로형 피아노입니다. (Ballad, Acoustic, Indie Pop)', descriptionKo: 'upright piano - 소박하고 따뜻한 세로형 피아노입니다. (Ballad, Acoustic, Indie Pop)', promptCore: 'upright piano' },
       { id: 'grand-piano', label: 'Grand Piano', labelKo: '그랜드 피아노', description: 'grand piano - 넓고 풍부한 정통 피아노입니다. (Ballad, Classical Pop, OST)', descriptionKo: 'grand piano - 넓고 풍부한 정통 피아노입니다. (Ballad, Classical Pop, OST)', promptCore: 'grand piano' },
       { id: 'live-piano', label: 'Live Piano', labelKo: '라이브 피아노', description: 'live piano - 실제 연주처럼 자연스러운 피아노입니다. (Band, Ballad, Jazz Pop)', descriptionKo: 'live piano - 실제 연주처럼 자연스러운 피아노입니다. (Band, Ballad, Jazz Pop)', promptCore: 'live piano' },
+      { id: 'fusion-acoustic-piano', label: 'Acoustic Piano', labelKo: '어쿠스틱 피아노', description: 'acoustic piano - 가까운 룸톤과 부드러운 서스테인이 있는 어쿠스틱 피아노 중심 사운드입니다. (Ballad, Indie Pop, Acoustic)', descriptionKo: 'acoustic piano - 가까운 룸톤과 부드러운 서스테인이 있는 어쿠스틱 피아노 중심 사운드입니다. (Ballad, Indie Pop, Acoustic)', promptCore: 'acoustic piano, soft room tone, gentle sustain' },
       { id: 'separator-piano-play', kind: 'separator', label: '연주방식', labelKo: '연주방식', description: '', descriptionKo: '', promptCore: '' },
       { id: 'piano-arpeggio', label: 'Piano Arpeggio', labelKo: '피아노 아르페지오', description: 'piano arpeggio - 코드를 한 음씩 풀어내는 피아노입니다. (Ballad, OST, Indie Pop)', descriptionKo: 'piano arpeggio - 코드를 한 음씩 풀어내는 피아노입니다. (Ballad, OST, Indie Pop)', promptCore: 'piano arpeggio' },
       { id: 'piano-chords', label: 'Piano Chords', labelKo: '피아노 코드', description: 'piano chords - 코드로 곡의 중심을 받치는 피아노입니다. (Pop, R&B, K-Ballad)', descriptionKo: 'piano chords - 코드로 곡의 중심을 받치는 피아노입니다. (Pop, R&B, K-Ballad)', promptCore: 'piano chords' },
@@ -1091,6 +998,21 @@ export const SOUND_TEXTURE_CYCLES = [
       { id: 'erhu', label: 'Erhu', labelKo: '얼후', description: 'erhu - 애절하게 휘어지는 중국 전통 현악 선율입니다. (C-Pop, OST, World Fusion)', descriptionKo: 'erhu - 애절하게 휘어지는 중국 전통 현악 선율입니다. (C-Pop, OST, World Fusion)', promptCore: 'erhu' },
       { id: 'dizi', label: 'Dizi', labelKo: '디즈', description: 'dizi - 맑고 밝은 중국 전통 피리입니다. (C-Pop Fusion, Folk, OST)', descriptionKo: 'dizi - 맑고 밝은 중국 전통 피리입니다. (C-Pop Fusion, Folk, OST)', promptCore: 'dizi' },
       { id: 'duduk', label: 'Duduk', labelKo: '두둑', description: 'duduk - 깊고 쓸쓸한 중동풍 목관 악기입니다. (Cinematic, World Fusion, Dark Ballad)', descriptionKo: 'duduk - 깊고 쓸쓸한 중동풍 목관 악기입니다. (Cinematic, World Fusion, Dark Ballad)', promptCore: 'duduk' },
+    ],
+  },
+  {
+    id: 'ensemble-production',
+    title: 'Ensemble',
+    titleKo: '편성',
+    description: 'Sets the overall instrumental ensemble and live performance formation.',
+    descriptionKo: '밴드, 어쿠스틱 세션, 오케스트라처럼 곡 전체의 연주 편성을 정해요.',
+    variants: [
+      { id: 'separator-ensemble-band', kind: 'separator', label: 'Band Ensemble', labelKo: '밴드 편성', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'acoustic-band', label: 'Acoustic Band', labelKo: '어쿠스틱 밴드', description: 'acoustic band - 어쿠스틱 기타, 부드러운 드럼, 따뜻한 베이스가 중심인 자연스러운 밴드 편성입니다.', descriptionKo: 'acoustic band - 어쿠스틱 기타, 부드러운 드럼, 따뜻한 베이스가 중심인 자연스러운 밴드 편성입니다.', promptCore: 'acoustic guitar, soft drums, warm bass' },
+      { id: 'indie-band', label: 'Indie Band', labelKo: '인디 밴드', description: 'indie band - 거친 기타와 자연스러운 룸 드럼이 살아 있는 느슨한 인디 밴드 편성입니다.', descriptionKo: 'indie band - 거친 기타와 자연스러운 룸 드럼이 살아 있는 느슨한 인디 밴드 편성입니다.', promptCore: 'raw guitars, natural room drums, warm live bass' },
+      { id: 'band', label: 'Full Band Sound', labelKo: '풀 밴드 사운드', description: 'full band - 드럼, 베이스, 기타, 건반이 균형 있게 어우러지는 기본 풀 밴드 편성입니다.', descriptionKo: 'full band - 드럼, 베이스, 기타, 건반이 균형 있게 어우러지는 기본 풀 밴드 편성입니다.', promptCore: 'balanced drums, bass, guitar, and keys' },
+      { id: 'separator-ensemble-orchestral', kind: 'separator', label: 'Orchestral Ensemble', labelKo: '오케스트라 편성', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'fusion-orchestral', label: 'Orchestral Ensemble', labelKo: '오케스트라', description: 'orchestral ensemble - 스트링, 브라스, 시네마틱 타악이 넓게 펼쳐지는 오케스트라 편성입니다.', descriptionKo: 'orchestral ensemble - 스트링, 브라스, 시네마틱 타악이 넓게 펼쳐지는 오케스트라 편성입니다.', promptCore: 'strings, brass, cinematic percussion' },
     ],
   },
   {

@@ -2233,9 +2233,22 @@ export default function FavoritesPage({
 
       await updateFavorite(song.id, updates);
 
-      const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
-      if (selectedSong?.id === song.id) {
-        setSelectedSong(nextSong);
+      const targetSongId = String(song.id || '');
+      const detailSessionStillOpen = source === 'detail'
+        && activeFavoriteEditorSongIdRef.current === targetSongId
+        && favoriteEditorReadySongIdRef.current === targetSongId
+        && popupOpenedSongIdRef.current === targetSongId;
+
+      // Never reopen Detail & Edit from an async save completion. The previous closure still held
+      // the old selectedSong after the user closed the window and called setSelectedSong(nextSong).
+      // A functional update changes only an editor that is still open on this exact song.
+      setSelectedSong((current: any) => {
+        if (!current || String(current.id || '') !== targetSongId) return current;
+        return { ...current, ...updates };
+      });
+
+      if (detailSessionStillOpen) {
+        const nextSong = { ...(selectedSong?.id === song.id ? selectedSong : song), ...updates };
         const nextState = buildFavoriteSunoEditorState(nextSong);
         setDetailSunoUrlInputs(nextState.inputs);
         setDetailSunoUrlMainIndex(nextState.mainIndex);
@@ -2278,8 +2291,16 @@ export default function FavoritesPage({
         sunoCoverFetchedAt: null,
       };
       await updateFavorite(song.id, updates);
-      if (selectedSong?.id === song.id) {
-        setSelectedSong({ ...(selectedSong || {}), ...updates });
+      const targetSongId = String(song.id || '');
+      const detailSessionStillOpen = source === 'detail'
+        && activeFavoriteEditorSongIdRef.current === targetSongId
+        && favoriteEditorReadySongIdRef.current === targetSongId
+        && popupOpenedSongIdRef.current === targetSongId;
+      setSelectedSong((current: any) => {
+        if (!current || String(current.id || '') !== targetSongId) return current;
+        return { ...current, ...updates };
+      });
+      if (detailSessionStillOpen) {
         setDetailSunoUrlInputs(['', '']);
         setDetailSunoUrlMainIndex(0);
         setDetailSunoUrlError('');
@@ -3351,6 +3372,14 @@ export default function FavoritesPage({
 
   const closeSelectedSong = async (source: 'ui' | 'history' = 'ui') => {
     const shouldPopOverlayHistory = source === 'ui' && detailHistoryPushedRef.current;
+
+    // End the detail session synchronously before any pending URL save can resolve. This keeps the
+    // server save alive, but prevents its late completion from restoring a window the user closed.
+    popupOpenedSongIdRef.current = null;
+    activeFavoriteEditorSongIdRef.current = null;
+    favoriteEditorReadySongIdRef.current = null;
+    clearFavoriteSunoSaveTimer('detail');
+    setDetailSunoUrlSaveStatus('idle');
 
     // Closing with the browser/app back button must never write to Firestore.
     // Only the explicit check/save button commits edits. This protects existing

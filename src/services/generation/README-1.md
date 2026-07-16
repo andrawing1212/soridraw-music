@@ -12,3 +12,8 @@ and output normalization. Version-specific creative modules must not be shared.
 
 Shared code must never decide story, scene, mood interpretation, lyric style,
 prompt wording, or post-generation creative rewriting.
+
+## Engine map
+
+See `docs/SORIDRAW_ENGINE_MAP.md` for the current active engines, application order,
+and ownership boundaries.

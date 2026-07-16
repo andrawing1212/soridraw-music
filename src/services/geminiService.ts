@@ -22420,6 +22420,98 @@ function removeGenericSoloVocalLabelsFromLyricTags(lyrics: string, params: Gener
 }
 
 
+function repairMultilineBracketCueLines(text: string): string {
+  const source = String(text || '').replace(/\r\n?/g, '\n');
+  const lines = source.split('\n');
+  const out: string[] = [];
+  let buffer = '';
+  let collecting = false;
+
+  const flushBuffer = () => {
+    const joined = buffer
+      .replace(/\s+/g, ' ')
+      .replace(/^\[\s+/, '[')
+      .replace(/\s+\]$/, ']')
+      .trim();
+    if (joined) out.push(joined);
+    buffer = '';
+    collecting = false;
+  };
+
+  for (const rawLine of lines) {
+    const trimmed = String(rawLine || '').trim();
+    if (!collecting) {
+      if (/^\[/.test(trimmed) && !/\]/.test(trimmed)) {
+        buffer = trimmed;
+        collecting = true;
+        continue;
+      }
+      out.push(rawLine);
+      continue;
+    }
+
+    buffer = `${buffer} ${trimmed}`.trim();
+    if (/\]/.test(trimmed)) {
+      const closeIndex = buffer.indexOf(']');
+      const tagPart = buffer.slice(0, closeIndex + 1);
+      const rest = buffer.slice(closeIndex + 1).trim();
+      buffer = tagPart;
+      flushBuffer();
+      if (rest) out.push(rest);
+      continue;
+    }
+
+    // Do not let one malformed opening bracket swallow an entire lyric.
+    if (buffer.length > 420) flushBuffer();
+  }
+
+  if (collecting) flushBuffer();
+  return out.join('\n');
+}
+
+function isRepairableKoreanLyricBodyLine(line: string): boolean {
+  const trimmed = String(line || '').trim();
+  if (!trimmed || /^\[[^\]]+\]$/.test(trimmed) || /^\([^()]+\)$/.test(trimmed)) return false;
+  return /[가-힣]/.test(trimmed);
+}
+
+function repairPathologicallyFragmentedKoreanLyricBodies(text: string): string {
+  const source = repairMultilineBracketCueLines(text);
+  const lines = source.split('\n');
+  const out: string[] = [];
+
+  const flushRun = (run: string[]) => {
+    if (!run.length) return;
+    const compactLengths = run.map((line) => line.replace(/[^가-힣A-Za-z0-9]/g, '').length);
+    const shortRatio = compactLengths.filter((length) => length <= 8).length / Math.max(1, compactLengths.length);
+    const averageLength = compactLengths.reduce((sum, length) => sum + length, 0) / Math.max(1, compactLengths.length);
+    const totalLength = compactLengths.reduce((sum, length) => sum + length, 0);
+    const isPathological = run.length >= 6 && shortRatio >= 0.6 && averageLength <= 10.5 && totalLength >= 36;
+
+    if (!isPathological) {
+      out.push(...run);
+      return;
+    }
+
+    const joined = run.join(' ').replace(/\s+/g, ' ').trim();
+    splitLongKoreanLyricLine(joined).forEach((line) => out.push(line));
+  };
+
+  let run: string[] = [];
+  for (const rawLine of lines) {
+    if (isRepairableKoreanLyricBodyLine(rawLine)) {
+      run.push(String(rawLine || '').trim());
+      continue;
+    }
+    flushRun(run);
+    run = [];
+    out.push(rawLine);
+  }
+  flushRun(run);
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function isLyricSectionTagLine(line: string): boolean {
   return /^\s*\[[^\]\n]+\]\s*$/.test(String(line || ""));
 }
@@ -22489,7 +22581,7 @@ function splitLongKoreanLyricLine(line: string): string[] {
 }
 
 function normalizeGeneratedLyricLineBreaks(text: string): string {
-  const source = String(text || "").replace(/\r\n?/g, "\n");
+  const source = repairMultilineBracketCueLines(String(text || "").replace(/\r\n?/g, "\n"));
   const expanded: string[] = [];
 
   source.split("\n").forEach((rawLine) => {
@@ -25712,13 +25804,123 @@ function hasV1IncompleteCueEnding(value: string): boolean {
   return /\b(?:with|and|or|to|of|for|from|into|over|under|through|by|as|a|an|the)\s*$/i.test(value);
 }
 
+type V1CueRepairContext = {
+  local?: unknown[];
+  arrangement?: unknown[];
+  global?: unknown[];
+};
+
+type V1CueReferenceToken = {
+  normalized: string;
+  surface: string;
+  count: number;
+  index: number;
+};
+
+function normalizeV1CueRepairToken(value: string): string {
+  return String(value || '').toLowerCase().replace(/[^a-z]/g, '');
+}
+
+function tokenizeV1CueReferenceValues(values: unknown[] = []): V1CueReferenceToken[] {
+  const counts = new Map<string, { surface: string; count: number; firstIndex: number }>();
+  let ordinal = 0;
+  values.forEach((value) => {
+    const words = cleanV1GeneratedPlanCueText(value).match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || [];
+    words.forEach((surface) => {
+      const normalized = normalizeV1CueRepairToken(surface);
+      if (normalized.length < 3) return;
+      const current = counts.get(normalized);
+      if (current) current.count += 1;
+      else counts.set(normalized, { surface, count: 1, firstIndex: ordinal });
+      ordinal += 1;
+    });
+  });
+  return [...counts.entries()].map(([normalized, meta]) => ({
+    normalized,
+    surface: meta.surface,
+    count: meta.count,
+    index: meta.firstIndex,
+  }));
+}
+
+function findV1CueReferenceRepair(
+  token: string,
+  tokenIndex: number,
+  context: V1CueRepairContext = {},
+): string {
+  const normalized = normalizeV1CueRepairToken(token);
+  if (normalized.length < 3) return '';
+
+  const choose = (
+    references: V1CueReferenceToken[],
+    options: { requireCount?: number; positional?: boolean },
+  ): string => {
+    const candidates = references
+      .filter((reference) => reference.count >= (options.requireCount || 1))
+      .filter((reference) => reference.normalized !== normalized)
+      .filter((reference) => !options.positional || Math.abs(reference.index - tokenIndex) <= 2)
+      .flatMap((reference) => {
+        const forms = [{ normalized: reference.normalized, surface: reference.surface }];
+        if (!reference.normalized.endsWith('s')) {
+          forms.push({ normalized: `${reference.normalized}s`, surface: `${reference.surface}s` });
+        }
+        return forms.map((form) => ({ ...reference, ...form }));
+      })
+      .filter((reference) => {
+        const difference = Math.abs(reference.normalized.length - normalized.length);
+        if (difference < 1 || difference > 2) return false;
+        return reference.normalized.endsWith(normalized) || reference.normalized.startsWith(normalized);
+      })
+      .sort((a, b) => {
+        const lengthGapA = Math.abs(a.normalized.length - normalized.length);
+        const lengthGapB = Math.abs(b.normalized.length - normalized.length);
+        return lengthGapA - lengthGapB || b.count - a.count || a.index - b.index;
+      });
+    return candidates[0]?.surface || '';
+  };
+
+  // Same-section alternatives are strongest because they describe the same local job.
+  const localRepair = choose(tokenizeV1CueReferenceValues(context.local || []), {});
+  if (localRepair) return localRepair;
+
+  // [Arrangement] is a trusted whole-song vocabulary source produced in the same response.
+  const arrangementRepair = choose(tokenizeV1CueReferenceValues(context.arrangement || []), {});
+  if (arrangementRepair) return arrangementRepair;
+
+  // Global plan vocabulary is used only when the complete form appears more than once.
+  return choose(tokenizeV1CueReferenceValues(context.global || []), { requireCount: 2 });
+}
+
+function preserveV1CueReplacementCase(original: string, replacement: string): string {
+  if (!replacement) return original;
+  if (/^[A-Z][a-z]/.test(original)) {
+    return replacement.charAt(0).toUpperCase() + replacement.slice(1).toLowerCase();
+  }
+  if (/^[A-Z]+$/.test(original)) return replacement.toUpperCase();
+  return replacement.toLowerCase();
+}
+
+function repairV1CueTextFromResponseVocabulary(
+  value: unknown,
+  context: V1CueRepairContext = {},
+): string {
+  const clean = cleanV1GeneratedPlanCueText(value);
+  if (!clean) return '';
+  let tokenIndex = 0;
+  return clean.replace(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g, (token) => {
+    const replacement = findV1CueReferenceRepair(token, tokenIndex, context);
+    tokenIndex += 1;
+    if (!replacement) return token;
+    return preserveV1CueReplacementCase(token, replacement);
+  });
+}
+
 function scoreV1GeneratedPlanPerformanceCue(value: string): number {
   const clean = cleanV1GeneratedPlanCueText(value);
   if (!clean || hasV1IncompleteCueEnding(clean)) return -100;
-  if (/\b(?:ums|uild|ension|arm-up)\b/i.test(clean)) return -90;
   let score = 0;
   const hasVocalSignal = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|raspy|husky|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|clipped|syncopated|laid[-\s]?back|loose|warm[-\s]?up)\b/i.test(clean);
-  const hasDynamicSignal = /\b(?:airy|soft|warm|bright|wistful|tense|tension|urgent|restrained|playful|confident|passionate|fading|rising|building|build|swell|crescendo|decrescendo|lifted|open|deep|gentle|dry|fuller|free|freer)\b/i.test(clean);
+  const hasDynamicSignal = /\b(?:airy|soft|warm|bright|wistful|tense|tension|urgent|restrained|playful|confident|passionate|fading|rising|building|build|swell|crescendo|decrescendo|lifted|open|deep|gentle|dry|fuller|free|freer|release|payoff|climax|dynamic|dynamics)\b/i.test(clean);
   if (hasVocalSignal) score += 4;
   if (hasDynamicSignal) score += 2;
   if (!hasVocalSignal && !hasDynamicSignal) score -= 3;
@@ -25727,37 +25929,31 @@ function scoreV1GeneratedPlanPerformanceCue(value: string): number {
   return score;
 }
 
-function selectV1GeneratedPlanPerformanceCue(...values: Array<unknown>): string {
-  const candidates = values
-    .map((value) => sanitizeV1GeneratedPlanPerformanceCue(value))
-    .filter(Boolean)
-    .map((value, index) => ({ value, index, score: scoreV1GeneratedPlanPerformanceCue(value) }))
-    .filter((item) => item.score > -100)
-    .sort((a, b) => b.score - a.score || a.index - b.index);
-  return candidates[0]?.value || '';
-}
-
-function sanitizeV1GeneratedPlanPerformanceCue(value: unknown): string {
-  const parts = cleanV1GeneratedPlanCueText(value)
+function sanitizeV1GeneratedPlanPerformanceCue(
+  value: unknown,
+  context: V1CueRepairContext = {},
+): string {
+  const repaired = repairV1CueTextFromResponseVocabulary(value, context);
+  const parts = cleanV1GeneratedPlanCueText(repaired)
     .split(/[,，]/)
     .map((part) => cleanV1GeneratedPlanCueText(part))
     .filter(Boolean)
     .filter((part) => {
       if (!/[A-Za-z]/.test(part)) return false;
+      if (hasV1IncompleteCueEnding(part)) return false;
       if (cueLooksLikeVerboseStorySentence(part)) return false;
       if (isDirectorProductionCueLeakForLyricSectionTag(part)) return false;
       if (isLyricSectionSpaceTextureCue(part)) return false;
       if (isGenericFallbackOnlyLyricSectionCue(part)) return false;
-      if (/\b(?:ensity|unk+nown|n\/a|none|null|undefined|atmosphere|production|arrangement|instrumental|sound\s+palette)\b/i.test(part)) return false;
+      if (/\b(?:unk+nown|n\/a|none|null|undefined|atmosphere|production|arrangement|instrumental|sound\s+palette)\b/i.test(part)) return false;
       const words = part.split(/\s+/).filter(Boolean);
       if (words.length < 1 || words.length > 12) return false;
 
-      // sectionPerformancePlan.performanceCue is already a typed vocal-performance field.
-      // Trust rhythmic and non-lexical vocal language such as "groove pocket" or "low humming";
-      // reject it only when concrete instruments / production operations clearly dominate.
+      // The field is already typed as vocal performance. Keep creative wording open and reject
+      // only clear production dominance or structurally unusable text.
       const concreteProduction = containsV1ConcreteProductionCue(part)
         || isDirectorProductionCueLeakForLyricSectionTag(part);
-      const vocalAction = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|groove|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|airy|raspy|husky|restrained|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|open|clipped|syncopated|laid[-\s]?back|loose|urgent|tension|release|lift)\b/i.test(part);
+      const vocalAction = /\b(?:vocal|sing|sung|delivery|phrasing|phrase|rhythmic|rhythm|pocket|groove|register|head\s+voice|chest\s+voice|falsetto|whisper|whispered|hush|hushed|hum|humming|chant|spoken|conversational|legato|staccato|breath|breathy|airy|raspy|husky|restrained|intimate|expressive|melodic|hook|ad[-\s]?libs?|improvis|upper|lower|open|clipped|syncopated|laid[-\s]?back|loose|urgent|tension|release|lift|payoff|climax|dynamic|dynamics)\b/i.test(part);
       if (concreteProduction && !vocalAction) return false;
       return true;
     })
@@ -25765,8 +25961,28 @@ function sanitizeV1GeneratedPlanPerformanceCue(value: unknown): string {
   return parts.join(', ');
 }
 
-function sanitizeV1GeneratedPlanSoundCue(value: unknown): string {
-  const clean = cleanV1GeneratedPlanCueText(value);
+function selectV1GeneratedPlanPerformanceCue(
+  context: V1CueRepairContext,
+  ...values: Array<unknown>
+): string {
+  const candidateContext: V1CueRepairContext = {
+    ...context,
+    local: [...(context.local || []), ...values],
+  };
+  const candidates = values
+    .map((value) => sanitizeV1GeneratedPlanPerformanceCue(value, candidateContext))
+    .filter(Boolean)
+    .map((value, index) => ({ value, index, score: scoreV1GeneratedPlanPerformanceCue(value) }))
+    .filter((item) => item.score > -100)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  return candidates[0]?.value || '';
+}
+
+function sanitizeV1GeneratedPlanSoundCue(
+  value: unknown,
+  context: V1CueRepairContext = {},
+): string {
+  const clean = repairV1CueTextFromResponseVocabulary(value, context);
   if (!clean || !/[A-Za-z]/.test(clean)) return '';
   const words = clean.split(/\s+/).filter(Boolean);
   if (words.length > 16) return '';
@@ -25775,6 +25991,12 @@ function sanitizeV1GeneratedPlanSoundCue(value: unknown): string {
     || isDirectorProductionCueLeakForLyricSectionTag(clean)
     || Boolean(findSoundCueEnglish(clean));
   return soundsLikeProduction ? clean : '';
+}
+
+function extractV1ArrangementReference(value: unknown): string {
+  const source = String(value || '').replace(/\r\n?/g, '\n');
+  const line = source.split('\n').find((entry) => /^\s*\[Arrangement\]/i.test(entry));
+  return cleanV1GeneratedPlanCueText(String(line || '').replace(/^\s*\[Arrangement\]\s*/i, ''));
 }
 
 function normalizeV1GeneratedPlanSectionName(value: unknown): string {
@@ -25836,12 +26058,98 @@ function dedupeV1StandaloneCues(values: string[], limit = 2): string[] {
   return out.slice(0, limit);
 }
 
+function promoteV1AdjacentPerformanceCueIntoSectionTags(
+  lyrics: string,
+  params: GenerateSongParams,
+): string {
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const blueprint = getV1SectionBlueprint(params);
+  const removeIndexes = new Set<number>();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = String(lines[index] || '').trim();
+    if (!isV1StructuralSectionTag(trimmed, blueprint.customNames)) continue;
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (!parsed) continue;
+    const section = normalizeLyricSectionDisplayName(parsed.rawSection);
+    const existingAnchor = extractV1AnchorFromCueBody(parsed.body, params);
+    const existingCue = v1PerformanceCuePartsFromBody(parsed.body, params)
+      .map((cue) => sanitizeV1GeneratedPlanPerformanceCue(cue))
+      .find(Boolean);
+    if (existingCue) continue;
+
+    const adjacentCandidates: Array<{ index: number; cue: string }> = [];
+    let cursor = index + 1;
+    while (cursor < lines.length) {
+      const candidate = String(lines[cursor] || '').trim();
+      if (!candidate) {
+        cursor += 1;
+        continue;
+      }
+      if (isV1StructuralSectionTag(candidate, blueprint.customNames)) break;
+      if (!isV1StandaloneBracketCueLine(candidate, blueprint.customNames)) break;
+      const inside = insideV1StandaloneCueLine(candidate);
+      const cue = sanitizeV1GeneratedPlanPerformanceCue(inside, { local: [inside] });
+      if (cue) adjacentCandidates.push({ index: cursor, cue });
+      cursor += 1;
+    }
+
+    const promoted = adjacentCandidates[0];
+    if (!promoted) continue;
+    const anchor = blueprint.vocalAnchors.length >= 2 ? existingAnchor : '';
+    if (blueprint.vocalAnchors.length >= 2 && !anchor) continue;
+    const displaySection = String(parsed.rawSection || section).trim();
+    lines[index] = `[${displaySection} : ${[anchor, promoted.cue].filter(Boolean).join(', ')}]`;
+    removeIndexes.add(promoted.index);
+  }
+
+  return lines
+    .filter((_, index) => !removeIndexes.has(index))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSongParams): string {
+  let text = repairMultilineBracketCueLines(lyrics);
+  text = repairPathologicallyFragmentedKoreanLyricBodies(text);
+  text = collapseAdjacentDuplicateStructuralSections(text, params);
+  text = promoteV1AdjacentPerformanceCueIntoSectionTags(text, params);
+  text = removeV1OrphanSectionSkeletonsAtPublicBoundary(text, params);
+
+  const out: string[] = [];
+  text.split('\n').forEach((rawLine) => {
+    const trimmed = String(rawLine || '').trim();
+    if (!trimmed) {
+      if (out.length && out[out.length - 1] !== '') out.push('');
+      return;
+    }
+    if (isStructuralLyricSectionTagForSpacing(trimmed)) {
+      while (out.length && out[out.length - 1] === '') out.pop();
+      if (out.length) out.push('');
+      out.push(trimmed.replace(/\s+/g, ' '));
+      return;
+    }
+    if (/^\[[^\]\n]+\]$/.test(trimmed)) {
+      out.push(trimmed.replace(/\s+/g, ' '));
+      return;
+    }
+    out.push(trimmed);
+  });
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function applyV1GeneratedSectionPerformancePlan(
   lyrics: string,
   rawPlan: unknown,
   params: GenerateSongParams,
+  productionPrompt: unknown = '',
 ): string {
-  const source = String(lyrics || '').replace(/\r\n?/g, '\n').trim();
+  const source = collapseAdjacentDuplicateStructuralSections(
+    repairMultilineBracketCueLines(String(lyrics || '').replace(/\r\n?/g, '\n')),
+    params,
+  ).trim();
   if (!source || isGenerationEngineV2(params) || !isVocalLyricSong(params)) return source;
   if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return source;
   if (params.songStructure === 'custom') return source;
@@ -25853,18 +26161,66 @@ function applyV1GeneratedSectionPerformancePlan(
   }
 
   const blueprint = getV1SectionBlueprint(params);
-  const normalizedPlan = plan
-    .map((item, originalIndex) => ({
-      sectionIndex: Number.isInteger(Number(item?.sectionIndex)) && Number(item?.sectionIndex) > 0
-        ? Number(item?.sectionIndex)
-        : originalIndex + 1,
-      sectionName: normalizeV1GeneratedPlanSectionName(item?.sectionName),
-      vocalAnchor: normalizeV1RepairAnchor(String(item?.vocalAnchor || ''), params),
-      performanceCue: sanitizeV1GeneratedPlanPerformanceCue(item?.performanceCue),
-      alternatePerformanceCue: sanitizeV1GeneratedPlanPerformanceCue(item?.alternatePerformanceCue),
-      soundCue: sanitizeV1GeneratedPlanSoundCue(item?.soundCue),
-    }))
+  const arrangementReference = extractV1ArrangementReference(productionPrompt);
+  const rawPlanItems = plan.map((item, originalIndex) => ({
+    sectionIndex: Number.isInteger(Number(item?.sectionIndex)) && Number(item?.sectionIndex) > 0
+      ? Number(item?.sectionIndex)
+      : originalIndex + 1,
+    sectionName: normalizeV1GeneratedPlanSectionName(item?.sectionName),
+    vocalAnchor: normalizeV1RepairAnchor(String(item?.vocalAnchor || ''), params),
+    performanceCue: cleanV1GeneratedPlanCueText(item?.performanceCue),
+    alternatePerformanceCue: cleanV1GeneratedPlanCueText(item?.alternatePerformanceCue),
+    soundCue: cleanV1GeneratedPlanCueText(item?.soundCue),
+  }));
+  const sourceCueReferences = (source.match(/\[[^\]\n]+\]/g) || []).map((entry) => entry.replace(/^\[|\]$/g, ''));
+  const globalCueReferences: unknown[] = [
+    arrangementReference,
+    ...sourceCueReferences,
+    ...rawPlanItems.flatMap((item) => [item.performanceCue, item.alternatePerformanceCue, item.soundCue]),
+  ];
+  const normalizedPlan = rawPlanItems
+    .map((item) => {
+      const repairContext: V1CueRepairContext = {
+        local: [item.performanceCue, item.alternatePerformanceCue, item.soundCue],
+        arrangement: [arrangementReference],
+        global: globalCueReferences,
+      };
+      return {
+        ...item,
+        performanceCue: sanitizeV1GeneratedPlanPerformanceCue(item.performanceCue, repairContext),
+        alternatePerformanceCue: sanitizeV1GeneratedPlanPerformanceCue(item.alternatePerformanceCue, repairContext),
+        soundCue: sanitizeV1GeneratedPlanSoundCue(item.soundCue, repairContext),
+      };
+    })
     .sort((a, b) => a.sectionIndex - b.sectionIndex);
+
+  const cueFamily = (sectionName: string): string => {
+    const base = baseV1GeneratedPlanSectionName(sectionName);
+    if (/^(?:final\s+chorus|chorus)$/.test(base)) return 'chorus';
+    if (/^(?:final\s+hook|hook|refrain)$/.test(base)) return 'hook';
+    if (/^pre[-\s]?chorus$/.test(base)) return 'pre-chorus';
+    if (/^rap\s+section$/.test(base)) return 'rap-section';
+    if (/^verse$/.test(base)) return 'verse';
+    return base;
+  };
+  const usedPerformanceCueKeys = new Set<string>();
+  const findFamilyFallbackCue = (section: string, currentItem?: (typeof normalizedPlan)[number]): string => {
+    const family = cueFamily(section);
+    const currentIndex = currentItem?.sectionIndex ?? Number.MAX_SAFE_INTEGER;
+    const candidates = normalizedPlan
+      .filter((candidate) => candidate !== currentItem && cueFamily(candidate.sectionName) === family)
+      .flatMap((candidate) => [
+        { value: candidate.alternatePerformanceCue, distance: Math.abs(candidate.sectionIndex - currentIndex), order: 0 },
+        { value: candidate.performanceCue, distance: Math.abs(candidate.sectionIndex - currentIndex), order: 1 },
+      ])
+      .filter((candidate) => Boolean(candidate.value))
+      .filter((candidate) => {
+        const key = normalizeV1PerformanceCueKey(candidate.value);
+        return key && !usedPerformanceCueKeys.has(key);
+      })
+      .sort((a, b) => a.distance - b.distance || a.order - b.order);
+    return candidates[0]?.value || '';
+  };
 
   const usedPlanIndexes = new Set<number>();
   const lines = source.split('\n');
@@ -25932,23 +26288,41 @@ function applyV1GeneratedSectionPerformancePlan(
     }
 
     const existingAnchor = extractV1AnchorFromCueBody(parsed.body, params);
-    const existingTagCues = v1PerformanceCuePartsFromBody(parsed.body, params)
-      .map(sanitizeV1GeneratedPlanPerformanceCue)
+    const rawExistingTagCues = v1PerformanceCuePartsFromBody(parsed.body, params);
+    const sectionRepairContext: V1CueRepairContext = {
+      local: [
+        item?.performanceCue,
+        item?.alternatePerformanceCue,
+        item?.soundCue,
+        ...rawExistingTagCues,
+        ...adjacentCueLines,
+      ],
+      arrangement: [arrangementReference],
+      global: globalCueReferences,
+    };
+    const existingTagCues = rawExistingTagCues
+      .map((cue) => sanitizeV1GeneratedPlanPerformanceCue(cue, sectionRepairContext))
       .filter(Boolean);
     const adjacentPerformance = adjacentCueLines
-      .map(sanitizeV1GeneratedPlanPerformanceCue)
+      .map((cue) => sanitizeV1GeneratedPlanPerformanceCue(cue, sectionRepairContext))
       .filter(Boolean);
     const adjacentProduction = adjacentCueLines
-      .map(sanitizeV1GeneratedPlanSoundCue)
+      .map((cue) => sanitizeV1GeneratedPlanSoundCue(cue, sectionRepairContext))
       .filter(Boolean);
 
-    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index);
-    const performanceCue = selectV1GeneratedPlanPerformanceCue(
+    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index)
+      || (/^Intro$/i.test(section) && Boolean(item?.performanceCue || item?.alternatePerformanceCue || adjacentPerformance[0]));
+    let performanceCue = selectV1GeneratedPlanPerformanceCue(
+      sectionRepairContext,
       item?.performanceCue,
       item?.alternatePerformanceCue,
       existingTagCues[0],
       adjacentPerformance[0],
     );
+    const selectedKey = normalizeV1PerformanceCueKey(performanceCue);
+    if (!performanceCue || (selectedKey && usedPerformanceCueKeys.has(selectedKey))) {
+      performanceCue = findFamilyFallbackCue(section, item) || performanceCue;
+    }
     const anchor = blueprint.vocalAnchors.length >= 2
       ? (item?.vocalAnchor || existingAnchor)
       : '';
@@ -25956,6 +26330,8 @@ function applyV1GeneratedSectionPerformancePlan(
     if (requiresCue && performanceCue && (blueprint.vocalAnchors.length < 2 || anchor)) {
       const body = [anchor, performanceCue].filter(Boolean).join(', ');
       output.push(`[${displaySection || section} : ${body}]`);
+      const cueKey = normalizeV1PerformanceCueKey(performanceCue);
+      if (cueKey) usedPerformanceCueKeys.add(cueKey);
     } else {
       output.push(line);
     }
@@ -25974,8 +26350,8 @@ function applyV1GeneratedSectionPerformancePlan(
       // duplicate the plan. Only preserve legacy/unclassified lines when no plan item matched.
       if (!item) {
         adjacentCueLines.forEach((cue) => {
-          const isPerformance = Boolean(sanitizeV1GeneratedPlanPerformanceCue(cue));
-          const isProduction = Boolean(sanitizeV1GeneratedPlanSoundCue(cue));
+          const isPerformance = Boolean(sanitizeV1GeneratedPlanPerformanceCue(cue, sectionRepairContext));
+          const isProduction = Boolean(sanitizeV1GeneratedPlanSoundCue(cue, sectionRepairContext));
           if (!isPerformance && !isProduction) output.push(`[${cue}]`);
         });
       }
@@ -25988,7 +26364,7 @@ function applyV1GeneratedSectionPerformancePlan(
   if (issues.length) {
     console.warn('[SORIDRAW Section Performance Plan] completed with local cue warnings; preserving one-call result:', issues);
   }
-  return merged;
+  return finalizeV1PublicLyricOutputIntegrity(merged, params);
 }
 
 function assertV1SectionPerformanceCueQuality(lyrics: string, params: GenerateSongParams): void {
@@ -26850,7 +27226,8 @@ function removeV1OrphanSectionSkeletonsAtPublicBoundary(lyrics: string, params: 
 }
 
 function finalizeGeneratedLyricsStructuralSafety(lyrics: string, params: GenerateSongParams): string {
-  let text = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(lyrics), params);
+  const repairedInput = repairMultilineBracketCueLines(lyrics);
+  let text = enforceLyricSectionBlockSpacing(sanitizeNonVocalAtmosphereParenthesesInLyrics(repairedInput), params);
   text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
   text = removeEmptySungSectionsFinalGuard(text, params);
   text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
@@ -26860,7 +27237,9 @@ function finalizeGeneratedLyricsStructuralSafety(lyrics: string, params: Generat
   text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
   text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
   text = collapseAdjacentDuplicateStructuralSections(text, params);
+  text = promoteV1AdjacentPerformanceCueIntoSectionTags(text, params);
   text = removeV1OrphanSectionSkeletonsAtPublicBoundary(text, params);
+  text = repairPathologicallyFragmentedKoreanLyricBodies(text);
   return text.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -29023,6 +29402,8 @@ ${exactStructureText}
 - alternatePerformanceCue is also REQUIRED for every sung or vocal-ad-lib section. Write a second complete 2–8 word cue with different wording but the same local function, so the application can safely use it if the primary cue is incomplete. For non-vocal sections, both cue fields may be empty.
 - For a solo song, vocalAnchor must be an empty string. For a multi-vocal song, vocalAnchor must be one exact active anchor from [Vocals], or All Voices only for a genuine shared payoff.
 - soundCue is optional. Use an empty string when no local production event is needed. When used, write one short audible instrument/effect/texture action in English, separate from the vocal cue.
+- Treat [Arrangement] as a binding timeline, not a loose mood description. Assign each hook entry, pull-back, bridge drop, instrumental takeover, and final lift to the exact structural section where it happens. Do not move an Arrangement event to a different section.
+- performanceCue must respond to that same local Arrangement event: a pull-back should expose or restrain the vocal, a rise should build or open it, and a final lift should expand the payoff without changing the singer identity.
 - Non-vocal sections such as Instrumental, Interlude, Break, Stop, or an actual solo section may use an empty performanceCue and a useful soundCue.
 - Build the plan as one coherent arc: opening state → development → rise → payoff → turn → final payoff → ending. CHANGE is primary, BALANCE prevents every section from becoming maximal, and UNITY keeps one singer identity and genre.
 - Do not design each section independently. Repeated sections must preserve identity while changing local execution or payoff.
@@ -30229,6 +30610,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           structurallyFinalKorean,
           finalSectionPerformancePlan,
           params,
+          result.productionPrompt,
         );
       }
       if (typeof result.lyrics.english === 'string') {
@@ -30240,6 +30622,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           structurallyFinalEnglish,
           finalSectionPerformancePlan,
           params,
+          result.productionPrompt,
         );
       }
     }

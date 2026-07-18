@@ -12272,43 +12272,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     </>
   );
 
-  const filteredSoundTextureCycles = useMemo(() => {
-    const queryText = [
-      ...selectedGenres,
-      ...subGenre,
-      ...selectedMoods,
-      ...selectedStyles,
-      userInput,
-    ].join(' ').toLowerCase();
-
-    const recommendationCycle = SOUND_TEXTURE_CYCLES.find((cycle) => cycle.id === 'recommended-sound-combos');
-    if (!recommendationCycle) return SOUND_TEXTURE_CYCLES;
-
-    const scoreRecommendation = (variant: any) => {
-      const text = [variant.id, variant.label, variant.labelKo, variant.descriptionKo, variant.description].join(' ').toLowerCase();
-      let score = 0;
-      if (/gugak|korean|traditional|국악|전통|사극|판소리|가야금|해금|장구/.test(queryText)) score += /korean|전통|국악/.test(text) ? 6 : 0;
-      if (/trap|hiphop|k-trap|808|dark|powerful|강력|어두|트랩|힙합|랩/.test(queryText)) score += /808|bass|베이스/.test(text) ? 4 : 0;
-      if (/cyber|glitch|electronic|사이버|글리치|전자|미래/.test(queryText)) score += /cyber|glitch|사이버/.test(text) ? 4 : 0;
-      if (/city|rnb|folk|band|warm|peaceful|시티|포크|밴드|따뜻|평화/.test(queryText)) score += /band|live|밴드/.test(text) ? 4 : 0;
-      if (/magic|dream|fantasy|cute|몽환|마법|판타지|꿈|귀여/.test(queryText)) score += /magic|마법/.test(text) ? 4 : 0;
-      if (/cinematic|epic|string|orchestra|웅장|시네마틱|영화|현악/.test(queryText)) score += /cinematic|strings|현악/.test(text) ? 4 : 0;
-      return score;
-    };
-
-    const recommendedVariants = [...(recommendationCycle.variants as readonly any[])]
-      .map((variant) => ({ variant, score: scoreRecommendation(variant) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map((item) => item.variant);
-
-    const filteredRecommendationCycle = {
-      ...recommendationCycle,
-      variants: recommendedVariants.length > 0 ? recommendedVariants : recommendationCycle.variants,
-    };
-
-    return [filteredRecommendationCycle, ...SOUND_TEXTURE_CYCLES.filter((cycle) => cycle.id !== 'recommended-sound-combos')];
-  }, [selectedGenres, subGenre, selectedMoods, selectedStyles, userInput]);
+  const filteredSoundTextureCycles = useMemo(
+    () => SOUND_TEXTURE_CYCLES,
+    [],
+  );
 
 
   return (

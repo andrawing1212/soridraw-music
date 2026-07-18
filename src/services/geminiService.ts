@@ -1449,11 +1449,255 @@ const STYLE_ROLE_BY_VARIANT_ID: Record<string, StylePromptRole> = STYLE_CYCLES.r
   return acc;
 }, {} as Record<string, StylePromptRole>);
 
+type V1StyleLyricRole =
+  | 'genre-expression'
+  | 'section-performance'
+  | 'voice-effect'
+  | 'none'
+  | 'transition-structure'
+  | 'narrative-arc'
+  | 'hook-blueprint'
+  | 'rhythmic-prosody';
+
+type V1HookPattern =
+  | 'natural'
+  | 'short-repeat'
+  | 'slogan'
+  | 'chant'
+  | 'call-response'
+  | 'easy-sing'
+  | 'one-line'
+  | 'melodic'
+  | 'first-line-anchor'
+  | 'end-line-anchor'
+  | 'preview'
+  | 'post-chorus-tag'
+  | 'one-word'
+  | 'progressive-repeat'
+  | 'variation-repeat'
+  | 'echo-response'
+  | 'split-ab'
+  | 'drop-hook'
+  | 'anti-chorus'
+  | 'circular-refrain'
+  | 'negative-space';
+
+interface V1StyleIntentDefinition {
+  promptRoles: StylePromptRole[];
+  lyricRole: V1StyleLyricRole;
+  protectedFromCompression?: boolean;
+  hookPattern?: V1HookPattern;
+}
+
+const V1_STYLE_INTENT_BY_CYCLE_ID: Record<string, V1StyleIntentDefinition> = {
+  hybrid: { promptRoles: ['genre', 'instruments'], lyricRole: 'genre-expression' },
+  'vocal-expression': { promptRoles: ['vocals'], lyricRole: 'section-performance' },
+  'special-effects': { promptRoles: ['vocals'], lyricRole: 'voice-effect' },
+  'era-texture': { promptRoles: ['genre', 'arrangement'], lyricRole: 'none', protectedFromCompression: true },
+  'stage-shift': { promptRoles: ['arrangement'], lyricRole: 'transition-structure' },
+  'space-texture': { promptRoles: ['atmosphere'], lyricRole: 'none' },
+  'cinematic-scene': { promptRoles: ['atmosphere', 'arrangement'], lyricRole: 'narrative-arc' },
+  'hook-addiction': { promptRoles: ['arrangement'], lyricRole: 'hook-blueprint' },
+  'groove-flow': { promptRoles: ['arrangement'], lyricRole: 'rhythmic-prosody' },
+};
+
+const V1_STYLE_INTENT_BY_STYLE_ID: Record<string, V1StyleIntentDefinition> = {
+  // Item-level exceptions keep UI group names stable while routing each musical function correctly.
+  'fusion-musical-theater': { promptRoles: ['vocals', 'arrangement'], lyricRole: 'narrative-arc' },
+  'emotional-build': { promptRoles: ['arrangement'], lyricRole: 'transition-structure' },
+  'scene-transition': { promptRoles: ['arrangement'], lyricRole: 'transition-structure' },
+  'dramatic-strings': { promptRoles: ['instruments', 'arrangement'], lyricRole: 'none' },
+  'orchestral-hit': { promptRoles: ['instruments', 'arrangement'], lyricRole: 'none' },
+  'large-scale-sound': { promptRoles: ['instruments', 'arrangement'], lyricRole: 'none' },
+  'deep-electronic': { promptRoles: ['instruments', 'atmosphere'], lyricRole: 'none' },
+};
+
+const V1_HOOK_PATTERN_BY_STYLE_ID: Record<string, V1HookPattern> = {
+  'short-hook-repeat': 'short-repeat',
+  'repeated-slogan': 'slogan',
+  'addictive-repeat': 'progressive-repeat',
+  'chant-hook': 'chant',
+  'call-response-hook': 'call-response',
+  'easy-sing-chorus': 'easy-sing',
+  'singalong-point': 'easy-sing',
+  'one-line-hook': 'one-line',
+  'melody-hook': 'melodic',
+  'catchy-hook': 'natural',
+  'earworm-chorus': 'variation-repeat',
+  'chorus-focus': 'natural',
+  'chorus-shift': 'variation-repeat',
+  'chorus-explosion': 'progressive-repeat',
+  'hook-led-flow': 'preview',
+  'chorus-first-line-anchor': 'first-line-anchor',
+  'chorus-end-line-anchor': 'end-line-anchor',
+  'hook-preview': 'preview',
+  'post-chorus-tag': 'post-chorus-tag',
+  'one-word-hook': 'one-word',
+  'progressive-hook-repeat': 'progressive-repeat',
+  'variation-hook-repeat': 'variation-repeat',
+  'echo-response-hook': 'echo-response',
+  'split-chorus-ab': 'split-ab',
+  'drop-hook': 'drop-hook',
+  'anti-chorus': 'anti-chorus',
+  'circular-refrain': 'circular-refrain',
+  'negative-space-hook': 'negative-space',
+};
+
+function getV1StyleIntentDefinition(item: ResolvedStyleItem): V1StyleIntentDefinition {
+  const cycleId = STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] || '';
+  const base = V1_STYLE_INTENT_BY_STYLE_ID[item.id]
+    || V1_STYLE_INTENT_BY_CYCLE_ID[cycleId]
+    || {
+      promptRoles: STYLE_ROLE_BY_VARIANT_ID[item.id] ? [STYLE_ROLE_BY_VARIANT_ID[item.id]] : [],
+      lyricRole: 'none' as V1StyleLyricRole,
+    };
+  const hookPattern = V1_HOOK_PATTERN_BY_STYLE_ID[item.id];
+  return hookPattern ? { ...base, hookPattern } : base;
+}
+
+function getSelectedV1StyleIntentItems(params: GenerateSongParams, cycleId?: string): ResolvedStyleItem[] {
+  return filterPromptSelectionIds(params.styles ?? [])
+    .map((id) => resolveStyleItem(id))
+    .filter((item): item is ResolvedStyleItem => Boolean(item && !isSeparatorLikeItem(item)))
+    .filter((item) => !cycleId || STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === cycleId);
+}
+
+function getSelectedV1HookPatterns(params: GenerateSongParams): V1HookPattern[] {
+  const seen = new Set<V1HookPattern>();
+  const patterns: V1HookPattern[] = [];
+  getSelectedV1StyleIntentItems(params, 'hook-addiction').forEach((item) => {
+    const pattern = getV1StyleIntentDefinition(item).hookPattern || 'natural';
+    if (seen.has(pattern)) return;
+    seen.add(pattern);
+    patterns.push(pattern);
+  });
+  return patterns.slice(0, 3);
+}
+
+function getV1RhythmicProsodyRule(item: ResolvedStyleItem): string {
+  const id = String(item.id || '').toLowerCase();
+  if (/straight-beat|tight-rhythm|restrained-rhythm/.test(id)) return 'use balanced line lengths and stable stress placement';
+  if (/offbeat|syncopated/.test(id)) return 'use pickup words, internal pauses, and slightly asymmetric stress without naming the rhythm';
+  if (/staccato|dense-rhythm/.test(id)) return 'prefer short clipped phrases and crisp consonant attacks';
+  if (/half-time/.test(id)) return 'use fewer syllables, longer held vowels, and wider breathing space';
+  if (/double-time/.test(id)) return 'use compact multisyllabic phrases and quick breath-group turns';
+  if (/three-beat/.test(id)) return 'shape lyric breaths in gentle three-part phrase groups without counting beats in the lyric';
+  if (/six-eight/.test(id)) return 'use rolling two-wave phrase groups with natural rise and fall';
+  if (/irregular-meter/.test(id)) return 'vary line length intentionally while keeping one recurring stress cell';
+  if (/loose-groove|lazy-groove|night-air-groove|loose-rap-groove/.test(id)) return 'use conversational behind-the-beat phrasing and relaxed line endings';
+  if (/sticky-groove/.test(id)) return 'use delayed stresses, repeated vowel shapes, and a slow pulling cadence';
+  if (/bounce|shuffle|step-bounce|dance/.test(id)) return 'place short punch words on recurring stresses so the lyric feels physically repeatable';
+  if (/loop|rhythmic-development/.test(id)) return 'reuse one rhythmic cell across sections while changing the surrounding words';
+  return 'let line length, stress, and breath follow the selected groove instead of prose rhythm';
+}
+
+function hookPatternInstruction(pattern: V1HookPattern): string {
+  switch (pattern) {
+    case 'short-repeat': return 'keep one compact hook phrase recognizable in every Chorus/Hook return';
+    case 'slogan': return 'create a chantable Story-Context-derived slogan and introduce it from the first eligible Chorus, not only the Final Chorus';
+    case 'chant': return 'use a rhythmically simple chant that can be performed by one lead or a group without flattening the story';
+    case 'call-response': return 'build a true lead-and-answer hook across every returning Chorus family section';
+    case 'easy-sing': return 'use open vowels, simple syntax, and a stable rhythmic contour that listeners can join quickly';
+    case 'one-line': return 'make one complete lyric line the central emotional and structural anchor';
+    case 'melodic': return 'keep the lyric compact enough for one clear melodic contour and a repeatable performance gesture';
+    case 'first-line-anchor': return 'open every Chorus/Hook return with the same compact anchor line';
+    case 'end-line-anchor': return 'close every Chorus/Hook return with the same compact anchor line';
+    case 'preview': return 'preview a short piece of the hook before the first full Chorus, then complete it in the Chorus';
+    case 'post-chorus-tag': return 'leave one short secondary tag after each Chorus; use a Post-Chorus section only when it already exists in the structure';
+    case 'one-word': return 'choose one word or extremely short phrase whose rhythm and performance carry the hook';
+    case 'progressive-repeat': return 'introduce the core once in Chorus 1, preserve recognition in Chorus 2, then reach at least two recognizable core occurrences or an equivalent response/harmony lift in Final Chorus without adding redundant duplicates';
+    case 'variation-repeat': return 'preserve the hook core while changing one word, response, or surrounding line on each return';
+    case 'echo-response': return 'answer the lead hook with a short vocal/lyric echo; do not confuse this with spatial reverb';
+    case 'split-ab': return 'write two contrasting Chorus halves that complete one hook idea instead of two unrelated choruses';
+    case 'drop-hook': return 'lock a compact lyric fragment to the Drop/beat impact and avoid a long prose chorus';
+    case 'anti-chorus': return 'make the Chorus deliberately smaller or barer than the build while keeping one unmistakable anchor';
+    case 'circular-refrain': return 'frame the Chorus beginning and ending with the same short line or cycle it through returning sections';
+    case 'negative-space': return 'strengthen a short hook with a deliberate breath, pause, or instrumental gap around it';
+    default: return 'build one memorable hook family with clear placement, repetition, and controlled variation';
+  }
+}
+
+function buildV1StyleIntentSingleSourceInstruction(params: GenerateSongParams, exactStructureText: string): string {
+  if (params.isNoLyrics || isGenerationEngineV2(params)) return '';
+  const selected = getSelectedV1StyleIntentItems(params);
+  if (!selected.length) return '';
+
+  const labelsFor = (cycleId: string, limit = 4) => selected
+    .filter((item) => STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === cycleId)
+    .map((item) => String(item.label || item.style || item.id).trim())
+    .filter(Boolean)
+    .slice(0, limit);
+
+  const era = labelsFor('era-texture', 3);
+  const transitions = labelsFor('stage-shift', 3);
+  const spaces = labelsFor('space-texture', 2);
+  const narrative = labelsFor('cinematic-scene', 2);
+  const vocalLines = labelsFor('vocal-expression', 3);
+  const voiceFx = labelsFor('special-effects', 2);
+  const hooks = labelsFor('hook-addiction', 4);
+  const rhythms = selected.filter((item) => STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === 'groove-flow').slice(0, 3);
+  const hookPatterns = getSelectedV1HookPatterns(params);
+  const hookRules = (hookPatterns.length ? hookPatterns : hooks.length ? ['natural' as V1HookPattern] : [])
+    .map((pattern) => `  - ${hookPatternInstruction(pattern)}`)
+    .join('\n');
+  const rhythmRules = rhythms
+    .map((item) => `  - ${item.label}: ${getV1RhythmicProsodyRule(item)}`)
+    .join('\n');
+
+  const lines = [
+    'V1 STYLE INTENT SINGLE-SOURCE PLAN (MANDATORY):',
+    '- Classify every selected Style item by musical function before writing. Do not dump all Style labels into one prompt line.',
+    '- The same Style Plan must control productionPrompt, sectionPerformancePlan, Korean lyrics, and the secondary lyric card. Do not reinterpret the same Style differently by language.',
+    '- Hybrid remains inside the existing Genre Identity Engine as a supporting genre identity. Never treat Hybrid as a lyric topic.',
+    era.length ? `- ERA TEXTURE (${era.join(', ')}): compress into one protected era identity in [Genre] and one short production/mix cue in [Arrangement]. Never write the era label as lyric content and never drop every selected era anchor during the 1000-character compaction.` : '',
+    transitions.length ? `- TRANSITION DIRECTION (${transitions.join(', ')}): assign each selected change to one musically suitable section event; do not spread it across the whole song.` : '',
+    spaces.length ? `- SPACE TEXTURE (${spaces.join(', ')}): route only to [Atmosphere] and local standalone sound cues. Never turn the place/reverb label into lyric subject matter.` : '',
+    narrative.length ? `- NARRATIVE DIRECTION (${narrative.join(', ')}): shape the emotional and scene progression across sections while preserving Story Context; do not replace the story with a stock cinematic plot.` : '',
+    vocalLines.length ? `- VOCAL LINE (${vocalLines.join(', ')}): realize through [Vocals] and local section performance tags, with section-to-section variation inside one singer identity.` : '',
+    voiceFx.length ? `- SPECIAL VOICE EFFECT (${voiceFx.join(', ')}): keep the effect in [Vocals] or a local English effect cue; do not sing the effect name as lyric content.` : '',
+    hooks.length ? `- HOOK LINE (${hooks.join(', ')}): design one shared Hook Blueprint before both lyric cards. The hook is a coordinated lyric phrase + rhythmic/melodic cell + performance event, not a random repeated title.` : '',
+    hookRules,
+    rhythms.length ? `- GROOVE/RHYTHM (${rhythms.map((item) => item.label).join(', ')}): shape lyric breath, syllabic density, stress, and repetition without literally naming the rhythm in lyrics.` : '',
+    rhythmRules,
+    exactStructureText ? `- Apply the plan only inside this locked structure: ${exactStructureText}. Do not invent a Post-Chorus, Drop, Refrain, or extra Chorus unless it already exists in the blueprint.` : '',
+    '- STYLE COVERAGE CHECK: before returning JSON, verify that each selected style appears at its correct destination. Missing intent must be restored at its destination; unrelated lines must not be padded with style words.',
+    '- HARD-CODING GUARD: fixed rules may define role, placement, repetition shape, breath, and validation only. The actual hook words, story details, images, and dialogue must be newly derived from the current Story Context.',
+  ].filter(Boolean);
+
+  return lines.join('\n');
+}
+
+function buildV1HookBlueprintOutputInstruction(params: GenerateSongParams, exactStructureText: string): string {
+  if (params.isNoLyrics || isGenerationEngineV2(params)) return '';
+  const selectedHookItems = getSelectedV1StyleIntentItems(params, 'hook-addiction');
+  const patterns = getSelectedV1HookPatterns(params);
+  const patternText = patterns.length ? patterns.join(', ') : 'natural';
+  const rhythmItems = getSelectedV1StyleIntentItems(params, 'groove-flow').slice(0, 3);
+  const rhythmText = rhythmItems.length
+    ? rhythmItems.map((item) => `${item.label}: ${getV1RhythmicProsodyRule(item)}`).join(' / ')
+    : 'follow the song groove with singable breath groups';
+  const hookLabels = selectedHookItems.map((item) => item.label).slice(0, 4).join(', ') || 'Natural hook family';
+  return `V1 HOOK BLUEPRINT OUTPUT (MANDATORY, JSON FIELD hookBlueprint):
+- Resolve ONE shared Hook Blueprint before writing either lyric card. Selected Hook Line: ${hookLabels}. Resolved patterns: ${patternText}.
+- The hook must combine three coordinated layers: memorable lyric core, repeatable rhythmic/melodic cell, and a clear performance or production event. Do not rely on title repetition alone.
+- koreanHookCore and secondaryHookCore must express the same Story-Context-derived central desire or emotional claim naturally in each card language. Prefer 1–7 words or one compact breath-group. Do not copy a technical style label.
+- Introduce the hook family from the first eligible Chorus/Hook/Refrain return. Never postpone a selected slogan, repeated phrase, or anchor until Final Chorus only.
+- Chorus 2 must preserve recognition while allowing controlled surrounding-line or response variation. Final Chorus may increase repeat density, range, harmony, response, or production weight without changing the core meaning.
+- Concrete progressive example: for slogan + progressive-repeat, Chorus 1 introduces the Story-Context-derived core once; Chorus 2 keeps the same recognizable core with at most a small surrounding variation; Final Chorus reaches at least two recognizable core occurrences or an equivalent lead/response payoff. If those occurrences already exist, do not insert extra duplicates.
+- Use simplicity strategically: one clear primary hook may coexist with a secondary melodic, rhythmic, instrumental, or post-chorus hook, but keep a visible hierarchy so the song does not become a pile of unrelated hooks.
+- A preview may tease only a fragment before the first Chorus. A Post-Chorus tag may use a separate existing Post-Chorus section only when that section already exists. Never invent a new section outside this locked structure: ${exactStructureText}.
+- A/B split, anti-chorus, drop hook, negative-space hook, and circular refrain are valid when selected. Their contrast must still preserve one recognizable hook family and the current Story Context.
+- K-pop/performance-ready designs may use chant, response, formation-friendly rhythm, or gesture-ready spacing; US/European pop craft may use direct placement, melodic economy, preview, post-chorus, or multiple coordinated hook layers. Use these as broad craft options, never as culture stereotypes or artist imitation.
+- RHYTHMIC PROSODY: ${rhythmText}. The rhythm choice controls line length, stress, breath, internal repetition, and pause placement, not lyric subject matter.
+- Return every hookBlueprint string field. Use pattern='none' and empty core fields only when the locked structure has no possible sung Hook/Chorus/Refrain/Drop payoff.
+- Both lyric cards must realize the same blueprint meaning and placement while remaining natural in their own language.`;
+}
+
 function getStyleItemsByPromptRole(styleValues: string[] = [], role: StylePromptRole) {
   return filterPromptSelectionIds(styleValues)
     .map((value) => resolveStyleItem(value))
     .filter((item): item is ResolvedStyleItem =>
-      Boolean(item && !isSeparatorLikeItem(item) && STYLE_ROLE_BY_VARIANT_ID[item.id] === role),
+      Boolean(item && !isSeparatorLikeItem(item) && getV1StyleIntentDefinition(item).promptRoles.includes(role)),
     );
 }
 
@@ -1464,17 +1708,17 @@ function getStylePromptValuesByRole(styleValues: string[] = [], role: StylePromp
 }
 
 function getInstrumentSoundPromptCores(values: string[] = []): string[] {
-  return filterPromptSelectionIds(values)
-    .map((value) => resolveInstrumentSoundItem(value)?.promptCore ?? "")
+  return getInstrumentSoundPromptItems(values)
+    .filter((item) => !isV1EnsembleFormationPromptItem(item))
+    .map((item) => item.prompt)
     .filter(NON_EMPTY);
 }
 
 function getInstrumentSoundLabels(values: string[] = []): string[] {
   return filterPromptSelectionIds(values)
-    .map((value) => {
-      const item = resolveInstrumentSoundItem(value);
-      return item?.promptCore ?? item?.label ?? sentenceCase(value);
-    })
+    .map((value) => resolveInstrumentSoundItem(value) as any)
+    .filter((item) => item && !isSeparatorLikeItem(item) && !isV1EnsembleFormationPromptItem(item))
+    .map((item) => item.promptCore ?? item.label ?? sentenceCase(item.id || ''))
     .filter(NON_EMPTY);
 }
 
@@ -1490,6 +1734,29 @@ function getInstrumentSoundPromptItems(values: string[] = []) {
       categoryKo: String(item.categoryKo || item.categoryLabel || '기타'),
       labelKo: String(item.labelKo || item.label || item.id || ''),
     }));
+}
+
+const V1_ENSEMBLE_FORMATION_IDS = new Set(['acoustic-band', 'indie-band', 'band', 'fusion-orchestral']);
+
+function isV1EnsembleFormationPromptItem(item: { id?: string; categoryId?: string } | null | undefined): boolean {
+  if (!item) return false;
+  return String(item.categoryId || '').trim() === 'ensemble'
+    || V1_ENSEMBLE_FORMATION_IDS.has(String(item.id || '').trim());
+}
+
+function getSelectedV1EnsembleFormationCues(params: GenerateSongParams): string[] {
+  const cueById: Record<string, string> = {
+    'acoustic-band': 'acoustic-band ensemble',
+    'indie-band': 'loose indie-band ensemble',
+    band: 'full-band ensemble',
+    'fusion-orchestral': 'orchestral ensemble',
+  };
+  return getInstrumentSoundPromptItems(params.instrumentSounds ?? [])
+    .filter(isV1EnsembleFormationPromptItem)
+    .map((item) => cueById[item.id] || `${item.labelKo || 'ensemble'} formation`)
+    .filter(Boolean)
+    .filter((cue, index, all) => all.findIndex((other) => other.toLowerCase() === cue.toLowerCase()) === index)
+    .slice(0, 2);
 }
 
 function isVocalEffectSoundValue(value: string): boolean {
@@ -1512,7 +1779,8 @@ function buildVocalEffectArrangementPhrase(values: string[] = []): string {
 }
 
 function compactSoundPromptsByCategory(values: string[] = []): string[] {
-  const items = getInstrumentSoundPromptItems(values);
+  const items = getInstrumentSoundPromptItems(values)
+    .filter((item) => !isV1EnsembleFormationPromptItem(item));
   if (!items.length) return [];
 
   const byCategory = new Map<string, typeof items>();
@@ -8757,6 +9025,121 @@ function getSelectedEraTextureItems(params: GenerateSongParams): ResolvedStyleIt
     .filter((item): item is ResolvedStyleItem => Boolean(item && !isSeparatorLikeItem(item) && isEraTextureStyleItem(item)));
 }
 
+function isV1EraMediaTextureItem(item: ResolvedStyleItem): boolean {
+  return /^(?:retro-radio|cassette-tape|analog-vintage|digital-y2k|retro-game-sound|old-mp3-texture|early-internet)$/i.test(item.id);
+}
+
+function getV1EraReinterpretationToken(item: ResolvedStyleItem): string {
+  const map: Record<string, string> = {
+    'era-prefix-neo-retro': 'neo-retro',
+    'era-prefix-future-retro': 'future-retro',
+    'era-prefix-retro-futuristic': 'retro-futurist',
+    'era-prefix-timeless': 'timeless',
+    'neon-retro': 'neon-retro',
+  };
+  return map[item.id] || '';
+}
+
+function getV1EraTemporalToken(item: ResolvedStyleItem): string {
+  const id = String(item.id || '').toLowerCase();
+  if (/^era-prefix-(?:neo-retro|future-retro|retro-futuristic|timeless)$/.test(id)) return '';
+  if (id.startsWith('era-prefix-')) {
+    const token = id.slice('era-prefix-'.length);
+    if (token === 'modern') return 'modern';
+    if (token === 'y2k') return 'Y2K';
+    return token.replace(/^early-(\d{2,4}s)$/, 'early-$1')
+      .replace(/^mid-(\d{2,4}s)$/, 'mid-$1')
+      .replace(/^late-(\d{2,4}s)$/, 'late-$1');
+  }
+  if (isV1EraMediaTextureItem(item)) return '';
+  const label = cleanupPromptTail(String(item.label || item.style || ''))
+    .replace(/\b(?:texture|color|feel|style)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return label ? compactGenreToken(label) : '';
+}
+
+function buildCanonicalEraIdentityPhrase(params: GenerateSongParams): string {
+  const items = getSelectedEraTextureItems(params);
+  if (!items.length) return '';
+  const temporal: string[] = [];
+  const reinterpretation: string[] = [];
+  const addUnique = (target: string[], value: string, limit: number) => {
+    const cleaned = cleanupPromptTail(value || '').trim();
+    if (!cleaned || target.some((old) => old.toLowerCase() === cleaned.toLowerCase()) || target.length >= limit) return;
+    target.push(cleaned);
+  };
+  items.forEach((item) => {
+    const reinterpret = getV1EraReinterpretationToken(item);
+    if (reinterpret) addUnique(reinterpretation, reinterpret, 1);
+    else addUnique(temporal, getV1EraTemporalToken(item), 2);
+  });
+  const temporalPhrase = temporal.join('/');
+  return cleanupPromptTail([temporalPhrase, reinterpretation[0]].filter(Boolean).join(' '));
+}
+
+function getV1EraProductionTextureHint(params: GenerateSongParams): string {
+  const items = getSelectedEraTextureItems(params);
+  if (!items.length) return '';
+  const identity = buildCanonicalEraIdentityPhrase(params);
+  const mediaCue = items
+    .filter(isV1EraMediaTextureItem)
+    .map((item) => getEraTextureLayerProfile(item).instrumentCue[0] || '')
+    .find(Boolean) || '';
+  const eraArrangement = items
+    .filter((item) => !isV1EraMediaTextureItem(item))
+    .map((item) => getEraTextureLayerProfile(item).arrangementCue || '')
+    .find(Boolean) || '';
+  const parts = [identity ? `${identity} production` : '', mediaCue, !identity ? eraArrangement : '']
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean);
+  return parts.slice(0, 2).join(', ');
+}
+
+function compactV1StyleCue(value: unknown, maxParts = 2): string {
+  return String(value || '')
+    .split(/\s*,\s*|\s*;\s*/)
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .slice(0, maxParts)
+    .join(' and ');
+}
+
+function getV1SelectedRhythmGrooveHint(params: GenerateSongParams): string {
+  const item = getSelectedV1StyleIntentItems(params, 'groove-flow')[0];
+  if (!item) return '';
+  return compactV1StyleCue(item.style || item.sound || item.label, 2);
+}
+
+function getV1TransitionDirectionHint(params: GenerateSongParams): string {
+  const item = getSelectedV1StyleIntentItems(params, 'stage-shift')[0]
+    || getSelectedV1StyleIntentItems(params).find((candidate) => getV1StyleIntentDefinition(candidate).lyricRole === 'transition-structure');
+  if (!item) return '';
+  const cue = compactV1StyleCue(item.sound || item.style || item.label, 2);
+  if (!cue) return '';
+  if (/\b(?:drop|strip|pull|thin|open|expand|switch|shift|enter|cut|pause|fade|collapse|build|rise|swell)\w*\b/i.test(cue)) return cue;
+  return cleanupPromptTail(`${cue} builds the transition into the hook`);
+}
+
+function getV1HookPayoffHint(params: GenerateSongParams): string {
+  const patterns = getSelectedV1HookPatterns(params);
+  if (!patterns.length) return '';
+  const pattern = patterns[0];
+  if (pattern === 'anti-chorus') return 'the chorus strips back around one exposed hook phrase';
+  if (pattern === 'negative-space') return 'the rhythm pauses around one short hook phrase';
+  if (pattern === 'drop-hook') return 'the beat drops into one compact vocal hook';
+  if (pattern === 'call-response' || pattern === 'echo-response') return 'the final hook returns with a short vocal response';
+  if (pattern === 'progressive-repeat' || pattern === 'chant' || pattern === 'slogan') return 'the final hook returns with denser group-ready repetition';
+  if (pattern === 'post-chorus-tag') return 'the final chorus leaves one short returning vocal tag';
+  return 'the final hook returns with one recognizable lyric and melodic phrase';
+}
+
+function getV1HookIdentityHint(params: GenerateSongParams): string {
+  return getSelectedV1HookPatterns(params).length
+    ? 'one recurring lyric and melodic hook anchors every chorus return'
+    : '';
+}
+
 
 type EraTextureLayerProfile = {
   genreAccent: string;
@@ -8978,7 +9361,7 @@ function getSelectedCatalogMoodItemsForGenre(params: GenerateSongParams) {
 
 function normalizeCatalogMoodGenreToken(value: string): string {
   const clean = cleanupPromptTail(String(value || ''))
-    .replace(/mood/gi, '')
+    .replace(/\bmood\b/gi, '')
     .replace(/[+|/]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
@@ -9939,8 +10322,17 @@ function repairAtmosphereSyntax(value: string): string {
 
   if (line.length > 190) {
     const beforeWhere = line.split(/\s+where\s+/i)[0];
-    const whereMatch = line.match(/\bwhere\s+(.{1,90})/i);
-    const wherePart = whereMatch ? `where ${cleanupPromptTail(whereMatch[1])}` : '';
+    const whereMatch = line.match(/\bwhere\s+(.+)/i);
+    let compactWhere = '';
+    if (whereMatch) {
+      const rawWhere = cleanupPromptTail(whereMatch[1]);
+      const searchWindow = rawWhere.slice(0, 132);
+      const conjunctionCut = searchWindow.lastIndexOf(' and ');
+      compactWhere = conjunctionCut >= 58
+        ? cleanupPromptTail(rawWhere.slice(0, conjunctionCut))
+        : smartTrimProductionPhrase(rawWhere, 118, 0);
+    }
+    const wherePart = compactWhere ? `where ${compactWhere}` : '';
     const compact = [beforeWhere, wherePart].filter(Boolean).join(' ');
     if (compact.length >= 50) line = compact;
   }
@@ -10025,6 +10417,9 @@ function normalizeAtmospherePromptLine(value: string): string {
     .replace(/\ba\s+(anxious|intimate|uneasy|open|old|emotional)\b/gi, 'an $1')
     .replace(/\bwith\s+soft\s+brightness\s+and\s+bright\s+tone\b/gi, 'with soft brightness')
     .replace(/\bwith\s+calm\s+tone\s+and\s+spacious\s+tone\b/gi, 'with calm spacious tone')
+    .replace(/\b(?:colored|shaped|framed)\s+by\s+an?\s+([^,.;]+)$/i, 'with $1 color')
+    .replace(/,\s*with\s+([^,.;]+)\s+color$/i, ' with $1 color')
+    .replace(/\bwith\s+and\s+/gi, 'with ')
     .replace(/,\s*,/g, ",")
     .replace(/\s+,/g, ",")
     .replace(/\s{2,}/g, " ")
@@ -12813,7 +13208,9 @@ function selectedMoodLiteralLeakTerms(params: GenerateSongParams): string[] {
 function selectedSoundText(params: GenerateSongParams): string {
   return [
     ...getCompactPointSoundPrompts(params.pointSounds ?? []),
-    ...getInstrumentSoundPromptItems(params.instrumentSounds ?? []).map((item) => `${item.labelKo || ''} ${item.prompt || ''}`),
+    ...getInstrumentSoundPromptItems(params.instrumentSounds ?? [])
+      .filter((item) => !isV1EnsembleFormationPromptItem(item))
+      .map((item) => `${item.labelKo || ''} ${item.prompt || ''}`),
   ]
     .filter(Boolean)
     .join(" ")
@@ -18996,6 +19393,11 @@ function repairMalformedFinalVocalLine(value: string, params: GenerateSongParams
 
 function hardenFinalVocalGrammar(value: string, params: GenerateSongParams): string {
   let line = cleanupPromptTail(value)
+    .replace(/\b([A-Za-z][A-Za-z-]*)-\s+(phrasing|delivery|tone)\b/gi, '$1 $2')
+    .replace(/\bclear\s+clean\s+tone\b/gi, 'clean tone')
+    .replace(/\bclean\s+clear\s+tone\b/gi, 'clean tone')
+    .replace(/\b([a-z][a-z-]+)\s+with\s+([^,;]+),\s*\1\s+(phrasing|delivery|tone)\b/gi, '$2, $1 $3')
+    .replace(/\b(phrasing|delivery)\s+((?:young|mature|light|deep)\s+spoken\s+tone)\b/gi, '$1 with $2')
     .replace(/\bvocal\s+(raw|energetic|slightly\s+distorted|sincere\s+storytelling|warm\s+tone|melancholic\s+feeling|natural\s+emotional\s+delivery|dark|wistful\s+feeling|smooth|close\s+breath|late[-\s]?night\s+phrasing)\b/gi, 'vocal with $1')
     .replace(/\bvocals\s+(raw|energetic|slightly\s+distorted|sincere\s+storytelling|warm\s+tone|melancholic\s+feeling|natural\s+emotional\s+delivery|dark|wistful\s+feeling|smooth|close\s+breath|late[-\s]?night\s+phrasing)\b/gi, 'vocals with $1')
     .replace(/\bwith\s+Raw,\s*Energetic,\s*Slightly\s+distorted\b/gi, 'with raw energy and slight distortion')
@@ -19005,6 +19407,7 @@ function hardenFinalVocalGrammar(value: string, params: GenerateSongParams): str
     .replace(/\bwith\s+([A-Z][a-z]+),\s*([A-Z][a-z]+),\s*([A-Z][a-z]+(?:\s+[a-z]+)?)\b/g, (_m, a, b, c) => `with ${String(a).toLowerCase()}, ${String(b).toLowerCase()}, ${String(c).toLowerCase()}`)
     .replace(/\bwith\s+([a-z]+),\s*([a-z]+),\s*([a-z]+(?:\s+[a-z]+)?)\b/gi, 'with $1, $2, and $3')
     .replace(/\bwith\s+with\b/gi, 'with')
+    .replace(/\band\s+and\b/gi, 'and')
     .replace(/\s{2,}/g, ' ');
 
   const isLargeGroup = shouldApplyLargeGroupVocalCompression(params);
@@ -19026,7 +19429,13 @@ function hardenFinalVocalGrammar(value: string, params: GenerateSongParams): str
     }
     line = cleanupPromptTail(`${head} ${joinPromptPhrase(picked, 'and')}`);
   }
-  return dedupeRepeatedVocalCuePhrases(hardenPromptOpenTail(line)) || 'Natural solo vocal with human breath';
+  const finalized = dedupeRepeatedVocalCuePhrases(hardenPromptOpenTail(line))
+    .replace(/\b(phrasing|delivery)\s+((?:young|mature|light|deep)\s+spoken\s+tone)\b/gi, '$1 with $2')
+    .replace(/\bwith\s+([^,;]+),\s*\1\b/gi, 'with $1')
+    .replace(/\band\s+and\b/gi, 'and')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return finalized || 'Natural solo vocal with human breath';
 }
 
 function finalValidatorSelectedText(params: GenerateSongParams): string {
@@ -19582,12 +19991,51 @@ function dedupeFinalInstrumentLine(value: string): string {
   return finalizePromptOpenTail(out.slice(0, 8).join(', ')) || 'balanced band and synth texture';
 }
 
-function validateFinalInstrumentLine(value: string, params: GenerateSongParams): string {
-  const baseItems = dedupeFinalInstrumentLine(value || 'balanced band and synth texture')
-    .split(',')
+function normalizeV1FinalInstrumentPart(value: string, params: GenerateSongParams): string {
+  let clean = normalizeV1EnglishCueGrammar(value);
+  if (!clean) return '';
+
+  // Warm Amp is a guitar-tone anchor. Keep the historical id, but never let the model attach
+  // the amp adjective to mandolin or leave a source-less "warm amp" token in [Instruments].
+  if ((params.instrumentSounds || []).includes('warm-amp')) {
+    clean = clean
+      .replace(/\bwarm\s+amp(?:\s+texture)?\s+(?=(?:mandolin|banjo|fiddle|synths?|bass|drums?|keys?|piano|rhodes)\b)/gi, 'warm guitar amp texture, ')
+      .replace(/\bwarm\s+amp(?:\s+texture)?\b/gi, 'warm guitar amp texture');
+  }
+
+  return cleanupPromptTail(clean);
+}
+
+function isV1ArrangementOnlyInstrumentPart(value: string): boolean {
+  const clean = String(value || '').toLowerCase();
+  if (!clean) return true;
+  const hasConcreteSoundObject = /\b(?:guitars?|mandolin|banjo|fiddle|ukulele|piano|rhodes|keys?|synths?|pads?|bass(?:line)?|808s?|drums?|snare|kick|percussion|strings?|brass|horns?|organ|accordion|flute|sax(?:ophone)?|trumpet|cello|violin|viola|harp|gayageum|haegeum|janggu|daegeum|duduk|choir|hiss|noise|ambience|reverb|delay|amp|texture|chords?)\b/i.test(clean);
+  const hasArrangementOnlySignal = /\b(?:groove|rhythm|flow|pocket|waltz|three[-\s]?beat|six[-\s]?eight|half[-\s]?time|double[-\s]?time|swing|hook|build[-\s]?up|drop|transition|sectional)\b/i.test(clean);
+  return hasArrangementOnlySignal && !hasConcreteSoundObject;
+}
+
+function getV1ProtectedSelectedInstrumentAnchors(params: GenerateSongParams): string[] {
+  const nonVocal = (params.instrumentSounds || []).filter((value) => !isVocalEffectSoundValue(value));
+  return compactSoundPromptsByCategory(nonVocal)
+    .flatMap((item) => String(item || '').split(','))
+    .map((part) => normalizeV1FinalInstrumentPart(normalizeInstrumentPromptForGenre(part, params), params))
+    .flatMap((part) => part.split(','))
     .map((part) => cleanupPromptTail(part))
-    .filter(Boolean);
-  const withStory = applyDirectStoryToInstrumentItems(baseItems, params);
+    .filter(Boolean)
+    .filter((part) => !isV1ArrangementOnlyInstrumentPart(part));
+}
+
+function validateFinalInstrumentLine(value: string, params: GenerateSongParams): string {
+  const normalizedValue = normalizeV1FinalInstrumentPart(value || 'balanced band and synth texture', params);
+  const baseItems = dedupeFinalInstrumentLine(normalizedValue)
+    .split(',')
+    .map((part) => normalizeV1FinalInstrumentPart(cleanupPromptTail(part), params))
+    .flatMap((part) => part.split(','))
+    .map((part) => cleanupPromptTail(part))
+    .filter(Boolean)
+    .filter((part) => !isV1ArrangementOnlyInstrumentPart(part));
+  const protectedAnchors = getV1ProtectedSelectedInstrumentAnchors(params);
+  const withStory = applyDirectStoryToInstrumentItems([...baseItems, ...protectedAnchors], params);
   return dedupeFinalInstrumentLine(withStory.join(', '));
 }
 
@@ -19942,13 +20390,20 @@ function enforceV1FinalProducerDirectionMapPrompt(prompt: string, params: Genera
   const vocalInfo = getVocalModeInfo(params.vocal);
   const vocalMode = vocalInfo.isSolo ? 'solo' : vocalInfo.total === 2 ? 'duo' : 'group';
 
+  const ensembleFormationCues = getSelectedV1EnsembleFormationCues(params);
   map.arrangement = buildV1GuaranteedProducerDirectionMap(map.arrangement || '', {
     tempo: normalizeTempoForArrangement(buildTempoPromptPhrase(params)) || getGenreDefaultTempoForArrangement(params),
-    grooveHint: [getDirectGenreArrangementCue(params), getGenreArrangementDNA(params)]
+    grooveHint: [getV1SelectedRhythmGrooveHint(params), getDirectGenreArrangementCue(params), getGenreArrangementDNA(params)]
       .filter(Boolean)
       .join(', '),
+    productionTextureHint: getV1EraProductionTextureHint(params),
+    identityHint: getV1HookIdentityHint(params),
+    transitionHint: getV1TransitionDirectionHint(params),
+    payoffHint: getV1HookPayoffHint(params),
     genre: map.genre,
-    instruments: map.instruments,
+    // Ensemble choices are whole-song formation resources. They help the producer map shape
+    // density and payoff, but they are not injected as a local instrument token named "band".
+    instruments: [map.instruments, ...ensembleFormationCues].filter(Boolean).join(', '),
     vocals: map.vocals,
     atmosphere: map.atmosphere,
     vocalMode,
@@ -20000,9 +20455,13 @@ function finalOutputPromptValidator(prompt: string, params: GenerateSongParams):
     const vocalMode = vocalInfo.isSolo ? 'solo' : vocalInfo.total === 2 ? 'duo' : 'group';
     map.arrangement = buildV1GuaranteedProducerDirectionMap(`${rawArrangementForV1Boundary}; ${map.arrangement}`, {
       tempo: normalizeTempoForArrangement(buildTempoPromptPhrase(validationParams)) || getGenreDefaultTempoForArrangement(validationParams),
-      grooveHint: [getDirectGenreArrangementCue(validationParams), getGenreArrangementDNA(validationParams)]
+      grooveHint: [getV1SelectedRhythmGrooveHint(validationParams), getDirectGenreArrangementCue(validationParams), getGenreArrangementDNA(validationParams)]
         .filter(Boolean)
         .join(', '),
+      productionTextureHint: getV1EraProductionTextureHint(validationParams),
+      identityHint: getV1HookIdentityHint(validationParams),
+      transitionHint: getV1TransitionDirectionHint(validationParams),
+      payoffHint: getV1HookPayoffHint(validationParams),
       genre: map.genre,
       instruments: map.instruments,
       vocals: map.vocals,
@@ -22486,7 +22945,11 @@ function repairPathologicallyFragmentedKoreanLyricBodies(text: string): string {
     const shortRatio = compactLengths.filter((length) => length <= 8).length / Math.max(1, compactLengths.length);
     const averageLength = compactLengths.reduce((sum, length) => sum + length, 0) / Math.max(1, compactLengths.length);
     const totalLength = compactLengths.reduce((sum, length) => sum + length, 0);
-    const isPathological = run.length >= 6 && shortRatio >= 0.6 && averageLength <= 10.5 && totalLength >= 36;
+    const microFragmentCount = compactLengths.filter((length) => length <= 3).length;
+    const longRunPathology = run.length >= 6 && shortRatio >= 0.6 && averageLength <= 10.5 && totalLength >= 36;
+    const shortRunPathology = run.length >= 4 && microFragmentCount >= 2 && shortRatio >= 0.5
+      && averageLength <= 9 && totalLength >= 16;
+    const isPathological = longRunPathology || shortRunPathology;
 
     if (!isPathological) {
       out.push(...run);
@@ -25823,7 +26286,13 @@ function normalizeV1EnglishCueGrammar(value: unknown): string {
     .replace(/\bdrums\s+beat\b/gi, 'drum beat')
     .replace(/\b(drop|drops|dropped|dropping)\s+outro\b/gi, (_match, verb: string) => `${verb} out`)
     .replace(/\b(fade|fades|faded|fading)\s+outro\b/gi, (_match, verb: string) => `${verb} out`)
-    .replace(/\bfully\s+strength\b/gi, 'at full strength');
+    .replace(/\bfully\s+strength\b/gi, 'at full strength')
+    .replace(/\bwith\s+and\s+/gi, 'with ')
+    .replace(/\bsoften\s+(?=(?:hums?|humming|vocals?|voice|delivery|phrasing|tone|ad[-\s]?libs?|analog|keys?|piano|guitar|mandolin|synths?|pads?|bass|drums?|percussion|strings?|chords?|rhodes)\b)/gi, 'soft ')
+    .replace(/\bwarm\s+amp\s+guitar\b/gi, 'warm guitar amp')
+    .replace(/\bsynths\s+(?=(?:chords?|leads?|stabs?|pads?|layers?|textures?|motifs?|lines?)\b)/gi, 'synth ')
+    .replace(/\bmain\s+chords\s+transitions\b/gi, 'main chord transitions')
+    .replace(/\bchords\s+transitions\b/gi, 'chord transitions');
 
   const singularVerbToBase: Record<string, string> = {
     enters: 'enter',
@@ -25873,7 +26342,7 @@ function normalizeV1EnglishCueGrammar(value: unknown): string {
   // This is intentionally structural rather than phrase-specific: a four-letter token ending in
   // "and" (for example, an accidental extra leading letter) is treated as the conjunction only
   // in an enumeration context. Legitimate uses such as "full band instrumentation" remain intact.
-  const soundObjectHead = String.raw`(?:pads|drums|keys|synths|guitars|vocals|strings|chords|textures|layers|hi[-\s]?hats|cymbals|808s|rhodes|bass|guitar|synth|piano|beat|percussion|instrumentation|daegeum|duduk)`;
+  const soundObjectHead = String.raw`(?:pads|drums|keys|synths|guitars|vocals|strings|chords|textures|layers|hi[-\s]?hats|cymbals|808s|rhodes|bass(?:line)?|guitar|synth|piano|beat|percussion|instrumentation|mandolin|banjo|fiddle|ukulele|marimba|snare(?:\s+roll)?|rimshot|kick|shaker|tambourine|daegeum|duduk|cello|violin|viola|harp|flute|sax(?:ophone)?|trumpet|trombone|horns?|brass|organ|accordion|gayageum|haegeum|janggu|hiss|noise|ambience|room\s+tone)`;
   const corruptedAndBetweenSoundObjects = new RegExp(
     String.raw`\b(${soundObjectHead})\s+([A-Za-z]and)\s+((?:[A-Za-z][A-Za-z-]*\s+){0,3}${soundObjectHead})\b`,
     'gi',
@@ -25881,6 +26350,20 @@ function normalizeV1EnglishCueGrammar(value: unknown): string {
   clean = clean.replace(
     corruptedAndBetweenSoundObjects,
     (_match, leftObject: string, _corruptedAnd: string, rightObject: string) => `${leftObject} and ${rightObject}`,
+  );
+
+  // Ensemble selections are whole-song formation signals, never a conjunction-like local token.
+  // Repair only the impossible object + band + object shape; valid phrases such as full band,
+  // live band, jazz band, or band instrumentation do not match because no concrete object sits
+  // on both sides of the word.
+  const soundObjectPhrase = String.raw`(?:(?:[A-Za-z][A-Za-z-]*\s+){0,3}${soundObjectHead}(?:\s+(?:line|lines|chords?|motif|pad|layer|backing|melody|counterline))?)`;
+  const bandBetweenSoundObjects = new RegExp(
+    String.raw`\b(${soundObjectPhrase})\s+band\s+(${soundObjectPhrase})\b`,
+    'gi',
+  );
+  clean = clean.replace(
+    bandBetweenSoundObjects,
+    (_match, leftObject: string, rightObject: string) => `${leftObject} and ${rightObject}`,
   );
 
   return clean.replace(/\s+/g, ' ').trim();
@@ -26226,6 +26709,7 @@ function sanitizeV1GeneratedPlanPerformanceCue(
 ): string {
   const repaired = repairV1CueTextFromResponseVocabulary(value, context);
   const parts = cleanV1GeneratedPlanCueText(repaired)
+    .replace(/\bsoften\s+(?=(?:hums?|humming|vocals?|voice|delivery|phrasing|tone|ad[-\s]?libs?)\b)/gi, 'soft ')
     .split(/[,，]/)
     .map((part) => cleanV1GeneratedPlanCueText(part).replace(/^(?:with|and|plus)\s+/i, '').trim())
     .filter(Boolean)
@@ -26295,6 +26779,29 @@ function sanitizeV1GeneratedPlanSoundCue(
   return soundsLikeProduction ? clean : '';
 }
 
+
+
+function sanitizeV1GeneratedPlanSoundCueForSection(
+  value: unknown,
+  sectionName: unknown,
+  context: V1CueRepairContext = {},
+): string {
+  const clean = sanitizeV1GeneratedPlanSoundCue(value, context);
+  if (!clean) return '';
+  const section = normalizeV1GeneratedPlanSectionName(sectionName);
+  const lower = clean.toLowerCase();
+
+  // A section-owned production event must move in the same time direction as its section.
+  // Reject only obvious end-of-song motion accidentally assigned to the opening. This keeps
+  // creative instrumentation open while preventing an Outro fade/dissolve from appearing under Intro.
+  if (/^Intro$/i.test(section)) {
+    const isOpeningMotion = /\b(?:fade(?:s|d|ing)?\s+in|emerge|enters?|opens?|begins?|starts?|introduces?|sets\s+up|rises?\s+in)\b/i.test(lower);
+    const isEndingMotion = /\b(?:fade(?:s|d|ing)?\s+out|dissolv(?:e|es|ed|ing)|die(?:s|d)?\s+away|trail(?:s|ed|ing)?\s+off|ending|outro|final\s+release|closes?)\b/i.test(lower);
+    if (isEndingMotion && !isOpeningMotion) return '';
+  }
+
+  return clean;
+}
 
 function scoreV1GeneratedPlanProductionCue(value: string): number {
   const clean = cleanV1GeneratedPlanCueText(value);
@@ -26519,8 +27026,8 @@ function resolveV1SharedSectionPerformancePlan(
     // is then reused verbatim by both lyric cards and the visible [Arrangement] timeline.
     const canonicalSoundCue = selectV1GeneratedPlanProductionCue(
       context,
-      arrangementAction,
-      directSoundCue,
+      sanitizeV1GeneratedPlanSoundCueForSection(arrangementAction, item.sectionName, context),
+      sanitizeV1GeneratedPlanSoundCueForSection(directSoundCue, item.sectionName, context),
     );
     return {
       ...item,
@@ -26589,9 +27096,10 @@ function alignV1FinalArrangementWithSectionPlan(
   const baseClause = existingClauses.find((part) => /\b(?:BPM|tempo|groove|pocket|pulse|flow)\b/i.test(part)) || existingClauses[0] || 'genre-shaped rhythmic flow';
   const rapClause = existingClauses.find((part) => /\b(?:no\s+rap|rap\s+section|rap\s+delivery)\b/i.test(part)) || '';
 
-  // Use every canonical section event. Earlier implementations selected a capped subset, which
-  // allowed a valid Final Chorus or Bridge event to appear in lyrics but disappear from
-  // [Arrangement]. The same event string now feeds both outputs.
+  // Every lyric card still receives its own canonical local event, but the visible [Arrangement]
+  // is a concise producer map rather than a nine-section checklist. Build the map from the same
+  // canonical events, then keep only the signature identity, decisive transition, and final payoff.
+  // This preserves single-source fidelity without spending Suno's prompt budget on repeated timing.
   const familyTotals = new Map<string, number>();
   timelineItems.forEach(({ item }) => {
     const key = baseV1GeneratedPlanSectionName(String(item.sectionName || 'Section'));
@@ -26609,7 +27117,21 @@ function alignV1FinalArrangementWithSectionPlan(
       : rawName;
     return `${displayName}: ${cleanupPromptTail(normalizeV1EnglishCueGrammar(event))}`;
   });
-  map.arrangement = cleanupPromptTail([baseClause, ...timelineClauses, rapClause].filter(Boolean).join('; '));
+  const vocalInfo = getVocalModeInfo(params.vocal);
+  const maxTimelineClauses = vocalInfo.isSolo ? 3 : 4;
+  const selectedTransitionHint = getV1TransitionDirectionHint(params);
+  const selectedHookPayoffHint = getV1HookPayoffHint(params);
+  const styleIntentClauses = [
+    selectedTransitionHint ? `Transition: ${selectedTransitionHint}` : '',
+    selectedHookPayoffHint ? `Final Chorus: ${selectedHookPayoffHint}` : '',
+  ].filter(Boolean);
+  const rawTimeline = [baseClause, ...styleIntentClauses, ...timelineClauses].filter(Boolean).join('; ');
+  let compactTimeline = compactV1SectionStructuredArrangement(rawTimeline, maxTimelineClauses)
+    || cleanupPromptTail(rawTimeline);
+  if (rapClause && !compactTimeline.toLowerCase().includes(rapClause.toLowerCase())) {
+    compactTimeline = cleanupPromptTail(`${compactTimeline}; ${rapClause}`);
+  }
+  map.arrangement = compactTimeline;
 
   const hasAudioQuality = /\[Audio quality improved to masterpiece\]/i.test(String(prompt || ''));
   const lines = [
@@ -26761,11 +27283,66 @@ function promoteV1AdjacentPerformanceCueIntoSectionTags(
     .trim();
 }
 
+function collapseV1PublicAdjacentProductionCues(lyrics: string, params: GenerateSongParams): string {
+  const source = repairMultilineBracketCueLines(String(lyrics || '').replace(/\r\n?/g, '\n'));
+  const lines = source.split('\n');
+  const blueprint = getV1SectionBlueprint(params);
+  const out: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const trimmed = String(line || '').trim();
+    if (!isV1StructuralSectionTag(trimmed, blueprint.customNames)) {
+      out.push(line);
+      continue;
+    }
+
+    out.push(line);
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    const sectionName = normalizeLyricSectionDisplayName(parsed?.rawSection || '');
+    const bracketLines: Array<{ raw: string; inside: string }> = [];
+    let cursor = index + 1;
+    while (cursor < lines.length) {
+      const candidate = String(lines[cursor] || '').trim();
+      if (!candidate) {
+        cursor += 1;
+        continue;
+      }
+      if (!isV1StandaloneBracketCueLine(candidate, blueprint.customNames)) break;
+      bracketLines.push({ raw: candidate, inside: insideV1StandaloneCueLine(candidate) });
+      cursor += 1;
+    }
+
+    if (!bracketLines.length) continue;
+    const context: V1CueRepairContext = { local: bracketLines.map((item) => item.inside) };
+    const productionCandidates: string[] = [];
+    const passthrough: string[] = [];
+    bracketLines.forEach((item) => {
+      const production = sanitizeV1GeneratedPlanSoundCueForSection(item.inside, sectionName, context);
+      const domain = classifyV1GeneratedPlanCueDomain(item.inside);
+      const looksLikeProduction = domain === 'production'
+        || hasV1ConcreteProductionObjectSignal(item.inside)
+        || cueIsMainlySoundOrInstrumentCue(item.inside)
+        || isDirectorProductionCueLeakForLyricSectionTag(item.inside);
+      if (production) productionCandidates.push(production);
+      else if (!looksLikeProduction) passthrough.push(item.raw);
+    });
+
+    const chosenProduction = selectV1GeneratedPlanProductionCue(context, ...productionCandidates);
+    if (chosenProduction) out.push(`[${normalizeV1EnglishCueGrammar(chosenProduction)}]`);
+    passthrough.slice(0, 1).forEach((item) => out.push(item));
+    index = cursor - 1;
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSongParams): string {
   let text = repairMultilineBracketCueLines(lyrics);
   text = repairPathologicallyFragmentedKoreanLyricBodies(text);
   text = collapseAdjacentDuplicateStructuralSections(text, params);
   text = promoteV1AdjacentPerformanceCueIntoSectionTags(text, params);
+  text = collapseV1PublicAdjacentProductionCues(text, params);
   text = removeV1OrphanSectionSkeletonsAtPublicBoundary(text, params);
 
   const out: string[] = [];
@@ -26792,7 +27369,16 @@ function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSo
     out.push(trimmed);
   });
 
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  let finalText = out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  // Section blueprint repair may append a missing structural skeleton after an earlier cleanup.
+  // Re-run the public-boundary body guard after all tag/cue formatting so empty trailing Drop/Outro
+  // blocks and split Korean micro-fragments cannot escape into the visible result.
+  finalText = cleanupGhostOpeningIntroAndEmptySungTags(finalText, params);
+  finalText = removeEmptySungSectionsFinalGuard(finalText, params);
+  finalText = removeEmptyRequiredSungBlocksStrictFinal(finalText, params);
+  finalText = removeV1OrphanSectionSkeletonsAtPublicBoundary(finalText, params);
+  finalText = repairPathologicallyFragmentedKoreanLyricBodies(finalText);
+  return finalText.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function applyV1GeneratedSectionPerformancePlan(
@@ -28459,7 +29045,7 @@ function compressFinalPromptIfNeeded(prompt: string, params: GenerateSongParams)
   const map = parseFinalPromptLineMap(prompt);
   
   const selectedStyleIds = params.styles ?? [];
-  const hasCallAndResponseStyle = selectedStyleIds.includes('call-response-hook') || selectedStyleIds.includes('call-and-response');
+  const hasCallAndResponseStyle = selectedStyleIds.includes('call-response-hook');
   const hasRepeatedSloganStyle = selectedStyleIds.includes('repeated-slogan');
   
   const promptLower = prompt.toLowerCase();
@@ -28536,6 +29122,186 @@ function compressFinalPromptIfNeeded(prompt: string, params: GenerateSongParams)
   }
 
   return removeAudioQualityLineWhenPromptIsNearLimit(enforceEnglishProductionPrompt(finalPromptLines.join('\n')));
+}
+
+
+const SUNO_PRODUCTION_PROMPT_HARD_LIMIT = 1000;
+const SUNO_PRODUCTION_PROMPT_TARGET = 970;
+
+function fitCommaSeparatedPromptValue(value: string, budget: number, maxItems: number): string {
+  const items = String(value || '')
+    .split(/\s*,\s*/)
+    .map((item) => cleanupPromptTail(item))
+    .filter(Boolean)
+    .filter((item, index, all) => all.findIndex((other) => other.toLowerCase() === item.toLowerCase()) === index);
+  if (!items.length) return smartTrimProductionPhrase(value, budget, 0);
+  const selected: string[] = [];
+  for (const item of items) {
+    if (selected.length >= maxItems) break;
+    const next = [...selected, item].join(', ');
+    if (next.length > budget && selected.length) break;
+    selected.push(item);
+  }
+  return smartTrimProductionPhrase(selected.join(', ') || items[0], budget, 0);
+}
+
+function compactFinalVocalsForSunoBudget(value: string, params: GenerateSongParams, budget: number): string {
+  let line = hardenFinalVocalGrammar(value, params);
+  line = compactFiveLineVocalsValue(line, params);
+  if (getVocalModeInfo(params.vocal).isSolo) {
+    line = compressVocalsLine(line, false);
+  }
+  line = repairMalformedFinalVocalLine(dedupeRepeatedVocalCuePhrases(line), params);
+  return smartTrimProductionPhrase(line, budget, 0);
+}
+
+function compactFinalArrangementForSunoBudget(value: string, params: GenerateSongParams, budget: number): string {
+  const vocalInfo = getVocalModeInfo(params.vocal);
+  const maxEventClauses = vocalInfo.isSolo ? 3 : 4;
+  let line = cleanupPromptTail(value);
+  const sourceParts = line.split(/\s*;\s*/).map((part) => cleanupPromptTail(part)).filter(Boolean);
+  const sourceRapCount = sourceParts.filter((part) => /\b(?:no\s+rap|rap\s+section|rap\s+delivery)\b/i.test(part)).length;
+  const alreadyCompact = sourceParts.length <= maxEventClauses + 1 + Math.min(1, sourceRapCount);
+  if (isV1SectionStructuredArrangement(line) && !alreadyCompact) {
+    line = compactV1SectionStructuredArrangement(line, maxEventClauses);
+  }
+
+  const parts = line
+    .split(/\s*;\s*/)
+    .map((part) => normalizeV1EnglishCueGrammar(part))
+    .filter(Boolean);
+  const rapParts = parts.filter((part) => /\b(?:no\s+rap|rap\s+section|rap\s+delivery)\b/i.test(part));
+  const coreParts = parts.filter((part) => !rapParts.includes(part));
+  const maxTotalCoreParts = vocalInfo.isSolo ? 4 : 5; // tempo/groove + identity + transition + payoff
+  let selectedCore = coreParts;
+  if (selectedCore.length > maxTotalCoreParts) {
+    selectedCore = [
+      selectedCore[0],
+      ...selectedCore.slice(1, maxTotalCoreParts - 1),
+      selectedCore[selectedCore.length - 1],
+    ].filter(Boolean);
+  }
+
+  let selected = [...selectedCore, ...rapParts.slice(0, 1)];
+  let rendered = selected.join('; ');
+  if (rendered.length > budget && selectedCore.length >= 3) {
+    const separators = Math.max(0, selected.length - 1) * 2;
+    const perClauseBudget = Math.max(38, Math.floor((budget - separators) / Math.max(1, selected.length)));
+    selected = selected
+      .map((part) => smartTrimProductionPhrase(part, perClauseBudget, 0))
+      .filter(Boolean);
+    rendered = selected.join('; ');
+  }
+  if (rendered.length > budget && selectedCore.length > 3) {
+    selectedCore = [selectedCore[0], selectedCore[1], selectedCore[selectedCore.length - 1]].filter(Boolean);
+    rendered = [...selectedCore, ...rapParts.slice(0, 1)].join('; ');
+  }
+  return smartTrimProductionPhrase(rendered, budget, 0);
+}
+
+function renderSunoProductionPrompt(map: FinalPromptLineMap, includeAudioQuality = false): string {
+  const lines = [
+    `[Genre] ${cleanupPromptTail(map.genre || 'Genre-led pop fusion')}`,
+    `[Instruments] ${cleanupPromptTail(map.instruments || 'balanced core instruments')}`,
+    `[Atmosphere] ${cleanupPromptTail(map.atmosphere || 'balanced emotional air')}`,
+    `[Vocals] ${cleanupPromptTail(map.vocals || 'Natural solo vocal with human breath')}`,
+    `[Arrangement] ${cleanupPromptTail(map.arrangement || 'genre-shaped rhythmic flow')}`,
+  ];
+  if (includeAudioQuality) lines.push('[Audio quality improved to masterpiece]');
+  return normalizeProductionPromptSectionBreaks(lines.join('\n'));
+}
+
+function reducePromptValueSemantically(value: string, targetLength: number): string {
+  const clean = cleanupPromptTail(value);
+  if (clean.length <= targetLength) return clean;
+  const semicolonParts = clean.split(/\s*;\s*/).map((part) => cleanupPromptTail(part)).filter(Boolean);
+  if (semicolonParts.length > 2) {
+    const reduced = [semicolonParts[0], ...semicolonParts.slice(1, -2), semicolonParts[semicolonParts.length - 1]].filter(Boolean).join('; ');
+    if (reduced.length < clean.length) return reduced;
+  }
+  const commaParts = clean.split(/\s*,\s*/).map((part) => cleanupPromptTail(part)).filter(Boolean);
+  if (commaParts.length > 1) {
+    const reduced = commaParts.slice(0, -1).join(', ');
+    if (reduced.length >= 12) return reduced;
+  }
+  return smartTrimProductionPhrase(clean, Math.max(12, targetLength), 0);
+}
+
+function enforceSunoProductionPromptCharacterBudget(prompt: string, params: GenerateSongParams): string {
+  const source = normalizeProductionPromptSectionBreaks(prompt);
+  const sourceHasAudioQuality = /\[Audio quality improved to masterpiece\]/i.test(source);
+  const map = parseFinalPromptLineMap(source);
+  const vocalInfo = getVocalModeInfo(params.vocal);
+
+  // The final Arrangement always uses a compact producer map, even when the whole prompt happens
+  // to fit already. Local lyric cues retain every canonical section event.
+  map.arrangement = compactFinalArrangementForSunoBudget(
+    map.arrangement,
+    params,
+    vocalInfo.isSolo ? 255 : 235,
+  );
+  map.atmosphere = normalizeAtmospherePromptLine(map.atmosphere);
+  map.vocals = hardenFinalVocalGrammar(map.vocals, params);
+
+  let rendered = renderSunoProductionPrompt(map, sourceHasAudioQuality);
+  if (rendered.length <= SUNO_PRODUCTION_PROMPT_HARD_LIMIT) return rendered;
+
+  // Audio-quality text is the first removable line because the five production fields already
+  // carry the actual musical instruction and Suno's hard prompt limit must never be exceeded.
+  rendered = renderSunoProductionPrompt(map, false);
+  if (rendered.length <= SUNO_PRODUCTION_PROMPT_HARD_LIMIT) return rendered;
+
+  const budgets = vocalInfo.isSolo
+    ? { genre: 110, instruments: 145, atmosphere: 200, vocals: 180, arrangement: 245 }
+    : { genre: 105, instruments: 130, atmosphere: 170, vocals: 260, arrangement: 220 };
+
+  map.genre = smartTrimProductionPhrase(map.genre, budgets.genre, 0);
+  map.instruments = fitCommaSeparatedPromptValue(map.instruments, budgets.instruments, 7);
+  map.atmosphere = smartTrimProductionPhrase(normalizeAtmospherePromptLine(map.atmosphere), budgets.atmosphere, 0);
+  map.vocals = compactFinalVocalsForSunoBudget(map.vocals, params, budgets.vocals);
+  map.arrangement = compactFinalArrangementForSunoBudget(map.arrangement, params, budgets.arrangement);
+  rendered = renderSunoProductionPrompt(map, false);
+  if (rendered.length <= SUNO_PRODUCTION_PROMPT_TARGET) return rendered;
+  if (rendered.length <= SUNO_PRODUCTION_PROMPT_HARD_LIMIT) return rendered;
+
+  const minimums: Record<keyof FinalPromptLineMap, number> = {
+    genre: 36,
+    instruments: 48,
+    atmosphere: 72,
+    vocals: vocalInfo.isSolo ? 68 : 120,
+    arrangement: 82,
+  };
+  const shrinkOrder: Array<keyof FinalPromptLineMap> = ['arrangement', 'atmosphere', 'vocals', 'instruments', 'genre'];
+  for (let pass = 0; pass < 24 && rendered.length > SUNO_PRODUCTION_PROMPT_HARD_LIMIT; pass += 1) {
+    const overflow = rendered.length - SUNO_PRODUCTION_PROMPT_TARGET;
+    const candidates = shrinkOrder
+      .filter((key) => String(map[key] || '').length > minimums[key])
+      .sort((left, right) => String(map[right] || '').length - String(map[left] || '').length);
+    const key = candidates[0];
+    if (!key) break;
+    const current = String(map[key] || '');
+    const target = Math.max(minimums[key], current.length - Math.max(12, overflow));
+    const reduced = reducePromptValueSemantically(current, target);
+    if (!reduced || reduced.length >= current.length) {
+      map[key] = smartTrimProductionPhrase(current, Math.max(minimums[key], current.length - 12), 0);
+    } else {
+      map[key] = reduced;
+    }
+    rendered = renderSunoProductionPrompt(map, false);
+  }
+
+  // Defensive exact-limit rollback. It operates only at complete word/connector boundaries and is
+  // expected to be unreachable after the semantic passes above.
+  if (rendered.length > SUNO_PRODUCTION_PROMPT_HARD_LIMIT) {
+    const overflow = rendered.length - SUNO_PRODUCTION_PROMPT_HARD_LIMIT;
+    map.atmosphere = smartTrimProductionPhrase(
+      map.atmosphere,
+      Math.max(minimums.atmosphere, map.atmosphere.length - overflow - 4),
+      0,
+    );
+    rendered = renderSunoProductionPrompt(map, false);
+  }
+  return rendered;
 }
 
 
@@ -28627,10 +29393,12 @@ function stripSelectedStyleCuePartsFromLine(
     .filter((item): item is ResolvedStyleItem => Boolean(item && !isSeparatorLikeItem(item)))
     .forEach((item) => {
       const cycleId = STYLE_CYCLE_ID_BY_VARIANT_ID[item.id];
+      const intent = getV1StyleIntentDefinition(item);
       if (target === 'instruments') {
+        if (intent.promptRoles.includes('instruments')) return;
         if (!['space-texture', 'stage-shift', 'hook-addiction', 'groove-flow', 'cinematic-scene', 'vocal-expression'].includes(cycleId)) return;
       } else if (target === 'vocals') {
-        if (cycleId === 'vocal-expression' || cycleId === 'special-effects') return;
+        if (intent.promptRoles.includes('vocals')) return;
       }
       splitStyleCueText(String(item.style || '')).forEach((cue) => blockedCues.push(cue));
       splitStyleCueText(String(item.sound || '')).forEach((cue) => blockedCues.push(cue));
@@ -29002,9 +29770,7 @@ function buildCanonicalGenreIdentityValue(params: GenerateSongParams): string {
   if (influences.length === 1) genreCore = `${primary} with ${influences[0]} influence`;
   else if (influences.length > 1) genreCore = `${primary} with ${joinPromptPhrase(influences, 'and')} influences`;
 
-  const eraPrefix = getSelectedEraTextureItems(params)
-    .map((item) => compactGenreToken(String(item.label || item.style || '')))
-    .filter(Boolean)[0] || '';
+  const eraPrefix = buildCanonicalEraIdentityPhrase(params);
   const moodAccents = getCanonicalGenreMoodAccents(params)
     .filter((accent) => !isTermIncluded(genreCore, accent))
     .slice(0, 2);
@@ -29077,6 +29843,7 @@ function routeStyleKeywordsToPrompt(prompt: string, params: GenerateSongParams):
   selectedStyleItems.forEach((item) => {
     const cycleId = STYLE_CYCLE_ID_BY_VARIANT_ID[item.id];
     const role = STYLE_ROLE_BY_VARIANT_ID[item.id];
+    const intent = getV1StyleIntentDefinition(item);
 
     if (item.id === 'fusion-musical-theater') {
       const theatricalVocalCue = 'staged expressive vocal movement';
@@ -29093,6 +29860,35 @@ function routeStyleKeywordsToPrompt(prompt: string, params: GenerateSongParams):
     if (cycleId === 'hybrid') {
       // Hybrid has already been applied above as a weak genre influence.
       // Its instrument cue is optional and must yield to the main/sub genre palette.
+      return;
+    }
+
+    const itemSpecificIntent = V1_STYLE_INTENT_BY_STYLE_ID[item.id];
+    if (itemSpecificIntent) {
+      const styleTerm = String(item.style || item.label || '').trim();
+      const soundTerm = compactV1StyleCue(item.sound || '', 2);
+      if (intent.promptRoles.includes('instruments') && soundTerm && !isTermIncluded(map.instruments || '', soundTerm)) {
+        map.instruments = map.instruments ? `${map.instruments}, ${soundTerm}` : soundTerm;
+        changed = true;
+      }
+      if (intent.promptRoles.includes('atmosphere')) {
+        const atmosphereTerm = styleTerm || soundTerm;
+        if (atmosphereTerm && !isSelectedStyleItemRepresentedInLine(map.atmosphere || '', item, atmosphereTerm)) {
+          map.atmosphere = map.atmosphere ? `${map.atmosphere}, ${atmosphereTerm}` : atmosphereTerm;
+          changed = true;
+        }
+      }
+      if (intent.promptRoles.includes('vocals')) {
+        const vocalTerm = soundTerm || styleTerm;
+        if (vocalTerm && !isTermIncluded(map.vocals || '', vocalTerm)) {
+          map.vocals = map.vocals ? `${map.vocals}, ${vocalTerm}` : vocalTerm;
+          changed = true;
+        }
+      }
+      if (intent.promptRoles.includes('arrangement')) {
+        addPriorityArrangementCue(getRoleScopedArrangementCueForStyleItem(item) || soundTerm || styleTerm);
+        changed = true;
+      }
       return;
     }
 
@@ -29115,11 +29911,9 @@ function routeStyleKeywordsToPrompt(prompt: string, params: GenerateSongParams):
         }
       }
     } else if (cycleId === 'era-texture') {
-      const styleTerm = item.style || item.label || '';
-      if (styleTerm && !isTermIncluded(map.genre || '', styleTerm)) {
-        map.genre = `${styleTerm} ${map.genre || ''}`.trim();
-        changed = true;
-      }
+      // Era identity and mix texture are rebuilt once by the protected canonical era engine.
+      // Do not append every era label here or the prompt grows before final compaction.
+      return;
     } else {
       const styleTerm = item.style || item.label || '';
       const soundTerm = item.sound || '';
@@ -29394,74 +30188,227 @@ function stripSpatialAndEraKeywordsFromLyrics(lyrics: string, params: GenerateSo
   return cleaned;
 }
 
-function enforceCallAndResponseInHook(lyrics: string): string {
-  const lines = lyrics.split('\n');
-  let insideHookOrChorus = false;
-  const processedLines = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    if (isBracketTag(trimmed)) {
-      insideHookOrChorus = /\[\s*(Chorus|Hook|Final\s*Chorus|Final\s*Hook)/i.test(trimmed);
-      processedLines.push(line);
-      continue;
-    }
-
-    if (insideHookOrChorus && trimmed && !trimmed.startsWith('(') && !trimmed.endsWith(')')) {
-      const words = trimmed.split(/\s+/);
-      if (words.length >= 2) {
-        const lastWord = words[words.length - 1];
-        const cleanLastWord = lastWord.replace(/[.!?,]/g, '');
-        if (cleanLastWord.length >= 2) {
-          processedLines.push(`${line} (${cleanLastWord})`);
-          continue;
-        }
-      }
-    }
-
-    processedLines.push(line);
-  }
-
-  return processedLines.join('\n');
+interface V1ResolvedHookBlueprint {
+  patterns: V1HookPattern[];
+  koreanHookCore: string;
+  secondaryHookCore: string;
+  koreanResponse: string;
+  secondaryResponse: string;
+  placement: string;
+  repeatShape: string;
+  rhythmicCell: string;
+  performanceEvent: string;
 }
 
-function enforceRepeatedSloganInHook(lyrics: string, title: string): string {
-  if (!title) return lyrics;
-  const cleanTitle = title.replace(/^\[[^\]]+\]\s*/, '').replace(/^['"]+|['"]+$/g, '').trim();
-  if (!cleanTitle) return lyrics;
+function cleanV1HookText(value: unknown, maxWords = 8): string {
+  const clean = String(value || '')
+    .replace(/^['"“”‘’]+|['"“”‘’]+$/g, '')
+    .replace(/^\[[^\]]+\]\s*/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (!clean || /^(?:none|null|n\/a)$/i.test(clean)) return '';
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return clean.replace(/[.!?。！？]+$/g, '').trim();
+  return words.slice(0, maxWords).join(' ').replace(/[.!?。！？]+$/g, '').trim();
+}
 
-  const lines = lyrics.split('\n');
-  let insideHookOrChorus = false;
-  const processedLines = [];
-  let hookLinesCount = 0;
+function isV1HookFamilySectionName(value: string): boolean {
+  return /^(?:Chorus|Final\s+Chorus|Hook|Final\s+Hook|Refrain)(?:\s+\d+)?$/i.test(normalizeLyricSectionDisplayName(value || ''));
+}
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
+function isV1StructuralHookGuardTag(line: string): { name: string } | null {
+  const match = String(line || '').trim().match(/^\[\s*([^:\]\n]{1,80})(?:\s*:\s*[^\]]*)?\s*\]$/);
+  if (!match) return null;
+  const name = normalizeLyricSectionDisplayName(match[1] || '');
+  if (!/^(?:Intro|Verse|Pre[-\s]?Chorus|Chorus|Final\s+Chorus|Hook|Final\s+Hook|Refrain|Bridge|Drop|Post[-\s]?Chorus|Outro|Rap\s+Section|Instrumental|Interlude|Break|Stop|Build[-\s]?Up|Climax)(?:\s+\d+)?$/i.test(name)) return null;
+  return { name };
+}
 
-    if (isBracketTag(trimmed)) {
-      insideHookOrChorus = /\[\s*(Chorus|Hook|Final\s*Chorus|Final\s*Hook)/i.test(trimmed);
-      processedLines.push(line);
-      hookLinesCount = 0;
+function extractV1HookCoreCandidate(lyrics: string): string {
+  // Hook fallback extraction runs before the public lyric formatter. Repair split tags and
+  // pathological Korean micro-lines first, otherwise a fragment such as "같은" can be mistaken
+  // for the hook while the complete repeated line sits on the following broken lines.
+  const lines = repairPathologicallyFragmentedKoreanLyricBodies(
+    repairMultilineBracketCueLines(String(lyrics || '')),
+  ).split('\n');
+  let active = false;
+  let sectionLineOrdinal = 0;
+  const candidates: Array<{ value: string; key: string; firstLine: boolean }> = [];
+  for (const line of lines) {
+    const tag = isV1StructuralHookGuardTag(line);
+    if (tag) {
+      active = isV1HookFamilySectionName(tag.name);
+      sectionLineOrdinal = 0;
       continue;
     }
+    const clean = String(line || '').trim();
+    if (!active || !clean || /^\[[^\]]+\]$/.test(clean) || /^\([^)]*\)$/.test(clean)) continue;
+    const candidate = cleanV1HookText(clean, 7);
+    const key = normalizedV1HookComparison(candidate);
+    if (candidate && candidate.length <= 56 && key) {
+      candidates.push({ value: candidate, key, firstLine: sectionLineOrdinal === 0 });
+      sectionLineOrdinal += 1;
+    }
+  }
+  if (!candidates.length) return '';
 
-    if (insideHookOrChorus && trimmed) {
-      hookLinesCount++;
-      if (hookLinesCount === 1) {
-        if (!trimmed.toLowerCase().includes(cleanTitle.toLowerCase())) {
-          processedLines.push(cleanTitle);
-          processedLines.push(cleanTitle);
-        }
+  const counts = new Map<string, number>();
+  candidates.forEach((candidate) => counts.set(candidate.key, (counts.get(candidate.key) || 0) + 1));
+  const scored = candidates.map((candidate, index) => {
+    const compactLength = candidate.key.length;
+    const wordCount = candidate.value.split(/\s+/).filter(Boolean).length;
+    let score = (counts.get(candidate.key) || 1) * 8;
+    if (candidate.firstLine) score += 3;
+    if (compactLength >= 4 && compactLength <= 28) score += 4;
+    if (wordCount >= 2 && wordCount <= 7) score += 2;
+    if (compactLength <= 2) score -= 12;
+    if (compactLength > 40) score -= 4;
+    return { ...candidate, index, score };
+  }).sort((a, b) => b.score - a.score || a.index - b.index);
+
+  return scored[0]?.value || '';
+}
+
+function parseV1HookPatternValue(value: unknown): V1HookPattern[] {
+  const allowed = new Set<V1HookPattern>([
+    'natural', 'short-repeat', 'slogan', 'chant', 'call-response', 'easy-sing', 'one-line', 'melodic',
+    'first-line-anchor', 'end-line-anchor', 'preview', 'post-chorus-tag', 'one-word', 'progressive-repeat',
+    'variation-repeat', 'echo-response', 'split-ab', 'drop-hook', 'anti-chorus', 'circular-refrain', 'negative-space',
+  ]);
+  return String(value || '')
+    .split(/[,/|]+/)
+    .map((part) => part.trim().toLowerCase() as V1HookPattern)
+    .filter((pattern): pattern is V1HookPattern => allowed.has(pattern));
+}
+
+function resolveV1SharedHookBlueprint(
+  raw: unknown,
+  params: GenerateSongParams,
+  koreanLyrics: string,
+  secondaryLyrics: string,
+): V1ResolvedHookBlueprint {
+  const source = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const selectedPatterns = getSelectedV1HookPatterns(params);
+  const modelPatterns = parseV1HookPatternValue(source.pattern);
+  const patterns = Array.from(new Set<V1HookPattern>([...selectedPatterns, ...modelPatterns])).slice(0, 3);
+  const finalPatterns = patterns.length ? patterns : ['natural' as V1HookPattern];
+  const koreanHookCore = cleanV1HookText(source.koreanHookCore, finalPatterns.includes('one-word') ? 2 : 7)
+    || extractV1HookCoreCandidate(koreanLyrics);
+  const secondaryHookCore = cleanV1HookText(source.secondaryHookCore, finalPatterns.includes('one-word') ? 2 : 7)
+    || extractV1HookCoreCandidate(secondaryLyrics);
+  const responseFallback = (core: string) => {
+    const words = core.split(/\s+/).filter(Boolean);
+    return cleanV1HookText(words.slice(Math.max(0, words.length - 2)).join(' ') || core, 3);
+  };
+  return {
+    patterns: finalPatterns,
+    koreanHookCore,
+    secondaryHookCore,
+    koreanResponse: cleanV1HookText(source.koreanResponse, 4) || responseFallback(koreanHookCore),
+    secondaryResponse: cleanV1HookText(source.secondaryResponse, 4) || responseFallback(secondaryHookCore),
+    placement: cleanV1HookText(source.placement, 10),
+    repeatShape: cleanV1HookText(source.repeatShape, 12),
+    rhythmicCell: cleanV1HookText(source.rhythmicCell, 12),
+    performanceEvent: cleanV1HookText(source.performanceEvent, 12),
+  };
+}
+
+function normalizedV1HookComparison(value: string): string {
+  return String(value || '').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
+function applyV1SharedHookBlueprintGuard(
+  lyrics: string,
+  blueprint: V1ResolvedHookBlueprint,
+  card: 'korean' | 'secondary',
+  params: GenerateSongParams,
+): string {
+  if (!String(lyrics || '').trim() || isGenerationEngineV2(params)) return lyrics;
+  if (params.isLyricMode && params.lyricMode === 'preserve') return lyrics;
+  const hasSelectedHookStyle = getSelectedV1StyleIntentItems(params, 'hook-addiction').length > 0;
+  if (!hasSelectedHookStyle) return lyrics;
+  const core = card === 'korean' ? blueprint.koreanHookCore : blueprint.secondaryHookCore;
+  const response = card === 'korean' ? blueprint.koreanResponse : blueprint.secondaryResponse;
+  if (!core) return lyrics;
+  const patterns = new Set(blueprint.patterns);
+  const lines = String(lyrics || '').split('\n');
+  const sections: Array<{ name: string; start: number; end: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const tag = isV1StructuralHookGuardTag(lines[index]);
+    if (!tag) continue;
+    if (sections.length) sections[sections.length - 1].end = index;
+    sections.push({ name: tag.name, start: index, end: lines.length });
+  }
+  const eligible = sections.filter((section) => isV1HookFamilySectionName(section.name)
+    || (patterns.has('drop-hook') && /^Drop(?:\s+\d+)?$/i.test(section.name)));
+  if (!eligible.length) return lyrics;
+
+  const inserts: Array<{ index: number; values: string[] }> = [];
+  const sectionOccurrenceCount = (section: { start: number; end: number }, value: string) => {
+    const needle = normalizedV1HookComparison(value);
+    if (!needle) return 0;
+    const body = lines.slice(section.start + 1, section.end)
+      .filter((line) => !/^\s*\[[^\]]+\]\s*$/.test(String(line || '')))
+      .map((line) => normalizedV1HookComparison(String(line || '').replace(/^\(|\)$/g, '')))
+      .join('');
+    if (!body || !body.includes(needle)) return 0;
+    return Math.max(0, body.split(needle).length - 1);
+  };
+  const sectionContains = (section: { start: number; end: number }, value: string) => sectionOccurrenceCount(section, value) > 0;
+  const startInsertIndex = (section: { start: number; end: number }) => {
+    let index = section.start + 1;
+    while (index < section.end && (!lines[index].trim() || /^\[[^\]]+\]$/.test(lines[index].trim()))) index += 1;
+    return index;
+  };
+  const endInsertIndex = (section: { start: number; end: number }) => {
+    let index = section.end;
+    while (index > section.start + 1 && !lines[index - 1].trim()) index -= 1;
+    return index;
+  };
+  const responseLine = response ? `(${response})` : '';
+  eligible.forEach((section, sectionIndex) => {
+    const isFinal = /^Final\s+(?:Chorus|Hook)/i.test(section.name) || sectionIndex === eligible.length - 1;
+    const existingCoreCount = sectionOccurrenceCount(section, core);
+    const startValues: string[] = [];
+    const endValues: string[] = [];
+    const wantsEnd = patterns.has('end-line-anchor');
+    const wantsCircular = patterns.has('circular-refrain');
+    if (existingCoreCount === 0) {
+      if (wantsEnd && !wantsCircular) endValues.push(core);
+      else startValues.push(core);
+    }
+    if ((patterns.has('call-response') || patterns.has('echo-response')) && responseLine && !sectionContains(section, response)) {
+      if (startValues.length) startValues.push(responseLine);
+      else endValues.push(responseLine);
+    }
+    if (patterns.has('progressive-repeat') && isFinal) {
+      const plannedCoreCount = [...startValues, ...endValues]
+        .filter((value) => normalizedV1HookComparison(value) === normalizedV1HookComparison(core))
+        .length;
+      // Final escalation means at least two recognisable core occurrences, not an unconditional
+      // extra line. This prevents the guard from tripling a hook that Gemini already repeated.
+      if (existingCoreCount + plannedCoreCount < 2) {
+        const target = wantsEnd ? endValues : startValues;
+        target.push(core);
       }
     }
+    if (patterns.has('circular-refrain') && existingCoreCount === 0) endValues.push(core);
+    if (patterns.has('post-chorus-tag') && response && !sectionContains(section, response)) endValues.push(response);
+    if (startValues.length) inserts.push({ index: startInsertIndex(section), values: startValues });
+    if (endValues.length) inserts.push({ index: endInsertIndex(section), values: endValues });
+  });
 
-    processedLines.push(line);
+  if (patterns.has('preview')) {
+    const firstHookStart = eligible[0].start;
+    const previewSection = [...sections].reverse().find((section) => section.end <= firstHookStart && /^Pre[-\s]?Chorus(?:\s+\d+)?$/i.test(section.name));
+    if (previewSection && !sectionContains(previewSection, core)) inserts.push({ index: endInsertIndex(previewSection), values: [core] });
   }
 
-  return processedLines.join('\n');
+  inserts.sort((a, b) => b.index - a.index).forEach((insert) => {
+    const values = insert.values.filter(Boolean);
+    lines.splice(insert.index, 0, ...values);
+  });
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 
@@ -29740,6 +30687,7 @@ async function generateSongLegacy(
     ...getDirectSoundInstrumentCues(params),
     ...compactSoundPromptsByCategory(params.instrumentSounds ?? []),
   ].filter(Boolean)));
+  const selectedEnsembleFormationCues = getSelectedV1EnsembleFormationCues(params);
   const styleSoundTextureCues = getSelectedStyleSoundTextureCues(params);
   const themePrompt = buildThemePrompt(params.themes ?? []);
   const themeSentence = buildThemeSentence(params.themes ?? []);
@@ -29921,6 +30869,8 @@ async function generateSongLegacy(
   );
   const rapModeInstruction = buildRapModeInstruction(params);
   const storyContextInstruction = buildStoryContextInstruction(params, detailLayer);
+  const styleIntentSingleSourceInstruction = buildV1StyleIntentSingleSourceInstruction(params, exactStructureText);
+  const hookBlueprintOutputInstruction = buildV1HookBlueprintOutputInstruction(params, exactStructureText);
   const stableMultiVocalLyricLabels = getStableMultiVocalLyricTagLabels(params);
   const multiVocalLyricTagAnchorInstruction = stableMultiVocalLyricLabels.length >= 2
     ? `MULTI-VOCAL LYRIC TAG ANCHOR RULE (MANDATORY):
@@ -29972,6 +30922,28 @@ ${selectedNativeScriptInstruction}
           required: ["english", "korean"],
         },
       };
+  const hookBlueprintResponseSchema = (!params.isNoLyrics && !isGenerationEngineV2(params))
+    ? {
+        hookBlueprint: {
+          type: Type.OBJECT,
+          properties: {
+            pattern: { type: Type.STRING },
+            koreanHookCore: { type: Type.STRING },
+            secondaryHookCore: { type: Type.STRING },
+            koreanResponse: { type: Type.STRING },
+            secondaryResponse: { type: Type.STRING },
+            placement: { type: Type.STRING },
+            repeatShape: { type: Type.STRING },
+            rhythmicCell: { type: Type.STRING },
+            performanceEvent: { type: Type.STRING },
+          },
+          required: ["pattern", "koreanHookCore", "secondaryHookCore", "koreanResponse", "secondaryResponse", "placement", "repeatShape", "rhythmicCell", "performanceEvent"],
+        },
+      }
+    : {};
+  const hookBlueprintRequired = (!params.isNoLyrics && !isGenerationEngineV2(params))
+    ? ["hookBlueprint"]
+    : [];
   const sectionPerformancePlanResponseSchema = (!params.isNoLyrics && !isGenerationEngineV2(params))
     ? {
         sectionPerformancePlan: {
@@ -30162,12 +31134,13 @@ ${exactStructureText}
 - Treat [Arrangement] as a binding timeline, not a loose mood description. Every hook entry, pull-back, bridge drop, instrumental takeover, and final lift named in [Arrangement] must appear in exactly one matching plan item. Do not move an event to another section.
 - performanceCue and the structured vocal fields must respond to that same local Arrangement event: a pull-back exposes or restrains the vocal, a rise builds or opens it, and a final lift expands the payoff without changing singer identity.
 - TYPE SEPARATION CONTRACT: delivery/phrasing/register/voice/humming directions belong only to performanceCue or structured vocal fields. Instruments, beats, pads, synths, foley, entries, drop-outs, swells, and fades belong only to arrangementAction/soundCue. A texture or rhythm adjective such as ambient or groove does not turn a phrase ending in delivery or phrasing into a sound cue. A concrete sound object performing an audible action remains production even when its name contains vocal, as in vocal pads swelling.
+- ENSEMBLE FORMATION CONTRACT: full-band, acoustic-band, indie-band, and orchestral ensemble selections describe the whole-song formation. Never use the standalone word band as a local sound object or as a connector between instruments. Local sound cues must name the actual audible instruments or texture event.
 - ARRANGEMENT FIDELITY CONTRACT: soundCue must preserve the complete audible event owned by this section from arrangementAction. Do not shorten away named remaining instruments, entries, drop-outs, or the event result merely to make a generic cue.
 - OUTPUT GRAMMAR CONTRACT: arrangementAction and soundCue must be complete, concise present-tense English cue clauses with correct subject-verb agreement and complete phrasal verbs. Preserve all event information, but do not emit fragments such as a plural sound object with a singular verb or an incomplete out/fade particle.
 - QUALITY CONTRACT: do not use a generic dynamic-only phrase when a more specific current-song delivery or phrasing cue is available. The free cue and structured fields must describe the same local vocal action, not compete with each other.
 - Build the plan as one coherent arc: opening state → development → rise → payoff → turn → final payoff → ending. CHANGE is primary, BALANCE prevents every section from becoming maximal, and UNITY keeps one singer identity and genre.
 - Do not design each section independently. Repeated sections preserve identity while changing local execution or payoff.
-- SINGLE-SOURCE CONTRACT: the Korean lyric card, the secondary-language lyric card, and the final [Arrangement] timeline MUST consume the same sectionPerformancePlan items. Do not invent or re-rank language-specific performance cues or production events.
+- SINGLE-SOURCE CONTRACT: the Korean lyric card, the secondary-language lyric card, and the final [Arrangement] producer map MUST consume the same canonical sectionPerformancePlan. Lyric cards render every owned local event; the visible [Arrangement] line summarizes only the key signature identity, decisive transition, and final-payoff events from that same plan. Do not invent or re-rank language-specific cues or production events.
 - The lyrics fields must keep the same exact section order and lyric ownership. Do not output the plan as lyric lines. The application binds the shared plan to both cards.`
     : '';
 
@@ -30175,6 +31148,10 @@ ${exactStructureText}
 You are a professional music composer and lyricist.
 
 ${sectionPerformancePlanOutputInstruction}
+
+${styleIntentSingleSourceInstruction}
+
+${hookBlueprintOutputInstruction}
 
 USER FREE-TEXT DIRECTOR NOTE (HIGH PRIORITY):
 ${detailLayer || "No extra user description."}
@@ -30310,6 +31287,12 @@ ${instrumentSoundPromptCores.length ? instrumentSoundPromptCores.map((s) => `- $
 USER-SELECTED SOUND ANCHORS (LOCKED IF PRESENT):
 ${selectedSoundAnchorCues.length ? selectedSoundAnchorCues.map((s) => `- ${s}`).join("\n") : "- No user-selected sound anchor."}
 
+ENSEMBLE FORMATION SIGNALS (WHOLE-SONG ROLE ONLY):
+${selectedEnsembleFormationCues.length ? selectedEnsembleFormationCues.map((s) => `- ${s}`).join("\n") : "- No extra ensemble formation selected."}
+- Ensemble formation signals such as full-band, acoustic-band, indie-band, or orchestral ensemble describe the whole-song formation and density arc.
+- Do not use the standalone word "band" as an instrument between two sound objects, and do not repeat the formation as a local section sound cue.
+- Express the selected formation once through the overall [Arrangement] behavior while [Instruments] lists the actual component instruments.
+
 STYLE GENRE-SOUND ACCENT LAYERS:
 ${styleSoundTextureCues.length ? styleSoundTextureCues.map((s) => `- ${s}`).join("\n") : "- No extra style genre-sound accent selected."}
 
@@ -30440,6 +31423,7 @@ ${isGenerationEngineV2(params) ? '' : '  "storyAtmosphere": "Concise natural-Eng
     params.isNoLyrics
       ? ""
       : `,
+  "hookBlueprint": { "pattern": "natural or selected pattern names", "koreanHookCore": "compact Korean hook core", "secondaryHookCore": "same hook meaning in the secondary language", "koreanResponse": "optional short Korean answer", "secondaryResponse": "optional short secondary-language answer", "placement": "first/end/preview/return placement", "repeatShape": "how repetition changes across returns", "rhythmicCell": "compact rhythm and breath shape", "performanceEvent": "hook performance or production event" },
   "lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }`
   }
 }
@@ -30800,10 +31784,11 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           ...v1StoryAtmosphereResponseSchema,
           title: { type: Type.STRING },
           productionPrompt: { type: Type.STRING },
+          ...hookBlueprintResponseSchema,
           ...sectionPerformancePlanResponseSchema,
           ...lyricsResponseSchema,
         },
-        required: ["storyContext", ...v1StoryAtmosphereRequired, "title", "productionPrompt", ...sectionPerformancePlanRequired, ...lyricsRequired],
+        required: ["storyContext", ...v1StoryAtmosphereRequired, "title", "productionPrompt", ...hookBlueprintRequired, ...sectionPerformancePlanRequired, ...lyricsRequired],
       },
     },
   };
@@ -31232,18 +32217,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       kor = stripSpatialAndEraKeywordsFromLyrics(kor, params);
       eng = stripSpatialAndEraKeywordsFromLyrics(eng, params);
 
-      // Apply Group B: Lyrics structure reflection
-      const selectedStyleIds = params.styles ?? [];
-      if (selectedStyleIds.includes('call-response-hook') || selectedStyleIds.includes('call-and-response')) {
-        kor = enforceCallAndResponseInHook(kor);
-        eng = enforceCallAndResponseInHook(eng);
-      }
-      if (selectedStyleIds.includes('repeated-slogan')) {
-        const korSlogan = result.koreanTitle || result.title || "";
-        const engSlogan = result.englishTitle || result.title || "";
-        kor = enforceRepeatedSloganInHook(kor, korSlogan);
-        eng = enforceRepeatedSloganInHook(eng, engSlogan);
-      }
+      // Hook-line structure is bound once at the true final lyric boundary from hookBlueprint.
+      // Do not mutate each language independently at this early cleanup stage.
 
       // In language-mix mode, foreign lyric cards are allowed to contain Korean mixed lines.
       // Do not strip Korean from lyrics.english here, or the English/foreign card loses its mix.
@@ -31311,6 +32286,12 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   // the visible prompt in Korean-only, dual-language, or mixed-language generation.
   const finalProducerMappedPrompt = enforceV1FinalProducerDirectionMapPrompt(cleanedPromptStr, params);
   const provisionalEnginePromptStr = renderProductionPromptForGenerationEngine(finalProducerMappedPrompt, params);
+  const resolvedV1HookBlueprint = resolveV1SharedHookBlueprint(
+    (result as any).hookBlueprint,
+    params,
+    String(result?.lyrics?.korean || ''),
+    String(result?.lyrics?.english || ''),
+  );
   const rawSectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
     ? (result as any).sectionPerformancePlan
     : [];
@@ -31321,8 +32302,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     ? provisionalEnginePromptStr
     : alignV1FinalArrangementWithSectionPlan(provisionalEnginePromptStr, resolvedSectionPerformancePlan, params);
   const finalGenreCompressedPrompt = enforceFinalGenreIdentityCompression(enginePromptStr, params);
-  result.prompt = finalGenreCompressedPrompt;
-  result.productionPrompt = finalGenreCompressedPrompt;
+  const sunoBudgetSafePrompt = enforceSunoProductionPromptCharacterBudget(finalGenreCompressedPrompt, params);
+  result.prompt = sunoBudgetSafePrompt;
+  result.productionPrompt = sunoBudgetSafePrompt;
   result.situationSummary = buildSituationSummary(params.situation);
   result.appliedKeywords = {
     ...buildAppliedKeywordPayload(params, resolvedStructure),
@@ -31375,8 +32357,14 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           finalizeGeneratedLyricsStructuralSafety(result.lyrics.korean, params),
           params,
         );
-        result.lyrics.korean = applyV1GeneratedSectionPerformancePlan(
+        const hookBoundKorean = applyV1SharedHookBlueprintGuard(
           structurallyFinalKorean,
+          resolvedV1HookBlueprint,
+          'korean',
+          params,
+        );
+        result.lyrics.korean = applyV1GeneratedSectionPerformancePlan(
+          hookBoundKorean,
           finalSectionPerformancePlan,
           params,
           result.productionPrompt,
@@ -31387,8 +32375,14 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           finalizeGeneratedLyricsStructuralSafety(result.lyrics.english, params),
           params,
         );
-        result.lyrics.english = applyV1GeneratedSectionPerformancePlan(
+        const hookBoundEnglish = applyV1SharedHookBlueprintGuard(
           structurallyFinalEnglish,
+          resolvedV1HookBlueprint,
+          'secondary',
+          params,
+        );
+        result.lyrics.english = applyV1GeneratedSectionPerformancePlan(
+          hookBoundEnglish,
           finalSectionPerformancePlan,
           params,
           result.productionPrompt,
@@ -31402,6 +32396,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   // the internal top-level field to visible song result consumers.
   delete (result as any).storyContext;
   delete (result as any).storyAtmosphere;
+  delete (result as any).hookBlueprint;
   delete (result as any).sectionPerformancePlan;
   delete (params as any).__v1StoryContext;
   delete (params as any).__v1StoryAtmosphere;
@@ -31684,8 +32679,11 @@ ${storedV1StoryContext}
     `${targetLanguageName} lyric card`,
     params.prompt || '',
   );
-  lyrics = applyV1SectionBlueprintGuard(
-    finalizeGeneratedLyricsStructuralSafety(lyrics, clicheGuardParams as unknown as GenerateSongParams),
+  lyrics = finalizeV1PublicLyricOutputIntegrity(
+    applyV1SectionBlueprintGuard(
+      finalizeGeneratedLyricsStructuralSafety(lyrics, clicheGuardParams as unknown as GenerateSongParams),
+      clicheGuardParams as unknown as GenerateSongParams,
+    ),
     clicheGuardParams as unknown as GenerateSongParams,
   );
 

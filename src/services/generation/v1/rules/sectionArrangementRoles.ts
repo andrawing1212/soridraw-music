@@ -14,6 +14,10 @@ export interface V1SectionRoleDefinition {
 export interface V1ProducerDirectionContext {
   tempo?: string;
   grooveHint?: string;
+  productionTextureHint?: string;
+  identityHint?: string;
+  transitionHint?: string;
+  payoffHint?: string;
   genre?: string;
   instruments?: string;
   vocals?: string;
@@ -303,7 +307,7 @@ export function buildV1ArrangementSectionPlanInstruction(
 - Protect explicit user production instructions. Named-section instructions, instrumental/vocal-only requests, silence, repetition, shortness, entry/exit timing, and ending behavior outrank automatic choices.
 - V1 STABILITY BOUNDARY: do not output score symbols, exact note chains, exact keys, octave targets, p/mf/f markings, crescendo, diminuendo, or other experimental notation. Those controls belong to v2. When such text appears in a broad user note, keep only its safe musical intent in ordinary relative language.
 - Keep all directions inside the same Story Context and emotional progression. [Arrangement] controls musical movement; it must not invent a second story.
-- Prefer 4 compact semicolon-separated clauses total after tempo. Do not force generic Verse/Pre-Chorus/Chorus descriptions merely to fill space.
+- For a solo, prefer 3 compact event clauses after tempo: signature identity, decisive transition, and final payoff. For a duet or group, allow up to 4 event clauses when a vocal handoff or shared payoff genuinely needs its own slot. Do not force generic Verse/Pre-Chorus/Chorus descriptions merely to fill space.
 - Avoid vague filler such as “raise tension,” “release the hook,” or “clear contrast” unless the clause also states the audible action that creates it.
 - Format: <tempo and groove>; <signature identity>; <decisive transition>; <final payoff>.
 - [Arrangement] sets the whole-song map. Lyric section tags execute only the local change for their own section, so do not duplicate the same full sentence in both places.
@@ -459,54 +463,65 @@ function formatProducerEntry(entry: ProducerCueEntry, budget = 16): string {
   return cue;
 }
 
-function compactV1ProducerDirectionMap(value: string): string {
+function compactV1ProducerDirectionMap(value: string, maxClauses = 4): string {
+  const clauseLimit = Math.max(2, Math.min(4, Math.floor(maxClauses || 4)));
   const { tempo, entries } = parseProducerCueEntries(value);
   const stableEntries = entries.filter((entry) => !isPrecisionProducerCue(entry.cue));
   if (!tempo && !stableEntries.length) return '';
   const used = new Set<number>();
-  const chosen: ProducerCueEntry[] = [];
-  const add = (entry?: ProducerCueEntry) => {
-    if (!entry) return;
-    const key = producerCueKey(entry.cue);
-    if (!key || chosen.some((item) => producerCueKey(item.cue) === key)) return;
-    used.add(entry.order);
-    chosen.push(entry);
-  };
 
-  add(chooseProducerEntry(stableEntries, used, (entry) => entry.family === 'rhythm'));
-  add(chooseProducerEntry(stableEntries, used, (entry) => {
+  const rhythm = chooseProducerEntry(stableEntries, used, (entry) => entry.family === 'rhythm');
+  const identity = chooseProducerEntry(stableEntries, used, (entry) => {
     const base = resolveBaseRoleDefinition(entry.label).label;
+    if (!entry.label || /\b(?:no\s+rap|rap\s+section|rap\s+delivery)\b/i.test(entry.cue)) return false;
     return !/^(?:Pre-Chorus|Bridge|Breakdown|Build-Up|Pre-Drop|Break|Stop|Final Chorus|Climax|Outro)$/i.test(base)
-      && ['identity', 'instrument', 'vocal', 'hook', 'drop', 'other'].includes(entry.family);
-  }));
-  add(chooseProducerEntry(stableEntries, used, (entry) => {
+      && ['identity', 'instrument', 'vocal', 'hook', 'drop', 'other', 'transition', 'space'].includes(entry.family);
+  });
+  const transition = chooseProducerEntry(stableEntries, used, (entry) => {
     const base = resolveBaseRoleDefinition(entry.label).label;
-    return /^(?:Pre-Chorus|Bridge|Breakdown|Build-Up|Pre-Drop|Break|Stop)$/i.test(base)
-      || ['build', 'break', 'transition', 'space'].includes(entry.family);
-  }));
-  add(chooseProducerEntry(stableEntries, used, (entry) => {
+    return /^(?:Pre-Chorus|Bridge|Breakdown|Build-Up|Pre-Drop|Break|Stop)$/i.test(base);
+  }) || chooseProducerEntry(stableEntries, used, (entry) => ['build', 'break', 'transition', 'space'].includes(entry.family));
+  const payoff = chooseProducerEntry(stableEntries, used, (entry) => {
     const base = resolveBaseRoleDefinition(entry.label).label;
     return entry.family === 'payoff' || /^(?:Final Chorus|Climax|Outro)$/i.test(base) || /\b(?:final|last)\s+(?:chorus|refrain)|\bclimax\b/i.test(entry.cue);
   }) || chooseProducerEntry(stableEntries, used, (entry) => {
     const base = resolveBaseRoleDefinition(entry.label).label;
     return /^(?:Chorus|Drop)$/i.test(base) || ['hook', 'build', 'drop', 'vocal'].includes(entry.family);
-  }));
+  });
+
+  // In the compact three-clause map, fold groove into the tempo clause so the three visible
+  // event slots remain identity -> decisive transition -> final payoff. This prevents the final
+  // payoff from being dropped merely because a separate groove clause consumed one slot.
+  const chosen: ProducerCueEntry[] = [];
+  const add = (entry?: ProducerCueEntry) => {
+    if (!entry) return;
+    const key = producerCueKey(entry.cue);
+    if (!key || chosen.some((item) => producerCueKey(item.cue) === key)) return;
+    chosen.push(entry);
+  };
+  if (clauseLimit >= 4) add(rhythm);
+  add(identity);
+  add(transition);
+  add(payoff);
 
   stableEntries.filter((entry) => isLockedProducerCue(entry.cue)).forEach((entry) => {
-    if (chosen.length < 4) add(entry);
+    if (chosen.length < clauseLimit) add(entry);
   });
   stableEntries.forEach((entry) => {
-    if (chosen.length >= 4 || used.has(entry.order)) return;
+    if (chosen.length >= clauseLimit || used.has(entry.order)) return;
     add(entry);
   });
 
-  const clauses = chosen.slice(0, 4)
-    .map((entry) => formatProducerEntry(entry, chosen.length >= 4 ? 14 : 16))
+  const clauses = chosen.slice(0, clauseLimit)
+    .map((entry) => formatProducerEntry(entry, clauseLimit >= 4 ? 14 : 13))
     .filter(Boolean);
-  return [tempo, ...clauses].filter(Boolean).join('; ');
+  const compactGroove = clauseLimit <= 3 && rhythm ? formatProducerEntry(rhythm, 10) : '';
+  const tempoAndGroove = [tempo, compactGroove].filter(Boolean).join(', ');
+  return [tempoAndGroove, ...clauses].filter(Boolean).join('; ');
 }
-export function compactV1SectionStructuredArrangement(value: string): string {
-  return compactV1ProducerDirectionMap(value);
+
+export function compactV1SectionStructuredArrangement(value: string, maxClauses = 4): string {
+  return compactV1ProducerDirectionMap(value, maxClauses);
 }
 
 export function ensureV1ArrangementSectionCoverage(value: string, _exactStructureText: string): string {
@@ -946,12 +961,20 @@ function buildProducerSlot(
   seed: string,
 ): string {
   const existing = existingCandidatesForSlot(raw, slot, resources);
+  const explicitHint = slot === 'identity'
+    ? context.identityHint
+    : slot === 'transition'
+      ? context.transitionHint
+      : context.payoffHint;
+  const hinted = explicitHint
+    ? createProducerCandidate(explicitHint, slot, 'existing', resources, true)
+    : undefined;
   const generated = slot === 'identity'
     ? buildIdentityCandidates(context, resources, usedResources, seed)
     : slot === 'transition'
       ? buildTransitionCandidates(context, resources, usedResources, seed)
       : buildPayoffCandidates(context, resources, usedResources, seed);
-  const selected = pickProducerCandidate([...existing, ...generated], resources, usedResources, usedActions, `${seed}:${slot}`);
+  const selected = pickProducerCandidate([...(hinted ? [hinted] : []), ...existing, ...generated], resources, usedResources, usedActions, `${seed}:${slot}`);
   return registerProducerCandidate(selected, usedResources, usedActions);
 }
 
@@ -989,8 +1012,9 @@ export function buildV1GuaranteedProducerDirectionMap(
   const parsedTempo = parseProducerCueEntries(raw).tempo;
   const tempo = clean(context.tempo || parsedTempo).replace(/[,;\s]+$/g, '') || '80–110 BPM';
   const groove = compactProducerClause(stripAbstractProducerTail(pickGrooveCue(raw, context)), 11) || 'genre-shaped rhythmic flow';
+  const productionTexture = compactProducerClause(stripAbstractProducerTail(context.productionTextureHint || ''), 8);
   const resources = extractProducerResources(context.instruments || '');
-  const seed = [context.genre, context.instruments, context.vocals, context.atmosphere, context.vocalMode, context.isInstrumental ? 'instrumental' : 'song']
+  const seed = [context.genre, context.instruments, context.vocals, context.atmosphere, context.productionTextureHint, context.identityHint, context.transitionHint, context.payoffHint, context.vocalMode, context.isInstrumental ? 'instrumental' : 'song']
     .filter(Boolean)
     .join('|');
   const usedResources = new Set<string>();
@@ -999,8 +1023,13 @@ export function buildV1GuaranteedProducerDirectionMap(
   const transition = buildProducerSlot('transition', raw, context, resources, usedResources, usedActions, seed);
   const payoff = buildProducerSlot('payoff', raw, context, resources, usedResources, usedActions, seed);
 
+  const tempoGrooveTexture = [tempo, groove, productionTexture]
+    .filter(Boolean)
+    .filter((part, index, all) => all.findIndex((other) => producerCueKey(other) === producerCueKey(part)) === index)
+    .join(', ');
+
   const core = [
-    `${tempo}, ${groove}`,
+    tempoGrooveTexture,
     compactProducerClause(stripAbstractProducerTail(identity), 20),
     compactProducerClause(stripAbstractProducerTail(transition), 20),
     compactProducerClause(stripAbstractProducerTail(payoff), 20),

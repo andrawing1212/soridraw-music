@@ -368,6 +368,56 @@ export interface AppliedKeywords {
   geminiFallbackFrom?: string | null;
   geminiFallbackReason?: string | null;
   geminiAttemptedModels?: string[];
+  languageMixAudit?: {
+    active?: boolean;
+    requestedRatio?: number;
+    targetLanguages?: string[];
+    status?: 'inactive' | 'passed' | 'needs-review' | 'preserved';
+    exactRepairAttempted?: boolean;
+    exactRepairUsed?: boolean;
+    exactRepairError?: string;
+    cards?: Partial<Record<'korean' | 'secondary', {
+      active?: boolean;
+      card?: 'korean' | 'secondary';
+      baseLanguage?: string;
+      targetLanguages?: string[];
+      requestedRatio?: number;
+      lowerBound?: number;
+      upperBound?: number;
+      actualMixRatio?: number;
+      actualBaseRatio?: number;
+      totalLexicalUnits?: number;
+      languageUnits?: Record<string, number>;
+      languageRatios?: Record<string, number>;
+      targetGoals?: Record<string, number>;
+      targetLowerBounds?: Record<string, number>;
+      targetUpperBounds?: Record<string, number>;
+      targetSectionFamilyCount?: number;
+      requiredSectionFamilyCount?: number;
+      uniqueTargetExpressionCount?: number;
+      requiredUniqueTargetExpressionCount?: number;
+      placementMode?: 'accent' | 'hook-led' | 'distributed-blocks' | 'balanced-blocks' | 'target-dominant' | 'near-total';
+      alternatingSequenceCount?: number;
+      maxAllowedAlternatingSequences?: number;
+      mirroredTranslationPairCount?: number;
+      maxAllowedMirroredPairs?: number;
+      isolatedTargetLineCount?: number;
+      targetBlockCount?: number;
+      averageTargetBlockLength?: number;
+      targetSectionCount?: number;
+      requiredTargetSectionCount?: number;
+      maxTargetSectionShare?: number;
+      maxAllowedTargetSectionShare?: number;
+      maxTargetSectionRatio?: number;
+      overloadedTargetSectionCount?: number;
+      duplicateTargetExpressionCount?: number;
+      placementPassed?: boolean;
+      repairApplied?: boolean;
+      replacedLineCount?: number;
+      status?: 'inactive' | 'passed' | 'needs-review' | 'preserved';
+      reasons?: string[];
+    }>>;
+  };
   hookBlueprint?: {
     selected?: Array<{
       id: string;

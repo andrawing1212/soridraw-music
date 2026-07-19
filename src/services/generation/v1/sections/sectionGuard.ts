@@ -368,6 +368,69 @@ function alignBlocksToBlueprint(blocks: V1LyricBlock[], blueprint: V1SectionBlue
   return aligned;
 }
 
+
+function repairStableMissingSections(
+  aligned: AlignedBlock[],
+  blueprint: V1SectionBlueprint,
+): void {
+  if (blueprint.mode !== 'stable') return;
+
+  const missingRequired = () => aligned
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.entry.requiresLyrics && !blockHasConcreteLyrics(item.block))
+    .map(({ index }) => index);
+
+  // Stable deliberately repeats Pre-Chorus and Chorus. Recover those repeated roles from the
+  // existing same-family occurrence first. This is musically safer than misclassifying an Outro
+  // paragraph as a Pre-Chorus merely because the model omitted an earlier header.
+  aligned.forEach((item, index) => {
+    if (!item.entry.requiresLyrics || blockHasConcreteLyrics(item.block)) return;
+    const base = baseV1SectionName(item.entry.name);
+    if (!/^(?:Pre-Chorus|Chorus)$/i.test(base)) return;
+    const donor = aligned
+      .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+      .filter(({ candidate }) => baseV1SectionName(candidate.entry.name).toLowerCase() === base.toLowerCase()
+        && blockHasConcreteLyrics(candidate.block))
+      .sort((a, b) => Math.abs(a.candidateIndex - index) - Math.abs(b.candidateIndex - index))[0]?.candidate;
+    if (!donor) return;
+    item.block = cloneBlock(donor.block);
+    item.block.originalSection = {
+      raw: `[${item.entry.name}]`,
+      name: item.entry.name,
+      cue: donor.block.originalSection?.cue || '',
+    };
+  });
+
+  // Recover any remaining promised section from extra paragraphs that Gemini placed inside a
+  // later oversized block (most often Outro). This moves existing lyric content only; it never
+  // invents new lines or changes the Stable order.
+  for (let donorIndex = 0; donorIndex < aligned.length; donorIndex += 1) {
+    const donor = aligned[donorIndex];
+    const missingBefore = missingRequired().filter((index) => index < donorIndex);
+    if (!missingBefore.length) continue;
+    const paragraphs = stableParagraphs(donor.block.bodyLines);
+    if (paragraphs.length <= 1) continue;
+    const take = Math.min(missingBefore.length, paragraphs.length - 1);
+    if (take <= 0) continue;
+
+    missingBefore.slice(0, take).forEach((targetIndex, paragraphIndex) => {
+      const target = aligned[targetIndex];
+      target.block = {
+        originalSection: {
+          raw: `[${target.entry.name}]`,
+          name: target.entry.name,
+          cue: '',
+        },
+        standaloneCues: [],
+        bodyLines: compactBodyLines(paragraphs[paragraphIndex]),
+      };
+    });
+    donor.block.bodyLines = compactBodyLines(
+      paragraphs.slice(take).flatMap((paragraph, index) => index ? ['', ...paragraph] : paragraph),
+    );
+  }
+}
+
 function moveLyricsOutOfNonVocalSections(aligned: AlignedBlock[]): void {
   aligned.forEach((item, index) => {
     if (item.entry.allowsLyrics || !blockHasConcreteLyrics(item.block)) return;
@@ -659,6 +722,34 @@ export function inspectV1LyricsForRoleIssues(lyrics: string, params: V1SectionEn
   return issues.filter((issue, index, all) => all.findIndex((other) => other.code === issue.code && other.message === issue.message) === index);
 }
 
+
+function sealStableRenderedSectionNames(
+  lyrics: string,
+  blueprint: V1SectionBlueprint,
+): string {
+  if (blueprint.mode !== 'stable') return String(lyrics || '').trim();
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const structuralIndexes: number[] = [];
+  lines.forEach((line, index) => {
+    const match = String(line || '').trim().match(/^\[\s*([^:\]\n]{1,80})(?:\s*:\s*[^\]]*)?\s*\]$/);
+    if (!match) return;
+    const normalized = normalizeV1SectionName(match[1] || '');
+    if (/^(?:Intro|Verse|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Rap Section|Hook|Final Hook)$/i.test(normalized)) {
+      structuralIndexes.push(index);
+    }
+  });
+  if (structuralIndexes.length !== blueprint.entries.length) return String(lyrics || '').trim();
+
+  structuralIndexes.forEach((lineIndex, order) => {
+    const expected = blueprint.entries[order]?.name;
+    if (!expected) return;
+    const match = String(lines[lineIndex] || '').trim().match(/^\[\s*[^:\]\n]{1,80}(?:\s*:\s*([^\]]+))?\s*\]$/);
+    const cue = String(match?.[1] || '').replace(/\s+/g, ' ').trim();
+    lines[lineIndex] = `[${expected}${cue ? `: ${cue}` : ''}]`;
+  });
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 export function applyV1SectionBlueprintGuard(lyrics: string, params: V1SectionEngineParams): string {
   const source = String(lyrics || '').replace(/\r\n?/g, '\n').trim();
   if (!source || params.isNoLyrics || params.includeLyrics === false || params.instrumentalBgmMode) return source;
@@ -670,7 +761,9 @@ export function applyV1SectionBlueprintGuard(lyrics: string, params: V1SectionEn
 
   const aligned = alignBlocksToBlueprint(blocks, blueprint);
   moveLyricsOutOfNonVocalSections(aligned);
+  repairStableMissingSections(aligned, blueprint);
   const issues = inspectV1SectionBlueprintFit(aligned);
   if (issues.length && typeof console !== 'undefined') console.warn('[SORIDRAW V1 Section Engine]', issues.map((issue) => issue.message));
-  return renderV1SectionBlocks(aligned, blueprint);
+  const rendered = renderV1SectionBlocks(aligned, blueprint);
+  return sealStableRenderedSectionNames(rendered, blueprint);
 }

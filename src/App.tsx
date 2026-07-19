@@ -14368,6 +14368,147 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </div>
 
                   {(() => {
+                    const mixAudit = (result.appliedKeywords as any)?.languageMixAudit;
+                    if (!mixAudit?.active) return null;
+                    const languageLabels: Record<string, string> = {
+                      ko: '한국어', en: '영어', ja: '일본어', zh: '중국어', es: '스페인어', fr: '프랑스어', de: '독일어', ru: '러시아어', th: '태국어',
+                    };
+                    const placementLabels: Record<string, string> = {
+                      accent: '짧은 포인트',
+                      'hook-led': '훅 중심 포인트',
+                      'distributed-blocks': '구간별 언어 블록',
+                      'balanced-blocks': '균형형 섹션·블록',
+                      'target-dominant': '혼합 언어 중심',
+                      'near-total': '혼합 언어 거의 전체',
+                    };
+                    const cards = Object.entries(mixAudit.cards || {}).filter(([, card]) => card && (card as any).active) as Array<[string, any]>;
+                    const statusLabel = mixAudit.status === 'passed'
+                      ? '언어 비율·배치 확인'
+                      : mixAudit.status === 'preserved'
+                        ? '원문 보호'
+                        : '언어 비율·배치 확인 필요';
+                    const statusClass = mixAudit.status === 'passed'
+                      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                      : mixAudit.status === 'preserved'
+                        ? 'border-sky-400/20 bg-sky-400/10 text-sky-200'
+                        : 'border-red-400/20 bg-red-400/10 text-red-300';
+                    return (
+                      <div className="mt-4 border-t border-[#cd8c31]/10 pt-4 space-y-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <h4 className="text-xs font-black text-[var(--text-primary)]">언어 혼합 검사</h4>
+                            <p className="mt-1 text-[10px] text-[var(--text-secondary)]">섹션 태그·사운드 큐·허밍을 제외하고 실제 가창 언어 분량과 섹션·블록 배치를 함께 검사합니다.</p>
+                            {mixAudit.exactRepairAttempted && (
+                              <p className={cn('mt-1 text-[9px] font-semibold', mixAudit.exactRepairUsed ? 'text-emerald-300' : 'text-amber-300')}>
+                                {mixAudit.exactRepairUsed ? '최종 가사 기준 정밀 보정을 적용했습니다.' : '정밀 보정을 시도했지만 사용할 수 있는 교체 후보가 부족했습니다.'}
+                              </p>
+                            )}
+                          </div>
+                          <span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-black', statusClass)}>{statusLabel}</span>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          {cards.map(([key, card]) => {
+                            const passed = card.status === 'passed';
+                            const preserved = card.status === 'preserved';
+                            const cardStatusClass = passed
+                              ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                              : preserved
+                                ? 'border-sky-400/20 bg-sky-400/10 text-sky-200'
+                                : 'border-red-400/20 bg-red-400/10 text-red-300';
+                            const targetLanguages = Array.isArray(card.targetLanguages) ? card.targetLanguages : [];
+                            const ratioEntries = [card.baseLanguage, ...targetLanguages].filter(Boolean).map((language: string) => ({
+                              language,
+                              actual: Number(card.languageRatios?.[language] || 0),
+                              goal: language === card.baseLanguage ? 100 - Number(card.requestedRatio || 0) : Number(card.targetGoals?.[language] || 0),
+                            }));
+                            return (
+                              <div key={key} className="rounded-2xl border border-[#cd8c31]/15 bg-black/10 p-4 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-[11px] font-black text-[#cd8c31]">{key === 'korean' ? '한글 가사 카드' : '보조 언어 가사 카드'}</p>
+                                  <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black', cardStatusClass)}>
+                                    {passed ? <Check className="h-3 w-3" /> : preserved ? <Shield className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                    {passed ? '통과' : preserved ? '원문 보호' : '확인 필요'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">선택 혼합 비율</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.requestedRatio || 0)}%</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">실제 혼합 분량</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.actualMixRatio || 0)}%</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">허용 범위</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.lowerBound || 0)}–{Number(card.upperBound || 0)}%</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">자동 보완</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.replacedLineCount || 0)}줄</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                  {ratioEntries.map(({ language, actual, goal }) => (
+                                    <div key={language} className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                      <p className="text-[9px] font-bold text-[var(--text-secondary)]">{languageLabels[language] || language}</p>
+                                      <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">실제 {actual}% · 목표 약 {goal}%</p>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">언어 배치 방식</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{placementLabels[String(card.placementMode || '')] || '구간별 배치'}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">혼합 언어 블록</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.targetBlockCount || 0)}개 · 평균 {Number(card.averageTargetBlockLength || 0)}줄</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">실제 적용 섹션</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.targetSectionCount || 0) < Number(card.requiredTargetSectionCount || 0) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.targetSectionCount || 0)}개 · 최소 {Number(card.requiredTargetSectionCount || 0)}개</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">한 섹션 집중도</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.maxTargetSectionShare || 0) > Number(card.maxAllowedTargetSectionShare || 100) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.maxTargetSectionShare || 0)}% · 최대 {Number(card.maxAllowedTargetSectionShare || 100)}%</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">한 줄 교대 패턴</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.alternatingSequenceCount || 0) > Number(card.maxAllowedAlternatingSequences || 0) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.alternatingSequenceCount || 0)}회</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">인접 번역 중복</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.mirroredTranslationPairCount || 0) > Number(card.maxAllowedMirroredPairs || 0) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.mirroredTranslationPairCount || 0)}쌍</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">과집중 섹션</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.overloadedTargetSectionCount || 0) > 0 ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.overloadedTargetSectionCount || 0)}개</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">반복 복사 문장</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.duplicateTargetExpressionCount || 0) > 0 ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.duplicateTargetExpressionCount || 0)}회</p>
+                                  </div>
+                                </div>
+                                {Array.isArray(card.reasons) && card.reasons.length > 0 && (
+                                  <div className="space-y-1">
+                                    {card.reasons.map((reason: string, index: number) => (
+                                      <p key={index} className="flex items-start gap-1.5 text-[10px] leading-relaxed text-red-200/80">
+                                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                                        {reason}
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {(() => {
                     const hookPlan = (result.appliedKeywords as any)?.hookBlueprint;
                     if (!hookPlan || !Array.isArray(hookPlan.selected) || hookPlan.selected.length === 0) return null;
                     const dimensionLabels: Record<string, string> = {

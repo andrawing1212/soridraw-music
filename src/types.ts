@@ -368,6 +368,62 @@ export interface AppliedKeywords {
   geminiFallbackFrom?: string | null;
   geminiFallbackReason?: string | null;
   geminiAttemptedModels?: string[];
+  hookBlueprint?: {
+    selected?: Array<{
+      id: string;
+      label: string;
+      pattern?: string;
+      dimension?: 'form' | 'placement' | 'repetition' | 'performance' | 'structure' | 'none';
+    }>;
+    dimensions?: Record<string, Array<{ id: string; label: string }>>;
+    patterns?: string[];
+    structureMode?: 'recommended' | 'stable' | 'experimental' | 'custom';
+    structureProfile?: string;
+    targetSections?: string[];
+    targetSectionsText?: string;
+    structureCondition?: string;
+    dropCondition?: string;
+    circularCondition?: string;
+    vocalCondition?: string;
+    placement?: string;
+    repeatShape?: string;
+    chorusMode?: 'fixed' | 'evolving';
+    rhythmicCell?: string;
+    performanceEvent?: string;
+    warnings?: string[];
+    korean?: {
+      primaryHookLine?: string;
+      microHook?: string;
+      previewFragment?: string;
+      variationHook?: string;
+      callLine?: string;
+      responseLine?: string;
+      echoResponseLine?: string;
+      postChorusTag?: string;
+      chorusBLine?: string;
+      chorus2ShiftLine?: string;
+      finalShiftLine?: string;
+      checks?: Record<string, boolean>;
+      statuses?: Record<string, 'passed' | 'failed' | 'audio' | 'not-applicable' | 'incompatible' | 'target-missing'>;
+      passed?: boolean;
+    };
+    secondary?: {
+      primaryHookLine?: string;
+      microHook?: string;
+      previewFragment?: string;
+      variationHook?: string;
+      callLine?: string;
+      responseLine?: string;
+      echoResponseLine?: string;
+      postChorusTag?: string;
+      chorusBLine?: string;
+      chorus2ShiftLine?: string;
+      finalShiftLine?: string;
+      checks?: Record<string, boolean>;
+      statuses?: Record<string, 'passed' | 'failed' | 'audio' | 'not-applicable' | 'incompatible' | 'target-missing'>;
+      passed?: boolean;
+    };
+  };
 }
 
 

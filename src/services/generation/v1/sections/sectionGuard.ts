@@ -193,6 +193,137 @@ function entryMatchScore(entry: V1SectionBlueprintEntry, block: V1LyricBlock): n
   return -1;
 }
 
+function stableExpectedIndexForBlock(
+  block: V1LyricBlock,
+  blueprint: V1SectionBlueprint,
+  startIndex: number,
+): number {
+  if (!block.originalSection) return -1;
+  const candidates = blueprint.entries
+    .map((entry, index) => ({ index, score: index < startIndex ? -1 : entryMatchScore(entry, block) }))
+    .filter((candidate) => candidate.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  return candidates[0]?.index ?? -1;
+}
+
+function stableParagraphs(lines: string[]): string[][] {
+  const paragraphs: string[][] = [];
+  let current: string[] = [];
+  const flush = () => {
+    const clean = compactBodyLines(current);
+    if (clean.some((line) => line.trim())) paragraphs.push(clean);
+    current = [];
+  };
+  compactBodyLines(lines).forEach((line) => {
+    if (!String(line || '').trim()) flush();
+    else current.push(line);
+  });
+  flush();
+  return paragraphs;
+}
+
+/**
+ * Stable is an exact public contract. Gemini occasionally emits the right ten lyric
+ * paragraphs but forgets several structural headers. Recover those omitted headers
+ * from paragraph boundaries before alignment. This changes structure only; it never
+ * invents lyric content. A selected Rap block is mapped to the next promised Stable
+ * slot (normally Verse 2), preserving its singer/performance cue while keeping the
+ * visible section label stable.
+ */
+function recoverStableParagraphSections(
+  blocks: V1LyricBlock[],
+  blueprint: V1SectionBlueprint,
+): V1LyricBlock[] {
+  if (blueprint.mode !== 'stable' || !blocks.length) return blocks;
+
+  const explicitNames = blocks
+    .filter((block) => Boolean(block.originalSection))
+    .map((block) => normalizeV1SectionName(block.originalSection?.name || '').toLowerCase());
+  const expectedNames = blueprint.entries.map((entry) => entry.name.toLowerCase());
+  const alreadyExact = explicitNames.length === expectedNames.length
+    && explicitNames.every((name, index) => name === expectedNames[index]);
+  if (alreadyExact) return blocks;
+
+  const recovered: V1LyricBlock[] = [];
+  let cursor = 0;
+
+  blocks.forEach((rawBlock, blockIndex) => {
+    const block = cloneBlock(rawBlock);
+    let assignedIndex = stableExpectedIndexForBlock(block, blueprint, cursor);
+
+    // Unknown structural names (most commonly an auto-created Rap Section) must not
+    // collapse backward into the previous section. They occupy the next promised
+    // lyric-capable Stable slot instead.
+    if (assignedIndex < 0 && block.originalSection) {
+      assignedIndex = blueprint.entries.findIndex((entry, index) => index >= cursor && entry.allowsLyrics);
+    }
+    if (assignedIndex < 0) {
+      recovered.push(block);
+      return;
+    }
+
+    let nextKnownIndex = blueprint.entries.length;
+    let nextKnownBlock: V1LyricBlock | null = null;
+    for (let lookahead = blockIndex + 1; lookahead < blocks.length; lookahead += 1) {
+      const candidate = stableExpectedIndexForBlock(blocks[lookahead], blueprint, assignedIndex + 1);
+      if (candidate >= 0) {
+        nextKnownIndex = candidate;
+        nextKnownBlock = blocks[lookahead];
+        break;
+      }
+    }
+
+    const includeEmptyNextKnown = nextKnownIndex < blueprint.entries.length
+      && Boolean(nextKnownBlock)
+      && !blockHasConcreteLyrics(nextKnownBlock!)
+      && blueprint.entries[nextKnownIndex].allowsLyrics;
+    const availableEndExclusive = Math.min(
+      blueprint.entries.length,
+      nextKnownIndex + (includeEmptyNextKnown ? 1 : 0),
+    );
+    const availableIndexes = blueprint.entries
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry, index }) => index >= assignedIndex && index < availableEndExclusive && entry.allowsLyrics)
+      .map(({ index }) => index);
+    const paragraphs = stableParagraphs(block.bodyLines);
+    const canRecoverMissingHeaders = paragraphs.length > 1 && availableIndexes.length > 1;
+
+    if (!canRecoverMissingHeaders) {
+      const entry = blueprint.entries[assignedIndex];
+      block.originalSection = {
+        raw: block.originalSection?.raw || `[${entry.name}]`,
+        name: entry.name,
+        cue: block.originalSection?.cue || '',
+      };
+      recovered.push(block);
+      cursor = assignedIndex + 1;
+      return;
+    }
+
+    const assignCount = Math.min(paragraphs.length, availableIndexes.length);
+    for (let paragraphIndex = 0; paragraphIndex < assignCount; paragraphIndex += 1) {
+      const entryIndex = availableIndexes[paragraphIndex];
+      const entry = blueprint.entries[entryIndex];
+      const isFirst = paragraphIndex === 0;
+      const payload = paragraphIndex === assignCount - 1 && paragraphs.length > assignCount
+        ? paragraphs.slice(paragraphIndex).flatMap((paragraph, index) => index ? ['', ...paragraph] : paragraph)
+        : paragraphs[paragraphIndex];
+      recovered.push({
+        originalSection: {
+          raw: isFirst ? (block.originalSection?.raw || `[${entry.name}]`) : `[${entry.name}]`,
+          name: entry.name,
+          cue: isFirst ? (block.originalSection?.cue || '') : '',
+        },
+        standaloneCues: isFirst ? [...block.standaloneCues] : [],
+        bodyLines: compactBodyLines(payload),
+      });
+    }
+    cursor = availableIndexes[Math.max(0, assignCount - 1)] + 1;
+  });
+
+  return recovered;
+}
+
 function alignBlocksToBlueprint(blocks: V1LyricBlock[], blueprint: V1SectionBlueprint): AlignedBlock[] {
   if (!blueprint.entries.length) return [];
   const aligned = blueprint.entries.map((entry) => ({ entry, block: emptyBlock() }));
@@ -533,8 +664,9 @@ export function applyV1SectionBlueprintGuard(lyrics: string, params: V1SectionEn
   if (!source || params.isNoLyrics || params.includeLyrics === false || params.instrumentalBgmMode) return source;
 
   const blueprint = getV1SectionBlueprint(params);
-  const blocks = parseV1LyricBlocks(source, blueprint);
-  if (!blocks.length) return source;
+  const parsedBlocks = parseV1LyricBlocks(source, blueprint);
+  if (!parsedBlocks.length) return source;
+  const blocks = recoverStableParagraphSections(parsedBlocks, blueprint);
 
   const aligned = alignBlocksToBlueprint(blocks, blueprint);
   moveLyricsOutOfNonVocalSections(aligned);

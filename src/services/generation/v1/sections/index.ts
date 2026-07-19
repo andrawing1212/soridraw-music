@@ -71,3 +71,16 @@ export type {
   V1SectionRoleFamily,
   V1SectionRolePolicy,
 } from './sectionRoleEngine';
+
+
+export {
+  isV1CircularRoleSectionName,
+  isV1EmbeddedDropRoleSectionName,
+  isV1HookRoleSectionName,
+  resolveV1HookRolePlan,
+} from './hookRoleEngine';
+export type {
+  V1DropHookPlacementMode,
+  V1HookRoleFamily,
+  V1HookRolePlan,
+} from './hookRoleEngine';

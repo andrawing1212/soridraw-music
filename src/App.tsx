@@ -263,6 +263,8 @@ import {
   SOUND_TEXTURE_CYCLES,
   STYLE_VARIANT_LOOKUP,
   STYLE_LABEL_TO_ID,
+  STYLE_VARIANT_ALIAS_TO_ID,
+  LEGACY_STYLE_TO_SOUND_ALIAS,
   SOUND_VARIANT_LOOKUP,
   SOUND_LABEL_TO_ID,
   ALLOWED_TAGS_BY_SECTION,
@@ -2488,8 +2490,9 @@ function buildCycleLookup<T extends { variants: readonly { id: string }[] }>(cyc
 const SOUND_TEXTURE_CYCLE_LOOKUP = buildCycleLookup(SOUND_TEXTURE_CYCLES);
 
 function getCycleVariantLabel(cycles: readonly { id: string; title: string; variants: readonly { id: string; label: string }[] }[], selectedIds: string[]) {
+  const canonicalSelectedIds = selectedIds.map((id) => STYLE_VARIANT_ALIAS_TO_ID[id] || STYLE_VARIANT_ALIAS_TO_ID[String(id).toLowerCase()] || id);
   const labels = cycles
-    .map((cycle) => cycle.variants.find((variant) => selectedIds.includes(variant.id)))
+    .map((cycle) => cycle.variants.find((variant) => canonicalSelectedIds.includes(variant.id)))
     .filter(Boolean)
     .map((variant) => variant!.label);
 
@@ -2572,14 +2575,16 @@ const HYBRID_STYLE_ID_SET = new Set(
     .filter(isSelectableKeywordItem)
     .map((item: any) => String(item.id))
 );
-const MOVED_STYLE_TO_SOUND_ID_SET = new Set([
-  'fusion-acoustic-piano',
-  'retro-synth',
-  'acoustic-band',
-  'indie-band',
-  'band',
-  'fusion-orchestral',
-]);
+const MOVED_STYLE_TO_SOUND_ALIAS: Record<string, string> = {
+  'fusion-acoustic-piano': 'fusion-acoustic-piano',
+  'retro-synth': 'retro-synth',
+  'acoustic-band': 'acoustic-band',
+  'indie-band': 'indie-band',
+  band: 'band',
+  'fusion-orchestral': 'fusion-orchestral',
+  ...LEGACY_STYLE_TO_SOUND_ALIAS,
+};
+const MOVED_STYLE_TO_SOUND_ID_SET = new Set(Object.keys(MOVED_STYLE_TO_SOUND_ALIAS));
 
 function isHybridStyleId(id: string): boolean {
   return HYBRID_STYLE_ID_SET.has(String(id));
@@ -2604,7 +2609,11 @@ function filterSelectableIds(values: string[] = []) {
 }
 
 function resolveStyleIds(labelsOrIds: string[] = []) {
-  return Array.from(new Set(labelsOrIds.map((value) => STYLE_LABEL_TO_ID[value] ?? (STYLE_VARIANT_LOOKUP[value] && !isSeparatorKeywordId(value) ? value : null)).filter(Boolean) as string[]));
+  return Array.from(new Set(labelsOrIds.map((value) => {
+    const raw = String(value || '').trim();
+    const aliased = STYLE_VARIANT_ALIAS_TO_ID[raw] || STYLE_VARIANT_ALIAS_TO_ID[raw.toLowerCase()] || raw;
+    return STYLE_LABEL_TO_ID[aliased] ?? (STYLE_VARIANT_LOOKUP[aliased] && !isSeparatorKeywordId(aliased) ? aliased : null);
+  }).filter(Boolean) as string[]));
 }
 
 function resolveSoundTextureIds(labelsOrIds: string[] = []) {
@@ -2614,8 +2623,10 @@ function resolveSoundTextureIds(labelsOrIds: string[] = []) {
 function resolveMovedStyleSoundIds(labelsOrIds: string[] = []) {
   return Array.from(new Set(labelsOrIds.map((value) => {
     const raw = String(value || '').trim();
+    const movedAlias = MOVED_STYLE_TO_SOUND_ALIAS[raw] || MOVED_STYLE_TO_SOUND_ALIAS[raw.toLowerCase()];
+    if (movedAlias && SOUND_VARIANT_LOOKUP[movedAlias]) return movedAlias;
     const resolved = SOUND_LABEL_TO_ID[raw] ?? (SOUND_VARIANT_LOOKUP[raw] && !isSeparatorKeywordId(raw) ? raw : null);
-    return resolved && MOVED_STYLE_TO_SOUND_ID_SET.has(resolved) ? resolved : null;
+    return resolved && MOVED_STYLE_TO_SOUND_ID_SET.has(resolved) ? (MOVED_STYLE_TO_SOUND_ALIAS[resolved] || resolved) : null;
   }).filter(Boolean) as string[]));
 }
 
@@ -2623,7 +2634,8 @@ function getStyleVariantLabelById(id: string) {
   if (isSeparatorKeywordId(id)) return '';
   const customLabel = getCustomKeywordText(id, CUSTOM_STYLE_PREFIX);
   if (customLabel) return customLabel;
-  const variant = STYLE_VARIANT_LOOKUP[id];
+  const canonicalId = STYLE_VARIANT_ALIAS_TO_ID[id] || STYLE_VARIANT_ALIAS_TO_ID[String(id).toLowerCase()] || id;
+  const variant = STYLE_VARIANT_LOOKUP[canonicalId];
   if ((variant as any)?.kind === 'separator') return '';
   return variant?.labelKo || variant?.label || id;
 }
@@ -7050,11 +7062,13 @@ const toggleCycleVariantSelection = (
   }, []);
 
   useEffect(() => {
-    const movedSoundIds = selectedStyles.filter((id) => MOVED_STYLE_TO_SOUND_ID_SET.has(id));
-    if (movedSoundIds.length === 0) return;
+    const movedStyleIds = selectedStyles.filter((id) => MOVED_STYLE_TO_SOUND_ID_SET.has(id));
+    if (movedStyleIds.length === 0) return;
+    const movedSoundIds = movedStyleIds
+      .map((id) => MOVED_STYLE_TO_SOUND_ALIAS[id] || id)
+      .filter((id) => Boolean(SOUND_VARIANT_LOOKUP[id]));
 
-    // Backward compatibility for saved sessions created before Hybrid was role-cleaned.
-    // Preserve the audible choice by moving the same stable IDs into Sound/Ensemble.
+    // Backward compatibility for saved sessions created before Style/Sound roles were cleaned.
     setSelectedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
     setPinnedStyles((prev) => prev.filter((id) => !MOVED_STYLE_TO_SOUND_ID_SET.has(id)));
     setSelectedInstrumentSounds((prev) => Array.from(new Set([...prev, ...movedSoundIds])));
@@ -12795,6 +12809,27 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             onCycleToggle={(cycleId, variantId) => {
               const baseStyles = selectedStyles.filter((id) => !isCustomStyleKeyword(id));
               if (variantId) {
+                const isAddingCallResponse = cycleId === 'hook-addiction'
+                  && variantId === 'call-response-hook'
+                  && !baseStyles.includes(variantId);
+                if (isAddingCallResponse) {
+                  const declaredVocalCount = (maleCount + femaleCount) > 0
+                    ? (maleCount + femaleCount)
+                    : vocalMode === 'duo'
+                      ? 2
+                      : vocalMode === 'group'
+                        ? 3
+                        : 1;
+                  const responsiveVocalLayerIds = new Set([
+                    'la-la-chorus', 'crowd-chant', 'group-chant', 'vocal-shouts',
+                    'gospel-choir', 'kids-choir', 'children-choir', 'youth-choir', 'whisper-choir', 'humming-choir',
+                  ]);
+                  const hasResponsiveVocalLayer = selectedInstrumentSounds.some((id) => responsiveVocalLayerIds.has(id));
+                  if (declaredVocalCount < 2 && !hasResponsiveVocalLayer) {
+                    showToast('콜앤리스폰스는 2인 이상 보컬 또는 사운드의 응답형 보컬 레이어가 필요합니다.');
+                    return;
+                  }
+                }
                 const isAddingHybrid = cycleId === 'hybrid' && !baseStyles.includes(variantId);
                 const selectedHybridCount = baseStyles.filter(isHybridStyleId).length;
                 if (isAddingHybrid && selectedHybridCount >= maxHybridStyleSelections) {
@@ -14240,7 +14275,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   transition={{ duration: 0.25, ease: "easeOut" }}
                   className="overflow-hidden"
                 >
-                  <div ref={appliedKeywordsRef} className="grid grid-cols-1 md:grid-cols-4 gap-2 pt-2">
+                  <div ref={appliedKeywordsRef} className="pt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                     {resolveKeywordsForDisplay(result).map((section) => (
                       <div key={section.key} className="space-y-0.5 group/cat">
                         <div className="flex items-center justify-between">
@@ -14329,6 +14365,225 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </div>
                       </div>
                     ) : null}
+                    </div>
+
+                  {(() => {
+                    const hookPlan = (result.appliedKeywords as any)?.hookBlueprint;
+                    if (!hookPlan || !Array.isArray(hookPlan.selected) || hookPlan.selected.length === 0) return null;
+                    const dimensionLabels: Record<string, string> = {
+                      form: '훅 형태',
+                      placement: '훅 배치',
+                      repetition: '반복 방식',
+                      performance: '가창 구조',
+                      structure: '핵심 구간 구조',
+                    };
+                    const checkLabels: Record<string, string> = {
+                      shortRepeat: '짧은 훅 반복',
+                      slogan: '반복되는 구호',
+                      oneLine: '한 줄 훅',
+                      oneWord: '한 단어 훅',
+                      melodicText: '멜로디 훅 가사',
+                      melodicAudio: '멜로디 훅 음원',
+                      firstLineAnchor: '후렴 첫줄 앵커',
+                      endLineAnchor: '후렴 끝줄 앵커',
+                      preview: '훅 선공개',
+                      postChorusTag: '포스트코러스 태그',
+                      circularRefrain: '순환 리프레인',
+                      fixedChorus: '고정 후렴',
+                      chorusEvolution: '핵심 구간 가사 발전',
+                      progressiveRepeat: '점층 반복',
+                      variationRepeat: '변형 반복',
+                      chantText: '챈트 가사 구조',
+                      chantAudio: '챈트 퍼포먼스',
+                      callResponse: '콜앤리스폰스',
+                      echoResponse: '메아리 응답',
+                      easySing: '따라 부르는 후렴',
+                      splitAB: 'A/B 분할 후렴',
+                      dropHook: '드롭 훅',
+                      antiChorusText: '안티코러스 가사·큐',
+                      antiChorusAudio: '안티코러스 다이내믹',
+                      negativeSpaceText: '여백 훅 가사·큐',
+                      negativeSpaceAudio: '여백 훅 공간감',
+                    };
+                    const fieldDefinitions = [
+                      ['primaryHookLine', '핵심 훅'],
+                      ['microHook', '한 단어 훅'],
+                      ['previewFragment', '선공개 조각'],
+                      ['variationHook', '변형 훅'],
+                      ['callLine', '리드 호출'],
+                      ['responseLine', '응답 훅'],
+                      ['echoResponseLine', '메아리 응답'],
+                      ['postChorusTag', '포스트코러스 태그'],
+                      ['chorusBLine', 'Chorus B'],
+                      ['chorus2ShiftLine', '중간 핵심 구간 변화'],
+                      ['finalShiftLine', '최종 핵심 구간 변화'],
+                    ] as const;
+                    const statusClass = (status: string) => status === 'passed'
+                      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                      : status === 'failed'
+                        ? 'border-red-400/20 bg-red-400/10 text-red-300'
+                        : status === 'audio'
+                          ? 'border-amber-400/20 bg-amber-400/10 text-amber-200'
+                          : status === 'incompatible'
+                            ? 'border-orange-400/20 bg-orange-400/10 text-orange-200'
+                            : status === 'target-missing'
+                              ? 'border-violet-400/20 bg-violet-400/10 text-violet-200'
+                              : 'border-white/10 bg-white/[0.04] text-[var(--text-secondary)]';
+                    const statusIcon = (status: string) => status === 'passed'
+                      ? <Check className="h-3 w-3" />
+                      : status === 'failed'
+                        ? <X className="h-3 w-3" />
+                        : status === 'audio'
+                          ? <Music className="h-3 w-3" />
+                          : status === 'incompatible' || status === 'target-missing'
+                            ? <AlertTriangle className="h-3 w-3" />
+                            : <Minus className="h-3 w-3" />;
+                    const renderHookCard = (label: string, card: any) => {
+                      if (!card) return null;
+                      const fields = fieldDefinitions
+                        .map(([key, title]) => ({ key, title, value: String(card[key] || '').trim() }))
+                        .filter((field) => field.value);
+                      const statuses = Object.entries(card.statuses || {}) as Array<[string, string]>;
+                      if (!fields.length && !statuses.length) return null;
+                      const statusValues = statuses.map(([, status]) => status);
+                      const hasIncompatible = statusValues.includes('incompatible');
+                      const hasTargetMissing = statusValues.includes('target-missing');
+                      const hasFailed = statusValues.includes('failed');
+                      const onlyUnavailable = statusValues.length > 0 && statusValues.every((status) => status === 'not-applicable');
+                      const summaryLabel = hasIncompatible
+                        ? '보컬 조건 미충족'
+                        : hasTargetMissing
+                          ? '적용 대상 부족'
+                        : hasFailed
+                          ? '가사 확인 필요'
+                          : onlyUnavailable
+                            ? '비교 대상 없음'
+                            : '가사 적용 확인';
+                      const summaryClass = hasIncompatible
+                        ? 'border-orange-400/20 bg-orange-400/10 text-orange-200'
+                        : hasTargetMissing
+                          ? 'border-violet-400/20 bg-violet-400/10 text-violet-200'
+                        : hasFailed
+                          ? 'border-red-400/20 bg-red-400/10 text-red-300'
+                          : onlyUnavailable
+                            ? 'border-white/10 bg-white/[0.04] text-[var(--text-secondary)]'
+                            : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
+                      return (
+                        <div className="rounded-2xl border border-[#cd8c31]/15 bg-black/10 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-black text-[#cd8c31]">{label}</p>
+                            <span className={cn('rounded-full border px-2 py-0.5 text-[9px] font-black', summaryClass)}>
+                              {summaryLabel}
+                            </span>
+                          </div>
+                          {fields.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 text-xs">
+                              {fields.map((field) => (
+                                <div key={field.key} className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                  <p className="text-[9px] font-bold tracking-wide text-[var(--text-secondary)]">{field.title}</p>
+                                  <p className="mt-1 font-semibold text-[var(--text-primary)] break-words">{field.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {statuses.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                              {statuses.map(([key, status]) => (
+                                <span key={key} className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold', statusClass(status))}>
+                                  {statusIcon(status)}
+                                  {checkLabels[key] || key}
+                                  {status === 'audio' ? ' · 음원 확인' : status === 'not-applicable' ? ' · 비교 대상 없음' : status === 'incompatible' ? ' · 보컬 조건 미충족' : status === 'target-missing' ? ' · 적용 대상 부족' : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    };
+                    return (
+                      <div className="mt-4 border-t border-[#cd8c31]/10 pt-4 space-y-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <h4 className="text-xs font-black text-[var(--text-primary)]">후렴 설계</h4>
+                            <p className="mt-1 text-[10px] text-[var(--text-secondary)]">선택 기능을 훅 형태·배치·반복·가창 구조·핵심 구간 구조로 나눠 실제 적용 결과를 보여줍니다.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {hookPlan.selected.map((item: any) => (
+                              <span key={item.id} className="rounded-full border border-[#cd8c31]/20 bg-[#cd8c31]/10 px-2.5 py-1 text-[10px] font-bold text-[#e2ad60]">
+                                {item.label || item.id}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+                          {Object.entries(dimensionLabels).map(([key, title]) => {
+                            const items = Array.isArray(hookPlan.dimensions?.[key]) ? hookPlan.dimensions[key] : [];
+                            if (!items.length) return null;
+                            return (
+                              <div key={key} className="rounded-xl border border-white/8 bg-white/[0.02] p-3">
+                                <p className="text-[9px] font-black text-[var(--text-secondary)]">{title}</p>
+                                <div className="mt-1.5 flex flex-wrap gap-1">
+                                  {items.map((item: any) => (
+                                    <span key={item.id} className="text-[10px] font-semibold text-[var(--text-primary)]">{item.label}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {(hookPlan.structureMode || hookPlan.targetSectionsText || hookPlan.structureCondition || hookPlan.vocalCondition) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                            {[
+                              ['구조 모드', hookPlan.structureMode === 'stable' ? '안정형' : hookPlan.structureMode === 'recommended' ? '추천' : hookPlan.structureMode === 'experimental' ? '실험형' : hookPlan.structureMode === 'custom' ? '커스텀' : hookPlan.structureMode],
+                              ['핵심 적용 구간', hookPlan.targetSectionsText],
+                              ['구조 조건', hookPlan.structureCondition],
+                              ['보컬 조건', hookPlan.vocalCondition],
+                            ].filter(([, value]) => String(value || '').trim()).map(([title, value]) => (
+                              <div key={String(title)} className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                                <p className="text-[9px] font-black text-[var(--text-secondary)]">{title}</p>
+                                <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{String(value)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {(hookPlan.chorusMode || hookPlan.placement || hookPlan.repeatShape || hookPlan.rhythmicCell || hookPlan.performanceEvent) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                            {[
+                              ['핵심 구간 방식', hookPlan.chorusMode === 'fixed' ? '고정 후렴' : '핵심 훅 유지 + 주변 가사 발전'],
+                              ['적용 위치', hookPlan.placement],
+                              ['가사 반복', hookPlan.repeatShape],
+                              ['훅 호흡', hookPlan.rhythmicCell],
+                              ['가창 구조', hookPlan.performanceEvent],
+                            ].filter(([, value]) => String(value || '').trim()).map(([title, value]) => (
+                              <div key={String(title)} className="rounded-xl border border-white/8 bg-white/[0.02] px-3 py-2.5">
+                                <p className="text-[9px] font-black text-[var(--text-secondary)]">{title}</p>
+                                <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{String(value)}</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {Array.isArray(hookPlan.warnings) && hookPlan.warnings.length > 0 && (
+                          <div className="space-y-1">
+                            {hookPlan.warnings.map((warning: string, index: number) => (
+                              <p key={index} className="flex items-start gap-1.5 text-[10px] leading-relaxed text-amber-200/80">
+                                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                                {warning}
+                              </p>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          {renderHookCard('한글 핵심 훅', hookPlan.korean)}
+                          {renderHookCard('보조 언어 핵심 훅', hookPlan.secondary)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   </div>
                 </motion.div>
 
@@ -14386,7 +14641,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   )}
                 </div>
               </div>
-
 
 
               <div className="flex flex-col gap-3">
@@ -20997,7 +21251,8 @@ function VocalControlComponent({
     const newMember: VocalMember = {
       id: `member_${Date.now()}`,
       gender,
-      roles: ['sub'],
+      // 첫 번째 그룹 멤버만 메인으로 시작하고, 이후 멤버는 사용자가 직접 역할을 선택한다.
+      roles: vocalMembers.length === 0 ? ['main'] : [],
     };
     
     const newMembers = [...vocalMembers, newMember];

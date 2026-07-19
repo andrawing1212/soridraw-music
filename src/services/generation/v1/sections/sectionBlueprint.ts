@@ -202,7 +202,6 @@ function isInstrumentalRoute(params: V1SectionEngineParams): boolean {
 }
 
 const STABLE_VOCAL = ['Intro', 'Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Pre-Chorus', 'Chorus', 'Bridge', 'Final Chorus', 'Outro'];
-const STABLE_VOCAL_WITH_RAP = ['Intro', 'Verse 1', 'Pre-Chorus', 'Chorus', 'Rap Section', 'Pre-Chorus', 'Chorus', 'Bridge', 'Final Chorus', 'Outro'];
 const STABLE_RAP = ['Intro', 'Rap Section', 'Hook', 'Rap Section', 'Hook', 'Bridge', 'Final Hook', 'Outro'];
 const STABLE_INSTRUMENTAL = ['Intro', 'Instrumental', 'Interlude', 'Instrumental', 'Outro'];
 
@@ -357,10 +356,11 @@ function resolveSequence(params: V1SectionEngineParams): { profile: V1SectionPro
 
   const profile = resolveProfile(params);
   if (params.songStructure === '2') {
-    // Stable is a visible user promise. Never swap it for the hidden rap-only blueprint.
-    // Rap OFF keeps the exact stable vocal structure; AUTO/ON replace only Verse 2 with one Rap Section.
-    const sections = shouldUseRapSection(params) ? STABLE_VOCAL_WITH_RAP : STABLE_VOCAL;
-    return { profile, mode: 'stable', rawEntries: sections.map((name) => ({ name, customTags: [] })) };
+    // Stable is a visible user promise. Its exact ten-section order never changes.
+    // A selected Rap role may own Verse 2 with rhythmic/rap delivery, but the structural
+    // label remains Verse 2. Users who want a real Rap Section choose Recommended,
+    // Experimental, or Custom instead of silently mutating Stable.
+    return { profile, mode: 'stable', rawEntries: STABLE_VOCAL.map((name) => ({ name, customTags: [] })) };
   }
   if (params.songStructure === '3') {
     const entropy = `${signalText(params)}|${params.generationIndex ?? 0}`;

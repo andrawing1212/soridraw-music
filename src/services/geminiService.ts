@@ -8,6 +8,7 @@ import {
   INSTRUMENT_SOUNDS,
   SOUND_STYLES,
   STYLE_CYCLES,
+  STYLE_VARIANT_ALIAS_TO_ID,
   MID_GENRE_PROMPTS,
   SUB_GENRE_PROMPTS,
   MOODS,
@@ -61,7 +62,12 @@ import {
   collapseV1WrappedBracketTags,
   filterV1SectionRoleIssuesForUserIntent,
   inspectV1LyricsForRoleIssues,
+  isV1CircularRoleSectionName,
+  isV1HookRoleSectionName,
+  normalizeV1SectionName,
+  resolveV1HookRolePlan,
   resolveV1VocalAnchorDescriptors,
+  type V1HookRolePlan,
 } from "./generation/v1/sections";
 
 let aiInstance: GoogleGenAI | null = null;
@@ -655,7 +661,10 @@ function matchesCatalogValue(item: any, value: string): boolean {
 
 function resolveStyleItem(value: string) {
   if (isSeparatorLikeId(value)) return undefined;
-  const found = SOUND_STYLES.find((item) => matchesCatalogValue(item, value));
+  const decoded = decodeSoridrawCustomKeyword(value);
+  const rawValue = String(decoded || '').trim();
+  const canonicalValue = STYLE_VARIANT_ALIAS_TO_ID[rawValue] || STYLE_VARIANT_ALIAS_TO_ID[rawValue.toLowerCase()] || value;
+  const found = SOUND_STYLES.find((item) => matchesCatalogValue(item, canonicalValue));
   return isSeparatorLikeItem(found) ? undefined : found;
 }
 
@@ -1461,25 +1470,26 @@ type V1StyleLyricRole =
 
 type V1HookPattern =
   | 'natural'
+  | 'fixed-chorus'
   | 'short-repeat'
   | 'slogan'
-  | 'chant'
-  | 'call-response'
-  | 'easy-sing'
   | 'one-line'
+  | 'one-word'
   | 'melodic'
   | 'first-line-anchor'
   | 'end-line-anchor'
   | 'preview'
   | 'post-chorus-tag'
-  | 'one-word'
+  | 'circular-refrain'
   | 'progressive-repeat'
   | 'variation-repeat'
+  | 'chant'
+  | 'call-response'
   | 'echo-response'
+  | 'easy-sing'
   | 'split-ab'
   | 'drop-hook'
   | 'anti-chorus'
-  | 'circular-refrain'
   | 'negative-space';
 
 interface V1StyleIntentDefinition {
@@ -1513,33 +1523,26 @@ const V1_STYLE_INTENT_BY_STYLE_ID: Record<string, V1StyleIntentDefinition> = {
 };
 
 const V1_HOOK_PATTERN_BY_STYLE_ID: Record<string, V1HookPattern> = {
+  'fixed-chorus': 'fixed-chorus',
   'short-hook-repeat': 'short-repeat',
   'repeated-slogan': 'slogan',
-  'addictive-repeat': 'progressive-repeat',
-  'chant-hook': 'chant',
-  'call-response-hook': 'call-response',
-  'easy-sing-chorus': 'easy-sing',
-  'singalong-point': 'easy-sing',
   'one-line-hook': 'one-line',
+  'one-word-hook': 'one-word',
   'melody-hook': 'melodic',
-  'catchy-hook': 'natural',
-  'earworm-chorus': 'variation-repeat',
-  'chorus-focus': 'natural',
-  'chorus-shift': 'variation-repeat',
-  'chorus-explosion': 'progressive-repeat',
-  'hook-led-flow': 'preview',
   'chorus-first-line-anchor': 'first-line-anchor',
   'chorus-end-line-anchor': 'end-line-anchor',
   'hook-preview': 'preview',
   'post-chorus-tag': 'post-chorus-tag',
-  'one-word-hook': 'one-word',
+  'circular-refrain': 'circular-refrain',
   'progressive-hook-repeat': 'progressive-repeat',
   'variation-hook-repeat': 'variation-repeat',
+  'chant-hook': 'chant',
+  'call-response-hook': 'call-response',
   'echo-response-hook': 'echo-response',
+  'easy-sing-chorus': 'easy-sing',
   'split-chorus-ab': 'split-ab',
   'drop-hook': 'drop-hook',
   'anti-chorus': 'anti-chorus',
-  'circular-refrain': 'circular-refrain',
   'negative-space-hook': 'negative-space',
 };
 
@@ -1571,7 +1574,7 @@ function getSelectedV1HookPatterns(params: GenerateSongParams): V1HookPattern[] 
     seen.add(pattern);
     patterns.push(pattern);
   });
-  return patterns.slice(0, 3);
+  return patterns;
 }
 
 function getV1RhythmicProsodyRule(item: ResolvedStyleItem): string {
@@ -1593,27 +1596,28 @@ function getV1RhythmicProsodyRule(item: ResolvedStyleItem): string {
 
 function hookPatternInstruction(pattern: V1HookPattern): string {
   switch (pattern) {
-    case 'short-repeat': return 'keep one compact hook phrase recognizable in every Chorus/Hook return';
-    case 'slogan': return 'create a chantable Story-Context-derived slogan and introduce it from the first eligible Chorus, not only the Final Chorus';
-    case 'chant': return 'use a rhythmically simple chant that can be performed by one lead or a group without flattening the story';
-    case 'call-response': return 'build a true lead-and-answer hook across every returning Chorus family section';
-    case 'easy-sing': return 'use open vowels, simple syntax, and a stable rhythmic contour that listeners can join quickly';
-    case 'one-line': return 'make one complete lyric line the central emotional and structural anchor';
-    case 'melodic': return 'keep the lyric compact enough for one clear melodic contour and a repeatable performance gesture';
-    case 'first-line-anchor': return 'open every Chorus/Hook return with the same compact anchor line';
-    case 'end-line-anchor': return 'close every Chorus/Hook return with the same compact anchor line';
-    case 'preview': return 'preview a short piece of the hook before the first full Chorus, then complete it in the Chorus';
-    case 'post-chorus-tag': return 'leave one short secondary tag after each Chorus; use a Post-Chorus section only when it already exists in the structure';
-    case 'one-word': return 'choose one word or extremely short phrase whose rhythm and performance carry the hook';
-    case 'progressive-repeat': return 'introduce the core once in Chorus 1, preserve recognition in Chorus 2, then reach at least two recognizable core occurrences or an equivalent response/harmony lift in Final Chorus without adding redundant duplicates';
-    case 'variation-repeat': return 'preserve the hook core while changing one word, response, or surrounding line on each return';
-    case 'echo-response': return 'answer the lead hook with a short vocal/lyric echo; do not confuse this with spatial reverb';
-    case 'split-ab': return 'write two contrasting Chorus halves that complete one hook idea instead of two unrelated choruses';
-    case 'drop-hook': return 'lock a compact lyric fragment to the Drop/beat impact and avoid a long prose chorus';
-    case 'anti-chorus': return 'make the Chorus deliberately smaller or barer than the build while keeping one unmistakable anchor';
-    case 'circular-refrain': return 'frame the Chorus beginning and ending with the same short line or cycle it through returning sections';
-    case 'negative-space': return 'strengthen a short hook with a deliberate breath, pause, or instrumental gap around it';
-    default: return 'build one memorable hook family with clear placement, repetition, and controlled variation';
+    case 'fixed-chorus': return 'repeat the complete sung lyric body of the first role-linked core target unchanged in every later role-linked target; section performance tags, vocal layers, harmony, ad-libs, and production energy may still grow';
+    case 'short-repeat': return 'write one complete compact hook line twice in a row at the opening of every role-linked core return';
+    case 'slogan': return 'create one Story-Context-derived slogan that stays recognizable in every role-linked core return and gains stronger group or energy emphasis in the final payoff';
+    case 'one-line': return 'make one complete lyric line the central emotional and structural anchor, with surrounding lines supporting that claim';
+    case 'one-word': return 'choose one separate visible micro-hook token with no spaces and repeat it rhythmically 3-4 times inside every role-linked core target without replacing the complete hook line';
+    case 'melodic': return 'keep the primary hook compact, open-voweled, and shaped for one clear repeatable melodic contour; actual melodic memorability remains an audio check';
+    case 'first-line-anchor': return 'open every role-linked core return with the same compact anchor line';
+    case 'end-line-anchor': return 'close every role-linked core return with the same compact anchor line';
+    case 'preview': return 'preview only a shorter incomplete fragment at the end of the resolved preparation section, then reveal the complete hook in the first role-linked core target';
+    case 'post-chorus-tag': return 'place one separate short secondary tag at the end of each role-linked core target; do not invent a Post-Chorus structural section when the blueprint lacks one';
+    case 'circular-refrain': return 'return the same short refrain through structurally separated existing sections; prefer real Refrain returns when present, otherwise use existing Intro, primary hook returns, and Outro without inventing a Refrain section';
+    case 'progressive-repeat': return 'introduce the core in the first role-linked target, preserve recognition in middle returns, and increase repetition, response, harmony, or energy in the final role-linked payoff';
+    case 'variation-repeat': return 'preserve the hook identity while using one controlled alternate line or changed word on later returns';
+    case 'chant': return 'shape the hook for clipped, rhythmically simple chant delivery; lyric placement is checked and the actual chant impact is verified in audio';
+    case 'call-response': return 'create a distinct lead call and a different short answer line, then repeat that lead-and-answer relationship in every role-linked core return';
+    case 'echo-response': return 'follow the lead hook with a shorter echo fragment of the same phrase; do not confuse this with spatial reverb';
+    case 'easy-sing': return 'use short syntax, familiar words, open vowels, and stable breath groups so listeners can quickly follow the lead line';
+    case 'split-ab': return 'split each role-linked core target into an A idea that presents the hook and a contrasting B idea that completes its answer or emotional payoff';
+    case 'drop-hook': return 'apply a compact hook to an existing Drop; when no Drop exists but a primary hook section exists, embed the drop release at the end of that section without inventing a new structural tag';
+    case 'anti-chorus': return 'make the role-linked core payoff deliberately smaller, quieter, or barer than its preceding lift while keeping one unmistakable compact anchor; actual dynamic contrast is an audio check';
+    case 'negative-space': return 'frame the short hook with a deliberate pause, breath, or instrumental gap; verify the cue in text and the actual space in audio';
+    default: return 'build one memorable hook family with clear form, placement, repetition, performance, and structure';
   }
 }
 
@@ -1634,7 +1638,7 @@ function buildV1StyleIntentSingleSourceInstruction(params: GenerateSongParams, e
   const narrative = labelsFor('cinematic-scene', 2);
   const vocalLines = labelsFor('vocal-expression', 3);
   const voiceFx = labelsFor('special-effects', 2);
-  const hooks = labelsFor('hook-addiction', 4);
+  const hooks = labelsFor('hook-addiction', 20);
   const rhythms = selected.filter((item) => STYLE_CYCLE_ID_BY_VARIANT_ID[item.id] === 'groove-flow').slice(0, 3);
   const hookPatterns = getSelectedV1HookPatterns(params);
   const hookRules = (hookPatterns.length ? hookPatterns : hooks.length ? ['natural' as V1HookPattern] : [])
@@ -1659,7 +1663,7 @@ function buildV1StyleIntentSingleSourceInstruction(params: GenerateSongParams, e
     hookRules,
     rhythms.length ? `- GROOVE/RHYTHM (${rhythms.map((item) => item.label).join(', ')}): shape lyric breath, syllabic density, stress, and repetition without literally naming the rhythm in lyrics.` : '',
     rhythmRules,
-    exactStructureText ? `- Apply the plan only inside this locked structure: ${exactStructureText}. Do not invent a Post-Chorus, Drop, Refrain, or extra Chorus unless it already exists in the blueprint.` : '',
+    exactStructureText ? `- Apply the plan only inside this locked structure: ${exactStructureText}. Do not invent a Post-Chorus, Drop, Refrain, or extra Chorus structural tag unless it already exists in the blueprint. An embedded Drop Hook or Circular Refrain must stay inside the existing sections chosen by the common role plan.` : '',
     '- STYLE COVERAGE CHECK: before returning JSON, verify that each selected style appears at its correct destination. Missing intent must be restored at its destination; unrelated lines must not be padded with style words.',
     '- HARD-CODING GUARD: fixed rules may define role, placement, repetition shape, breath, and validation only. The actual hook words, story details, images, and dialogue must be newly derived from the current Story Context.',
   ].filter(Boolean);
@@ -1676,22 +1680,42 @@ function buildV1HookBlueprintOutputInstruction(params: GenerateSongParams, exact
   const rhythmText = rhythmItems.length
     ? rhythmItems.map((item) => `${item.label}: ${getV1RhythmicProsodyRule(item)}`).join(' / ')
     : 'follow the song groove with singable breath groups';
-  const hookLabels = selectedHookItems.map((item) => item.label).slice(0, 4).join(', ') || 'Natural hook family';
-  return `V1 HOOK BLUEPRINT OUTPUT (MANDATORY, JSON FIELD hookBlueprint):
-- Resolve ONE shared Hook Blueprint before writing either lyric card. Selected Hook Line: ${hookLabels}. Resolved patterns: ${patternText}.
-- The hook must combine three coordinated layers: memorable lyric core, repeatable rhythmic/melodic cell, and a clear performance or production event. Do not rely on title repetition alone.
-- koreanHookCore and secondaryHookCore must express the same Story-Context-derived central desire or emotional claim naturally in each card language. Prefer 1–7 words or one compact breath-group. Do not copy a technical style label.
-- Introduce the hook family from the first eligible Chorus/Hook/Refrain return. Never postpone a selected slogan, repeated phrase, or anchor until Final Chorus only.
-- Chorus 2 must preserve recognition while allowing controlled surrounding-line or response variation. Final Chorus may increase repeat density, range, harmony, response, or production weight without changing the core meaning.
-- Concrete progressive example: for slogan + progressive-repeat, Chorus 1 introduces the Story-Context-derived core once; Chorus 2 keeps the same recognizable core with at most a small surrounding variation; Final Chorus reaches at least two recognizable core occurrences or an equivalent lead/response payoff. If those occurrences already exist, do not insert extra duplicates.
-- Use simplicity strategically: one clear primary hook may coexist with a secondary melodic, rhythmic, instrumental, or post-chorus hook, but keep a visible hierarchy so the song does not become a pile of unrelated hooks.
-- A preview may tease only a fragment before the first Chorus. A Post-Chorus tag may use a separate existing Post-Chorus section only when that section already exists. Never invent a new section outside this locked structure: ${exactStructureText}.
-- A/B split, anti-chorus, drop hook, negative-space hook, and circular refrain are valid when selected. Their contrast must still preserve one recognizable hook family and the current Story Context.
-- K-pop/performance-ready designs may use chant, response, formation-friendly rhythm, or gesture-ready spacing; US/European pop craft may use direct placement, melodic economy, preview, post-chorus, or multiple coordinated hook layers. Use these as broad craft options, never as culture stereotypes or artist imitation.
-- RHYTHMIC PROSODY: ${rhythmText}. The rhythm choice controls line length, stress, breath, internal repetition, and pause placement, not lyric subject matter.
-- Return every hookBlueprint string field. Use pattern='none' and empty core fields only when the locked structure has no possible sung Hook/Chorus/Refrain/Drop payoff.
-- Both lyric cards must realize the same blueprint meaning and placement while remaining natural in their own language.`;
+  const hookLabels = selectedHookItems.map((item) => item.label).join(', ') || 'Natural hook family';
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const hookRolePlan = resolveV1HookRolePlan(params);
+  const callResponseCompatibilityRule = patterns.includes('call-response')
+    ? (vocalCompatibility.callResponseAvailable
+      ? `- CALL-RESPONSE VOCAL CONDITION: available through ${vocalCompatibility.vocalCount >= 2 ? `${vocalCompatibility.vocalCount} declared vocalists` : `responsive Vocal Layer (${vocalCompatibility.responsiveLayerIds.join(', ')})`}. Use only the declared singers/layer; do not invent another main singer.`
+      : `- CALL-RESPONSE VOCAL CONDITION: UNAVAILABLE. This is a solo setup with no responsive Vocal Layer. Do not create a second singer, group answer, or fake parenthetical response. Leave call/response fields empty and keep the ordinary chorus intact.`)
+    : '';
+  return `V1 HOOK DESIGN ENGINE (MANDATORY, JSON FIELD hookBlueprint):
+- Resolve ONE shared Hook Design before writing either lyric card. Selected Hook Line items: ${hookLabels}. Resolved patterns: ${patternText}.
+- APPLY EVERY SELECTED PATTERN. Never silently discard the fourth or later selection. If several patterns are selected, keep one clear primary hook and layer the other functions around it instead of creating unrelated hooks.
+- Organize the design internally by five dimensions: HOOK FORM, PLACEMENT, REPETITION CURVE, VOCAL STRUCTURE, and CORE-SECTION STRUCTURE.
+- COMMON CORE-SECTION ROLE PLAN: mode=${hookRolePlan.mode}, profile=${hookRolePlan.profile}, family=${hookRolePlan.family}, primary targets=${hookRolePlan.targetSectionsText}. Apply hook functions to these role targets rather than assuming every structure uses Chorus labels. Structure condition: ${hookRolePlan.structureCondition}.
+- DEFAULT CORE-RETURN EVOLUTION CONTRACT: unless Fixed Chorus is selected, never copy the complete first primary-target lyric body line-for-line into later role-linked targets. Preserve only the primary hook and any explicitly selected first-line/end-line anchor. A middle return must add or replace at least one surrounding line with a concrete consequence of the preceding development. The final role-linked payoff (${hookRolePlan.finalHookSectionName || 'last primary target'}) must add or replace at least one surrounding line with the emotional turn or payoff created before it.
+- FIXED CHORUS CONTRACT: when Fixed Chorus is selected and two or more role-linked primary targets exist, every later target must repeat the complete sung lyric body of the first target exactly. Only section tags, standalone production cues, vocal layers, harmony, ad-libs, and performance energy may change. If only one target exists, do not invent another section; the verifier must report insufficient repeat targets. Fixed Chorus overrides lyric-text variation from Progressive Repeat or Variation Repeat; those selections may strengthen only performance/production.
+- One-line Hook fixes one complete central line only; it never means copying the full target body. First-line Anchor fixes only the first line of every role-linked target. End-line Anchor fixes only the last line. Every unanchored surrounding line remains available for narrative development unless Fixed Chorus is selected.
+- Return koreanChorus2Shift/secondaryChorus2Shift as complete new surrounding lines for the first middle role-linked return, and koreanFinalShift/secondaryFinalShift as complete new surrounding lines for the final role-linked payoff. They must not duplicate the primary hook, each other, or a menu label. Leave them empty only for Fixed Chorus.
+- koreanHookCore and secondaryHookCore are the same Story-Context-derived COMPLETE primary hook meaning in natural language for each card. Prefer one compact breath-group, usually 2–7 words. Do not copy a menu label or technical instruction.
+- One-word Hook: return koreanMicroHook and secondaryMicroHook as a separate visible token with no spaces. It must be a second hook layer repeated 3–4 times, not a shortened replacement for the complete hook.
+- Hook Preview: return a shorter incomplete preview fragment. The first full primary line must wait for the first role-linked core target.
+- Variation Repeat: return koreanVariantHook and secondaryVariantHook as controlled alternate lines that keep the same hook identity while changing one word or one surrounding idea.
+- Call-and-response: return a distinct lead call in koreanCallLine/secondaryCallLine and a different concise answer in koreanResponse/secondaryResponse. Echo-response uses separate koreanEchoResponse/secondaryEchoResponse fields as a shorter fragment of the primary hook.
+- Post-Chorus Tag: return a separate short koreanPostChorusTag/secondaryPostChorusTag. Do not reuse it as the primary hook unless the Story Context truly requires it.
+- A/B Split Chorus: return koreanChorusB/secondaryChorusB as the contrasting B-half payoff that completes the primary A-half hook idea.
+- Short Hook Repeat means the COMPLETE primary hook line opens every role-linked core target twice. When combined with One-word Hook, every target visibly contains two separate layers: full line twice, then the micro hook repeated 3–4 times.
+- Progressive Repeat means the first role-linked target introduces the core, the middle return preserves recognition, and the final role-linked payoff increases repeat count, response, harmony, or energy while surrounding lyrics still evolve. Variation Repeat must not erase the core identity. When Fixed Chorus is also selected, keep the lyric body fixed and realize progression/variation only through performance or production.
+- Chant, Melody Hook, Anti-Chorus, and Negative-space Hook require both deterministic text/cue placement and later audio confirmation. Do not invent extra JSON planning fields; realize them through the selected-function contract and the actual lyric/production cues.
+- Circular Refrain follows this existing-section route: ${hookRolePlan.circularCondition}. Prefer real Refrain sections when present; otherwise return through existing Intro, role-linked hook targets, and Outro. Never invent a Refrain section.
+- Drop Hook follows this structure rule: ${hookRolePlan.dropCondition}. A real Drop owns the hook when present. Otherwise embed one compact drop release inside the end of an existing role-linked hook section; never invent a new [Drop] tag.
+- Post-Chorus Tag may use an existing Post-Chorus section, but when none exists it must remain a short tag at the end of the existing Chorus. Never invent a new section outside this locked structure: ${exactStructureText}.
+- Call-response and Echo-response are different: call-response uses a meaningfully different answer; echo-response repeats a shorter fragment of the same phrase. Easy-sing simplifies the lead line; group or crowd layers belong to the separate Vocal Layer sound category.
+${callResponseCompatibilityRule}
+- RHYTHMIC PROSODY: ${rhythmText}. Rhythm controls line length, stress, breath, internal repetition, and pause placement, never the lyric subject.
+- Return every hookBlueprint field. Use empty strings only when the corresponding selected function does not need that field. Both lyric cards must realize the same design meaning, placement, and repetition curve while sounding natural in their own language.`;
 }
+
 
 function getStyleItemsByPromptRole(styleValues: string[] = [], role: StylePromptRole) {
   return filterPromptSelectionIds(styleValues)
@@ -1778,6 +1802,50 @@ function buildVocalEffectArrangementPhrase(values: string[] = []): string {
   return cleanupPromptTail(`auxiliary vocal layer with ${joinPromptPhrase(dedupePromptParts(prompts, 4), 'and')} supporting hooks and transitions`);
 }
 
+const V1_RESPONSIVE_VOCAL_LAYER_IDS = new Set([
+  'la-la-chorus',
+  'crowd-chant',
+  'group-chant',
+  'vocal-shouts',
+  'gospel-choir',
+  'kids-choir',
+  'children-choir',
+  'youth-choir',
+  'whisper-choir',
+  'humming-choir',
+]);
+
+function getV1DeclaredVocalCount(params: GenerateSongParams): number {
+  const vocal = params.vocal || ({} as VocalConfig);
+  const explicit = Math.max(0, Number(vocal.male || 0)) + Math.max(0, Number(vocal.female || 0));
+  if (explicit > 0) return explicit;
+  if (vocal.mode === 'duo') return 2;
+  if (vocal.mode === 'group') return 3;
+  return 1;
+}
+
+function getV1ResponsiveVocalLayerIds(params: GenerateSongParams): string[] {
+  return (params.instrumentSounds || [])
+    .map((value) => resolveInstrumentSoundItem(value) as any)
+    .filter((item) => item && !isSeparatorLikeItem(item) && String(item.categoryId || '') === 'vocal-effects')
+    .map((item) => String(item.id || ''))
+    .filter((id) => V1_RESPONSIVE_VOCAL_LAYER_IDS.has(id));
+}
+
+function getV1HookVocalCompatibility(params: GenerateSongParams) {
+  const vocalCount = getV1DeclaredVocalCount(params);
+  const responsiveLayerIds = getV1ResponsiveVocalLayerIds(params);
+  const callResponseAvailable = vocalCount >= 2 || responsiveLayerIds.length > 0;
+  return {
+    vocalCount,
+    responsiveLayerIds,
+    callResponseAvailable,
+    callResponseReason: callResponseAvailable
+      ? ''
+      : '콜앤리스폰스는 2인 이상 보컬 또는 그룹 챈트·관객 챈트·합창 같은 응답형 보컬 레이어가 필요합니다.',
+  };
+}
+
 function compactSoundPromptsByCategory(values: string[] = []): string[] {
   const items = getInstrumentSoundPromptItems(values)
     .filter((item) => !isV1EnsembleFormationPromptItem(item));
@@ -1836,6 +1904,7 @@ function compactSoundPromptsByCategory(values: string[] = []): string[] {
         compacted.push(`percussion accents with ${prompts}`);
         break;
       case 'vocal-effects':
+      case '보컬 레이어':
       case '보컬 효과':
       case '보컬 연출':
       case '보컬효과':
@@ -22880,7 +22949,9 @@ function removeGenericSoloVocalLabelsFromLyricTags(lyrics: string, params: Gener
 
 
 function repairMultilineBracketCueLines(text: string): string {
-  const source = String(text || '').replace(/\r\n?/g, '\n');
+  // Collapse structural/performance tags wrapped across lines before generic bracket repair.
+  // Example: a wrapped [Verse 1 : conversational rhythmic] must remain one structural tag.
+  const source = collapseV1WrappedBracketTags(String(text || '').replace(/\r\n?/g, '\n'));
   const lines = source.split('\n');
   const out: string[] = [];
   let buffer = '';
@@ -22934,6 +23005,12 @@ function isRepairableKoreanLyricBodyLine(line: string): boolean {
   return /[가-힣]/.test(trimmed);
 }
 
+function joinPathologicalKoreanFragments(run: string[]): string {
+  // Preserve every generated character and word boundary. The formatter may repair hard line
+  // wrapping, but it must never guess whether two Korean fragments were originally one word.
+  return run.map((line) => String(line || '').trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+}
+
 function repairPathologicallyFragmentedKoreanLyricBodies(text: string): string {
   const source = repairMultilineBracketCueLines(text);
   const lines = source.split('\n');
@@ -22942,13 +23019,14 @@ function repairPathologicallyFragmentedKoreanLyricBodies(text: string): string {
   const flushRun = (run: string[]) => {
     if (!run.length) return;
     const compactLengths = run.map((line) => line.replace(/[^가-힣A-Za-z0-9]/g, '').length);
-    const shortRatio = compactLengths.filter((length) => length <= 8).length / Math.max(1, compactLengths.length);
+    const shortRatio = compactLengths.filter((length) => length <= 10).length / Math.max(1, compactLengths.length);
     const averageLength = compactLengths.reduce((sum, length) => sum + length, 0) / Math.max(1, compactLengths.length);
     const totalLength = compactLengths.reduce((sum, length) => sum + length, 0);
-    const microFragmentCount = compactLengths.filter((length) => length <= 3).length;
-    const longRunPathology = run.length >= 6 && shortRatio >= 0.6 && averageLength <= 10.5 && totalLength >= 36;
+    const microFragmentCount = compactLengths.filter((length) => length <= 4).length;
+    // Preserve intentional short hooks, but repair sustained editor/model hard wrapping.
+    const longRunPathology = run.length >= 6 && shortRatio >= 0.5 && averageLength <= 12.5 && totalLength >= 34;
     const shortRunPathology = run.length >= 4 && microFragmentCount >= 2 && shortRatio >= 0.5
-      && averageLength <= 9 && totalLength >= 16;
+      && averageLength <= 10.5 && totalLength >= 18;
     const isPathological = longRunPathology || shortRunPathology;
 
     if (!isPathological) {
@@ -22956,7 +23034,7 @@ function repairPathologicallyFragmentedKoreanLyricBodies(text: string): string {
       return;
     }
 
-    const joined = run.join(' ').replace(/\s+/g, ' ').trim();
+    const joined = joinPathologicalKoreanFragments(run);
     splitLongKoreanLyricLine(joined).forEach((line) => out.push(line));
   };
 
@@ -25875,6 +25953,18 @@ function hasCatastrophicV1LyricStructureFailure(lyrics: string, params: Generate
   const bodyLines = lyricDensityBodyLines(source, params);
   if (bodyLines.length < 2) return true;
 
+  // V1 structure is not advisory. Missing, extra, renamed, or out-of-order structural
+  // tags are catastrophic because the public selector promises the active blueprint.
+  // Stable in particular must always remain the exact visible ten-section sequence.
+  const blueprint = getV1SectionBlueprint(params);
+  const expectedOrder = blueprint.entries
+    .map((entry) => normalizeLyricSectionDisplayName(entry.name).toLowerCase());
+  const actualOrder = blocks
+    .map((block) => normalizeLyricSectionDisplayName(block.section || '').toLowerCase())
+    .filter(Boolean);
+  if (actualOrder.length !== expectedOrder.length
+    || actualOrder.some((section, index) => section !== expectedOrder[index])) return true;
+
   let emptyRequiredBlocks = 0;
   blocks.forEach((block) => {
     const normalized = normalizeLyricSectionDisplayName(block.section || '');
@@ -25911,13 +26001,15 @@ async function repairSparseLyricsWithGemini(
   // V1 no longer spends another Gemini call on soft quality preferences such as a modest
   // Final Chorus, Intro mass, or section-role nuance. A full lyric rewrite is reserved only
   // for catastrophic structural failure (missing/empty required sung blocks or no usable body).
-  const densityRepairNeeded = source
-    ? (isGenerationEngineV2(params)
-      ? needsLyricDensityRepair(source, params)
-      : hasCatastrophicV1LyricStructureFailure(source, params))
-    : false;
+  const densityRepairNeeded = isGenerationEngineV2(params)
+    ? Boolean(source && needsLyricDensityRepair(source, params))
+    : hasCatastrophicV1LyricStructureFailure(originalSource, params);
   if (!source || (!densityRepairNeeded && !roleIssues.length)) {
-    return enforceLyricSectionBlockSpacing(source || originalSource, params);
+    // V1 Stable may intentionally keep a tag-only Intro/Outro. The ghost cleanup source
+    // is only a repair working copy; when no repair is needed, preserve the original exact
+    // blueprint rather than returning a copy that may have removed an intentional empty tag.
+    const noRepairSource = isGenerationEngineV2(params) ? (source || originalSource) : originalSource;
+    return enforceLyricSectionBlockSpacing(noRepairSource, params);
   }
 
   const instruction = lyricDensityRepairInstruction(languageLabel, params, roleIssues);
@@ -26028,7 +26120,7 @@ async function repairSparseLyricsWithGemini(
     const minimumAcceptedAfterRepair = isGenerationEngineV2(params)
       ? Math.floor(lyricDensityMinimumCharsForLyrics(repairedPost, params) * 0.65)
       : Math.floor(beforeChars * 0.7);
-    if (afterChars < minimumAcceptedAfterRepair) return enforceLyricSectionBlockSpacing(source, params);
+    if (afterChars < minimumAcceptedAfterRepair) return enforceLyricSectionBlockSpacing(isGenerationEngineV2(params) ? source : originalSource, params);
     return cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(repairedPost, params), params);
   } catch (error) {
     console.warn('[SORIDRAW Lyrics Density Repair] skipped:', error);
@@ -27337,6 +27429,28 @@ function collapseV1PublicAdjacentProductionCues(lyrics: string, params: Generate
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+function tightenV1EmbeddedDropHookBlocks(lyrics: string): string {
+  const cueKey = normalizedV1HookComparison('[brief beat drop under the vocal hook]');
+  const lines = repairMultilineBracketCueLines(lyrics).split('\n');
+  const out: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = String(lines[index] || '').trim();
+    if (normalizedV1HookComparison(trimmed) !== cueKey) {
+      out.push(lines[index]);
+      continue;
+    }
+    while (out.length && !String(out[out.length - 1] || '').trim()) out.pop();
+    out.push('[brief beat drop under the vocal hook]');
+    let cursor = index + 1;
+    while (cursor < lines.length && !String(lines[cursor] || '').trim()) cursor += 1;
+    if (cursor < lines.length) {
+      out.push(String(lines[cursor] || '').trim());
+      index = cursor;
+    }
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSongParams): string {
   let text = repairMultilineBracketCueLines(lyrics);
   text = repairPathologicallyFragmentedKoreanLyricBodies(text);
@@ -27378,6 +27492,9 @@ function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSo
   finalText = removeEmptyRequiredSungBlocksStrictFinal(finalText, params);
   finalText = removeV1OrphanSectionSkeletonsAtPublicBoundary(finalText, params);
   finalText = repairPathologicallyFragmentedKoreanLyricBodies(finalText);
+  finalText = collapseAdjacentDuplicateStructuralSections(finalText, params);
+  finalText = removeV1OrphanSectionSkeletonsAtPublicBoundary(finalText, params);
+  finalText = tightenV1EmbeddedDropHookBlocks(finalText);
   return finalText.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -30192,8 +30309,26 @@ interface V1ResolvedHookBlueprint {
   patterns: V1HookPattern[];
   koreanHookCore: string;
   secondaryHookCore: string;
+  koreanMicroHook: string;
+  secondaryMicroHook: string;
+  koreanPreviewFragment: string;
+  secondaryPreviewFragment: string;
+  koreanVariantHook: string;
+  secondaryVariantHook: string;
+  koreanCallLine: string;
+  secondaryCallLine: string;
   koreanResponse: string;
   secondaryResponse: string;
+  koreanEchoResponse: string;
+  secondaryEchoResponse: string;
+  koreanPostChorusTag: string;
+  secondaryPostChorusTag: string;
+  koreanChorusB: string;
+  secondaryChorusB: string;
+  koreanChorus2Shift: string;
+  secondaryChorus2Shift: string;
+  koreanFinalShift: string;
+  secondaryFinalShift: string;
   placement: string;
   repeatShape: string;
   rhythmicCell: string;
@@ -30212,32 +30347,97 @@ function cleanV1HookText(value: unknown, maxWords = 8): string {
   return words.slice(0, maxWords).join(' ').replace(/[.!?。！？]+$/g, '').trim();
 }
 
-function isV1HookFamilySectionName(value: string): boolean {
-  return /^(?:Chorus|Final\s+Chorus|Hook|Final\s+Hook|Refrain)(?:\s+\d+)?$/i.test(normalizeLyricSectionDisplayName(value || ''));
+function cleanV1MicroHookToken(value: unknown, fallbackCore = ''): string {
+  const raw = String(value || '')
+    .replace(/^['"“”‘’]+|['"“”‘’]+$/g, '')
+    .replace(/^\[[^\]]+\]\s*/, '')
+    .replace(/[()]/g, '')
+    .replace(/[.!?。！？,;:]+$/g, '')
+    .trim();
+  const directParts = raw.split(/\s+/).filter(Boolean);
+  if (directParts.length === 1 && directParts[0].length <= 18) return directParts[0];
+
+  const fallbackParts = String(fallbackCore || '')
+    .replace(/[()\[\]{}'"“”‘’.,!?。！？;:]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const sourceParts = directParts.length ? directParts : fallbackParts;
+  if (!sourceParts.length) return '';
+
+  const stopWords = new Set([
+    'a', 'an', 'the', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'my', 'your', 'our', 'is', 'are',
+    '한', '그', '이', '저', '내', '네', '우리',
+  ]);
+  const candidates = sourceParts
+    .map((part) => part.replace(/[^\p{L}\p{N}'-]/gu, ''))
+    .filter(Boolean)
+    .map((part) => {
+      if (/^[가-힣]{2,}$/.test(part)) {
+        return part.replace(/(?:에게|에서|으로|까지|부터|처럼|보다|만큼|이라|라고|이고|이며|은|는|이|가|을|를|에|의|도|만|로|와|과)$/u, '') || part;
+      }
+      return part;
+    })
+    .filter((part) => part && !stopWords.has(part.toLowerCase()));
+  const best = [...candidates].sort((a, b) => {
+    const aNumeric = /^\d+$/.test(a) ? -1 : 0;
+    const bNumeric = /^\d+$/.test(b) ? -1 : 0;
+    return aNumeric - bNumeric || a.length - b.length;
+  })[0];
+  return String(best || sourceParts[sourceParts.length - 1] || '').slice(0, 18);
 }
 
-function isV1StructuralHookGuardTag(line: string): { name: string } | null {
+function buildV1PreviewFragment(value: unknown, core: string, microHook: string): string {
+  const supplied = cleanV1HookText(value, 3);
+  if (supplied && normalizedV1HookComparison(supplied) !== normalizedV1HookComparison(core)) return supplied;
+  if (microHook) return microHook;
+  const words = String(core || '').split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return core;
+  return words.slice(0, Math.min(2, words.length - 1)).join(' ');
+}
+
+function isV1HookFamilySectionName(value: string, plan?: V1HookRolePlan): boolean {
+  if (plan) return isV1HookRoleSectionName(value, plan);
+  return /^(?:Chorus|Final\s+Chorus|Hook|Final\s+Hook|Refrain|Main\s+Theme|Climax|Theme\s+A)(?:\s+\d+)?$/i.test(normalizeLyricSectionDisplayName(value || ''));
+}
+
+function isV1StructuralHookGuardTag(
+  line: string,
+  allowedSectionNames: string[] = [],
+): { name: string } | null {
   const match = String(line || '').trim().match(/^\[\s*([^:\]\n]{1,80})(?:\s*:\s*[^\]]*)?\s*\]$/);
   if (!match) return null;
-  const name = normalizeLyricSectionDisplayName(match[1] || '');
-  if (!/^(?:Intro|Verse|Pre[-\s]?Chorus|Chorus|Final\s+Chorus|Hook|Final\s+Hook|Refrain|Bridge|Drop|Post[-\s]?Chorus|Outro|Rap\s+Section|Instrumental|Interlude|Break|Stop|Build[-\s]?Up|Climax)(?:\s+\d+)?$/i.test(name)) return null;
+  // Custom section names are valid structural boundaries even when their names are not
+  // part of the built-in section vocabulary. Resolve them against the exact blueprint first.
+  const name = normalizeV1SectionName(match[1] || '', allowedSectionNames);
+  const allowedMatch = allowedSectionNames.find(
+    (candidate) => String(candidate || '').trim().toLowerCase() === String(name || '').trim().toLowerCase(),
+  );
+  if (allowedMatch) return { name: allowedMatch };
+  // The common hook engine must preserve numbered Recommended/Experimental names
+  // (Chorus 1, Refrain 2, Hook 2). The legacy display normalizer intentionally strips
+  // those numbers, which would collapse role targets and make only Final Chorus work.
+  if (!/^(?:Intro|Verse|Pre[-\s]?Chorus|Chorus|Final\s+Chorus|Hook|Final\s+Hook|Refrain|Bridge|Drop|Post[-\s]?Chorus|Outro|Rap\s+Section|Instrumental|Interlude|Break|Stop|Build[-\s]?Up|Main\s+Theme|Theme\s+A|Theme\s+B|Climax)(?:\s+\d+)?$/i.test(name)) return null;
   return { name };
 }
 
-function extractV1HookCoreCandidate(lyrics: string): string {
+function extractV1HookCoreCandidate(lyrics: string, params?: GenerateSongParams): string {
   // Hook fallback extraction runs before the public lyric formatter. Repair split tags and
   // pathological Korean micro-lines first, otherwise a fragment such as "같은" can be mistaken
   // for the hook while the complete repeated line sits on the following broken lines.
   const lines = repairPathologicallyFragmentedKoreanLyricBodies(
     repairMultilineBracketCueLines(String(lyrics || '')),
   ).split('\n');
+  const rolePlan = params ? resolveV1HookRolePlan(params) : undefined;
+  const structuralSectionNames = params
+    ? getV1SectionBlueprint(params).entries.map((entry) => entry.name)
+    : [];
   let active = false;
   let sectionLineOrdinal = 0;
   const candidates: Array<{ value: string; key: string; firstLine: boolean }> = [];
   for (const line of lines) {
-    const tag = isV1StructuralHookGuardTag(line);
+    const tag = isV1StructuralHookGuardTag(line, structuralSectionNames);
     if (tag) {
-      active = isV1HookFamilySectionName(tag.name);
+      active = isV1HookFamilySectionName(tag.name, rolePlan);
       sectionLineOrdinal = 0;
       continue;
     }
@@ -30271,14 +30471,80 @@ function extractV1HookCoreCandidate(lyrics: string): string {
 
 function parseV1HookPatternValue(value: unknown): V1HookPattern[] {
   const allowed = new Set<V1HookPattern>([
-    'natural', 'short-repeat', 'slogan', 'chant', 'call-response', 'easy-sing', 'one-line', 'melodic',
-    'first-line-anchor', 'end-line-anchor', 'preview', 'post-chorus-tag', 'one-word', 'progressive-repeat',
-    'variation-repeat', 'echo-response', 'split-ab', 'drop-hook', 'anti-chorus', 'circular-refrain', 'negative-space',
+    'natural', 'fixed-chorus', 'short-repeat', 'slogan', 'one-line', 'one-word', 'melodic',
+    'first-line-anchor', 'end-line-anchor', 'preview', 'post-chorus-tag', 'circular-refrain',
+    'progressive-repeat', 'variation-repeat', 'chant', 'call-response', 'echo-response', 'easy-sing',
+    'split-ab', 'drop-hook', 'anti-chorus', 'negative-space',
   ]);
   return String(value || '')
     .split(/[,/|]+/)
     .map((part) => part.trim().toLowerCase() as V1HookPattern)
     .filter((pattern): pattern is V1HookPattern => allowed.has(pattern));
+}
+
+function buildV1DeterministicHookPlanText(
+  patterns: V1HookPattern[],
+  params: GenerateSongParams,
+): Pick<V1ResolvedHookBlueprint, 'placement' | 'repeatShape' | 'rhythmicCell' | 'performanceEvent'> {
+  const set = new Set(patterns);
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const rolePlan = resolveV1HookRolePlan(params);
+
+  const placementParts: string[] = [];
+  if (set.has('first-line-anchor')) placementParts.push(`${rolePlan.targetSectionsText} 첫 줄`);
+  if (set.has('end-line-anchor')) placementParts.push(`${rolePlan.targetSectionsText} 마지막 줄`);
+  if (set.has('preview')) placementParts.push(rolePlan.preparationSectionNames.length
+    ? `${rolePlan.preparationSectionNames.join(' · ')} 끝 → ${rolePlan.hookSectionNames[0] || '핵심 훅 구간'} 완성`
+    : '선공개를 넣을 앞선 가창 구간 부족');
+  if (set.has('post-chorus-tag')) placementParts.push(`${rolePlan.targetSectionsText} 끝부분`);
+  if (set.has('circular-refrain')) placementParts.push(rolePlan.circularCondition);
+  const placement = placementParts.length
+    ? placementParts.join(' · ')
+    : rolePlan.targetSectionsText;
+
+  let repeatShape = rolePlan.hookSectionNames.length > 1
+    ? '핵심 훅 유지 · 주변 가사 발전'
+    : '핵심 훅 구간 1개 · 반복 비교 대상 없음';
+  if (set.has('fixed-chorus')) {
+    repeatShape = rolePlan.hookSectionNames.length > 1
+      ? `${rolePlan.hookSectionLabels[0]} 전체 가사 = ${rolePlan.hookSectionLabels.slice(1).join(' = ')}`
+      : '고정할 반복 핵심 구간 부족';
+  } else {
+    const repeatParts: string[] = [];
+    if (set.has('progressive-repeat')) repeatParts.push('첫 핵심 구간 소개 → 중간 확장 → 최종 강화');
+    if (set.has('variation-repeat')) repeatParts.push('핵심 의미 유지 · 주변 표현 변형');
+    if (repeatParts.length) repeatShape = repeatParts.join(' · ');
+  }
+
+  const rhythmParts: string[] = [];
+  if (set.has('short-repeat')) rhythmParts.push('같은 완성 훅 2회');
+  if (set.has('slogan')) rhythmParts.push('짧은 구호 반복');
+  if (set.has('one-line')) rhythmParts.push('완성된 한 줄 중심');
+  if (set.has('one-word')) rhythmParts.push('한 단어 3~4회');
+  if (set.has('melodic')) rhythmParts.push('짧고 열린 발음');
+  if (set.has('chant')) rhythmParts.push('짧고 끊기는 구호 호흡');
+  if (set.has('easy-sing')) rhythmParts.push('짧고 균형 잡힌 문장');
+
+  const performanceParts: string[] = [];
+  if (set.has('chant')) performanceParts.push('챈트');
+  if (set.has('call-response')) {
+    performanceParts.push(vocalCompatibility.callResponseAvailable
+      ? '리드 호출 → 응답 보컬'
+      : '콜앤리스폰스 보컬 조건 미충족');
+  }
+  if (set.has('echo-response')) performanceParts.push('훅 → 짧은 메아리 응답');
+  if (set.has('easy-sing')) performanceParts.push('따라 부르는 후렴');
+  if (set.has('split-ab')) performanceParts.push('A/B 분할 핵심 구간');
+  if (set.has('drop-hook')) performanceParts.push(rolePlan.dropCondition);
+  if (set.has('anti-chorus')) performanceParts.push('상승 후 핵심 구간 축소');
+  if (set.has('negative-space')) performanceParts.push('훅 앞뒤 여백');
+
+  return {
+    placement,
+    repeatShape,
+    rhythmicCell: rhythmParts.join(' · '),
+    performanceEvent: performanceParts.join(' · '),
+  };
 }
 
 function resolveV1SharedHookBlueprint(
@@ -30289,32 +30555,143 @@ function resolveV1SharedHookBlueprint(
 ): V1ResolvedHookBlueprint {
   const source = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
   const selectedPatterns = getSelectedV1HookPatterns(params);
-  const modelPatterns = parseV1HookPatternValue(source.pattern);
-  const patterns = Array.from(new Set<V1HookPattern>([...selectedPatterns, ...modelPatterns])).slice(0, 3);
-  const finalPatterns = patterns.length ? patterns : ['natural' as V1HookPattern];
-  const koreanHookCore = cleanV1HookText(source.koreanHookCore, finalPatterns.includes('one-word') ? 2 : 7)
-    || extractV1HookCoreCandidate(koreanLyrics);
-  const secondaryHookCore = cleanV1HookText(source.secondaryHookCore, finalPatterns.includes('one-word') ? 2 : 7)
-    || extractV1HookCoreCandidate(secondaryLyrics);
+  const finalPatterns = selectedPatterns.length
+    ? Array.from(new Set<V1HookPattern>(selectedPatterns))
+    : ['natural' as V1HookPattern];
+  const koreanHookCore = cleanV1HookText(source.koreanHookCore, 7)
+    || extractV1HookCoreCandidate(koreanLyrics, params);
+  const secondaryHookCore = cleanV1HookText(source.secondaryHookCore, 7)
+    || extractV1HookCoreCandidate(secondaryLyrics, params);
+  const koreanMicroHook = finalPatterns.includes('one-word')
+    ? cleanV1MicroHookToken(source.koreanMicroHook, koreanHookCore)
+    : '';
+  const secondaryMicroHook = finalPatterns.includes('one-word')
+    ? cleanV1MicroHookToken(source.secondaryMicroHook, secondaryHookCore)
+    : '';
+  const needsPreview = finalPatterns.includes('preview');
+  const koreanPreviewFragment = needsPreview
+    ? buildV1PreviewFragment(source.koreanPreviewFragment, koreanHookCore, koreanMicroHook)
+    : '';
+  const secondaryPreviewFragment = needsPreview
+    ? buildV1PreviewFragment(source.secondaryPreviewFragment, secondaryHookCore, secondaryMicroHook)
+    : '';
   const responseFallback = (core: string) => {
     const words = core.split(/\s+/).filter(Boolean);
     return cleanV1HookText(words.slice(Math.max(0, words.length - 2)).join(' ') || core, 3);
   };
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const needsResponse = finalPatterns.some((pattern) => ['call-response', 'post-chorus-tag'].includes(pattern));
+  const koreanResponse = needsResponse
+    ? (cleanV1HookText(source.koreanResponse, 4) || responseFallback(koreanHookCore))
+    : '';
+  const secondaryResponse = needsResponse
+    ? (cleanV1HookText(source.secondaryResponse, 4) || responseFallback(secondaryHookCore))
+    : '';
+  const koreanEchoResponse = finalPatterns.includes('echo-response')
+    ? (cleanV1HookText(source.koreanEchoResponse, 3) || responseFallback(koreanHookCore))
+    : '';
+  const secondaryEchoResponse = finalPatterns.includes('echo-response')
+    ? (cleanV1HookText(source.secondaryEchoResponse, 3) || responseFallback(secondaryHookCore))
+    : '';
+  const allowCallResponse = !finalPatterns.includes('call-response') || vocalCompatibility.callResponseAvailable;
+  const publicPlan = buildV1DeterministicHookPlanText(finalPatterns, params);
   return {
     patterns: finalPatterns,
     koreanHookCore,
     secondaryHookCore,
-    koreanResponse: cleanV1HookText(source.koreanResponse, 4) || responseFallback(koreanHookCore),
-    secondaryResponse: cleanV1HookText(source.secondaryResponse, 4) || responseFallback(secondaryHookCore),
-    placement: cleanV1HookText(source.placement, 10),
-    repeatShape: cleanV1HookText(source.repeatShape, 12),
-    rhythmicCell: cleanV1HookText(source.rhythmicCell, 12),
-    performanceEvent: cleanV1HookText(source.performanceEvent, 12),
+    koreanMicroHook,
+    secondaryMicroHook,
+    koreanPreviewFragment,
+    secondaryPreviewFragment,
+    koreanVariantHook: finalPatterns.includes('variation-repeat') ? cleanV1HookText(source.koreanVariantHook, 8) : '',
+    secondaryVariantHook: finalPatterns.includes('variation-repeat') ? cleanV1HookText(source.secondaryVariantHook, 8) : '',
+    koreanCallLine: finalPatterns.includes('call-response') && allowCallResponse ? (cleanV1HookText(source.koreanCallLine, 7) || koreanHookCore) : '',
+    secondaryCallLine: finalPatterns.includes('call-response') && allowCallResponse ? (cleanV1HookText(source.secondaryCallLine, 7) || secondaryHookCore) : '',
+    koreanResponse: finalPatterns.includes('call-response') && !allowCallResponse && !finalPatterns.includes('post-chorus-tag') ? '' : koreanResponse,
+    secondaryResponse: finalPatterns.includes('call-response') && !allowCallResponse && !finalPatterns.includes('post-chorus-tag') ? '' : secondaryResponse,
+    koreanEchoResponse,
+    secondaryEchoResponse,
+    koreanPostChorusTag: finalPatterns.includes('post-chorus-tag') ? (cleanV1HookText(source.koreanPostChorusTag, 4) || koreanResponse) : '',
+    secondaryPostChorusTag: finalPatterns.includes('post-chorus-tag') ? (cleanV1HookText(source.secondaryPostChorusTag, 4) || secondaryResponse) : '',
+    koreanChorusB: finalPatterns.includes('split-ab') ? (cleanV1HookText(source.koreanChorusB, 8) || responseFallback(koreanHookCore)) : '',
+    secondaryChorusB: finalPatterns.includes('split-ab') ? (cleanV1HookText(source.secondaryChorusB, 8) || responseFallback(secondaryHookCore)) : '',
+    koreanChorus2Shift: finalPatterns.includes('fixed-chorus') ? '' : cleanV1HookText(source.koreanChorus2Shift, 12),
+    secondaryChorus2Shift: finalPatterns.includes('fixed-chorus') ? '' : cleanV1HookText(source.secondaryChorus2Shift, 12),
+    koreanFinalShift: finalPatterns.includes('fixed-chorus') ? '' : cleanV1HookText(source.koreanFinalShift, 12),
+    secondaryFinalShift: finalPatterns.includes('fixed-chorus') ? '' : cleanV1HookText(source.secondaryFinalShift, 12),
+    placement: publicPlan.placement,
+    repeatShape: publicPlan.repeatShape,
+    rhythmicCell: publicPlan.rhythmicCell,
+    performanceEvent: publicPlan.performanceEvent,
   };
 }
 
 function normalizedV1HookComparison(value: string): string {
   return String(value || '').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+}
+
+function isV1CompleteEasySingHook(value: string): boolean {
+  const text = String(value || '').trim();
+  if (!text) return false;
+  const lower = text.toLowerCase().replace(/[.!?]+$/g, '').trim();
+  if (/\b(?:and|or|but|to|of|in|on|at|for|with|from|because|although|though|while|than|that|which|who|whose|when|where|if|as)\s*$/i.test(lower)) return false;
+  if (/^(?:when|whenever|while|because|although|though|if|even if|as soon as)\b/i.test(lower) && !/[,;:—-]/.test(lower)) return false;
+  if (/\b(?:i|you|we|they|he|she|it)\s+(?:am|is|are|was|were|will|would|can|could|should|may|might|must|have|has|had)\s*$/i.test(lower)) return false;
+  return true;
+}
+
+function buildV1MicroHookRepeatLine(token: string, repeatCount = 4): string {
+  const clean = cleanV1MicroHookToken(token);
+  if (!clean) return '';
+  return Array.from({ length: Math.max(3, Math.min(6, repeatCount)) }, () => clean).join(', ');
+}
+
+function coalesceV1SplitHookPhraseLines(
+  lyrics: string,
+  phrase: string,
+  targetSectionNames: string[],
+  params: GenerateSongParams,
+): string {
+  const phraseKey = normalizedV1HookComparison(phrase);
+  if (!phraseKey || !targetSectionNames.length) return lyrics;
+  const targetKeys = new Set(targetSectionNames.map(normalizedV1HookComparison).filter(Boolean));
+  const lines = repairMultilineBracketCueLines(lyrics).split('\n');
+  const structuralNames = getV1SectionBlueprint(params).entries.map((entry) => entry.name);
+  const sections: Array<{ name: string; start: number; end: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const parsed = isV1StructuralHookGuardTag(lines[index], structuralNames);
+    if (!parsed) continue;
+    if (sections.length) sections[sections.length - 1].end = index;
+    sections.push({ name: parsed.name, start: index, end: lines.length });
+  }
+  const removals = new Set<number>();
+  const replacements = new Map<number, string>();
+  sections.filter((section) => targetKeys.has(normalizedV1HookComparison(section.name))).forEach((section) => {
+    const bodyIndexes = Array.from({ length: Math.max(0, section.end - section.start - 1) }, (_, offset) => section.start + 1 + offset)
+      .filter((index) => {
+        const trimmed = String(lines[index] || '').trim();
+        return Boolean(trimmed && !/^\[[^\]]+\]$/.test(trimmed) && !/^\([^()]+\)$/.test(trimmed));
+      });
+    for (let cursor = 0; cursor < bodyIndexes.length; cursor += 1) {
+      for (let width = 2; width <= 3 && cursor + width <= bodyIndexes.length; width += 1) {
+        const indexes = bodyIndexes.slice(cursor, cursor + width);
+        const consecutive = indexes.every((value, index) => index === 0 || value === indexes[index - 1] + 1);
+        if (!consecutive) continue;
+        const joinedKey = normalizedV1HookComparison(indexes.map((index) => lines[index]).join(' '));
+        if (joinedKey !== phraseKey) continue;
+        replacements.set(indexes[0], phrase);
+        indexes.slice(1).forEach((index) => removals.add(index));
+        cursor += width - 1;
+        break;
+      }
+    }
+  });
+  return lines
+    .map((line, index) => removals.has(index) ? null : (replacements.get(index) || line))
+    .filter((line): line is string => line !== null)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function applyV1SharedHookBlueprintGuard(
@@ -30325,39 +30702,98 @@ function applyV1SharedHookBlueprintGuard(
 ): string {
   if (!String(lyrics || '').trim() || isGenerationEngineV2(params)) return lyrics;
   if (params.isLyricMode && params.lyricMode === 'preserve') return lyrics;
-  const hasSelectedHookStyle = getSelectedV1StyleIntentItems(params, 'hook-addiction').length > 0;
-  if (!hasSelectedHookStyle) return lyrics;
   const core = card === 'korean' ? blueprint.koreanHookCore : blueprint.secondaryHookCore;
+  const microHook = card === 'korean' ? blueprint.koreanMicroHook : blueprint.secondaryMicroHook;
+  const previewFragment = card === 'korean' ? blueprint.koreanPreviewFragment : blueprint.secondaryPreviewFragment;
+  const variantHook = card === 'korean' ? blueprint.koreanVariantHook : blueprint.secondaryVariantHook;
+  const callLine = card === 'korean' ? blueprint.koreanCallLine : blueprint.secondaryCallLine;
   const response = card === 'korean' ? blueprint.koreanResponse : blueprint.secondaryResponse;
-  if (!core) return lyrics;
+  const echoResponse = card === 'korean' ? blueprint.koreanEchoResponse : blueprint.secondaryEchoResponse;
+  const postChorusTag = card === 'korean' ? blueprint.koreanPostChorusTag : blueprint.secondaryPostChorusTag;
+  const chorusB = card === 'korean' ? blueprint.koreanChorusB : blueprint.secondaryChorusB;
+  const chorus2Shift = card === 'korean' ? blueprint.koreanChorus2Shift : blueprint.secondaryChorus2Shift;
+  const finalShift = card === 'korean' ? blueprint.koreanFinalShift : blueprint.secondaryFinalShift;
   const patterns = new Set(blueprint.patterns);
+  const rolePlan = resolveV1HookRolePlan(params);
+  const structuralSectionNames = getV1SectionBlueprint(params).entries.map((entry) => entry.name);
+  const fixedChorus = patterns.has('fixed-chorus');
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const allowCallResponse = !patterns.has('call-response') || vocalCompatibility.callResponseAvailable;
+  if (!core && !microHook && !chorus2Shift && !finalShift && !fixedChorus) return lyrics;
+
   const lines = String(lyrics || '').split('\n');
   const sections: Array<{ name: string; start: number; end: number }> = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const tag = isV1StructuralHookGuardTag(lines[index]);
+    const tag = isV1StructuralHookGuardTag(lines[index], structuralSectionNames);
     if (!tag) continue;
     if (sections.length) sections[sections.length - 1].end = index;
     sections.push({ name: tag.name, start: index, end: lines.length });
   }
-  const eligible = sections.filter((section) => isV1HookFamilySectionName(section.name)
-    || (patterns.has('drop-hook') && /^Drop(?:\s+\d+)?$/i.test(section.name)));
-  if (!eligible.length) return lyrics;
+  const chorusSections = sections.filter((section) => isV1HookFamilySectionName(section.name, rolePlan));
+  const dropSections = sections.filter((section) => rolePlan.dropSectionNames.some((name) => normalizedV1HookComparison(name) === normalizedV1HookComparison(section.name)));
+  const embeddedDropSections = rolePlan.dropPlacementMode === 'embedded-hook' && chorusSections.length
+    ? [chorusSections[0]]
+    : [];
+  if (!chorusSections.length && !(patterns.has('drop-hook') && (dropSections.length || embeddedDropSections.length))) return lyrics;
 
-  const inserts: Array<{ index: number; values: string[] }> = [];
-  const sectionOccurrenceCount = (section: { start: number; end: number }, value: string) => {
+  const bodyLines = (section: { start: number; end: number }) => lines
+    .slice(section.start + 1, section.end)
+    .map((line) => String(line || '').trim())
+    .filter((line) => line && !/^\[[^\]]+\]$/.test(line));
+  const cueLines = (section: { start: number; end: number }) => lines
+    .slice(section.start + 1, section.end)
+    .map((line) => String(line || '').trim())
+    .filter((line) => /^\[[^\]]+\]$/.test(line));
+  const normalizeLine = (value: string) => normalizedV1HookComparison(String(value || '').replace(/^\(|\)$/g, ''));
+  const exactCount = (section: { start: number; end: number }, value: string) => {
     const needle = normalizedV1HookComparison(value);
     if (!needle) return 0;
-    const body = lines.slice(section.start + 1, section.end)
-      .filter((line) => !/^\s*\[[^\]]+\]\s*$/.test(String(line || '')))
-      .map((line) => normalizedV1HookComparison(String(line || '').replace(/^\(|\)$/g, '')))
-      .join('');
-    if (!body || !body.includes(needle)) return 0;
-    return Math.max(0, body.split(needle).length - 1);
+    return bodyLines(section).filter((line) => normalizeLine(line) === needle).length;
   };
-  const sectionContains = (section: { start: number; end: number }, value: string) => sectionOccurrenceCount(section, value) > 0;
+  const hasExact = (section: { start: number; end: number }, value: string) => exactCount(section, value) > 0;
+  const hasPhraseAcrossBodyLines = (section: { start: number; end: number }, value: string) => {
+    const needle = normalizedV1HookComparison(value);
+    if (!needle) return false;
+    return normalizedV1HookComparison(bodyLines(section).join(' ')).includes(needle);
+  };
+  const openingCount = (section: { start: number; end: number }, value: string) => {
+    const needle = normalizedV1HookComparison(value);
+    if (!needle) return 0;
+    let count = 0;
+    for (const line of bodyLines(section)) {
+      if (normalizeLine(line) === needle) count += 1;
+      else break;
+    }
+    return count;
+  };
+  const endingMatches = (section: { start: number; end: number }, value: string) => {
+    const postTagKey = normalizedV1HookComparison(postChorusTag);
+    const body = bodyLines(section).filter((line) => !postTagKey || normalizeLine(line) !== postTagKey);
+    return Boolean(body.length && normalizeLine(body[body.length - 1]) === normalizedV1HookComparison(value));
+  };
+  const hasRepeatedMicroLine = (section: { start: number; end: number }, token: string, minimum = 3) => {
+    const cleanToken = cleanV1MicroHookToken(token);
+    if (!cleanToken) return false;
+    const normalizedToken = normalizedV1HookComparison(cleanToken);
+    return bodyLines(section).some((line) => {
+      const tokens = String(line || '')
+        .replace(/[()\[\]]/g, ' ')
+        .split(/[\s,，、/|·]+/)
+        .map((part) => normalizedV1HookComparison(part))
+        .filter(Boolean);
+      return tokens.filter((part) => part === normalizedToken).length >= minimum;
+    });
+  };
+  const hasCue = (section: { start: number; end: number }, cue: string) => cueLines(section)
+    .some((line) => normalizedV1HookComparison(line) === normalizedV1HookComparison(cue));
   const startInsertIndex = (section: { start: number; end: number }) => {
     let index = section.start + 1;
     while (index < section.end && (!lines[index].trim() || /^\[[^\]]+\]$/.test(lines[index].trim()))) index += 1;
+    return index;
+  };
+  const cueInsertIndex = (section: { start: number; end: number }) => {
+    let index = section.start + 1;
+    while (index < section.end && !lines[index].trim()) index += 1;
     return index;
   };
   const endInsertIndex = (section: { start: number; end: number }) => {
@@ -30365,50 +30801,674 @@ function applyV1SharedHookBlueprintGuard(
     while (index > section.start + 1 && !lines[index - 1].trim()) index -= 1;
     return index;
   };
-  const responseLine = response ? `(${response})` : '';
-  eligible.forEach((section, sectionIndex) => {
-    const isFinal = /^Final\s+(?:Chorus|Hook)/i.test(section.name) || sectionIndex === eligible.length - 1;
-    const existingCoreCount = sectionOccurrenceCount(section, core);
+
+  const queued = new Map<number, string[]>();
+  const queue = (
+    index: number,
+    values: Array<string | null | undefined>,
+    preserveIntentionalRepeats = false,
+  ) => {
+    const cleanValues = values.map((value) => String(value || '').trim()).filter(Boolean);
+    if (!cleanValues.length) return;
+    const current = queued.get(index) || [];
+    cleanValues.forEach((value) => {
+      const normalized = normalizedV1HookComparison(value);
+      if (preserveIntentionalRepeats || !current.some((existing) => normalizedV1HookComparison(existing) === normalized)) current.push(value);
+    });
+    queued.set(index, current);
+  };
+
+  const microRepeatLine = patterns.has('one-word') ? buildV1MicroHookRepeatLine(microHook, 4) : '';
+  const oneWordOnlyFamily = patterns.has('one-word')
+    && Array.from(patterns).every((pattern) => ['one-word', 'preview', 'negative-space'].includes(pattern));
+  const coreDrivenPatterns = new Set<V1HookPattern>([
+    'slogan', 'one-line', 'melodic', 'first-line-anchor', 'end-line-anchor', 'preview', 'circular-refrain',
+    'progressive-repeat', 'variation-repeat', 'chant', 'call-response', 'echo-response', 'easy-sing',
+    'split-ab', 'anti-chorus', 'negative-space',
+  ]);
+
+  chorusSections.forEach((section, sectionIndex) => {
+    const isFinal = normalizedV1HookComparison(section.name) === normalizedV1HookComparison(rolePlan.finalHookSectionName) || sectionIndex === chorusSections.length - 1;
+    const cueValues: string[] = [];
     const startValues: string[] = [];
     const endValues: string[] = [];
     const wantsEnd = patterns.has('end-line-anchor');
-    const wantsCircular = patterns.has('circular-refrain');
-    if (existingCoreCount === 0) {
-      if (wantsEnd && !wantsCircular) endValues.push(core);
-      else startValues.push(core);
+
+    if (patterns.has('chant') && !hasCue(section, '[rhythmic chant delivery]')) cueValues.push('[rhythmic chant delivery]');
+    if (patterns.has('call-response') && allowCallResponse) {
+      const responseRoleCue = vocalCompatibility.vocalCount >= 2
+        ? '[second vocalist answers the lead]'
+        : '[responsive vocal layer answers the lead]';
+      if (!hasCue(section, responseRoleCue)) cueValues.push(responseRoleCue);
     }
-    if ((patterns.has('call-response') || patterns.has('echo-response')) && responseLine && !sectionContains(section, response)) {
-      if (startValues.length) startValues.push(responseLine);
-      else endValues.push(responseLine);
-    }
-    if (patterns.has('progressive-repeat') && isFinal) {
-      const plannedCoreCount = [...startValues, ...endValues]
-        .filter((value) => normalizedV1HookComparison(value) === normalizedV1HookComparison(core))
-        .length;
-      // Final escalation means at least two recognisable core occurrences, not an unconditional
-      // extra line. This prevents the guard from tripling a hook that Gemini already repeated.
-      if (existingCoreCount + plannedCoreCount < 2) {
-        const target = wantsEnd ? endValues : startValues;
-        target.push(core);
+    if (patterns.has('melodic') && !hasCue(section, '[clear melodic hook contour]')) cueValues.push('[clear melodic hook contour]');
+    if (patterns.has('anti-chorus') && !hasCue(section, '[chorus strips back to one sparse anchor]')) cueValues.push('[chorus strips back to one sparse anchor]');
+    if (patterns.has('negative-space') && !hasCue(section, '[brief pause before the hook]')) cueValues.push('[brief pause before the hook]');
+
+    if (core && !oneWordOnlyFamily) {
+      if (patterns.has('short-repeat')) {
+        const requiredOpeningCount = isFinal && patterns.has('progressive-repeat') ? 3 : 2;
+        const currentOpeningCount = openingCount(section, core);
+        for (let count = currentOpeningCount; count < requiredOpeningCount; count += 1) startValues.push(core);
+      } else if (patterns.has('first-line-anchor')) {
+        if (openingCount(section, core) < 1) startValues.push(core);
+      } else if (wantsEnd) {
+        if (!endingMatches(section, core)) endValues.push(core);
+      } else if (Array.from(patterns).some((pattern) => coreDrivenPatterns.has(pattern)) && !hasExact(section, core)) {
+        startValues.push(core);
       }
     }
-    if (patterns.has('circular-refrain') && existingCoreCount === 0) endValues.push(core);
-    if (patterns.has('post-chorus-tag') && response && !sectionContains(section, response)) endValues.push(response);
-    if (startValues.length) inserts.push({ index: startInsertIndex(section), values: startValues });
-    if (endValues.length) inserts.push({ index: endInsertIndex(section), values: endValues });
+
+    if (patterns.has('one-word') && microHook && !hasRepeatedMicroLine(section, microHook, 3)) {
+      startValues.push(microRepeatLine);
+    }
+
+    if (patterns.has('call-response') && allowCallResponse) {
+      if (callLine && !hasExact(section, callLine) && normalizedV1HookComparison(callLine) !== normalizedV1HookComparison(core)) startValues.push(callLine);
+      if (response && !hasExact(section, response)) startValues.push(`(${response})`);
+    }
+    if (patterns.has('echo-response') && echoResponse && !hasExact(section, echoResponse)) {
+      startValues.push(`(${echoResponse})`);
+    }
+    if (patterns.has('split-ab') && chorusB && !hasExact(section, chorusB)) {
+      endValues.push(chorusB);
+    }
+    if (!fixedChorus && patterns.has('variation-repeat') && sectionIndex === 1 && variantHook && !hasExact(section, variantHook)) {
+      endValues.push(variantHook);
+    }
+    if (!fixedChorus && patterns.has('progressive-repeat') && isFinal && core) {
+      const plannedCount = [...startValues, ...endValues]
+        .filter((value) => normalizedV1HookComparison(value) === normalizedV1HookComparison(core)).length;
+      const existingCount = exactCount(section, core);
+      if (existingCount + plannedCount < 2) startValues.push(core);
+    }
+    if (patterns.has('post-chorus-tag') && postChorusTag && !hasExact(section, postChorusTag)) endValues.push(`(${postChorusTag})`);
+
+    queue(cueInsertIndex(section), cueValues);
+    queue(startInsertIndex(section), startValues, patterns.has('short-repeat') || (patterns.has('progressive-repeat') && isFinal));
+    queue(endInsertIndex(section), endValues);
   });
 
-  if (patterns.has('preview')) {
-    const firstHookStart = eligible[0].start;
-    const previewSection = [...sections].reverse().find((section) => section.end <= firstHookStart && /^Pre[-\s]?Chorus(?:\s+\d+)?$/i.test(section.name));
-    if (previewSection && !sectionContains(previewSection, core)) inserts.push({ index: endInsertIndex(previewSection), values: [core] });
+  if (patterns.has('drop-hook')) {
+    const dropValue = microHook ? buildV1MicroHookRepeatLine(microHook, 4) : core;
+    if (dropSections.length) {
+      dropSections.forEach((section) => {
+        const cueValues = hasCue(section, '[drop hits under the hook]') ? [] : ['[drop hits under the hook]'];
+        queue(cueInsertIndex(section), cueValues);
+        if (dropValue && !(microHook ? hasRepeatedMicroLine(section, microHook, 3) : hasExact(section, core))) {
+          queue(startInsertIndex(section), [dropValue]);
+        }
+      });
+    } else {
+      embeddedDropSections.forEach((section) => {
+        const cue = '[brief beat drop under the vocal hook]';
+        const body = bodyLines(section);
+        const lastBodyLine = body[body.length - 1] || '';
+        const embeddedAlreadyAtEnd = microHook
+          ? (() => {
+            const cleanToken = cleanV1MicroHookToken(microHook);
+            const normalizedToken = normalizedV1HookComparison(cleanToken);
+            const tokens = String(lastBodyLine || '')
+              .replace(/[()\[\]]/g, ' ')
+              .split(/[\s,，、/|·]+/)
+              .map((part) => normalizedV1HookComparison(part))
+              .filter(Boolean);
+            return Boolean(normalizedToken && tokens.filter((part) => part === normalizedToken).length >= 3);
+          })()
+          : Boolean(core && normalizedV1HookComparison(lastBodyLine) === normalizedV1HookComparison(core));
+        if (!hasCue(section, cue)) queue(endInsertIndex(section), [cue]);
+        if (dropValue && !embeddedAlreadyAtEnd) queue(endInsertIndex(section), [dropValue]);
+      });
+    }
   }
 
-  inserts.sort((a, b) => b.index - a.index).forEach((insert) => {
-    const values = insert.values.filter(Boolean);
-    lines.splice(insert.index, 0, ...values);
+  const firstHookStart = chorusSections[0]?.start ?? Number.MAX_SAFE_INTEGER;
+  const previewSection = [...sections].reverse().find((section) =>
+    section.end <= firstHookStart
+    && rolePlan.preparationSectionNames.some((name) => normalizedV1HookComparison(name) === normalizedV1HookComparison(section.name)),
+  );
+  const previewValue = previewFragment || microHook || core;
+
+  if (patterns.has('preview') && previewSection && previewValue && !hasExact(previewSection, previewValue)) {
+    queue(endInsertIndex(previewSection), [previewValue]);
+  }
+
+  if (patterns.has('circular-refrain') && core) {
+    sections
+      .filter((section) => isV1CircularRoleSectionName(section.name, rolePlan))
+      .forEach((section) => {
+        if (hasExact(section, core) || hasPhraseAcrossBodyLines(section, core)) return;
+        if (/^Refrain(?:\s+\d+)?$/i.test(section.name)) {
+          queue(startInsertIndex(section), [core]);
+        } else if (isV1HookFamilySectionName(section.name, rolePlan)) {
+          queue(startInsertIndex(section), [core]);
+        } else {
+          queue(endInsertIndex(section), [`(${core})`]);
+        }
+      });
+  }
+
+  [...queued.entries()]
+    .sort((a, b) => b[0] - a[0])
+    .forEach(([index, values]) => lines.splice(index, 0, ...values));
+  const hookBound = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const bodyGuarded = applyV1ChorusBodyModeGuard(hookBound, blueprint, card, params);
+  return patterns.has('circular-refrain') && core
+    ? coalesceV1SplitHookPhraseLines(bodyGuarded, core, rolePlan.circularSectionNames, params)
+    : bodyGuarded;
+}
+
+function parseV1ChorusBodySections(lyrics: string, params: GenerateSongParams) {
+  const lines = String(lyrics || '').split('\n');
+  const structuralSectionNames = getV1SectionBlueprint(params).entries.map((entry) => entry.name);
+  const sections: Array<{ name: string; start: number; end: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const tag = isV1StructuralHookGuardTag(lines[index], structuralSectionNames);
+    if (!tag) continue;
+    if (sections.length) sections[sections.length - 1].end = index;
+    sections.push({ name: tag.name, start: index, end: lines.length });
+  }
+  const rolePlan = resolveV1HookRolePlan(params);
+  return { lines, sections: sections.filter((section) => isV1HookFamilySectionName(section.name, rolePlan)) };
+}
+
+function getV1SectionSungBody(lines: string[], section: { start: number; end: number }): string[] {
+  return lines.slice(section.start + 1, section.end)
+    .map((line) => String(line || '').trim())
+    .filter((line) => line && !/^\[[^\]]+\]$/.test(line));
+}
+
+
+function replaceV1SectionSungBody(lines: string[], section: { start: number; end: number }, nextBody: string[]): void {
+  const contentStart = section.start + 1;
+  const original = lines.slice(contentStart, section.end);
+  const sungIndexes = original
+    .map((line, index) => ({ line: String(line || '').trim(), index }))
+    .filter((item) => item.line && !/^\[[^\]]+\]$/.test(item.line))
+    .map((item) => item.index);
+
+  // Chorus evolution normally changes one lyric line. Replace lyric slots in place so an
+  // embedded Drop cue stays immediately before its hook instead of moving above the Chorus.
+  if (sungIndexes.length === nextBody.length) {
+    const replacement = [...original];
+    sungIndexes.forEach((originalIndex, bodyIndex) => {
+      replacement[originalIndex] = nextBody[bodyIndex];
+    });
+    lines.splice(contentStart, section.end - contentStart, ...replacement);
+    return;
+  }
+
+  // Fixed Chorus can change line count. Preserve target-local cue blocks near their lyric slot.
+  const cueBuckets: string[][] = Array.from({ length: sungIndexes.length + 1 }, () => []);
+  let sungCursor = 0;
+  original.forEach((rawLine) => {
+    const trimmed = String(rawLine || '').trim();
+    if (trimmed && !/^\[[^\]]+\]$/.test(trimmed)) {
+      sungCursor += 1;
+      return;
+    }
+    if (trimmed) cueBuckets[Math.min(sungCursor, cueBuckets.length - 1)].push(trimmed);
   });
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  const replacement: string[] = [];
+  nextBody.forEach((bodyLine, index) => {
+    replacement.push(...cueBuckets[Math.min(index, cueBuckets.length - 1)], bodyLine);
+  });
+  if (nextBody.length < cueBuckets.length) {
+    cueBuckets.slice(nextBody.length).flat().forEach((cue) => replacement.push(cue));
+  }
+  if (replacement.length && replacement[replacement.length - 1] !== '') replacement.push('');
+  lines.splice(contentStart, section.end - contentStart, ...replacement);
+}
+
+function v1HookProtectedLineKeys(blueprint: V1ResolvedHookBlueprint, card: 'korean' | 'secondary'): Set<string> {
+  const values = card === 'korean'
+    ? [blueprint.koreanHookCore, blueprint.koreanMicroHook, buildV1MicroHookRepeatLine(blueprint.koreanMicroHook, 4), blueprint.koreanPreviewFragment, blueprint.koreanVariantHook, blueprint.koreanCallLine, blueprint.koreanResponse, blueprint.koreanEchoResponse, blueprint.koreanPostChorusTag, blueprint.koreanChorusB]
+    : [blueprint.secondaryHookCore, blueprint.secondaryMicroHook, buildV1MicroHookRepeatLine(blueprint.secondaryMicroHook, 4), blueprint.secondaryPreviewFragment, blueprint.secondaryVariantHook, blueprint.secondaryCallLine, blueprint.secondaryResponse, blueprint.secondaryEchoResponse, blueprint.secondaryPostChorusTag, blueprint.secondaryChorusB];
+  return new Set(values.map(normalizedV1HookComparison).filter(Boolean));
+}
+
+function isV1MainChorusEvolutionLine(line: string): boolean {
+  const clean = String(line || '').trim();
+  return Boolean(clean && !/^\([^)]*\)$/.test(clean) && normalizedV1HookComparison(clean).length >= 3);
+}
+
+function hasV1MeaningfulChorusEvolution(baseBody: string[], targetBody: string[], protectedKeys: Set<string>): boolean {
+  const baseKeys = new Set(baseBody.filter(isV1MainChorusEvolutionLine).map(normalizedV1HookComparison).filter((key) => key && !protectedKeys.has(key)));
+  return targetBody
+    .filter(isV1MainChorusEvolutionLine)
+    .map(normalizedV1HookComparison)
+    .filter((key) => key && !protectedKeys.has(key))
+    .some((key) => !baseKeys.has(key));
+}
+
+function applyV1ChorusShiftLine(body: string[], shiftLine: string, protectedKeys: Set<string>, preferLate: boolean): string[] {
+  const cleanShift = cleanV1HookText(shiftLine, 12);
+  const shiftKey = normalizedV1HookComparison(cleanShift);
+  if (!cleanShift || !shiftKey || body.some((line) => normalizedV1HookComparison(line) === shiftKey)) return body;
+  const candidates = body
+    .map((line, index) => ({ line, index, key: normalizedV1HookComparison(line) }))
+    .filter((item) => isV1MainChorusEvolutionLine(item.line) && item.key && !protectedKeys.has(item.key));
+  const selected = preferLate ? candidates[candidates.length - 1] : candidates[0];
+  if (selected) {
+    const next = [...body];
+    next[selected.index] = cleanShift;
+    return next;
+  }
+  return preferLate ? [...body, cleanShift] : [cleanShift, ...body];
+}
+
+function applyV1ChorusBodyModeGuard(lyrics: string, blueprint: V1ResolvedHookBlueprint, card: 'korean' | 'secondary', params: GenerateSongParams): string {
+  if (!String(lyrics || '').trim() || isGenerationEngineV2(params)) return lyrics;
+  if (params.isLyricMode && params.lyricMode === 'preserve') return lyrics;
+  const fixedChorus = blueprint.patterns.includes('fixed-chorus');
+  const rolePlan = resolveV1HookRolePlan(params);
+  const parsed = parseV1ChorusBodySections(lyrics, params);
+  if (parsed.sections.length < 2) return lyrics;
+
+  if (fixedChorus) {
+    const sourceBody = getV1SectionSungBody(parsed.lines, parsed.sections[0]);
+    if (!sourceBody.length) return lyrics;
+    for (let index = parsed.sections.length - 1; index >= 1; index -= 1) {
+      replaceV1SectionSungBody(parsed.lines, parsed.sections[index], sourceBody);
+    }
+    return parsed.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  const protectedKeys = v1HookProtectedLineKeys(blueprint, card);
+  const chorus2Shift = card === 'korean' ? blueprint.koreanChorus2Shift : blueprint.secondaryChorus2Shift;
+  const finalShift = card === 'korean' ? blueprint.koreanFinalShift : blueprint.secondaryFinalShift;
+  const firstBody = getV1SectionSungBody(parsed.lines, parsed.sections[0]);
+  const secondSection = parsed.sections[1];
+  const secondBody = getV1SectionSungBody(parsed.lines, secondSection);
+  const secondIsFinalPayoff = normalizedV1HookComparison(secondSection.name) === normalizedV1HookComparison(rolePlan.finalHookSectionName)
+    || parsed.sections.length === 2;
+  if (!secondIsFinalPayoff && !hasV1MeaningfulChorusEvolution(firstBody, secondBody, protectedKeys) && chorus2Shift) {
+    replaceV1SectionSungBody(parsed.lines, secondSection, applyV1ChorusShiftLine(secondBody, chorus2Shift, protectedKeys, false));
+  }
+
+  const reparsed = parseV1ChorusBodySections(parsed.lines.join('\n'), params);
+  const finalSectionIndex = reparsed.sections.findIndex((section) => normalizedV1HookComparison(section.name) === normalizedV1HookComparison(rolePlan.finalHookSectionName));
+  const resolvedFinalIndex = finalSectionIndex >= 0 ? finalSectionIndex : reparsed.sections.length - 1;
+  if (resolvedFinalIndex > 0) {
+    const referenceIndex = Math.max(0, resolvedFinalIndex - 1);
+    const firstBodyAfterRepair = getV1SectionSungBody(reparsed.lines, reparsed.sections[0]);
+    const referenceBody = getV1SectionSungBody(reparsed.lines, reparsed.sections[referenceIndex]);
+    const finalBody = getV1SectionSungBody(reparsed.lines, reparsed.sections[resolvedFinalIndex]);
+    const evolvesFromFirst = hasV1MeaningfulChorusEvolution(firstBodyAfterRepair, finalBody, protectedKeys);
+    const evolvesFromPrevious = hasV1MeaningfulChorusEvolution(referenceBody, finalBody, protectedKeys);
+    if ((!evolvesFromFirst || !evolvesFromPrevious) && finalShift) {
+      replaceV1SectionSungBody(reparsed.lines, reparsed.sections[resolvedFinalIndex], applyV1ChorusShiftLine(finalBody, finalShift, protectedKeys, true));
+    }
+  }
+  return reparsed.lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+type V1HookCheckStatus = 'passed' | 'failed' | 'audio' | 'not-applicable' | 'incompatible' | 'target-missing';
+
+function validateV1HookBlueprintCard(
+  lyrics: string,
+  blueprint: V1ResolvedHookBlueprint,
+  card: 'korean' | 'secondary',
+  params: GenerateSongParams,
+) {
+  const core = card === 'korean' ? blueprint.koreanHookCore : blueprint.secondaryHookCore;
+  const microHook = card === 'korean' ? blueprint.koreanMicroHook : blueprint.secondaryMicroHook;
+  const previewFragment = card === 'korean' ? blueprint.koreanPreviewFragment : blueprint.secondaryPreviewFragment;
+  const variantHook = card === 'korean' ? blueprint.koreanVariantHook : blueprint.secondaryVariantHook;
+  const callLine = card === 'korean' ? blueprint.koreanCallLine : blueprint.secondaryCallLine;
+  const response = card === 'korean' ? blueprint.koreanResponse : blueprint.secondaryResponse;
+  const echoResponse = card === 'korean' ? blueprint.koreanEchoResponse : blueprint.secondaryEchoResponse;
+  const postChorusTag = card === 'korean' ? blueprint.koreanPostChorusTag : blueprint.secondaryPostChorusTag;
+  const chorusB = card === 'korean' ? blueprint.koreanChorusB : blueprint.secondaryChorusB;
+  const chorus2Shift = card === 'korean' ? blueprint.koreanChorus2Shift : blueprint.secondaryChorus2Shift;
+  const finalShift = card === 'korean' ? blueprint.koreanFinalShift : blueprint.secondaryFinalShift;
+  const patterns = new Set(blueprint.patterns);
+  const rolePlan = resolveV1HookRolePlan(params);
+  const structuralSectionNames = getV1SectionBlueprint(params).entries.map((entry) => entry.name);
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const lines = String(lyrics || '').split('\n');
+  const sections: Array<{ name: string; start: number; end: number }> = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const tag = isV1StructuralHookGuardTag(lines[index], structuralSectionNames);
+    if (!tag) continue;
+    if (sections.length) sections[sections.length - 1].end = index;
+    sections.push({ name: tag.name, start: index, end: lines.length });
+  }
+  const chorusSections = sections.filter((section) => isV1HookFamilySectionName(section.name, rolePlan));
+  const dropSections = sections.filter((section) => rolePlan.dropSectionNames.some((name) => normalizedV1HookComparison(name) === normalizedV1HookComparison(section.name)));
+  const embeddedDropSections = rolePlan.dropPlacementMode === 'embedded-hook' && chorusSections.length
+    ? [chorusSections[0]]
+    : [];
+  const circularSections = sections.filter((section) => isV1CircularRoleSectionName(section.name, rolePlan));
+  const bodyLines = (section: { start: number; end: number }) => lines
+    .slice(section.start + 1, section.end)
+    .map((line) => String(line || '').trim())
+    .filter((line) => line && !/^\[[^\]]+\]$/.test(line));
+  const cueLines = (section: { start: number; end: number }) => lines
+    .slice(section.start + 1, section.end)
+    .map((line) => String(line || '').trim())
+    .filter((line) => /^\[[^\]]+\]$/.test(line));
+  const normalizeLine = (value: string) => normalizedV1HookComparison(String(value || '').replace(/^\(|\)$/g, ''));
+  const exactCount = (section: { start: number; end: number }, value: string) => {
+    const needle = normalizedV1HookComparison(value);
+    if (!needle) return 0;
+    return bodyLines(section).filter((line) => normalizeLine(line) === needle).length;
+  };
+  const hasPhraseAcrossBodyLines = (section: { start: number; end: number }, value: string) => {
+    const needle = normalizedV1HookComparison(value);
+    if (!needle) return false;
+    return normalizedV1HookComparison(bodyLines(section).join(' ')).includes(needle);
+  };
+  const openingCount = (section: { start: number; end: number }, value: string) => {
+    const needle = normalizedV1HookComparison(value);
+    let count = 0;
+    for (const line of bodyLines(section)) {
+      if (normalizeLine(line) === needle) count += 1;
+      else break;
+    }
+    return count;
+  };
+  const endingMatches = (section: { start: number; end: number }, value: string) => {
+    const postTagKey = normalizedV1HookComparison(postChorusTag);
+    const body = bodyLines(section).filter((line) => !postTagKey || normalizeLine(line) !== postTagKey);
+    return Boolean(body.length && normalizeLine(body[body.length - 1]) === normalizedV1HookComparison(value));
+  };
+  const hasRepeatedMicroLine = (section: { start: number; end: number }, token: string, minimum = 3) => {
+    const cleanToken = cleanV1MicroHookToken(token);
+    if (!cleanToken) return false;
+    const normalizedToken = normalizedV1HookComparison(cleanToken);
+    return bodyLines(section).some((line) => {
+      const tokens = String(line || '')
+        .replace(/[()\[\]]/g, ' ')
+        .split(/[\s,，、/|·]+/)
+        .map((part) => normalizedV1HookComparison(part))
+        .filter(Boolean);
+      return tokens.filter((part) => part === normalizedToken).length >= minimum;
+    });
+  };
+  const hasCue = (section: { start: number; end: number }, cue: string) => cueLines(section)
+    .some((line) => normalizedV1HookComparison(line) === normalizedV1HookComparison(cue));
+  const firstHookIndex = chorusSections[0]?.start ?? Number.MAX_SAFE_INTEGER;
+  const previewSection = [...sections].reverse().find((section) => section.end <= firstHookIndex
+    && rolePlan.preparationSectionNames.some((name) => normalizedV1HookComparison(name) === normalizedV1HookComparison(section.name)));
+
+  const checks: Record<string, boolean> = {};
+  const statuses: Record<string, V1HookCheckStatus> = {};
+  const hasCoreTargets = chorusSections.length > 0;
+  const setCheck = (
+    key: string,
+    value: boolean,
+    statusWhenPassed: V1HookCheckStatus = 'passed',
+    requiresCoreTarget = true,
+  ) => {
+    if (requiresCoreTarget && !hasCoreTargets) {
+      checks[key] = false;
+      statuses[key] = 'target-missing';
+      return;
+    }
+    checks[key] = value;
+    statuses[key] = value ? statusWhenPassed : 'failed';
+  };
+  const everyChorusHasCore = Boolean(core) && hasCoreTargets && chorusSections.every((section) => exactCount(section, core) >= 1);
+  const protectedKeys = v1HookProtectedLineKeys(blueprint, card);
+  if (patterns.has('fixed-chorus')) {
+    if (chorusSections.length < 2) {
+      statuses.fixedChorus = 'target-missing';
+      checks.fixedChorus = false;
+    } else {
+      const firstSignature = getV1SectionSungBody(lines, chorusSections[0]).map(normalizedV1HookComparison).filter(Boolean).join('|');
+      setCheck('fixedChorus', Boolean(firstSignature) && chorusSections.slice(1).every((section) => getV1SectionSungBody(lines, section).map(normalizedV1HookComparison).filter(Boolean).join('|') === firstSignature));
+    }
+  } else if (chorusSections.length > 1) {
+    const firstBodyForEvolution = getV1SectionSungBody(lines, chorusSections[0]);
+    const finalSectionForEvolution = chorusSections.find((section) => normalizedV1HookComparison(section.name) === normalizedV1HookComparison(rolePlan.finalHookSectionName)) || chorusSections[chorusSections.length - 1];
+    const finalBodyForEvolution = getV1SectionSungBody(lines, finalSectionForEvolution);
+    if (chorusSections.length === 2) {
+      setCheck('chorusEvolution', hasV1MeaningfulChorusEvolution(firstBodyForEvolution, finalBodyForEvolution, protectedKeys));
+    } else {
+      const secondBodyForEvolution = getV1SectionSungBody(lines, chorusSections[1]);
+      const finalReference = getV1SectionSungBody(lines, chorusSections[chorusSections.length - 2]);
+      setCheck('chorusEvolution',
+        hasV1MeaningfulChorusEvolution(firstBodyForEvolution, secondBodyForEvolution, protectedKeys)
+        && hasV1MeaningfulChorusEvolution(firstBodyForEvolution, finalBodyForEvolution, protectedKeys)
+        && hasV1MeaningfulChorusEvolution(finalReference, finalBodyForEvolution, protectedKeys));
+    }
+  } else if (chorusSections.length === 1) {
+    statuses.chorusEvolution = 'not-applicable';
+  }
+
+
+  if (patterns.has('short-repeat')) setCheck('shortRepeat', Boolean(core) && chorusSections.length > 0 && chorusSections.every((section) => openingCount(section, core) >= 2));
+  if (patterns.has('slogan')) {
+    const sloganWords = String(core || '').split(/\s+/).filter(Boolean);
+    setCheck('slogan', everyChorusHasCore && sloganWords.length > 0 && sloganWords.length <= 6 && String(core || '').length <= 44);
+  }
+  if (patterns.has('one-line')) setCheck('oneLine', everyChorusHasCore);
+  if (patterns.has('one-word')) setCheck('oneWord', Boolean(microHook) && chorusSections.length > 0 && chorusSections.every((section) => hasRepeatedMicroLine(section, microHook, 3)));
+  if (patterns.has('melodic')) {
+    const wordCount = String(core || '').split(/\s+/).filter(Boolean).length;
+    setCheck('melodicText', everyChorusHasCore && wordCount > 0 && wordCount <= 7);
+    if (hasCoreTargets) statuses.melodicAudio = 'audio';
+  }
+  if (patterns.has('first-line-anchor')) setCheck('firstLineAnchor', Boolean(core) && chorusSections.length > 0 && chorusSections.every((section) => openingCount(section, core) >= 1));
+  if (patterns.has('end-line-anchor')) setCheck('endLineAnchor', Boolean(core) && chorusSections.length > 0 && chorusSections.every((section) => endingMatches(section, core)));
+  if (patterns.has('preview')) {
+    if (!hasCoreTargets || !previewSection) {
+      checks.preview = false;
+      statuses.preview = 'target-missing';
+    } else {
+      const firstTarget = chorusSections[0];
+      setCheck('preview', Boolean(previewFragment
+        && exactCount(previewSection, previewFragment) >= 1
+        && core
+        && firstTarget
+        && exactCount(firstTarget, core) >= 1));
+    }
+  }
+  if (patterns.has('post-chorus-tag')) setCheck('postChorusTag', Boolean(postChorusTag) && chorusSections.length > 0 && chorusSections.every((section) => exactCount(section, postChorusTag) >= 1));
+  if (patterns.has('circular-refrain')) {
+    if (circularSections.length < 2) {
+      checks.circularRefrain = false;
+      statuses.circularRefrain = 'target-missing';
+    }
+    else setCheck('circularRefrain', Boolean(core) && circularSections.every((section) =>
+      exactCount(section, core) >= 1 || hasPhraseAcrossBodyLines(section, core),
+    ));
+  }
+  if (patterns.has('progressive-repeat')) {
+    if (chorusSections.length < 2) {
+      checks.progressiveRepeat = false;
+      statuses.progressiveRepeat = 'target-missing';
+    } else {
+      const finalSection = chorusSections.find((section) => normalizedV1HookComparison(section.name) === normalizedV1HookComparison(rolePlan.finalHookSectionName)) || chorusSections[chorusSections.length - 1];
+      setCheck('progressiveRepeat', Boolean(core && finalSection && exactCount(finalSection, core) >= 2));
+    }
+  }
+  if (patterns.has('variation-repeat')) {
+    if (chorusSections.length < 2) {
+      checks.variationRepeat = false;
+      statuses.variationRepeat = 'target-missing';
+    } else {
+      const secondSection = chorusSections[1];
+      setCheck('variationRepeat', Boolean(variantHook && secondSection && exactCount(secondSection, variantHook) >= 1 && everyChorusHasCore));
+    }
+  }
+  if (patterns.has('chant')) {
+    setCheck('chantText', everyChorusHasCore && chorusSections.every((section) => hasCue(section, '[rhythmic chant delivery]')));
+    if (hasCoreTargets) statuses.chantAudio = 'audio';
+  }
+  if (patterns.has('call-response')) {
+    if (!vocalCompatibility.callResponseAvailable) {
+      checks.callResponse = false;
+      statuses.callResponse = 'incompatible';
+    } else {
+      const responseRoleCue = vocalCompatibility.vocalCount >= 2
+        ? '[second vocalist answers the lead]'
+        : '[responsive vocal layer answers the lead]';
+      setCheck('callResponse', Boolean(callLine && response)
+        && normalizedV1HookComparison(callLine) !== normalizedV1HookComparison(response)
+        && chorusSections.length > 0
+        && chorusSections.every((section) => hasCue(section, responseRoleCue)
+          && exactCount(section, callLine) >= 1
+          && exactCount(section, response) >= 1));
+    }
+  }
+  if (patterns.has('echo-response')) {
+    const coreKey = normalizedV1HookComparison(core);
+    const responseKey = normalizedV1HookComparison(echoResponse);
+    setCheck('echoResponse', Boolean(coreKey && responseKey && coreKey !== responseKey && coreKey.includes(responseKey))
+      && chorusSections.length > 0
+      && chorusSections.every((section) => exactCount(section, core) >= 1 && exactCount(section, echoResponse) >= 1));
+  }
+  if (patterns.has('easy-sing')) {
+    const words = String(core || '').split(/\s+/).filter(Boolean);
+    setCheck('easySing', everyChorusHasCore && words.length > 0 && words.length <= 7 && String(core || '').length <= 52 && isV1CompleteEasySingHook(core));
+  }
+  if (patterns.has('split-ab')) setCheck('splitAB', Boolean(core && chorusB) && chorusSections.length > 0 && chorusSections.every((section) => exactCount(section, core) >= 1 && exactCount(section, chorusB) >= 1));
+  if (patterns.has('drop-hook')) {
+    const targetDropSections = dropSections.length ? dropSections : embeddedDropSections;
+    if (!targetDropSections.length) {
+      checks.dropHook = false;
+      statuses.dropHook = 'target-missing';
+    } else if (dropSections.length) {
+      setCheck('dropHook', Boolean(core || microHook) && targetDropSections.every((section) => microHook ? hasRepeatedMicroLine(section, microHook, 3) : exactCount(section, core) >= 1), 'passed', false);
+    } else {
+      setCheck('dropHook', Boolean(core || microHook) && targetDropSections.every((section) => {
+        const body = bodyLines(section);
+        const lastBodyLine = body[body.length - 1] || '';
+        const dropLineAtEnd = microHook
+          ? (() => {
+            const cleanToken = cleanV1MicroHookToken(microHook);
+            const normalizedToken = normalizedV1HookComparison(cleanToken);
+            const tokens = String(lastBodyLine || '')
+              .replace(/[()\[\]]/g, ' ')
+              .split(/[\s,，、/|·]+/)
+              .map((part) => normalizedV1HookComparison(part))
+              .filter(Boolean);
+            return Boolean(normalizedToken && tokens.filter((part) => part === normalizedToken).length >= 3);
+          })()
+          : Boolean(core && normalizedV1HookComparison(lastBodyLine) === normalizedV1HookComparison(core));
+        return hasCue(section, '[brief beat drop under the vocal hook]') && dropLineAtEnd;
+      }), 'passed', false);
+    }
+  }
+  if (patterns.has('anti-chorus')) {
+    setCheck('antiChorusText', everyChorusHasCore && chorusSections.every((section) => hasCue(section, '[chorus strips back to one sparse anchor]') && bodyLines(section).length <= 5));
+    if (hasCoreTargets) statuses.antiChorusAudio = 'audio';
+  }
+  if (patterns.has('negative-space')) {
+    setCheck('negativeSpaceText', everyChorusHasCore && chorusSections.every((section) => hasCue(section, '[brief pause before the hook]')));
+    if (hasCoreTargets) statuses.negativeSpaceAudio = 'audio';
+  }
+
+  return {
+    primaryHookLine: core,
+    microHook,
+    previewFragment,
+    variationHook: variantHook,
+    callLine,
+    responseLine: response,
+    echoResponseLine: echoResponse,
+    postChorusTag,
+    chorusBLine: chorusB,
+    chorus2ShiftLine: chorus2Shift,
+    finalShiftLine: finalShift,
+    checks,
+    statuses,
+    passed: Object.keys(statuses).length > 0 && !Object.values(statuses).some((status) => status === 'failed' || status === 'incompatible' || status === 'target-missing'),
+  };
+}
+
+const V1_HOOK_DIMENSION_BY_PATTERN: Record<V1HookPattern, 'form' | 'placement' | 'repetition' | 'performance' | 'structure' | 'none'> = {
+  natural: 'none',
+  'fixed-chorus': 'repetition',
+  'short-repeat': 'form',
+  slogan: 'form',
+  'one-line': 'form',
+  'one-word': 'form',
+  melodic: 'form',
+  'first-line-anchor': 'placement',
+  'end-line-anchor': 'placement',
+  preview: 'placement',
+  'post-chorus-tag': 'placement',
+  'circular-refrain': 'placement',
+  'progressive-repeat': 'repetition',
+  'variation-repeat': 'repetition',
+  chant: 'performance',
+  'call-response': 'performance',
+  'echo-response': 'performance',
+  'easy-sing': 'performance',
+  'split-ab': 'structure',
+  'drop-hook': 'structure',
+  'anti-chorus': 'structure',
+  'negative-space': 'structure',
+};
+
+function buildV1HookBlueprintWarnings(patterns: V1HookPattern[], params: GenerateSongParams): string[] {
+  const set = new Set(patterns);
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const rolePlan = resolveV1HookRolePlan(params);
+  const warnings: string[] = [];
+  if (set.has('fixed-chorus') && (set.has('progressive-repeat') || set.has('variation-repeat'))) warnings.push('고정 후렴이 선택되어 가사 본문은 동일하게 유지하고, 점층·변형 의도는 보컬·화음·편곡 에너지에서만 반영합니다.');
+  if (set.has('fixed-chorus') && (set.has('first-line-anchor') || set.has('end-line-anchor') || set.has('one-line'))) warnings.push('고정 후렴에서는 전체 후렴이 반복되므로 한 줄 훅·첫줄·끝줄 고정 기능은 자동으로 포함됩니다.');
+  if (set.has('anti-chorus') && set.has('drop-hook')) warnings.push('안티코러스와 드롭 훅은 같은 후렴에서 서로 다른 에너지 방향을 요구하므로 구조별로 분리 적용됩니다.');
+  if (set.has('call-response') && !vocalCompatibility.callResponseAvailable) warnings.push(vocalCompatibility.callResponseReason);
+  if (set.has('call-response') && set.has('echo-response')) warnings.push('콜앤리스폰스와 메아리 응답을 함께 선택하면 응답이 두 층으로 늘어날 수 있어 가사를 간결하게 유지합니다.');
+  if (set.has('fixed-chorus') && rolePlan.hookSectionNames.length < 2) warnings.push('고정 후렴을 반복할 핵심 구간이 2개 미만이라 새 섹션을 만들지 않고 적용 대상 부족으로 표시합니다.');
+  if (set.has('preview') && rolePlan.preparationSectionNames.length === 0) warnings.push('훅을 미리 보여 줄 앞선 가창 구간이 없어 훅 선공개 적용 대상이 부족합니다.');
+  if (set.has('circular-refrain') && rolePlan.circularSectionNames.length < 2) warnings.push('같은 문구를 순환시킬 서로 떨어진 기존 섹션이 부족합니다.');
+  if (patterns.length > 6) warnings.push('후렴 기능을 많이 선택했습니다. 엔진은 모두 유지하지만 핵심 훅 한 개를 중심으로 우선순위를 정합니다.');
+  return warnings;
+}
+
+function buildV1HookBlueprintPublicSummary(
+  blueprint: V1ResolvedHookBlueprint,
+  params: GenerateSongParams,
+  koreanLyrics: string,
+  secondaryLyrics: string,
+) {
+  const rolePlan = resolveV1HookRolePlan(params);
+  const vocalCompatibility = getV1HookVocalCompatibility(params);
+  const selected = getSelectedV1StyleIntentItems(params, 'hook-addiction').map((item) => {
+    const pattern = getV1StyleIntentDefinition(item).hookPattern || 'natural';
+    return {
+      id: item.id,
+      label: String((item as any).labelKo || item.label || item.id),
+      pattern,
+      dimension: V1_HOOK_DIMENSION_BY_PATTERN[pattern],
+    };
+  });
+  const dimensions = selected.reduce<Record<string, Array<{ id: string; label: string }>>>((acc, item) => {
+    if (item.dimension === 'none') return acc;
+    if (!acc[item.dimension]) acc[item.dimension] = [];
+    acc[item.dimension].push({ id: item.id, label: item.label });
+    return acc;
+  }, {});
+  return {
+    selected,
+    dimensions,
+    patterns: blueprint.patterns,
+    structureMode: rolePlan.mode,
+    structureProfile: rolePlan.profile,
+    targetSections: rolePlan.hookSectionLabels,
+    targetSectionsText: rolePlan.targetSectionsText,
+    structureCondition: rolePlan.structureCondition,
+    dropCondition: rolePlan.dropCondition,
+    circularCondition: rolePlan.circularCondition,
+    vocalCondition: blueprint.patterns.includes('call-response')
+      ? (vocalCompatibility.callResponseAvailable
+        ? (vocalCompatibility.vocalCount >= 2 ? `${vocalCompatibility.vocalCount}인 보컬 구성` : '응답형 보컬 레이어 사용 가능')
+        : '솔로 보컬 · 응답형 보컬 레이어 없음')
+      : '',
+    placement: blueprint.placement,
+    repeatShape: blueprint.repeatShape,
+    chorusMode: blueprint.patterns.includes('fixed-chorus') ? 'fixed' : 'evolving',
+    rhythmicCell: blueprint.rhythmicCell,
+    performanceEvent: blueprint.performanceEvent,
+    warnings: buildV1HookBlueprintWarnings(blueprint.patterns, params),
+    korean: String(koreanLyrics || '').trim() ? validateV1HookBlueprintCard(koreanLyrics, blueprint, 'korean', params) : undefined,
+    secondary: String(secondaryLyrics || '').trim() ? validateV1HookBlueprintCard(secondaryLyrics, blueprint, 'secondary', params) : undefined,
+  };
 }
 
 
@@ -30930,14 +31990,28 @@ ${selectedNativeScriptInstruction}
             pattern: { type: Type.STRING },
             koreanHookCore: { type: Type.STRING },
             secondaryHookCore: { type: Type.STRING },
+            koreanMicroHook: { type: Type.STRING },
+            secondaryMicroHook: { type: Type.STRING },
+            koreanPreviewFragment: { type: Type.STRING },
+            secondaryPreviewFragment: { type: Type.STRING },
+            koreanVariantHook: { type: Type.STRING },
+            secondaryVariantHook: { type: Type.STRING },
+            koreanCallLine: { type: Type.STRING },
+            secondaryCallLine: { type: Type.STRING },
             koreanResponse: { type: Type.STRING },
             secondaryResponse: { type: Type.STRING },
-            placement: { type: Type.STRING },
-            repeatShape: { type: Type.STRING },
-            rhythmicCell: { type: Type.STRING },
-            performanceEvent: { type: Type.STRING },
+            koreanEchoResponse: { type: Type.STRING },
+            secondaryEchoResponse: { type: Type.STRING },
+            koreanPostChorusTag: { type: Type.STRING },
+            secondaryPostChorusTag: { type: Type.STRING },
+            koreanChorusB: { type: Type.STRING },
+            secondaryChorusB: { type: Type.STRING },
+            koreanChorus2Shift: { type: Type.STRING },
+            secondaryChorus2Shift: { type: Type.STRING },
+            koreanFinalShift: { type: Type.STRING },
+            secondaryFinalShift: { type: Type.STRING },
           },
-          required: ["pattern", "koreanHookCore", "secondaryHookCore", "koreanResponse", "secondaryResponse", "placement", "repeatShape", "rhythmicCell", "performanceEvent"],
+          required: ["pattern", "koreanHookCore", "secondaryHookCore", "koreanMicroHook", "secondaryMicroHook", "koreanPreviewFragment", "secondaryPreviewFragment", "koreanVariantHook", "secondaryVariantHook", "koreanCallLine", "secondaryCallLine", "koreanResponse", "secondaryResponse", "koreanEchoResponse", "secondaryEchoResponse", "koreanPostChorusTag", "secondaryPostChorusTag", "koreanChorusB", "secondaryChorusB", "koreanChorus2Shift", "secondaryChorus2Shift", "koreanFinalShift", "secondaryFinalShift"],
         },
       }
     : {};
@@ -31100,8 +32174,9 @@ ${exactStructureText}
 ${exactStructureText}
 - In Stable/Recommended mode, do not place Chorus before the first Verse unless the user explicitly wrote a custom chorus-first instruction. The first sung storytelling section should begin with Verse or Rap Section according to the required structure.
 - Output the structural sections in this order. Do not omit, merge, rename, or absorb required structural sections into another tag.
+- When the selected mode is Stable, the visible ten-section order is immutable. Never replace Verse 2 with Rap Section, even when a rapper role or Rap AUTO/ON is active. Keep the [Verse 2] label and let the rap-capable singer use rhythmic or rap delivery inside that Verse 2 instead.
 - If the required structure includes Intro, keep Intro as the opening/prologue section. Intro may be lyric-free when it functions as instrumental, ambient, foley, texture, mood-setting, or buildup opening. It may also contain one very short ad-lib, spoken aside, hook phrase, foley-like vocal moment, or atmospheric vocal line when it naturally fits the genre, scene, and flow. Avoid both extremes: do not force Verse/Rap/Chorus body lyrics into Intro, and do not always leave Intro as tag-only. Do not treat a tag-only Intro as an error.
-- Preserve the exact section labels written in the required structure. Recommended, Stable, and Experimental modes number repeated sections chronologically (Verse 1/2, Pre-Chorus 1/2, Chorus 1/2). Never invent Verse A/B/C or singer-based suffixes. Custom mode preserves the user's explicit names.
+- Preserve the exact section labels written in the required structure. Do not add 1/2, A/B/C, or singer-based suffixes unless that exact label already appears in the required structure. Stable keeps repeated [Pre-Chorus] and [Chorus] labels unnumbered exactly as displayed, while [Verse 1] and [Verse 2] remain distinct.
 - Every sung or vocal-ad-lib section tag MUST use a fresh current-song performance cue. Do not inject a fixed fallback phrase and do not leave a sung tag bare. Derive each cue from the section's lyric body, structural role, neighbouring contrast, selected vocal character, and [Arrangement] arc. Do NOT put space-texture labels such as tunnel echo, bathroom reverb, spatial texture, room reverb, or reverb-only cues inside sung lyric section tags; keep them as production/standalone sound cues.
 - The structure is fixed, but section cue wording is NOT fixed. Do not reuse canned cues such as processed, soft swell, fading out, emotional build, controlled emotional turn, or high-energy hook as one-word/generic answers.
 - If the fixed structure includes Refrain, keep every Refrain occurrence and make it feel like a returning short phrase. Do not reduce Refrain to a one-time section.
@@ -31423,7 +32498,7 @@ ${isGenerationEngineV2(params) ? '' : '  "storyAtmosphere": "Concise natural-Eng
     params.isNoLyrics
       ? ""
       : `,
-  "hookBlueprint": { "pattern": "natural or selected pattern names", "koreanHookCore": "compact Korean hook core", "secondaryHookCore": "same hook meaning in the secondary language", "koreanResponse": "optional short Korean answer", "secondaryResponse": "optional short secondary-language answer", "placement": "first/end/preview/return placement", "repeatShape": "how repetition changes across returns", "rhythmicCell": "compact rhythm and breath shape", "performanceEvent": "hook performance or production event" },
+  "hookBlueprint": { "pattern": "all selected pattern names", "koreanHookCore": "complete compact Korean primary hook line", "secondaryHookCore": "same primary hook meaning in the secondary language", "koreanMicroHook": "one visible token for One-word Hook, otherwise empty", "secondaryMicroHook": "same micro-hook meaning, otherwise empty", "koreanPreviewFragment": "short incomplete preview for Hook Preview, otherwise empty", "secondaryPreviewFragment": "same preview meaning, otherwise empty", "koreanVariantHook": "controlled alternate hook for Variation Repeat, otherwise empty", "secondaryVariantHook": "same alternate meaning, otherwise empty", "koreanCallLine": "lead call for Call-response, otherwise empty", "secondaryCallLine": "same lead-call function, otherwise empty", "koreanResponse": "different answer for Call-response, otherwise empty", "secondaryResponse": "same answer function, otherwise empty", "koreanEchoResponse": "short fragment of primary hook for Echo-response, otherwise empty", "secondaryEchoResponse": "same echo function, otherwise empty", "koreanPostChorusTag": "separate short tag for Post-Chorus Tag, otherwise empty", "secondaryPostChorusTag": "same tag meaning, otherwise empty", "koreanChorusB": "B-half payoff for A/B Split, otherwise empty", "secondaryChorusB": "same B-half function, otherwise empty", "koreanChorus2Shift": "complete new surrounding line for the first middle core-return evolution, empty only for Fixed Chorus", "secondaryChorus2Shift": "same middle core-return evolution function", "koreanFinalShift": "complete new surrounding line for the final role-linked payoff, empty only for Fixed Chorus", "secondaryFinalShift": "same final role-linked payoff function" },
   "lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }`
   }
 }
@@ -32363,11 +33438,14 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           'korean',
           params,
         );
-        result.lyrics.korean = applyV1GeneratedSectionPerformancePlan(
-          hookBoundKorean,
-          finalSectionPerformancePlan,
+        result.lyrics.korean = finalizeV1PublicLyricOutputIntegrity(
+          applyV1GeneratedSectionPerformancePlan(
+            hookBoundKorean,
+            finalSectionPerformancePlan,
+            params,
+            result.productionPrompt,
+          ),
           params,
-          result.productionPrompt,
         );
       }
       if (typeof result.lyrics.english === 'string') {
@@ -32381,14 +33459,26 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           'secondary',
           params,
         );
-        result.lyrics.english = applyV1GeneratedSectionPerformancePlan(
-          hookBoundEnglish,
-          finalSectionPerformancePlan,
+        result.lyrics.english = finalizeV1PublicLyricOutputIntegrity(
+          applyV1GeneratedSectionPerformancePlan(
+            hookBoundEnglish,
+            finalSectionPerformancePlan,
+            params,
+            result.productionPrompt,
+          ),
           params,
-          result.productionPrompt,
         );
       }
     }
+  }
+
+  if (!params.isNoLyrics && !isGenerationEngineV2(params) && result?.appliedKeywords) {
+    (result.appliedKeywords as any).hookBlueprint = buildV1HookBlueprintPublicSummary(
+      resolvedV1HookBlueprint,
+      params,
+      String(result?.lyrics?.korean || ''),
+      String(result?.lyrics?.english || ''),
+    );
   }
 
   (result as any).userInput = params.userInput ?? "";
@@ -32797,6 +33887,7 @@ Translate the provided text into ${targetLanguage}.
 
   return response.text || "";
 }
+
 
 
 

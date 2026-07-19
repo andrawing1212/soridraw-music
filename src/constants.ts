@@ -595,45 +595,41 @@ export const STYLE_CYCLES: SoundStyleCycle[] = [
   },
   {
     id: 'hook-addiction',
-    title: 'Hook Line',
+    title: 'Hook Design',
     titleKo: '후렴 라인',
-    description: 'Strengthens the memorability of hooks, chorus lines, and repetition.',
-    descriptionKo: '실제 후렴 문구는 현재 Story Context에서 새로 만들고, 선택 항목은 첫 등장·반복·응답·강화 방식을 정해요. 예: ‘여기 있어’가 Chorus 1부터 등장하고 Final Chorus에서 더 강하게 반복됩니다.',
+    description: 'Designs the hook by form, placement, repetition, performance, and chorus structure.',
+    descriptionKo: '기본은 핵심 훅만 유지하고 Chorus 1·2·Final의 주변 가사를 이야기 진행에 맞게 발전시킵니다. 전체 후렴 가사를 그대로 반복하려면 ‘고정 후렴’을 선택하고, 그 밖의 기능은 형태·배치·반복·가창 구조·후렴 구조로 나누어 설계합니다.',
     variants: [
-      { id: 'separator-style-hook-addiction-addictive', kind: 'separator', label: 'Addictive Hook', labelKo: '중독성 강한 후렴', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'short-hook-repeat', label: 'Short Hook Repeat', labelKo: '짧은 훅 반복', description: 'A short hook repeated for strong recall.', descriptionKo: '짧은 훅을 반복해 기억에 남게 합니다. (Short Hook Repeat)', style: 'short repeated hook', sound: 'tight hook loop', mood: 'simple, catchy' },
-      { id: 'repeated-slogan', label: 'Repeated Slogan', labelKo: '반복되는 구호', description: 'A slogan-like phrase repeats as a hook device.', descriptionKo: '이야기에서 뽑은 짧은 문구를 구호처럼 사용합니다. 예: Chorus 1부터 ‘여기 있어’를 핵심 문구로 유지하고 마지막 후렴에서 더 힘 있게 외칩니다. (Repeated Slogan)', style: 'repeated slogan hook', sound: 'chantable phrase repetition', mood: 'bold, performative' },
-      { id: 'addictive-repeat', label: 'Addictive Repetition', labelKo: '중독성 있는 반복', description: 'Repetitive hook phrases that build familiarity.', descriptionKo: '같은 핵심 훅의 인식은 유지하면서 돌아올수록 반복 밀도를 높입니다. 예: Chorus 1 한 번 → Chorus 2 인식 유지 → Final Chorus 두 번 이상 강화. (Addictive Repetition)', style: 'addictive repeated hook phrases', sound: 'loop-friendly hook rhythm', mood: 'catchy, hypnotic' },
-      { id: 'chant-hook', label: 'Chant Hook', labelKo: '챈트 훅', description: 'Rhythmic chant-like hook for impact.', descriptionKo: '구호처럼 외치는 리듬형 훅입니다. (Chant Hook)', style: 'chant-like hook', sound: 'rhythmic vocal chant accents', mood: 'energetic, bold' },
-      { id: 'call-response-hook', label: 'Call-response Hook', labelKo: '콜앤리스폰스 훅', description: 'Hook built on call-and-response movement.', descriptionKo: '주고받는 구조의 후렴 훅을 만듭니다. (Call-response Hook)', style: 'call-response hook movement', sound: 'alternating vocal hook accents', mood: 'interactive, playful' },
-      { id: 'easy-sing-chorus', label: 'Easy-sing Chorus', labelKo: '따라 부르는 후렴', description: 'A chorus with simple phrasing for easy singing.', descriptionKo: '누구나 따라 부르기 쉬운 후렴 구조입니다. (Easy-sing Chorus)', style: 'chorus-only easy singalong hook', sound: 'chorus hook spacing', mood: 'friendly, accessible' },
-      { id: 'singalong-point', label: 'Singalong Point', labelKo: '떼창 포인트', description: 'A chorus section that invites group singing.', descriptionKo: '따라 부르기 쉬운 떼창 포인트를 만듭니다. (Singalong Point)', style: 'singalong chorus point', sound: 'group-friendly hook spacing', mood: 'communal, uplifting' },
-      { id: 'separator-style-hook-addiction-memorable', kind: 'separator', label: 'Memorable Hook', labelKo: '기억에 남는 후렴', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'one-line-hook', label: 'One-line Hook', labelKo: '한 줄 훅', description: 'A single strong line becomes the emotional anchor.', descriptionKo: '한 줄이 곡의 중심 훅이 되도록 만듭니다. (One-line Hook)', style: 'one-line hook focus', sound: 'minimal hook anchor', mood: 'direct, memorable' },
-      { id: 'melody-hook', label: 'Melody Hook', labelKo: '멜로디 훅', description: 'A melodic phrase that becomes the main hook.', descriptionKo: '선율 자체가 훅이 되는 멜로디 중심 스타일입니다. (Melody Hook)', style: 'melodic hook focus', sound: 'clear melodic motif', mood: 'singable, polished' },
-      { id: 'catchy-hook', label: 'Catchy Hook', labelKo: '캐치한 훅', description: 'A hook designed to stick quickly in the listener’s ear.', descriptionKo: '귀에 빠르게 남는 캐치한 훅을 강화합니다. (Catchy Hook)', style: 'catchy hook focus', sound: 'clear melodic hook emphasis', mood: 'memorable, bright' },
-      { id: 'earworm-chorus', label: 'Earworm Chorus', labelKo: '귀에 남는 후렴', description: 'A chorus designed for strong earworm effect.', descriptionKo: '계속 머릿속에 맴도는 후렴감을 강화합니다. (Earworm Chorus)', style: 'chorus-only earworm hook writing', sound: 'sticky chorus melodic contour', mood: 'catchy, addictive' },
-      { id: 'separator-style-hook-addiction-natural', kind: 'separator', label: 'Natural Hook', labelKo: '자연스러운 후렴', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'chorus-focus', label: 'Chorus Focus', labelKo: '후렴 강조', description: 'Stronger chorus-centered arrangement and payoff.', descriptionKo: '후렴의 존재감과 완성도를 높이는 스타일입니다. (Chorus Focus)', style: 'chorus-focused songwriting', sound: 'wide chorus lift', mood: 'satisfying, direct' },
-      { id: 'chorus-shift', label: 'Chorus Shift', labelKo: '후렴 전환감', description: 'A chorus that changes the emotional or rhythmic angle.', descriptionKo: '후렴에서 분위기나 리듬이 전환되는 느낌을 줍니다. (Chorus Shift)', style: 'chorus shift moment', sound: 'section contrast at the hook', mood: 'dynamic, surprising' },
-      { id: 'chorus-explosion', label: 'Explosive Chorus', labelKo: '후렴 폭발', description: 'A chorus that opens wide with stronger energy.', descriptionKo: '후렴에서 에너지가 크게 터지는 구조입니다. (Explosive Chorus)', style: 'explosive chorus payoff', sound: 'wide lift, stronger drums and harmony', mood: 'powerful, cathartic' },
-      { id: 'hook-led-flow', label: 'Hook-led Flow', labelKo: '훅 중심 전개', description: 'The whole song is organized around the hook.', descriptionKo: '곡 전체가 훅을 중심으로 돌아가는 전개입니다. (Hook-led Flow)', style: 'hook-led structure', sound: 'recurring hook motif', mood: 'focused, memorable' },
-      { id: 'separator-style-hook-addiction-placement', kind: 'separator', label: 'Hook Placement', labelKo: '훅 배치', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'chorus-first-line-anchor', label: 'First-line Chorus Anchor', labelKo: '후렴 첫줄 앵커', description: 'The chorus opens with the same compact anchor line so the hook is recognized immediately.', descriptionKo: '모든 후렴의 첫 줄에 같은 핵심 문구가 먼저 등장해 훅을 즉시 인식시키는 구조입니다. (First-line Chorus Anchor)', style: 'chorus first-line anchor', sound: 'immediate hook entrance', mood: 'direct, memorable' },
-      { id: 'chorus-end-line-anchor', label: 'End-line Chorus Anchor', labelKo: '후렴 끝줄 앵커', description: 'The chorus resolves on the same compact line so the final cadence becomes the hook.', descriptionKo: '모든 후렴의 끝 줄이 같은 핵심 문구로 닫혀 마지막 여운 자체가 훅이 되는 구조입니다. (End-line Chorus Anchor)', style: 'chorus end-line anchor', sound: 'hooked closing cadence', mood: 'resolving, memorable' },
-      { id: 'hook-preview', label: 'Hook Preview', labelKo: '훅 선공개', description: 'A short piece of the hook appears before the first full chorus and returns with full meaning later.', descriptionKo: '첫 후렴 전에 핵심 훅의 일부를 짧게 들려준 뒤 본 후렴에서 완성해 익숙함을 만드는 구조입니다. (Hook Preview)', style: 'pre-chorus hook preview', sound: 'teased hook motif before full chorus', mood: 'anticipating, familiar' },
-      { id: 'post-chorus-tag', label: 'Post-Chorus Tag', labelKo: '포스트코러스 태그', description: 'A short lyric or vocal tag remains after the chorus as a second memory point.', descriptionKo: '후렴 뒤에 짧은 문구나 보컬 태그를 남겨 두 번째 기억 지점을 만드는 구조입니다. (Post-Chorus Tag)', style: 'short post-chorus tag', sound: 'bonus hook after chorus', mood: 'sticky, lingering' },
-      { id: 'separator-style-hook-addiction-repeat-design', kind: 'separator', label: 'Repetition Design', labelKo: '반복 설계', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'one-word-hook', label: 'One-word Hook', labelKo: '한 단어 훅', description: 'One word or an extremely short phrase carries the main hook through rhythm and performance.', descriptionKo: '한 단어나 아주 짧은 말이 리듬과 퍼포먼스를 통해 중심 훅이 되는 구조입니다. (One-word Hook)', style: 'one-word hook focus', sound: 'single-word rhythmic hook', mood: 'minimal, bold' },
-      { id: 'progressive-hook-repeat', label: 'Progressive Hook Repeat', labelKo: '점층 반복', description: 'The same hook grows from one appearance to a stronger repeated final payoff.', descriptionKo: '같은 훅을 첫 후렴에서 소개하고 뒤의 후렴으로 갈수록 반복·응답·화음 중 하나를 단계적으로 늘립니다. 예: 1회 → 인식 유지+작은 변화 → 마지막 2회 반복. (Progressive Hook Repeat)', style: 'progressive hook repetition', sound: 'increasing repeat density', mood: 'building, addictive' },
-      { id: 'variation-hook-repeat', label: 'Variation Repeat', labelKo: '변형 반복', description: 'The hook core stays recognizable while one word, response, or surrounding line changes each return.', descriptionKo: '핵심 문구는 유지하되 돌아올 때마다 한 단어·응답·주변 문장을 변형해 반복 피로를 줄이는 구조입니다. (Variation Repeat)', style: 'recognizable hook with controlled variation', sound: 'repeated rhythmic cell with changing detail', mood: 'familiar, evolving' },
-      { id: 'echo-response-hook', label: 'Echo-response Hook', labelKo: '메아리 응답 훅', description: 'A lead hook is answered by a short lyrical or vocal echo without changing the song space setting.', descriptionKo: '리드 훅 뒤에 짧은 가사·보컬 응답이 따라오는 구조입니다. 공간 메뉴의 터널 메아리와는 다른 후렴 문답 방식입니다. (Echo-response Hook)', style: 'echo-response lyric hook', sound: 'short vocal echo answer', mood: 'interactive, sticky' },
-      { id: 'separator-style-hook-addiction-experimental', kind: 'separator', label: 'Experimental Chorus', labelKo: '실험적 후렴', description: '', descriptionKo: '', promptCore: '' },
-      { id: 'split-chorus-ab', label: 'A/B Split Chorus', labelKo: 'A/B 분할 후렴', description: 'The chorus uses two contrasting halves that complete one hook idea.', descriptionKo: '후렴을 서로 다른 A와 B 두 덩어리로 나누되 하나의 핵심 훅으로 완성하는 구조입니다. (A/B Split Chorus)', style: 'two-part A/B chorus hook', sound: 'contrasting chorus halves', mood: 'dynamic, complete' },
-      { id: 'drop-hook', label: 'Drop Hook', labelKo: '드롭 훅', description: 'A compact lyric fragment locks to the drop or beat impact instead of a long conventional chorus.', descriptionKo: '긴 전통 후렴 대신 짧은 가사 조각이 드롭·비트 충격과 결합해 훅이 되는 구조입니다. (Drop Hook)', style: 'drop-centered vocal hook', sound: 'compact lyric fragment on beat impact', mood: 'physical, immediate' },
-      { id: 'anti-chorus', label: 'Anti-Chorus', labelKo: '안티코러스', description: 'The chorus becomes deliberately smaller, quieter, or barer than the build while keeping one strong anchor.', descriptionKo: '빌드업 뒤에 오히려 작고 조용하거나 비워진 후렴을 두되 하나의 강한 앵커는 남기는 대비 구조입니다. (Anti-Chorus)', style: 'sparse anti-chorus contrast', sound: 'reduced chorus impact with one anchor', mood: 'unexpected, intimate' },
-      { id: 'circular-refrain', label: 'Circular Refrain', labelKo: '순환 리프레인', description: 'The same short line frames the beginning and ending of each chorus or returns across sections.', descriptionKo: '짧은 문구가 후렴의 시작과 끝을 감싸거나 여러 섹션을 순환하며 돌아오는 구조입니다. (Circular Refrain)', style: 'circular returning refrain', sound: 'recurring frame line', mood: 'hypnotic, cohesive' },
-      { id: 'negative-space-hook', label: 'Negative-space Hook', labelKo: '여백 훅', description: 'A short hook is strengthened by a deliberate pause, breath, or instrumental gap around it.', descriptionKo: '짧은 훅 주변에 의도적인 쉼·호흡·연주 여백을 두어 문구를 더 크게 들리게 하는 구조입니다. (Negative-space Hook)', style: 'negative-space hook design', sound: 'hook framed by a brief pause', mood: 'minimal, striking' }
+      { id: 'separator-style-hook-form', kind: 'separator', label: 'Hook Form', labelKo: '훅 형태', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'short-hook-repeat', label: 'Short Hook Repeat', labelKo: '짧은 훅 반복', description: 'The same complete compact hook line opens every chorus twice.', descriptionKo: '완성된 짧은 훅 한 줄을 모든 후렴 첫머리에서 같은 문장으로 2번 연속 반복합니다. 예: “No Wrong Turn” / “No Wrong Turn”. (Short Hook Repeat)', style: 'short repeated hook', sound: 'tight hook loop', mood: 'simple, catchy' },
+      { id: 'repeated-slogan', label: 'Repeated Slogan', labelKo: '반복되는 구호', description: 'A slogan-like phrase remains recognizable across every chorus and grows in the final return.', descriptionKo: 'Story Context에서 뽑은 짧은 문구를 외칠 수 있는 구호로 만들고 모든 후렴에서 유지하며 마지막 후렴에서 더 강하게 확장합니다. (Repeated Slogan)', style: 'repeated slogan hook', sound: 'chantable phrase repetition', mood: 'bold, performative' },
+      { id: 'one-line-hook', label: 'One-line Hook', labelKo: '한 줄 훅', description: 'One complete lyric line becomes the emotional and structural anchor.', descriptionKo: '한 개의 완성된 문장을 곡의 중심 훅으로 삼고 다른 후렴 문장이 그 의미를 받쳐주도록 설계합니다. (One-line Hook)', style: 'one-line hook focus', sound: 'minimal hook anchor', mood: 'direct, memorable' },
+      { id: 'one-word-hook', label: 'One-word Hook', labelKo: '한 단어 훅', description: 'A separate one-token micro hook repeats rhythmically inside every chorus.', descriptionKo: '띄어쓰기 없는 한 단어·숫자·짧은 음절을 완성 훅과 별도 층으로 만들고 모든 후렴 안에서 3~4번 반복합니다. 예: “Just a Single Digit” 2회 + “1, 1, 1, 1”. (One-word Hook)', style: 'one-word hook focus', sound: 'single-word rhythmic hook', mood: 'minimal, bold' },
+      { id: 'melody-hook', label: 'Melody Hook', labelKo: '멜로디 훅', description: 'A compact lyric phrase is shaped for one clear, repeatable melodic contour.', descriptionKo: '짧고 열린 발음의 문구를 하나의 선명한 선율에 얹기 쉽게 설계합니다. 가사 구조는 검사하고 실제 선율 기억성은 음원에서 확인합니다. (Melody Hook)', style: 'melodic hook focus', sound: 'clear melodic motif', mood: 'singable, polished' },
+
+      { id: 'separator-style-hook-placement', kind: 'separator', label: 'Hook Placement', labelKo: '훅 배치', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'chorus-first-line-anchor', label: 'First-line Chorus Anchor', labelKo: '후렴 첫줄 앵커', description: 'Every chorus opens with the same compact anchor line.', descriptionKo: '모든 후렴의 첫 줄에 같은 핵심 문구를 배치해 시작과 동시에 훅을 인식시킵니다. (First-line Chorus Anchor)', style: 'chorus first-line anchor', sound: 'immediate hook entrance', mood: 'direct, memorable' },
+      { id: 'chorus-end-line-anchor', label: 'End-line Chorus Anchor', labelKo: '후렴 끝줄 앵커', description: 'Every chorus resolves on the same compact anchor line.', descriptionKo: '모든 후렴의 마지막 줄을 같은 핵심 문구로 닫아 끝의 여운 자체를 훅으로 만듭니다. (End-line Chorus Anchor)', style: 'chorus end-line anchor', sound: 'hooked closing cadence', mood: 'resolving, memorable' },
+      { id: 'hook-preview', label: 'Hook Preview', labelKo: '훅 선공개', description: 'A shorter incomplete fragment appears before the first full chorus.', descriptionKo: '첫 Pre-Chorus 끝에 완성 훅보다 짧은 조각을 1번 먼저 들려주고 첫 Chorus에서 완전한 문장을 공개합니다. (Hook Preview)', style: 'pre-chorus hook preview', sound: 'teased hook motif before full chorus', mood: 'anticipating, familiar' },
+      { id: 'post-chorus-tag', label: 'Post-Chorus Tag', labelKo: '포스트코러스 태그', description: 'A short secondary tag remains immediately after the chorus.', descriptionKo: '후렴이 끝난 직후 짧은 두 번째 기억 문구를 남깁니다. 구조에 Post-Chorus가 없으면 새 섹션을 만들지 않고 기존 Chorus 끝에 짧게 붙입니다. (Post-Chorus Tag)', style: 'short post-chorus tag', sound: 'bonus hook after chorus', mood: 'sticky, lingering' },
+      { id: 'circular-refrain', label: 'Circular Refrain', labelKo: '순환 리프레인', description: 'The same short line frames each chorus or returns across existing sections.', descriptionKo: '같은 짧은 문구가 곡의 서로 떨어진 기존 구간에서 다시 돌아옵니다. 실제 Refrain이 있으면 그 구간을 우선 사용하고, 없으면 Intro·핵심 후렴 구간·Outro에서 순환시킵니다. 새 Refrain 섹션은 만들지 않습니다. (Circular Refrain)', style: 'circular returning refrain', sound: 'recurring frame line', mood: 'hypnotic, cohesive' },
+
+      { id: 'separator-style-hook-repeat', kind: 'separator', label: 'Repetition Curve', labelKo: '반복 방식', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'fixed-chorus', label: 'Fixed Chorus', labelKo: '고정 후렴', description: 'The complete Chorus 1 lyric body repeats unchanged in Chorus 2 and Final Chorus while performance and production may grow.', descriptionKo: 'Chorus 1의 전체 가사 본문을 Chorus 2와 Final Chorus에서 그대로 반복합니다. 가사는 고정하되 섹션 가창 태그·보컬 레이어·화음·애드리브·편곡 에너지는 달라질 수 있습니다. 이 기능을 선택하지 않으면 핵심 훅만 유지하고 주변 후렴 가사는 Verse 2와 Bridge 이후 내용에 맞게 발전합니다. (Fixed Chorus)', style: 'fixed chorus lyric body', sound: 'same chorus lyrics with evolving performance', mood: 'familiar, stable' },
+      { id: 'progressive-hook-repeat', label: 'Progressive Hook Repeat', labelKo: '점층 반복', description: 'The hook grows from first introduction to a stronger final payoff.', descriptionKo: 'Chorus 1에서 소개하고 Chorus 2에서 인식을 유지한 뒤 Final Chorus에서 반복·응답·화음 중 하나를 단계적으로 강화합니다. (Progressive Hook Repeat)', style: 'progressive hook repetition', sound: 'increasing repeat density', mood: 'building, addictive' },
+      { id: 'variation-hook-repeat', label: 'Variation Repeat', labelKo: '변형 반복', description: 'The hook identity stays recognizable while a controlled detail changes each return.', descriptionKo: '핵심 의미와 리듬 셀은 유지하되 Chorus가 돌아올 때 한 단어·응답·주변 문장만 제한적으로 바꿉니다. (Variation Repeat)', style: 'recognizable hook with controlled variation', sound: 'repeated rhythmic cell with changing detail', mood: 'familiar, evolving' },
+
+      { id: 'separator-style-hook-performance', kind: 'separator', label: 'Hook Performance', labelKo: '가창 구조', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'chant-hook', label: 'Chant Hook', labelKo: '챈트 훅', description: 'A short hook is delivered with simple rhythmic accents like a chant.', descriptionKo: '짧은 훅을 박자에 맞춰 끊어 외치는 챈트로 설계합니다. 가사의 반복 구조는 검사하고 실제 구호 전달은 음원에서 확인합니다. (Chant Hook)', style: 'chant-like hook', sound: 'rhythmic vocal chant accents', mood: 'energetic, bold' },
+      { id: 'call-response-hook', label: 'Call-response Hook', labelKo: '콜앤리스폰스 훅', description: 'A lead call and a different answer line create the hook.', descriptionKo: '리드가 질문·제안·호출을 하면 다른 보컬이나 응답형 보컬 레이어가 의미가 다른 짧은 문장으로 대답합니다. 2인 이상 보컬 또는 그룹 챈트·관객 챈트·합창 레이어가 필요합니다. (Call-response Hook)', style: 'call-response hook movement', sound: 'alternating vocal hook accents', mood: 'interactive, playful' },
+      { id: 'echo-response-hook', label: 'Echo-response Hook', labelKo: '메아리 응답 훅', description: 'A lead hook is followed by a shorter echo fragment of the same phrase.', descriptionKo: '리드 훅 뒤에 마지막 단어·짧은 조각이 메아리처럼 따라옵니다. 공간 메뉴의 터널 메아리와는 다른 가사·보컬 응답입니다. (Echo-response Hook)', style: 'echo-response lyric hook', sound: 'short vocal echo answer', mood: 'interactive, sticky' },
+      { id: 'easy-sing-chorus', label: 'Easy-sing Chorus', labelKo: '따라 부르는 후렴', description: 'Simple syntax, open vowels, and stable line lengths make the lead chorus easy to join.', descriptionKo: '짧은 문장, 쉬운 어휘, 열린 발음, 일정한 호흡으로 처음 듣는 사람도 리드 보컬을 따라 부르기 쉽게 만듭니다. (Easy-sing Chorus)', style: 'chorus-only easy singalong hook', sound: 'chorus hook spacing', mood: 'friendly, accessible' },
+
+      { id: 'separator-style-hook-structure', kind: 'separator', label: 'Chorus Structure', labelKo: '후렴 구조', description: '', descriptionKo: '', promptCore: '' },
+      { id: 'split-chorus-ab', label: 'A/B Split Chorus', labelKo: 'A/B 분할 후렴', description: 'Two contrasting halves complete one hook idea.', descriptionKo: 'Chorus A가 핵심 상황이나 질문을 제시하고 Chorus B가 응답이나 감정 결론을 완성하도록 두 덩어리로 나눕니다. (A/B Split Chorus)', style: 'two-part A/B chorus hook', sound: 'contrasting chorus halves', mood: 'dynamic, complete' },
+      { id: 'drop-hook', label: 'Drop Hook', labelKo: '드롭 훅', description: 'A compact lyric fragment locks to an existing Drop section or beat impact.', descriptionKo: '기존 Drop이 있으면 그 구간에 짧은 훅을 결합합니다. Drop이 없으면 새 섹션을 만들지 않고 Chorus·Hook·Main Theme 같은 첫 번째 적합한 핵심 구간 끝에 내장형 드롭 훅으로 자동 배치합니다. 적용할 핵심 구간도 없을 때만 ‘적용 대상 부족’으로 표시합니다. (Drop Hook)', style: 'drop-centered vocal hook', sound: 'compact lyric fragment on beat impact', mood: 'physical, immediate' },
+      { id: 'anti-chorus', label: 'Anti-Chorus', labelKo: '안티코러스', description: 'The chorus becomes deliberately smaller or barer than the build.', descriptionKo: 'Pre-Chorus가 상승한 뒤 Chorus는 오히려 짧고 조용하거나 비워 두되 하나의 강한 훅 문장만 남깁니다. 실제 다이내믹 대비는 음원에서 확인합니다. (Anti-Chorus)', style: 'sparse anti-chorus contrast', sound: 'reduced chorus impact with one anchor', mood: 'unexpected, intimate' },
+      { id: 'negative-space-hook', label: 'Negative-space Hook', labelKo: '여백 훅', description: 'A short hook is framed by a deliberate breath, pause, or instrumental gap.', descriptionKo: '짧은 훅 앞뒤에 쉼·호흡·연주 여백을 두어 문구를 크게 들리게 합니다. 가사·프롬프트의 여백 지시는 검사하고 실제 공간감은 음원에서 확인합니다. (Negative-space Hook)', style: 'negative-space hook design', sound: 'hook framed by a brief pause', mood: 'minimal, striking' }
     ],
   },
   {
@@ -692,9 +688,48 @@ export const STYLE_GROUPS = [
   { id: 'space-texture', label: 'Space Texture', labelKo: '공간 질감', descriptionKo: '소리의 거리감, 장소감, 잔향처럼 들리는 공간을 더해요.', cycleIds: ['space-texture'] },
   { id: 'cinematic-scene', label: 'Narrative Direction', labelKo: '서사 연출', descriptionKo: 'OST, 장면감, 웅장한 전개처럼 곡의 이야기 연출을 더해요.', cycleIds: ['cinematic-scene'] },
 
-  { id: 'hook-addiction', label: 'Hook Line', labelKo: '후렴 라인', descriptionKo: '실제 후렴 문구는 현재 Story Context에서 새로 만들고, 선택 항목은 첫 등장·반복·응답·강화 방식을 정해요. 예: ‘여기 있어’가 Chorus 1부터 등장하고 Final Chorus에서 더 강하게 반복됩니다.', cycleIds: ['hook-addiction'] },
+  { id: 'hook-addiction', label: 'Hook Design', labelKo: '후렴 라인', descriptionKo: '핵심 훅을 형태·배치·반복·가창 구조·후렴 구조로 나누어 설계하고 생성 후 실제 적용 결과를 확인합니다.', cycleIds: ['hook-addiction'] },
   { id: 'groove-flow', label: 'Groove Rhythm', labelKo: '리듬감', descriptionKo: '곡을 움직이는 박자, 그루브, 바운스, 루프 흐름을 더해요.', cycleIds: ['groove-flow'] },
 ] as const;
+
+// Hidden compatibility aliases for saved selections created before the hook-menu cleanup.
+// New UI exposes only the canonical destinations above; old IDs are translated at load/generation time.
+export const STYLE_VARIANT_ALIAS_TO_ID: Record<string, string> = {
+  'addictive-repeat': 'progressive-hook-repeat',
+  'addictive repetition': 'progressive-hook-repeat',
+  '중독성 있는 반복': 'progressive-hook-repeat',
+  'catchy-hook': 'one-line-hook',
+  'catchy hook': 'one-line-hook',
+  '캐치한 훅': 'one-line-hook',
+  'earworm-chorus': 'variation-hook-repeat',
+  'earworm chorus': 'variation-hook-repeat',
+  '귀에 남는 후렴': 'variation-hook-repeat',
+  'chorus-focus': 'chorus-first-line-anchor',
+  'chorus focus': 'chorus-first-line-anchor',
+  '후렴 강조': 'chorus-first-line-anchor',
+  'chorus-shift': 'scene-transition',
+  'chorus shift': 'scene-transition',
+  '후렴 전환감': 'scene-transition',
+  'chorus-explosion': 'emotional-build',
+  'explosive chorus': 'emotional-build',
+  '후렴 폭발': 'emotional-build',
+  'hook-led-flow': 'hook-preview',
+  'hook-led flow': 'hook-preview',
+  '훅 중심 전개': 'hook-preview',
+  'same-chorus': 'fixed-chorus',
+  'same chorus': 'fixed-chorus',
+  'fixed chorus': 'fixed-chorus',
+  '고정 후렴': 'fixed-chorus',
+};
+
+// Hook Line no longer owns group singalong. Older saved Style values are migrated
+// to Sound > Vocal Layer so the vocal formation stays separate from lyric structure.
+export const LEGACY_STYLE_TO_SOUND_ALIAS: Record<string, string> = {
+  'singalong-point': 'group-chant',
+  'singalong point': 'group-chant',
+  'Singalong Point': 'group-chant',
+  '떼창 포인트': 'group-chant',
+};
 
 export const SOUND_STYLES: SoundStyleItem[] = STYLE_CYCLES.flatMap((cycle) =>
   cycle.variants.map((variant) => ({
@@ -1033,10 +1068,10 @@ export const SOUND_TEXTURE_CYCLES = [
   },
   {
     id: 'vocal-effects',
-    title: 'Vocal Effects',
-    titleKo: '보컬 효과',
+    title: 'Vocal Layers',
+    titleKo: '보컬 레이어',
     description: 'Auxiliary vocal layers such as humming, choirs, chants, harmonies, and vocal samples.',
-    descriptionKo: '허밍, 합창, 챈트, 화음, 보컬 샘플 같은 보조 보컬 장치를 더해요.',
+    descriptionKo: '메인 보컬 위에 허밍, 합창, 챈트, 화음, 보컬 샘플 같은 보조 목소리 층을 더해요.',
     variants: [
       { id: 'separator-vocal-humming-pad', kind: 'separator', label: 'Humming / Pad', labelKo: '허밍 / 패드', description: '', descriptionKo: '', promptCore: '' },
       { id: 'hummed-texture', label: 'Hummed Texture', labelKo: '허밍 질감', description: 'hummed texture - 허밍처럼 부드럽게 깔리는 목소리 질감입니다.', descriptionKo: 'hummed texture - 허밍처럼 부드럽게 깔리는 목소리 질감입니다.', promptCore: 'hummed texture' },

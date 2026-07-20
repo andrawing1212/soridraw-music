@@ -11433,7 +11433,7 @@ ${normalizePromptForDisplay(result.prompt)}
         return (
           <span
             key={`lyric-cue-${index}`}
-            className="font-semibold text-[#d99a36]"
+            className="font-semibold text-[#cd8c31]/55"
           >
             {part}
           </span>

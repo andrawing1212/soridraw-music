@@ -65,6 +65,7 @@ import {
   isV1CircularRoleSectionName,
   isV1HookRoleSectionName,
   normalizeV1SectionName,
+  baseV1SectionName,
   resolveV1HookRolePlan,
   resolveV1VocalAnchorDescriptors,
   type V1HookRolePlan,
@@ -4761,20 +4762,20 @@ function auditLanguageMixRatio(
 
 function buildLanguageMixRatioContract(targetRatio: number): string {
   const ratio = normalizeEnglishMixRatio(targetRatio);
-  const minRatio = Math.max(0, ratio - 5);
-  const maxRatio = Math.min(100, ratio + 5);
   const baseShare = Math.max(0, 100 - ratio);
   const distributionRule = ratio <= 20
-    ? 'Place meaningful mixed-language phrases in at least two musically useful section families; do not hide the entire mix only in Intro, Outro, or non-lexical ad-libs.'
+    ? 'Use a few meaningful mixed-language accents in one or two musically useful section families when the song length allows; do not hide the entire mix only in production cues or non-lexical ad-libs.'
     : ratio <= 40
-      ? 'Distribute meaningful mixed-language phrases across at least three section families, including one core payoff section and one narrative or transition section.'
+      ? 'Use regular mixed-language phrases across multiple section families, including at least one core payoff or transition section when musically natural.'
       : ratio <= 60
-        ? 'Make both language sides continuously audible across the main song arc, including narrative sections and core payoff sections.'
-        : 'Make the selected mix target language dominant across the main song arc while preserving clear base-language identity lines in more than one major section.';
-  return `- Exact selected target = ${ratio}% mixed-language share and ${baseShare}% base-language share.
-- Count ACTUAL SUNG LYRIC BODY LINES only. Ignore every structural section tag and every standalone sound/production cue.
-- Use the nearest achievable whole-line count and keep the final mixed-language share within ${minRatio}-${maxRatio}% whenever the lyric has enough lines.
-- A line counts toward the mixed-language share only when it contains a meaningful phrase or complete short lyric thought in the selected mix language. A lone filler, isolated interjection, repeated micro-token, title fragment, or production word does not count.
+        ? 'Let both language sides remain clearly audible across the main song arc without mechanically alternating every line.'
+        : 'Let the selected mix language carry more of the main song arc while preserving clear base-language identity and emotional continuity.';
+  return `- Selected mix direction = about ${ratio}% mixed-language share and about ${baseShare}% base-language share.
+- This percentage is an approximate musical target, not a reason to damage lyric quality. Priority order: coherent Story Context, natural character voice, section role, hook identity, singability, then the nearest natural language-mix share.
+- Count ACTUAL SUNG LYRIC BODY LINES only. Ignore structural section tags and standalone sound/production cues.
+- When the selected ratio is above 0%, the selected mix language must appear as meaningful sung lyric content; do not return a completely single-language lyric.
+- A mixed-language line must contain a meaningful phrase or complete short lyric thought. A lone filler, isolated interjection, repeated micro-token, title fragment, or production word does not count.
+- Keep 10%, 20%, 30%, 40%, 50%, 60%, and 70% perceptibly different, but use the nearest natural amount instead of forcing an exact mathematical percentage.
 - ${distributionRule}`;
 }
 
@@ -4793,6 +4794,63 @@ function extractLanguageMixStructuralSequence(lyrics: string, params: GenerateSo
     });
 }
 
+function hasLanguageMixUnscopedSungLyrics(lyrics: string, params: GenerateSongParams): boolean {
+  const customNames = (params.customStructure || [])
+    .map((item) => String(item?.section || '').trim())
+    .filter(Boolean);
+  let hasSection = false;
+  for (const rawLine of String(lyrics || '').split(/\r?\n/)) {
+    const line = String(rawLine || '').trim();
+    if (!line) continue;
+    if (isV1StructuralSectionTag(line, customNames)) {
+      hasSection = true;
+      continue;
+    }
+    if (isStandaloneLyricDirectiveLine(line)) continue;
+    if ((line.match(LANGUAGE_MIX_LEXICAL_RE) || []).length && !hasSection) return true;
+  }
+  return false;
+}
+
+function languageMixRetryIntroducesCriticalSectionShapeIssue(
+  currentLyrics: string,
+  candidateLyrics: string,
+  params: GenerateSongParams,
+): boolean {
+  const protectedShapeCodes = new Set([
+    'intro-overdeveloped',
+    'humming-intro-lexical-overflow',
+    'final-payoff-underdeveloped',
+    'refrain-missing-return',
+    'refrain-overdeveloped',
+    'refrain-identity-lost',
+    'compact-role-overdeveloped',
+    'outro-restarts-story',
+  ]);
+  const currentIssueCodes = new Set(
+    filterV1SectionRoleIssuesForUserIntent(
+      inspectV1LyricsForRoleIssues(currentLyrics, params),
+      params,
+    )
+      .map((issue) => issue.code)
+      .filter((code) => protectedShapeCodes.has(code)),
+  );
+  const candidateIssues = filterV1SectionRoleIssuesForUserIntent(
+    inspectV1LyricsForRoleIssues(candidateLyrics, params),
+    params,
+  );
+  return candidateIssues.some(
+    (issue) => protectedShapeCodes.has(issue.code) && !currentIssueCodes.has(issue.code),
+  );
+}
+
+function shouldRetryLanguageMixAudit(audit: LanguageMixRatioAudit, targetRatio: number): boolean {
+  if (!audit.measurable || !audit.totalLineCount || targetRatio <= 0) return false;
+  if (audit.targetLineCount === 0) return true;
+  const severeUnderfillFloor = Math.max(5, normalizeEnglishMixRatio(targetRatio) * 0.35);
+  return audit.ratio < severeUnderfillFloor;
+}
+
 function isLanguageMixRetryStructureCompatible(
   currentLyrics: string,
   candidateLyrics: string,
@@ -4800,13 +4858,30 @@ function isLanguageMixRetryStructureCompatible(
 ): boolean {
   const currentSections = extractLanguageMixStructuralSequence(currentLyrics, params);
   const candidateSections = extractLanguageMixStructuralSequence(candidateLyrics, params);
-  if (!currentSections.length || currentSections.length !== candidateSections.length) return false;
-  if (currentSections.some((section, index) => section !== candidateSections[index])) return false;
+  if (!candidateSections.length) return false;
+
+  // Engine-owned structures must satisfy the active blueprint itself. Comparing only with the
+  // first lyric can preserve an already-missing Bridge or another malformed section map.
+  if (params.songStructure === 'custom') {
+    if (!currentSections.length || currentSections.length !== candidateSections.length) return false;
+    if (currentSections.some((section, index) => section !== candidateSections[index])) return false;
+  } else {
+    const expectedSections = getV1SectionBlueprint(params).entries
+      .map((entry) => normalizeLyricSectionDisplayName(entry.name).toLowerCase());
+    if (candidateSections.length !== expectedSections.length) return false;
+    if (candidateSections.some((section, index) => section !== expectedSections[index])) return false;
+  }
+
+  if (hasLanguageMixUnscopedSungLyrics(candidateLyrics, params)) return false;
   const currentLineCount = extractLanguageMixSungLines(currentLyrics).length;
   const candidateLineCount = extractLanguageMixSungLines(candidateLyrics).length;
   if (!currentLineCount || !candidateLineCount) return false;
-  return candidateLineCount >= Math.max(1, Math.floor(currentLineCount * 0.72))
-    && candidateLineCount <= Math.ceil(currentLineCount * 1.28);
+  if (
+    candidateLineCount < Math.max(1, Math.floor(currentLineCount * 0.72))
+    || candidateLineCount > Math.ceil(currentLineCount * 1.28)
+  ) return false;
+  if (languageMixRetryIntroducesCriticalSectionShapeIssue(currentLyrics, candidateLyrics, params)) return false;
+  return true;
 }
 
 function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
@@ -25342,6 +25417,232 @@ function hasCatastrophicV1LyricStructureFailure(lyrics: string, params: Generate
   return emptyRequiredBlocks > 0;
 }
 
+
+type V1VisibleSectionBlock = {
+  rawSection: string;
+  start: number;
+  end: number;
+  bodyLines: string[];
+};
+
+type V1MissingRequiredSection = {
+  expectedIndex: number;
+  name: string;
+  role: string;
+};
+
+function extractV1VisibleSectionBlocks(
+  lyrics: string,
+  params: GenerateSongParams,
+): V1VisibleSectionBlock[] {
+  const blueprint = getV1SectionBlueprint(params);
+  const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+  const blocks: V1VisibleSectionBlock[] = [];
+  lines.forEach((line, index) => {
+    const trimmed = String(line || '').trim();
+    if (!isV1StructuralSectionTag(trimmed, blueprint.customNames)) return;
+    const parsed = parseGuardBracketSectionTag(trimmed);
+    if (!parsed) return;
+    if (blocks.length) blocks[blocks.length - 1].end = index;
+    blocks.push({
+      rawSection: normalizeV1SectionName(parsed.rawSection, blueprint.customNames),
+      start: index,
+      end: lines.length,
+      bodyLines: [],
+    });
+  });
+  blocks.forEach((block) => {
+    block.bodyLines = lines.slice(block.start + 1, block.end);
+  });
+  return blocks;
+}
+
+function alignVisibleV1SectionsToBlueprint(
+  lyrics: string,
+  params: GenerateSongParams,
+): Array<{ expectedIndex: number; block: V1VisibleSectionBlock }> {
+  const blueprint = getV1SectionBlueprint(params);
+  const blocks = extractV1VisibleSectionBlocks(lyrics, params);
+  const used = new Set<number>();
+  let cursor = 0;
+  const aligned: Array<{ expectedIndex: number; block: V1VisibleSectionBlock }> = [];
+
+  blocks.forEach((block) => {
+    const normalized = normalizeV1SectionName(block.rawSection, blueprint.customNames);
+    const exact = blueprint.entries.findIndex((entry, index) =>
+      index >= cursor
+      && !used.has(index)
+      && normalizeV1SectionName(entry.name, blueprint.customNames).toLowerCase() === normalized.toLowerCase(),
+    );
+    const family = exact >= 0 ? exact : blueprint.entries.findIndex((entry, index) =>
+      index >= cursor
+      && !used.has(index)
+      && baseV1SectionName(normalizeV1SectionName(entry.name, blueprint.customNames)).toLowerCase()
+        === baseV1SectionName(normalized).toLowerCase(),
+    );
+    const fallback = family >= 0 ? family : blueprint.entries.findIndex((entry, index) =>
+      !used.has(index)
+      && baseV1SectionName(normalizeV1SectionName(entry.name, blueprint.customNames)).toLowerCase()
+        === baseV1SectionName(normalized).toLowerCase(),
+    );
+    if (fallback < 0) return;
+    used.add(fallback);
+    cursor = fallback + 1;
+    aligned.push({ expectedIndex: fallback, block });
+  });
+  return aligned;
+}
+
+function collectMissingRequiredV1Sections(
+  lyrics: string,
+  params: GenerateSongParams,
+): V1MissingRequiredSection[] {
+  if (params.songStructure === 'custom') return [];
+  const blueprint = getV1SectionBlueprint(params);
+  const aligned = alignVisibleV1SectionsToBlueprint(lyrics, params);
+  const byIndex = new Map(aligned.map((item) => [item.expectedIndex, item.block]));
+  return blueprint.entries
+    .map((entry, expectedIndex) => ({ entry, expectedIndex }))
+    .filter(({ entry, expectedIndex }) => {
+      if (!entry.requiresLyrics) return false;
+      const block = byIndex.get(expectedIndex);
+      if (!block) return true;
+      return !block.bodyLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params));
+    })
+    .map(({ entry, expectedIndex }) => ({
+      expectedIndex,
+      name: entry.name,
+      role: entry.lyricRole,
+    }));
+}
+
+function insertMissingV1SectionBodies(
+  lyrics: string,
+  params: GenerateSongParams,
+  generatedSections: Array<{ sectionName: string; bodyLines: string[] }>,
+): string {
+  let current = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
+  const blueprint = getV1SectionBlueprint(params);
+  const generatedByName = new Map<string, string[]>();
+
+  generatedSections.forEach((item) => {
+    const normalized = normalizeV1SectionName(item.sectionName, blueprint.customNames).toLowerCase();
+    const body = (item.bodyLines || [])
+      .flatMap((line) => String(line || '').replace(/\r\n?/g, '\n').split('\n'))
+      .map((line) => String(line || '').trim())
+      .filter(Boolean)
+      .filter((line) => !/^\[[^\]]+\]$/.test(line));
+    if (normalized && body.length) generatedByName.set(normalized, body);
+  });
+
+  const missing = collectMissingRequiredV1Sections(current, params)
+    .filter((item) => generatedByName.has(normalizeV1SectionName(item.name, blueprint.customNames).toLowerCase()))
+    .sort((a, b) => b.expectedIndex - a.expectedIndex);
+
+  missing.forEach((item) => {
+    const body = generatedByName.get(normalizeV1SectionName(item.name, blueprint.customNames).toLowerCase()) || [];
+    if (!body.length) return;
+    const lines = current.replace(/\r\n?/g, '\n').split('\n');
+    const aligned = alignVisibleV1SectionsToBlueprint(current, params);
+    const next = aligned
+      .filter((candidate) => candidate.expectedIndex > item.expectedIndex)
+      .sort((a, b) => a.expectedIndex - b.expectedIndex)[0];
+    const insertAt = next?.block.start ?? lines.length;
+    const payload = [`[${item.name}]`, ...body];
+    if (insertAt > 0 && String(lines[insertAt - 1] || '').trim()) payload.unshift('');
+    if (insertAt < lines.length && String(lines[insertAt] || '').trim()) payload.push('');
+    lines.splice(insertAt, 0, ...payload);
+    current = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  });
+
+  return applyV1SectionBlueprintGuard(current, params);
+}
+
+async function repairMissingV1RequiredSectionsWithGemini(
+  ai: GoogleGenAI,
+  lyrics: string,
+  params: GenerateSongParams,
+  productionPrompt: string,
+  languageLabel: string,
+): Promise<string> {
+  if (isGenerationEngineV2(params) || params.songStructure === 'custom') return lyrics;
+  const guarded = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
+  const missing = collectMissingRequiredV1Sections(guarded, params);
+  if (!missing.length) return guarded;
+
+  const blueprint = getV1SectionBlueprint(params);
+  const storyContext = String((params as any).__v1StoryContext || '').trim();
+  const systemInstruction = `You are SORIDRAW's missing-section body repair stage.
+Write lyric bodies only for the explicitly listed missing required sections in ${languageLabel}.
+
+ABSOLUTE RULES:
+- Preserve every existing lyric line, hook, section, singer assignment, and production cue. Do not rewrite the supplied lyric.
+- Return content only for the requested missing sections. Do not add, remove, rename, merge, split, or reorder any section.
+- Follow each missing section's current-song role and connect naturally between its neighbouring sections.
+- Preserve the current Story Context, character voice, emotional progression, language-mix style, and approximate language balance. Quality and singability come before percentage arithmetic.
+- Do not copy a neighbouring section, restart the story, translate adjacent lines redundantly, or introduce stock phrases.
+- bodyLines must contain sung lyric or vocal-ad-lib lines only. Do not include square-bracket section tags, production cues, explanations, markdown, or numbering.
+- Return valid JSON only.`;
+
+  try {
+    const response = await generateContentWithModelFallback(
+      ai,
+      {
+        model: GEMINI_TEXT_MODEL_CHAIN[0],
+        contents: JSON.stringify({
+          storyContext,
+          productionDirection: String(productionPrompt || '').slice(0, 1800),
+          exactSectionOrder: blueprint.exactOrderText,
+          currentLyrics: guarded.slice(0, 7000),
+          missingSections: missing.map((item) => ({
+            sectionName: item.name,
+            sectionRole: item.role,
+          })),
+        }),
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              sections: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    sectionName: { type: Type.STRING },
+                    bodyLines: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                    },
+                  },
+                  required: ['sectionName', 'bodyLines'],
+                },
+              },
+            },
+            required: ['sections'],
+          },
+        },
+      },
+      'repairMissingV1Sections',
+    );
+    const parsed = parseGeminiJsonObject(response?.text || '{}');
+    const generated = Array.isArray(parsed?.sections) ? parsed.sections : [];
+    const repaired = insertMissingV1SectionBodies(
+      guarded,
+      params,
+      generated.map((item: any) => ({
+        sectionName: String(item?.sectionName || ''),
+        bodyLines: Array.isArray(item?.bodyLines) ? item.bodyLines.map((line: any) => String(line || '')) : [],
+      })),
+    );
+    return hasCatastrophicV1LyricStructureFailure(repaired, params) ? lyrics : repaired;
+  } catch (error) {
+    console.warn('[SORIDRAW V1 Section Engine] missing-section body repair skipped:', error);
+    return lyrics;
+  }
+}
+
 async function repairSparseLyricsWithGemini(
   ai: GoogleGenAI,
   lyrics: string,
@@ -25379,6 +25680,21 @@ async function repairSparseLyricsWithGemini(
     return enforceLyricSectionBlockSpacing(noRepairSource, params);
   }
 
+  // V1 section architecture is engine-owned. Repair only the missing required section body
+  // before considering a full-lyric rewrite, so existing lyric quality and language mixing stay intact.
+  if (!isGenerationEngineV2(params) && densityRepairNeeded) {
+    const targetedRepair = await repairMissingV1RequiredSectionsWithGemini(
+      ai,
+      applyV1SectionBlueprintGuard(originalSource, params),
+      params,
+      productionPrompt,
+      languageLabel,
+    );
+    if (!hasCatastrophicV1LyricStructureFailure(targetedRepair, params)) {
+      return enforceLyricSectionBlockSpacing(targetedRepair, params);
+    }
+  }
+
   const instruction = lyricDensityRepairInstruction(languageLabel, params, roleIssues);
   const context = [
     instruction,
@@ -25413,6 +25729,9 @@ async function repairSparseLyricsWithGemini(
     const repaired = typeof parsed?.lyrics === 'string' ? parsed.lyrics.trim() : '';
     if (!repaired) return enforceLyricSectionBlockSpacing(lyrics, params);
     let repairedPost = cleanupGhostOpeningIntroAndEmptySungTags(postProcessLyricsSectionTags(repaired, params), params);
+    if (!isGenerationEngineV2(params)) {
+      repairedPost = applyV1SectionBlueprintGuard(repairedPost, params);
+    }
     const beforeChars = lyricDensityTextLength(lyricDensityBodyLines(source, params));
     let afterChars = lyricDensityTextLength(lyricDensityBodyLines(repairedPost, params));
     const repairedMinimumChars = lyricDensityMinimumCharsForLyrics(repairedPost, params);
@@ -25488,6 +25807,9 @@ async function repairSparseLyricsWithGemini(
       ? Math.floor(lyricDensityMinimumCharsForLyrics(repairedPost, params) * 0.65)
       : Math.floor(beforeChars * 0.7);
     if (afterChars < minimumAcceptedAfterRepair) return enforceLyricSectionBlockSpacing(isGenerationEngineV2(params) ? source : originalSource, params);
+    if (!isGenerationEngineV2(params) && hasCatastrophicV1LyricStructureFailure(repairedPost, params)) {
+      return enforceLyricSectionBlockSpacing(originalSource, params);
+    }
     return cleanupGhostOpeningIntroAndEmptySungTags(enforceLyricSectionBlockSpacing(repairedPost, params), params);
   } catch (error) {
     console.warn('[SORIDRAW Lyrics Density Repair] skipped:', error);
@@ -31111,17 +31433,17 @@ function finalizeV1SongAtAbsoluteReturnBoundary(
   const finalizeCard = (value: unknown, card: 'korean' | 'secondary') => {
     const source = String(value || '').trim();
     if (!source) return '';
-    // This is the true last mutation boundary. Structural repair is allowed first, but the public
-    // integrity pass must run after it so an embedded Drop Hook cannot be pulled back to the top of
-    // Chorus 1 by a later section/cue normalizer.
-    const structurallyGuarded = applyV1SectionBlueprintGuard(
+    // Legacy public cleanup still flattens repeated labels while matching. Run it first, then let
+    // the Section Blueprint Guard be the final structural owner so exact names such as Verse 1 /
+    // Verse 2 and the promised section order survive into the UI. Hook binding remains last.
+    const publiclyNormalized = finalizeV1PublicLyricOutputIntegrity(
       finalizeGeneratedLyricsStructuralSafety(source, params),
       params,
     );
-    const publiclyNormalized = finalizeV1PublicLyricOutputIntegrity(structurallyGuarded, params);
+    const structurallyGuarded = applyV1SectionBlueprintGuard(publiclyNormalized, params);
     const circularRefrainBound = resolvedHookBlueprint
-      ? enforceV1CircularRefrainAbsoluteReturnSlots(publiclyNormalized, resolvedHookBlueprint, card, params)
-      : publiclyNormalized;
+      ? enforceV1CircularRefrainAbsoluteReturnSlots(structurallyGuarded, resolvedHookBlueprint, card, params)
+      : structurallyGuarded;
     return resolvedHookBlueprint
       ? enforceV1EmbeddedDropHookAbsoluteReturnSlot(circularRefrainBound, resolvedHookBlueprint, card, params)
       : circularRefrainBound;
@@ -31388,7 +31710,7 @@ async function generateSongLegacy(
       const cardTargetScriptLines = cardTargets
         .map((lang) => `    - ${languageNameMap[lang] || lang}: use ${languageNativeScriptMap[lang] || 'that language\'s normal native writing system'}.`)
         .join('\n');
-      return `- ${languageNameMap[cardLanguage] || cardLanguage} lyric card: use ${languageNameMap[cardLanguage] || cardLanguage} as the base language and make ${cardTargetNames} occupy the selected ${englishMixRatio}% share of actual sung lyric body lines. This target is mandatory; compose the language changes inside the complete lyric from the start rather than adding filler afterward.\n  Script rule for this card:\n    - ${languageNameMap[cardLanguage] || cardLanguage}: use ${languageNativeScriptMap[cardLanguage] || 'that language\'s normal native writing system'}.\n${cardTargetScriptLines || '    - No extra mixed script required.'}`;
+      return `- ${languageNameMap[cardLanguage] || cardLanguage} lyric card: use ${languageNameMap[cardLanguage] || cardLanguage} as the natural base for about ${100 - englishMixRatio}% of the sung lyric body, and blend ${cardTargetNames} for about ${englishMixRatio}% as meaningful sung content. Keep the Story Context, section roles, hook identity, and singability stronger than exact ratio matching; compose the language changes naturally inside the complete lyric from the start.\n  Script rule for this card:\n    - ${languageNameMap[cardLanguage] || cardLanguage}: use ${languageNativeScriptMap[cardLanguage] || 'that language\'s normal native writing system'}.\n${cardTargetScriptLines || '    - No extra mixed script required.'}`;
     })
     .join('\n');
   const hasKoreanLanguage = requestedLyricLanguages.includes("ko");
@@ -31575,21 +31897,20 @@ ${selectedNativeScriptInstruction}
 
   const mixedLyricsInstruction =
     shouldUseMixedLyrics && !params.isNoLyrics
-      ? `LANGUAGE MIX MODE (MANDATORY, RATIO-LOCKED):
+      ? `LANGUAGE MIX MODE (QUALITY-FIRST, APPROXIMATE TARGET):
 - The feature supports any selected languages; it is not limited to one fixed language pair.
 - UI primary language = ${primaryMixLanguageName}. Each requested lyric card must still use its own card language as its natural base.
 - Selected mixed-language target(s) = ${mixTargetLanguageNames || 'the selected non-base language'}.
 - Use each language's normal native writing system. Do not romanize or transliterate non-Latin languages.
 ${mixTargetNativeScriptInstruction}
 ${languageMixRatioContract}
-- Apply the selected ratio independently to each requested lyric card according to this mandatory card plan:
+- Apply the selected approximate ratio independently to each requested lyric card according to this card plan:
 ${languageMixCardPlan}
-- The selected value may be 10%, 20%, 30%, 40%, 50%, 60%, or 70%. Do not collapse these into a few broad modes; make each selected percentage audibly and visibly distinct.
 - Keep one continuous Story Context, one character voice, and one emotional progression across language changes.
-- Compose coherent mixed-language lyric lines during the initial whole-song writing. Do not translate the immediately adjacent line, duplicate the same hook meaning in another language, or insert dictionary-word filler only to raise the count.
-- When two mix target languages are selected, both must appear meaningfully inside the selected mixed share; do not let one disappear.
-- Preserve breath, tense, speaker ownership, section role, hook identity, and singability while meeting the selected ratio.
-- Generate the final mixed lyric correctly in this single response. Do not output repair candidates, alternate replacement lines, hidden blueprints, or ratio-control metadata.`
+- Compose coherent mixed-language lyric content during the initial whole-song writing. Do not translate the immediately adjacent line, duplicate the same hook meaning in another language, mechanically alternate every line, or insert dictionary-word filler only to raise the count.
+- When two mix target languages are selected, both should appear meaningfully when the available lyric length allows; do not erase one merely to chase the percentage.
+- Preserve breath, tense, speaker ownership, section role, hook identity, and singability before ratio precision.
+- Generate the strongest complete lyric in this response. Do not output repair candidates, alternate replacement lines, hidden blueprints, or ratio-control metadata.`
       : "";
 
   const lyricDraftInstruction =
@@ -32727,8 +33048,8 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   }
 
   // Language Mix is authored as a complete lyric, never as stock-line insertion or line-by-line replacement.
-  // If the first response misses a measurable 10-70% target by more than one practical lyric-line step,
-  // retry the complete affected lyric card once while preserving the section skeleton and hook contract.
+  // Quality comes first. Retry the complete affected lyric card only when the selected mixed language is
+  // missing or severely underrepresented, while preserving the existing section architecture and hook contract.
   if (shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params)) {
     const mixRetryCards = [
       requestedLyricLanguages.includes('ko')
@@ -32765,7 +33086,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           englishMixRatio,
         ),
       }))
-      .filter((card) => card.audit.measurable && card.audit.distance > card.audit.tolerance);
+      .filter((card) => shouldRetryLanguageMixAudit(card.audit, englishMixRatio));
 
     if (failingMixCards.length) {
       const retryCardContract = failingMixCards.map((card) => {
@@ -32773,21 +33094,23 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
         const scriptRules = card.targets
           .map((lang) => `  - ${languageNameMap[lang] || lang}: ${languageNativeScriptMap[lang] || 'native script'}`)
           .join('\n');
-        return `- ${card.key} card base = ${languageNameMap[card.baseLanguage] || card.baseLanguage}; mix target(s) = ${targetNames}; current measured share = ${card.audit.ratio.toFixed(1)}%; required target = ${englishMixRatio}%.\n${scriptRules}`;
+        return `- ${card.key} card base = ${languageNameMap[card.baseLanguage] || card.baseLanguage}; mix target(s) = ${targetNames}; current measured share = ${card.audit.ratio.toFixed(1)}%; approximate selected direction = ${englishMixRatio}%.\n${scriptRules}`;
       }).join('\n');
 
-      const languageMixRetrySystemInstruction = `You are SORIDRAW's one-pass whole-lyric language-mix correction stage.
+      const languageMixRetrySystemInstruction = `You are SORIDRAW's one-pass whole-lyric language-mix recovery stage.
 Rewrite only the complete affected lyric card or cards. Never return replacement-line candidates and never insert stock phrases.
 
-[LOCKED IDENTITY]
-- Preserve the same Story Context, character voice, emotional progression, hook meaning, vocal ownership, section order, section count, and approximate line count.
-- Preserve every structural section family in the same order. Do not add or remove Intro, Verse, Pre-Chorus, Chorus, Bridge, Final Chorus, Outro, Rap Section, Hook, Refrain, Drop, or other sections.
+[QUALITY PRIORITY]
+- Preserve the same Story Context, character voice, emotional progression, hook meaning, vocal ownership, section order, and section count.
+- Preserve every existing structural section family in the same order. Do not add, remove, merge, split, or rename sections.
+- Keep the overall lyric length and section balance close to the current lyric. Do not move a large amount of story into Intro or Outro, shrink the final payoff, or append untagged lyric lines after the final section.
 - Keep standalone production cues separate from sung lyric lines.
+- Natural lyric quality, section role, hook identity, and singability are more important than exact percentage matching.
 
-[RATIO CONTRACT]
+[APPROXIMATE MIX DIRECTION]
 ${languageMixRatioContract}
 ${retryCardContract}
-- Rewrite the full affected lyric coherently in one pass so the ratio is achieved by natural complete phrases or complete short lyric thoughts.
+- The current lyric missed or severely underused the selected mix language. Rewrite the full affected lyric coherently in one pass so meaningful mixed-language content is clearly present and moves toward the selected direction without forcing exact arithmetic.
 - Do not translate adjacent lines redundantly, duplicate the hook in another language, mechanically alternate every line, or use isolated filler only to satisfy the percentage.
 - Return valid JSON only with this shape: { "lyrics": { "english": "...", "korean": "..." } }.`;
 
@@ -32846,6 +33169,7 @@ ${retryCardContract}
           );
           if (
             candidateAudit.measurable
+            && candidateAudit.targetLineCount > card.audit.targetLineCount
             && candidateAudit.distance + 0.5 < card.audit.distance
           ) {
             result.lyrics[card.key] = candidate;

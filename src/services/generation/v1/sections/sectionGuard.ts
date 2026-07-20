@@ -734,7 +734,7 @@ function sealStableRenderedSectionNames(
     const match = String(line || '').trim().match(/^\[\s*([^:\]\n]{1,80})(?:\s*:\s*[^\]]*)?\s*\]$/);
     if (!match) return;
     const normalized = normalizeV1SectionName(match[1] || '');
-    if (/^(?:Intro|Verse|Pre-Chorus|Chorus|Bridge|Final Chorus|Outro|Rap Section|Hook|Final Hook)$/i.test(normalized)) {
+    if (/^(?:Intro|Verse(?:\s+\d+)?|Pre-Chorus(?:\s+\d+)?|Chorus(?:\s+\d+)?|Bridge(?:\s+\d+)?|Final Chorus|Outro|Rap Section(?:\s+\d+)?|Hook(?:\s+\d+)?|Final Hook)$/i.test(normalized)) {
       structuralIndexes.push(index);
     }
   });

@@ -482,7 +482,21 @@ import {
 import { auth, googleProvider, db } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
-import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
+import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
+
+const RAP_MODE_STORAGE_KEY = 'soridraw_rap_mode';
+const readStoredRapMode = (): RapMode => {
+  if (typeof window === 'undefined') return 'off';
+  try {
+    const stored = String(window.localStorage.getItem(RAP_MODE_STORAGE_KEY) || '').toLowerCase();
+    if (stored === 'auto' || stored === 'off' || stored === 'on') return stored;
+  } catch {}
+  return 'off';
+};
+const writeStoredRapMode = (mode: RapMode) => {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(RAP_MODE_STORAGE_KEY, mode); } catch {}
+};
 
 const INSTRUMENTAL_BGM_GENRE_IDS = new Set([
   'instrumental_bgm',
@@ -5623,24 +5637,14 @@ function App() {
   const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([]);
   const [vocalRandomActivationKey, setVocalRandomActivationKey] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
-  const [rapMode, setRapMode] = useState<RapMode>('off');
-  const hasSelectedRapperRole = useMemo(
-    () => vocalMembers.some((member) => member.roles.includes('rapper')),
-    [vocalMembers],
-  );
-  const previousRapperPresenceRef = useRef(hasSelectedRapperRole);
+  const [rapMode, setRapMode] = useState<RapMode>(() => readStoredRapMode());
+  const [lyricWritingStyle, setLyricWritingStyle] = useState<V1LyricWritingStyle>(() => readStoredV1LyricWritingStyle());
   useEffect(() => {
-    const previous = previousRapperPresenceRef.current;
-    if (hasSelectedRapperRole !== previous) {
-      setRapMode((current) => {
-        if (hasSelectedRapperRole && current === 'off') return 'auto';
-        if (!hasSelectedRapperRole && current === 'auto') return 'off';
-        return current;
-      });
-      if (!hasSelectedRapperRole) setRapEnabled(false);
-      previousRapperPresenceRef.current = hasSelectedRapperRole;
-    }
-  }, [hasSelectedRapperRole]);
+    // Rap Mode is an explicit global studio preference. Vocal-role edits must not
+    // silently switch OFF/AUTO/ON behind the user's back.
+    setRapEnabled(rapMode === 'on');
+    writeStoredRapMode(rapMode);
+  }, [rapMode]);
   useEffect(() => {
     const total = maleCount + femaleCount;
     if (total === 0) {
@@ -7929,6 +7933,7 @@ const toggleCycleVariantSelection = (
 
     const storedLyricWritingStyle = (appliedKeywords as any).lyricWritingStyle;
     if (storedLyricWritingStyle === 'default' || storedLyricWritingStyle === 'kimEana') {
+      setLyricWritingStyle(storedLyricWritingStyle);
       writeStoredV1LyricWritingStyle(storedLyricWritingStyle);
     }
 
@@ -13250,6 +13255,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               vocalTones={vocalTones}
               vocalMembers={vocalMembers}
               rapEnabled={rapEnabled}
+              rapMode={rapMode}
+              onRapModeChange={(mode) => {
+                setRapMode(mode);
+                setRapEnabled(mode === 'on');
+              }}
               onMaleChange={setMaleCount}
               onFemaleChange={setFemaleCount}
               onModeChange={setVocalMode}
@@ -13289,6 +13299,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
               onLyricsLengthChange={setLyricsLength}
+              lyricWritingStyle={lyricWritingStyle}
+              onLyricWritingStyleChange={setLyricWritingStyle}
               songStructure={songStructure}
               customStructure={customStructure}
               onSongStructureChange={setSongStructure}
@@ -13300,6 +13312,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setLyricsLength('normal');
                 setSongStructure('1');
                 setCustomStructure([]);
+                setLyricWritingStyle('default');
+                writeStoredV1LyricWritingStyle('default');
               }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -15297,6 +15311,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               languageMixTargetLanguages={languageMixTargetLanguages}
               rapEnabled={rapEnabled}
               rapMode={rapMode}
+              lyricWritingStyle={lyricWritingStyle}
               onClose={closeMainGenerationModal}
               suspendHistoryHandling={showPreviewPopup}
               onPreview={(options) => {
@@ -17834,6 +17849,8 @@ const CategorySection = React.memo(CategorySectionComponent, (prev, next) => {
 interface SongStructureIntegratedControlProps {
   lyricsLength: LyricsLength;
   onLyricsLengthChange: (val: LyricsLength) => void;
+  lyricWritingStyle: V1LyricWritingStyle;
+  onLyricWritingStyleChange: (val: V1LyricWritingStyle) => void;
   songStructure: SongStructure;
   customStructure: CustomSectionItem[];
   onSongStructureChange: (val: SongStructure) => void;
@@ -17857,6 +17874,8 @@ interface SongStructureIntegratedControlProps {
 function SongStructureIntegratedControlComponent({
   lyricsLength,
   onLyricsLengthChange,
+  lyricWritingStyle,
+  onLyricWritingStyleChange,
   songStructure,
   customStructure,
   onSongStructureChange,
@@ -19146,6 +19165,40 @@ function SongStructureIntegratedControlComponent({
             className="overflow-hidden"
           >
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
+              {/* 공통 작사 스타일 */}
+              <div className="space-y-2">
+                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-btn-border bg-btn-bg p-1 shadow-btn">
+                  {([
+                    { id: 'default', label: '기본', description: 'Story Context와 장르에 맞춰 자유롭게 작사합니다.' },
+                    { id: 'kimEana', label: '김이나식', description: '캐릭터·말맛·생활감 중심의 작법 보조를 적용합니다.' },
+                  ] as Array<{ id: V1LyricWritingStyle; label: string; description: string }>).map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        onLyricWritingStyleChange(item.id);
+                        writeStoredV1LyricWritingStyle(item.id);
+                        onHover({ id: `lyric-writing-${item.id}`, label: item.label, labelKo: item.label, description: item.description, _ts: Date.now() });
+                      }}
+                      onMouseEnter={() => onHover({ id: `lyric-writing-${item.id}`, label: item.label, labelKo: item.label, description: item.description })}
+                      onMouseLeave={() => onHover(null)}
+                      className={cn(
+                        "rounded-xl px-3 py-2.5 text-[13px] font-black transition-all",
+                        lyricWritingStyle === item.id
+                          ? "bg-[#FFB400] text-[#171717] shadow-md"
+                          : "text-[var(--text-secondary)] hover:bg-btn-hover hover:text-[var(--text-primary)]"
+                      )}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] leading-relaxed text-[var(--text-secondary)]/75">
+                  스튜디오 공통 설정으로 저장되며, 지원되는 작사 엔진에서 적용됩니다.
+                </p>
+              </div>
+
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
                 <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
@@ -19915,6 +19968,7 @@ function SongStructureIntegratedControlComponent({
 
 const SongStructureIntegratedControl = React.memo(SongStructureIntegratedControlComponent, (prev, next) => {
   return prev.lyricsLength === next.lyricsLength &&
+         prev.lyricWritingStyle === next.lyricWritingStyle &&
          prev.songStructure === next.songStructure &&
          prev.isLocked === next.isLocked &&
          prev.userTier === next.userTier &&
@@ -21130,6 +21184,8 @@ interface VocalControlProps {
   vocalTones: VocalTone[];
   vocalMembers: VocalMember[];
   rapEnabled: boolean;
+  rapMode: RapMode;
+  onRapModeChange: (mode: RapMode) => void;
   onMaleChange: (count: number) => void;
   onFemaleChange: (count: number) => void;
   onModeChange: (mode: VocalMode) => void;
@@ -21157,6 +21213,8 @@ function VocalControlComponent({
   vocalTones,
   vocalMembers,
   rapEnabled,
+  rapMode,
+  onRapModeChange,
   isKoreanEnglishMix,
   englishMixRatio,
   onEnglishMixRatioChange,
@@ -21325,7 +21383,7 @@ function VocalControlComponent({
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
-  useStableContentHeight(contentRef, setContentHeight, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, isKoreanEnglishMix, englishMixRatio]);
+  useStableContentHeight(contentRef, setContentHeight, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, rapMode, isKoreanEnglishMix, englishMixRatio]);
 
   const handleModeClick = (mode: VocalMode) => {
     const nextMode = mode === 'duo' ? 'group' : mode;
@@ -21339,7 +21397,6 @@ function VocalControlComponent({
       onMaleChange(0);
       onFemaleChange(0);
       onMembersChange([]);
-      onRapChange(false);
       markVocalEmptySelection();
     }
 
@@ -21734,7 +21791,6 @@ function VocalControlComponent({
       onMaleChange(gender === 'male' ? 1 : 0);
       onFemaleChange(gender === 'female' ? 1 : 0);
       onMembersChange([nextMember]);
-      onRapChange(false);
       setIsVocalRandomActive(true);
       setVocalCompositionSource(hasManualSoloGender ? 'manual' : 'random');
       onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: hasManualSoloGender ? '선택한 솔로 성별은 유지하고 보컬 캐릭터만 랜덤 적용했습니다.' : '솔로 남성/여성 중 하나와 보컬 캐릭터를 랜덤 적용했습니다.', _ts: Date.now() });
@@ -21761,10 +21817,26 @@ function VocalControlComponent({
     onMaleChange(nextMembers.filter((member) => member.gender === 'male').length);
     onFemaleChange(nextMembers.filter((member) => member.gender === 'female').length);
     onMembersChange(nextMembers);
-    onRapChange(false);
     setIsVocalRandomActive(true);
     setVocalCompositionSource('random');
     onHover({ id: 'vocal-random', label: 'Random Group Vocal', labelKo: '그룹 보컬 랜덤', description: '남성/여성/혼성 그룹 중 하나로 2~3명을 랜덤 구성하고 각 보컬 캐릭터를 다르게 적용했습니다.', _ts: Date.now() });
+  };
+
+  const cycleRapMode = () => {
+    const nextMode: RapMode = rapMode === 'auto' ? 'off' : rapMode === 'off' ? 'on' : 'auto';
+    onRapModeChange(nextMode);
+    onRapChange(nextMode === 'on');
+    onHover({
+      id: 'vocal-rap-mode',
+      label: `Rap ${nextMode.toUpperCase()}`,
+      labelKo: `랩 ${nextMode.toUpperCase()}`,
+      description: nextMode === 'auto'
+        ? '래퍼 역할·장르·섹션 구조에 맞을 때만 랩을 적용합니다.'
+        : nextMode === 'on'
+          ? '래퍼 역할이 없어도 랩 구간을 적극적으로 적용합니다.'
+          : '래퍼 역할이 있어도 랩 구간을 만들지 않습니다.',
+      _ts: Date.now(),
+    });
   };
 
   const getVocalModeTooltip = (mode: VocalMode): CategoryItem => {
@@ -21791,6 +21863,34 @@ function VocalControlComponent({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={cycleRapMode}
+            onMouseEnter={() => onHover({
+              id: 'vocal-rap-mode',
+              label: `Rap ${rapMode.toUpperCase()}`,
+              labelKo: `랩 ${rapMode.toUpperCase()}`,
+              description: rapMode === 'auto'
+                ? '래퍼 역할·장르·섹션 구조에 맞을 때만 랩을 적용합니다. 클릭하면 OFF로 전환됩니다.'
+                : rapMode === 'on'
+                  ? '래퍼 역할이 없어도 랩 구간을 적극적으로 적용합니다. 클릭하면 AUTO로 전환됩니다.'
+                  : '래퍼 역할이 있어도 랩 구간을 만들지 않습니다. 클릭하면 ON으로 전환됩니다.'
+            })}
+            onMouseLeave={() => onHover(null)}
+            className={cn(
+              "h-10 px-3 rounded-xl transition-all border shadow-btn flex items-center gap-1.5 text-[11px] font-black",
+              rapMode === 'on'
+                ? "bg-[#FFB400] text-[#171717] border-black/20 soridraw-selected-strong"
+                : rapMode === 'auto'
+                  ? "bg-[#FFB400]/18 text-[#FFD36A] border-black/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+            )}
+            title={`랩 모드 ${rapMode.toUpperCase()} · 클릭하여 AUTO → OFF → ON 순환`}
+            aria-label={`랩 모드 ${rapMode.toUpperCase()}`}
+          >
+            <Mic2 className="w-3.5 h-3.5" />
+            <span>랩 {rapMode.toUpperCase()}</span>
+          </button>
           {onToggleLock && (
             <button
               type="button"
@@ -22430,6 +22530,7 @@ const VocalControl = React.memo(VocalControlComponent, (prev, next) => {
          prev.femaleCount === next.femaleCount &&
          prev.vocalMode === next.vocalMode &&
          prev.rapEnabled === next.rapEnabled &&
+         prev.rapMode === next.rapMode &&
          prev.isKoreanEnglishMix === next.isKoreanEnglishMix &&
          prev.englishMixRatio === next.englishMixRatio &&
          prev.isLocked === next.isLocked &&

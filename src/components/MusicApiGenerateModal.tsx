@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, ChevronDown, ChevronLeft, Key, Languages, Music, X, ListMusic, Mic2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, Key, Languages, Music, X, ListMusic } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -58,6 +58,7 @@ type MusicApiGenerateModalProps = {
   languageMixTargetLanguages?: LanguageCode[];
   rapEnabled?: boolean;
   rapMode?: RapMode;
+  lyricWritingStyle?: V1LyricWritingStyle;
   onPreview?: (options: {
     includeLyrics: boolean;
     lyricLanguages: LanguageCode[];
@@ -221,7 +222,7 @@ const writeStoredGenerationEngineVersion = (value: GenerationEngineVersion) => {
 const isV1LyricWritingStyle = (value: unknown): value is V1LyricWritingStyle =>
   value === 'default' || value === 'kimEana';
 
-const readStoredV1LyricWritingStyle = (): V1LyricWritingStyle => {
+export const readStoredV1LyricWritingStyle = (): V1LyricWritingStyle => {
   if (typeof window === 'undefined') return 'default';
   try {
     const stored = window.localStorage.getItem(V1_LYRIC_WRITING_STYLE_STORAGE_KEY);
@@ -262,6 +263,7 @@ export default function MusicApiGenerateModal({
   languageMixTargetLanguages,
   rapEnabled = false,
   rapMode,
+  lyricWritingStyle: requestedLyricWritingStyle,
   onPreview,
   suspendHistoryHandling = false,
 }: MusicApiGenerateModalProps) {
@@ -367,7 +369,7 @@ export default function MusicApiGenerateModal({
   const [sunoModelVersion, setSunoModelVersion] = useState<SunoModelVersion>(() => (isMain ? 'V5_5' : readStoredSunoModelVersion()));
   const [isSunoModelOpen, setIsSunoModelOpen] = useState(false);
   const [generationEngineVersion, setGenerationEngineVersion] = useState<GenerationEngineVersion>(() => (isMain ? readStoredGenerationEngineVersion() : 'classic'));
-  const [lyricWritingStyle, setLyricWritingStyle] = useState<V1LyricWritingStyle>(() => (isMain ? readStoredV1LyricWritingStyle() : 'default'));
+  const [lyricWritingStyle, setLyricWritingStyle] = useState<V1LyricWritingStyle>(() => requestedLyricWritingStyle || (isMain ? readStoredV1LyricWritingStyle() : 'default'));
   const [isGenerationEngineOpen, setIsGenerationEngineOpen] = useState(false);
   const generationEngineMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -380,6 +382,11 @@ export default function MusicApiGenerateModal({
     if (!isMain) return;
     setGenerationEngineVersion(readStoredGenerationEngineVersion());
   }, [isMain]);
+
+  useEffect(() => {
+    const nextStyle = requestedLyricWritingStyle || (isMain ? readStoredV1LyricWritingStyle() : 'default');
+    setLyricWritingStyle(nextStyle);
+  }, [isMain, requestedLyricWritingStyle]);
 
   useEffect(() => {
     if (!isMain || !isGenerationEngineOpen) return;
@@ -1015,83 +1022,23 @@ export default function MusicApiGenerateModal({
                       {isMain && (
                         <div className={`mt-4 pt-4 border-t ${dividerClass} space-y-3`}>
                           <div className="flex items-center justify-between">
-                            <p className={`text-xs font-black ${accentText}`}>가사 옵션</p>
+                            <p className={`text-xs font-black ${accentText}`}>언어 혼합</p>
                             <p className={`text-[10px] font-bold ${accentText}`}>가사 포함 시 적용</p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setLocalKoreanEnglishMix((prev) => !prev)}
-                              className={`rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
-                                localKoreanEnglishMix
-                                  ? accentSelected
-                                  : optionRest
-                              }`}
-                            >
-                              <p className="text-sm font-black flex items-center gap-1.5">
-                                <Languages className="w-3.5 h-3.5" />
-                                언어 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
-                              </p>
-                            </button>
-                            <div className={`rounded-xl px-2 py-2 border transition-all ${optionRest}`}>
-                              <p className="mb-2 text-sm font-black flex items-center gap-1.5">
-                                <Mic2 className="w-3.5 h-3.5" />
-                                랩 모드
-                              </p>
-                              <div className="grid grid-cols-3 gap-1.5">
-                                {(['off', 'auto', 'on'] as RapMode[]).map((mode) => (
-                                  <button
-                                    key={mode}
-                                    type="button"
-                                    onClick={() => setLocalRapMode(mode)}
-                                    className={`rounded-lg px-2 py-2 text-[12px] font-black transition-all ${
-                                      localRapMode === mode
-                                        ? accentSelected
-                                        : 'bg-black/10 text-[var(--text-secondary)] hover:bg-white/[0.06]'
-                                    }`}
-                                  >
-                                    {mode === 'auto' ? 'AUTO' : mode.toUpperCase()}
-                                  </button>
-                                ))}
-                              </div>
-                              <p className="mt-1.5 text-[9px] font-semibold leading-relaxed text-[var(--text-secondary)]/70">
-                                OFF 없음 · AUTO 래퍼 선택 시 · ON 래퍼 없이도 적용
-                              </p>
-                            </div>
-                          </div>
-                          {generationEngineVersion === 'classic' && (
-                            <div className={`rounded-xl px-3 py-3 border ${optionRest}`}>
-                              <div className="mb-2 flex items-center justify-between">
-                                <p className="text-sm font-black">작사 스타일</p>
-                                <p className={`text-[10px] font-bold ${accentText}`}>V1 전용</p>
-                              </div>
-                              <div className="grid grid-cols-2 gap-1.5">
-                                {([
-                                  { id: 'default', label: '기본' },
-                                  { id: 'kimEana', label: '김이나식' },
-                                ] as Array<{ id: V1LyricWritingStyle; label: string }>).map((item) => (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => {
-                                      writeStoredV1LyricWritingStyle(item.id);
-                                      setLyricWritingStyle(item.id);
-                                    }}
-                                    className={`rounded-lg px-2 py-2 text-[12px] font-black transition-all ${
-                                      lyricWritingStyle === item.id
-                                        ? accentSelected
-                                        : 'bg-black/10 text-[var(--text-secondary)] hover:bg-white/[0.06]'
-                                    }`}
-                                  >
-                                    {item.label}
-                                  </button>
-                                ))}
-                              </div>
-                              <p className="mt-2 text-[10px] leading-relaxed text-[var(--text-secondary)]/75">
-                                기본은 Story Context와 장르에 맞춰 자유 작사합니다. 김이나식은 캐릭터·말맛·생활감 작법만 보조 적용합니다.
-                              </p>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setLocalKoreanEnglishMix((prev) => !prev)}
+                            className={`w-full rounded-xl px-3 py-2.5 sm:py-3 border text-left transition-all ${
+                              localKoreanEnglishMix
+                                ? accentSelected
+                                : optionRest
+                            }`}
+                          >
+                            <p className="text-sm font-black flex items-center gap-1.5">
+                              <Languages className="w-3.5 h-3.5" />
+                              언어 혼합 {localKoreanEnglishMix ? 'ON' : 'OFF'}
+                            </p>
+                          </button>
                           <AnimatePresence initial={false}>
                             {localKoreanEnglishMix && (
                               <motion.div
@@ -1274,9 +1221,9 @@ export default function MusicApiGenerateModal({
                   )}
                   {isMain && includeLyrics && (
                     <div className={`flex items-center justify-between px-5 py-4 border-t ${dividerClass}`}>
-                      <span className="text-sm font-black text-[var(--text-secondary)]">가사 옵션</span>
+                      <span className="text-sm font-black text-[var(--text-secondary)]">언어 혼합</span>
                       <span className={`text-sm font-black ${accentText} text-right`}>
-                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'} · 랩 {localRapMode.toUpperCase()}{generationEngineVersion === 'classic' ? ` · ${lyricWritingStyle === 'kimEana' ? '김이나식' : '기본 작사'}` : ''}
+                        {localKoreanEnglishMix ? `언어혼합 ${localEnglishMixRatio}%` : '언어혼합 OFF'}
                       </span>
                     </div>
                   )}

@@ -71,6 +71,7 @@ import {
 } from "./generation/v1/sections";
 import {
   auditV1LanguageMixCard,
+  buildLanguageArrangementPlan,
   collectV1LanguageMixRepairSeeds,
   enforceV1LanguageMixCard,
   mergeV1LanguageMixRepairSlots,
@@ -32781,7 +32782,18 @@ ${selectedNativeScriptInstruction}
           : englishMixRatio <= 50 ? 38
             : englishMixRatio <= 70 ? 44
               : 48;
-  const explicitLanguageExchangeMode = getSelectedV1HookPatterns(params).includes('call-response');
+  const selectedLanguageHookPatterns = getSelectedV1HookPatterns(params);
+  const explicitLanguageExchangeMode = selectedLanguageHookPatterns.includes('call-response');
+  const languageArrangementPlan = buildLanguageArrangementPlan({
+    requestedRatio: englishMixRatio,
+    targetLanguages: requestedLanguageMixTargets,
+    structureMode: String(params.songStructure || '1'),
+    hookPatterns: selectedLanguageHookPatterns,
+    rapMode: getRapModeFromParams(params),
+    hasRapperRole: Boolean((params.vocal?.members || []).some((member: any) => Array.isArray(member?.roles) && member.roles.includes('rapper'))),
+    vocalCount: Number((params.vocal?.members || []).length || 0),
+    genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
+  });
   const languageMixPlacementRule = englishMixRatio <= 5
     ? 'Use one or two compact accents total. Prefer a title/hook entry point or one final payoff; do not create a full target-language block.'
     : englishMixRatio <= 10
@@ -32812,6 +32824,7 @@ ${mixTargetNativeScriptInstruction}
 ${languageMixCardPlan}
 - PROFESSIONAL PLACEMENT PROFILE FOR ${englishMixRatio}%:
   ${languageMixPlacementRule}
+${languageArrangementPlan.promptInstruction}
 - Switch languages only at a musically and semantically useful boundary: section change, complete phrase boundary, hook return, beat/arrangement turn, rapper-to-singer handoff, or emotional reveal.
 - Prefer coherent two-to-four-line language blocks when the ratio is 20% or higher. A single mixed line is acceptable only when its syntax and melody are natural.
 ${languageExchangeRule}

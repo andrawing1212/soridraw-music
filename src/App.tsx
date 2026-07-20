@@ -11204,7 +11204,7 @@ ${normalizePromptForDisplay(result.prompt)}
               saveRecentSongEdit();
             }}
             disabled={isSavingRecentSongEdit}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#cd8c31]/15 text-[#f0c079] border border-[#cd8c31]/25 transition-all active:scale-95 disabled:opacity-50"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#e3a13a]/15 text-[#f4bc63] border border-[#e3a13a]/25 transition-all active:scale-95 disabled:opacity-50"
             title="수정 저장"
           >
             {isSavingRecentSongEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -13803,13 +13803,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#cd8c31]/30 shadow-[0_-1px_0_rgba(205,140,49,0.16)] transition-all duration-300 relative"
+                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] transition-all duration-300 relative"
               )}
             >
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#cd8c31]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#cd8c31]/[0.18] transition-all duration-500">
+              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
           <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
@@ -13821,7 +13821,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[var(--hover-bg)] hover:bg-[#cd8c31]/10 text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all active:scale-95 shadow-sm"
+                      className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all shrink-0 active:scale-95 shadow-sm"
                     >
                       <HeartIcon className="w-5 h-5 fill-current text-[#cd8c31]" />
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">뮤직노트</span>
@@ -13865,14 +13865,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[var(--hover-bg)] px-1.5 text-[#cd8c31] border border-[#cd8c31]/25 transition-all active:scale-95 shadow-sm"
+                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       <HeartIcon className="w-[16px] h-[16px] fill-current text-[#cd8c31]" />
                       <span className="text-[11px] font-extrabold whitespace-nowrap">뮤직노트</span>
                     </button>
 
                     <div className="flex items-center justify-center gap-1 font-mono text-[13px] tracking-[0.12em] uppercase font-bold text-[var(--text-primary)]">
-                      <Music className="w-[17px] h-[17px] shrink-0 text-[#cd8c31]" />
+                      <Music className="w-[17px] h-[17px] shrink-0 text-[#e3a13a]" />
                       <span className="whitespace-nowrap">제목</span>
                       <span className="text-[10px] tracking-[0.1em] whitespace-nowrap">(Title)</span>
                     </div>
@@ -13901,7 +13901,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
                   <div className="flex justify-center pt-2.5 pb-0.5">
-                    <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#cd8c31]/90 tracking-tight">
+                    <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#e3a13a]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
                   </div>
@@ -13912,7 +13912,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.koreanTitle}
                           onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
-                          className="w-full rounded-xl border border-[#cd8c31]/25 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                          className="w-full rounded-xl border border-[#e3a13a]/35 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f4bc63] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                           placeholder="한국어 제목"
                         />
                       )}
@@ -13920,7 +13920,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.secondaryTitle}
                           onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
-                          className="w-full rounded-xl border border-[#cd8c31]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                          className="w-full rounded-xl border border-[#e3a13a]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#e3a13a] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                           placeholder="외국어 제목"
                         />
                       )}
@@ -13934,8 +13934,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
-                        const primaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#f0c079]' : 'text-[var(--text-primary)]');
-                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#cd8c31]' : 'text-[#cd8c31]/90');
+                        const primaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#f4bc63]' : 'text-[var(--text-primary)]');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
                         return (
                           <>
@@ -14006,7 +14006,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <p className="text-[12px] font-semibold text-[var(--text-secondary)]/80 tracking-tight text-center">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
-                            <span className="ml-1 text-[#f0c079] font-bold">(최근 생성곡)</span>
+                            <span className="ml-1 text-[#f4bc63] font-bold">(최근 생성곡)</span>
                           )}
                         </p>
                       </div>
@@ -14072,14 +14072,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart min-w-[48px] min-h-[48px] flex items-center justify-center shrink-0 disabled:cursor-wait disabled:opacity-70"
                     >
                       {isTogglingCurrentStudioFavorite ? (
-                        <Loader2 className="w-6 h-6 animate-spin text-[#cd8c31]" />
+                        <Loader2 className="w-6 h-6 animate-spin text-[#e3a13a]" />
                       ) : (
                         <Heart 
                           className={cn(
                             "w-6 h-6 transition-all",
                             isSongFavorited(result)
-                              ? "fill-[#cd8c31] text-[#cd8c31]"
-                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                              ? "fill-[#e3a13a] text-[#e3a13a]"
+                              : "text-[var(--text-primary)] group-hover/heart:text-[#e3a13a]"
                           )} 
                         />
                       )}
@@ -14090,7 +14090,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <div className="hidden sm:block space-y-4 pt-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-[var(--text-primary)] font-mono text-sm tracking-widest uppercase font-bold">
-                      <Music className="w-[18px] h-[18px] text-[#cd8c31]" />
+                      <Music className="w-[18px] h-[18px] text-[#e3a13a]" />
                       제목 (Title)
                     </div>
                   </div>
@@ -14104,7 +14104,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <input
                                   value={recentSongEditDraft.koreanTitle}
                                   onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
-                                  className="w-full rounded-2xl border border-[#cd8c31]/25 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f0c079] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                  className="w-full rounded-2xl border border-[#e3a13a]/35 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f4bc63] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder="한국어 제목"
                                 />
                               )}
@@ -14112,7 +14112,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <input
                                   value={recentSongEditDraft.secondaryTitle}
                                   onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
-                                  className="w-full rounded-2xl border border-[#cd8c31]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#cd8c31] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                  className="w-full rounded-2xl border border-[#e3a13a]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#e3a13a] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder="외국어 제목"
                                 />
                               )}
@@ -14127,12 +14127,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const genrePrefix = getResolvedGenre(result) || getSubGenre(result) || 'Song';
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
-                        const primaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#f0c079]' : 'text-[var(--text-primary)]');
-                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#cd8c31]' : (isRecent ? 'text-[#cd8c31]' : 'text-[#cd8c31]/90');
+                        const primaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#f4bc63]' : 'text-[var(--text-primary)]');
+                        const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
                         return (
                           <div className="relative w-full min-h-[132px] flex flex-col items-center justify-start pt-0">
-                            <p className="max-w-[calc(100%-160px)] truncate text-center text-base md:text-lg font-extrabold text-[#cd8c31]/90 tracking-tight">
+                            <p className="max-w-[calc(100%-160px)] truncate text-center text-base md:text-lg font-extrabold text-[#e3a13a]/90 tracking-tight">
                               [{genrePrefix}]
                             </p>
 
@@ -14201,7 +14201,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-secondary)]/80 tracking-tight">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
-                            <span className="ml-1 text-[#f0c079] font-bold">(최근 생성곡)</span>
+                            <span className="ml-1 text-[#f4bc63] font-bold">(최근 생성곡)</span>
                           )}
                         </p>
                       </div>
@@ -14266,14 +14266,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       className="p-2.5 rounded-2xl bg-[var(--hover-bg)] border border-[var(--border-color)] shadow-lg transition-all hover:bg-[var(--hover-bg)]/20 group/heart disabled:cursor-wait disabled:opacity-70"
                     >
                       {isTogglingCurrentStudioFavorite ? (
-                        <Loader2 className="w-5 h-5 animate-spin text-[#cd8c31]" />
+                        <Loader2 className="w-5 h-5 animate-spin text-[#e3a13a]" />
                       ) : (
                         <Heart 
                           className={cn(
                             "w-5 h-5 transition-all",
                             isSongFavorited(result)
-                              ? "fill-[#cd8c31] text-[#cd8c31]"
-                              : "text-[var(--text-primary)] group-hover/heart:text-[#cd8c31]"
+                              ? "fill-[#e3a13a] text-[#e3a13a]"
+                              : "text-[var(--text-primary)] group-hover/heart:text-[#e3a13a]"
                           )} 
                         />
                       )}
@@ -14283,10 +14283,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[#cd8c31]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#cd8c31]/[0.15] transition-all duration-500">
+              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-all duration-500">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-[#cd8c31]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#e3a13a]" />
                     적용된 키워드
                   </h3>
                   <div className="flex items-center gap-2 shrink-0">
@@ -14354,7 +14354,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           )}
                           {result.appliedKeywords.vocal?.isToneSelected && result.appliedKeywords.vocalTone && (
                             <span 
-                              className="px-1.5 py-0.5 rounded-md text-[11px] bg-[#cd8c31]/10 text-[#cd8c31] border border-[#cd8c31]/20 cursor-help"
+                              className="px-1.5 py-0.5 rounded-md text-[11px] bg-[#e3a13a]/15 text-[#e3a13a] border border-[#e3a13a]/20 cursor-help"
                               onMouseEnter={() => setHoveredItem({ id: 'kw-vocal-tone', label: 'Vocal Tone', description: `선택된 보컬톤: ${result.appliedKeywords.vocalTone}` })}
                               onMouseLeave={() => setHoveredItem(null)}
                             >
@@ -14439,7 +14439,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         ? 'border-sky-400/20 bg-sky-400/10 text-sky-200'
                         : 'border-red-400/20 bg-red-400/10 text-red-300';
                     return (
-                      <div className="mt-4 border-t border-[#cd8c31]/10 pt-4 space-y-3">
+                      <div className="mt-4 border-t border-[#e3a13a]/10 pt-4 space-y-3">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <h4 className="text-xs font-black text-[var(--text-primary)]">언어 혼합 검사</h4>
@@ -14468,9 +14468,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               goal: language === card.baseLanguage ? 100 - Number(card.requestedRatio || 0) : Number(card.targetGoals?.[language] || 0),
                             }));
                             return (
-                              <div key={key} className="rounded-2xl border border-[#cd8c31]/15 bg-black/10 p-4 space-y-3">
+                              <div key={key} className="rounded-2xl border border-[#e3a13a]/15 bg-black/10 p-4 space-y-3">
                                 <div className="flex items-center justify-between gap-2">
-                                  <p className="text-[11px] font-black text-[#cd8c31]">{key === 'korean' ? '한글 가사 카드' : '보조 언어 가사 카드'}</p>
+                                  <p className="text-[11px] font-black text-[#e3a13a]">{key === 'korean' ? '한글 가사 카드' : '보조 언어 가사 카드'}</p>
                                   <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black', cardStatusClass)}>
                                     {passed ? <Check className="h-3 w-3" /> : preserved ? <Shield className="h-3 w-3" /> : <X className="h-3 w-3" />}
                                     {passed ? '통과' : preserved ? '원문 보호' : '확인 필요'}
@@ -14688,9 +14688,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             ? 'border-white/10 bg-white/[0.04] text-[var(--text-secondary)]'
                             : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
                       return (
-                        <div className="rounded-2xl border border-[#cd8c31]/15 bg-black/10 p-4 space-y-3">
+                        <div className="rounded-2xl border border-[#e3a13a]/15 bg-black/10 p-4 space-y-3">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-[11px] font-black text-[#cd8c31]">{label}</p>
+                            <p className="text-[11px] font-black text-[#e3a13a]">{label}</p>
                             <span className={cn('rounded-full border px-2 py-0.5 text-[9px] font-black', summaryClass)}>
                               {summaryLabel}
                             </span>
@@ -14720,7 +14720,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       );
                     };
                     return (
-                      <div className="mt-4 border-t border-[#cd8c31]/10 pt-4 space-y-4">
+                      <div className="mt-4 border-t border-[#e3a13a]/10 pt-4 space-y-4">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <h4 className="text-xs font-black text-[var(--text-primary)]">후렴 설계</h4>
@@ -14728,7 +14728,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {hookPlan.selected.map((item: any) => (
-                              <span key={item.id} className="rounded-full border border-[#cd8c31]/20 bg-[#cd8c31]/10 px-2.5 py-1 text-[10px] font-bold text-[#e2ad60]">
+                              <span key={item.id} className="rounded-full border border-[#e3a13a]/20 bg-[#e3a13a]/15 px-2.5 py-1 text-[10px] font-bold text-[#e2ad60]">
                                 {item.label || item.id}
                               </span>
                             ))}
@@ -14817,8 +14817,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   className={cn(
                     "section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
                     isAppliedKeywordsExpanded 
-                      ? "bg-[#cd8c31] text-white border-[#cd8c31]" 
-                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#cd8c31] hover:text-white hover:bg-[#cd8c31]"
+                      ? "bg-[#e3a13a] text-white border-[#e3a13a]" 
+                      : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
                   {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
@@ -14826,10 +14826,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Prompt Section */}
-              <div className="bg-[var(--card-bg)] rounded-3xl border border-[#cd8c31]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#cd8c31]/[0.15] transition-all duration-500">
-                <div className="p-5 border-b border-[#cd8c31]/[0.14] flex items-center justify-between bg-[#cd8c31]/[0.045]">
+              <div className="bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+                <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                    <Sparkles className="w-4 h-4 text-[#cd8c31]" />
+                    <Sparkles className="w-4 h-4 text-[#e3a13a]" />
                     음악 프롬프트
                   </h3>
                   <div className="flex items-center gap-2">
@@ -14839,7 +14839,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => copyToClipboard(isRecentSongSectionEditing('prompt') && recentSongEditDraft ? recentSongEditDraft.prompt : normalizePromptForDisplay(result.prompt), 'prompt')}
                       onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] text-[#e3a13a]/85 hover:text-[#f4bc63] transition-all border border-[#e3a13a]/[0.16] active:scale-95 shadow-btn"
                     >
                       {copiedType === 'prompt' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                     </button>
@@ -14850,7 +14850,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <textarea
                       value={recentSongEditDraft.prompt}
                       onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, prompt: event.target.value } : prev)}
-                      className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#cd8c31]/25 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                      className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#e3a13a]/35 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                       placeholder="음악 프롬프트를 수정하세요"
                     />
                   ) : (
@@ -14870,10 +14870,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#cd8c31]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
-                          <div className="p-5 border-b border-[#cd8c31]/[0.14] flex items-center justify-between bg-[#cd8c31]/[0.045]">
+                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
+                          <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                              <Languages className="w-4 h-4 text-[#cd8c31]" />
+                              <Languages className="w-4 h-4 text-[#e3a13a]" />
                               가사 언어 추가
                             </h3>
                           </div>
@@ -14890,7 +14890,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   key={lang}
                                   onClick={() => handleAddLyricsLanguage(lang)}
                                   disabled={isAddingLyricsLanguage}
-                                  className="px-3 py-3 rounded-2xl border border-[#cd8c31]/25 bg-[#cd8c31]/10 hover:bg-[#cd8c31] hover:text-white text-[#cd8c31] text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="px-3 py-3 rounded-2xl border border-[#e3a13a]/35 bg-[#e3a13a]/15 hover:bg-[#e3a13a] hover:text-white text-[#e3a13a] text-xs font-black transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   {addingLyricsLanguageTarget === lang ? '생성 중...' : `${lyricLanguageLabels[lang]?.ko || lang} 추가`}
                                 </button>
@@ -14910,10 +14910,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const copyType = `lyrics-${lang}`;
 
                         return (
-                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#cd8c31]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#cd8c31]/[0.15] transition-all duration-500">
-                            <div className="p-5 border-b border-[#cd8c31]/[0.14] flex items-center justify-between bg-[#cd8c31]/[0.045]">
+                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+                            <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
-                                <Music className="w-4 h-4 text-[#cd8c31]" />
+                                <Music className="w-4 h-4 text-[#e3a13a]" />
                                 {label} 가사
                               </h3>
                               <div className="flex items-center gap-2">
@@ -14938,7 +14938,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   onClick={() => copyToClipboard(isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? getRecentSongLyricsDraftValue(lang) : normalizeLyricsForDisplay(lyricsText), copyType)}
                                   onMouseEnter={() => setHoveredItem({ id: `copy-${copyType}`, label: `${label} 가사 복사`, description: `${label} 가사 전체를 복사합니다.` })}
                                   onMouseLeave={() => setHoveredItem(null)}
-                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] text-[#cd8c31]/85 hover:text-[#f0c079] transition-all border border-[#cd8c31]/[0.16] active:scale-95 shadow-btn"
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] text-[#e3a13a]/85 hover:text-[#f4bc63] transition-all border border-[#e3a13a]/[0.16] active:scale-95 shadow-btn"
                                 >
                                   {copiedType === copyType ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5" />}
                                 </button>
@@ -14949,7 +14949,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <textarea
                                   value={getRecentSongLyricsDraftValue(lang)}
                                   onChange={(event) => updateRecentSongLyricsDraftValue(lang, event.target.value)}
-                                  className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#cd8c31]/25 bg-black/20 p-4 font-sans text-sm md:text-base leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/60 focus:ring-2 focus:ring-[#cd8c31]/10"
+                                  className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#e3a13a]/35 bg-black/20 p-4 font-sans text-sm md:text-base leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder={`${label} 가사를 수정하세요`}
                                 />
                               ) : (
@@ -14978,29 +14978,29 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
                 )}
-                  <div className="mt-2 overflow-hidden rounded-2xl border border-[#cd8c31]/[0.16] bg-[#cd8c31]/[0.035]">
+                  <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
                     <button
                       type="button"
                       onClick={() => setIsHomeMusicApiMenuCollapsed((prev) => !prev)}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#cd8c31]/[0.06]"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#e3a13a]/[0.06]"
                     >
                       <div className="min-w-0">
-                        <p className="text-sm font-black text-[#f0c079]">Music API 생성</p>
-                        <p className="mt-0.5 text-[11px] font-medium text-[#cd8c31]/55">
+                        <p className="text-sm font-black text-[#f4bc63]">Music API 생성</p>
+                        <p className="mt-0.5 text-[11px] font-medium text-[#e3a13a]/55">
                           Suno 음원 생성 메뉴
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 text-[11px] font-black text-[#cd8c31]/55">
+                      <div className="flex shrink-0 items-center gap-2 text-[11px] font-black text-[#e3a13a]/55">
                         <span>{isHomeMusicApiMenuCollapsed ? '펼쳐보기' : '접기'}</span>
                         <ChevronDown className={cn("h-4 w-4 transition-transform", !isHomeMusicApiMenuCollapsed && "rotate-180")} />
                       </div>
                     </button>
 
                     {!isHomeMusicApiMenuCollapsed && (
-                      <div className="flex items-center justify-between gap-2 border-t border-[#cd8c31]/[0.14] p-3">
+                      <div className="flex items-center justify-between gap-2 border-t border-[#e3a13a]/[0.22] p-3">
                         <button
                           onClick={() => navigate('/my-page')}
-                          className="flex bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] py-3 px-4 rounded-xl text-[#cd8c31]/80 hover:text-[#f0c079] transition-all items-center justify-center shrink-0 border border-[#cd8c31]/[0.14]"
+                          className="flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22]"
                           title="마이페이지에서 API 관리"
                         >
                           <Settings className="w-5 h-5" />
@@ -15014,8 +15014,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           className={cn(
                             "flex-1 py-3 rounded-xl text-white font-bold transition-all whitespace-nowrap",
                             isMusicApiGenerating
-                              ? "bg-[#cd8c31]/35 cursor-not-allowed"
-                              : "bg-[#cd8c31] hover:bg-[#b77925] shadow-lg shadow-[#cd8c31]/[0.18]"
+                              ? "bg-[#e3a13a]/35 cursor-not-allowed"
+                              : "bg-[#e3a13a] hover:bg-[#b77925] shadow-lg shadow-[#e3a13a]/[0.18]"
                           )}
                         >
                           {isMusicApiGenerating ? "Music API 요청 중..." : "Music API로 생성"}
@@ -15025,7 +15025,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             clearSunoLibrarySignal();
                             navigate('/suno-library');
                           }}
-                          className="relative flex bg-[#cd8c31]/[0.08] hover:bg-[#cd8c31]/[0.12] py-3 px-4 rounded-xl text-[#cd8c31]/80 hover:text-[#f0c079] transition-all items-center justify-center shrink-0 border border-[#cd8c31]/[0.14] text-sm font-bold"
+                          className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"
                         >
                           {sunoLibrarySignal && (

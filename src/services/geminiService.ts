@@ -69,19 +69,6 @@ import {
   resolveV1VocalAnchorDescriptors,
   type V1HookRolePlan,
 } from "./generation/v1/sections";
-import {
-  auditV1LanguageMixCard,
-  buildLanguageArrangementPlan,
-  collectV1LanguageMixRepairSeeds,
-  enforceV1LanguageMixCard,
-  mergeV1LanguageMixRepairSlots,
-  normalizeV1LanguageMixBlueprint,
-  type V1LanguageMixAudit,
-  type V1LanguageMixBlueprint,
-  type V1LanguageMixLanguageCode,
-  type V1LanguageMixRepairSeed,
-  type V1LanguageMixRepairSlot,
-} from "./generation/v1/language";
 
 let aiInstance: GoogleGenAI | null = null;
 let aiInstanceKey: string | null = null;
@@ -1625,7 +1612,7 @@ function hookPatternInstruction(pattern: V1HookPattern): string {
     case 'chant': return 'shape the hook for clipped, rhythmically simple chant delivery; lyric placement is checked and the actual chant impact is verified in audio';
     case 'call-response': return 'create a distinct lead call and a different short answer line, then repeat that lead-and-answer relationship in every role-linked core return';
     case 'echo-response': return 'follow the lead hook with a shorter echo fragment of the same phrase; do not confuse this with spatial reverb';
-    case 'easy-sing': return 'simplify the primary hook into one or two compact lead lines with familiar words, stable breath groups, one obvious stress peak, open or sonorous vowel landings, and a clear rhyme/cadence family; in bilingual lyrics, weave one short global phrase or response into the same hook identity instead of adding a long foreign-language paragraph';
+    case 'easy-sing': return 'use short syntax, familiar words, open vowels, and stable breath groups so listeners can quickly follow the lead line';
     case 'split-ab': return 'split each role-linked core target into an A idea that presents the hook and a contrasting B idea that completes its answer or emotional payoff';
     case 'drop-hook': return 'apply a compact hook to an existing Drop; when no Drop exists but a primary hook section exists, embed the drop release at the end of that section without inventing a new structural tag';
     case 'anti-chorus': return 'make the role-linked core payoff deliberately smaller, quieter, or barer than its preceding lift while keeping one unmistakable compact anchor; actual dynamic contrast is an audio check';
@@ -4660,751 +4647,10 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
   };
 }
 
-function containsLatin(text: string): boolean {
-  return /[A-Za-z]/.test(text);
-}
-
-function containsHangul(text: string): boolean {
-  return /[가-힣]/.test(text);
-}
-
-function injectMixedPhrases(
-  text: string,
-  phrases: string[],
-  detector: (text: string) => boolean,
-  maxInjections = 3,
-): string {
-  if (!text.trim() || detector(text)) return text;
-
-  const lines = text.split("\n");
-  let phraseIndex = 0;
-  let injected = 0;
-
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i].trim();
-    if (!line || /^\[.*\]$/.test(line)) continue;
-
-    const phrase = phrases[phraseIndex % phrases.length];
-    phraseIndex += 1;
-
-    if (!lines[i].includes(phrase)) {
-      lines[i] = `${lines[i]} ${phrase}`.trim();
-      injected += 1;
-    }
-
-    if (injected >= maxInjections) break;
-  }
-
-  return lines.join("\n");
-}
-
-function stripLyricSectionTagLines(text: string): string {
-  return String(text || "")
-    // Exclude full-line Suno section tags and their cue text from language-ratio calculations.
-    // Example: [Verse A: low and intimate] should not count as English lyric content.
-    .replace(/^\s*\[[^\]]+\]\s*$/gm, "")
-    .trim();
-}
-
-function countEnglishWords(text: string): number {
-  const lyricBodyOnly = stripLyricSectionTagLines(text);
-  return (lyricBodyOnly.match(/[A-Za-z]+(?:[’'-][A-Za-z]+)?/g) || []).length;
-}
-
-function countKoreanWordUnits(text: string): number {
-  return String(text || "")
-    .split(/\s+/)
-    .filter((part) => /[가-힣]/.test(part)).length;
-}
-
-function countLyricWordUnits(text: string): number {
-  const plain = stripLyricSectionTagLines(text);
-  return Math.max(1, countKoreanWordUnits(plain) + countEnglishWords(plain));
-}
-
-function removeEnglishFragmentsFromKoreanLine(line: string): string {
-  const trimmed = line.trim();
-  if (!trimmed) return line;
-  if (/^\[[^\]]+\]$/.test(trimmed)) return line;
-
-  // Remove standalone English ad-libs/lines.
-  if (/^\(?[A-Za-z0-9\s’'",.!?&-]+\)?$/.test(trimmed)) return "";
-
-  return line
-    // Remove English-only parenthetical phrases: (Stay with me)
-    .replace(/\s*\([A-Za-z0-9\s’'",.!?&-]+\)\s*/g, " ")
-    // Remove Latin words inside Korean lines.
-    .replace(/[A-Za-z]+(?:[’'-][A-Za-z]+)?/g, "")
-    // Clean separators left by removed English phrases.
-    .replace(/\s*,\s*,+/g, ", ")
-    .replace(/^[\s,.:;!?-]+|[\s,.:;!?-]+$/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trimEnd();
-}
-
-function limitEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10): string {
-  const source = String(text || "");
-  const ratio = normalizeEnglishMixRatio(englishMixRatio);
-  if (!source.trim()) return source;
-  if (ratio <= 0) return stripEnglishAdlibsForKoreanOnlyLyrics(source);
-
-  const totalUnits = countLyricWordUnits(source);
-  const maxEnglishWords = Math.max(1, Math.floor((totalUnits * ratio) / 100));
-  const currentEnglishWords = countEnglishWords(source);
-  if (currentEnglishWords <= maxEnglishWords) return source;
-
-  let usedEnglishWords = 0;
-  const maxWordsPerKeptFragment = ratio >= 70 ? 32 : ratio >= 60 ? 28 : ratio >= 50 ? 24 : ratio <= 10 ? 5 : ratio <= 20 ? 8 : 14;
-
-  const limited = source
-    .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) return line;
-      if (/^\[[^\]]+\]$/.test(trimmed)) return line;
-
-      const englishWords = countEnglishWords(line);
-      if (englishWords === 0) return line;
-
-      const hasKorean = /[가-힣]/.test(line);
-      const isStandaloneEnglish = !hasKorean || /^\([A-Za-z0-9\s’'",.!?&-]+\)$/.test(trimmed);
-
-      if (
-        usedEnglishWords + englishWords <= maxEnglishWords &&
-        englishWords <= maxWordsPerKeptFragment &&
-        (isStandaloneEnglish || hasKorean)
-      ) {
-        usedEnglishWords += englishWords;
-        return line;
-      }
-
-      return removeEnglishFragmentsFromKoreanLine(line);
-    })
-    .filter((line, index, arr) => {
-      if (line.trim()) return true;
-      const prev = arr[index - 1]?.trim();
-      const next = arr[index + 1]?.trim();
-      return Boolean(prev && next && /^\[/.test(next));
-    })
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-
-  return limited;
-}
-
-
-function raiseEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10): string {
-  const ratio = normalizeEnglishMixRatio(englishMixRatio);
-  let source = String(text || "");
-  if (!source.trim() || ratio <= 0) return source;
-
-  const totalUnits = countLyricWordUnits(source);
-  const maxEnglishWords = Math.max(1, Math.floor((totalUnits * ratio) / 100));
-  const currentEnglishWords = countEnglishWords(source);
-
-  // Treat the selected value as the intended mix strength, not a random decoration.
-  // Still keep it safely below the selected maximum, then final limiter enforces the cap.
-  const targetEnglishWords = Math.max(
-    1,
-    Math.floor(
-      maxEnglishWords * (ratio >= 70 ? 0.92 : ratio >= 60 ? 0.89 : ratio >= 50 ? 0.86 : ratio >= 30 ? 0.78 : ratio >= 20 ? 0.65 : ratio >= 10 ? 0.45 : 0.25),
-    ),
-  );
-
-  if (currentEnglishWords >= targetEnglishWords) return source;
-
-  const phrasePool = ratio >= 60
-    ? ["I can't run away", "It's written in the stars", "Tell me what you want", "I'm losing control", "No more hiding", "Stay with me tonight", "We can break the fate", "Don't let me go", "Everything is changing", "Right here, right now", "I'm falling into you", "This is not a dream"]
-    : ratio >= 50
-      ? ["Stay with me", "right now", "I need you", "Don't let go", "Feel alive", "You and I", "No more", "Take me higher", "Hold on", "Let it go"]
-      : ratio >= 30
-        ? ["(Stay with me)", "tonight", "One more time", "I need you", "Don't let go", "right now", "Feel alive", "You and I", "No more", "Take me higher", "Hold on", "Let it go"]
-        : ratio >= 20
-          ? ["(Stay tonight)", "One more time", "You and I", "Feel alive"]
-          : ratio >= 10
-            ? ["(Stay)", "tonight", "You and I"]
-            : ["(Stay)"];
-
-  const maxInjections = ratio >= 70 ? 40 : ratio >= 60 ? 36 : ratio >= 50 ? 32 : ratio >= 30 ? 18 : ratio >= 20 ? 8 : ratio >= 10 ? 4 : 1;
-  const lines = source.split("\n");
-  let usedEnglishWords = currentEnglishWords;
-  let injected = 0;
-  let phraseIndex = 0;
-
-  const choosePhrase = () => {
-    for (let attempt = 0; attempt < phrasePool.length; attempt += 1) {
-      const phrase = phrasePool[(phraseIndex + attempt) % phrasePool.length];
-      const words = countEnglishWords(phrase);
-      if (usedEnglishWords + words <= maxEnglishWords) {
-        phraseIndex += attempt + 1;
-        return { phrase, words };
-      }
-    }
-    return null;
-  };
-
-  // Prefer musical payoff sections first so English feels intentional, not scattered randomly.
-  const preferredIndexes: number[] = [];
-  let currentSection = "";
-  lines.forEach((line, index) => {
-    const tag = line.match(/^\s*\[([^\]]+)\]\s*$/);
-    if (tag) {
-      currentSection = tag[1].toLowerCase();
-      return;
-    }
-    if (/chorus|hook|rap|bridge|final/.test(currentSection)) preferredIndexes.push(index);
-  });
-
-  const allIndexes = lines.map((_, index) => index);
-  const orderedIndexes = [...preferredIndexes, ...allIndexes.filter((index) => !preferredIndexes.includes(index))];
-
-  for (const index of orderedIndexes) {
-    if (injected >= maxInjections || usedEnglishWords >= targetEnglishWords) break;
-
-    const rawLine = lines[index] || "";
-    const trimmed = rawLine.trim();
-    if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) continue;
-    if (!/[가-힣]/.test(trimmed)) continue;
-    if (countEnglishWords(trimmed) > 0) continue;
-
-    const picked = choosePhrase();
-    if (!picked) break;
-
-    lines[index] = `${rawLine} ${picked.phrase}`.trimEnd();
-    usedEnglishWords += picked.words;
-    injected += 1;
-  }
-
-  return lines.join("\n");
-}
-
-function rebalanceHighEnglishMixDominance(text: string, englishMixRatio = 10): string {
-  const ratio = normalizeEnglishMixRatio(englishMixRatio);
-  let source = String(text || "");
-  if (!source.trim() || ratio < 50) return source;
-
-  const getActualEnglishShare = (value: string) => {
-    const total = countLyricWordUnits(value);
-    return total <= 0 ? 0 : countEnglishWords(value) / total;
-  };
-
-  const minimumShare = ratio >= 70 ? 0.62 : ratio >= 60 ? 0.54 : 0.45;
-  if (getActualEnglishShare(source) >= minimumShare) return source;
-
-  const phrasePool = ratio >= 70
-    ? [
-        "I can't run away from this feeling",
-        "Everything is written in the stars",
-        "Tell me what you really want",
-        "I'm losing control tonight",
-        "No more hiding from the truth",
-        "Stay with me before we fall",
-        "We can break the fate tonight",
-        "Don't let me go so easily",
-        "Everything is changing around us",
-        "Right here, right now, I know",
-        "I'm falling into you again",
-        "This is not a dream anymore",
-      ]
-    : [
-        "I can't run away",
-        "It's written in the stars",
-        "Tell me what you want",
-        "I'm losing control",
-        "No more hiding",
-        "Stay with me tonight",
-        "We can break the fate",
-        "Don't let me go",
-        "Everything is changing",
-        "Right here, right now",
-      ];
-
-  let phraseIndex = 0;
-  let koreanBodyLineCount = 0;
-  const nextPhrase = () => {
-    const phrase = phrasePool[phraseIndex % phrasePool.length];
-    phraseIndex += 1;
-    return phrase;
-  };
-
-  const lines = source.split("\n");
-  const adjusted: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) {
-      adjusted.push(line);
-      continue;
-    }
-
-    const hasKorean = containsHangul(trimmed);
-    const englishWords = countEnglishWords(trimmed);
-
-    if (!hasKorean) {
-      adjusted.push(line);
-      continue;
-    }
-
-    koreanBodyLineCount += 1;
-
-    if (ratio >= 90) {
-      // 70% should feel target-language-led while retaining deliberate matrix-language identity lines;
-      // replace most Korean-heavy body lines with English body lines. Section tags are not touched.
-      const keepKoreanIdentityLine = koreanBodyLineCount % 5 === 0 || englishWords >= 5;
-      if (keepKoreanIdentityLine) {
-        adjusted.push(line);
-      } else {
-        adjusted.push(nextPhrase());
-      }
-      continue;
-    }
-
-    // 50-70% should add English body lines without relying on section tags.
-    adjusted.push(line);
-    const needsMoreEnglish = ratio >= 70
-      ? englishWords === 0 || englishWords < countKoreanWordUnits(trimmed)
-      : englishWords === 0 && koreanBodyLineCount % 2 === 0;
-    if (needsMoreEnglish) {
-      adjusted.push(nextPhrase());
-    }
-  }
-
-  source = adjusted.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-
-  // If still below the intended floor, add compact English response lines after lyric body lines
-  // instead of relying on section tags to fake the ratio.
-  if (getActualEnglishShare(source) < minimumShare) {
-    const expanded: string[] = [];
-    for (const line of source.split("\n")) {
-      expanded.push(line);
-      const trimmed = line.trim();
-      if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) continue;
-      if (containsHangul(trimmed) && getActualEnglishShare(expanded.join("\n")) < minimumShare) {
-        expanded.push(nextPhrase());
-      }
-    }
-    source = expanded.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  }
-
-  return source;
-}
-
-function isLyricBodyLineForMix(line: string): boolean {
-  const trimmed = String(line || "").trim();
-  if (!trimmed) return false;
-  if (/^\[[^\]]+\]$/.test(trimmed)) return false;
-  return true;
-}
-
-function getKoreanMixTargetLineShare(ratio: number): number {
-  if (ratio >= 90) return 0.78;
-  if (ratio >= 70) return 0.62;
-  if (ratio >= 50) return 0.45;
-  if (ratio >= 30) return 0.26;
-  if (ratio >= 20) return 0.17;
-  if (ratio >= 10) return 0.1;
-  if (ratio >= 5) return 0.05;
-  return 0;
-}
-
-function normalizeKoreanMixSourceLine(line: string): string {
-  const trimmed = String(line || "").trim();
-  if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) return "";
-  if (!containsHangul(trimmed)) return "";
-
-  // Keep natural bilingual hook lines, but remove very long English tails when the line is mostly Korean.
-  const koreanUnits = countKoreanWordUnits(trimmed);
-  const englishWords = countEnglishWords(trimmed);
-  let cleaned = trimmed;
-  if (koreanUnits >= 2 && englishWords >= 5) {
-    cleaned = cleaned
-      .replace(/\s+[A-Za-z][A-Za-z0-9\s’'",.!?&-]{12,}$/g, "")
-      .trim();
-  }
-
-  if (cleaned.length > 54) {
-    cleaned = cleaned.slice(0, 54).replace(/[\s,.;:!?-]+$/g, "");
-  }
-  return containsHangul(cleaned) ? cleaned : "";
-}
-
-function extractKoreanMixSourceLines(koreanLyrics: string): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-
-  for (const line of String(koreanLyrics || "").split("\n")) {
-    const normalized = normalizeKoreanMixSourceLine(line);
-    if (!normalized) continue;
-    const key = normalized.replace(/\s+/g, " ").toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(normalized);
-  }
-
-  return result;
-}
-
-function raiseKoreanMixRatioInForeignLyrics(
-  foreignLyrics: string,
-  koreanLyrics: string,
-  englishMixRatio = 10,
-): string {
-  const ratio = normalizeEnglishMixRatio(englishMixRatio);
-  const source = String(foreignLyrics || "");
-  if (!source.trim() || ratio <= 0) return source;
-
-  const targetShare = getKoreanMixTargetLineShare(ratio);
-  if (targetShare <= 0) return source;
-
-  const lines = source.split("\n");
-  const bodyIndexes = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => isLyricBodyLineForMix(line));
-  if (!bodyIndexes.length) return source;
-
-  const currentKoreanLines = bodyIndexes.filter(({ line }) => containsHangul(line)).length;
-  const currentShare = currentKoreanLines / bodyIndexes.length;
-  if (currentShare >= targetShare) return source;
-
-  const sourceKoreanLines = extractKoreanMixSourceLines(koreanLyrics);
-  const fallbackKoreanLines = [
-    "아직 여기서 기다려",
-    "오늘 밤도 너를 불러",
-    "조금만 더 가까이 와",
-    "이 마음은 그대로야",
-    "다시 불빛이 켜질 거야",
-    "우린 아직 기다리고 있어",
-  ];
-  const pool = sourceKoreanLines.length ? sourceKoreanLines : fallbackKoreanLines;
-
-  const desiredAdditionalLines = Math.max(
-    0,
-    Math.ceil(((targetShare * bodyIndexes.length) - currentKoreanLines) / Math.max(0.1, 1 - targetShare)),
-  );
-  const maxAdditionalLines = ratio >= 70 ? 34 : ratio >= 60 ? 29 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
-  const additionsNeeded = Math.min(desiredAdditionalLines, maxAdditionalLines);
-  if (additionsNeeded <= 0) return source;
-
-  const preferredSections = /chorus|hook|rap|bridge|final|outro/i;
-  const insertAfterIndexes: number[] = [];
-  let currentSection = "";
-  lines.forEach((line, index) => {
-    const tag = line.match(/^\s*\[([^\]]+)\]\s*$/);
-    if (tag) {
-      currentSection = tag[1] || "";
-      return;
-    }
-    if (!isLyricBodyLineForMix(line)) return;
-    if (containsHangul(line)) return;
-    if (preferredSections.test(currentSection)) insertAfterIndexes.push(index);
-  });
-  lines.forEach((line, index) => {
-    if (!isLyricBodyLineForMix(line)) return;
-    if (containsHangul(line)) return;
-    if (!insertAfterIndexes.includes(index)) insertAfterIndexes.push(index);
-  });
-
-  const expanded: string[] = [];
-  let poolIndex = 0;
-  let inserted = 0;
-  const existing = new Set(
-    lines
-      .map((line) => line.trim().replace(/\s+/g, " ").toLowerCase())
-      .filter(Boolean),
-  );
-  const insertionSet = new Set(insertAfterIndexes.slice(0, additionsNeeded));
-
-  for (let index = 0; index < lines.length; index += 1) {
-    expanded.push(lines[index]);
-    if (!insertionSet.has(index) || inserted >= additionsNeeded) continue;
-
-    let picked = "";
-    for (let attempts = 0; attempts < pool.length; attempts += 1) {
-      const candidate = pool[(poolIndex + attempts) % pool.length];
-      const key = candidate.trim().replace(/\s+/g, " ").toLowerCase();
-      if (candidate && !existing.has(key)) {
-        picked = candidate;
-        poolIndex += attempts + 1;
-        existing.add(key);
-        break;
-      }
-    }
-    if (!picked) {
-      picked = pool[poolIndex % pool.length] || "아직 여기서 기다려";
-      poolIndex += 1;
-    }
-    expanded.push(picked);
-    inserted += 1;
-  }
-
-  return expanded.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-
-function containsLanguageSpecificText(line: string, language: LanguageCode): boolean {
-  const value = String(line || "");
-  switch (language) {
-    case "ko":
-      return containsHangul(value);
-    case "en":
-      return countEnglishWords(value) >= 2;
-    case "ja":
-      // Prefer kana as a strong Japanese signal; Kanji-only lines can overlap with Chinese.
-      return /[\u3040-\u30ff\u31f0-\u31ff]/.test(value);
-    case "zh":
-      return /[\u4e00-\u9fff]/.test(value);
-    case "ru":
-      return /[\u0400-\u04ff]/.test(value);
-    case "th":
-      return /[\u0e00-\u0e7f]/.test(value);
-    case "es":
-      return /[áéíóúñü¿¡]/i.test(value);
-    case "fr":
-      return /[àâæçéèêëîïôœùûüÿ]/i.test(value);
-    case "de":
-      return /[äöüß]/i.test(value);
-    default:
-      return false;
-  }
-}
-
-const LANGUAGE_MIX_FALLBACK_LINES: Record<LanguageCode, string[]> = {
-  ko: [
-    "아직 여기서 기다려",
-    "오늘 밤도 너를 불러",
-    "조금만 더 가까이 와",
-    "이 마음은 그대로야",
-  ],
-  en: [
-    "Stay with me tonight",
-    "Don't let the light go",
-    "I am still waiting here",
-    "Come back home to me",
-  ],
-  ja: [
-    "ここで待っているよ",
-    "もう少しだけそばにいて",
-    "君の声を探してる",
-    "夜が明けるまで",
-  ],
-  zh: [
-    "我还在这里等你",
-    "别让这束光熄灭",
-    "再靠近一点点",
-    "今晚别离开",
-  ],
-  es: [
-    "Quédate conmigo",
-    "No apagues esta luz",
-    "Te espero aquí",
-    "Vuelve a casa",
-  ],
-  fr: [
-    "Reste avec moi",
-    "Je t’attends ici",
-    "Ne laisse pas la lumière partir",
-    "Reviens ce soir",
-  ],
-  de: [
-    "Bleib heute Nacht bei mir",
-    "Ich warte hier auf dich",
-    "Lass das Licht nicht gehen",
-    "Komm wieder nach Hause",
-  ],
-  ru: [
-    "Я всё ещё жду тебя",
-    "Не гаси этот свет",
-    "Останься рядом со мной",
-    "Вернись домой сегодня",
-  ],
-  th: [
-    "ฉันยังรอเธออยู่",
-    "อย่าปล่อยให้ไฟดับ",
-    "กลับมาหาฉันคืนนี้",
-    "อยู่ข้างฉันอีกนิด",
-  ],
-};
-
-function getLanguageMixTargetLineShare(ratio: number): number {
-  return getKoreanMixTargetLineShare(ratio);
-}
-
-function normalizeLanguageMixSourceLine(line: string, language: LanguageCode): string {
-  const trimmed = String(line || "").trim();
-  if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) return "";
-  if (!containsLanguageSpecificText(trimmed, language)) return "";
-  if (trimmed.length > 58) {
-    return trimmed.slice(0, 58).replace(/[\s,.;:!?-]+$/g, "");
-  }
-  return trimmed;
-}
-
-function extractLanguageMixSourceLines(sourceLyrics: string, language: LanguageCode): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const line of String(sourceLyrics || "").split("\n")) {
-    const normalized = normalizeLanguageMixSourceLine(line, language);
-    if (!normalized) continue;
-    const key = normalized.replace(/\s+/g, " ").toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(normalized);
-  }
-  return result;
-}
-
-function balanceLanguageMixTargetsInLyricCard(
-  baseLyrics: string,
-  allGeneratedLyrics: string,
-  targetLanguages: LanguageCode[],
-  mixRatio = 10,
-): string {
-  const ratio = normalizeEnglishMixRatio(mixRatio);
-  const source = String(baseLyrics || "");
-  const targets = Array.from(new Set((targetLanguages || []).filter(Boolean)));
-  if (!source.trim() || ratio <= 0 || targets.length === 0) return source;
-
-  const targetShare = getLanguageMixTargetLineShare(ratio);
-  if (targetShare <= 0) return source;
-
-  const lines = source.split("\n");
-  const bodyIndexes = lines
-    .map((line, index) => ({ line, index }))
-    .filter(({ line }) => isLyricBodyLineForMix(line));
-  if (!bodyIndexes.length) return source;
-
-  const containsAnyTargetLanguage = (line: string) => targets.some((lang) => containsLanguageSpecificText(line, lang));
-  const currentMixedLines = bodyIndexes.filter(({ line }) => containsAnyTargetLanguage(line)).length;
-  const currentShare = currentMixedLines / bodyIndexes.length;
-  if (currentShare >= targetShare) return source;
-
-  const sourcePools = new Map<LanguageCode, string[]>();
-  targets.forEach((lang) => {
-    const extracted = extractLanguageMixSourceLines(allGeneratedLyrics, lang);
-    sourcePools.set(lang, extracted.length ? extracted : (LANGUAGE_MIX_FALLBACK_LINES[lang] || []));
-  });
-
-  const desiredAdditionalLines = Math.max(
-    0,
-    Math.ceil(((targetShare * bodyIndexes.length) - currentMixedLines) / Math.max(0.1, 1 - targetShare)),
-  );
-  const maxAdditionalLines = ratio >= 70 ? 34 : ratio >= 60 ? 29 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
-  const additionsNeeded = Math.min(desiredAdditionalLines, maxAdditionalLines);
-  if (additionsNeeded <= 0) return source;
-
-  const preferredSections = /chorus|hook|rap|bridge|final|outro/i;
-  const insertAfterIndexes: number[] = [];
-  let currentSection = "";
-  lines.forEach((line, index) => {
-    const tag = line.match(/^\s*\[([^\]]+)\]\s*$/);
-    if (tag) {
-      currentSection = tag[1] || "";
-      return;
-    }
-    if (!isLyricBodyLineForMix(line)) return;
-    if (containsAnyTargetLanguage(line)) return;
-    if (preferredSections.test(currentSection)) insertAfterIndexes.push(index);
-  });
-  lines.forEach((line, index) => {
-    if (!isLyricBodyLineForMix(line)) return;
-    if (containsAnyTargetLanguage(line)) return;
-    if (!insertAfterIndexes.includes(index)) insertAfterIndexes.push(index);
-  });
-
-  const expanded: string[] = [];
-  const existing = new Set(lines.map((line) => line.trim().replace(/\s+/g, " ").toLowerCase()).filter(Boolean));
-  const insertionSet = new Set(insertAfterIndexes.slice(0, additionsNeeded));
-  const poolOffsets = new Map<LanguageCode, number>();
-  let inserted = 0;
-  let targetCursor = 0;
-
-  const pickLineForLanguage = (lang: LanguageCode): string => {
-    const pool = sourcePools.get(lang) || LANGUAGE_MIX_FALLBACK_LINES[lang] || [];
-    if (!pool.length) return "";
-    const start = poolOffsets.get(lang) || 0;
-    for (let attempt = 0; attempt < pool.length; attempt += 1) {
-      const candidate = pool[(start + attempt) % pool.length];
-      const key = candidate.trim().replace(/\s+/g, " ").toLowerCase();
-      if (candidate && !existing.has(key)) {
-        poolOffsets.set(lang, start + attempt + 1);
-        existing.add(key);
-        return candidate;
-      }
-    }
-    const fallback = pool[start % pool.length] || "";
-    poolOffsets.set(lang, start + 1);
-    return fallback;
-  };
-
-  for (let index = 0; index < lines.length; index += 1) {
-    expanded.push(lines[index]);
-    if (!insertionSet.has(index) || inserted >= additionsNeeded) continue;
-
-    let picked = "";
-    for (let attempts = 0; attempts < targets.length; attempts += 1) {
-      const lang = targets[(targetCursor + attempts) % targets.length];
-      picked = pickLineForLanguage(lang);
-      if (picked) {
-        targetCursor += attempts + 1;
-        break;
-      }
-    }
-    if (!picked) continue;
-    expanded.push(picked);
-    inserted += 1;
-  }
-
-  return expanded.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-
-function enforceKpopMixedLyrics(
-  lyrics: { english: string; korean: string },
-  englishMixRatio = 10,
-): {
-  english: string;
-  korean: string;
-} {
-  const ratio = normalizeEnglishMixRatio(englishMixRatio);
-  const maxInjections = ratio <= 10 ? 1 : ratio <= 20 ? 2 : 3;
-  const koreanSource = lyrics.korean ?? "";
-
-  const koreanMixed = ratio >= 50
-    ? rebalanceHighEnglishMixDominance(
-        raiseEnglishMixRatioInKoreanLyrics(koreanSource, ratio),
-        ratio,
-      )
-    : raiseEnglishMixRatioInKoreanLyrics(koreanSource, ratio);
-
-  const englishSource = lyrics.english ?? "";
-  const englishWithSoftAccent = injectMixedPhrases(
-    englishSource,
-    ["(이 밤에)", "(너와 나)", "(괜찮아)"],
-    containsHangul,
-    maxInjections,
-  );
-  const englishMixed = ratio >= 10
-    ? raiseKoreanMixRatioInForeignLyrics(englishWithSoftAccent, koreanMixed || koreanSource, ratio)
-    : englishWithSoftAccent;
-
-  return {
-    korean: ratio >= 50
-      ? rebalanceHighEnglishMixDominance(koreanMixed, ratio)
-      : limitEnglishMixRatioInKoreanLyrics(koreanMixed, ratio),
-    english: englishMixed,
-  };
-}
-
-
 function normalizeEnglishMixRatio(value: unknown): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 10;
-  if (numeric <= 0) return 0;
-  const allowed = [10, 20, 30, 40, 50, 60, 70];
-  return allowed.reduce((best, candidate) => (
-    Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best
-  ), 10);
+  return Math.max(0, Math.min(90, Math.round(numeric)));
 }
 
 function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
@@ -5415,7 +4661,7 @@ function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
       if (!trimmed) return line;
       // Keep Suno-style section tags such as [Verse] or [Chorus]. For default/free and custom structures, prefer [Verse] instead of numbered [Verse]/[Verse].
       if (/^\[[^\]]+\]$/.test(trimmed)) return line;
-      // Remove standalone English ad-libs such as (Stay with me) or (I don't want you here).
+      // Remove standalone foreign-language lyric ad-libs in single-language mode.
       if (/^\([A-Za-z0-9\s'",.!?&-]+\)$/.test(trimmed)) return "";
       // Remove trailing English-only parenthetical ad-libs after Korean lines.
       return line.replace(/\s*\([A-Za-z0-9\s'",.!?&-]+\)\s*$/g, "").trimEnd();
@@ -28933,98 +28179,32 @@ function cleanArrangementBpm(line: string): string {
   return cleaned;
 }
 
-function removeKoreanFromEnglishLyrics(englishLyrics: string, koreanLyrics: string, titleEng: string): string {
+function removeKoreanFromEnglishLyrics(englishLyrics: string, _koreanLyrics: string, _titleEng: string): string {
   if (!englishLyrics) return '';
-  
-  const lines = englishLyrics.split('\n');
-  const cleanedLines: string[] = [];
-  
-  const translationDict: Record<string, string> = {
-    '놓으려 할수록': 'The more I let go',
-    '사랑해': 'I love you',
-    '안녕': 'Goodbye',
-    '기억해': 'Remember me',
-    '영원히': 'Forever',
-    '시간': 'Time',
-    '다시': 'Again',
-    '바람': 'Wind',
-    '하루': 'One day',
-    '우리': 'We',
-    '함께': 'Together',
-    '눈물': 'Tears',
-    '마음': 'My heart',
-    '하늘': 'Sky',
-    '기억': 'Memory',
-    '생각': 'Thought',
-    '빛': 'Light',
-    '어둠': 'Darkness',
-    '꿈': 'Dream',
-    '길': 'Way',
-    '밤': 'Night',
-    '너와 나': 'You and I',
-    '너를': 'You',
-    '내가': 'I',
-    '지워': 'Erase',
-    '아파': 'It hurts',
-    '그대': 'You',
-    '추억': 'Memory',
-    '매일': 'Every day',
-    '순간': 'Moment',
-  };
 
-  for (let line of lines) {
+  const cleanedLines = englishLyrics.split('\n').flatMap((line) => {
     const trimmed = line.trim();
-    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-      cleanedLines.push(line);
-      continue;
-    }
-    
-    if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(trimmed)) {
-      let translated = trimmed;
-      
-      for (const [kor, eng] of Object.entries(translationDict)) {
-        const regex = new RegExp(kor, 'g');
-        if (regex.test(translated)) {
-          translated = translated.replace(regex, eng);
-        }
-      }
-      
-      if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(translated)) {
-        if (translated.includes('놓으려 할수록')) {
-          translated = translated.replace(/놓으려 할수록/g, 'The more I let go');
-        }
-        if (translated.includes('가슴이')) {
-          translated = translated.replace(/가슴이/g, 'My heart');
-        }
-        if (translated.includes('사랑')) {
-          translated = translated.replace(/사랑/g, 'love');
-        }
-        if (translated.includes('기억')) {
-          translated = translated.replace(/기억/g, 'remember');
-        }
-        if (translated.includes('잊을 수')) {
-          translated = translated.replace(/잊을 수/g, 'cannot forget');
-        }
-      }
-      
-      if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(translated)) {
-        if (titleEng) {
-          translated = titleEng;
-        } else {
-          translated = translated.replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, '').trim();
-          if (!translated) {
-            translated = 'In this moment';
-          }
-        }
-      }
-      
-      cleanedLines.push(line.replace(trimmed, translated));
-    } else {
-      cleanedLines.push(line);
-    }
-  }
-  
-  return cleanedLines.join('\n');
+    if (!trimmed) return [''];
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) return [line];
+    if (!/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(trimmed)) return [line];
+
+    // Never translate leaked Korean with a fixed dictionary or fallback lyric sentence.
+    // Keep only an already-present non-Korean fragment; otherwise drop the contaminated line
+    // and let the existing sparse-lyric repair regenerate it from the current Story Context.
+    const indent = line.match(/^\s*/)?.[0] || '';
+    const cleaned = trimmed
+      .replace(/[ㄱ-ㅎㅏ-ㅣ가-힣]+/g, ' ')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .replace(/([,.;:!?]){2,}/g, '$1')
+      .replace(/^[\s,.;:!?–—-]+|[\s,.;:!?–—-]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    return /[A-Za-zÀ-ÖØ-öø-ÿА-Яа-яЁёก-๙一-鿿ぁ-ゟ゠-ヿ]/u.test(cleaned)
+      ? [`${indent}${cleaned}`]
+      : [];
+  });
+
+  return cleanedLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function getEnglishGenreName(id: string): string {
@@ -30358,49 +29538,6 @@ function stripSpatialAndEraKeywordsFromLyrics(lyrics: string, params: GenerateSo
 }
 
 const V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY = '__v1ResolvedHookBlueprint';
-const V1_INTERNAL_LANGUAGE_MIX_BLUEPRINT_KEY = '__v1LanguageMixBlueprint';
-
-
-function swapV1HookBlueprintCardLanguageFields(
-  blueprint: V1ResolvedHookBlueprint | undefined,
-): V1ResolvedHookBlueprint | undefined {
-  if (!blueprint) return blueprint;
-  const swapped = { ...blueprint } as V1ResolvedHookBlueprint;
-  const suffixes = [
-    'HookCore', 'MicroHook', 'PreviewFragment', 'VariantHook', 'CallLine',
-    'Response', 'EchoResponse', 'PostChorusTag', 'ChorusB', 'Chorus2Shift', 'FinalShift',
-  ];
-  suffixes.forEach((suffix) => {
-    const koreanKey = `korean${suffix}` as keyof V1ResolvedHookBlueprint;
-    const secondaryKey = `secondary${suffix}` as keyof V1ResolvedHookBlueprint;
-    const koreanValue = String((blueprint as any)[koreanKey] || '');
-    const secondaryValue = String((blueprint as any)[secondaryKey] || '');
-    if (!secondaryValue && !koreanValue) return;
-    (swapped as any)[koreanKey] = secondaryValue || koreanValue;
-    (swapped as any)[secondaryKey] = koreanValue || secondaryValue;
-  });
-  return swapped;
-}
-
-function getV1ProtectedHookLines(
-  blueprint: V1ResolvedHookBlueprint | undefined,
-  card: 'korean' | 'secondary',
-): string[] {
-  if (!blueprint) return [];
-  const prefix = card === 'korean' ? 'korean' : 'secondary';
-  const keys = [
-    `${prefix}HookCore`,
-    `${prefix}MicroHook`,
-    `${prefix}PreviewFragment`,
-    `${prefix}VariantHook`,
-    `${prefix}CallLine`,
-    `${prefix}Response`,
-    `${prefix}EchoResponse`,
-    `${prefix}PostChorusTag`,
-    `${prefix}ChorusB`,
-  ];
-  return keys.map((key) => String((blueprint as any)[key] || '').trim()).filter(Boolean);
-}
 
 interface V1ResolvedHookBlueprint {
   patterns: V1HookPattern[];
@@ -30483,36 +29620,13 @@ function cleanV1MicroHookToken(value: unknown, fallbackCore = ''): string {
   return String(best || sourceParts[sourceParts.length - 1] || '').slice(0, 18);
 }
 
-const V1_WEAK_ENGLISH_PREVIEW_ENDINGS = new Set([
-  'a', 'an', 'the', 'and', 'or', 'but', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'from', 'through',
-  'my', 'your', 'our', 'their', 'his', 'her', 'this', 'that', 'these', 'those',
-  'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'will', 'would', 'can', 'could', 'should', 'may', 'might', 'must',
-]);
-
-function isV1WeakPreviewEnding(value: string): boolean {
-  const words = String(value || '').toLowerCase().match(/[a-z]+(?:['’-][a-z]+)?/g) || [];
-  if (!words.length) return false;
-  return V1_WEAK_ENGLISH_PREVIEW_ENDINGS.has(words[words.length - 1]);
-}
-
 function buildV1PreviewFragment(value: unknown, core: string, microHook: string): string {
-  const supplied = cleanV1HookText(value, 4);
-  if (supplied
-    && normalizedV1HookComparison(supplied) !== normalizedV1HookComparison(core)
-    && !isV1WeakPreviewEnding(supplied)) return supplied;
+  const supplied = cleanV1HookText(value, 3);
+  if (supplied && normalizedV1HookComparison(supplied) !== normalizedV1HookComparison(core)) return supplied;
   if (microHook) return microHook;
   const words = String(core || '').split(/\s+/).filter(Boolean);
   if (words.length <= 1) return core;
-  const candidates = [
-    words.slice(Math.max(0, words.length - 3)).join(' '),
-    words.slice(Math.max(0, words.length - 2)).join(' '),
-    words.slice(0, Math.min(3, words.length - 1)).join(' '),
-    words.slice(0, Math.min(2, words.length - 1)).join(' '),
-  ].map((candidate) => cleanV1HookText(candidate, 4))
-    .filter((candidate) => candidate
-      && normalizedV1HookComparison(candidate) !== normalizedV1HookComparison(core)
-      && !isV1WeakPreviewEnding(candidate));
-  return candidates[0] || cleanV1MicroHookToken('', core) || core;
+  return words.slice(0, Math.min(2, words.length - 1)).join(' ');
 }
 
 function isV1HookFamilySectionName(value: string, plan?: V1HookRolePlan): boolean {
@@ -31078,107 +30192,6 @@ function applyV1SharedHookBlueprintGuard(
     : bodyGuarded;
 }
 
-
-function normalizeV1StableSectionTagNamesOnly(
-  lyrics: string,
-  params: GenerateSongParams,
-): string {
-  const blueprint = getV1SectionBlueprint(params);
-  if (blueprint.mode !== 'stable') return String(lyrics || '').trim();
-  const lines = repairMultilineBracketCueLines(String(lyrics || '')).split('\n');
-  const structuralNames = blueprint.entries.map((entry) => entry.name);
-  const tagIndexes = lines
-    .map((line, index) => ({ index, tag: isV1StructuralHookGuardTag(line, structuralNames) }))
-    .filter((item) => Boolean(item.tag));
-  if (tagIndexes.length !== blueprint.entries.length) return String(lyrics || '').trim();
-
-  tagIndexes.forEach((item, order) => {
-    const expected = blueprint.entries[order]?.name;
-    if (!expected) return;
-    const match = String(lines[item.index] || '').trim().match(/^\[\s*[^:\]\n]{1,80}(?:\s*:\s*([^\]]+))?\s*\]$/);
-    const cue = String(match?.[1] || '').replace(/\s+/g, ' ').trim();
-    lines[item.index] = `[${expected}${cue ? `: ${cue}` : ''}]`;
-  });
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-export function enforceV1CircularRefrainAbsoluteReturnContract(
-  lyrics: string,
-  blueprint: V1ResolvedHookBlueprint | undefined,
-  card: 'korean' | 'secondary',
-  params: GenerateSongParams,
-): string {
-  if (!blueprint || !blueprint.patterns.includes('circular-refrain')) return String(lyrics || '').trim();
-  if (params.isLyricMode && params.lyricMode === 'preserve') return String(lyrics || '').trim();
-  const core = cleanV1HookText(card === 'korean' ? blueprint.koreanHookCore : blueprint.secondaryHookCore, 12);
-  if (!core) return String(lyrics || '').trim();
-
-  const rolePlan = resolveV1HookRolePlan(params);
-  const structuralNames = getV1SectionBlueprint(params).entries.map((entry) => entry.name);
-  const lines = repairMultilineBracketCueLines(String(lyrics || '')).split('\n');
-  const sections: Array<{ name: string; start: number; end: number }> = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const tag = isV1StructuralHookGuardTag(lines[index], structuralNames);
-    if (!tag) continue;
-    if (sections.length) sections[sections.length - 1].end = index;
-    sections.push({ name: tag.name, start: index, end: lines.length });
-  }
-  const targets = sections.filter((section) => isV1CircularRoleSectionName(section.name, rolePlan));
-  if (targets.length < 2) return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-
-  const normalizeSung = (value: string) => normalizedV1HookComparison(String(value || '').replace(/^\(|\)$/g, ''));
-  const coreKey = normalizedV1HookComparison(core);
-  const hookLineKeys = new Set<string>();
-  sections.filter((section) => isV1HookFamilySectionName(section.name, rolePlan)).forEach((section) => {
-    lines.slice(section.start + 1, section.end).forEach((line) => {
-      const trimmed = String(line || '').trim();
-      if (!trimmed || /^\[[^\]]+\]$/.test(trimmed)) return;
-      const key = normalizeSung(trimmed);
-      if (key && key !== coreKey) hookLineKeys.add(key);
-    });
-  });
-
-  [...targets].sort((a, b) => b.start - a.start).forEach((section) => {
-    const local = lines.slice(section.start + 1, section.end);
-    const cueLines: string[] = [];
-    const sungLines: string[] = [];
-    local.forEach((line) => {
-      const trimmed = String(line || '').trim();
-      if (!trimmed) return;
-      if (/^\[[^\]]+\]$/.test(trimmed)) cueLines.push(trimmed);
-      else sungLines.push(trimmed);
-    });
-
-    const isIntro = /^Intro(?:\s+\d+)?$/i.test(section.name);
-    const isOutro = /^Outro(?:\s+\d+)?$/i.test(section.name);
-    const isHook = isV1HookFamilySectionName(section.name, rolePlan);
-    const cleaned: string[] = [];
-    const seen = new Set<string>();
-    sungLines.forEach((line) => {
-      const key = normalizeSung(line);
-      if (!key || key === coreKey) return;
-      if (isOutro && hookLineKeys.has(key)) return;
-      if (seen.has(key)) return;
-      seen.add(key);
-      cleaned.push(line);
-    });
-
-    // Circular Refrain is a short identity return, not permission to paste a Chorus into Outro.
-    // Keep at most three distinct closing lines around one exact refrain identity.
-    const compact = isOutro && cleaned.length > 3 ? cleaned.slice(-3) : cleaned;
-    const refrainLine = isIntro || isOutro ? `(${core})` : core;
-    const nextLocal = isIntro || isOutro
-      ? [...cueLines, ...compact, refrainLine]
-      : isHook
-        ? [...cueLines, refrainLine, ...compact]
-        : [...cueLines, refrainLine, ...compact];
-    if (section.end < lines.length) nextLocal.push('');
-    lines.splice(section.start + 1, section.end - section.start - 1, ...nextLocal);
-  });
-
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
 function parseV1ChorusBodySections(lyrics: string, params: GenerateSongParams) {
   const lines = String(lyrics || '').split('\n');
   const structuralSectionNames = getV1SectionBlueprint(params).entries.map((entry) => entry.name);
@@ -31491,12 +30504,10 @@ function validateV1HookBlueprintCard(
     if (circularSections.length < 2) {
       checks.circularRefrain = false;
       statuses.circularRefrain = 'target-missing';
-    } else {
-      const outroTargets = circularSections.filter((section) => /^Outro(?:\s+\d+)?$/i.test(section.name));
-      const compactOutro = outroTargets.every((section) => bodyLines(section).length <= 4);
-      const oneIdentityPerTarget = circularSections.every((section) => exactCount(section, core) === 1);
-      setCheck('circularRefrain', Boolean(core) && oneIdentityPerTarget && compactOutro);
     }
+    else setCheck('circularRefrain', Boolean(core) && circularSections.every((section) =>
+      exactCount(section, core) >= 1 || hasPhraseAcrossBodyLines(section, core),
+    ));
   }
   if (patterns.has('progressive-repeat')) {
     if (chorusSections.length < 2) {
@@ -31871,456 +30882,37 @@ async function applySharedLyricHardBanGuard(
   };
 }
 
-type V1LanguageMixExactRepairCard = {
-  card: 'korean' | 'secondary';
-  lyrics: string;
-  baseLanguage: V1LanguageMixLanguageCode;
-  targetLanguages: V1LanguageMixLanguageCode[];
-  requestedRatio: number;
-  protectedLines: string[];
-};
-
-const V1_LANGUAGE_MIX_LABELS: Record<V1LanguageMixLanguageCode, string> = {
-  ko: 'Korean',
-  en: 'English',
-  ja: 'Japanese',
-  zh: 'Chinese',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-  ru: 'Russian',
-  th: 'Thai',
-};
-
-const V1_LANGUAGE_MIX_NATIVE_SCRIPT: Record<V1LanguageMixLanguageCode, string> = {
-  ko: 'natural Hangul',
-  en: 'natural English Latin script',
-  ja: 'natural Japanese using kana/kanji, never romaji',
-  zh: 'natural Chinese characters',
-  es: 'natural Spanish Latin script',
-  fr: 'natural French Latin script',
-  de: 'natural German Latin script',
-  ru: 'natural Russian Cyrillic',
-  th: 'natural Thai script',
-};
-
-function v1LanguageMixExactRepairSlotLimit(ratio: number): number {
-  // Cover the whole song without forcing an oversized JSON reserve for low ratios.
-  // Round-robin seed selection guarantees section spread before the pool grows deeper.
-  if (ratio <= 10) return 18;
-  if (ratio <= 20) return 24;
-  if (ratio <= 30) return 30;
-  if (ratio <= 40) return 34;
-  if (ratio <= 50) return 38;
-  if (ratio <= 60) return 42;
-  return 44;
-}
-
-function validateV1ExactRepairSlots(
-  rawSlots: V1LanguageMixRepairSlot[],
-  seeds: V1LanguageMixRepairSeed[],
-  targets: V1LanguageMixLanguageCode[],
-): V1LanguageMixRepairSlot[] {
-  const allowed = new Set(seeds.map((seed) => `${seed.sectionIndex}|${seed.lineIndex}`));
-  const requiredTargets = new Set(targets);
-  const seen = new Set<string>();
-  return rawSlots.filter((slot) => {
-    const key = `${slot.sectionIndex}|${slot.lineIndex}`;
-    if (!allowed.has(key) || seen.has(key)) return false;
-    const variantLanguages = new Set((slot.targetVariants || []).map((variant) => variant.targetLanguage));
-    if (!slot.baseLine || !Array.from(requiredTargets).every((language) => variantLanguages.has(language))) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-async function buildV1ExactLanguageMixRepairBlueprint(
-  params: GenerateSongParams,
-  cards: V1LanguageMixExactRepairCard[],
-): Promise<V1LanguageMixBlueprint> {
-  const activeCards = cards.map((card) => {
-    const maxSlots = v1LanguageMixExactRepairSlotLimit(card.requestedRatio);
-    const seeds = collectV1LanguageMixRepairSeeds(card.lyrics, {
-      maxSlots,
-      protectedLines: card.protectedLines,
-    });
-    return { ...card, seeds };
-  }).filter((card) => card.seeds.length > 0 && card.targetLanguages.length > 0);
-
-  if (!activeCards.length) return { koreanSlots: [], secondarySlots: [] };
-
-  const exactArrangementGuidance = activeCards.map((card) => buildLanguageArrangementPlan({
-    requestedRatio: card.requestedRatio,
-    targetLanguages: card.targetLanguages,
-    structureMode: String(params.songStructure || '1'),
-    hookPatterns: getSelectedV1HookPatterns(params),
-    rapMode: getRapModeFromParams(params),
-    hasRapperRole: Boolean(params.vocal?.members?.some((member) => member.roles?.includes('rapper'))),
-    vocalCount: Number(params.vocal?.male || 0) + Number(params.vocal?.female || 0),
-    genreText: [params.genre, ...(params.subGenre || [])].filter(Boolean).join(' / '),
-  })).map((plan, index) => `CARD ${activeCards[index].card}: ${plan.promptInstruction}`).join('\n\n');
-
-  const variantSchema = {
-    type: Type.OBJECT,
-    properties: {
-      targetLanguage: { type: Type.STRING },
-      line: { type: Type.STRING },
-    },
-    required: ['targetLanguage', 'line'],
-  };
-  const slotSchema = {
-    type: Type.OBJECT,
-    properties: {
-      sectionIndex: { type: Type.INTEGER },
-      sectionName: { type: Type.STRING },
-      lineIndex: { type: Type.INTEGER },
-      baseLine: { type: Type.STRING },
-      targetVariants: { type: Type.ARRAY, items: variantSchema },
-    },
-    required: ['sectionIndex', 'sectionName', 'lineIndex', 'baseLine', 'targetVariants'],
-  };
-
-  const systemInstruction = `You are SORIDRAW's final multilingual lyric transcreation reserve writer.
-The deterministic engine has already finished structure, vocalist ownership, hooks, and section roles. Your only job is to provide exact-position language alternatives for the supplied sung lyric lines.
-
-ABSOLUTE RULES:
-- Return every supplied slot exactly once with the same sectionIndex, sectionName, and lineIndex. The output slot count for each card must exactly equal its expectedSlotCount.
-- baseLine must be a complete, natural, singable transcreation in the card's base language.
-- targetVariants must contain one complete natural line for EVERY requested target language code.
-- Preserve the original semantic event, speaker, tense, emotional intensity, approximate breath length, syllable density, rhyme landing, and melodic stress.
-- Use the normal native writing system. Never romanize Japanese, Chinese, Russian, or Thai.
-- Never output section tags, square-bracket production cues, vocalist labels, explanations, markdown, generic filler, broken grammar, dangling articles/prepositions, or direct word-for-word awkward translations.
-- Each alternative must work as a replacement for the original line without changing neighboring line count or section order.
-- Do not copy one identical phrase into many unrelated slots. Every non-hook target-language alternative must be lexically distinct across slots while preserving each line's local event.
-- Do not concentrate every target-language alternative inside one Verse or one Chorus. Supply usable alternatives across the full song: a 10% mix needs hook and late-recall candidates; 20% needs candidates across 3–4 actual sections covering early/middle/late; 30%=3–5, 40%=4–6, 50%=5–7, 60%=6–8, and 70%=6–9 actual sections.
-- The engine, not you, will choose contiguous blocks and the final ratio. Do not add duplicate lyric lines.
-
-${exactArrangementGuidance}`;
-
-  const payload = {
-    cards: activeCards.map((card) => ({
-      card: card.card,
-      requestedRatio: card.requestedRatio,
-      baseLanguage: {
-        code: card.baseLanguage,
-        name: V1_LANGUAGE_MIX_LABELS[card.baseLanguage],
-        script: V1_LANGUAGE_MIX_NATIVE_SCRIPT[card.baseLanguage],
-      },
-      targetLanguages: card.targetLanguages.map((language) => ({
-        code: language,
-        name: V1_LANGUAGE_MIX_LABELS[language],
-        script: V1_LANGUAGE_MIX_NATIVE_SCRIPT[language],
-      })),
-      expectedSlotCount: card.seeds.length,
-      slots: card.seeds,
-    })),
-  };
-
-  const ai = getAI(params.geminiApiKey);
-  const response = await generateContentWithModelFallback(
-    ai,
-    {
-      model: GEMINI_TEXT_MODEL_CHAIN[0],
-      contents: JSON.stringify(payload),
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            languageMixBlueprint: {
-              type: Type.OBJECT,
-              properties: {
-                koreanSlots: { type: Type.ARRAY, items: slotSchema },
-                secondarySlots: { type: Type.ARRAY, items: slotSchema },
-              },
-              required: ['koreanSlots', 'secondarySlots'],
-            },
-          },
-          required: ['languageMixBlueprint'],
-        },
-      },
-    },
-    'repairV1LanguageMixExactSlots',
-  );
-
-  const parsed = parseGeminiJsonObject(response?.text || '{}');
-  const normalized = normalizeV1LanguageMixBlueprint(parsed?.languageMixBlueprint || parsed);
-  const koreanCard = activeCards.find((card) => card.card === 'korean');
-  const secondaryCard = activeCards.find((card) => card.card === 'secondary');
-  return {
-    koreanSlots: koreanCard
-      ? validateV1ExactRepairSlots(normalized.koreanSlots, koreanCard.seeds, koreanCard.targetLanguages)
-      : [],
-    secondarySlots: secondaryCard
-      ? validateV1ExactRepairSlots(normalized.secondarySlots, secondaryCard.seeds, secondaryCard.targetLanguages)
-      : [],
-  };
-}
-
-async function finalizeV1SongAtAbsoluteReturnBoundary(
+function finalizeV1SongAtAbsoluteReturnBoundary(
   result: SongResult,
   params: GenerateSongParams,
   resolvedHookBlueprint?: V1ResolvedHookBlueprint,
-  languageMixBlueprint?: V1LanguageMixBlueprint,
-): Promise<SongResult> {
+): SongResult {
   if (!result?.lyrics || isGenerationEngineV2(params)) return result;
 
-  const requestedLanguages = Array.from(new Set((params.lyricLanguages?.length ? params.lyricLanguages : ['ko']) as LanguageCode[])).slice(0, 2);
-  const primaryLanguage = (requestedLanguages[0] || 'ko') as LanguageCode;
-  const secondaryLanguage = (requestedLanguages.find((language) => language !== 'ko') || 'en') as LanguageCode;
-  const requestedRatio = normalizeEnglishMixRatio(params.englishMixRatio);
-  const mixActive = Boolean(
-    !params.isNoLyrics &&
-    (params.isKoreanEnglishMix || (params.isKpopSelected && params.kpopMode === 2)) &&
-    requestedRatio > 0
-  );
-  const rawTargets = Array.from(new Set(((params.languageMixTargetLanguages || []) as LanguageCode[])
-    .filter((language): language is LanguageCode => Boolean(language) && language !== primaryLanguage)))
-    .slice(0, 2);
-  const globalTargets = rawTargets.length
-    ? rawTargets
-    : (primaryLanguage === 'ko' ? [secondaryLanguage] : ['ko' as LanguageCode]);
-  const getTargetsForCard = (cardLanguage: LanguageCode): LanguageCode[] => {
-    const pairedLanguage = requestedLanguages.find((language) => language !== cardLanguage);
-    return Array.from(new Set(globalTargets
-      .map((language) => language === cardLanguage ? (pairedLanguage || primaryLanguage) : language)
-      .filter((language): language is LanguageCode => Boolean(language) && language !== cardLanguage)))
-      .slice(0, 2);
-  };
-  // At 70% the target language is the audible matrix language of the mixed card.
-  // Swap the card-facing hook fields before every protection/rebind/final audit so a Korean
-  // circular hook cannot consume the base-language budget five times and make the requested
-  // target-heavy ratio mathematically unreachable.
-  const activeHookBlueprint = mixActive && requestedRatio >= 70
-    ? swapV1HookBlueprintCardLanguageFields(resolvedHookBlueprint)
-    : resolvedHookBlueprint;
-  const preserveMode = Boolean(params.isLyricMode && params.lyricMode === 'preserve' && String(params.lyricDraft || '').trim());
-  const allowLanguageLineAlternation = getSelectedV1HookPatterns(params).includes('call-response');
-  const audits: Partial<Record<'korean' | 'secondary', V1LanguageMixAudit>> = {};
-  let exactRepairAttempted = false;
-  let exactRepairUsed = false;
-  let exactRepairError = '';
-
-  const filterSafeSlots = (slots: V1LanguageMixRepairSlot[]): V1LanguageMixRepairSlot[] => slots.map((slot) => ({
-    ...slot,
-    baseLine: findLyricHardBanViolations(String(slot.baseLine || ''), params).length === 0 ? slot.baseLine : '',
-    targetVariants: (slot.targetVariants || []).filter((variant) =>
-      findLyricHardBanViolations(String(variant?.line || ''), params).length === 0
-    ),
-  })).filter((slot) => Boolean(slot.baseLine) && slot.targetVariants.length > 0);
-
-  const finalizeCard = (
-    value: unknown,
-    card: 'korean' | 'secondary',
-    baseLanguage: LanguageCode,
-    slots: V1LanguageMixRepairSlot[],
-    priorReplacedLineCount = 0,
-  ) => {
+  const finalizeCard = (value: unknown, card: 'korean' | 'secondary') => {
     const source = String(value || '').trim();
     if (!source) return '';
-
-    const restoreExactSectionStructure = (lyrics: string): string => finalizeV1PublicLyricOutputIntegrity(
-      applyV1SectionBlueprintGuard(
-        finalizeGeneratedLyricsStructuralSafety(lyrics, params),
-        params,
-      ),
+    // This is the true last mutation boundary. Structural repair is allowed first, but the public
+    // integrity pass must run after it so an embedded Drop Hook cannot be pulled back to the top of
+    // Chorus 1 by a later section/cue normalizer.
+    const structurallyGuarded = applyV1SectionBlueprintGuard(
+      finalizeGeneratedLyricsStructuralSafety(source, params),
       params,
     );
-    let current = restoreExactSectionStructure(source);
-    const targets = getTargetsForCard(baseLanguage) as V1LanguageMixLanguageCode[];
-    const safeSlots = filterSafeSlots(slots);
-    const protectedLines = getV1ProtectedHookLines(activeHookBlueprint, card);
-    let cardReplacedLineCount = Math.max(0, Math.round(Number(priorReplacedLineCount || 0)));
-
-    if (mixActive && targets.length > 0) {
-      const firstPass = enforceV1LanguageMixCard({
-        lyrics: current,
-        card,
-        baseLanguage: baseLanguage as V1LanguageMixLanguageCode,
-        targetLanguages: targets,
-        requestedRatio,
-        slots: safeSlots,
-        protectedLines,
-        preserveMode,
-        allowLineAlternation: allowLanguageLineAlternation,
-        hookPatterns: getSelectedV1HookPatterns(params),
-        genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
-      });
-      current = firstPass.lyrics;
-      cardReplacedLineCount += Number(firstPass.audit.replacedLineCount || 0);
-
-      // Language repair is allowed to replace surrounding lyric lines. Rebind the shared hook
-      // contract immediately afterwards so Fixed Chorus, anchors, Drop Hook, and refrain identity
-      // remain the single source of truth.
-      if (activeHookBlueprint) {
-        current = applyV1SharedHookBlueprintGuard(current, activeHookBlueprint, card, params);
-      }
-      current = restoreExactSectionStructure(current);
-
-      // One deterministic second pass handles ratio drift caused by the hook rebind. It still uses
-      // the same-call section/line slots; no additional Gemini request is made.
-      const secondPass = enforceV1LanguageMixCard({
-        lyrics: current,
-        card,
-        baseLanguage: baseLanguage as V1LanguageMixLanguageCode,
-        targetLanguages: targets,
-        requestedRatio,
-        slots: safeSlots,
-        protectedLines,
-        preserveMode,
-        allowLineAlternation: allowLanguageLineAlternation,
-        hookPatterns: getSelectedV1HookPatterns(params),
-        genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
-      });
-      current = secondPass.lyrics;
-      cardReplacedLineCount += Number(secondPass.audit.replacedLineCount || 0);
-      if (activeHookBlueprint) {
-        current = applyV1SharedHookBlueprintGuard(current, activeHookBlueprint, card, params);
-      }
-      current = restoreExactSectionStructure(current);
-    }
-
-    // Absolute structure boundary: language replacement may change only sung lines. Re-render the
-    // exact Stable/Recommended/Experimental/Custom blueprint names and order before the final
-    // embedded Drop Hook slot and before the UI audit.
-    current = restoreExactSectionStructure(current);
-    current = activeHookBlueprint
-      ? enforceV1CircularRefrainAbsoluteReturnContract(current, activeHookBlueprint, card, params)
-      : current;
-    current = activeHookBlueprint
-      ? enforceV1EmbeddedDropHookAbsoluteReturnSlot(current, activeHookBlueprint, card, params)
-      : current;
-    current = normalizeV1StableSectionTagNamesOnly(current, params);
-
-    if (mixActive && targets.length > 0) {
-      const finalAudit = auditV1LanguageMixCard({
-        lyrics: current,
-        card,
-        baseLanguage: baseLanguage as V1LanguageMixLanguageCode,
-        targetLanguages: targets,
-        requestedRatio,
-        slots: safeSlots,
-        protectedLines,
-        preserveMode,
-        allowLineAlternation: allowLanguageLineAlternation,
-        hookPatterns: getSelectedV1HookPatterns(params),
-        genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
-      });
-      audits[card] = {
-        ...finalAudit,
-        repairApplied: cardReplacedLineCount > 0,
-        replacedLineCount: cardReplacedLineCount,
-      };
-    }
-    return current;
+    const publiclyNormalized = finalizeV1PublicLyricOutputIntegrity(structurallyGuarded, params);
+    return resolvedHookBlueprint
+      ? enforceV1EmbeddedDropHookAbsoluteReturnSlot(publiclyNormalized, resolvedHookBlueprint, card, params)
+      : publiclyNormalized;
   };
 
-  result.lyrics.korean = finalizeCard(
-    result.lyrics.korean,
-    'korean',
-    'ko',
-    languageMixBlueprint?.koreanSlots || [],
-  );
-  result.lyrics.english = finalizeCard(
-    result.lyrics.english,
-    'secondary',
-    secondaryLanguage,
-    languageMixBlueprint?.secondarySlots || [],
-  );
+  result.lyrics.korean = finalizeCard(result.lyrics.korean, 'korean');
+  result.lyrics.english = finalizeCard(result.lyrics.english, 'secondary');
 
-  // The same-response blueprint can be empty, incomplete, or mapped to line positions that
-  // changed during structure/hook/performance guards. When the ACTUAL return lyric still fails,
-  // make one compact exact-position transcreation request for all failed cards, then let the
-  // deterministic engine choose only the smallest contiguous blocks required by the selected ratio.
-  if (mixActive && !preserveMode) {
-    const failedCards: V1LanguageMixExactRepairCard[] = [];
-    const koreanTargets = getTargetsForCard('ko') as V1LanguageMixLanguageCode[];
-    const secondaryTargets = getTargetsForCard(secondaryLanguage) as V1LanguageMixLanguageCode[];
-    if (String(result.lyrics.korean || '').trim() && audits.korean?.status === 'needs-review' && koreanTargets.length) {
-      failedCards.push({
-        card: 'korean',
-        lyrics: String(result.lyrics.korean || ''),
-        baseLanguage: 'ko',
-        targetLanguages: koreanTargets,
-        requestedRatio,
-        protectedLines: getV1ProtectedHookLines(activeHookBlueprint, 'korean'),
-      });
-    }
-    if (String(result.lyrics.english || '').trim() && audits.secondary?.status === 'needs-review' && secondaryTargets.length) {
-      failedCards.push({
-        card: 'secondary',
-        lyrics: String(result.lyrics.english || ''),
-        baseLanguage: secondaryLanguage as V1LanguageMixLanguageCode,
-        targetLanguages: secondaryTargets,
-        requestedRatio,
-        protectedLines: getV1ProtectedHookLines(activeHookBlueprint, 'secondary'),
-      });
-    }
-
-    if (failedCards.length) {
-      exactRepairAttempted = true;
-      try {
-        const exactBlueprint = await buildV1ExactLanguageMixRepairBlueprint(params, failedCards);
-        if (failedCards.some((card) => card.card === 'korean') && exactBlueprint.koreanSlots.length) {
-          const before = audits.korean;
-          result.lyrics.korean = finalizeCard(
-            result.lyrics.korean,
-            'korean',
-            'ko',
-            mergeV1LanguageMixRepairSlots(exactBlueprint.koreanSlots, languageMixBlueprint?.koreanSlots || []),
-            Number(before?.replacedLineCount || 0),
-          );
-          const after = audits.korean;
-          exactRepairUsed = exactRepairUsed || Boolean(
-            after && (after.replacedLineCount > 0 || after.status === 'passed' || (before && after.actualMixRatio !== before.actualMixRatio))
-          );
-        }
-        if (failedCards.some((card) => card.card === 'secondary') && exactBlueprint.secondarySlots.length) {
-          const before = audits.secondary;
-          result.lyrics.english = finalizeCard(
-            result.lyrics.english,
-            'secondary',
-            secondaryLanguage,
-            mergeV1LanguageMixRepairSlots(exactBlueprint.secondarySlots, languageMixBlueprint?.secondarySlots || []),
-            Number(before?.replacedLineCount || 0),
-          );
-          const after = audits.secondary;
-          exactRepairUsed = exactRepairUsed || Boolean(
-            after && (after.replacedLineCount > 0 || after.status === 'passed' || (before && after.actualMixRatio !== before.actualMixRatio))
-          );
-        }
-      } catch (error: any) {
-        exactRepairError = String(error?.message || error || 'language repair failed').slice(0, 240);
-        console.warn('[SORIDRAW LanguageMix] exact final-line repair failed; preserving completed lyrics:', error);
-      }
-    }
-  }
-
-  if (mixActive && result.appliedKeywords) {
-    const activeAudits = Object.values(audits).filter(Boolean) as V1LanguageMixAudit[];
-    const overallStatus = activeAudits.some((audit) => audit.status === 'needs-review')
-      ? 'needs-review'
-      : activeAudits.some((audit) => audit.status === 'preserved')
-        ? 'preserved'
-        : activeAudits.length > 0 && activeAudits.every((audit) => audit.status === 'passed')
-          ? 'passed'
-          : 'inactive';
-    (result.appliedKeywords as any).languageMixAudit = {
-      active: activeAudits.length > 0,
-      requestedRatio,
-      targetLanguages: globalTargets,
-      status: overallStatus,
-      cards: audits,
-      exactRepairAttempted,
-      exactRepairUsed,
-      exactRepairError: exactRepairError || undefined,
-    };
-  }
-
-  if (activeHookBlueprint && result.appliedKeywords) {
+  // The visible verification must be calculated from the exact strings returned to the UI, not
+  // from the earlier pre-hard-ban/pre-structural-guard version.
+  if (resolvedHookBlueprint && result.appliedKeywords) {
     (result.appliedKeywords as any).hookBlueprint = buildV1HookBlueprintPublicSummary(
-      activeHookBlueprint,
+      resolvedHookBlueprint,
       params,
       String(result.lyrics.korean || ''),
       String(result.lyrics.english || ''),
@@ -32328,7 +30920,6 @@ async function finalizeV1SongAtAbsoluteReturnBoundary(
   }
 
   delete (result as any)[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
-  delete (result as any)[V1_INTERNAL_LANGUAGE_MIX_BLUEPRINT_KEY];
   return result;
 }
 
@@ -32347,9 +30938,6 @@ export async function generateSong(
   const resolvedHookBlueprint = route === 'v2'
     ? undefined
     : (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] as V1ResolvedHookBlueprint | undefined;
-  const languageMixBlueprint = route === 'v2'
-    ? undefined
-    : (generated as any)?.[V1_INTERNAL_LANGUAGE_MIX_BLUEPRINT_KEY] as V1LanguageMixBlueprint | undefined;
 
   let guarded = generated;
   try {
@@ -32360,7 +30948,7 @@ export async function generateSong(
     guarded = generated;
   }
   if (route !== 'v2' && guarded?.lyrics) {
-    guarded = await finalizeV1SongAtAbsoluteReturnBoundary(guarded, params, resolvedHookBlueprint, languageMixBlueprint);
+    guarded = finalizeV1SongAtAbsoluteReturnBoundary(guarded, params, resolvedHookBlueprint);
     if (String(guarded.lyrics.korean || '').trim()) {
       assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);
     }
@@ -32370,8 +30958,6 @@ export async function generateSong(
   }
   delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
   delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
-  delete (generated as any)?.[V1_INTERNAL_LANGUAGE_MIX_BLUEPRINT_KEY];
-  delete (guarded as any)?.[V1_INTERNAL_LANGUAGE_MIX_BLUEPRINT_KEY];
   return guarded;
 }
 
@@ -32579,7 +31165,7 @@ async function generateSongLegacy(
       const cardTargetScriptLines = cardTargets
         .map((lang) => `    - ${languageNameMap[lang] || lang}: use ${languageNativeScriptMap[lang] || 'that language\'s normal native writing system'}.`)
         .join('\n');
-      return `- ${languageNameMap[cardLanguage] || cardLanguage} lyric card: use ${languageNameMap[cardLanguage] || cardLanguage} as the base for about ${100 - englishMixRatio}% of actual sung lexical content, and use ${cardTargetNames} for about ${englishMixRatio}% of actual sung lexical content.\n  Script rule for this card:\n    - ${languageNameMap[cardLanguage] || cardLanguage}: use ${languageNativeScriptMap[cardLanguage] || 'that language\'s normal native writing system'}.\n${cardTargetScriptLines || '    - No extra mixed script required.'}`;
+      return `- ${languageNameMap[cardLanguage] || cardLanguage} lyric card: keep ${languageNameMap[cardLanguage] || cardLanguage} as the natural base and aim approximately toward a ${englishMixRatio}% mixed-language presence from ${cardTargetNames}; do not sacrifice meaning, voice, or section flow to hit an exact count.\n  Script rule for this card:\n    - ${languageNameMap[cardLanguage] || cardLanguage}: use ${languageNativeScriptMap[cardLanguage] || 'that language\'s normal native writing system'}.\n${cardTargetScriptLines || '    - No extra mixed script required.'}`;
     })
     .join('\n');
   const hasKoreanLanguage = requestedLyricLanguages.includes("ko");
@@ -32717,40 +31303,6 @@ ${selectedNativeScriptInstruction}
   const hookBlueprintRequired = (!params.isNoLyrics && !isGenerationEngineV2(params))
     ? ["hookBlueprint"]
     : [];
-  const languageMixVariantSchema = {
-    type: Type.OBJECT,
-    properties: {
-      targetLanguage: { type: Type.STRING },
-      line: { type: Type.STRING },
-    },
-    required: ["targetLanguage", "line"],
-  };
-  const languageMixSlotSchema = {
-    type: Type.OBJECT,
-    properties: {
-      sectionIndex: { type: Type.INTEGER },
-      sectionName: { type: Type.STRING },
-      lineIndex: { type: Type.INTEGER },
-      baseLine: { type: Type.STRING },
-      targetVariants: { type: Type.ARRAY, items: languageMixVariantSchema },
-    },
-    required: ["sectionIndex", "sectionName", "lineIndex", "baseLine", "targetVariants"],
-  };
-  const languageMixBlueprintResponseSchema = (shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params))
-    ? {
-        languageMixBlueprint: {
-          type: Type.OBJECT,
-          properties: {
-            koreanSlots: { type: Type.ARRAY, items: languageMixSlotSchema },
-            secondarySlots: { type: Type.ARRAY, items: languageMixSlotSchema },
-          },
-          required: ["koreanSlots", "secondarySlots"],
-        },
-      }
-    : {};
-  const languageMixBlueprintRequired = (shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params))
-    ? ["languageMixBlueprint"]
-    : [];
   const sectionPerformancePlanResponseSchema = (!params.isNoLyrics && !isGenerationEngineV2(params))
     ? {
         sectionPerformancePlan: {
@@ -32793,88 +31345,30 @@ ${selectedNativeScriptInstruction}
     !requestedLyricLanguages.some((lang) => lang !== "ko")
       ? `KOREAN-ONLY LYRIC MODE (MANDATORY):
 - Write lyrics.korean in Korean only.
-- Do NOT include English words, English sentences, romanized Korean, or English ad-libs.
+- Do NOT include foreign-language lyric words, romanized Korean, or foreign-language ad-libs.
 - Parentheses are allowed only for Korean inner thoughts, Korean ad-libs, or Korean sound expressions.
-- Do NOT add lines such as "(Stay)", "(I miss you)", "Oh baby", "tonight", or any English hook phrase unless the user explicitly asks for English.`
+- Do not introduce any foreign-language hook, filler, slogan, or response unless the user explicitly requested language mixing.`
       : "";
 
-  const languageMixRepairSlotCount = englishMixRatio <= 10 ? 18
-    : englishMixRatio <= 20 ? 24
-      : englishMixRatio <= 30 ? 30
-        : englishMixRatio <= 40 ? 34
-          : englishMixRatio <= 50 ? 38
-            : englishMixRatio <= 60 ? 42
-              : 44;
-  const selectedLanguageHookPatterns = getSelectedV1HookPatterns(params);
-  const explicitLanguageExchangeMode = selectedLanguageHookPatterns.includes('call-response');
-  const languageArrangementPlan = buildLanguageArrangementPlan({
-    requestedRatio: englishMixRatio,
-    targetLanguages: requestedLanguageMixTargets,
-    structureMode: String(params.songStructure || '1'),
-    hookPatterns: selectedLanguageHookPatterns,
-    rapMode: getRapModeFromParams(params),
-    hasRapperRole: Boolean((params.vocal?.members || []).some((member: any) => Array.isArray(member?.roles) && member.roles.includes('rapper'))),
-    vocalCount: Number((params.vocal?.members || []).length || 0),
-    genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
-  });
-  const languageMixPlacementRule = englishMixRatio <= 10
-    ? 'Use one compact global hook/tag motif and one deliberate late recall. A single section may carry the motif when it is musically strong; do not scatter unrelated foreign words.'
-    : englishMixRatio <= 20
-      ? 'Use phrase-level weaving around a hook or transition plus one distinct development role and a later recall. Avoid both one-section takeover and compulsory coverage of every section.'
-      : englishMixRatio <= 30
-        ? 'Combine a bilingual hook cell with one role-specific Verse/Rap/Bridge development and a transformed final return. Keep most target-only runs short.'
-        : englishMixRatio <= 40
-          ? 'Create a visible whole-song arc through compact woven phrases and selective coherent blocks. Let genre and section function decide where monolingual contrast is useful.'
-          : englishMixRatio <= 50
-            ? 'Balance both languages as one topline. Use phrase weaving, mixed hook cells, and occasional role-based blocks; do not hand an entire Chorus to a separate foreign-language part.'
-            : englishMixRatio <= 60
-              ? 'Let the target language lead while Korean-style story, identity, and hook anchors remain active. Use smooth handoffs rather than subtitle alternation.'
-              : 'Use the target language as the main body while matrix-language hook, story, and emotional anchors preserve recognisable origin and global K-style identity.';
-  const languageExchangeRule = explicitLanguageExchangeMode
-    ? '- Strict one-line exchange is allowed only inside the explicitly selected Call-response moment. Outside that moment, use natural phrase blocks.'
-    : '- Do NOT alternate base language and target language one line at a time for three or more switches. Strict A/B/A/B language exchange is forbidden unless Call-response was explicitly selected.';
   const mixedLyricsInstruction =
     shouldUseMixedLyrics && !params.isNoLyrics
-      ? `LANGUAGE MIX MODE — PROFESSIONAL SECTION/BLOCK PLACEMENT (MANDATORY):
-- The feature name is "Language Mix". It supports every selected base/target language, not only Korean/English.
-- Treat each lyric card's own language as the MATRIX LANGUAGE: it carries the story spine, grammar, point of view, and emotional continuity. Treat selected mix languages as EMBEDDED LANGUAGES used for memorable entry points, complete phrases, section blocks, vocal handoffs, rap color, bridge contrast, or final payoff.
-- UI primary language = ${primaryMixLanguageName}. Global mix target selection = ${mixTargetLanguageNames || 'the selected non-base language'}.
-- Use native writing systems. Do not romanize or transliterate Japanese, Chinese, Thai, or Russian.
+      ? `LANGUAGE MIX MODE (MANDATORY, QUALITY-FIRST):
+- The feature supports any selected languages; it is not limited to one fixed language pair.
+- UI primary language = ${primaryMixLanguageName}. Each requested lyric card must still use its own card language as its natural base.
+- Selected mixed-language target(s) = ${mixTargetLanguageNames || 'the selected non-base language'}.
+- Use each language's normal native writing system. Do not romanize or transliterate non-Latin languages.
 ${mixTargetNativeScriptInstruction}
-- ${englishMixRatio}% means the share of ACTUAL SUNG LEXICAL CONTENT. Section tags, production cues, vocalist labels, and meaningless humming do not count.
-- Apply Language Mix independently to EACH selected lyric card.
-- CARD-SPECIFIC LANGUAGE BUDGET:
+- Treat ${englishMixRatio}% as an approximate whole-song creative direction for sung lexical content, not a line-by-line quota and not a reason to damage a good lyric.
+- Apply the mix independently to each requested lyric card according to this card plan:
 ${languageMixCardPlan}
-- PROFESSIONAL PLACEMENT PROFILE FOR ${englishMixRatio}%:
-  ${languageMixPlacementRule}
-${languageArrangementPlan.promptInstruction}
-- Switch languages only at a musically and semantically useful boundary: section change, complete phrase boundary, hook return, beat/arrangement turn, rapper-to-singer handoff, or emotional reveal.
-- Prefer coherent language blocks when the ratio is 20% or higher. A single mixed line is acceptable only as a deliberate hook tag, vocal handoff, or transition and only when syntax and melody are natural.
-${languageExchangeRule}
-- Never place a base-language line immediately followed by its direct target-language translation. Do not create bilingual subtitles, translation ladders, or duplicated meaning in adjacent lines.
-- When two target languages are selected, assign them distinct musical jobs instead of rotating all three languages line by line. Default role logic: target A supports hook/final recall; target B supports Verse 2/Rap/Bridge contrast. Adapt this to genre and vocal ownership.
-- Preserve singability when switching languages: similar breath length, usable syllable density, strong-vowel landing on sustained notes, compatible rhyme/phoneme shape, and unchanged semantic event. Natural transcreation is preferred over literal translation.
-- Titles and hooks are useful listener entry points, but ratio alone never justifies copying one foreign line or assigning a whole Chorus to a separate language. Use distinct musical roles and natural phrase weaving.
-- There is NO fixed pass/fail quota for how many sections must contain the target language. Judge the result by total ratio, one-section concentration, target-only run length, abrupt takeover, phrase continuity, genre convention, hook function, and late recall. A monolingual section is allowed when it creates purposeful contrast.
-- Keep the exact selected section skeleton and all vocalist ownership tags. Language planning must never delete, merge, duplicate, or rename structural sections.
-- Keep every target-language phrase grammatical and complete. Never output broken fragments such as "change my", "find my play", or a Hook Preview ending on an article/preposition such as "running through the".
-- The full lyric card must total about ${100 - englishMixRatio}% base language and ${englishMixRatio}% selected mix-language content. If two target languages are selected, divide the mixed share as evenly as practical, but musical naturalness outranks exact decimal equality.`
+- Keep one continuous Story Context, one character voice, and one emotional progression across language changes.
+- A mixed-language line must add a natural rhythmic, emotional, conversational, or hook function. Never insert filler only to raise the percentage.
+- Do not translate the same adjacent lyric into multiple languages, do not create duplicate hook families, and do not repeat a word merely because another language surface exists.
+- If two target languages are selected, include both only where they fit naturally; do not force mechanical alternation.
+- Prefer coherent phrases or short connected blocks over isolated dictionary words. Preserve breath, tense, speaker ownership, and section role.
+- Generate the final mixed lyric correctly in this single response. Do not output repair candidates, alternate replacement lines, hidden blueprints, or ratio-control metadata.
+- When exact ratio and lyric quality conflict, preserve natural language, specific imagery, character consistency, and musical singability.`
       : "";
-
-  const languageMixBlueprintInstruction = shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params)
-    ? `LANGUAGE MIX REPAIR BLUEPRINT (MANDATORY, SAME RESPONSE):
-- Return languageMixBlueprint with koreanSlots and secondarySlots. This reserve is internal and must not appear as duplicate lyric lines.
-- For each active lyric card, provide up to ${languageMixRepairSlotCount} exact section/line alternatives across musically useful locations. Make options available in hook, development/role-contrast, and late-return areas, but do not imply that every section must be converted.
-- Provide both single-line weave candidates and short adjacent neighborhoods. Most sung non-rap target-only runs should stay compact; a longer block is reserved for a clear Rap, Bridge, viewpoint, or target-led function. The deterministic engine chooses by ratio, concentration, genre, hook role, and phrase continuity.
-- sectionIndex = 1-based structural-section occurrence in that generated lyric card. sectionName = exact section name without performance cue. lineIndex = 1-based sung body line, excluding section tags and square-bracket cues.
-- baseLine = a complete natural line in the card's matrix/base language. targetVariants = complete natural transcreations in every active target language, using native script.
-- Preserve semantic event, emotional role, tense, vocalist ownership, approximate syllable/breath length, rhyme landing, and melodic stress. Prefer transcreation over literal word order.
-- Never provide adjacent baseLine/targetVariant pairs as two separate lyric lines. They are alternatives for one slot, not bilingual subtitles.
-- Build slot neighborhoods across Verse/Rap, Pre-Chorus, Chorus/Hook/Refrain, Bridge, Final, and Outro as available. Do not place all reserve slots in Chorus.
-- For two target languages, make contiguous neighborhoods available for each language in different musical roles; do not force three-language line rotation.
-- Do not use tags, sound cues, humming, incomplete fragments, or internal instructions in reserve lines.
-- If a lyric card is not selected or has no valid mix target, return an empty slot array.`
-    : "";
 
   const lyricDraftInstruction =
     params.isLyricMode && params.lyricDraft
@@ -33225,7 +31719,6 @@ ${basePromptSeed}
 
 ${koreanOnlyNoEnglishInstruction}
 ${mixedLyricsInstruction}
-${languageMixBlueprintInstruction}
 
 ${lyricDraftInstruction}
 
@@ -33285,8 +31778,7 @@ ${isGenerationEngineV2(params) ? '' : '  "storyAtmosphere": "Concise natural-Eng
     params.isNoLyrics
       ? ""
       : `,
-  "hookBlueprint": { "pattern": "all selected pattern names", "koreanHookCore": "complete compact Korean primary hook line", "secondaryHookCore": "same primary hook meaning in the secondary language", "koreanMicroHook": "one visible token for One-word Hook, otherwise empty", "secondaryMicroHook": "same micro-hook meaning, otherwise empty", "koreanPreviewFragment": "short musically self-contained preview for Hook Preview; it may withhold the full hook but must not end on a weak particle", "secondaryPreviewFragment": "same preview function; never end on an article, preposition, possessive, or auxiliary", "koreanVariantHook": "controlled alternate hook for Variation Repeat, otherwise empty", "secondaryVariantHook": "same alternate meaning, otherwise empty", "koreanCallLine": "lead call for Call-response, otherwise empty", "secondaryCallLine": "same lead-call function, otherwise empty", "koreanResponse": "different answer for Call-response, otherwise empty", "secondaryResponse": "same answer function, otherwise empty", "koreanEchoResponse": "short fragment of primary hook for Echo-response, otherwise empty", "secondaryEchoResponse": "same echo function, otherwise empty", "koreanPostChorusTag": "separate short tag for Post-Chorus Tag, otherwise empty", "secondaryPostChorusTag": "same tag meaning, otherwise empty", "koreanChorusB": "B-half payoff for A/B Split, otherwise empty", "secondaryChorusB": "same B-half function, otherwise empty", "koreanChorus2Shift": "complete new surrounding line for the first middle core-return evolution, empty only for Fixed Chorus", "secondaryChorus2Shift": "same middle core-return evolution function", "koreanFinalShift": "complete new surrounding line for the final role-linked payoff, empty only for Fixed Chorus", "secondaryFinalShift": "same final role-linked payoff function" },${shouldUseMixedLyrics ? `
-  "languageMixBlueprint": { "koreanSlots": [{ "sectionIndex": 1, "sectionName": "exact section name", "lineIndex": 1, "baseLine": "same meaning in card base language", "targetVariants": [{ "targetLanguage": "selected code", "line": "same meaning in target language" }] }], "secondarySlots": [] },` : ''}
+  "hookBlueprint": { "pattern": "all selected pattern names", "koreanHookCore": "complete compact Korean primary hook line", "secondaryHookCore": "same primary hook meaning in the secondary language", "koreanMicroHook": "one visible token for One-word Hook, otherwise empty", "secondaryMicroHook": "same micro-hook meaning, otherwise empty", "koreanPreviewFragment": "short incomplete preview for Hook Preview, otherwise empty", "secondaryPreviewFragment": "same preview meaning, otherwise empty", "koreanVariantHook": "controlled alternate hook for Variation Repeat, otherwise empty", "secondaryVariantHook": "same alternate meaning, otherwise empty", "koreanCallLine": "lead call for Call-response, otherwise empty", "secondaryCallLine": "same lead-call function, otherwise empty", "koreanResponse": "different answer for Call-response, otherwise empty", "secondaryResponse": "same answer function, otherwise empty", "koreanEchoResponse": "short fragment of primary hook for Echo-response, otherwise empty", "secondaryEchoResponse": "same echo function, otherwise empty", "koreanPostChorusTag": "separate short tag for Post-Chorus Tag, otherwise empty", "secondaryPostChorusTag": "same tag meaning, otherwise empty", "koreanChorusB": "B-half payoff for A/B Split, otherwise empty", "secondaryChorusB": "same B-half function, otherwise empty", "koreanChorus2Shift": "complete new surrounding line for the first middle core-return evolution, empty only for Fixed Chorus", "secondaryChorus2Shift": "same middle core-return evolution function", "koreanFinalShift": "complete new surrounding line for the final role-linked payoff, empty only for Fixed Chorus", "secondaryFinalShift": "same final role-linked payoff function" },
   "lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }`
   }
 }
@@ -33339,7 +31831,6 @@ Prefer titles that:
 - could be used in conversation
 
 Examples:
-- "Stayed a Little Longer"
 - "We Didn’t Say Goodbye"
 - "Call Me Back"
 - "I Thought You Knew"
@@ -33648,11 +32139,10 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
           title: { type: Type.STRING },
           productionPrompt: { type: Type.STRING },
           ...hookBlueprintResponseSchema,
-          ...languageMixBlueprintResponseSchema,
           ...sectionPerformancePlanResponseSchema,
           ...lyricsResponseSchema,
         },
-        required: ["storyContext", ...v1StoryAtmosphereRequired, "title", "productionPrompt", ...hookBlueprintRequired, ...languageMixBlueprintRequired, ...sectionPerformancePlanRequired, ...lyricsRequired],
+        required: ["storyContext", ...v1StoryAtmosphereRequired, "title", "productionPrompt", ...hookBlueprintRequired, ...sectionPerformancePlanRequired, ...lyricsRequired],
       },
     },
   };
@@ -34014,11 +32504,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
       result.lyrics.english = "";
   }
 
-  if (shouldUseMixedLyrics && !params.isNoLyrics && englishMixRatio > 0) {
-    // V52 common Language Mix Engine owns every selectable ratio and every supported mix language.
-    // Do not run the legacy stock-phrase injectors here; they created broken fragments and could
-    // make 30% behave like a tiny accent mix. The final-boundary engine uses the same-response repair blueprint.
-  }
+  // Language Mix is authored once inside the initial Gemini lyric response.
+  // Do not inject stock phrases, replace completed lines, or chase an exact percentage after generation.
+  // The selected ratio remains a creative direction; story continuity, natural diction, and hook identity win on conflict.
 
   if (!shouldUseMixedLyrics && !params.isNoLyrics) {
     const isKoreanOnly =
@@ -34132,9 +32620,6 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     params,
     String(result?.lyrics?.korean || ''),
     String(result?.lyrics?.english || ''),
-  );
-  const resolvedV1LanguageMixBlueprint = normalizeV1LanguageMixBlueprint(
-    (result as any).languageMixBlueprint,
   );
   const rawSectionPerformancePlan = Array.isArray((result as any).sectionPerformancePlan)
     ? (result as any).sectionPerformancePlan
@@ -34251,9 +32736,6 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     // Keep the resolved contract only until generateSong() completes the hard-ban and final
     // structural boundary. It is deleted before the public SongResult is returned.
     (result as any)[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] = resolvedV1HookBlueprint;
-    if (shouldUseMixedLyrics && englishMixRatio > 0) {
-      (result as any)[V1_INTERNAL_LANGUAGE_MIX_BLUEPRINT_KEY] = resolvedV1LanguageMixBlueprint;
-    }
   }
 
   (result as any).userInput = params.userInput ?? "";
@@ -34262,7 +32744,6 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   delete (result as any).storyContext;
   delete (result as any).storyAtmosphere;
   delete (result as any).hookBlueprint;
-  delete (result as any).languageMixBlueprint;
   delete (result as any).sectionPerformancePlan;
   delete (params as any).__v1StoryContext;
   delete (params as any).__v1StoryAtmosphere;
@@ -34376,9 +32857,8 @@ export async function regenerateLyricsOnly(
         .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== targetLanguage)
         .slice(0, 2)
     : [];
-  const mixRatio = explicitMixEnabled ? normalizeEnglishMixRatio(applied.englishMixRatio || applied.languageMixRatio || 10) : 0;
+  const mixRatio = explicitMixEnabled ? Math.max(0, Math.min(90, Number(applied.englishMixRatio || applied.languageMixRatio || 10))) : 0;
   const isMixed = explicitMixEnabled && mixTargets.length > 0;
-  const regenerationMixSlotCount = mixRatio <= 10 ? 8 : mixRatio <= 20 ? 12 : mixRatio <= 30 ? 16 : mixRatio <= 40 ? 19 : mixRatio <= 50 ? 22 : mixRatio <= 60 ? 25 : 28;
   const mixTargetText = mixTargets.length
     ? mixTargets.map((lang) => `${targetLanguageNameMap[lang] || lang} (${nativeScriptMap[lang] || "native script"})`).join(", ")
     : "none";
@@ -34401,9 +32881,7 @@ You are SORIDRAW's focused lyric regeneration engine.
 Regenerate ONLY the requested lyric text. Do not create a title. Do not create a production prompt.
 
 [OUTPUT]
-- Return valid JSON only.
-- Always return { "lyrics": "..." }.
-- When Language Mix is active, also return languageMixSlots using the same sectionIndex/lineIndex repair-slot contract described below.
+- Return valid JSON only: { "lyrics": "..." }.
 - The lyrics field must contain only the regenerated lyric body.
 - Keep section tags and line breaks readable for Suno-style lyrics.
 
@@ -34411,14 +32889,10 @@ Regenerate ONLY the requested lyric text. Do not create a title. Do not create a
 - Target lyric card language: ${targetLanguageName}.
 - Use ${nativeScriptMap[targetLanguage] || "the target language's normal native writing system"}.
 - Language mixing active: ${isMixed ? "YES" : "NO"}.
-${isMixed ? `- Keep the same mix condition: about ${100 - mixRatio}% ${targetLanguageName} and about ${mixRatio}% actual sung lexical content from: ${mixTargetText}.
-- Tags, sound cues, vocalist labels, and meaningless humming do not count toward the percentage.
-- Keep placement natural by section role; do not force the same ratio inside every section.
-- If two target languages are selected, split the mixed share as evenly as practical and do not omit either target.
-- At 10%, use one hook motif plus late recall; at 20–30%, build early/middle/late development; at 40–50%, balance coherent blocks; at 60–70%, make target-language content lead while retaining matrix-language story, emotion, and identity anchors.
-- Do not satisfy the ratio with one repeated hook, isolated filler, or broken fragments.
-- Return up to ${regenerationMixSlotCount} languageMixSlots. Each slot must contain sectionIndex, exact sectionName, 1-based sung-body lineIndex, a complete same-meaning baseLine, and targetVariants for every active target language. Variants must preserve meaning, role, tense, and similar breath while using native script.` : `- Do NOT add mixed-language lyric lines, foreign ad-libs, or foreign hook phrases.
-- For Korean lyrics, keep the lyric body in Korean only. English section tags such as [Verse : warm delivery] may stay, but lyric lines like Oh baby / alright / Just take your time are forbidden.`}
+${isMixed ? `- Keep the same approximate whole-song mix direction: ${mixRatio}% from ${mixTargetText}, while protecting natural diction, story continuity, speaker identity, section function, and singability.
+- Do not translate adjacent lines redundantly, duplicate the hook in another language, add filler, or force line-by-line alternation only to reach a number.
+- Write the final mixed lyric once; do not return replacement candidates or ratio metadata.` : `- Do NOT add mixed-language lyric lines, foreign-language ad-libs, or foreign-language hook phrases.
+- For Korean lyrics, keep lyric-body text in Korean only. English structural section tags may remain.`}
 ${targetLanguage === "ko" && !allowLatinScriptFragments ? `- The Korean lyric body must not contain Latin-script words or English ad-libs. Keep only Korean text in lyric lines, except existing Suno section tags.` : ""}
 
 ${buildLyricClicheGuardInstruction(clicheGuardParams)}
@@ -34499,34 +32973,8 @@ ${storedV1StoryContext}
         type: Type.OBJECT,
         properties: {
           lyrics: { type: Type.STRING },
-          ...(isMixed ? {
-            languageMixSlots: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  sectionIndex: { type: Type.INTEGER },
-                  sectionName: { type: Type.STRING },
-                  lineIndex: { type: Type.INTEGER },
-                  baseLine: { type: Type.STRING },
-                  targetVariants: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        targetLanguage: { type: Type.STRING },
-                        line: { type: Type.STRING },
-                      },
-                      required: ["targetLanguage", "line"],
-                    },
-                  },
-                },
-                required: ["sectionIndex", "sectionName", "lineIndex", "baseLine", "targetVariants"],
-              },
-            },
-          } : {}),
         },
-        required: isMixed ? ["lyrics", "languageMixSlots"] : ["lyrics"],
+        required: ["lyrics"],
       },
     },
   };
@@ -34542,13 +32990,9 @@ ${storedV1StoryContext}
   }
 
   let lyrics = "";
-  let regenerationMixSlots: V1LanguageMixRepairSlot[] = [];
   try {
     const parsed = JSON.parse(response?.text || "{}");
     lyrics = String(parsed?.lyrics || "").trim();
-    regenerationMixSlots = isMixed
-      ? normalizeV1LanguageMixBlueprint({ koreanSlots: parsed?.languageMixSlots, secondarySlots: [] }).koreanSlots
-      : [];
   } catch (parseError) {
     console.warn("Failed to parse regenerateLyricsOnly JSON:", parseError, response?.text);
     lyrics = String(response?.text || "").trim();
@@ -34588,36 +33032,6 @@ ${storedV1StoryContext}
     ),
     clicheGuardParams as unknown as GenerateSongParams,
   );
-
-  if (isMixed && storedGenerationEngine !== 'v2' && storedGenerationEngine !== 'v3') {
-    const preserveMode = Boolean(applied.isLyricMode && applied.lyricMode === 'preserve' && String(applied.lyricDraft || '').trim());
-    const safeSlots = regenerationMixSlots.map((slot) => ({
-      ...slot,
-      baseLine: findLyricHardBanViolations(String(slot.baseLine || ''), clicheGuardParams as unknown as GenerateSongParams).length === 0 ? slot.baseLine : '',
-      targetVariants: slot.targetVariants.filter((variant) =>
-        findLyricHardBanViolations(String(variant.line || ''), clicheGuardParams as unknown as GenerateSongParams).length === 0
-      ),
-    })).filter((slot) => slot.baseLine && slot.targetVariants.length > 0);
-    lyrics = enforceV1LanguageMixCard({
-      lyrics,
-      card: targetLanguage === 'ko' ? 'korean' : 'secondary',
-      baseLanguage: targetLanguage as V1LanguageMixLanguageCode,
-      targetLanguages: mixTargets as V1LanguageMixLanguageCode[],
-      requestedRatio: mixRatio,
-      slots: safeSlots,
-      preserveMode,
-      allowLineAlternation: getSelectedV1HookPatterns(clicheGuardParams as unknown as GenerateSongParams).includes('call-response'),
-      hookPatterns: getSelectedV1HookPatterns(clicheGuardParams as unknown as GenerateSongParams),
-      genreText: [applied.genre, ...(applied.subGenre || []), ...(applied.styles || [])].filter(Boolean).join(' '),
-    }).lyrics;
-    lyrics = finalizeV1PublicLyricOutputIntegrity(
-      applyV1SectionBlueprintGuard(
-        finalizeGeneratedLyricsStructuralSafety(lyrics, clicheGuardParams as unknown as GenerateSongParams),
-        clicheGuardParams as unknown as GenerateSongParams,
-      ),
-      clicheGuardParams as unknown as GenerateSongParams,
-    );
-  }
 
   if (!lyrics) {
     throw new Error("정상적인 가사를 다시 생성하지 못했습니다. 다시 시도해주세요.");

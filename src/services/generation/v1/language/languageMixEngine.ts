@@ -47,7 +47,7 @@ export interface V1LanguageMixAudit {
   requiredSectionFamilyCount: number;
   uniqueTargetExpressionCount: number;
   requiredUniqueTargetExpressionCount: number;
-  placementMode: 'accent' | 'hook-led' | 'distributed-blocks' | 'balanced-blocks' | 'target-dominant' | 'near-total';
+  placementMode: 'hook-led' | 'distributed-blocks' | 'arc-balanced' | 'balanced-blocks' | 'target-led' | 'target-dominant';
   alternatingSequenceCount: number;
   maxAllowedAlternatingSequences: number;
   mirroredTranslationPairCount: number;
@@ -62,6 +62,26 @@ export interface V1LanguageMixAudit {
   maxTargetSectionRatio: number;
   overloadedTargetSectionCount: number;
   duplicateTargetExpressionCount: number;
+  targetTimelineZoneCount: number;
+  requiredTimelineZoneCount: number;
+  maxTargetTimelineZoneShare: number;
+  maxAllowedTargetTimelineZoneShare: number;
+  maxTargetSectionCount: number;
+  earlyTargetPresent: boolean;
+  middleTargetPresent: boolean;
+  lateTargetPresent: boolean;
+  hookTargetPresent: boolean;
+  finalRecallPresent: boolean;
+  maxTargetOnlyRunLength: number;
+  maxHookTargetOnlyRunLength: number;
+  abruptTakeoverCount: number;
+  mixedLanguageLineCount: number;
+  maxAllowedTargetOnlyRunLength: number;
+  maxAllowedHookTargetOnlyRunLength: number;
+  sectionCoverageIsReference: boolean;
+  genreBlendProfile: string;
+  easySingActive: boolean;
+  languageArcPassed: boolean;
   placementPassed: boolean;
   repairApplied: boolean;
   replacedLineCount: number;
@@ -79,6 +99,8 @@ export interface EnforceV1LanguageMixCardInput {
   preserveMode?: boolean;
   protectedLines?: string[];
   allowLineAlternation?: boolean;
+  hookPatterns?: string[];
+  genreText?: string;
 }
 
 export interface EnforceV1LanguageMixCardResult {
@@ -99,8 +121,9 @@ const LATIN_HINTS: Record<'en' | 'es' | 'fr' | 'de', Set<string>> = {
 function clampRatio(value: unknown): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
-  const allowed = [0, 5, 10, 20, 30, 50, 70, 90];
-  return allowed.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 0);
+  if (numeric <= 0) return 0;
+  const allowed = [10, 20, 30, 40, 50, 60, 70];
+  return allowed.reduce((best, candidate) => Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best, 10);
 }
 
 function normalizeSpaces(value: unknown): string {
@@ -172,22 +195,22 @@ function isLyricBodyLine(line: string): boolean {
 
 function ratioBounds(ratio: number): { lower: number; upper: number } {
   if (ratio <= 0) return { lower: 0, upper: 0 };
-  if (ratio <= 5) return { lower: 2, upper: 8 };
   if (ratio <= 10) return { lower: 5, upper: 15 };
   if (ratio <= 20) return { lower: 15, upper: 25 };
   if (ratio <= 30) return { lower: 25, upper: 35 };
-  if (ratio <= 50) return { lower: 43, upper: 57 };
-  if (ratio <= 70) return { lower: 63, upper: 77 };
-  return { lower: 84, upper: 95 };
+  if (ratio <= 40) return { lower: 35, upper: 45 };
+  if (ratio <= 50) return { lower: 44, upper: 56 };
+  if (ratio <= 60) return { lower: 54, upper: 66 };
+  return { lower: 64, upper: 76 };
 }
 
 function placementModeForRatio(ratio: number): V1LanguageMixAudit['placementMode'] {
-  if (ratio <= 5) return 'accent';
   if (ratio <= 10) return 'hook-led';
   if (ratio <= 30) return 'distributed-blocks';
+  if (ratio <= 40) return 'arc-balanced';
   if (ratio <= 50) return 'balanced-blocks';
-  if (ratio <= 70) return 'target-dominant';
-  return 'near-total';
+  if (ratio <= 60) return 'target-led';
+  return 'target-dominant';
 }
 
 function maxAllowedAlternatingSequences(ratio: number, allowLineAlternation = false): number {
@@ -196,49 +219,135 @@ function maxAllowedAlternatingSequences(ratio: number, allowLineAlternation = fa
 }
 
 function preferredTargetBlockLength(ratio: number): { min: number; max: number } {
-  if (ratio <= 5) return { min: 1, max: 1 };
   if (ratio <= 10) return { min: 1, max: 2 };
-  if (ratio <= 20) return { min: 1, max: 2 };
+  if (ratio <= 20) return { min: 2, max: 3 };
   if (ratio <= 30) return { min: 2, max: 3 };
+  if (ratio <= 40) return { min: 2, max: 4 };
   if (ratio <= 50) return { min: 2, max: 4 };
-  if (ratio <= 70) return { min: 3, max: 5 };
-  return { min: 4, max: 8 };
+  if (ratio <= 60) return { min: 3, max: 5 };
+  return { min: 3, max: 5 };
 }
 
 function maxTargetSectionShareForRatio(ratio: number, availableSections: number): number {
   if (availableSections <= 1) return 100;
-  if (ratio <= 5) return 100;
-  if (ratio <= 10) return 70;
-  if (ratio <= 20) return 35;
-  if (ratio <= 30) return 42;
-  if (ratio <= 50) return 36;
-  if (ratio <= 70) return 34;
-  return 32;
+  // This is a concentration guard, not an indirect section-count quota. A musically intentional
+  // Hook + Rap, Hook + Bridge, or Hook + Outro design may use only two or three target-bearing
+  // sections. Long target-only runs and abrupt takeovers are audited separately.
+  if (ratio <= 10) return 85;
+  if (ratio <= 20) return 70;
+  if (ratio <= 30) return 60;
+  if (ratio <= 40) return 55;
+  if (ratio <= 50) return 50;
+  if (ratio <= 60) return 48;
+  return 46;
 }
 
 function maxTargetRatioInsideSection(ratio: number): number {
-  if (ratio <= 5) return 45;
-  if (ratio <= 10) return 50;
-  if (ratio <= 20) return 52;
+  if (ratio <= 10) return 48;
+  if (ratio <= 20) return 56;
   if (ratio <= 30) return 66;
-  if (ratio <= 50) return 78;
-  if (ratio <= 70) return 92;
-  return 100;
+  if (ratio <= 40) return 76;
+  if (ratio <= 50) return 84;
+  if (ratio <= 60) return 92;
+  return 96;
 }
 
 function requiredTargetSectionCount(ratio: number, availableSections: number): number {
-  const desired = ratio <= 5 ? 1
-    : ratio <= 10 ? 2
-      : ratio <= 20 ? 4
-        : ratio <= 30 ? 3
+  const desired = ratio <= 10 ? 2
+    : ratio <= 20 ? 3
+      : ratio <= 30 ? 3
+        : ratio <= 40 ? 4
           : ratio <= 50 ? 5
-            : ratio <= 70 ? 6
-              : 7;
+            : ratio <= 60 ? 6
+              : 6;
   return Math.max(1, Math.min(desired, Math.max(1, availableSections)));
+}
+
+function maxTargetSectionCountForRatio(ratio: number, availableSections: number): number {
+  const desired = ratio <= 10 ? 3
+    : ratio <= 20 ? 4
+      : ratio <= 30 ? 5
+        : ratio <= 40 ? 6
+          : ratio <= 50 ? 7
+            : ratio <= 60 ? 8
+              : 9;
+  return Math.max(1, Math.min(desired, Math.max(1, availableSections)));
+}
+
+function requiredTimelineZoneCount(ratio: number, availableZones: number): number {
+  // Low and medium ratios may intentionally live in one musical role (for example a Chorus hook or
+  // one Rap contrast) unless Hook recall creates a second late return. Wider whole-song spread becomes
+  // a hard need only when the target language owns a large share of the song.
+  const desired = ratio >= 40 ? 2 : 1;
+  return Math.max(1, Math.min(desired, Math.max(1, availableZones)));
+}
+
+function maxTargetTimelineZoneShareForRatio(ratio: number): number {
+  if (ratio <= 10) return 100;
+  if (ratio <= 20) return 100;
+  if (ratio <= 30) return 90;
+  if (ratio <= 40) return 78;
+  if (ratio <= 50) return 72;
+  if (ratio <= 60) return 68;
+  return 65;
+}
+
+type V1LanguageGenreBlendProfile = 'k-idol-dance' | 'k-ballad' | 'k-indie-folk' | 'k-band-rock' | 'k-hiphop-rap' | 'k-rnb-soul' | 'global-pop';
+
+function resolveLanguageGenreBlendProfile(value: unknown): V1LanguageGenreBlendProfile {
+  const text = normalizeSpaces(value).toLocaleLowerCase();
+  if (/r&b|rnb|neo\s*soul|soul|알앤비|소울/.test(text)) return 'k-rnb-soul';
+  if (/hip[-\s]?hop|melodic\s*rap|\brap\b|trap|drill|boom[-\s]?bap|힙합|랩|트랩|드릴/.test(text)) return 'k-hiphop-rap';
+  if (/band|rock|punk|metal|emo|post[-\s]?rock|밴드|록|펑크|메탈/.test(text)) return 'k-band-rock';
+  if (/indie|folk|acoustic|singer[-\s]?songwriter|인디|포크|어쿠스틱/.test(text)) return 'k-indie-folk';
+  if (/ballad|slow\s*ballad|발라드/.test(text)) return 'k-ballad';
+  if (/k[-\s]?pop|idol|dance\s*pop|electropop|synth\s*pop|j[-\s]?idol|아이돌|댄스/.test(text)) return 'k-idol-dance';
+  return 'global-pop';
+}
+
+function normalizeHookPatterns(value: unknown): Set<string> {
+  return new Set((Array.isArray(value) ? value : [])
+    .map((item) => normalizeSpaces(item).toLocaleLowerCase())
+    .filter(Boolean));
+}
+
+function maxAllowedTargetOnlyRunLengthForContext(
+  ratio: number,
+  profile: V1LanguageGenreBlendProfile,
+): number {
+  if (profile === 'k-hiphop-rap') return ratio <= 20 ? 3 : ratio <= 50 ? 4 : 5;
+  if (profile === 'k-band-rock') return ratio <= 20 ? 2 : ratio <= 50 ? 3 : 4;
+  if (profile === 'k-ballad' || profile === 'k-indie-folk') return ratio <= 30 ? 2 : ratio <= 60 ? 3 : 4;
+  return ratio <= 30 ? 2 : ratio <= 50 ? 3 : 4;
+}
+
+function maxAllowedHookTargetOnlyRunLengthForContext(
+  ratio: number,
+  profile: V1LanguageGenreBlendProfile,
+  easySingActive: boolean,
+): number {
+  if (easySingActive) return ratio >= 60 ? 3 : 2;
+  if (profile === 'k-band-rock' || profile === 'k-hiphop-rap') return ratio <= 30 ? 2 : ratio <= 60 ? 3 : 4;
+  return ratio <= 40 ? 2 : ratio <= 60 ? 3 : 4;
 }
 
 function isHookFamily(family: string): boolean {
   return /^(?:chorus|hook|refrain|drop|theme)$/i.test(String(family || ''));
+}
+
+type V1LanguageTimelineZone = 'early' | 'middle' | 'late';
+
+function timelineZoneForSection(sectionName: string, sectionIndex: number, totalSections: number): V1LanguageTimelineZone {
+  const normalized = normalizeSpaces(sectionName).toLocaleLowerCase();
+  if (/^(?:final\s+(?:chorus|hook)|outro|climax)/.test(normalized)) return 'late';
+  if (/^(?:intro|verse\s*1\b)/.test(normalized)) return 'early';
+  if (/^(?:verse\s*2\b|rap|bridge)/.test(normalized)) return 'middle';
+  const total = Math.max(1, totalSections);
+  const earlyEnd = Math.max(1, Math.ceil(total * 0.4));
+  const lateStart = Math.max(earlyEnd + 1, Math.ceil(total * 0.8));
+  if (sectionIndex <= earlyEnd) return 'early';
+  if (sectionIndex >= lateStart) return 'late';
+  return 'middle';
 }
 
 function sectionPlacementPriority(family: string, ratio: number): number {
@@ -251,17 +360,17 @@ function sectionPlacementPriority(family: string, ratio: number): number {
 }
 
 function requiredSectionCount(ratio: number, available: number): number {
-  const desired = ratio <= 5 ? 1
-    : ratio <= 10 ? 2
-      : ratio <= 20 ? 3
-        : ratio <= 30 ? 3
+  const desired = ratio <= 10 ? 2
+    : ratio <= 20 ? 3
+      : ratio <= 30 ? 3
+        : ratio <= 40 ? 4
           : ratio <= 70 ? 4
-            : 5;
+            : 4;
   return Math.max(1, Math.min(desired, Math.max(1, available)));
 }
 
 function requiredUniqueExpressionCount(ratio: number, bodyLineCount: number): number {
-  const desired = ratio <= 5 ? 1 : ratio <= 10 ? 2 : ratio <= 20 ? 3 : ratio <= 30 ? 4 : ratio <= 50 ? 6 : ratio <= 70 ? 8 : 10;
+  const desired = ratio <= 10 ? 1 : ratio <= 20 ? 2 : ratio <= 30 ? 3 : ratio <= 40 ? 4 : ratio <= 50 ? 5 : ratio <= 60 ? 6 : 7;
   return Math.max(1, Math.min(desired, Math.max(1, Math.round(bodyLineCount * 0.35))));
 }
 
@@ -483,7 +592,6 @@ function targetGoals(ratio: number, targets: V1LanguageMixLanguageCode[]): Parti
 }
 
 function targetBounds(goal: number, totalRatio: number, targetCount: number): { lower: number; upper: number } {
-  if (totalRatio <= 5) return { lower: 0.5, upper: Math.max(5, goal + 3) };
   const tolerance = Math.max(3, Math.round((ratioBounds(totalRatio).upper - ratioBounds(totalRatio).lower) / Math.max(1, targetCount) / 2));
   return { lower: Math.max(0, goal - tolerance), upper: Math.min(100, goal + tolerance) };
 }
@@ -503,6 +611,17 @@ interface V1LanguagePlacementAnalysis {
   maxTargetSectionRatio: number;
   overloadedTargetSectionCount: number;
   duplicateTargetExpressionCount: number;
+  targetTimelineZoneCount: number;
+  maxTargetTimelineZoneShare: number;
+  earlyTargetPresent: boolean;
+  middleTargetPresent: boolean;
+  lateTargetPresent: boolean;
+  hookTargetPresent: boolean;
+  finalRecallPresent: boolean;
+  maxTargetOnlyRunLength: number;
+  maxHookTargetOnlyRunLength: number;
+  abruptTakeoverCount: number;
+  mixedLanguageLineCount: number;
 }
 
 function classifyLanguageLineRole(
@@ -535,8 +654,16 @@ function analyzeLanguagePlacement(
   let maxTargetSectionRatio = 0;
   let overloadedTargetSectionCount = 0;
   let duplicateTargetExpressionCount = 0;
+  let maxTargetOnlyRunLength = 0;
+  let maxHookTargetOnlyRunLength = 0;
+  let abruptTakeoverCount = 0;
+  let mixedLanguageLineCount = 0;
   const sectionTargetUnits: number[] = [];
   const duplicateCandidates = new Map<string, number>();
+  const targetTimelineZones = new Set<V1LanguageTimelineZone>();
+  const zoneTargetUnits: Record<V1LanguageTimelineZone, number> = { early: 0, middle: 0, late: 0 };
+  let hookTargetPresent = false;
+  let finalRecallPresent = false;
   const requestedRatio = clampRatio(input.requestedRatio);
   const sectionRatioLimit = maxTargetRatioInsideSection(requestedRatio);
 
@@ -562,6 +689,26 @@ function analyzeLanguagePlacement(
         targetPresent: targetUnits > 0,
       };
     });
+
+    mixedLanguageLineCount += rows.filter((row) => row.role === 'mixed').length;
+    let strictTargetRun = 0;
+    let blockMaxTargetRun = 0;
+    rows.forEach((row) => {
+      if (row.role === 'target') {
+        strictTargetRun += 1;
+        blockMaxTargetRun = Math.max(blockMaxTargetRun, strictTargetRun);
+      } else {
+        strictTargetRun = 0;
+      }
+    });
+    maxTargetOnlyRunLength = Math.max(maxTargetOnlyRunLength, blockMaxTargetRun);
+    if (isHookFamily(block.family)) {
+      maxHookTargetOnlyRunLength = Math.max(maxHookTargetOnlyRunLength, blockMaxTargetRun);
+    }
+    const hasMatrixOrMixedContext = rows.some((row) => row.role === 'base' || row.role === 'mixed');
+    if (blockMaxTargetRun >= 4 && (isHookFamily(block.family) || (block.family !== 'rap' && hasMatrixOrMixedContext))) {
+      abruptTakeoverCount += 1;
+    }
 
     let alternatingLength = 1;
     let alternatingRunCounted = false;
@@ -606,9 +753,16 @@ function analyzeLanguagePlacement(
     if (sectionTargetUnitCount > 0) {
       sectionTargetUnits.push(sectionTargetUnitCount);
       totalTargetUnits += sectionTargetUnitCount;
+      const zone = timelineZoneForSection(block.sectionName, block.sectionIndex, parsed.blocks.length);
+      targetTimelineZones.add(zone);
+      zoneTargetUnits[zone] += sectionTargetUnitCount;
+      if (isHookFamily(block.family)) hookTargetPresent = true;
+      if (zone === 'late' && (/^final\s+(?:chorus|hook)/i.test(block.sectionName) || block.family === 'outro')) {
+        finalRecallPresent = true;
+      }
       const sectionRatio = sectionTotalUnitCount > 0 ? (sectionTargetUnitCount / sectionTotalUnitCount) * 100 : 0;
       maxTargetSectionRatio = Math.max(maxTargetSectionRatio, sectionRatio);
-      if (requestedRatio <= 30 && rows.length >= 4 && sectionRatio > sectionRatioLimit) {
+      if (requestedRatio <= 40 && rows.length >= 4 && sectionRatio > sectionRatioLimit) {
         overloadedTargetSectionCount += 1;
       }
     }
@@ -634,6 +788,19 @@ function analyzeLanguagePlacement(
     maxTargetSectionRatio: Math.round(maxTargetSectionRatio * 10) / 10,
     overloadedTargetSectionCount,
     duplicateTargetExpressionCount,
+    targetTimelineZoneCount: targetTimelineZones.size,
+    maxTargetTimelineZoneShare: totalTargetUnits > 0
+      ? Math.round((Math.max(zoneTargetUnits.early, zoneTargetUnits.middle, zoneTargetUnits.late) / totalTargetUnits) * 1000) / 10
+      : 0,
+    earlyTargetPresent: targetTimelineZones.has('early'),
+    middleTargetPresent: targetTimelineZones.has('middle'),
+    lateTargetPresent: targetTimelineZones.has('late'),
+    hookTargetPresent,
+    finalRecallPresent,
+    maxTargetOnlyRunLength,
+    maxHookTargetOnlyRunLength,
+    abruptTakeoverCount,
+    mixedLanguageLineCount,
   };
 }
 
@@ -651,6 +818,11 @@ function buildAudit(
   const lines = String(lyrics || '').split('\n');
   const parsed = parseLyricStructure(lines);
   const placement = analyzeLanguagePlacement(parsed, input, trustedLines, equivalenceGroups);
+  const hookPatterns = normalizeHookPatterns(input.hookPatterns);
+  const easySingActive = hookPatterns.has('easy-sing');
+  const genreBlendProfile = resolveLanguageGenreBlendProfile(input.genreText);
+  const maxAllowedTargetOnlyRunLength = maxAllowedTargetOnlyRunLengthForContext(requestedRatio, genreBlendProfile);
+  const maxAllowedHookTargetOnlyRunLength = maxAllowedHookTargetOnlyRunLengthForContext(requestedRatio, genreBlendProfile, easySingActive);
   const totals: Partial<Record<V1LanguageMixLanguageCode, number>> = {};
   const targetFamilies = new Set<string>();
   const uniqueExpressions = new Set<string>();
@@ -691,7 +863,11 @@ function buildAudit(
   const availableSections = parsed.blocks.filter((block) => block.bodyLines.length > 0).length;
   const requiredSections = requiredSectionCount(requestedRatio, availableFamilies.size);
   const requiredTargetSections = requiredTargetSectionCount(requestedRatio, availableSections);
+  const maxTargetSections = maxTargetSectionCountForRatio(requestedRatio, availableSections);
   const maxAllowedTargetSectionShare = maxTargetSectionShareForRatio(requestedRatio, availableSections);
+  const availableTimelineZones = new Set(parsed.blocks.filter((block) => block.bodyLines.length > 0).map((block) => timelineZoneForSection(block.sectionName, block.sectionIndex, parsed.blocks.length))).size;
+  const requiredTimelineZones = requiredTimelineZoneCount(requestedRatio, availableTimelineZones);
+  const maxAllowedTimelineZoneShare = maxTargetTimelineZoneShareForRatio(requestedRatio);
   const requiredUnique = requiredUniqueExpressionCount(requestedRatio, parsed.bodyLines.length);
   const reasons: string[] = [];
   if (requestedRatio > 0 && actualMixRatio < bounds.lower) reasons.push(`실제 혼합 언어 분량이 ${bounds.lower}%보다 낮습니다.`);
@@ -703,10 +879,18 @@ function buildAudit(
     if (actual < lower) reasons.push(`${language} 분량이 목표 배분보다 부족합니다.`);
     if (actual > upper) reasons.push(`${language} 분량이 목표 배분보다 많습니다.`);
   });
-  if (requestedRatio >= 10 && targetFamilies.size < requiredSections) reasons.push(`혼합 언어가 ${requiredSections}개 이상의 섹션군에 분산되지 않았습니다.`);
   if (requestedRatio >= 10 && uniqueExpressions.size < requiredUnique) reasons.push(`반복 훅을 제외한 고유 혼합 표현이 ${requiredUnique}개보다 적습니다.`);
-  if (requestedRatio >= 10 && placement.targetSectionCount < requiredTargetSections) {
-    reasons.push(`혼합 언어가 ${requiredTargetSections}개 이상의 실제 섹션에 분산되지 않았습니다.`);
+  if (requestedRatio >= 10 && placement.targetTimelineZoneCount < requiredTimelineZones) {
+    reasons.push(`혼합 언어가 곡의 전반·중반·후반 중 ${requiredTimelineZones}개 이상의 시간 구간을 연결하지 못했습니다.`);
+  }
+  if (requestedRatio >= 40 && placement.maxTargetTimelineZoneShare > maxAllowedTimelineZoneShare) {
+    reasons.push(`혼합 언어 전체 분량의 ${placement.maxTargetTimelineZoneShare}%가 전반·중반·후반 중 한 구간에 치우쳤습니다. 최대 ${maxAllowedTimelineZoneShare}% 이하여야 합니다.`);
+  }
+  if (requestedRatio >= 10 && easySingActive && !placement.hookTargetPresent) {
+    reasons.push('따라 부르는 후렴이 선택되었지만 혼합 언어가 Chorus·Hook·Refrain 계열의 글로벌 기억점에 연결되지 않았습니다.');
+  }
+  if (requestedRatio >= 10 && placement.hookTargetPresent && !placement.finalRecallPresent) {
+    reasons.push('훅에서 제시된 혼합 언어 모티프가 Final Chorus 또는 Outro에서 회수되지 않았습니다.');
   }
   if (requestedRatio >= 10 && placement.maxTargetSectionShare > maxAllowedTargetSectionShare) {
     reasons.push(`혼합 언어 전체 분량의 ${placement.maxTargetSectionShare}%가 한 섹션에 몰려 있습니다. 한 섹션 최대 ${maxAllowedTargetSectionShare}% 이하여야 합니다.`);
@@ -718,6 +902,16 @@ function buildAudit(
     reasons.push(`훅이 아닌 구간에서 동일한 외국어 문장이 ${placement.duplicateTargetExpressionCount}회 반복 복사되었습니다.`);
   }
 
+  if (placement.maxTargetOnlyRunLength > maxAllowedTargetOnlyRunLength) {
+    reasons.push(`혼합 언어가 한 구간에서 ${placement.maxTargetOnlyRunLength}줄 연속으로 이어져 별도 파트처럼 들립니다. 장르·비율 기준 권장 상한은 ${maxAllowedTargetOnlyRunLength}줄입니다.`);
+  }
+  if (placement.maxHookTargetOnlyRunLength > maxAllowedHookTargetOnlyRunLength) {
+    reasons.push(`후렴 계열에서 혼합 언어가 ${placement.maxHookTargetOnlyRunLength}줄 연속으로 지배합니다. 훅은 두 언어가 같은 톱라인 안에서 더 짧게 직조되어야 합니다.`);
+  }
+  if (placement.abruptTakeoverCount > 0) {
+    reasons.push(`한국어 흐름 뒤에 긴 외국어 파트가 갑자기 넘어오는 구간이 ${placement.abruptTakeoverCount}곳 감지되었습니다.`);
+  }
+
   const maxAlternating = maxAllowedAlternatingSequences(requestedRatio, Boolean(input.allowLineAlternation));
   const maxMirroredPairs = input.allowLineAlternation ? 1 : 0;
   const preferredBlock = preferredTargetBlockLength(requestedRatio);
@@ -727,25 +921,34 @@ function buildAudit(
   if (placement.mirroredTranslationPairCount > maxMirroredPairs) {
     reasons.push('같은 의미를 두 언어로 바로 이어 쓰는 번역 대조형 줄이 감지되었습니다.');
   }
-  const scatteredTargetBlocks = !input.allowLineAlternation && requestedRatio >= 50
-    ? placement.targetBlockCount >= 8
-      && placement.averageTargetBlockLength < 1.5
-      && placement.isolatedTargetLineCount >= 6
-    : requestedRatio >= 30
-      ? placement.targetBlockCount >= 6
-        && placement.averageTargetBlockLength < 1.5
-        && placement.isolatedTargetLineCount >= 5
+  const scatteredTargetBlocks = !input.allowLineAlternation && requestedRatio >= 40
+    ? placement.targetBlockCount > placement.targetSectionCount + 3
+      && placement.averageTargetBlockLength < 1.8
+      && placement.isolatedTargetLineCount >= 4
+    : requestedRatio >= 20
+      ? placement.targetBlockCount > placement.targetSectionCount + 2
+        && placement.averageTargetBlockLength < 1.6
+        && placement.isolatedTargetLineCount >= 3
       : false;
   if (scatteredTargetBlocks) {
     reasons.push(`혼합 언어가 한 줄씩 흩어져 있습니다. ${preferredBlock.min}줄 이상의 자연스러운 언어 블록이 필요합니다.`);
   }
+  const hookRecallPassed = !placement.hookTargetPresent || placement.finalRecallPresent;
+  const easySingHookPassed = !easySingActive || placement.hookTargetPresent;
+  const languageArcPassed = placement.targetTimelineZoneCount >= requiredTimelineZones
+    && (requestedRatio < 40 || placement.maxTargetTimelineZoneShare <= maxAllowedTimelineZoneShare)
+    && hookRecallPassed
+    && easySingHookPassed;
   const placementPassed = placement.alternatingSequenceCount <= maxAlternating
     && placement.mirroredTranslationPairCount <= maxMirroredPairs
     && !scatteredTargetBlocks
-    && placement.targetSectionCount >= requiredTargetSections
     && placement.maxTargetSectionShare <= maxAllowedTargetSectionShare
     && placement.overloadedTargetSectionCount === 0
-    && placement.duplicateTargetExpressionCount === 0;
+    && placement.duplicateTargetExpressionCount === 0
+    && placement.maxTargetOnlyRunLength <= maxAllowedTargetOnlyRunLength
+    && placement.maxHookTargetOnlyRunLength <= maxAllowedHookTargetOnlyRunLength
+    && placement.abruptTakeoverCount === 0
+    && languageArcPassed;
 
   const active = requestedRatio > 0 && targets.length > 0;
   const status: V1LanguageMixAudit['status'] = !active
@@ -791,6 +994,26 @@ function buildAudit(
     maxTargetSectionRatio: placement.maxTargetSectionRatio,
     overloadedTargetSectionCount: placement.overloadedTargetSectionCount,
     duplicateTargetExpressionCount: placement.duplicateTargetExpressionCount,
+    targetTimelineZoneCount: placement.targetTimelineZoneCount,
+    requiredTimelineZoneCount: requiredTimelineZones,
+    maxTargetTimelineZoneShare: placement.maxTargetTimelineZoneShare,
+    maxAllowedTargetTimelineZoneShare: maxAllowedTimelineZoneShare,
+    maxTargetSectionCount: maxTargetSections,
+    earlyTargetPresent: placement.earlyTargetPresent,
+    middleTargetPresent: placement.middleTargetPresent,
+    lateTargetPresent: placement.lateTargetPresent,
+    hookTargetPresent: placement.hookTargetPresent,
+    finalRecallPresent: placement.finalRecallPresent,
+    maxTargetOnlyRunLength: placement.maxTargetOnlyRunLength,
+    maxHookTargetOnlyRunLength: placement.maxHookTargetOnlyRunLength,
+    abruptTakeoverCount: placement.abruptTakeoverCount,
+    mixedLanguageLineCount: placement.mixedLanguageLineCount,
+    maxAllowedTargetOnlyRunLength,
+    maxAllowedHookTargetOnlyRunLength,
+    sectionCoverageIsReference: true,
+    genreBlendProfile,
+    easySingActive,
+    languageArcPassed,
     placementPassed,
     repairApplied,
     replacedLineCount,
@@ -832,29 +1055,39 @@ function auditPenalty(audit: V1LanguageMixAudit): number {
     if (actual > upper) return sum + (actual - upper);
     return sum;
   }, 0);
-  const sectionPenalty = Math.max(0, audit.requiredSectionFamilyCount - audit.targetSectionFamilyCount) * 8;
   const uniquePenalty = Math.max(0, audit.requiredUniqueTargetExpressionCount - audit.uniqueTargetExpressionCount) * 3;
   const alternatingPenalty = Math.max(0, audit.alternatingSequenceCount - audit.maxAllowedAlternatingSequences) * 14;
   const mirroredPenalty = Math.max(0, audit.mirroredTranslationPairCount - audit.maxAllowedMirroredPairs) * 16;
   const blockPenalty = audit.placementPassed ? 0 : Math.max(2, audit.isolatedTargetLineCount * 1.5);
-  const exactSectionPenalty = Math.max(0, audit.requiredTargetSectionCount - audit.targetSectionCount) * 18;
-  const distributionReady = audit.targetSectionCount >= audit.requiredTargetSectionCount || audit.actualMixRatio >= audit.lowerBound;
+  const timelinePenalty = Math.max(0, audit.requiredTimelineZoneCount - audit.targetTimelineZoneCount) * 28;
+  const timelineConcentrationPenalty = Math.max(0, audit.maxTargetTimelineZoneShare - audit.maxAllowedTargetTimelineZoneShare) * 4;
+  const hookPenalty = audit.easySingActive && !audit.hookTargetPresent ? 30 : 0;
+  const finalRecallPenalty = audit.hookTargetPresent && !audit.finalRecallPresent ? 36 : 0;
+  const distributionReady = audit.actualMixRatio >= audit.lowerBound;
   const concentrationPenalty = distributionReady
     ? Math.max(0, audit.maxTargetSectionShare - audit.maxAllowedTargetSectionShare) * 4
     : 0;
   const overloadPenalty = distributionReady ? audit.overloadedTargetSectionCount * 24 : 0;
   const duplicatePenalty = audit.duplicateTargetExpressionCount * 28;
+  const targetRunPenalty = Math.max(0, audit.maxTargetOnlyRunLength - audit.maxAllowedTargetOnlyRunLength) * 20;
+  const hookRunPenalty = Math.max(0, audit.maxHookTargetOnlyRunLength - audit.maxAllowedHookTargetOnlyRunLength) * 28;
+  const takeoverPenalty = audit.abruptTakeoverCount * 32;
   return ratioPenalty * 5
     + targetPenalty * 7
-    + sectionPenalty
     + uniquePenalty
     + alternatingPenalty
     + mirroredPenalty
     + blockPenalty
-    + exactSectionPenalty
+    + timelinePenalty
+    + timelineConcentrationPenalty
+    + hookPenalty
+    + finalRecallPenalty
     + concentrationPenalty
     + overloadPenalty
-    + duplicatePenalty;
+    + duplicatePenalty
+    + targetRunPenalty
+    + hookRunPenalty
+    + takeoverPenalty;
 }
 
 function buildSlotLanguageMaps(
@@ -1156,7 +1389,21 @@ function blockTieBreak(
   const desiredLength = audit.requestedRatio <= 10 ? 1 : Math.round((preferred.min + preferred.max) / 2);
   const blockLengthScore = Math.max(0, 24 - Math.abs(window.length - desiredLength) * 6);
   const exactScore = window.filter((binding) => binding.exact).length * 5;
-  const spreadScore = targetLanguage && !representedFamilies.has(family) ? 180 : 0;
+  const opensNewFamily = !representedFamilies.has(family);
+  const spreadScore = targetLanguage && opensNewFamily
+    ? audit.maxTargetSectionShare > audit.maxAllowedTargetSectionShare
+      ? 90
+      : audit.isolatedTargetLineCount >= 3
+        ? -25
+        : 15
+    : 25;
+  const sectionName = window[0]?.entry.sectionName || '';
+  const zone = timelineZoneForSection(sectionName, window[0]?.entry.sectionIndex || 1, 10);
+  const missingZoneScore = targetLanguage && ((zone === 'early' && !audit.earlyTargetPresent)
+    || (zone === 'middle' && !audit.middleTargetPresent)
+    || (zone === 'late' && !audit.lateTargetPresent)) ? 190 : 0;
+  const hookScore = targetLanguage && !audit.hookTargetPresent && isHookFamily(family) ? 220 : 0;
+  const finalRecallScore = targetLanguage && !audit.finalRecallPresent && zone === 'late' ? 260 : 0;
   const sectionScore = sectionPlacementPriority(family, audit.requestedRatio) * 2;
   const alternationRepairScore = !audit.placementPassed && window.length >= 2 ? 45 : 0;
   const languageActual = Number(audit.languageRatios[language] || 0);
@@ -1164,7 +1411,7 @@ function blockTieBreak(
     ? 100 - audit.requestedRatio
     : Number(audit.targetGoals[language] || 0);
   const deficitScore = targetLanguage && languageActual < languageGoal ? Math.min(40, languageGoal - languageActual) : 0;
-  return blockLengthScore + exactScore + spreadScore + sectionScore + alternationRepairScore + deficitScore;
+  return blockLengthScore + exactScore + spreadScore + missingZoneScore + hookScore + finalRecallScore + sectionScore + alternationRepairScore + deficitScore;
 }
 
 
@@ -1266,8 +1513,6 @@ export function enforceV1LanguageMixCard(input: EnforceV1LanguageMixCardInput): 
         targetFamilies.add(block.family);
       }
     });
-    const requiredSections = requiredTargetSectionCount(requestedRatio, parsed.blocks.filter((block) => block.bodyLines.length).length);
-    const requiredFamilies = requiredSectionCount(requestedRatio, new Set(parsed.bodyLines.map((entry) => entry.family)).size);
     const bySection = new Map<number, V1BoundRepairSlot[][]>();
     windows.forEach((window) => {
       const sectionIndex = window[0]?.entry.sectionIndex || 0;
@@ -1287,13 +1532,42 @@ export function enforceV1LanguageMixCard(input: EnforceV1LanguageMixCardInput): 
       return { sectionIndex, family: bestWindow?.[0]?.entry.family || 'unknown', window: bestWindow };
     }).filter((candidate) => Boolean(candidate.window));
 
-    while ((targetSectionIndexes.size < requiredSections || targetFamilies.size < requiredFamilies) && sectionCandidates.length) {
+    const needsSeeding = () => audit.targetTimelineZoneCount < audit.requiredTimelineZoneCount
+      || (audit.easySingActive && !audit.hookTargetPresent)
+      || (audit.hookTargetPresent && !audit.finalRecallPresent)
+      || audit.maxTargetSectionShare > audit.maxAllowedTargetSectionShare;
+
+    let seedingPass = 0;
+    while (needsSeeding() && sectionCandidates.length && seedingPass < 4) {
+      seedingPass += 1;
       sectionCandidates.sort((a, b) => {
+        const aZone = timelineZoneForSection(
+          a.window?.[0]?.entry.sectionName || '',
+          a.sectionIndex,
+          parsed.blocks.length,
+        );
+        const bZone = timelineZoneForSection(
+          b.window?.[0]?.entry.sectionName || '',
+          b.sectionIndex,
+          parsed.blocks.length,
+        );
+        const zoneMissing = (zone: V1LanguageTimelineZone) => (zone === 'early' && !audit.earlyTargetPresent)
+          || (zone === 'middle' && !audit.middleTargetPresent)
+          || (zone === 'late' && !audit.lateTargetPresent);
+        const aHookNeed = audit.easySingActive && !audit.hookTargetPresent && isHookFamily(a.family) ? 1 : 0;
+        const bHookNeed = audit.easySingActive && !audit.hookTargetPresent && isHookFamily(b.family) ? 1 : 0;
+        const aFinalNeed = audit.hookTargetPresent && !audit.finalRecallPresent && aZone === 'late' ? 1 : 0;
+        const bFinalNeed = audit.hookTargetPresent && !audit.finalRecallPresent && bZone === 'late' ? 1 : 0;
+        const aMissingZone = zoneMissing(aZone) ? 1 : 0;
+        const bMissingZone = zoneMissing(bZone) ? 1 : 0;
         const aNewFamily = targetFamilies.has(a.family) ? 0 : 1;
         const bNewFamily = targetFamilies.has(b.family) ? 0 : 1;
         const aNewSection = targetSectionIndexes.has(a.sectionIndex) ? 0 : 1;
         const bNewSection = targetSectionIndexes.has(b.sectionIndex) ? 0 : 1;
-        return bNewFamily - aNewFamily
+        return bFinalNeed - aFinalNeed
+          || bHookNeed - aHookNeed
+          || bMissingZone - aMissingZone
+          || bNewFamily - aNewFamily
           || bNewSection - aNewSection
           || sectionPlacementPriority(b.family, requestedRatio) - sectionPlacementPriority(a.family, requestedRatio);
       });
@@ -1399,7 +1673,7 @@ export function enforceV1LanguageMixCard(input: EnforceV1LanguageMixCardInput): 
 
 
   // Hard ratio convergence pass. The quality penalty solver above is intentionally conservative,
-  // but a valid final repair pool must not leave 20% at 42% or 90% at 79% merely because a local
+  // but a valid final repair pool must not leave 20% at 42% or 70% at 55% merely because a local
   // placement score is flat. Use the same exact-position alternatives to move monotonically toward
   // the requested range, while still rejecting copied non-hook text and protecting hook identities.
   const ratioDistance = (candidate: V1LanguageMixAudit): number => {
@@ -1445,7 +1719,11 @@ export function enforceV1LanguageMixCard(input: EnforceV1LanguageMixCardInput): 
       } else if (excessive && Number(audit.languageRatios[excessive] || 0) > Number(audit.targetUpperBounds[excessive] || 100)) {
         desiredLanguage = input.baseLanguage;
       } else if (!audit.placementPassed) {
-        desiredLanguage = audit.maxTargetSectionShare > audit.maxAllowedTargetSectionShare
+        const mustReduceTakeover = audit.maxTargetSectionShare > audit.maxAllowedTargetSectionShare
+          || audit.maxTargetOnlyRunLength > audit.maxAllowedTargetOnlyRunLength
+          || audit.maxHookTargetOnlyRunLength > audit.maxAllowedHookTargetOnlyRunLength
+          || audit.abruptTakeoverCount > 0;
+        desiredLanguage = mustReduceTakeover
           ? input.baseLanguage
           : (targets[0] || input.baseLanguage);
       }

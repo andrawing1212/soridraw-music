@@ -1625,7 +1625,7 @@ function hookPatternInstruction(pattern: V1HookPattern): string {
     case 'chant': return 'shape the hook for clipped, rhythmically simple chant delivery; lyric placement is checked and the actual chant impact is verified in audio';
     case 'call-response': return 'create a distinct lead call and a different short answer line, then repeat that lead-and-answer relationship in every role-linked core return';
     case 'echo-response': return 'follow the lead hook with a shorter echo fragment of the same phrase; do not confuse this with spatial reverb';
-    case 'easy-sing': return 'use short syntax, familiar words, open vowels, and stable breath groups so listeners can quickly follow the lead line';
+    case 'easy-sing': return 'simplify the primary hook into one or two compact lead lines with familiar words, stable breath groups, one obvious stress peak, open or sonorous vowel landings, and a clear rhyme/cadence family; in bilingual lyrics, weave one short global phrase or response into the same hook identity instead of adding a long foreign-language paragraph';
     case 'split-ab': return 'split each role-linked core target into an A idea that presents the hook and a contrasting B idea that completes its answer or emotional payoff';
     case 'drop-hook': return 'apply a compact hook to an existing Drop; when no Drop exists but a primary hook section exists, embed the drop release at the end of that section without inventing a new structural tag';
     case 'anti-chorus': return 'make the role-linked core payoff deliberately smaller, quieter, or barer than its preceding lift while keeping one unmistakable compact anchor; actual dynamic contrast is an audio check';
@@ -4754,7 +4754,7 @@ function limitEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10):
   if (currentEnglishWords <= maxEnglishWords) return source;
 
   let usedEnglishWords = 0;
-  const maxWordsPerKeptFragment = ratio >= 90 ? 40 : ratio >= 70 ? 32 : ratio >= 50 ? 24 : ratio <= 5 ? 3 : ratio <= 10 ? 5 : ratio <= 20 ? 8 : 14;
+  const maxWordsPerKeptFragment = ratio >= 70 ? 32 : ratio >= 60 ? 28 : ratio >= 50 ? 24 : ratio <= 10 ? 5 : ratio <= 20 ? 8 : 14;
 
   const limited = source
     .split("\n")
@@ -4808,13 +4808,13 @@ function raiseEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10):
   const targetEnglishWords = Math.max(
     1,
     Math.floor(
-      maxEnglishWords * (ratio >= 90 ? 0.96 : ratio >= 70 ? 0.92 : ratio >= 50 ? 0.86 : ratio >= 30 ? 0.78 : ratio >= 20 ? 0.65 : ratio >= 10 ? 0.45 : 0.25),
+      maxEnglishWords * (ratio >= 70 ? 0.92 : ratio >= 60 ? 0.89 : ratio >= 50 ? 0.86 : ratio >= 30 ? 0.78 : ratio >= 20 ? 0.65 : ratio >= 10 ? 0.45 : 0.25),
     ),
   );
 
   if (currentEnglishWords >= targetEnglishWords) return source;
 
-  const phrasePool = ratio >= 70
+  const phrasePool = ratio >= 60
     ? ["I can't run away", "It's written in the stars", "Tell me what you want", "I'm losing control", "No more hiding", "Stay with me tonight", "We can break the fate", "Don't let me go", "Everything is changing", "Right here, right now", "I'm falling into you", "This is not a dream"]
     : ratio >= 50
       ? ["Stay with me", "right now", "I need you", "Don't let go", "Feel alive", "You and I", "No more", "Take me higher", "Hold on", "Let it go"]
@@ -4826,7 +4826,7 @@ function raiseEnglishMixRatioInKoreanLyrics(text: string, englishMixRatio = 10):
             ? ["(Stay)", "tonight", "You and I"]
             : ["(Stay)"];
 
-  const maxInjections = ratio >= 90 ? 48 : ratio >= 70 ? 40 : ratio >= 50 ? 32 : ratio >= 30 ? 18 : ratio >= 20 ? 8 : ratio >= 10 ? 4 : 1;
+  const maxInjections = ratio >= 70 ? 40 : ratio >= 60 ? 36 : ratio >= 50 ? 32 : ratio >= 30 ? 18 : ratio >= 20 ? 8 : ratio >= 10 ? 4 : 1;
   const lines = source.split("\n");
   let usedEnglishWords = currentEnglishWords;
   let injected = 0;
@@ -4889,10 +4889,10 @@ function rebalanceHighEnglishMixDominance(text: string, englishMixRatio = 10): s
     return total <= 0 ? 0 : countEnglishWords(value) / total;
   };
 
-  const minimumShare = ratio >= 90 ? 0.78 : ratio >= 70 ? 0.62 : 0.45;
+  const minimumShare = ratio >= 70 ? 0.62 : ratio >= 60 ? 0.54 : 0.45;
   if (getActualEnglishShare(source) >= minimumShare) return source;
 
-  const phrasePool = ratio >= 90
+  const phrasePool = ratio >= 70
     ? [
         "I can't run away from this feeling",
         "Everything is written in the stars",
@@ -4949,7 +4949,7 @@ function rebalanceHighEnglishMixDominance(text: string, englishMixRatio = 10): s
     koreanBodyLineCount += 1;
 
     if (ratio >= 90) {
-      // 90% should feel like English-led lyrics. Keep only occasional Korean identity lines;
+      // 70% should feel target-language-led while retaining deliberate matrix-language identity lines;
       // replace most Korean-heavy body lines with English body lines. Section tags are not touched.
       const keepKoreanIdentityLine = koreanBodyLineCount % 5 === 0 || englishWords >= 5;
       if (keepKoreanIdentityLine) {
@@ -5082,7 +5082,7 @@ function raiseKoreanMixRatioInForeignLyrics(
     0,
     Math.ceil(((targetShare * bodyIndexes.length) - currentKoreanLines) / Math.max(0.1, 1 - targetShare)),
   );
-  const maxAdditionalLines = ratio >= 90 ? 48 : ratio >= 70 ? 34 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
+  const maxAdditionalLines = ratio >= 70 ? 34 : ratio >= 60 ? 29 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
   const additionsNeeded = Math.min(desiredAdditionalLines, maxAdditionalLines);
   if (additionsNeeded <= 0) return source;
 
@@ -5289,7 +5289,7 @@ function balanceLanguageMixTargetsInLyricCard(
     0,
     Math.ceil(((targetShare * bodyIndexes.length) - currentMixedLines) / Math.max(0.1, 1 - targetShare)),
   );
-  const maxAdditionalLines = ratio >= 90 ? 48 : ratio >= 70 ? 34 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
+  const maxAdditionalLines = ratio >= 70 ? 34 : ratio >= 60 ? 29 : ratio >= 50 ? 24 : ratio >= 30 ? 12 : ratio >= 20 ? 7 : ratio >= 10 ? 4 : 1;
   const additionsNeeded = Math.min(desiredAdditionalLines, maxAdditionalLines);
   if (additionsNeeded <= 0) return source;
 
@@ -5367,7 +5367,7 @@ function enforceKpopMixedLyrics(
   korean: string;
 } {
   const ratio = normalizeEnglishMixRatio(englishMixRatio);
-  const maxInjections = ratio <= 5 ? 1 : ratio <= 10 ? 1 : ratio <= 20 ? 2 : 3;
+  const maxInjections = ratio <= 10 ? 1 : ratio <= 20 ? 2 : 3;
   const koreanSource = lyrics.korean ?? "";
 
   const koreanMixed = ratio >= 50
@@ -5400,7 +5400,11 @@ function enforceKpopMixedLyrics(
 function normalizeEnglishMixRatio(value: unknown): number {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 10;
-  return Math.max(0, Math.min(90, Math.round(numeric)));
+  if (numeric <= 0) return 0;
+  const allowed = [10, 20, 30, 40, 50, 60, 70];
+  return allowed.reduce((best, candidate) => (
+    Math.abs(candidate - numeric) < Math.abs(best - numeric) ? candidate : best
+  ), 10);
 }
 
 function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
@@ -31903,13 +31907,13 @@ const V1_LANGUAGE_MIX_NATIVE_SCRIPT: Record<V1LanguageMixLanguageCode, string> =
 function v1LanguageMixExactRepairSlotLimit(ratio: number): number {
   // Cover the whole song without forcing an oversized JSON reserve for low ratios.
   // Round-robin seed selection guarantees section spread before the pool grows deeper.
-  if (ratio <= 5) return 12;
   if (ratio <= 10) return 18;
   if (ratio <= 20) return 24;
   if (ratio <= 30) return 30;
+  if (ratio <= 40) return 34;
   if (ratio <= 50) return 38;
-  if (ratio <= 70) return 44;
-  return 48;
+  if (ratio <= 60) return 42;
+  return 44;
 }
 
 function validateV1ExactRepairSlots(
@@ -31945,6 +31949,17 @@ async function buildV1ExactLanguageMixRepairBlueprint(
 
   if (!activeCards.length) return { koreanSlots: [], secondarySlots: [] };
 
+  const exactArrangementGuidance = activeCards.map((card) => buildLanguageArrangementPlan({
+    requestedRatio: card.requestedRatio,
+    targetLanguages: card.targetLanguages,
+    structureMode: String(params.songStructure || '1'),
+    hookPatterns: getSelectedV1HookPatterns(params),
+    rapMode: getRapModeFromParams(params),
+    hasRapperRole: Boolean(params.vocal?.members?.some((member) => member.roles?.includes('rapper'))),
+    vocalCount: Number(params.vocal?.male || 0) + Number(params.vocal?.female || 0),
+    genreText: [params.genre, ...(params.subGenre || [])].filter(Boolean).join(' / '),
+  })).map((plan, index) => `CARD ${activeCards[index].card}: ${plan.promptInstruction}`).join('\n\n');
+
   const variantSchema = {
     type: Type.OBJECT,
     properties: {
@@ -31977,8 +31992,10 @@ ABSOLUTE RULES:
 - Never output section tags, square-bracket production cues, vocalist labels, explanations, markdown, generic filler, broken grammar, dangling articles/prepositions, or direct word-for-word awkward translations.
 - Each alternative must work as a replacement for the original line without changing neighboring line count or section order.
 - Do not copy one identical phrase into many unrelated slots. Every non-hook target-language alternative must be lexically distinct across slots while preserving each line's local event.
-- Do not concentrate every target-language alternative inside one Verse or one Chorus. Supply usable alternatives across the full song: a 20% Stable mix needs candidates in at least four actual sections spanning at least three section families, a 30% mix needs at least three actual sections, and balanced/target-dominant mixes need progressively wider coverage.
-- The engine, not you, will choose contiguous 2–4 line blocks and the final ratio. Do not add duplicate lyric lines.`;
+- Do not concentrate every target-language alternative inside one Verse or one Chorus. Supply usable alternatives across the full song: a 10% mix needs hook and late-recall candidates; 20% needs candidates across 3–4 actual sections covering early/middle/late; 30%=3–5, 40%=4–6, 50%=5–7, 60%=6–8, and 70%=6–9 actual sections.
+- The engine, not you, will choose contiguous blocks and the final ratio. Do not add duplicate lyric lines.
+
+${exactArrangementGuidance}`;
 
   const payload = {
     cards: activeCards.map((card) => ({
@@ -32071,7 +32088,7 @@ async function finalizeV1SongAtAbsoluteReturnBoundary(
       .filter((language): language is LanguageCode => Boolean(language) && language !== cardLanguage)))
       .slice(0, 2);
   };
-  // At 70–90% the target language is the audible matrix language of the mixed card.
+  // At 70% the target language is the audible matrix language of the mixed card.
   // Swap the card-facing hook fields before every protection/rebind/final audit so a Korean
   // circular hook cannot consume the base-language budget five times and make the requested
   // target-heavy ratio mathematically unreachable.
@@ -32127,6 +32144,8 @@ async function finalizeV1SongAtAbsoluteReturnBoundary(
         protectedLines,
         preserveMode,
         allowLineAlternation: allowLanguageLineAlternation,
+        hookPatterns: getSelectedV1HookPatterns(params),
+        genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
       });
       current = firstPass.lyrics;
       cardReplacedLineCount += Number(firstPass.audit.replacedLineCount || 0);
@@ -32151,6 +32170,8 @@ async function finalizeV1SongAtAbsoluteReturnBoundary(
         protectedLines,
         preserveMode,
         allowLineAlternation: allowLanguageLineAlternation,
+        hookPatterns: getSelectedV1HookPatterns(params),
+        genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
       });
       current = secondPass.lyrics;
       cardReplacedLineCount += Number(secondPass.audit.replacedLineCount || 0);
@@ -32183,6 +32204,8 @@ async function finalizeV1SongAtAbsoluteReturnBoundary(
         protectedLines,
         preserveMode,
         allowLineAlternation: allowLanguageLineAlternation,
+        hookPatterns: getSelectedV1HookPatterns(params),
+        genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
       });
       audits[card] = {
         ...finalAudit,
@@ -32775,13 +32798,13 @@ ${selectedNativeScriptInstruction}
 - Do NOT add lines such as "(Stay)", "(I miss you)", "Oh baby", "tonight", or any English hook phrase unless the user explicitly asks for English.`
       : "";
 
-  const languageMixRepairSlotCount = englishMixRatio <= 5 ? 12
-    : englishMixRatio <= 10 ? 18
-      : englishMixRatio <= 20 ? 24
-        : englishMixRatio <= 30 ? 30
+  const languageMixRepairSlotCount = englishMixRatio <= 10 ? 18
+    : englishMixRatio <= 20 ? 24
+      : englishMixRatio <= 30 ? 30
+        : englishMixRatio <= 40 ? 34
           : englishMixRatio <= 50 ? 38
-            : englishMixRatio <= 70 ? 44
-              : 48;
+            : englishMixRatio <= 60 ? 42
+              : 44;
   const selectedLanguageHookPatterns = getSelectedV1HookPatterns(params);
   const explicitLanguageExchangeMode = selectedLanguageHookPatterns.includes('call-response');
   const languageArrangementPlan = buildLanguageArrangementPlan({
@@ -32794,19 +32817,19 @@ ${selectedNativeScriptInstruction}
     vocalCount: Number((params.vocal?.members || []).length || 0),
     genreText: [params.genre, ...(params.subGenre || []), ...(params.styles || [])].filter(Boolean).join(' '),
   });
-  const languageMixPlacementRule = englishMixRatio <= 5
-    ? 'Use one or two compact accents total. Prefer a title/hook entry point or one final payoff; do not create a full target-language block.'
-    : englishMixRatio <= 10
-      ? 'Use one compact hook phrase plus one separated accent, or one short complete target-language line in a key section. Keep the base-language story almost continuous.'
-      : englishMixRatio <= 20
-        ? 'Use three or four compact complete target-language phrases distributed across at least three section families; in the Stable structure they should normally touch at least four actual sections. Each local block should normally be one or two complete lines. Never turn one full four-line-or-longer Verse into the target language.'
-        : englishMixRatio <= 30
-          ? 'Use a hook-led pattern across at least three different real sections: one target-language hook or payoff block, another two-to-three-line block in Verse/Rap/Pre-Chorus/Bridge, and a controlled final return. Do not satisfy the ratio with one repeated hook or one all-target Verse.'
+  const languageMixPlacementRule = englishMixRatio <= 10
+    ? 'Use one compact global hook/tag motif and one deliberate late recall. A single section may carry the motif when it is musically strong; do not scatter unrelated foreign words.'
+    : englishMixRatio <= 20
+      ? 'Use phrase-level weaving around a hook or transition plus one distinct development role and a later recall. Avoid both one-section takeover and compulsory coverage of every section.'
+      : englishMixRatio <= 30
+        ? 'Combine a bilingual hook cell with one role-specific Verse/Rap/Bridge development and a transformed final return. Keep most target-only runs short.'
+        : englishMixRatio <= 40
+          ? 'Create a visible whole-song arc through compact woven phrases and selective coherent blocks. Let genre and section function decide where monolingual contrast is useful.'
           : englishMixRatio <= 50
-            ? 'Balance languages by section or by two-to-four-line phrase blocks. Do not alternate Korean and the target language line by line like a translation worksheet.'
-            : englishMixRatio <= 70
-              ? 'Make the selected target language the main lyric language in most sections. Keep the base language as compact identity, emotional-anchor, or response blocks rather than alternating every line.'
-              : 'Write nearly the whole song in the selected target language(s). Keep only one or two short base-language identity anchors or a brief final callback.';
+            ? 'Balance both languages as one topline. Use phrase weaving, mixed hook cells, and occasional role-based blocks; do not hand an entire Chorus to a separate foreign-language part.'
+            : englishMixRatio <= 60
+              ? 'Let the target language lead while Korean-style story, identity, and hook anchors remain active. Use smooth handoffs rather than subtitle alternation.'
+              : 'Use the target language as the main body while matrix-language hook, story, and emotional anchors preserve recognisable origin and global K-style identity.';
   const languageExchangeRule = explicitLanguageExchangeMode
     ? '- Strict one-line exchange is allowed only inside the explicitly selected Call-response moment. Outside that moment, use natural phrase blocks.'
     : '- Do NOT alternate base language and target language one line at a time for three or more switches. Strict A/B/A/B language exchange is forbidden unless Call-response was explicitly selected.';
@@ -32826,13 +32849,13 @@ ${languageMixCardPlan}
   ${languageMixPlacementRule}
 ${languageArrangementPlan.promptInstruction}
 - Switch languages only at a musically and semantically useful boundary: section change, complete phrase boundary, hook return, beat/arrangement turn, rapper-to-singer handoff, or emotional reveal.
-- Prefer coherent two-to-four-line language blocks when the ratio is 20% or higher. A single mixed line is acceptable only when its syntax and melody are natural.
+- Prefer coherent language blocks when the ratio is 20% or higher. A single mixed line is acceptable only as a deliberate hook tag, vocal handoff, or transition and only when syntax and melody are natural.
 ${languageExchangeRule}
 - Never place a base-language line immediately followed by its direct target-language translation. Do not create bilingual subtitles, translation ladders, or duplicated meaning in adjacent lines.
 - When two target languages are selected, assign them distinct musical jobs instead of rotating all three languages line by line. Default role logic: target A supports hook/final recall; target B supports Verse 2/Rap/Bridge contrast. Adapt this to genre and vocal ownership.
 - Preserve singability when switching languages: similar breath length, usable syllable density, strong-vowel landing on sustained notes, compatible rhyme/phoneme shape, and unchanged semantic event. Natural transcreation is preferred over literal translation.
-- Titles and hooks are useful listener entry points, but a repeated foreign hook alone cannot satisfy 20% or more. Use multiple distinct expressions and at least the required section spread.
-- For 20% and 30%, no single real section may carry most of the entire mixed-language budget. In Stable mode, distribute 20% across at least four actual sections spanning at least three section families, and 30% across at least three actual sections. Keep the matrix language present inside long Verse/Rap sections.
+- Titles and hooks are useful listener entry points, but ratio alone never justifies copying one foreign line or assigning a whole Chorus to a separate language. Use distinct musical roles and natural phrase weaving.
+- There is NO fixed pass/fail quota for how many sections must contain the target language. Judge the result by total ratio, one-section concentration, target-only run length, abrupt takeover, phrase continuity, genre convention, hook function, and late recall. A monolingual section is allowed when it creates purposeful contrast.
 - Keep the exact selected section skeleton and all vocalist ownership tags. Language planning must never delete, merge, duplicate, or rename structural sections.
 - Keep every target-language phrase grammatical and complete. Never output broken fragments such as "change my", "find my play", or a Hook Preview ending on an article/preposition such as "running through the".
 - The full lyric card must total about ${100 - englishMixRatio}% base language and ${englishMixRatio}% selected mix-language content. If two target languages are selected, divide the mixed share as evenly as practical, but musical naturalness outranks exact decimal equality.`
@@ -32841,8 +32864,8 @@ ${languageExchangeRule}
   const languageMixBlueprintInstruction = shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params)
     ? `LANGUAGE MIX REPAIR BLUEPRINT (MANDATORY, SAME RESPONSE):
 - Return languageMixBlueprint with koreanSlots and secondarySlots. This reserve is internal and must not appear as duplicate lyric lines.
-- For each active lyric card, provide up to ${languageMixRepairSlotCount} exact section/line slots. Cover every real section once before adding a second slot from any section, then continue round-robin across the full song. Never front-load the reserve into Intro/Verse 1/Chorus 1 only.
-- Group most slots into ADJACENT neighborhoods of 2–4 consecutive sung lines inside the same section, especially for 20/30/50/70/90%. The deterministic engine repairs whole language blocks, not scattered alternating lines.
+- For each active lyric card, provide up to ${languageMixRepairSlotCount} exact section/line alternatives across musically useful locations. Make options available in hook, development/role-contrast, and late-return areas, but do not imply that every section must be converted.
+- Provide both single-line weave candidates and short adjacent neighborhoods. Most sung non-rap target-only runs should stay compact; a longer block is reserved for a clear Rap, Bridge, viewpoint, or target-led function. The deterministic engine chooses by ratio, concentration, genre, hook role, and phrase continuity.
 - sectionIndex = 1-based structural-section occurrence in that generated lyric card. sectionName = exact section name without performance cue. lineIndex = 1-based sung body line, excluding section tags and square-bracket cues.
 - baseLine = a complete natural line in the card's matrix/base language. targetVariants = complete natural transcreations in every active target language, using native script.
 - Preserve semantic event, emotional role, tense, vocalist ownership, approximate syllable/breath length, rhyme landing, and melodic stress. Prefer transcreation over literal word order.
@@ -33994,7 +34017,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   if (shouldUseMixedLyrics && !params.isNoLyrics && englishMixRatio > 0) {
     // V52 common Language Mix Engine owns every selectable ratio and every supported mix language.
     // Do not run the legacy stock-phrase injectors here; they created broken fragments and could
-    // make 30% behave like 0-5%. The final-boundary engine uses the same-response repair blueprint.
+    // make 30% behave like a tiny accent mix. The final-boundary engine uses the same-response repair blueprint.
   }
 
   if (!shouldUseMixedLyrics && !params.isNoLyrics) {
@@ -34353,9 +34376,9 @@ export async function regenerateLyricsOnly(
         .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== targetLanguage)
         .slice(0, 2)
     : [];
-  const mixRatio = explicitMixEnabled ? Math.max(0, Math.min(90, Number(applied.englishMixRatio || applied.languageMixRatio || 10))) : 0;
+  const mixRatio = explicitMixEnabled ? normalizeEnglishMixRatio(applied.englishMixRatio || applied.languageMixRatio || 10) : 0;
   const isMixed = explicitMixEnabled && mixTargets.length > 0;
-  const regenerationMixSlotCount = mixRatio <= 5 ? 4 : mixRatio <= 10 ? 6 : mixRatio <= 20 ? 10 : mixRatio <= 30 ? 14 : mixRatio <= 50 ? 20 : mixRatio <= 70 ? 26 : 32;
+  const regenerationMixSlotCount = mixRatio <= 10 ? 8 : mixRatio <= 20 ? 12 : mixRatio <= 30 ? 16 : mixRatio <= 40 ? 19 : mixRatio <= 50 ? 22 : mixRatio <= 60 ? 25 : 28;
   const mixTargetText = mixTargets.length
     ? mixTargets.map((lang) => `${targetLanguageNameMap[lang] || lang} (${nativeScriptMap[lang] || "native script"})`).join(", ")
     : "none";
@@ -34392,7 +34415,7 @@ ${isMixed ? `- Keep the same mix condition: about ${100 - mixRatio}% ${targetLan
 - Tags, sound cues, vocalist labels, and meaningless humming do not count toward the percentage.
 - Keep placement natural by section role; do not force the same ratio inside every section.
 - If two target languages are selected, split the mixed share as evenly as practical and do not omit either target.
-- At 5/10%, use compact accents; at 20/30%, distribute meaningful complete target-language or bilingual lines; at 50%, keep the two sides balanced; at 70/90%, make target-language content dominant while retaining base-language identity anchors.
+- At 10%, use one hook motif plus late recall; at 20–30%, build early/middle/late development; at 40–50%, balance coherent blocks; at 60–70%, make target-language content lead while retaining matrix-language story, emotion, and identity anchors.
 - Do not satisfy the ratio with one repeated hook, isolated filler, or broken fragments.
 - Return up to ${regenerationMixSlotCount} languageMixSlots. Each slot must contain sectionIndex, exact sectionName, 1-based sung-body lineIndex, a complete same-meaning baseLine, and targetVariants for every active target language. Variants must preserve meaning, role, tense, and similar breath while using native script.` : `- Do NOT add mixed-language lyric lines, foreign ad-libs, or foreign hook phrases.
 - For Korean lyrics, keep the lyric body in Korean only. English section tags such as [Verse : warm delivery] may stay, but lyric lines like Oh baby / alright / Just take your time are forbidden.`}
@@ -34584,6 +34607,8 @@ ${storedV1StoryContext}
       slots: safeSlots,
       preserveMode,
       allowLineAlternation: getSelectedV1HookPatterns(clicheGuardParams as unknown as GenerateSongParams).includes('call-response'),
+      hookPatterns: getSelectedV1HookPatterns(clicheGuardParams as unknown as GenerateSongParams),
+      genreText: [applied.genre, ...(applied.subGenre || []), ...(applied.styles || [])].filter(Boolean).join(' '),
     }).lyrics;
     lyrics = finalizeV1PublicLyricOutputIntegrity(
       applyV1SectionBlueprintGuard(

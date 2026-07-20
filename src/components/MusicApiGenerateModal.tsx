@@ -360,7 +360,7 @@ export default function MusicApiGenerateModal({
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
   const [localKoreanEnglishMix, setLocalKoreanEnglishMix] = useState<boolean>(() => Boolean(isKoreanEnglishMix));
-  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
+  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.max(10, Math.min(70, Math.round((Number(englishMixRatio) || 10) / 10) * 10)));
   const [localLanguageMixTargets, setLocalLanguageMixTargets] = useState<LanguageCode[]>(() =>
     normalizeLanguageMixTargets(initialLangs[0], initialLangs, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)),
   );
@@ -524,7 +524,7 @@ export default function MusicApiGenerateModal({
   useEffect(() => {
     if (!isMain) return;
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
-    setLocalEnglishMixRatio(Math.max(5, Math.min(90, Number(englishMixRatio) || 10)));
+    setLocalEnglishMixRatio(Math.max(10, Math.min(70, Math.round((Number(englishMixRatio) || 10) / 10) * 10)));
     setLocalLanguageMixTargets(normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)));
     setLocalRapMode(rapMode || (rapEnabled ? 'on' : 'off'));
   }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled, rapMode]);
@@ -657,7 +657,7 @@ export default function MusicApiGenerateModal({
   const subtitle = isMain
     ? (step === 1 ? '가사 포함 여부와 생성할 가사 언어를 선택합니다.' : '선택한 설정으로 곡 생성을 시작합니다.')
     : (step === 1 ? 'Music API로 보낼 대상과 가사를 선택합니다.' : '선택한 설정으로 생성을 요청합니다.');
-  const mixRatioOptions = [5, 10, 20, 30, 50, 70, 90];
+  const mixRatioOptions = [10, 20, 30, 40, 50, 60, 70];
 
   return (
     <div

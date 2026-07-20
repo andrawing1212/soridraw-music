@@ -7914,7 +7914,7 @@ const toggleCycleVariantSelection = (
     setIsPointSoundMode(pointSoundIds.length > 0);
     setKpopMode(restoredGenreIds.includes('kpop') ? resolvedKpopMode : 0);
     setIsKoreanEnglishMix(resolvedMixedLyrics);
-    setEnglishMixRatio(Math.max(5, Math.min(90, Number((appliedKeywords as any).englishMixRatio ?? 10) || 10)));
+    setEnglishMixRatio(Math.max(10, Math.min(70, Math.round((Number((appliedKeywords as any).englishMixRatio ?? 10) || 10) / 10) * 10)));
     setCitypopMode(restoredGenreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -9116,7 +9116,7 @@ const saveRecentSong = async (newSong: any) => {
     const requestedKoreanEnglishMix = requestedIncludeLyrics
       ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix)
       : false;
-    const requestedEnglishMixRatio = Math.max(5, Math.min(90, Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10));
+    const requestedEnglishMixRatio = Math.max(10, Math.min(70, Math.round((Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10) / 10) * 10));
     const requestedLanguageMixTargetLanguages = requestedIncludeLyrics && requestedKoreanEnglishMix
       ? Array.from(new Set(((generationOptions?.languageMixTargetLanguages?.length ? generationOptions.languageMixTargetLanguages : languageMixTargetLanguages) || [])
           .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== requestedLyricLanguages[0])))
@@ -11422,6 +11422,28 @@ ${normalizePromptForDisplay(result.prompt)}
       .replace(/\n{3,}/g, '\n\n')
       .trim();
   };
+
+  const renderLyricsWithCueHighlight = (value: string) => {
+    const normalized = normalizeLyricsForDisplay(value);
+
+    return normalized.split(/(\[[^\]\n]*\])/g).map((part, index) => {
+      const isBracketCue = /^\[[^\]\n]*\]$/.test(part);
+
+      if (isBracketCue) {
+        return (
+          <span
+            key={`lyric-cue-${index}`}
+            className="font-semibold text-[#d99a36]"
+          >
+            {part}
+          </span>
+        );
+      }
+
+      return <React.Fragment key={`lyric-text-${index}`}>{part}</React.Fragment>;
+    });
+  };
+
 
   const copyToClipboard = async (text: string, type: string) => {
     try {
@@ -14393,7 +14415,17 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       'distributed-blocks': '구간별 언어 블록',
                       'balanced-blocks': '균형형 섹션·블록',
                       'target-dominant': '혼합 언어 중심',
-                      'near-total': '혼합 언어 거의 전체',
+                      'arc-balanced': '전·중·후 언어 아크',
+                      'target-led': '혼합 언어 주도형',
+                    };
+                    const genreBlendLabels: Record<string, string> = {
+                      'k-idol-dance': 'K-아이돌·댄스',
+                      'k-ballad': 'K-발라드',
+                      'k-indie-folk': 'K-인디·포크',
+                      'k-band-rock': 'K-밴드·록',
+                      'k-hiphop-rap': 'K-힙합·랩',
+                      'k-rnb-soul': 'K-R&B·소울',
+                      'global-pop': '글로벌 팝',
                     };
                     const cards = Object.entries(mixAudit.cards || {}).filter(([, card]) => card && (card as any).active) as Array<[string, any]>;
                     const statusLabel = mixAudit.status === 'passed'
@@ -14481,11 +14513,43 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   </div>
                                   <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
                                     <p className="text-[9px] font-bold text-[var(--text-secondary)]">실제 적용 섹션</p>
-                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.targetSectionCount || 0) < Number(card.requiredTargetSectionCount || 0) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.targetSectionCount || 0)}개 · 최소 {Number(card.requiredTargetSectionCount || 0)}개</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.targetSectionCount || 0)}개 · 참고 {Number(card.requiredTargetSectionCount || 0)}–{Number(card.maxTargetSectionCount || 0)}개</p>
                                   </div>
                                   <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
                                     <p className="text-[9px] font-bold text-[var(--text-secondary)]">한 섹션 집중도</p>
                                     <p className={cn('mt-1 text-[11px] font-semibold', Number(card.maxTargetSectionShare || 0) > Number(card.maxAllowedTargetSectionShare || 100) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.maxTargetSectionShare || 0)}% · 최대 {Number(card.maxAllowedTargetSectionShare || 100)}%</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">전·중·후 언어 아크</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', !card.languageArcPassed ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.targetTimelineZoneCount || 0)}구간 · 최소 {Number(card.requiredTimelineZoneCount || 0)}구간</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">시간 구간 집중도</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.maxTargetTimelineZoneShare || 0) > Number(card.maxAllowedTargetTimelineZoneShare || 100) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.maxTargetTimelineZoneShare || 0)}% · 최대 {Number(card.maxAllowedTargetTimelineZoneShare || 100)}%</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">훅·파이널 연결</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', (card.easySingActive && !card.hookTargetPresent) || (card.hookTargetPresent && !card.finalRecallPresent) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{card.hookTargetPresent ? '훅 연결' : card.easySingActive ? '훅 연결 필요' : '훅 자유'} · {card.hookTargetPresent ? (card.finalRecallPresent ? '후반 회수' : '후반 미회수') : '역할형 배치'}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">장르 혼합 프로필</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{genreBlendLabels[String(card.genreBlendProfile || '')] || '장르 적응형'}</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">연속 외국어 구간</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.maxTargetOnlyRunLength || 0) > Number(card.maxAllowedTargetOnlyRunLength || 99) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.maxTargetOnlyRunLength || 0)}줄 · 기준 {Number(card.maxAllowedTargetOnlyRunLength || 0)}줄</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">후렴 외국어 연속</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.maxHookTargetOnlyRunLength || 0) > Number(card.maxAllowedHookTargetOnlyRunLength || 99) ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.maxHookTargetOnlyRunLength || 0)}줄 · 기준 {Number(card.maxAllowedHookTargetOnlyRunLength || 0)}줄</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">갑작스런 언어 파트</p>
+                                    <p className={cn('mt-1 text-[11px] font-semibold', Number(card.abruptTakeoverCount || 0) > 0 ? 'text-red-300' : 'text-[var(--text-primary)]')}>{Number(card.abruptTakeoverCount || 0)}곳</p>
+                                  </div>
+                                  <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">한 줄 내부 혼합</p>
+                                    <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">{Number(card.mixedLanguageLineCount || 0)}줄</p>
                                   </div>
                                   <div className="rounded-xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
                                     <p className="text-[9px] font-bold text-[var(--text-secondary)]">한 줄 교대 패턴</p>
@@ -14892,7 +14956,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <>
                                   <div className="flex-1" />
                                   <pre className="whitespace-pre-wrap font-sans text-[var(--text-secondary)] leading-relaxed text-sm md:text-base w-full text-center">
-                                    {normalizeLyricsForDisplay(lyricsText)}
+                                    {renderLyricsWithCueHighlight(lyricsText)}
                                   </pre>
                                   <div className="flex-1" />
                                 </>
@@ -15320,7 +15384,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               }}
               onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
                 const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
-                const nextRatio = Math.max(5, Math.min(90, Number(options?.englishMixRatio ?? englishMixRatio) || 10));
+                const nextRatio = Math.max(10, Math.min(70, Math.round((Number(options?.englishMixRatio ?? englishMixRatio) || 10) / 10) * 10));
                 const nextRapMode: RapMode = includeLyrics ? (options?.rapMode || (options?.rapEnabled ? 'on' : rapMode)) : rapMode;
                 const nextRap = includeLyrics ? nextRapMode === 'on' : rapEnabled;
                 const nextMixTargets = includeLyrics && nextMix ? Array.from(new Set((options?.languageMixTargetLanguages || languageMixTargetLanguages).filter(Boolean))).slice(0, 2) as LanguageCode[] : [];

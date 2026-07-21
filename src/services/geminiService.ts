@@ -55,6 +55,11 @@ import {
   mergeV1ForcedVocalIdentityWithGeneratedPerformance,
 } from "./generation/v1/rules";
 import {
+  finishGeminiAuditSession,
+  recordGeminiAuditCall,
+  startGeminiAuditSession,
+} from "./geminiAuditLog";
+import {
   applyV1SectionBlueprintGuard,
   buildV1SectionBlueprintInstruction,
   formatV1SectionBlueprintOrder,
@@ -150,6 +155,144 @@ function getAI(apiKeyOverride?: string | null) {
   }
 
   return aiInstance;
+}
+
+type GeminiAuditRequestMeta = { context: string; fallbackAttempt: number };
+const geminiAuditRequestMeta = new WeakMap<object, GeminiAuditRequestMeta>();
+
+type GeminiGenerationRequestBudget = {
+  maxRequests: number;
+  maxCorrectionRequests: number;
+  usedRequests: number;
+  usedCorrectionRequests: number;
+};
+
+const GEMINI_GENERATION_MAX_REQUESTS = 3;
+const GEMINI_GENERATION_MAX_CORRECTION_REQUESTS = 1;
+const AUTO_LANGUAGE_MIX_RETRY_ENABLED = false;
+const geminiGenerationRequestBudgets = new Map<string, GeminiGenerationRequestBudget>();
+
+class GeminiRequestBudgetExceededError extends Error {
+  readonly code = 'SORIDRAW_GEMINI_REQUEST_BUDGET_EXCEEDED';
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'GeminiRequestBudgetExceededError';
+  }
+}
+
+function beginGeminiGenerationRequestBudget(sessionId: string): void {
+  if (!sessionId) return;
+  geminiGenerationRequestBudgets.set(sessionId, {
+    maxRequests: GEMINI_GENERATION_MAX_REQUESTS,
+    maxCorrectionRequests: GEMINI_GENERATION_MAX_CORRECTION_REQUESTS,
+    usedRequests: 0,
+    usedCorrectionRequests: 0,
+  });
+}
+
+function endGeminiGenerationRequestBudget(sessionId: string): void {
+  if (!sessionId) return;
+  geminiGenerationRequestBudgets.delete(sessionId);
+}
+
+function isInitialSongGenerationContext(context: string): boolean {
+  const clean = String(context || '').trim();
+  return clean === 'generateSong'
+    || clean === 'generateSongCompactFallback'
+    || clean.startsWith('generateSong v2');
+}
+
+function consumeGeminiGenerationRequestBudget(sessionId: string, context: string): void {
+  const budget = geminiGenerationRequestBudgets.get(sessionId);
+  if (!budget) return;
+
+  const isCorrection = !isInitialSongGenerationContext(context);
+  if (budget.usedRequests >= budget.maxRequests) {
+    throw new GeminiRequestBudgetExceededError(
+      `곡 생성 Gemini 호출 상한(${budget.maxRequests}회)에 도달해 ${context} 호출을 생략했습니다.`,
+    );
+  }
+  if (isCorrection && budget.usedCorrectionRequests >= budget.maxCorrectionRequests) {
+    throw new GeminiRequestBudgetExceededError(
+      `곡 생성 자동 보정 호출 상한(${budget.maxCorrectionRequests}회)에 도달해 ${context} 호출을 생략했습니다.`,
+    );
+  }
+
+  budget.usedRequests += 1;
+  if (isCorrection) budget.usedCorrectionRequests += 1;
+}
+
+function withGeminiAuditRequestMeta<T extends object>(
+  params: T,
+  context: string,
+  fallbackAttempt = 1,
+): T {
+  geminiAuditRequestMeta.set(params, {
+    context: String(context || 'Gemini 호출').trim() || 'Gemini 호출',
+    fallbackAttempt: Math.max(1, Math.round(Number(fallbackAttempt) || 1)),
+  });
+  return params;
+}
+
+function getAuditedAI(
+  apiKeyOverride?: string | null,
+  auditSessionId?: string | null,
+): GoogleGenAI {
+  const ai = getAI(apiKeyOverride);
+  const sessionId = String(auditSessionId || '').trim();
+  if (!sessionId) return ai;
+
+  const originalModels = (ai as any).models;
+  const modelsProxy = new Proxy(originalModels, {
+    get(target, property, receiver) {
+      if (property !== 'generateContent') {
+        const value = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+      return async (params: any) => {
+        const meta = params && typeof params === 'object'
+          ? geminiAuditRequestMeta.get(params)
+          : undefined;
+        const context = meta?.context || 'Gemini 호출';
+        consumeGeminiGenerationRequestBudget(sessionId, context);
+        const startedAtMs = Date.now();
+        const model = String(params?.model || 'unknown');
+        try {
+          const response = await target.generateContent.call(target, params);
+          recordGeminiAuditCall({
+            sessionId,
+            context,
+            model,
+            status: 'success',
+            startedAtMs,
+            response,
+            fallbackAttempt: meta?.fallbackAttempt || 1,
+          });
+          return response;
+        } catch (error) {
+          recordGeminiAuditCall({
+            sessionId,
+            context,
+            model,
+            status: 'failed',
+            startedAtMs,
+            fallbackAttempt: meta?.fallbackAttempt || 1,
+            error,
+          });
+          throw error;
+        }
+      };
+    },
+  });
+
+  return new Proxy(ai as any, {
+    get(target, property, receiver) {
+      if (property === 'models') return modelsProxy;
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as GoogleGenAI;
 }
 
 const GEMINI_TEXT_MODEL_CHAIN = [
@@ -282,7 +425,9 @@ async function generateContentWithModelFallback(
       if (i > 0) {
         console.warn(`[SORIDRAW Gemini Fallback] ${context}: retrying with ${model}`);
       }
-      const response = await ai.models.generateContent(paramsForAttempt);
+      const response = await ai.models.generateContent(
+        withGeminiAuditRequestMeta(paramsForAttempt, context, i + 1),
+      );
       (response as any).__soridrawGeminiModelInfo = {
         usedModel: model,
         fallbackUsed: i > 0,
@@ -394,10 +539,11 @@ export async function generateCustomSectionMetadata(input: CustomSectionAutoMeta
   const fallback = fallbackCustomSectionMetadata(input);
   const labelKo = String(input.labelKo || '').trim();
   if (!labelKo) return fallback;
+  const auditSessionId = startGeminiAuditSession('사용자 섹션 메타데이터 생성');
   try {
-    const ai = getAI(input.geminiApiKey);
+    const ai = getAuditedAI(input.geminiApiKey, auditSessionId);
     const prompt = `You are converting a Korean user-created Suno song section/tag into compact English metadata for a music app.\nReturn ONLY JSON.\nRules:\n- labelEn: short English section/tag name, Title Case, max 4 words.\n- tagCue: short lyric-tag cue, max 8 words, no brackets.\n- promptFull: fuller internal prompt, max 18 words, comma-separated, no brackets.\n- kind: one of vocal, rap, instrumental, transition, build, theme, other.\n- allowVocal false for instrumental/transition.\n- isInstrumental true only when it must contain no voice/humming/chant.\nUser Korean label: ${labelKo}\nDescription: ${input.description || ''}\nPreferred kind: ${input.kind || ''}\nContext: ${input.context || 'section'}`;
-    const response = await ai.models.generateContent({
+    const response = await ai.models.generateContent(withGeminiAuditRequestMeta({
       model: 'gemini-2.5-flash-lite',
       contents: prompt,
       config: {
@@ -415,14 +561,14 @@ export async function generateCustomSectionMetadata(input: CustomSectionAutoMeta
           required: ['labelEn', 'tagCue', 'promptFull'],
         },
       },
-    });
+    }, 'generateCustomSectionMetadata'));
     const text = response.text || '';
     const parsed = JSON.parse(text);
     const labelEn = titleCaseWords(parsed.labelEn || fallback.labelEn).slice(0, 40) || fallback.labelEn;
     const tagCue = String(parsed.tagCue || fallback.tagCue).replace(/[\[\]\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || fallback.tagCue;
     const promptFull = String(parsed.promptFull || fallback.promptFull).replace(/[\[\]\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) || fallback.promptFull;
     const kind = ['vocal', 'rap', 'instrumental', 'transition', 'build', 'theme', 'other'].includes(parsed.kind) ? parsed.kind as CustomSectionKind : fallback.kind;
-    return {
+    const result = {
       labelEn,
       tagCue,
       promptFull,
@@ -430,7 +576,10 @@ export async function generateCustomSectionMetadata(input: CustomSectionAutoMeta
       allowVocal: typeof parsed.allowVocal === 'boolean' ? parsed.allowVocal : fallback.allowVocal,
       isInstrumental: typeof parsed.isInstrumental === 'boolean' ? parsed.isInstrumental : fallback.isInstrumental,
     };
+    finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: labelEn });
+    return result;
   } catch (error) {
+    finishGeminiAuditSession(auditSessionId, 'failed', { error });
     console.warn('Custom section metadata generation failed, using fallback:', error);
     return fallback;
   }
@@ -493,6 +642,7 @@ interface GenerateSongParams {
   lyricClicheGuard?: any;
   generationEngineVersion?: GenerationEngineVersion;
   lyricWritingStyle?: V1LyricWritingStyle;
+  __geminiAuditSessionId?: string;
 }
 
 function resolveSectionCueOptions(params?: Pick<GenerateSongParams, 'sectionCueOptions'> | null): SectionCueOptions {
@@ -4572,6 +4722,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
         ...extractSoridrawCustomKeywordValues(rawPointSounds, 'sound'),
       ]).join(' / '),
       geminiApiKey: String((first as any).geminiApiKey || '').trim(),
+      __geminiAuditSessionId: String((first as any).__geminiAuditSessionId || '').trim() || undefined,
       recentGeneratedTitles: (((first as any).recentGeneratedTitles ?? []) as unknown[])
         .map((value) => String(value ?? '').trim())
         .filter(Boolean)
@@ -18412,74 +18563,13 @@ async function repairClassicAtmosphereFromSourceWithGemini(
     || getClassicAtmosphereValueFromPrompt(fallbackPrompt);
   if (!shouldRepairClassicAtmosphereFromSource(currentAtmosphere, params)) return rawPrompt;
 
-  const repairContext = [
-    'Repair only the [Atmosphere] line of a five-line music production prompt.',
-    'The authoritative narrative center is the V1 Story Context below. Preserve its natural scope exactly.',
-    'Story Context may be one visual scene, a broader situation, a relationship, a whole-day progression, an emotional condition, a premise, or an abstract image. Do not force it into speaker/place/object/action slots when those are not present.',
-    'Use the original user source as the highest-priority factual evidence. Use the generated lyrics only as the current musical rendering of the same context; lyrics must never override explicit user meaning.',
-    'Write an Atmosphere sentence that makes the same situation and emotional pressure clear without inventing a second story or falling back to a generic mood sentence.',
-    'Do not use canned scenarios, topic-specific templates, or compulsory concrete props.',
-    'Translate Korean or other source languages internally and return natural English only.',
-    'Write one concise sentence suitable after [Atmosphere]. It may describe a broader progression rather than one frozen image when the Story Context is situation-shaped.',
-    'Do not mention Story Context, the user, source text, core idea, blueprint, prompt, interpretation, or visible musical moment.',
-    'Do not copy internal instructions or output brackets.',
-    '',
-    'V1 Story Context:',
-    resolvedStoryContext.slice(0, 3600) || 'None',
-    '',
-    'Original user source:',
-    sourceText.slice(0, 3600) || 'None',
-    '',
-    'Generated lyrics / same-context evidence:',
-    lyricTextForPromptRefinement(lyrics).slice(0, 3600) || 'None',
-    '',
-    'Current production prompt for musical context:',
-    String(rawPrompt || fallbackPrompt || '').slice(0, 2200),
-    '',
-    'Return JSON only: {"atmosphere":"..."}',
-  ].join('\n');
+  // 88차 호출 최적화: Atmosphere 품질 보정은 추가 Gemini 호출 없이
+  // 기존 Story Context/선택값 기반 로컬 폴백으로만 복구한다.
+  return replaceClassicAtmosphereLine(
+    rawPrompt || fallbackPrompt,
+    buildGenericAtmosphereRepairFallback(params),
+  );
 
-  try {
-    const response = await generateContentWithModelFallback(
-      ai,
-      {
-        model: GEMINI_TEXT_MODEL_CHAIN[0],
-        contents: repairContext,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              atmosphere: { type: Type.STRING },
-            },
-            required: ['atmosphere'],
-          },
-        },
-      },
-      'repairClassicAtmosphereFromSource',
-    );
-
-    const parsed = JSON.parse(response.text || '{}');
-    let repaired = cleanupPromptTail(String(parsed?.atmosphere || '')
-      .replace(/^\[(?:Atmosphere|Mood)\]\s*/i, '')
-      .replace(/[\r\n]+/g, ' '));
-    repaired = stripRemainingKoreanForProductionPrompt(repaired);
-    repaired = stripInternalPromptLeakPhrases(repaired);
-    repaired = normalizeAtmospherePromptLine(repaired);
-
-    if (!repaired
-      || containsSceneBlueprintPlaceholderLeak(repaired)
-      || isBrokenFinalPromptPhrase(repaired)
-      || isGenericAtmosphereFallbackLine(repaired)
-      || /\b(?:user|source text|core idea|blueprint|prompt|interpretation)\b/i.test(repaired)) {
-      return replaceClassicAtmosphereLine(rawPrompt, buildGenericAtmosphereRepairFallback(params));
-    }
-
-    return replaceClassicAtmosphereLine(rawPrompt, repaired);
-  } catch (error) {
-    console.warn('[SORIDRAW Atmosphere Repair] skipped:', error);
-    return replaceClassicAtmosphereLine(rawPrompt, buildGenericAtmosphereRepairFallback(params));
-  }
 }
 
 function reconcileFiveLinePromptRoles(prompt: string): string {
@@ -25789,6 +25879,17 @@ async function repairSparseLyricsWithGemini(
     return enforceLyricSectionBlockSpacing(originalSource, params);
   }
 
+  // 88차 호출 최적화: V1은 섹션 품질 문제로 Gemini를 다시 호출하지 않는다.
+  // 번호/태그/빈 스켈레톤은 코드 기반 Section Blueprint Guard로 정리하고,
+  // 실제 가사 본문이 짧거나 일부 섹션이 약해도 완성된 곡을 그대로 반환한다.
+  if (!isGenerationEngineV2(params)) {
+    const locallyGuarded = applyV1SectionBlueprintGuard(
+      cleanupGhostOpeningIntroAndEmptySungTags(originalSource, params),
+      params,
+    );
+    return enforceLyricSectionBlockSpacing(locallyGuarded || originalSource, params);
+  }
+
   // Repair must not treat locally-created ghost skeletons as real empty lyric sections.
   // Clean tag-only fallback Intro/Verse shells before deciding whether a second Gemini pass
   // is needed. This prevents the repair pass from creating a second, competing lyric version.
@@ -31544,7 +31645,7 @@ function buildV1HookBlueprintPublicSummary(
 }
 
 
-const HARD_BAN_REWRITE_MAX_PASSES = 2;
+const HARD_BAN_REWRITE_MAX_PASSES = 1;
 
 function hardBanLanguageLabelForCard(params: GenerateSongParams, card: 'korean' | 'secondary'): string {
   if (card === 'korean') return 'Korean lyric card in natural Hangul';
@@ -31647,6 +31748,7 @@ ABSOLUTE RULES:
         },
       },
       pass === 0 ? 'rewriteLyricHardBanLines' : 'rewriteLyricHardBanLinesSecondPass',
+      [GEMINI_TEXT_MODEL_CHAIN[0]],
     );
 
     let parsed: any = {};
@@ -31677,6 +31779,117 @@ ABSOLUTE RULES:
   return current;
 }
 
+async function rewriteHardBanLyricCardsWithGemini(
+  ai: GoogleGenAI,
+  cards: Array<{ key: 'korean' | 'secondary'; lyrics: string; languageLabel: string }>,
+  params: GenerateSongParams,
+  productionPrompt = '',
+): Promise<Record<'korean' | 'secondary', string>> {
+  const currentByKey: Record<'korean' | 'secondary', string> = {
+    korean: cards.find((card) => card.key === 'korean')?.lyrics || '',
+    secondary: cards.find((card) => card.key === 'secondary')?.lyrics || '',
+  };
+  const targets = cards.map((card) => {
+    const lines = String(card.lyrics || '').replace(/\r\n?/g, '\n').split('\n');
+    const violations = findLyricHardBanViolations(card.lyrics, params);
+    const targetMap = new Map<number, Set<string>>();
+    violations.forEach((violation) => {
+      const terms = targetMap.get(violation.lineIndex) || new Set<string>();
+      terms.add(violation.term);
+      targetMap.set(violation.lineIndex, terms);
+    });
+    return {
+      key: card.key,
+      languageLabel: card.languageLabel,
+      fullLyrics: card.lyrics.slice(0, 7000),
+      linesToRewrite: Array.from(targetMap.keys()).sort((a, b) => a - b).map((lineIndex) => ({
+        lineNumber: lineIndex + 1,
+        bannedTerms: Array.from(targetMap.get(lineIndex) || []),
+        previousLine: lineIndex > 0 ? lines[lineIndex - 1] : '',
+        currentLine: lines[lineIndex] || '',
+        nextLine: lineIndex + 1 < lines.length ? lines[lineIndex + 1] : '',
+      })),
+    };
+  }).filter((card) => card.linesToRewrite.length > 0);
+
+  if (!targets.length) return currentByKey;
+
+  const response = await generateContentWithModelFallback(
+    ai,
+    {
+      model: GEMINI_TEXT_MODEL_CHAIN[0],
+      contents: JSON.stringify({
+        productionDirection: String(productionPrompt || '').slice(0, 1600),
+        cards: targets,
+      }),
+      config: {
+        systemInstruction: `You are SORIDRAW's final lyric hard-ban line editor.
+Rewrite only the listed lyric-body lines in each card.
+- Every banned term must disappear, including spacing variants.
+- Preserve meaning, speaker attitude, tense, rhyme, breath, section tags, and line count.
+- Replace the whole phrase naturally. Never leave a dangling particle or ending.
+- Return exactly one replacement for each requested card key and lineNumber.
+- Do not include explanations, markdown, section tags, or banned terms in replacement text.
+- Return valid JSON only.`,
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            cards: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  key: { type: Type.STRING },
+                  replacements: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        lineNumber: { type: Type.INTEGER },
+                        text: { type: Type.STRING },
+                      },
+                      required: ['lineNumber', 'text'],
+                    },
+                  },
+                },
+                required: ['key', 'replacements'],
+              },
+            },
+          },
+          required: ['cards'],
+        },
+      },
+    },
+    'rewriteLyricHardBanCards',
+    [GEMINI_TEXT_MODEL_CHAIN[0]],
+  );
+
+  const parsed = parseGeminiJsonObject(response?.text || '{}');
+  const responseCards = Array.isArray(parsed?.cards) ? parsed.cards : [];
+  for (const target of targets) {
+    const lines = String(currentByKey[target.key] || '').replace(/\r\n?/g, '\n').split('\n');
+    const allowed = new Set(target.linesToRewrite.map((item) => item.lineNumber));
+    const responseCard = responseCards.find((item: any) => String(item?.key || '') === target.key);
+    const replacements = Array.isArray(responseCard?.replacements) ? responseCard.replacements : [];
+    replacements.forEach((replacement: any) => {
+      const lineNumber = Number(replacement?.lineNumber);
+      if (!Number.isInteger(lineNumber) || !allowed.has(lineNumber)) return;
+      const nextLine = cleanHardBanReplacementLine(replacement?.text);
+      if (!nextLine || /^\s*\[[^\]]+\]\s*$/.test(nextLine)) return;
+      lines[lineNumber - 1] = nextLine;
+    });
+    currentByKey[target.key] = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  const remaining = cards.flatMap((card) => findLyricHardBanViolations(currentByKey[card.key], params));
+  if (remaining.length) {
+    const terms = Array.from(new Set(remaining.map((item) => item.term))).slice(0, 12).join(', ');
+    throw new Error(`가사 강한 금지어를 자연스럽게 교정하지 못했습니다: ${terms}. 다시 생성해주세요.`);
+  }
+  return currentByKey;
+}
+
 async function applySharedLyricHardBanGuard(
   result: SongResult,
   params: GenerateSongParams,
@@ -31689,21 +31902,24 @@ async function applySharedLyricHardBanGuard(
   const secondaryViolations = findLyricHardBanViolations(secondary, params);
   if (!koreanViolations.length && !secondaryViolations.length) return result;
 
-  const ai = getAI(params.geminiApiKey);
+  const ai = getAuditedAI(params.geminiApiKey, params.__geminiAuditSessionId);
   const productionPrompt = String((result as any).productionPrompt || result.prompt || '');
-  const correctedKorean = koreanViolations.length
-    ? await rewriteHardBanLyricLinesWithGemini(ai, korean, params, hardBanLanguageLabelForCard(params, 'korean'), productionPrompt)
-    : korean;
-  const correctedSecondary = secondaryViolations.length
-    ? await rewriteHardBanLyricLinesWithGemini(ai, secondary, params, hardBanLanguageLabelForCard(params, 'secondary'), productionPrompt)
-    : secondary;
+  const corrected = await rewriteHardBanLyricCardsWithGemini(
+    ai,
+    [
+      ...(koreanViolations.length ? [{ key: 'korean' as const, lyrics: korean, languageLabel: hardBanLanguageLabelForCard(params, 'korean') }] : []),
+      ...(secondaryViolations.length ? [{ key: 'secondary' as const, lyrics: secondary, languageLabel: hardBanLanguageLabelForCard(params, 'secondary') }] : []),
+    ],
+    params,
+    productionPrompt,
+  );
 
   return {
     ...result,
     lyrics: {
       ...result.lyrics,
-      korean: correctedKorean,
-      english: correctedSecondary,
+      korean: corrected.korean || korean,
+      english: corrected.secondary || secondary,
     },
   };
 }
@@ -31798,62 +32014,78 @@ function assertNoFinalLyricHardBanViolations(result: SongResult, params: Generat
 export async function generateSong(
   ...args: GenerateSongInput
 ): Promise<SongResult> {
-  const params = normalizeArgs(args);
+  const auditSessionId = startGeminiAuditSession('곡 생성');
+  beginGeminiGenerationRequestBudget(auditSessionId);
+  const first = args[0];
+  const auditedArgs = (typeof first === 'object' && first !== null && !Array.isArray(first)
+    ? [{ ...(first as any), __geminiAuditSessionId: auditSessionId }, ...args.slice(1)]
+    : args) as GenerateSongInput;
+  const params = normalizeArgs(auditedArgs);
   const route = resolveGenerationEngineRoute(params.generationEngineVersion);
 
-  const generated = route === "v2"
-    ? await runV2Engine(() => generateSongLegacy(...args))
-    : await runV1Engine(() => generateSongLegacy(...args));
-  const resolvedHookBlueprint = route === 'v2'
-    ? undefined
-    : (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] as V1ResolvedHookBlueprint | undefined;
-
-  // Bind the exact public section/hook structure first. The cliché guard must inspect the same
-  // lyric strings that users will actually see; otherwise a later hook return can reintroduce a
-  // banned word after an earlier cleanup pass.
-  let structurallyFinal = generated;
-  if (route !== 'v2' && structurallyFinal?.lyrics) {
-    structurallyFinal = finalizeV1SongAtAbsoluteReturnBoundary(structurallyFinal, params, resolvedHookBlueprint);
-  }
-
-  let guarded: SongResult;
   try {
-    guarded = await applySharedLyricHardBanGuard(structurallyFinal, params);
+    const generated = route === "v2"
+      ? await runV2Engine(() => generateSongLegacy(...auditedArgs))
+      : await runV1Engine(() => generateSongLegacy(...auditedArgs));
+    const resolvedHookBlueprint = route === 'v2'
+      ? undefined
+      : (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] as V1ResolvedHookBlueprint | undefined;
+
+    // Bind the exact public section/hook structure first. The cliché guard must inspect the same
+    // lyric strings that users will actually see; otherwise a later hook return can reintroduce a
+    // banned word after an earlier cleanup pass.
+    let structurallyFinal = generated;
+    if (route !== 'v2' && structurallyFinal?.lyrics) {
+      structurallyFinal = finalizeV1SongAtAbsoluteReturnBoundary(structurallyFinal, params, resolvedHookBlueprint);
+    }
+
+    let guarded: SongResult;
+    try {
+      guarded = await applySharedLyricHardBanGuard(structurallyFinal, params);
+    } catch (error) {
+      // Admin/user 1st-priority terms are an explicit output contract. Returning the original song
+      // here silently leaked those terms, so the generation must report a clear failure instead.
+      console.error('[SORIDRAW HardBan] final cleanup failed:', error);
+      throw error;
+    }
+
+    if (route !== 'v2' && guarded?.lyrics) {
+      guarded = finalizeV1SongAfterHardBan(guarded, params, resolvedHookBlueprint);
+      const finalStructuralFailures = [
+        String(guarded.lyrics.korean || '').trim(),
+        String(guarded.lyrics.english || '').trim(),
+      ].filter(Boolean).filter((lyrics) => hasCatastrophicV1LyricStructureFailure(lyrics, params));
+      if (finalStructuralFailures.length) {
+        // Section-quality repair is fail-open. The user explicitly requires generation to complete
+        // even when a one-time local repair cannot fully satisfy a soft density preference.
+        // Preserve the completed, numbered lyric instead of converting a quality warning into
+        // a full generation failure.
+        console.warn('[SORIDRAW V1 Section Engine] final structure warning preserved completed song:', {
+          cards: finalStructuralFailures.length,
+        });
+      }
+      if (String(guarded.lyrics.korean || '').trim()) {
+        assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);
+      }
+      if (String(guarded.lyrics.english || '').trim()) {
+        assertV1SectionPerformanceCueQuality(guarded.lyrics.english, params);
+      }
+    }
+
+    guarded = applySectionCueOutputPolicyToSongResult(guarded, params);
+    assertNoFinalLyricHardBanViolations(guarded, params);
+    delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
+    delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
+    finishGeminiAuditSession(auditSessionId, 'success', {
+      resultLabel: String((guarded as any)?.title || '').trim() || `${route.toUpperCase()} 곡 생성`,
+    });
+    return guarded;
   } catch (error) {
-    // Admin/user 1st-priority terms are an explicit output contract. Returning the original song
-    // here silently leaked those terms, so the generation must report a clear failure instead.
-    console.error('[SORIDRAW HardBan] final cleanup failed:', error);
+    finishGeminiAuditSession(auditSessionId, 'failed', { error });
     throw error;
+  } finally {
+    endGeminiGenerationRequestBudget(auditSessionId);
   }
-
-  if (route !== 'v2' && guarded?.lyrics) {
-    guarded = finalizeV1SongAfterHardBan(guarded, params, resolvedHookBlueprint);
-    const finalStructuralFailures = [
-      String(guarded.lyrics.korean || '').trim(),
-      String(guarded.lyrics.english || '').trim(),
-    ].filter(Boolean).filter((lyrics) => hasCatastrophicV1LyricStructureFailure(lyrics, params));
-    if (finalStructuralFailures.length) {
-      // Section-quality repair is fail-open. The user explicitly requires generation to complete
-      // even when a one-time local repair cannot fully satisfy a soft density preference.
-      // Preserve the completed, numbered lyric instead of converting a quality warning into
-      // a full generation failure.
-      console.warn('[SORIDRAW V1 Section Engine] final structure warning preserved completed song:', {
-        cards: finalStructuralFailures.length,
-      });
-    }
-    if (String(guarded.lyrics.korean || '').trim()) {
-      assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);
-    }
-    if (String(guarded.lyrics.english || '').trim()) {
-      assertV1SectionPerformanceCueQuality(guarded.lyrics.english, params);
-    }
-  }
-
-  guarded = applySectionCueOutputPolicyToSongResult(guarded, params);
-  assertNoFinalLyricHardBanViolations(guarded, params);
-  delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
-  delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
-  return guarded;
 }
 
 // SORIDRAW_V49_MIX_RATIO_SAFE_FIX
@@ -31885,7 +32117,7 @@ async function generateSongLegacy(
 
   if (isGenerationEngineV2(params)) {
     return generateSongV2(params, {
-      getAI,
+      getAI: (apiKey?: string | null) => getAuditedAI(apiKey, params.__geminiAuditSessionId),
       generateContentWithModelFallback,
       modelChain: GEMINI_TEXT_MODEL_CHAIN,
     });
@@ -33016,7 +33248,7 @@ Write lyrics that feel like they were written by a real person, not an AI.
 ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 `.trim();
 
-  const ai = getAI(params.geminiApiKey);
+  const ai = getAuditedAI(params.geminiApiKey, params.__geminiAuditSessionId);
   let response;
 
   const generateParams = {
@@ -33061,14 +33293,14 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     } else {
       console.warn("[SORIDRAW Generation Guard] prompt/schema failure; trying one compact response:", fallbackError);
       try {
-        response = await ai.models.generateContent({
+        response = await ai.models.generateContent(withGeminiAuditRequestMeta({
           model: GEMINI_TEXT_MODEL_CHAIN[0],
           contents: "Generate a short safe song title, final productionPrompt, and lyrics as JSON. Always return valid JSON only.",
           config: {
             systemInstruction: `${systemInstruction}\n\nCRITICAL FALLBACK MODE: Return compact valid JSON only. Do not refuse. If any keyword combination is difficult, simplify it and continue.\n\n${GEMINI_FALLBACK_STABILITY_INSTRUCTION}`,
             responseMimeType: "application/json",
           },
-        });
+        }, 'generateSongCompactFallback'));
       } catch (minimalError: any) {
         console.warn("[SORIDRAW Generation Guard] one-shot minimal fallback failed:", minimalError);
         responseError = minimalError;
@@ -33350,12 +33582,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   if (hasSecondaryLanguage) {
     const hasKoreanInEnglishTitle = /[가-힣]/.test(result.englishTitle || "");
     if (!result.englishTitle || hasKoreanInEnglishTitle) {
-      const translated = await translateKoreanTitleToEnglish(
-        result.koreanTitle || "",
-        params.userInput || "",
-        params.geminiApiKey
-      );
-      result.englishTitle = translated;
+      // 88차 호출 최적화: 제목 누락만으로 별도 Gemini 호출을 시작하지 않는다.
+      // 첫 응답의 영어 제목이 없으면 안전한 로컬 제목으로 마무리한다.
+      result.englishTitle = "Untitled";
       const titleParts = [
         hasKoreanLanguage ? result.koreanTitle : "",
         result.englishTitle,
@@ -33403,7 +33632,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
   // Language Mix is authored as a complete lyric, never as stock-line insertion or line-by-line replacement.
   // Quality comes first. Retry the complete affected lyric card only when the selected mixed language is
   // missing or severely underrepresented, while preserving the existing section architecture and hook contract.
-  if (shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params)) {
+  if (AUTO_LANGUAGE_MIX_RETRY_ENABLED && shouldUseMixedLyrics && !params.isNoLyrics && !isGenerationEngineV2(params)) {
     const mixRetryCards = [
       requestedLyricLanguages.includes('ko')
         ? {
@@ -33789,8 +34018,9 @@ export async function translateKoreanTitleToEnglish(
     return "The Sound of Life";
   }
 
+  const auditSessionId = startGeminiAuditSession('한국어 제목 영어 변환');
   const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
-  const ai = getAI(geminiApiKey);
+  const ai = getAuditedAI(geminiApiKey, auditSessionId);
   const systemInstruction = `
 You are a professional lyricist and translator.
 Translate the following Korean song title into English or generate a matching catchy English song title based on the description/user input.
@@ -33810,14 +34040,17 @@ Translate the following Korean song title into English or generate a matching ca
           temperature: 0.7,
         },
       },
-      geminiApiKey
+      "translateKoreanTitleToEnglish",
     );
     const text = typeof response.text === "string" ? response.text.trim() : "";
     const cleaned = text.replace(/^['"]+|['"]+$/g, "").trim();
     if (cleaned && !/[가-힣]/.test(cleaned)) {
+      finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: cleaned });
       return cleaned;
     }
+    finishGeminiAuditSession(auditSessionId, 'failed', { error: new Error('영어 제목 응답이 비어 있거나 한국어를 포함했습니다.') });
   } catch (err) {
+    finishGeminiAuditSession(auditSessionId, 'failed', { error: err });
     console.error("Failed to translate Korean title to English:", err);
   }
 
@@ -33840,6 +34073,8 @@ export interface RegenerateLyricsOnlyParams {
 export async function regenerateLyricsOnly(
   params: RegenerateLyricsOnlyParams,
 ): Promise<{ lyrics: string; geminiModelInfo?: GeminiModelUsageInfo }> {
+  const auditSessionId = startGeminiAuditSession('가사 새로고침');
+  try {
   const targetLanguageNameMap: Record<LanguageCode, string> = {
     ko: "Korean",
     en: "English",
@@ -33989,7 +34224,7 @@ ${storedV1StoryContext}
     },
   });
 
-  const ai = getAI(params.geminiApiKey);
+  const ai = getAuditedAI(params.geminiApiKey, auditSessionId);
   let response;
   const generateParams = {
     model: GEMINI_TEXT_MODEL_CHAIN[0],
@@ -34067,7 +34302,12 @@ ${storedV1StoryContext}
   }
 
   const geminiModelInfo: GeminiModelUsageInfo | undefined = (response as any)?.__soridrawGeminiModelInfo;
+  finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: `${targetLanguageName} 가사 새로고침` });
   return { lyrics, geminiModelInfo };
+  } catch (error) {
+    finishGeminiAuditSession(auditSessionId, 'failed', { error });
+    throw error;
+  }
 }
 
 export async function translateTitleAndLyrics(
@@ -34076,11 +34316,13 @@ export async function translateTitleAndLyrics(
   targetLanguage: "korean" | "english" | string,
   geminiApiKey?: string,
 ): Promise<{ title: string; lyrics: string }> {
-  const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
-  const cleanTitle = String(title || "").trim();
-  const cleanLyrics = String(lyrics || "").trim();
+  const auditSessionId = startGeminiAuditSession('제목·가사 번역');
+  try {
+    const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
+    const cleanTitle = String(title || "").trim();
+    const cleanLyrics = String(lyrics || "").trim();
 
-  const systemInstruction = `
+    const systemInstruction = `
 You are a professional lyricist and translator.
 Translate the provided song title and lyrics into ${targetLanguage}.
 - Return valid JSON only.
@@ -34090,48 +34332,55 @@ Translate the provided song title and lyrics into ${targetLanguage}.
 - Do not translate literally. Keep it natural and lyrical.
 `.trim();
 
-  const ai = getAI(geminiApiKey);
-  let response;
+    const ai = getAuditedAI(geminiApiKey, auditSessionId);
+    let response;
 
-  const generateParams = {
-    model,
-    contents: JSON.stringify({ title: cleanTitle, lyrics: cleanLyrics }),
-    config: {
-      systemInstruction,
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          lyrics: { type: Type.STRING },
+    const generateParams = {
+      model,
+      contents: JSON.stringify({ title: cleanTitle, lyrics: cleanLyrics }),
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            lyrics: { type: Type.STRING },
+          },
+          required: ["title", "lyrics"],
         },
-        required: ["title", "lyrics"],
       },
-    },
-  };
+    };
 
-  try {
-    response = await generateContentWithModelFallback(
-      ai,
-      generateParams,
-      "translateTitleAndLyrics",
-    );
+    try {
+      response = await generateContentWithModelFallback(
+        ai,
+        generateParams,
+        "translateTitleAndLyrics",
+      );
+    } catch (error) {
+      handleGeminiError(error, "translateTitleAndLyrics");
+    }
+
+    let result: { title: string; lyrics: string };
+    try {
+      const parsed = JSON.parse(response?.text || "{}");
+      result = {
+        title: String(parsed?.title || cleanTitle || "").trim(),
+        lyrics: String(parsed?.lyrics || "").trim(),
+      };
+    } catch (parseError) {
+      console.warn("Failed to parse translateTitleAndLyrics JSON:", parseError, response?.text);
+      result = {
+        title: cleanTitle,
+        lyrics: String(response?.text || "").trim(),
+      };
+    }
+    finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: `${targetLanguage} 제목·가사 번역` });
+    return result;
   } catch (error) {
-    handleGeminiError(error, "translateTitleAndLyrics");
-  }
-
-  try {
-    const parsed = JSON.parse(response?.text || "{}");
-    return {
-      title: String(parsed?.title || cleanTitle || "").trim(),
-      lyrics: String(parsed?.lyrics || "").trim(),
-    };
-  } catch (parseError) {
-    console.warn("Failed to parse translateTitleAndLyrics JSON:", parseError, response?.text);
-    return {
-      title: cleanTitle,
-      lyrics: String(response?.text || "").trim(),
-    };
+    finishGeminiAuditSession(auditSessionId, 'failed', { error });
+    throw error;
   }
 }
 
@@ -34140,9 +34389,11 @@ export async function translateLyrics(
   targetLanguage: "korean" | "english" | string,
   geminiApiKey?: string,
 ): Promise<string> {
-  const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
+  const auditSessionId = startGeminiAuditSession('가사 번역');
+  try {
+    const model: string = GEMINI_TEXT_MODEL_CHAIN[0];
 
-  const systemInstruction = `
+    const systemInstruction = `
 You are a professional lyricist and translator.
 Translate the provided text into ${targetLanguage}.
 - Maintain the original structure and line breaks when the input is lyrics.
@@ -34151,28 +34402,31 @@ Translate the provided text into ${targetLanguage}.
 - Return only the translated text.
 `.trim();
 
-  const ai = getAI(geminiApiKey);
-  let response;
+    const ai = getAuditedAI(geminiApiKey, auditSessionId);
+    let response;
 
-  const generateParams = {
-    model,
-    contents: lyrics,
-    config: { systemInstruction },
-  };
+    const generateParams = {
+      model,
+      contents: lyrics,
+      config: { systemInstruction },
+    };
 
-  try {
-    response = await generateContentWithModelFallback(
-      ai,
-      generateParams,
-      "translateLyrics",
-    );
+    try {
+      response = await generateContentWithModelFallback(
+        ai,
+        generateParams,
+        "translateLyrics",
+      );
+    } catch (error) {
+      handleGeminiError(error, "translateLyrics");
+    }
+
+    const result = response?.text || "";
+    finishGeminiAuditSession(auditSessionId, 'success', { resultLabel: `${targetLanguage} 가사 번역` });
+    return result;
   } catch (error) {
-    handleGeminiError(error, "translateLyrics");
+    finishGeminiAuditSession(auditSessionId, 'failed', { error });
+    throw error;
   }
-
-  return response.text || "";
 }
-
-
-
 

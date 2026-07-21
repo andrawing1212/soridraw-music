@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, Key, SlidersHorizontal } from 'lucide-react';
+import { Activity, Home, Users, Key, SlidersHorizontal } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 
@@ -14,6 +14,7 @@ const ADMIN_TABS = [
   { path: '/admin/users', label: '회원 관리', icon: Users },
   { path: '/admin/suno-api', label: 'Suno API', icon: Key },
   { path: '/admin/app-settings', label: '앱 설정', icon: SlidersHorizontal },
+  { path: '/admin/gemini-audit', label: 'Gemini 호출', icon: Activity },
 ];
 
 export default function AdminPageLayout({ title, description, actions, children }: AdminPageLayoutProps) {

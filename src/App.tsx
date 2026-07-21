@@ -2371,6 +2371,7 @@ const LabPageLazy = lazy(() => import('./pages/LabPage'));
 const HomePageLazy = lazy(() => import('./pages/HomePage'));
 const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
 const AdminAppSettingsPageLazy = lazy(() => import('./pages/AdminAppSettingsPage'));
+const AdminGeminiAuditPageLazy = lazy(() => import('./pages/AdminGeminiAuditPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -15233,6 +15234,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <AdminAppSettingsPageLazy />
               </Suspense>
             } />
+            <Route path="/admin/gemini-audit" element={
+              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                <AdminGeminiAuditPageLazy />
+              </Suspense>
+            } />
           </>
         ) : (
           <>
@@ -15242,6 +15248,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Route path="/admin/tags" element={<Navigate to="/" replace />} />
             <Route path="/admin/suno-api" element={<Navigate to="/" replace />} />
             <Route path="/admin/app-settings" element={<Navigate to="/" replace />} />
+            <Route path="/admin/gemini-audit" element={<Navigate to="/" replace />} />
           </>
         )}
       </Routes>

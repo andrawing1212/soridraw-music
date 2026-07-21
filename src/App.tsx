@@ -19408,9 +19408,9 @@ function SongStructureIntegratedControlComponent({
                   </p>
                 </div>
 
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
-                    <span className="text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">보컬 큐</span>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
+                    <span className="truncate text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">보컬 큐</span>
                     <button
                       type="button"
                       role="switch"
@@ -19448,18 +19448,24 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'min-w-[56px] rounded-full border px-3 py-1 text-[12px] font-black transition-all',
+                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionVocalCueEnabled
-                          ? 'bg-[#FFB400] border-black/20 text-[#171717] shadow-sm'
-                          : 'bg-[var(--card-bg)] border-btn-border text-[var(--text-secondary)]'
+                          ? 'border-[#FFB400] bg-[#FFB400]'
+                          : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
                       )}
                     >
-                      {sectionVocalCueEnabled ? 'ON' : 'OFF'}
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200',
+                          sectionVocalCueEnabled ? 'translate-x-5' : 'translate-x-0'
+                        )}
+                      />
                     </button>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
-                    <span className="text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">악기 큐</span>
+                  <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
+                    <span className="truncate text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">악기 큐</span>
                     <button
                       type="button"
                       role="switch"
@@ -19497,13 +19503,19 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'min-w-[56px] rounded-full border px-3 py-1 text-[12px] font-black transition-all',
+                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionInstrumentCueEnabled
-                          ? 'bg-[#FFB400] border-black/20 text-[#171717] shadow-sm'
-                          : 'bg-[var(--card-bg)] border-btn-border text-[var(--text-secondary)]'
+                          ? 'border-[#FFB400] bg-[#FFB400]'
+                          : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
                       )}
                     >
-                      {sectionInstrumentCueEnabled ? 'ON' : 'OFF'}
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'absolute left-[2px] top-[2px] h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform duration-200',
+                          sectionInstrumentCueEnabled ? 'translate-x-5' : 'translate-x-0'
+                        )}
+                      />
                     </button>
                   </div>
                 </div>

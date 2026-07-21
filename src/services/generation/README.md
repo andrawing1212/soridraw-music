@@ -213,3 +213,19 @@ Only a structure with no usable core target is marked `target-missing`. Lyric Pr
 - Verse and Rap Section are development sections. When one is severely underdeveloped relative to another section in the same family and the user did not explicitly request a one-line/very short section, only that section body is regenerated in place. Existing section tags, cues, hook identity, language style, and all other lyrics remain untouched.
 - The exact final visible lyric now receives the dynamic admin/user hard-ban check after final hook and section binding. Hard-ban cleanup is fail-closed: a forbidden term cannot be silently returned when cleanup fails, and no old Hook Blueprint text is rebound after the final hard-ban pass.
 - No fixed lyric phrase, scene, replacement pool, fixed section line count, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.
+
+## 78차 Section repair fail-open completion fix
+
+- The 77차 failure dialog was caused by a soft section-quality condition being promoted to a fatal public-return assertion. A one-line Verse or another relative-density issue could remain after the single local repair attempt, and the completed song was then discarded.
+- Relative Verse/Rap density remains eligible for one targeted in-place repair, but it is no longer classified as catastrophic. If the repair keeps the section compact, the completed song is preserved instead of launching a whole-lyric rewrite or failing generation.
+- The post-hard-ban stage no longer reruns destructive empty-section cleanup. Hard-ban edits lyric-body lines only, so the exact numbered section ownership already fixed at the absolute-return boundary is preserved.
+- Final section diagnostics are fail-open: true ownership/order warnings are logged for inspection, but a completed title, prompt, and lyric are not converted into a generation failure.
+- Exact numbered section order, missing required-section repair, Outro repair attempt, hard-ban inspection, hook binding, language mixing, Firebase/Auth/Firestore/Functions, and saved-data shape remain unchanged.
+
+## 79차 Custom Section performance parity fix
+
+- Custom structure keeps the user's exact numbered section order, custom names, Stop/Break/Instrumental ownership, and explicit custom cues, but no longer bypasses the V1 Section Performance Plan at the public return boundary.
+- The same current-song performance contract now applies to Custom and built-in structures: every sung or vocal-ad-lib section with a real body must receive a valid local performance cue, and multi-vocal sections must retain an active singer anchor.
+- Custom/nonstandard sung section names are resolved through the active Section Blueprint instead of a fixed standard-name list. Transition and instrumental entries remain lyric-free and are excluded from vocal-cue enforcement.
+- Section-role diagnostics for Main/Lead/Rap ownership and shared final payoff now also inspect Custom songs. Existing user/director overrides still suppress only the specific default role rule they explicitly replace.
+- No stock performance phrase, fixed singer assignment, lyric rewrite, section reorder, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.

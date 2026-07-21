@@ -54,6 +54,11 @@ export type Category = 'genre' | 'style' | 'mood';
 export type LyricsLength = 'very-short' | 'short' | 'normal' | 'long';
 export type SongStructure = '1' | '2' | '3' | 'custom'; // 1=자동, 2=기본랜덤, 3=변칙랜덤, custom=직접선택
 
+export interface SectionCueOptions {
+  vocal: boolean;
+  instrument: boolean;
+}
+
 export type VocalMode = 'solo' | 'duo' | 'group'; // 'duo' is kept for legacy saved data; UI now uses solo/group.
 
 export type VocalRole = 'main' | 'lead' | 'sub' | 'rapper';
@@ -346,6 +351,7 @@ export interface AppliedKeywords {
   lyricsLength?: LyricsLength;
   songStructure?: SongStructure;
   customStructure?: CustomSectionItem[];
+  sectionCueOptions?: SectionCueOptions;
   kpopMode?: 0 | 1 | 2;
   isKoreanEnglishMix?: boolean;
   citypopMode?: 0 | 1 | 2;
@@ -531,6 +537,7 @@ export interface GenerateSongParams {
   lyricMode?: 'assist' | 'preserve';
   songStructure?: SongStructure;
   customStructure?: CustomSectionItem[];
+  sectionCueOptions?: SectionCueOptions;
   lyricsLength?: LyricsLength;
   kpopMode?: 0 | 1 | 2;
   instrumentTags?: string[];

@@ -419,6 +419,10 @@ function buildAppliedKeywords(params: any, geminiModelInfo: any): any {
     lyricsLength: params?.lyricsLength,
     songStructure: params?.songStructure,
     customStructure: params?.customStructure,
+    sectionCueOptions: {
+      vocal: params?.sectionCueOptions?.vocal !== false,
+      instrument: params?.sectionCueOptions?.instrument !== false,
+    },
     kpopMode: params?.kpopMode ?? 0,
     isKoreanEnglishMix: Boolean(params?.isKoreanEnglishMix),
     lyricLanguages: params?.lyricLanguages,

@@ -1,4 +1,4 @@
-import { CustomSectionItem } from '../types';
+import { CustomSectionItem, SectionCueOptions } from '../types';
 
 export interface PromptTemplate {
   id: string;
@@ -18,6 +18,7 @@ export interface PromptTemplate {
   vocalToneId?: string;
   songStructure?: string;
   customStructure?: CustomSectionItem[];
+  sectionCueOptions?: Partial<SectionCueOptions>;
 
   lyricMode?: 'assist' | 'preserve';
 

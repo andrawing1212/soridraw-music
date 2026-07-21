@@ -280,7 +280,7 @@ import {
   VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import {
   getFirstEnabledNavigationPath,
@@ -5656,6 +5656,8 @@ function App() {
   
   const [lyricsLength, setLyricsLength] = useState<LyricsLength>('normal');
   const [songStructure, setSongStructure] = useState<SongStructure>('1');
+  const [sectionVocalCueEnabled, setSectionVocalCueEnabled] = useState(true);
+  const [sectionInstrumentCueEnabled, setSectionInstrumentCueEnabled] = useState(true);
   const [vocalMode, setVocalMode] = useState<VocalMode>('solo');
   const [vocalTones, setVocalTones] = useState<VocalTone[]>(VOCAL_TONES);
   const [selectedVocalToneId, setSelectedVocalToneId] = useState<string | undefined>(undefined);
@@ -6151,6 +6153,10 @@ function App() {
     }
     if (template.customStructure) {
       setCustomStructure(template.customStructure);
+    }
+    if (template.sectionCueOptions) {
+      if (typeof template.sectionCueOptions.vocal === 'boolean') setSectionVocalCueEnabled(template.sectionCueOptions.vocal);
+      if (typeof template.sectionCueOptions.instrument === 'boolean') setSectionInstrumentCueEnabled(template.sectionCueOptions.instrument);
     }
     if (template.lyricMode) {
       setLyricMode(template.lyricMode);
@@ -7965,6 +7971,10 @@ const toggleCycleVariantSelection = (
     }
 
     if (appliedKeywords.customStructure) setCustomStructure(normalizeCustomStructure(appliedKeywords.customStructure));
+    if (appliedKeywords.sectionCueOptions) {
+      setSectionVocalCueEnabled(appliedKeywords.sectionCueOptions.vocal !== false);
+      setSectionInstrumentCueEnabled(appliedKeywords.sectionCueOptions.instrument !== false);
+    }
 
     if (appliedKeywords.vocal) {
       const v = appliedKeywords.vocal;
@@ -8773,6 +8783,8 @@ const toggleCycleVariantSelection = (
     setLyricMode('assist');
     setLyricsLength('normal');
     setSongStructure('1');
+    setSectionVocalCueEnabled(true);
+    setSectionInstrumentCueEnabled(true);
     setVocalMode('solo');
     setMaleCount(0);
     setFemaleCount(0);
@@ -9675,6 +9687,10 @@ const saveRecentSong = async (newSong: any) => {
         songPrompt,
         lyricsLength,
         songStructure,
+        sectionCueOptions: {
+          vocal: sectionVocalCueEnabled,
+          instrument: sectionInstrumentCueEnabled,
+        } satisfies SectionCueOptions,
         useAutoDuration: false,
         vocal: {
           male: maleCount,
@@ -10616,6 +10632,10 @@ ${normalizePromptForDisplay(result.prompt)}
       lyricsLength: applied.lyricsLength || 'normal',
       songStructure: applied.songStructure || '1',
       customStructure: Array.isArray(applied.customStructure) ? applied.customStructure : [],
+      sectionCueOptions: {
+        vocal: applied.sectionCueOptions?.vocal !== false,
+        instrument: applied.sectionCueOptions?.instrument !== false,
+      },
       vocal,
       tempo: applied.tempo || '',
       isRandomTempo: Boolean(applied.isRandomTempo),
@@ -11537,6 +11557,8 @@ ${normalizePromptForDisplay(result.prompt)}
     userInput !== '' ||
     lyricsLength !== 'normal' ||
     songStructure !== '1' ||
+    !sectionVocalCueEnabled ||
+    !sectionInstrumentCueEnabled ||
     maleCount > 0 ||
     femaleCount > 0 ||
     rapEnabled ||
@@ -13352,6 +13374,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onLyricWritingStyleChange={setLyricWritingStyle}
               songStructure={songStructure}
               customStructure={customStructure}
+              sectionVocalCueEnabled={sectionVocalCueEnabled}
+              sectionInstrumentCueEnabled={sectionInstrumentCueEnabled}
+              onSectionVocalCueEnabledChange={setSectionVocalCueEnabled}
+              onSectionInstrumentCueEnabledChange={setSectionInstrumentCueEnabled}
               onSongStructureChange={setSongStructure}
               onCustomStructureChange={setCustomStructure}
               isLocked={menuLocks.structure}
@@ -13361,6 +13387,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setLyricsLength('normal');
                 setSongStructure('1');
                 setCustomStructure([]);
+                setSectionVocalCueEnabled(true);
+                setSectionInstrumentCueEnabled(true);
                 setLyricWritingStyle('default');
                 writeStoredV1LyricWritingStyle('default');
               }}
@@ -17944,6 +17972,10 @@ interface SongStructureIntegratedControlProps {
   onLyricWritingStyleChange: (val: V1LyricWritingStyle) => void;
   songStructure: SongStructure;
   customStructure: CustomSectionItem[];
+  sectionVocalCueEnabled: boolean;
+  sectionInstrumentCueEnabled: boolean;
+  onSectionVocalCueEnabledChange: (enabled: boolean) => void;
+  onSectionInstrumentCueEnabledChange: (enabled: boolean) => void;
   onSongStructureChange: (val: SongStructure) => void;
   onCustomStructureChange: (val: CustomSectionItem[]) => void;
   onClear: () => void;
@@ -17969,6 +18001,10 @@ function SongStructureIntegratedControlComponent({
   onLyricWritingStyleChange,
   songStructure,
   customStructure,
+  sectionVocalCueEnabled,
+  sectionInstrumentCueEnabled,
+  onSectionVocalCueEnabledChange,
+  onSectionInstrumentCueEnabledChange,
   onSongStructureChange,
   onCustomStructureChange,
   onClear,
@@ -19371,6 +19407,106 @@ function SongStructureIntegratedControlComponent({
                     {songStructure === 'custom' && (customGuideText ? `사용자가 직접 선택한 섹션 순서대로 구성됩니다.\n${customGuideText}` : '사용자가 직접 선택한 섹션 순서대로 구성됩니다.')}
                   </p>
                 </div>
+
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
+                    <span className="text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">보컬 큐</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={sectionVocalCueEnabled}
+                      aria-label={`보컬 큐 ${sectionVocalCueEnabled ? '켜짐' : '꺼짐'}`}
+                      onClick={() => {
+                        const nextValue = !sectionVocalCueEnabled;
+                        onSectionVocalCueEnabledChange(nextValue);
+                        onHover({
+                          id: 'section-vocal-cue-toggle',
+                          label: '보컬 큐',
+                          labelKo: '보컬 큐',
+                          description: nextValue
+                            ? '섹션 태그에 현재 곡의 보컬 표현·프레이징 큐를 표시합니다. 내부 섹션 역할과 보컬 설계는 항상 유지됩니다.'
+                            : '내부 섹션 역할과 보컬 설계는 유지하고, 공개 가사에서는 보컬 표현·프레이징 큐만 숨깁니다. 다중 보컬의 담당 표시는 유지됩니다.',
+                          _ts: Date.now(),
+                        });
+                      }}
+                      onMouseEnter={() => onHover({
+                        id: 'section-vocal-cue-toggle',
+                        label: '보컬 큐',
+                        labelKo: '보컬 큐',
+                        description: sectionVocalCueEnabled
+                          ? '켜짐: 섹션 태그에 현재 곡의 보컬 표현·프레이징 큐를 표시합니다. 내부 섹션 역할과 보컬 설계는 항상 유지됩니다.'
+                          : '꺼짐: 내부 섹션 역할과 보컬 설계는 유지하고, 공개 가사에서는 보컬 표현·프레이징 큐만 숨깁니다. 다중 보컬의 담당 표시는 유지됩니다.',
+                      })}
+                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                      onTouchStart={() => onLongPressStart({
+                        id: 'section-vocal-cue-toggle',
+                        label: '보컬 큐',
+                        labelKo: '보컬 큐',
+                        description: sectionVocalCueEnabled
+                          ? '켜짐: 섹션 태그에 현재 곡의 보컬 표현·프레이징 큐를 표시합니다. 내부 섹션 역할과 보컬 설계는 항상 유지됩니다.'
+                          : '꺼짐: 내부 섹션 역할과 보컬 설계는 유지하고, 공개 가사에서는 보컬 표현·프레이징 큐만 숨깁니다. 다중 보컬의 담당 표시는 유지됩니다.',
+                      })}
+                      onTouchEnd={onLongPressEnd}
+                      className={cn(
+                        'min-w-[56px] rounded-full border px-3 py-1 text-[12px] font-black transition-all',
+                        sectionVocalCueEnabled
+                          ? 'bg-[#FFB400] border-black/20 text-[#171717] shadow-sm'
+                          : 'bg-[var(--card-bg)] border-btn-border text-[var(--text-secondary)]'
+                      )}
+                    >
+                      {sectionVocalCueEnabled ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
+                    <span className="text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">악기 큐</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={sectionInstrumentCueEnabled}
+                      aria-label={`악기 큐 ${sectionInstrumentCueEnabled ? '켜짐' : '꺼짐'}`}
+                      onClick={() => {
+                        const nextValue = !sectionInstrumentCueEnabled;
+                        onSectionInstrumentCueEnabledChange(nextValue);
+                        onHover({
+                          id: 'section-instrument-cue-toggle',
+                          label: '악기 큐',
+                          labelKo: '악기 큐',
+                          description: nextValue
+                            ? '섹션 아래에 현재 곡의 악기·편곡 큐를 표시합니다. 내부 편곡 설계는 항상 유지됩니다.'
+                            : '내부 편곡 설계는 유지하고, 공개 가사에서는 섹션 아래 악기·편곡 큐만 숨깁니다.',
+                          _ts: Date.now(),
+                        });
+                      }}
+                      onMouseEnter={() => onHover({
+                        id: 'section-instrument-cue-toggle',
+                        label: '악기 큐',
+                        labelKo: '악기 큐',
+                        description: sectionInstrumentCueEnabled
+                          ? '켜짐: 섹션 아래에 현재 곡의 악기·편곡 큐를 표시합니다. 내부 편곡 설계는 항상 유지됩니다.'
+                          : '꺼짐: 내부 편곡 설계는 유지하고, 공개 가사에서는 섹션 아래 악기·편곡 큐만 숨깁니다.',
+                      })}
+                      onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+                      onTouchStart={() => onLongPressStart({
+                        id: 'section-instrument-cue-toggle',
+                        label: '악기 큐',
+                        labelKo: '악기 큐',
+                        description: sectionInstrumentCueEnabled
+                          ? '켜짐: 섹션 아래에 현재 곡의 악기·편곡 큐를 표시합니다. 내부 편곡 설계는 항상 유지됩니다.'
+                          : '꺼짐: 내부 편곡 설계는 유지하고, 공개 가사에서는 섹션 아래 악기·편곡 큐만 숨깁니다.',
+                      })}
+                      onTouchEnd={onLongPressEnd}
+                      className={cn(
+                        'min-w-[56px] rounded-full border px-3 py-1 text-[12px] font-black transition-all',
+                        sectionInstrumentCueEnabled
+                          ? 'bg-[#FFB400] border-black/20 text-[#171717] shadow-sm'
+                          : 'bg-[var(--card-bg)] border-btn-border text-[var(--text-secondary)]'
+                      )}
+                    >
+                      {sectionInstrumentCueEnabled ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -20061,6 +20197,8 @@ const SongStructureIntegratedControl = React.memo(SongStructureIntegratedControl
   return prev.lyricsLength === next.lyricsLength &&
          prev.lyricWritingStyle === next.lyricWritingStyle &&
          prev.songStructure === next.songStructure &&
+         prev.sectionVocalCueEnabled === next.sectionVocalCueEnabled &&
+         prev.sectionInstrumentCueEnabled === next.sectionInstrumentCueEnabled &&
          prev.isLocked === next.isLocked &&
          prev.userTier === next.userTier &&
          prev.user?.uid === next.user?.uid &&

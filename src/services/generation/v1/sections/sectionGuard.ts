@@ -557,7 +557,7 @@ export function inspectV1LyricsForRoleIssues(lyrics: string, params: V1SectionEn
     }
   });
 
-  if (blueprint.mode !== 'custom' && blueprint.vocalAnchors.length > 1) {
+  if (blueprint.vocalAnchors.length > 1) {
     const mainAnchors = vocalAnchorsForRole(blueprint, 'Main');
     const leadAnchors = vocalAnchorsForRole(blueprint, 'Lead');
     const rapAnchors = vocalAnchorsForRole(blueprint, 'Rap');
@@ -605,7 +605,7 @@ export function inspectV1LyricsForRoleIssues(lyrics: string, params: V1SectionEn
     if (invalidIds.size) issues.push({ code: 'vocal-anchor-undefined', message: `Lyrics use undefined voice ID ${[...invalidIds].join(', ')} that is not declared in [Vocals].` });
 
     const final = aligned.find((item) => /^(?:Final Chorus|Final Hook|Climax)$/i.test(item.entry.name));
-    if (final && blueprint.mode !== 'custom') {
+    if (final) {
       const cue = cueText(final);
       const finalIds = vocalIdsInText(cue);
       const shared = /\ball\s+(?:male\s+voices|female\s+voices|voices|vocals)\b/i.test(cue) || finalIds.length >= 2;

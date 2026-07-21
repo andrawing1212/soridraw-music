@@ -25394,11 +25394,12 @@ function hasCatastrophicV1LyricStructureFailure(lyrics: string, params: Generate
   if (hasEmptyRequired) return true;
   if (hasV1NumberedSectionOwnershipOverflow(visibleBlocks, blueprint, params)) return true;
 
-  // Only failures that make section ownership impossible are catastrophic.
-  // Sparse Verse mass, a modest Final Chorus, or an overlong compact section are quality issues:
-  // they may trigger one targeted repair, but they must never discard an otherwise completed song.
   const criticalRoleCodes = new Set([
     'role-body-duplicate',
+    'outro-restarts-story',
+    'final-payoff-underdeveloped',
+    'development-section-underdeveloped',
+    'compact-role-overdeveloped',
   ]);
   return filterV1SectionRoleIssuesForUserIntent(
     inspectV1LyricsForRoleIssues(source, params),
@@ -25796,14 +25797,10 @@ async function repairSparseLyricsWithGemini(
   // V1 no longer spends another Gemini call on soft quality preferences such as a modest
   // Final Chorus, Intro mass, or section-role nuance. A full lyric rewrite is reserved only
   // for catastrophic structural failure (missing/empty required sung blocks or no usable body).
-  const catastrophicRepairNeeded = !isGenerationEngineV2(params)
-    && hasCatastrophicV1LyricStructureFailure(originalSource, params);
-  const targetedSectionRepairNeeded = !isGenerationEngineV2(params)
-    && collectV1SectionBodyRepairTargets(originalSource, params).length > 0;
   const densityRepairNeeded = isGenerationEngineV2(params)
     ? Boolean(source && needsLyricDensityRepair(source, params))
-    : catastrophicRepairNeeded;
-  if (!source || (!densityRepairNeeded && !targetedSectionRepairNeeded && !roleIssues.length)) {
+    : hasCatastrophicV1LyricStructureFailure(originalSource, params);
+  if (!source || (!densityRepairNeeded && !roleIssues.length)) {
     // V1 may intentionally keep a tag-only Intro, but a default vocal Outro is required.
     // The ghost cleanup source is only a repair working copy; when no repair is needed, preserve the original exact
     // blueprint rather than returning a copy that may have removed an intentional empty tag.
@@ -25813,7 +25810,7 @@ async function repairSparseLyricsWithGemini(
 
   // V1 section architecture is engine-owned. Repair only the missing required section body
   // before considering a full-lyric rewrite, so existing lyric quality and language mixing stay intact.
-  if (!isGenerationEngineV2(params) && (catastrophicRepairNeeded || targetedSectionRepairNeeded)) {
+  if (!isGenerationEngineV2(params) && densityRepairNeeded) {
     const targetedRepair = await repairMissingV1RequiredSectionsWithGemini(
       ai,
       applyV1SectionBlueprintGuard(originalSource, params),
@@ -25821,11 +25818,7 @@ async function repairSparseLyricsWithGemini(
       productionPrompt,
       languageLabel,
     );
-    const targetedIsCatastrophic = hasCatastrophicV1LyricStructureFailure(targetedRepair, params);
-    if (!targetedIsCatastrophic) {
-      // A one-line Verse or another relative-density issue receives one local repair attempt only.
-      // If Gemini keeps it compact, preserve the completed song instead of escalating into a
-      // whole-lyric rewrite or a generation failure.
+    if (!hasCatastrophicV1LyricStructureFailure(targetedRepair, params)) {
       return enforceLyricSectionBlockSpacing(targetedRepair, params);
     }
   }
@@ -31618,11 +31611,16 @@ function finalizeV1SongAfterHardBan(
   const finalizeCard = (value: unknown) => {
     const source = String(value || '').trim();
     if (!source) return '';
-    // The hard-ban stage rewrites lyric-body lines only. Re-running the full structural cleanup
-    // here removed a repaired Outro/Verse tag after generation and then made the final validator
-    // reject the whole song. Keep section ownership exactly as it was at the absolute-return
-    // boundary; only normalize harmless nested ad-lib punctuation.
-    return normalizeNestedParenthesizedAdlibs(source).replace(/\n{3,}/g, '\n\n').trim();
+    let text = finalizeGeneratedLyricsStructuralSafety(source, params);
+    text = applyV1SectionBlueprintGuard(text, params);
+    text = normalizeNestedParenthesizedAdlibs(text);
+    // The hard-ban pass edits lyric lines only. Do not re-run hook binding afterwards because
+    // an older hook blueprint can reinsert the exact banned phrase that was just removed.
+    text = cleanupGhostOpeningIntroAndEmptySungTags(text, params);
+    text = removeEmptySungSectionsFinalGuard(text, params);
+    text = removeEmptyRequiredSungBlocksStrictFinal(text, params);
+    text = removeV1OrphanSectionSkeletonsAtPublicBoundary(text, params);
+    return normalizeNestedParenthesizedAdlibs(text).replace(/\n{3,}/g, '\n\n').trim();
   };
 
   result.lyrics.korean = finalizeCard(result.lyrics.korean);
@@ -31689,13 +31687,7 @@ export async function generateSong(
       String(guarded.lyrics.english || '').trim(),
     ].filter(Boolean).filter((lyrics) => hasCatastrophicV1LyricStructureFailure(lyrics, params));
     if (finalStructuralFailures.length) {
-      // Section-quality repair is fail-open. The user explicitly requires generation to complete
-      // even when a one-time local repair cannot fully satisfy a soft density preference.
-      // Preserve the completed, numbered lyric instead of converting a quality warning into
-      // a full generation failure.
-      console.warn('[SORIDRAW V1 Section Engine] final structure warning preserved completed song:', {
-        cards: finalStructuralFailures.length,
-      });
+      throw new Error('가사 섹션 구조를 안전하게 복구하지 못했습니다. 빈 Outro 또는 지나치게 축소된 Verse가 남아 다시 생성이 필요합니다.');
     }
     if (String(guarded.lyrics.korean || '').trim()) {
       assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);

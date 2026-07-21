@@ -17280,7 +17280,7 @@ function CycleKeywordPopup({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0 }}
-          className="soridraw-studio-cycle-modal-panel relative z-10 w-full max-w-2xl max-h-[82vh] rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
+          className="soridraw-studio-cycle-modal-panel relative z-10 flex w-full max-w-2xl max-h-[82vh] flex-col rounded-3xl bg-[var(--card-bg)] shadow-2xl overflow-hidden"
           onPointerDown={(e) => e.stopPropagation()}
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -17333,7 +17333,7 @@ function CycleKeywordPopup({
           </div>
 
           <div
-            className="p-5 overflow-y-auto custom-scrollbar max-h-[calc(82vh-104px)] space-y-3"
+            className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-5 pt-5 pb-8 space-y-3 scroll-pb-8"
             onWheel={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
           >
@@ -17382,7 +17382,7 @@ function CycleKeywordPopup({
                   >
                     <div className="min-w-0">
                       <span className={cn("text-[16px] truncate block", isSelected ? "font-black" : "font-black")}>{variant.labelKo || variant.label}</span>
-                      <p className={cn("text-xs mt-1 leading-snug line-clamp-2", isSelected ? "text-[#050505]/85 font-extrabold" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
+                      <p className={cn("text-xs mt-1 leading-snug", isSelected ? "text-[#050505]/85 font-extrabold" : "text-[var(--text-secondary)]")}>{variant.descriptionKo || variant.description}</p>
                     </div>
                   </button>
                   {canPointSelect && (

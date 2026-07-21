@@ -184,9 +184,9 @@ const DEFINITIONS: V1SectionDefinition[] = [
     canonical: 'Outro',
     aliases: [/^outro(?:\s*\d+)?$/i, /^ending$/i],
     kind: 'closing',
-    requiresLyrics: false,
+    requiresLyrics: true,
     allowsLyrics: true,
-    lyricRole: 'Close or leave a deliberate final afterimage in a few lines. Do not restart the whole story.',
+    lyricRole: 'Close or leave a deliberate final afterimage with a short lyric, ad-lib, or resolved vocal return. Do not restart the whole story.',
   },
 ];
 

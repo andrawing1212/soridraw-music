@@ -201,7 +201,7 @@ function isInstrumentalRoute(params: V1SectionEngineParams): boolean {
   return Boolean(params.isNoLyrics || params.includeLyrics === false || params.instrumentalBgmMode);
 }
 
-const STABLE_VOCAL = ['Intro', 'Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Pre-Chorus', 'Chorus', 'Bridge', 'Final Chorus', 'Outro'];
+const STABLE_VOCAL = ['Intro', 'Verse 1', 'Pre-Chorus 1', 'Chorus 1', 'Verse 2', 'Pre-Chorus 2', 'Chorus 2', 'Bridge', 'Final Chorus', 'Outro'];
 const STABLE_RAP = ['Intro', 'Rap Section', 'Hook', 'Rap Section', 'Hook', 'Bridge', 'Final Hook', 'Outro'];
 const STABLE_INSTRUMENTAL = ['Intro', 'Instrumental', 'Interlude', 'Instrumental', 'Outro'];
 
@@ -282,7 +282,7 @@ function injectRapIntoExperimentalSequence(sequence: string[], params: V1Section
 }
 
 
-const AUTO_NUMBERED_SECTION_BASES = new Set([
+const CHRONOLOGICAL_NUMBERED_SECTION_BASES = new Set([
   'Verse',
   'Pre-Chorus',
   'Chorus',
@@ -291,27 +291,22 @@ const AUTO_NUMBERED_SECTION_BASES = new Set([
   'Rap Section',
 ]);
 
-function numberRepeatedAutoSections(
+/**
+ * Every chronological lyric family owns an explicit 1-based public number.
+ * This applies to Recommended, Stable, Experimental, and Custom alike so a
+ * generic [Chorus] can never ambiguously absorb Chorus 1/2 content later.
+ * Unique payoff/closing names such as Final Chorus, Bridge, Intro, and Outro
+ * remain unnumbered because they are not chronological repeat families.
+ */
+function numberChronologicalSections(
   rawEntries: Array<{ name: string; customTags: string[] }>,
-  mode: V1SectionBlueprint['mode'],
 ): Array<{ name: string; customTags: string[] }> {
-  if (mode === 'custom' || mode === 'stable') return rawEntries;
-
-  const totals = new Map<string, number>();
-  rawEntries.forEach((item) => {
-    const normalized = normalizeV1SectionName(item.name);
-    const base = baseV1SectionName(normalized);
-    if (!AUTO_NUMBERED_SECTION_BASES.has(base) || /^Final\s+/i.test(normalized)) return;
-    totals.set(base, (totals.get(base) || 0) + 1);
-  });
-
   const seen = new Map<string, number>();
   return rawEntries.map((item) => {
     const normalized = normalizeV1SectionName(item.name);
+    if (/^Final\s+/i.test(normalized)) return { ...item, name: normalized };
     const base = baseV1SectionName(normalized);
-    if ((totals.get(base) || 0) <= 1 || !AUTO_NUMBERED_SECTION_BASES.has(base) || /^Final\s+/i.test(normalized)) {
-      return item;
-    }
+    if (!CHRONOLOGICAL_NUMBERED_SECTION_BASES.has(base)) return { ...item, name: normalized };
     const occurrence = (seen.get(base) || 0) + 1;
     seen.set(base, occurrence);
     return { ...item, name: `${base} ${occurrence}` };
@@ -351,7 +346,7 @@ function resolveSequence(params: V1SectionEngineParams): { profile: V1SectionPro
   }
 
   if (params.songStructure === 'custom' && (params.customStructure || []).length > 0) {
-    return { profile: 'custom', mode: 'custom', rawEntries: customStructureEntries(params) };
+    return { profile: 'custom', mode: 'custom', rawEntries: numberChronologicalSections(customStructureEntries(params)) };
   }
 
   const profile = resolveProfile(params);
@@ -360,17 +355,17 @@ function resolveSequence(params: V1SectionEngineParams): { profile: V1SectionPro
     // A selected Rap role may own Verse 2 with rhythmic/rap delivery, but the structural
     // label remains Verse 2. Users who want a real Rap Section choose Recommended,
     // Experimental, or Custom instead of silently mutating Stable.
-    return { profile, mode: 'stable', rawEntries: STABLE_VOCAL.map((name) => ({ name, customTags: [] })) };
+    return { profile, mode: 'stable', rawEntries: numberChronologicalSections(STABLE_VOCAL.map((name) => ({ name, customTags: [] }))) };
   }
   if (params.songStructure === '3') {
     const entropy = `${signalText(params)}|${params.generationIndex ?? 0}`;
     const experimental = composeV1ExperimentalSections(profile, entropy);
     const sections = profile === 'rap' ? experimental : injectRapIntoExperimentalSequence(experimental, params);
     const rawEntries = sections.map((name) => ({ name, customTags: [] }));
-    return { profile, mode: 'experimental', rawEntries: numberRepeatedAutoSections(rawEntries, 'experimental') };
+    return { profile, mode: 'experimental', rawEntries: numberChronologicalSections(rawEntries) };
   }
   const rawEntries = recommendedSectionsForProfile(params, profile).map((name) => ({ name, customTags: [] }));
-  return { profile, mode: 'recommended', rawEntries: numberRepeatedAutoSections(rawEntries, 'recommended') };
+  return { profile, mode: 'recommended', rawEntries: numberChronologicalSections(rawEntries) };
 }
 
 function roleForOccurrence(name: string, occurrence: number, total: number, definitionRole: string): string {
@@ -452,10 +447,24 @@ function buildRoleAwareOwnershipInstruction(anchors: string[]): string {
   return lines.join('\n');
 }
 
+function userExplicitlyRequestsLyricFreeOutro(params: V1SectionEngineParams): boolean {
+  const customOutroText = (params.customStructure || [])
+    .filter((item) => /^(?:outro|ending|아웃트로|종주부|후주)$/i.test(String(item?.section || '').trim()))
+    .flatMap((item) => [item.section, ...(item.tags || [])])
+    .join(' ');
+  const directText = [params.userInput || '', customOutroText].join(' ');
+  return /(?:\boutro\b|ending|아웃트로|종주부|후주).{0,48}(?:\blyric[-\s]?free\b|\bno\s+(?:lyrics?|vocals?)\b|\binstrumental(?:-only)?\b|가사\s*(?:없이|없게|제외)|보컬\s*(?:없이|없게|제외)|연주만|인스트루멘탈)|(?:\blyric[-\s]?free\b|\bno\s+(?:lyrics?|vocals?)\b|\binstrumental(?:-only)?\b|가사\s*(?:없이|없게|제외)|보컬\s*(?:없이|없게|제외)|연주만|인스트루멘탈).{0,48}(?:\boutro\b|ending|아웃트로|종주부|후주)/i.test(directText);
+}
+
 export function createV1SectionBlueprint(params: V1SectionEngineParams): V1SectionBlueprint {
   const resolved = resolveSequence(params);
   const customNames = getV1CustomSectionNames(params.customStructure || []);
-  const entries = makeEntries(resolved.rawEntries, customNames);
+  const lyricFreeOutro = userExplicitlyRequestsLyricFreeOutro(params);
+  const entries = makeEntries(resolved.rawEntries, customNames).map((entry) => (
+    lyricFreeOutro && /^Outro$/i.test(entry.name)
+      ? { ...entry, requiresLyrics: false, allowsLyrics: false }
+      : entry
+  ));
   const vocalAnchors = resolveV1VocalAnchors(params);
   return {
     mode: resolved.mode,
@@ -485,7 +494,7 @@ export function buildV1SectionBlueprintInstruction(params: V1SectionEngineParams
   const blueprint = getV1SectionBlueprint(params);
   const singerAnchorInstruction = blueprint.vocalAnchors.length
     ? `- Active singer anchors for this song: ${blueprint.vocalAnchors.join(' / ')}. [Vocals] defines the same A/B/C/D identities with gender and role; lyric sections must reuse only those exact matching forms. Never introduce an undefined letter, remove its role, or change its gender inside a lyric tag.`
-    : `- This is one solo voice. Never invent or print any group-member gender/letter/role identity in lyric section tags. Every tag must begin with the structural section name, for example [Verse 1: conversational phrasing] or [Rap Section: tight rhythmic flow]. RAP MODE changes this same solo singer's local delivery; it does not create another member.`;
+    : `- This is one solo voice. Never invent or print any group-member gender/letter/role identity in lyric section tags. Every tag must begin with the structural section name, for example [Verse 1: conversational phrasing] or [Rap Section 1: tight rhythmic flow]. RAP MODE changes this same solo singer's local delivery; it does not create another member.`;
   const tagOrderInstruction = blueprint.vocalAnchors.length
     ? '- Every structural tag must START with its exact section name. Never reverse the order into a singer-first tag.'
     : '- Every structural tag must START with its exact section name. Do not place any singer identity before the section name.';
@@ -497,7 +506,7 @@ ${tagOrderInstruction}
 - Build one coherent performance arc from [Arrangement], then make each sung section audibly distinct inside that same arc. Choose the primary cue from vocal behavior, phrasing/rhythm, emotional attitude, or dynamic change. Add a second cue only when it describes another clearly audible local contrast. Preserve unity of singer identity and genre while making Verse, rise, payoff, turn, final payoff, and ending feel meaningfully different.
 ${singerAnchorInstruction}
 ${blueprint.roleOwnershipInstruction ? `ROLE-AWARE VOCAL OWNERSHIP (MANDATORY):\n${blueprint.roleOwnershipInstruction}` : ''}
-- Do not create Verse A/B/C, Verse 1A/1B, Chorus 2A/2B, or similar singer-based structural suffixes in Recommended, Stable, or Experimental mode. Numbers belong only to repeated chronological sections; singer handoff stays inside one composite tag. Custom mode preserves an explicitly user-written section name.
+- Do not create Verse A/B/C, Verse 1A/1B, Chorus 2A/2B, or similar singer-based structural suffixes. Verse, Pre-Chorus, Chorus, Hook, Refrain, and Rap Section always use 1-based chronological numbers in every mode, including Custom. User-created nonstandard section names remain unchanged; singer handoff stays inside one composite tag.
 - USER SECTION OVERRIDE PRIORITY: this role/mass map supplies defaults only where the user has not explicitly designed the section. A direct user/director instruction about section length, repetition count, lyric-free status, monologue/dialogue shape, singer ownership, or story function overrides the default role and relative-mass description for that named section. Preserve explicit custom-section cues exactly; never "repair" an intentional exception back into the generic role.
 - Never leave sound-imitation text ambiguous. Non-lexical human sounds such as (음, 음...), (우-), (아...) are vocal ad-libs/humming and stay in parentheses in the lyric body; they are never [sound effect] cues. Real rain, footsteps, objects, instruments, ambience, and foley use a standalone square-bracket production cue. If a sound-like phrase is meant as sung or spoken lyric, write it as an unmistakable lyric sentence and state the vocal delivery in the structural tag. A humming-only tag must not own ordinary lexical lyric lines.
 - Do not omit, merge, rename, flatten, or accidentally duplicate structural sections. Keep Final Chorus and Final Hook distinct when they appear in this blueprint.

@@ -1603,7 +1603,7 @@ export const BASE_PROMPTS = [
 ];
 
 export const BASIC_STRUCTURE =
-  'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro';
+  'Intro → Verse 1 → Pre-Chorus 1 → Chorus 1 → Verse 2 → Pre-Chorus 2 → Chorus 2 → Bridge → Final Chorus → Outro';
 
 export const GENRE_HIERARCHY: GenreGroupItem[] = [
   {

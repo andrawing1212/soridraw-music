@@ -14,6 +14,7 @@ export interface V1SectionRoleIssue {
     | 'intro-overdeveloped'
     | 'humming-intro-lexical-overflow'
     | 'final-payoff-underdeveloped'
+    | 'development-section-underdeveloped'
     | 'role-body-duplicate'
     | 'refrain-missing-return'
     | 'refrain-overdeveloped'
@@ -93,6 +94,11 @@ export function filterV1SectionRoleIssuesForUserIntent(
     /\bfinal\s+(?:chorus|hook)\b|\blast\s+(?:chorus|hook)\b|파이널\s*(?:코러스|후렴|훅)|마지막\s*(?:코러스|후렴|훅)/i,
     /\bshort(?:er)?\b|\bbrief\b|\bminimal\b|\bone[-\s]?line\b|\bquiet\b|\bsoft\b|\bfade\b|짧게|더\s*짧게|한\s*줄|최소|조용|잔잔|페이드/i,
   );
+  const developmentMassOverride = hasUserOverrideFor(
+    text,
+    /\bverse(?:\s*\d+)?\b|\brap\s+(?:section|verse)(?:\s*\d+)?\b|벌스(?:\s*\d+)?|\d+절|랩\s*(?:섹션|파트|벌스)/i,
+    /\bshort(?:er)?\b|\bbrief\b|\bminimal\b|\bone[-\s]?line\b|짧게|더\s*짧게|한\s*줄|최소/i,
+  );
   const outroOverride = hasUserOverrideFor(
     text,
     /\boutro\b|아웃트로|종주부|후주/i,
@@ -115,6 +121,7 @@ export function filterV1SectionRoleIssuesForUserIntent(
       'intro-overdeveloped',
       'humming-intro-lexical-overflow',
       'final-payoff-underdeveloped',
+      'development-section-underdeveloped',
       'role-body-duplicate',
       'refrain-missing-return',
       'refrain-overdeveloped',
@@ -133,6 +140,7 @@ export function filterV1SectionRoleIssuesForUserIntent(
     if (issue.code === 'refrain-identity-lost' && refrainIdentityOverride) return false;
     if (issue.code === 'compact-role-overdeveloped' && compactOverride) return false;
     if (issue.code === 'final-payoff-underdeveloped' && finalPayoffOverride) return false;
+    if (issue.code === 'development-section-underdeveloped' && developmentMassOverride) return false;
     if (issue.code === 'outro-restarts-story' && outroOverride) return false;
     if (issue.code === 'role-body-duplicate' && duplicateOverride) return false;
     if (issue.code === 'shared-final-voice-missing' && soloFinalOverride) return false;
@@ -189,6 +197,9 @@ function entryMatchScore(entry: V1SectionBlueprintEntry, block: V1LyricBlock): n
   if (!rawName) return -1;
   const normalized = normalizeV1SectionName(rawName);
   if (normalized.toLowerCase() === entry.name.toLowerCase()) return 4;
+  const sourceIsFinal = /^Final\s+/i.test(normalized);
+  const entryIsFinal = /^Final\s+/i.test(entry.name);
+  if (sourceIsFinal !== entryIsFinal) return -1;
   if (baseV1SectionName(normalized).toLowerCase() === baseV1SectionName(entry.name).toLowerCase()) return 2;
   return -1;
 }
@@ -223,105 +234,17 @@ function stableParagraphs(lines: string[]): string[][] {
 }
 
 /**
- * Stable is an exact public contract. Gemini occasionally emits the right ten lyric
- * paragraphs but forgets several structural headers. Recover those omitted headers
- * from paragraph boundaries before alignment. This changes structure only; it never
- * invents lyric content. A selected Rap block is mapped to the next promised Stable
- * slot (normally Verse 2), preserving its singer/performance cue while keeping the
- * visible section label stable.
+ * Numbered section tags are the structural source of truth. Never infer a missing
+ * Verse/Pre-Chorus/Chorus from blank-line paragraphs because intentional lyric
+ * spacing is not a section boundary. Missing required sections are handled by the
+ * targeted missing-section repair stage, which can add only that named body.
  */
 function recoverStableParagraphSections(
   blocks: V1LyricBlock[],
   blueprint: V1SectionBlueprint,
 ): V1LyricBlock[] {
-  if (blueprint.mode !== 'stable' || !blocks.length) return blocks;
-
-  const explicitNames = blocks
-    .filter((block) => Boolean(block.originalSection))
-    .map((block) => normalizeV1SectionName(block.originalSection?.name || '').toLowerCase());
-  const expectedNames = blueprint.entries.map((entry) => entry.name.toLowerCase());
-  const alreadyExact = explicitNames.length === expectedNames.length
-    && explicitNames.every((name, index) => name === expectedNames[index]);
-  if (alreadyExact) return blocks;
-
-  const recovered: V1LyricBlock[] = [];
-  let cursor = 0;
-
-  blocks.forEach((rawBlock, blockIndex) => {
-    const block = cloneBlock(rawBlock);
-    let assignedIndex = stableExpectedIndexForBlock(block, blueprint, cursor);
-
-    // Unknown structural names (most commonly an auto-created Rap Section) must not
-    // collapse backward into the previous section. They occupy the next promised
-    // lyric-capable Stable slot instead.
-    if (assignedIndex < 0 && block.originalSection) {
-      assignedIndex = blueprint.entries.findIndex((entry, index) => index >= cursor && entry.allowsLyrics);
-    }
-    if (assignedIndex < 0) {
-      recovered.push(block);
-      return;
-    }
-
-    let nextKnownIndex = blueprint.entries.length;
-    let nextKnownBlock: V1LyricBlock | null = null;
-    for (let lookahead = blockIndex + 1; lookahead < blocks.length; lookahead += 1) {
-      const candidate = stableExpectedIndexForBlock(blocks[lookahead], blueprint, assignedIndex + 1);
-      if (candidate >= 0) {
-        nextKnownIndex = candidate;
-        nextKnownBlock = blocks[lookahead];
-        break;
-      }
-    }
-
-    const includeEmptyNextKnown = nextKnownIndex < blueprint.entries.length
-      && Boolean(nextKnownBlock)
-      && !blockHasConcreteLyrics(nextKnownBlock!)
-      && blueprint.entries[nextKnownIndex].allowsLyrics;
-    const availableEndExclusive = Math.min(
-      blueprint.entries.length,
-      nextKnownIndex + (includeEmptyNextKnown ? 1 : 0),
-    );
-    const availableIndexes = blueprint.entries
-      .map((entry, index) => ({ entry, index }))
-      .filter(({ entry, index }) => index >= assignedIndex && index < availableEndExclusive && entry.allowsLyrics)
-      .map(({ index }) => index);
-    const paragraphs = stableParagraphs(block.bodyLines);
-    const canRecoverMissingHeaders = paragraphs.length > 1 && availableIndexes.length > 1;
-
-    if (!canRecoverMissingHeaders) {
-      const entry = blueprint.entries[assignedIndex];
-      block.originalSection = {
-        raw: block.originalSection?.raw || `[${entry.name}]`,
-        name: entry.name,
-        cue: block.originalSection?.cue || '',
-      };
-      recovered.push(block);
-      cursor = assignedIndex + 1;
-      return;
-    }
-
-    const assignCount = Math.min(paragraphs.length, availableIndexes.length);
-    for (let paragraphIndex = 0; paragraphIndex < assignCount; paragraphIndex += 1) {
-      const entryIndex = availableIndexes[paragraphIndex];
-      const entry = blueprint.entries[entryIndex];
-      const isFirst = paragraphIndex === 0;
-      const payload = paragraphIndex === assignCount - 1 && paragraphs.length > assignCount
-        ? paragraphs.slice(paragraphIndex).flatMap((paragraph, index) => index ? ['', ...paragraph] : paragraph)
-        : paragraphs[paragraphIndex];
-      recovered.push({
-        originalSection: {
-          raw: isFirst ? (block.originalSection?.raw || `[${entry.name}]`) : `[${entry.name}]`,
-          name: entry.name,
-          cue: isFirst ? (block.originalSection?.cue || '') : '',
-        },
-        standaloneCues: isFirst ? [...block.standaloneCues] : [],
-        bodyLines: compactBodyLines(payload),
-      });
-    }
-    cursor = availableIndexes[Math.max(0, assignCount - 1)] + 1;
-  });
-
-  return recovered;
+  if (blueprint.mode !== 'stable') return blocks;
+  return blocks.map(cloneBlock);
 }
 
 function alignBlocksToBlueprint(blocks: V1LyricBlock[], blueprint: V1SectionBlueprint): AlignedBlock[] {
@@ -357,12 +280,11 @@ function alignBlocksToBlueprint(blocks: V1LyricBlock[], blueprint: V1SectionBlue
       return;
     }
 
-    // Unknown or duplicate structural blocks must not shift every later section by position.
-    // Preserve their body near the closest already matched lyric-capable section instead.
-    const fallbackIndex = [...aligned.keys()]
-      .filter((index) => aligned[index].entry.allowsLyrics)
-      .sort((a, b) => Math.abs(a - Math.max(lastMatched, 0)) - Math.abs(b - Math.max(lastMatched, 0)))[0];
-    if (fallbackIndex !== undefined) mergeBlockInto(aligned[fallbackIndex].block, block);
+    // An unknown or third duplicate structural block has no blueprint owner.
+    // Never pour its lyric body into Chorus 2, Bridge, Final Chorus, or Outro.
+    // The catastrophic/missing-section repair stage may retry the exact structure;
+    // destructive nearest-section merging is forbidden at the public boundary.
+    return;
   });
 
   return aligned;
@@ -370,65 +292,12 @@ function alignBlocksToBlueprint(blocks: V1LyricBlock[], blueprint: V1SectionBlue
 
 
 function repairStableMissingSections(
-  aligned: AlignedBlock[],
-  blueprint: V1SectionBlueprint,
+  _aligned: AlignedBlock[],
+  _blueprint: V1SectionBlueprint,
 ): void {
-  if (blueprint.mode !== 'stable') return;
-
-  const missingRequired = () => aligned
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.entry.requiresLyrics && !blockHasConcreteLyrics(item.block))
-    .map(({ index }) => index);
-
-  // Stable deliberately repeats Pre-Chorus and Chorus. Recover those repeated roles from the
-  // existing same-family occurrence first. This is musically safer than misclassifying an Outro
-  // paragraph as a Pre-Chorus merely because the model omitted an earlier header.
-  aligned.forEach((item, index) => {
-    if (!item.entry.requiresLyrics || blockHasConcreteLyrics(item.block)) return;
-    const base = baseV1SectionName(item.entry.name);
-    if (!/^(?:Pre-Chorus|Chorus)$/i.test(base)) return;
-    const donor = aligned
-      .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
-      .filter(({ candidate }) => baseV1SectionName(candidate.entry.name).toLowerCase() === base.toLowerCase()
-        && blockHasConcreteLyrics(candidate.block))
-      .sort((a, b) => Math.abs(a.candidateIndex - index) - Math.abs(b.candidateIndex - index))[0]?.candidate;
-    if (!donor) return;
-    item.block = cloneBlock(donor.block);
-    item.block.originalSection = {
-      raw: `[${item.entry.name}]`,
-      name: item.entry.name,
-      cue: donor.block.originalSection?.cue || '',
-    };
-  });
-
-  // Recover any remaining promised section from extra paragraphs that Gemini placed inside a
-  // later oversized block (most often Outro). This moves existing lyric content only; it never
-  // invents new lines or changes the Stable order.
-  for (let donorIndex = 0; donorIndex < aligned.length; donorIndex += 1) {
-    const donor = aligned[donorIndex];
-    const missingBefore = missingRequired().filter((index) => index < donorIndex);
-    if (!missingBefore.length) continue;
-    const paragraphs = stableParagraphs(donor.block.bodyLines);
-    if (paragraphs.length <= 1) continue;
-    const take = Math.min(missingBefore.length, paragraphs.length - 1);
-    if (take <= 0) continue;
-
-    missingBefore.slice(0, take).forEach((targetIndex, paragraphIndex) => {
-      const target = aligned[targetIndex];
-      target.block = {
-        originalSection: {
-          raw: `[${target.entry.name}]`,
-          name: target.entry.name,
-          cue: '',
-        },
-        standaloneCues: [],
-        bodyLines: compactBodyLines(paragraphs[paragraphIndex]),
-      };
-    });
-    donor.block.bodyLines = compactBodyLines(
-      paragraphs.slice(take).flatMap((paragraph, index) => index ? ['', ...paragraph] : paragraph),
-    );
-  }
+  // Intentionally empty. Missing required bodies are repaired by the dedicated
+  // Gemini missing-section body stage. Copying a neighbouring Chorus or splitting
+  // blank-line paragraphs caused section ownership corruption.
 }
 
 function moveLyricsOutOfNonVocalSections(aligned: AlignedBlock[]): void {
@@ -581,6 +450,31 @@ export function inspectV1LyricsForRoleIssues(lyrics: string, params: V1SectionEn
 
   const developmentItems = aligned.filter((item) => /^(?:Verse|Rap Section)$/i.test(baseV1SectionName(item.entry.name)));
   const developmentLoad = averageLoad(developmentItems);
+  const developmentGroups = new Map<string, AlignedBlock[]>();
+  developmentItems.forEach((item) => {
+    const key = baseV1SectionName(item.entry.name).toLowerCase();
+    const list = developmentGroups.get(key) || [];
+    list.push(item);
+    developmentGroups.set(key, list);
+  });
+  developmentGroups.forEach((items) => {
+    if (items.length < 2) return;
+    const reference = items
+      .map((item) => ({ item, load: bodyLoad(item.block) }))
+      .sort((a, b) => b.load.chars - a.load.chars || b.load.lines - a.load.lines)[0];
+    if (!reference || reference.load.lines < 2 || reference.load.chars < 18) return;
+    items.forEach((item) => {
+      if (item === reference.item) return;
+      const current = bodyLoad(item.block);
+      if (!current.lines || !current.chars) return;
+      if (isSubstantiallyShorter(current, reference.load)) {
+        issues.push({
+          code: 'development-section-underdeveloped',
+          message: `${item.entry.name} is substantially smaller than ${reference.item.entry.name} and cannot carry its development role reliably.`,
+        });
+      }
+    });
+  });
   const intro = aligned.find((item) => /^Intro$/i.test(item.entry.name));
   const firstDevelopment = developmentItems[0];
   if (intro && firstDevelopment) {
@@ -663,7 +557,7 @@ export function inspectV1LyricsForRoleIssues(lyrics: string, params: V1SectionEn
     }
   });
 
-  if (blueprint.mode !== 'custom' && blueprint.vocalAnchors.length > 1) {
+  if (blueprint.vocalAnchors.length > 1) {
     const mainAnchors = vocalAnchorsForRole(blueprint, 'Main');
     const leadAnchors = vocalAnchorsForRole(blueprint, 'Lead');
     const rapAnchors = vocalAnchorsForRole(blueprint, 'Rap');
@@ -711,7 +605,7 @@ export function inspectV1LyricsForRoleIssues(lyrics: string, params: V1SectionEn
     if (invalidIds.size) issues.push({ code: 'vocal-anchor-undefined', message: `Lyrics use undefined voice ID ${[...invalidIds].join(', ')} that is not declared in [Vocals].` });
 
     const final = aligned.find((item) => /^(?:Final Chorus|Final Hook|Climax)$/i.test(item.entry.name));
-    if (final && blueprint.mode !== 'custom') {
+    if (final) {
       const cue = cueText(final);
       const finalIds = vocalIdsInText(cue);
       const shared = /\ball\s+(?:male\s+voices|female\s+voices|voices|vocals)\b/i.test(cue) || finalIds.length >= 2;
@@ -760,7 +654,6 @@ export function applyV1SectionBlueprintGuard(lyrics: string, params: V1SectionEn
   const blocks = recoverStableParagraphSections(parsedBlocks, blueprint);
 
   const aligned = alignBlocksToBlueprint(blocks, blueprint);
-  moveLyricsOutOfNonVocalSections(aligned);
   repairStableMissingSections(aligned, blueprint);
   const issues = inspectV1SectionBlueprintFit(aligned);
   if (issues.length && typeof console !== 'undefined') console.warn('[SORIDRAW V1 Section Engine]', issues.map((issue) => issue.message));

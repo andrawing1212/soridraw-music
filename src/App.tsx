@@ -426,8 +426,31 @@ const normalizeCustomStructure = (input: any): CustomSectionItem[] => {
   }
 };
 
+const NUMBERED_CUSTOM_SECTION_FAMILIES = new Map<string, string>([
+  ['verse', 'Verse'],
+  ['pre-chorus', 'Pre-Chorus'],
+  ['pre chorus', 'Pre-Chorus'],
+  ['chorus', 'Chorus'],
+  ['hook', 'Hook'],
+  ['refrain', 'Refrain'],
+  ['rap section', 'Rap Section'],
+  ['rap verse', 'Rap Section'],
+]);
+
+const numberChronologicalCustomSections = (structure: CustomSectionItem[]): CustomSectionItem[] => {
+  const seen = new Map<string, number>();
+  return structure.map((item) => {
+    const raw = String(item.section || '').replace(/\s+(?:\d+|[A-Z])$/i, '').replace(/\s+/g, ' ').trim();
+    const canonical = NUMBERED_CUSTOM_SECTION_FAMILIES.get(raw.toLowerCase());
+    if (!canonical) return item;
+    const occurrence = (seen.get(canonical) || 0) + 1;
+    seen.set(canonical, occurrence);
+    return { ...item, section: `${canonical} ${occurrence}` };
+  });
+};
+
 const formatStoredCustomStructureText = (structure: any): string => {
-  const normalized = normalizeCustomStructure(structure);
+  const normalized = numberChronologicalCustomSections(normalizeCustomStructure(structure));
   const formatTag = (tag: any): string => {
     const raw = String(tag || '').trim();
     if (!raw) return '';
@@ -1967,7 +1990,11 @@ const SECTION_SHORT_DESCRIPTION: Record<string, string> = {
   'Verse A': '첫 이야기 전개',
   'Verse B': '두 번째 전개',
   'Pre-Chorus': '후렴 전 고조',
+  'Pre-Chorus 1': '첫 후렴 전 고조',
+  'Pre-Chorus 2': '두 번째 후렴 전 고조',
   'Chorus': '핵심 후렴',
+  'Chorus 1': '첫 핵심 후렴',
+  'Chorus 2': '두 번째 핵심 후렴',
   'Hook': '반복 훅 구간',
   'Drop': '비트 폭발 구간',
   'Bridge': '흐름 전환 구간',
@@ -9525,7 +9552,7 @@ const saveRecentSong = async (newSong: any) => {
             : songStructure === '1'
               ? buildAdaptiveDefaultStructureGuide()
               : songStructure === '2'
-                ? 'Use the exact stable V1 blueprint: Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro. Do not flatten Verse 1/2 or Final Chorus.'
+                ? 'Use the exact stable V1 blueprint: Intro → Verse 1 → Pre-Chorus 1 → Chorus 1 → Verse 2 → Pre-Chorus 2 → Chorus 2 → Bridge → Final Chorus → Outro. Do not flatten or remove chronological section numbers.'
                 : 'Use the exact experimental V1 blueprint supplied by the generation engine. Do not replace it with a stable or previously used sequence.',
           hasBalladStyle ? 'allow a slower emotional rise through the pre-chorus and chorus' : 'keep the sectional contrast clear and memorable',
           selectedStyleText !== 'Core style kept close to the root genre' ? `style direction anchored by ${selectedStyleText}` : null,
@@ -18725,7 +18752,7 @@ function SongStructureIntegratedControlComponent({
   }, [vocalLabelMapForStructure, parseVocalTagFallbackForStructure, customTagLabelMapForStructure, pointSoundTagLabels]);
 
   function formatStructureText(structure: CustomSectionItem[]) {
-    const normalized = normalizeCustomStructure(structure);
+    const normalized = numberChronologicalCustomSections(normalizeCustomStructure(structure));
     const getDisplay = getStructureTagDisplay;
     const getSectionDisplay = (section: string) => customSectionMap.get(section)?.labelKo || section;
     return normalized.map(s => {
@@ -18743,7 +18770,7 @@ function SongStructureIntegratedControlComponent({
   }
 
   const getStableStructureGuide = useCallback(() => {
-    return 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Pre-Chorus → Chorus → Bridge → Final Chorus → Outro';
+    return 'Intro → Verse 1 → Pre-Chorus 1 → Chorus 1 → Verse 2 → Pre-Chorus 2 → Chorus 2 → Bridge → Final Chorus → Outro';
   }, []);
 
   const stableStructureGuide = getStableStructureGuide();

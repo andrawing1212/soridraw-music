@@ -2335,8 +2335,8 @@ function buildLyricGuidancePrompt(
 - LYRIC TAG PLACEMENT RULE: put only vocal/performance behavior inside the structural section tag after the colon. Put instruments, beat changes, sound effects, ambience, foley, reverb, and texture events on a separate square-bracket line directly below that section tag.
 - A standalone sound/production cue is never a structural section and must never replace Verse, Pre-Chorus, Chorus, Bridge, Final Chorus, or Outro.
 - Short inline vocal gestures may stay as parentheses inside the lyric body; environmental or instrumental events stay as standalone square-bracket cue lines under the owning section.
-- Every sung or vocal-ad-lib structural section tag MUST contain a short current-song performance cue. Bare sung tags such as [Verse 1], [Chorus], [Bridge], or [Outro] are invalid. Singer-role or free-floating performance-only tags must be merged into the nearest structural tag.
-- Rich section tags are encouraged when they help performance, but every sung section tag must own real lyric/ad-lib lines before the next section. Never output a planning-only empty [Intro], [Verse], [Pre-Chorus], [Chorus], [Bridge], [Drop], or [Outro]. Break/Stop/Instrumental transition tags may be lyric-free.
+- Every sung or vocal-ad-lib structural section tag MUST contain a short current-song performance cue. Bare sung tags such as [Verse 1], [Chorus 1], [Bridge], or [Outro] are invalid. Singer-role or free-floating performance-only tags must be merged into the nearest structural tag.
+- Rich section tags are encouraged when they help performance, but every sung section tag must own real lyric/ad-lib lines before the next section. Never output a planning-only empty [Intro], [Verse 1], [Pre-Chorus 1], [Chorus 1], [Bridge], [Drop], or [Outro]. Break/Stop/Instrumental transition tags may be lyric-free.
 - Do not place a cue-only duplicate section tag immediately before the real section. Merge the cue into the real section tag instead.
 - Actual sung ad-libs or sung short words should use parentheses, not square brackets.
 - The lyrics should primarily follow the user's story/intention.
@@ -4856,21 +4856,16 @@ function isLanguageMixRetryStructureCompatible(
   candidateLyrics: string,
   params: GenerateSongParams,
 ): boolean {
-  const currentSections = extractLanguageMixStructuralSequence(currentLyrics, params);
   const candidateSections = extractLanguageMixStructuralSequence(candidateLyrics, params);
   if (!candidateSections.length) return false;
 
-  // Engine-owned structures must satisfy the active blueprint itself. Comparing only with the
-  // first lyric can preserve an already-missing Bridge or another malformed section map.
-  if (params.songStructure === 'custom') {
-    if (!currentSections.length || currentSections.length !== candidateSections.length) return false;
-    if (currentSections.some((section, index) => section !== candidateSections[index])) return false;
-  } else {
-    const expectedSections = getV1SectionBlueprint(params).entries
-      .map((entry) => normalizeLyricSectionDisplayName(entry.name).toLowerCase());
-    if (candidateSections.length !== expectedSections.length) return false;
-    if (candidateSections.some((section, index) => section !== expectedSections[index])) return false;
-  }
+  // Every V1 mode, including Custom, must satisfy the active numbered blueprint itself.
+  // Comparing only with the first lyric can preserve an already-missing or unnumbered section map.
+  const activeBlueprint = getV1SectionBlueprint(params);
+  const expectedSections = activeBlueprint.entries
+    .map((entry) => normalizeV1SectionName(entry.name, activeBlueprint.customNames).toLowerCase().replace(/\s+/g, ' '));
+  if (candidateSections.length !== expectedSections.length) return false;
+  if (candidateSections.some((section, index) => section !== expectedSections[index])) return false;
 
   if (hasLanguageMixUnscopedSungLyrics(candidateLyrics, params)) return false;
   const currentLineCount = extractLanguageMixSungLines(currentLyrics).length;
@@ -4890,7 +4885,7 @@ function stripEnglishAdlibsForKoreanOnlyLyrics(text: string): string {
     .map((line) => {
       const trimmed = line.trim();
       if (!trimmed) return line;
-      // Keep Suno-style section tags such as [Verse] or [Chorus]. For default/free and custom structures, prefer [Verse] instead of numbered [Verse]/[Verse].
+      // Keep Suno-style structural tags intact. V1 assigns chronological numbers at the final Section Blueprint boundary.
       if (/^\[[^\]]+\]$/.test(trimmed)) return line;
       // Remove standalone foreign-language lyric ad-libs in single-language mode.
       if (/^\([A-Za-z0-9\s'",.!?&-]+\)$/.test(trimmed)) return "";
@@ -5383,7 +5378,7 @@ function normalizeLyricStructureTextForGeneration(structureText: string): string
 }
 
 
-const STANDARD_STABLE_LYRIC_STRUCTURE = 'Intro → Verse → Pre-Chorus → Chorus → Verse → Pre-Chorus → Chorus → Bridge → Chorus → Outro';
+const STANDARD_STABLE_LYRIC_STRUCTURE = 'Intro → Verse 1 → Pre-Chorus 1 → Chorus 1 → Verse 2 → Pre-Chorus 2 → Chorus 2 → Bridge → Final Chorus → Outro';
 
 function buildStableGenreStructure(params: GenerateSongParams): string {
   const genreMeta = params.genre ? getGenreMeta(params.genre) : null;
@@ -5431,6 +5426,19 @@ function buildStructureText(
   params?: GenerateSongParams,
 ): string {
   if (songStructure === "custom" && customStructure.length > 0) {
+    if (params) {
+      const customBlueprint = getV1SectionBlueprint({
+        ...params,
+        songStructure: 'custom',
+        customStructure,
+      });
+      return customBlueprint.entries
+        .map((entry) => {
+          const tags = formatCustomStructureTagForPrompt(entry.name, entry.customTags || []);
+          return `${entry.name}${tags.length > 0 ? ` (${tags.join(", ")})` : ""}`;
+        })
+        .join(" → ");
+    }
     return customStructure
       .map((section) => {
         const sectionName = normalizeLyricSectionNameForGeneration(section.section);
@@ -5997,7 +6005,7 @@ function buildSelectedKeywordLiteralLyricGuard(params: GenerateSongParams): stri
 - 분위기는 새 장소, 사건, 관계, 갈등, 제목, 훅을 만들지 말고 기존 주제/직접입력/상황의 말투, 거리감, 행동 속도, 침묵의 길이, 문장 리듬, 압력만 조절하십시오. 감정 온도, 온기, 공기, 촉감, 계절명, 시간명, 창가/모퉁이/방 같은 표면 단어로 번역하지 마십시오.
 - 선택 분위기는 “말하지 말고 보여주기” 방식으로만 반영하되, 새로운 소품을 억지로 만들지 마십시오. 먼저 사용자의 주제/상황 안에 이미 있는 인물, 행동, 말하지 못한 문장만 사용하십시오.
 - 선택된 악기/사운드/장르명은 가사 본문에 등장하는 물건이나 비유가 아닙니다. 해금/가야금/카혼/기타/신스/베이스/드럼 같은 단어를 가사 본문에 넣지 마십시오. 단, 사용자가 직접 이야기 소재로 쓴 경우만 예외입니다.
-- This ban applies to lyric body lines. English acoustic/performance cues inside section tags such as [Verse : tense delivery] may stay rich and expressive.
+- This ban applies to lyric body lines. English acoustic/performance cues inside section tags such as [Verse 1 : tense delivery] may stay rich and expressive.
 - Forbidden literal lyric words from Genre/Style/Sound/Mood unless the user directly typed them as story text: ${protectedTerms.length ? protectedTerms.join(', ') : 'none'}.
 - Theme words are story seeds, not mandatory lyric words. Use them as objects/relationships/places only when the story truly needs them; otherwise imply them through actions and details: ${themeTerms.length ? themeTerms.join(', ') : 'none'}.
 - If a forbidden production/mood word appears in a lyric body line, rewrite that line into an ordinary-life image, character action, sensory background, or concrete object before returning JSON.`;
@@ -11970,10 +11978,10 @@ or [Break]
 - Selected point sound cues: ${cueList}.
 - These are sound/stage/texture cues only. Do NOT turn them into lyric words, story topics, metaphors, or repeated hook phrases.
 - If they are used, place them as English standalone square-bracket cue lines directly under the relevant structural section tag in only 1-2 sections total. Do not write them as Korean parenthetical lyric lines.
-- These cue lines are NOT structural sections and must never replace or consume [Verse], [Pre-Chorus], [Chorus], [Bridge], or [Outro].
-- Format example: [Verse]
+- These cue lines are NOT structural sections and must never replace or consume [Verse 1], [Pre-Chorus 1], [Chorus 1], [Bridge], or [Outro].
+- Format example: [Verse 1]
 [clock tick]
-or [Chorus]
+or [Chorus 1]
 [group shout].
 - Instrumental sections may use these cues inside the section tag, but never add lyric lines inside an instrumental-only section.
 - Never invent unselected Foley/SFX such as doors, clocks, sirens, footsteps, typing, or radio noise.`;
@@ -11991,7 +11999,7 @@ function buildSectionCueMusicalVarietyInstruction(params: GenerateSongParams, ex
 - CHANGE is the primary goal: every sung or vocal-ad-lib section must show a real audible difference from its neighbour through one of four decision areas: vocal behavior, phrasing/rhythm, emotional attitude, or dynamic change.
 - BALANCE means contrast must be proportionate. Do not make every section maximal, fragile, whispered, shouted, or densely ornamented. Reserve the strongest expansion for the section whose structural role and [Arrangement] justify it.
 - UNITY means all tags must still sound like the same song, singer identity, genre, Story Context, and producer direction. Variation must come from local execution, not from changing the singer's entire character or genre in every section.
-- Every sung or vocal-ad-lib structural tag MUST contain one short current-song performance cue. A bare tag such as [Verse], [Chorus], [Bridge], or [Outro], or a multi-vocal anchor with no performance cue, is invalid.
+- Every sung or vocal-ad-lib structural tag MUST contain one short current-song performance cue. A bare tag such as [Verse 1], [Chorus 1], [Bridge], or [Outro], or a multi-vocal anchor with no performance cue, is invalid.
 - Choose ONE primary cue by answering the section-specific question supplied by the Section Role Engine. Add a second cue only when it describes another clearly audible local contrast; never stack synonyms or copy the whole input palette.
 - Sparse input rule: when few keywords are selected, derive the cue from genre phrasing, tempo articulation, selected vocal identity, the actual lyric lines, the section role, and the contrast with the previous/next section. Lack of keywords is never a reason to leave a sung tag bare.
 - Dense input rule: when many keywords are selected, route them before writing the tag. Vocal behavior belongs in the structural tag; instrument/effect/texture changes belong on a standalone square-bracket line; whole-song motion belongs in [Arrangement]; scene/emotion belongs in Story Context and lyric content. Use only the locally dominant signal in the tag.
@@ -21164,7 +21172,7 @@ function ensureLeadingSectionBeforeFirstVocal(lines: string[]): string[] {
   const first = lines[firstContentIndex].trim();
   if (isVocalRoleTag(first)) {
     const copy = [...lines];
-    copy.splice(firstContentIndex, 0, "[Verse]");
+    copy.splice(firstContentIndex, 0, "[Verse 1]");
     return copy;
   }
   return lines;
@@ -22493,60 +22501,33 @@ function repairMultilineBracketCueLines(text: string): string {
   return out.join('\n');
 }
 
-function isRepairableKoreanLyricBodyLine(line: string): boolean {
-  const trimmed = String(line || '').trim();
-  if (!trimmed || /^\[[^\]]+\]$/.test(trimmed) || /^\([^()]+\)$/.test(trimmed)) return false;
-  return /[가-힣]/.test(trimmed);
+function collapseNestedParenthesizedAdlibLine(line: string): string {
+  let value = String(line || '').trim();
+  // Echo/response values are stored without performance punctuation, but older or model-supplied
+  // values can already arrive parenthesized. Keep exactly one visible wrapper instead of ((...)).
+  for (let guard = 0; guard < 4; guard += 1) {
+    const match = value.match(/^\(\s*(\([^()]+\))\s*\)$/);
+    if (!match) break;
+    value = match[1].trim();
+  }
+  return value;
 }
 
-function joinPathologicalKoreanFragments(run: string[]): string {
-  // Preserve every generated character and word boundary. The formatter may repair hard line
-  // wrapping, but it must never guess whether two Korean fragments were originally one word.
-  return run.map((line) => String(line || '').trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+function normalizeNestedParenthesizedAdlibs(text: string): string {
+  return String(text || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => collapseNestedParenthesizedAdlibLine(line))
+    .join('\n');
 }
 
 function repairPathologicallyFragmentedKoreanLyricBodies(text: string): string {
-  const source = repairMultilineBracketCueLines(text);
-  const lines = source.split('\n');
-  const out: string[] = [];
-
-  const flushRun = (run: string[]) => {
-    if (!run.length) return;
-    const compactLengths = run.map((line) => line.replace(/[^가-힣A-Za-z0-9]/g, '').length);
-    const shortRatio = compactLengths.filter((length) => length <= 10).length / Math.max(1, compactLengths.length);
-    const averageLength = compactLengths.reduce((sum, length) => sum + length, 0) / Math.max(1, compactLengths.length);
-    const totalLength = compactLengths.reduce((sum, length) => sum + length, 0);
-    const microFragmentCount = compactLengths.filter((length) => length <= 4).length;
-    // Preserve intentional short hooks, but repair sustained editor/model hard wrapping.
-    const longRunPathology = run.length >= 6 && shortRatio >= 0.5 && averageLength <= 12.5 && totalLength >= 34;
-    const shortRunPathology = run.length >= 4 && microFragmentCount >= 2 && shortRatio >= 0.5
-      && averageLength <= 10.5 && totalLength >= 18;
-    const isPathological = longRunPathology || shortRunPathology;
-
-    if (!isPathological) {
-      out.push(...run);
-      return;
-    }
-
-    const joined = joinPathologicalKoreanFragments(run);
-    // Preserve the recovered phrase as one generated lyric line. The public formatter may
-    // repair an obvious hard-wrap run, but it must never introduce a new character-count wrap.
-    if (joined) out.push(joined);
-  };
-
-  let run: string[] = [];
-  for (const rawLine of lines) {
-    if (isRepairableKoreanLyricBodyLine(rawLine)) {
-      run.push(String(rawLine || '').trim());
-      continue;
-    }
-    flushRun(run);
-    run = [];
-    out.push(rawLine);
-  }
-  flushRun(run);
-
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  // Generated lyric line breaks are creative structure, especially for hooks, chants, echoes,
+  // pauses, and short Korean phrases. Never infer that a run of short lines is editor wrapping.
+  // Only repair malformed multi-line bracket cues and duplicate whole-line ad-lib parentheses.
+  return normalizeNestedParenthesizedAdlibs(repairMultilineBracketCueLines(text))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function isLyricSectionTagLine(line: string): boolean {
@@ -23304,7 +23285,7 @@ function rewriteForbiddenSoloSectionTags(lyrics: string, params: GenerateSongPar
         : isGenerationEngineV2(params)
           ? lyricEmotionCueForBareSection('Chorus', params)
           : [];
-      return sungCues.length ? addCueToBracketTagLine('[Chorus]', sungCues) : '[Chorus]';
+      return sungCues.length ? addCueToBracketTagLine('[Chorus 1]', sungCues) : '[Chorus 1]';
     }
 
     const instrumentalCues = cueParts.length ? cueParts : [parsed.rawSection];
@@ -25140,8 +25121,8 @@ function repairOpeningUntaggedLyricBlock(lyrics: string, params: GenerateSongPar
   // contains an Intro. If the model wanted a sung/spoken Intro it usually emits an [Intro]
   // tag itself; otherwise the safest local repair is to start the lyric body at Verse.
   const tag = isGenerationEngineV2(params)
-    ? `[Verse : ${lyricFriendlySectionCue('Verse', params)}]`
-    : '[Verse]';
+    ? `[Verse 1 : ${lyricFriendlySectionCue('Verse', params)}]`
+    : '[Verse 1]';
 
   lines.splice(firstIdx, 0, tag);
   return lines.join('\n');
@@ -25366,7 +25347,7 @@ ${roleIssues.length ? `- Detected structural-role problems to repair: ${roleIssu
 - The problem to fix is not short lines themselves; fix empty or underdeveloped sections, tag-only sections, and sections filled only with meaningless tiny phrases.
 - Intro is flexible: if the Intro cue is instrumental/ambient/opening, it may stay lyric-free. If it naturally fits the scene, it may also carry one very short ad-lib, spoken aside, hook phrase, or atmospheric vocal line. Do not force sung lyrics into an instrumental Intro, and do not always leave Intro empty.
 - If Intro has sung/ad-lib lines, remove instrumental wording from the Intro tag and make it a sung opening cue.
-- Do not leave required sung sections tag-only. Build-Up, Drop, Breakdown, Intro, and Outro may be sparse or lyric-free only when their active role map allows it; never fill them merely to satisfy a quota.
+- Do not leave required sung sections tag-only. Intro, Build-Up, Drop, and Breakdown may be sparse or lyric-free only when their active role map allows it. Outro must close with a short lyric/ad-lib unless the user explicitly requested a lyric-free instrumental Outro.
 - Do not use fixed line quotas. Judge section mass relatively from the current structure, tempo articulation, melodic space, Story Context, and the role of neighbouring sections.
 - Final Chorus/Final Hook must not collapse into a one-line Outro when an earlier Chorus/Hook established a fuller center. Intro must not carry more main-story development than the first Verse unless the user explicitly designed it that way.
 - Break and Stop must remain lyric-free transition tags, but they need a short cue after the colon.
@@ -25390,31 +25371,39 @@ function isProtectedLyricPreserveMode(params: GenerateSongParams): boolean {
 function hasCatastrophicV1LyricStructureFailure(lyrics: string, params: GenerateSongParams): boolean {
   const source = String(lyrics || '').trim();
   if (!source) return true;
-  const blocks = splitLyricBlocksForDensity(source);
-  if (!blocks.length) return true;
   const bodyLines = lyricDensityBodyLines(source, params);
   if (bodyLines.length < 2) return true;
 
-  // V1 structure is not advisory. Missing, extra, renamed, or out-of-order structural
-  // tags are catastrophic because the public selector promises the active blueprint.
-  // Stable in particular must always remain the exact visible ten-section sequence.
+  // The numbered V1 blueprint is the public contract in every mode, including Custom.
+  // Do not flatten Chorus 1/2 or Pre-Chorus 1/2 into one family during validation.
   const blueprint = getV1SectionBlueprint(params);
+  const visibleBlocks = extractV1VisibleSectionBlocks(source, params);
   const expectedOrder = blueprint.entries
-    .map((entry) => normalizeLyricSectionDisplayName(entry.name).toLowerCase());
-  const actualOrder = blocks
-    .map((block) => normalizeLyricSectionDisplayName(block.section || '').toLowerCase())
-    .filter(Boolean);
+    .map((entry) => normalizeV1SectionName(entry.name, blueprint.customNames).toLowerCase().replace(/\s+/g, ' '));
+  const actualOrder = visibleBlocks
+    .map((block) => normalizeV1SectionName(block.rawSection, blueprint.customNames).toLowerCase().replace(/\s+/g, ' '));
   if (actualOrder.length !== expectedOrder.length
     || actualOrder.some((section, index) => section !== expectedOrder[index])) return true;
 
-  let emptyRequiredBlocks = 0;
-  blocks.forEach((block) => {
-    const normalized = normalizeLyricSectionDisplayName(block.section || '');
-    const required = /^(?:Verse(?:\s+\d+)?|Pre[-\s]?Chorus(?:\s+\d+)?|Chorus(?:\s+\d+)?|Final\s+Chorus|Hook(?:\s+\d+)?|Final\s+Hook|Refrain(?:\s+\d+)?|Rap\s+Section(?:\s+\d+)?|Bridge)$/i.test(normalized);
-    if (!required) return;
-    if (!sectionMeaningScoreForDensity(block.lines, params).bodyLines.length) emptyRequiredBlocks += 1;
+  const hasEmptyRequired = blueprint.entries.some((entry, index) => {
+    if (!entry.requiresLyrics) return false;
+    const block = visibleBlocks[index];
+    if (!block) return true;
+    return !block.bodyLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params));
   });
-  return emptyRequiredBlocks > 0;
+  if (hasEmptyRequired) return true;
+  if (hasV1NumberedSectionOwnershipOverflow(visibleBlocks, blueprint, params)) return true;
+
+  // Only failures that make section ownership impossible are catastrophic.
+  // Sparse Verse mass, a modest Final Chorus, or an overlong compact section are quality issues:
+  // they may trigger one targeted repair, but they must never discard an otherwise completed song.
+  const criticalRoleCodes = new Set([
+    'role-body-duplicate',
+  ]);
+  return filterV1SectionRoleIssuesForUserIntent(
+    inspectV1LyricsForRoleIssues(source, params),
+    params,
+  ).some((issue) => criticalRoleCodes.has(issue.code));
 }
 
 
@@ -25425,10 +25414,11 @@ type V1VisibleSectionBlock = {
   bodyLines: string[];
 };
 
-type V1MissingRequiredSection = {
+type V1SectionBodyRepairTarget = {
   expectedIndex: number;
   name: string;
   role: string;
+  reason: 'missing' | 'underdeveloped';
 };
 
 function extractV1VisibleSectionBlocks(
@@ -25457,6 +25447,40 @@ function extractV1VisibleSectionBlocks(
   return blocks;
 }
 
+function hasV1NumberedSectionOwnershipOverflow(
+  blocks: V1VisibleSectionBlock[],
+  blueprint: ReturnType<typeof getV1SectionBlueprint>,
+  params: GenerateSongParams,
+): boolean {
+  const grouped = new Map<string, Array<{ lines: number; chars: number; maxLineChars: number }>>();
+  blueprint.entries.forEach((entry, index) => {
+    const base = baseV1SectionName(entry.name);
+    if (!/^(?:Verse|Pre-Chorus|Chorus|Hook|Refrain|Rap Section)$/i.test(base)) return;
+    const block = blocks[index];
+    if (!block) return;
+    const score = sectionMeaningScoreForDensity(block.bodyLines, params);
+    const maxLineChars = score.bodyLines.reduce(
+      (max, line) => Math.max(max, String(line || '').replace(/\s+/g, '').length),
+      0,
+    );
+    const list = grouped.get(base.toLowerCase()) || [];
+    list.push({ lines: score.bodyLines.length, chars: score.chars, maxLineChars });
+    grouped.set(base.toLowerCase(), list);
+  });
+
+  for (const loads of grouped.values()) {
+    if (loads.length < 2 || loads.some((load) => !load.chars)) continue;
+    const byChars = [...loads].sort((a, b) => a.chars - b.chars);
+    const smallest = byChars[0];
+    const largest = byChars[byChars.length - 1];
+    const lineMassOverflow = largest.lines >= smallest.lines + 5 && largest.lines > smallest.lines * 2.1;
+    const charMassOverflow = largest.chars >= smallest.chars + 90 && largest.chars > smallest.chars * 2.2;
+    const collapsedLongLineOverflow = largest.maxLineChars >= smallest.chars * 1.8 && largest.maxLineChars >= 72;
+    if (lineMassOverflow || charMassOverflow || collapsedLongLineOverflow) return true;
+  }
+  return false;
+}
+
 function alignVisibleV1SectionsToBlueprint(
   lyrics: string,
   params: GenerateSongParams,
@@ -25474,17 +25498,20 @@ function alignVisibleV1SectionsToBlueprint(
       && !used.has(index)
       && normalizeV1SectionName(entry.name, blueprint.customNames).toLowerCase() === normalized.toLowerCase(),
     );
-    const family = exact >= 0 ? exact : blueprint.entries.findIndex((entry, index) =>
-      index >= cursor
-      && !used.has(index)
-      && baseV1SectionName(normalizeV1SectionName(entry.name, blueprint.customNames)).toLowerCase()
-        === baseV1SectionName(normalized).toLowerCase(),
-    );
-    const fallback = family >= 0 ? family : blueprint.entries.findIndex((entry, index) =>
-      !used.has(index)
-      && baseV1SectionName(normalizeV1SectionName(entry.name, blueprint.customNames)).toLowerCase()
-        === baseV1SectionName(normalized).toLowerCase(),
-    );
+    const sourceIsFinal = /^Final\s+/i.test(normalized);
+    const family = exact >= 0 ? exact : blueprint.entries.findIndex((entry, index) => {
+      const entryName = normalizeV1SectionName(entry.name, blueprint.customNames);
+      return index >= cursor
+        && !used.has(index)
+        && /^Final\s+/i.test(entryName) === sourceIsFinal
+        && baseV1SectionName(entryName).toLowerCase() === baseV1SectionName(normalized).toLowerCase();
+    });
+    const fallback = family >= 0 ? family : blueprint.entries.findIndex((entry, index) => {
+      const entryName = normalizeV1SectionName(entry.name, blueprint.customNames);
+      return !used.has(index)
+        && /^Final\s+/i.test(entryName) === sourceIsFinal
+        && baseV1SectionName(entryName).toLowerCase() === baseV1SectionName(normalized).toLowerCase();
+    });
     if (fallback < 0) return;
     used.add(fallback);
     cursor = fallback + 1;
@@ -25496,8 +25523,7 @@ function alignVisibleV1SectionsToBlueprint(
 function collectMissingRequiredV1Sections(
   lyrics: string,
   params: GenerateSongParams,
-): V1MissingRequiredSection[] {
-  if (params.songStructure === 'custom') return [];
+): V1SectionBodyRepairTarget[] {
   const blueprint = getV1SectionBlueprint(params);
   const aligned = alignVisibleV1SectionsToBlueprint(lyrics, params);
   const byIndex = new Map(aligned.map((item) => [item.expectedIndex, item.block]));
@@ -25513,10 +25539,87 @@ function collectMissingRequiredV1Sections(
       expectedIndex,
       name: entry.name,
       role: entry.lyricRole,
+      reason: 'missing' as const,
     }));
 }
 
-function insertMissingV1SectionBodies(
+function userExplicitlyRequestsCompactV1DevelopmentSection(
+  params: GenerateSongParams,
+  sectionName: string,
+): boolean {
+  const blueprint = getV1SectionBlueprint(params);
+  const custom = (params.customStructure || [])
+    .filter((item) => normalizeV1SectionName(String(item?.section || ''), blueprint.customNames).toLowerCase() === normalizeV1SectionName(sectionName, blueprint.customNames).toLowerCase())
+    .flatMap((item) => [item.section, ...(item.tags || [])]);
+  const text = [params.userInput || '', ...custom].join(' ');
+  const escaped = sectionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+  const sectionPattern = new RegExp(`(?:${escaped}|${baseV1SectionName(sectionName)}|벌스|랩\\s*(?:섹션|파트)|\\d+절)`, 'i');
+  if (!sectionPattern.test(text)) return false;
+  return /\bone[-\s]?line\b|\bminimal\b|\bbrief\b|\bshort(?:er)?\b|한\s*줄|짧게|최소/i.test(text);
+}
+
+function collectUnderdevelopedV1Sections(
+  lyrics: string,
+  params: GenerateSongParams,
+): V1SectionBodyRepairTarget[] {
+  const blueprint = getV1SectionBlueprint(params);
+  const aligned = alignVisibleV1SectionsToBlueprint(lyrics, params);
+  const byIndex = new Map(aligned.map((item) => [item.expectedIndex, item.block]));
+  const groups = new Map<string, Array<{ expectedIndex: number; entry: (typeof blueprint.entries)[number]; score: ReturnType<typeof sectionMeaningScoreForDensity> }>>();
+
+  blueprint.entries.forEach((entry, expectedIndex) => {
+    const base = baseV1SectionName(entry.name);
+    if (!/^(?:Verse|Rap Section)$/i.test(base) || !entry.requiresLyrics) return;
+    const block = byIndex.get(expectedIndex);
+    if (!block) return;
+    const score = sectionMeaningScoreForDensity(block.bodyLines, params);
+    if (!score.bodyLines.length || !score.chars) return;
+    const key = base.toLowerCase();
+    const list = groups.get(key) || [];
+    list.push({ expectedIndex, entry, score });
+    groups.set(key, list);
+  });
+
+  const targets: V1SectionBodyRepairTarget[] = [];
+  groups.forEach((items) => {
+    if (items.length < 2) return;
+    const reference = [...items].sort((a, b) => b.score.chars - a.score.chars || b.score.bodyLines.length - a.score.bodyLines.length)[0];
+    if (!reference || reference.score.bodyLines.length < 2 || reference.score.chars < 18) return;
+    items.forEach((item) => {
+      if (item === reference || userExplicitlyRequestsCompactV1DevelopmentSection(params, item.entry.name)) return;
+      const currentLines = item.score.bodyLines.length;
+      const referenceLines = reference.score.bodyLines.length;
+      const lineCollapse = currentLines * 1.6 < referenceLines;
+      const charCollapse = item.score.chars * 1.6 < reference.score.chars;
+      if (!lineCollapse && !charCollapse) return;
+      targets.push({
+        expectedIndex: item.expectedIndex,
+        name: item.entry.name,
+        role: item.entry.lyricRole,
+        reason: 'underdeveloped',
+      });
+    });
+  });
+  return targets;
+}
+
+function collectV1SectionBodyRepairTargets(
+  lyrics: string,
+  params: GenerateSongParams,
+): V1SectionBodyRepairTarget[] {
+  const combined = [
+    ...collectMissingRequiredV1Sections(lyrics, params),
+    ...collectUnderdevelopedV1Sections(lyrics, params),
+  ];
+  const seen = new Set<number>();
+  return combined.filter((item) => {
+    if (seen.has(item.expectedIndex)) return false;
+    seen.add(item.expectedIndex);
+    return true;
+  });
+}
+
+function applyGeneratedV1SectionBodies(
   lyrics: string,
   params: GenerateSongParams,
   generatedSections: Array<{ sectionName: string; bodyLines: string[] }>,
@@ -25535,15 +25638,28 @@ function insertMissingV1SectionBodies(
     if (normalized && body.length) generatedByName.set(normalized, body);
   });
 
-  const missing = collectMissingRequiredV1Sections(current, params)
+  const targets = collectV1SectionBodyRepairTargets(current, params)
     .filter((item) => generatedByName.has(normalizeV1SectionName(item.name, blueprint.customNames).toLowerCase()))
     .sort((a, b) => b.expectedIndex - a.expectedIndex);
 
-  missing.forEach((item) => {
+  targets.forEach((item) => {
     const body = generatedByName.get(normalizeV1SectionName(item.name, blueprint.customNames).toLowerCase()) || [];
     if (!body.length) return;
     const lines = current.replace(/\r\n?/g, '\n').split('\n');
     const aligned = alignVisibleV1SectionsToBlueprint(current, params);
+    const existing = aligned.find((candidate) => candidate.expectedIndex === item.expectedIndex);
+
+    if (existing) {
+      const preservedCues = lines
+        .slice(existing.block.start + 1, existing.block.end)
+        .map((line) => String(line || '').trim())
+        .filter((line) => /^\[[^\]]+\]$/.test(line));
+      const replacement = [...preservedCues, ...body];
+      lines.splice(existing.block.start + 1, existing.block.end - existing.block.start - 1, ...replacement);
+      current = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+      return;
+    }
+
     const next = aligned
       .filter((candidate) => candidate.expectedIndex > item.expectedIndex)
       .sort((a, b) => a.expectedIndex - b.expectedIndex)[0];
@@ -25565,19 +25681,19 @@ async function repairMissingV1RequiredSectionsWithGemini(
   productionPrompt: string,
   languageLabel: string,
 ): Promise<string> {
-  if (isGenerationEngineV2(params) || params.songStructure === 'custom') return lyrics;
+  if (isGenerationEngineV2(params)) return lyrics;
   const guarded = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
-  const missing = collectMissingRequiredV1Sections(guarded, params);
-  if (!missing.length) return guarded;
+  const targets = collectV1SectionBodyRepairTargets(guarded, params);
+  if (!targets.length) return guarded;
 
   const blueprint = getV1SectionBlueprint(params);
   const storyContext = String((params as any).__v1StoryContext || '').trim();
   const systemInstruction = `You are SORIDRAW's missing-section body repair stage.
-Write lyric bodies only for the explicitly listed missing required sections in ${languageLabel}.
+Write lyric bodies only for the explicitly listed missing or structurally underdeveloped sections in ${languageLabel}.
 
 ABSOLUTE RULES:
 - Preserve every existing lyric line, hook, section, singer assignment, and production cue. Do not rewrite the supplied lyric.
-- Return content only for the requested missing sections. Do not add, remove, rename, merge, split, or reorder any section.
+- Return content only for the requested target sections. For an underdeveloped section, replace only that section's lyric body; preserve its existing tag and production cues. Do not add, remove, rename, merge, split, or reorder any section.
 - Follow each missing section's current-song role and connect naturally between its neighbouring sections.
 - Preserve the current Story Context, character voice, emotional progression, language-mix style, and approximate language balance. Quality and singability come before percentage arithmetic.
 - Do not copy a neighbouring section, restart the story, translate adjacent lines redundantly, or introduce stock phrases.
@@ -25594,9 +25710,10 @@ ABSOLUTE RULES:
           productionDirection: String(productionPrompt || '').slice(0, 1800),
           exactSectionOrder: blueprint.exactOrderText,
           currentLyrics: guarded.slice(0, 7000),
-          missingSections: missing.map((item) => ({
+          targetSections: targets.map((item) => ({
             sectionName: item.name,
             sectionRole: item.role,
+            repairReason: item.reason,
           })),
         }),
         config: {
@@ -25628,7 +25745,7 @@ ABSOLUTE RULES:
     );
     const parsed = parseGeminiJsonObject(response?.text || '{}');
     const generated = Array.isArray(parsed?.sections) ? parsed.sections : [];
-    const repaired = insertMissingV1SectionBodies(
+    const repaired = applyGeneratedV1SectionBodies(
       guarded,
       params,
       generated.map((item: any) => ({
@@ -25663,18 +25780,32 @@ async function repairSparseLyricsWithGemini(
   // Clean tag-only fallback Intro/Verse shells before deciding whether a second Gemini pass
   // is needed. This prevents the repair pass from creating a second, competing lyric version.
   const source = cleanupGhostOpeningIntroAndEmptySungTags(originalSource, params);
-  const roleIssues = source && isGenerationEngineV2(params)
-    ? filterV1SectionRoleIssuesForUserIntent(inspectV1LyricsForRoleIssues(source, params), params).map((issue) => issue.message)
+  const detectedRoleIssues = source
+    ? filterV1SectionRoleIssuesForUserIntent(inspectV1LyricsForRoleIssues(source, params), params)
     : [];
+  const v1CriticalRoleCodes = new Set([
+    'role-body-duplicate',
+    'outro-restarts-story',
+    'final-payoff-underdeveloped',
+    'development-section-underdeveloped',
+    'compact-role-overdeveloped',
+  ]);
+  const roleIssues = detectedRoleIssues
+    .filter((issue) => isGenerationEngineV2(params) || v1CriticalRoleCodes.has(issue.code))
+    .map((issue) => issue.message);
   // V1 no longer spends another Gemini call on soft quality preferences such as a modest
   // Final Chorus, Intro mass, or section-role nuance. A full lyric rewrite is reserved only
   // for catastrophic structural failure (missing/empty required sung blocks or no usable body).
+  const catastrophicRepairNeeded = !isGenerationEngineV2(params)
+    && hasCatastrophicV1LyricStructureFailure(originalSource, params);
+  const targetedSectionRepairNeeded = !isGenerationEngineV2(params)
+    && collectV1SectionBodyRepairTargets(originalSource, params).length > 0;
   const densityRepairNeeded = isGenerationEngineV2(params)
     ? Boolean(source && needsLyricDensityRepair(source, params))
-    : hasCatastrophicV1LyricStructureFailure(originalSource, params);
-  if (!source || (!densityRepairNeeded && !roleIssues.length)) {
-    // V1 Stable may intentionally keep a tag-only Intro/Outro. The ghost cleanup source
-    // is only a repair working copy; when no repair is needed, preserve the original exact
+    : catastrophicRepairNeeded;
+  if (!source || (!densityRepairNeeded && !targetedSectionRepairNeeded && !roleIssues.length)) {
+    // V1 may intentionally keep a tag-only Intro, but a default vocal Outro is required.
+    // The ghost cleanup source is only a repair working copy; when no repair is needed, preserve the original exact
     // blueprint rather than returning a copy that may have removed an intentional empty tag.
     const noRepairSource = isGenerationEngineV2(params) ? (source || originalSource) : originalSource;
     return enforceLyricSectionBlockSpacing(noRepairSource, params);
@@ -25682,7 +25813,7 @@ async function repairSparseLyricsWithGemini(
 
   // V1 section architecture is engine-owned. Repair only the missing required section body
   // before considering a full-lyric rewrite, so existing lyric quality and language mixing stay intact.
-  if (!isGenerationEngineV2(params) && densityRepairNeeded) {
+  if (!isGenerationEngineV2(params) && (catastrophicRepairNeeded || targetedSectionRepairNeeded)) {
     const targetedRepair = await repairMissingV1RequiredSectionsWithGemini(
       ai,
       applyV1SectionBlueprintGuard(originalSource, params),
@@ -25690,7 +25821,11 @@ async function repairSparseLyricsWithGemini(
       productionPrompt,
       languageLabel,
     );
-    if (!hasCatastrophicV1LyricStructureFailure(targetedRepair, params)) {
+    const targetedIsCatastrophic = hasCatastrophicV1LyricStructureFailure(targetedRepair, params);
+    if (!targetedIsCatastrophic) {
+      // A one-line Verse or another relative-density issue receives one local repair attempt only.
+      // If Gemini keeps it compact, preserve the completed song instead of escalating into a
+      // whole-lyric rewrite or a generation failure.
       return enforceLyricSectionBlockSpacing(targetedRepair, params);
     }
   }
@@ -25914,16 +26049,33 @@ function isV1ActionablePerformanceCuePart(part: string): boolean {
   return true;
 }
 
-function isV1PerformanceCueRequiredSection(sectionName: string, lines: string[], index: number): boolean {
+function isV1PerformanceCueRequiredSection(
+  sectionName: string,
+  lines: string[],
+  index: number,
+  params?: GenerateSongParams,
+): boolean {
   const section = normalizeLyricSectionDisplayName(sectionName || '');
   if (!hasLyricBodyLinesAfterSectionTag(lines, index)) return false;
   if (/^(?:Break|Stop|Interlude|Instrumental|Instrumental Opening|Solo|Guitar Solo|Drum Break)$/i.test(section)) return false;
+
+  // Custom mode must use the same performance-cue contract as the built-in structures.
+  // Resolve custom/nonstandard section names through the active blueprint instead of relying
+  // only on the standard-name regex. Transition/instrumental entries remain protected.
+  if (params) {
+    const blueprint = getV1SectionBlueprint(params);
+    const entry = blueprint.entries.find((candidate) => candidate.name.toLowerCase() === section.toLowerCase());
+    if (entry) {
+      if (!entry.allowsLyrics || entry.kind === 'transition' || entry.kind === 'instrumental') return false;
+      return true;
+    }
+  }
+
   return /^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus(?:\s+[A-Z0-9]+)?|Chorus(?:\s+[A-Z0-9]+)?|Final\s+Chorus|Hook(?:\s+[A-Z0-9]+)?|Final\s+Hook|Refrain(?:\s+[A-Z0-9]+)?|Rap\s+Section(?:\s+[A-Z0-9]+)?|Build[-\s]?Up|Drop|Breakdown|Bridge(?:\s+[A-Z0-9]+)?|Climax|Outro)$/i.test(section);
 }
 
 function collectV1SectionPerformanceCueIssues(lyrics: string, params: GenerateSongParams): V1SectionPerformanceCueIssue[] {
   if (isGenerationEngineV2(params) || !isVocalLyricSong(params)) return [];
-  if (params.songStructure === 'custom') return [];
   if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return [];
   const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
   const issues: V1SectionPerformanceCueIssue[] = [];
@@ -25933,7 +26085,7 @@ function collectV1SectionPerformanceCueIssues(lyrics: string, params: GenerateSo
     const parsed = parseGuardBracketSectionTag(line);
     if (!parsed) return;
     const section = normalizeLyricSectionDisplayName(parsed.rawSection);
-    if (!isV1PerformanceCueRequiredSection(section, lines, index)) return;
+    if (!isV1PerformanceCueRequiredSection(section, lines, index, params)) return;
 
     const anchor = extractV1AnchorFromCueBody(parsed.body, params);
     const cueParts = v1PerformanceCuePartsFromBody(parsed.body, params);
@@ -27334,7 +27486,14 @@ function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSo
   finalText = collapseAdjacentDuplicateStructuralSections(finalText, params);
   finalText = removeV1OrphanSectionSkeletonsAtPublicBoundary(finalText, params);
   finalText = tightenV1EmbeddedDropHookBlocks(finalText);
-  return finalText.replace(/\n{3,}/g, '\n\n').trim();
+  const cleaned = finalText.replace(/\n{3,}/g, '\n\n').trim();
+  // Legacy public formatting normalizes numbered families for internal matching. Custom mode
+  // previously avoided this path entirely, so enabling the shared performance plan exposed that
+  // flattening. Re-seal the active Custom blueprint at the true public boundary so Verse 1/2,
+  // Pre-Chorus 1/2, Chorus 1/2, user-created names, and Stop/Break ownership stay exact.
+  return params.songStructure === 'custom'
+    ? applyV1SectionBlueprintGuard(cleaned, params)
+    : cleaned;
 }
 
 function applyV1GeneratedSectionPerformancePlan(
@@ -27349,7 +27508,6 @@ function applyV1GeneratedSectionPerformancePlan(
   ).trim();
   if (!source || isGenerationEngineV2(params) || !isVocalLyricSong(params)) return source;
   if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return source;
-  if (params.songStructure === 'custom') return source;
 
   const normalizedPlan = isV1CanonicalSectionPerformancePlan(rawPlan)
     ? rawPlan
@@ -27478,7 +27636,7 @@ function applyV1GeneratedSectionPerformancePlan(
       .map((cue) => sanitizeV1GeneratedPlanSoundCue(cue, sectionRepairContext))
       .filter(Boolean);
 
-    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index)
+    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index, params)
       || (/^Intro$/i.test(section) && Boolean(item?.performanceCue || item?.alternatePerformanceCue || adjacentPerformance[0]));
     const promptDerivedCue = buildV1PromptDerivedPerformanceCue(
       productionPrompt,
@@ -30111,11 +30269,17 @@ interface V1ResolvedHookBlueprint {
 }
 
 function cleanV1HookText(value: unknown, maxWords = 8): string {
-  const clean = String(value || '')
+  let raw = collapseNestedParenthesizedAdlibLine(String(value || '')
     .replace(/^['"“”‘’]+|['"“”‘’]+$/g, '')
     .replace(/^\[[^\]]+\]\s*/, '')
     .replace(/\s{2,}/g, ' ')
-    .trim();
+    .trim());
+  for (let guard = 0; guard < 3; guard += 1) {
+    const wrapped = raw.match(/^\(\s*([^()]+?)\s*\)$/);
+    if (!wrapped) break;
+    raw = wrapped[1].trim();
+  }
+  const clean = raw;
   if (!clean || /^(?:none|null|n\/a)$/i.test(clean)) return '';
   const words = clean.split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) return clean.replace(/[.!?。！？]+$/g, '').trim();
@@ -31467,6 +31631,48 @@ function finalizeV1SongAtAbsoluteReturnBoundary(
   return result;
 }
 
+function finalizeV1SongAfterHardBan(
+  result: SongResult,
+  params: GenerateSongParams,
+  resolvedHookBlueprint?: V1ResolvedHookBlueprint,
+): SongResult {
+  if (!result?.lyrics || isGenerationEngineV2(params)) return result;
+
+  const finalizeCard = (value: unknown) => {
+    const source = String(value || '').trim();
+    if (!source) return '';
+    // The hard-ban stage rewrites lyric-body lines only. Re-running the full structural cleanup
+    // here removed a repaired Outro/Verse tag after generation and then made the final validator
+    // reject the whole song. Keep section ownership exactly as it was at the absolute-return
+    // boundary; only normalize harmless nested ad-lib punctuation.
+    return normalizeNestedParenthesizedAdlibs(source).replace(/\n{3,}/g, '\n\n').trim();
+  };
+
+  result.lyrics.korean = finalizeCard(result.lyrics.korean);
+  result.lyrics.english = finalizeCard(result.lyrics.english);
+
+  if (resolvedHookBlueprint && result.appliedKeywords) {
+    (result.appliedKeywords as any).hookBlueprint = buildV1HookBlueprintPublicSummary(
+      resolvedHookBlueprint,
+      params,
+      String(result.lyrics.korean || ''),
+      String(result.lyrics.english || ''),
+    );
+  }
+  return result;
+}
+
+function assertNoFinalLyricHardBanViolations(result: SongResult, params: GenerateSongParams): void {
+  if (params.isNoLyrics || !result?.lyrics) return;
+  const violations = [
+    ...findLyricHardBanViolations(result.lyrics.korean, params),
+    ...findLyricHardBanViolations(result.lyrics.english, params),
+  ];
+  if (!violations.length) return;
+  const terms = Array.from(new Set(violations.map((item) => item.term))).slice(0, 12).join(', ');
+  throw new Error(`가사 클리셰 1순위 금지어가 최종 결과에 남아 생성이 중단되었습니다: ${terms}. 다시 생성해주세요.`);
+}
+
 // SORIDRAW_ENGINE_FOLDER_ROUTER_STEP_28
 export async function generateSong(
   ...args: GenerateSongInput
@@ -31474,8 +31680,6 @@ export async function generateSong(
   const params = normalizeArgs(args);
   const route = resolveGenerationEngineRoute(params.generationEngineVersion);
 
-  // All connected generation engines pass through the same technical hard-ban
-  // boundary. This does not share creative logic between V1/V2/V3.
   const generated = route === "v2"
     ? await runV2Engine(() => generateSongLegacy(...args))
     : await runV1Engine(() => generateSongLegacy(...args));
@@ -31483,16 +31687,39 @@ export async function generateSong(
     ? undefined
     : (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] as V1ResolvedHookBlueprint | undefined;
 
-  let guarded = generated;
-  try {
-    guarded = await applySharedLyricHardBanGuard(generated, params);
-  } catch (error) {
-    // A post-generation lyric cleanup must never erase an otherwise completed title/prompt/lyric.
-    console.warn('[SORIDRAW HardBan] cleanup failed; preserving completed song:', error);
-    guarded = generated;
+  // Bind the exact public section/hook structure first. The cliché guard must inspect the same
+  // lyric strings that users will actually see; otherwise a later hook return can reintroduce a
+  // banned word after an earlier cleanup pass.
+  let structurallyFinal = generated;
+  if (route !== 'v2' && structurallyFinal?.lyrics) {
+    structurallyFinal = finalizeV1SongAtAbsoluteReturnBoundary(structurallyFinal, params, resolvedHookBlueprint);
   }
+
+  let guarded: SongResult;
+  try {
+    guarded = await applySharedLyricHardBanGuard(structurallyFinal, params);
+  } catch (error) {
+    // Admin/user 1st-priority terms are an explicit output contract. Returning the original song
+    // here silently leaked those terms, so the generation must report a clear failure instead.
+    console.error('[SORIDRAW HardBan] final cleanup failed:', error);
+    throw error;
+  }
+
   if (route !== 'v2' && guarded?.lyrics) {
-    guarded = finalizeV1SongAtAbsoluteReturnBoundary(guarded, params, resolvedHookBlueprint);
+    guarded = finalizeV1SongAfterHardBan(guarded, params, resolvedHookBlueprint);
+    const finalStructuralFailures = [
+      String(guarded.lyrics.korean || '').trim(),
+      String(guarded.lyrics.english || '').trim(),
+    ].filter(Boolean).filter((lyrics) => hasCatastrophicV1LyricStructureFailure(lyrics, params));
+    if (finalStructuralFailures.length) {
+      // Section-quality repair is fail-open. The user explicitly requires generation to complete
+      // even when a one-time local repair cannot fully satisfy a soft density preference.
+      // Preserve the completed, numbered lyric instead of converting a quality warning into
+      // a full generation failure.
+      console.warn('[SORIDRAW V1 Section Engine] final structure warning preserved completed song:', {
+        cards: finalStructuralFailures.length,
+      });
+    }
     if (String(guarded.lyrics.korean || '').trim()) {
       assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);
     }
@@ -31500,6 +31727,8 @@ export async function generateSong(
       assertV1SectionPerformanceCueQuality(guarded.lyrics.english, params);
     }
   }
+
+  assertNoFinalLyricHardBanViolations(guarded, params);
   delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
   delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
   return guarded;
@@ -31768,9 +31997,9 @@ async function generateSongLegacy(
 - Make the selected Main/Lead/Sub/Rap roles affect real section ownership, not only the printed label. Main should lead at least one core payoff or emotional peak; Lead should carry at least one flow-setting or rising section; Sub should receive a meaningful support/contrast section; a Rap-capable anchor should own Rap Section whenever it exists.
 - Apply those as soft musical priorities rather than a rigid formula. After the role expectations are satisfied, rotate singers according to song flow, emotion, tension, hook design, genre, and direct user ownership. Do not force Main to sing every Chorus or Lead to sing every Verse.
 - Keep the selected section skeleton stable and readable. If the chosen structure contains Intro, the lyric output must begin with an Intro tag. Use [Intro] plus a separate production cue for a real instrumental intro, or [Intro: Male A Main, hum] / another exact active singer anchor for a vocal intro.
-- In Recommended, Stable, and Experimental mode, use chronological section numbers only when a section repeats: Verse 1, Verse 2, Chorus 1, Chorus 2. Never use Verse A/B/C, Verse 1A/1B, Chorus 2A/2B, or Bridge letters to identify singers. Custom mode preserves an explicitly user-created name.
-- The tag syntax is fixed while section ownership remains role-aware and flexible: [Section: exact gender + letter + role anchor, short performance cue]. The identity must exist exactly in [Vocals] and must come before the performance cue. Use [Chorus: All Voices, short cue] only for a real shared moment.
-- Do NOT invent free-floating identity labels such as Deep Main Vocal, Female Harmony Vocal, or Male Low Rap Vocal. Main/Lead/Sub/Rap is valid only as part of the exact declared anchor, e.g. [Verse: Male A Main, deep tone].
+- In every mode, including Custom, standard chronological lyric families always use 1-based numbers: Verse 1/2, Pre-Chorus 1/2, Chorus 1/2, Hook 1/2, Refrain 1/2, and Rap Section 1/2. Never remove the number or replace it with A/B/C or singer-based suffixes. User-created nonstandard section names remain unchanged.
+- The tag syntax is fixed while section ownership remains role-aware and flexible: [Section: exact gender + letter + role anchor, short performance cue]. The identity must exist exactly in [Vocals] and must come before the performance cue. Use [Chorus 1: All Voices, short cue] only when that numbered Chorus is a real shared moment.
+- Do NOT invent free-floating identity labels such as Deep Main Vocal, Female Harmony Vocal, or Male Low Rap Vocal. Main/Lead/Sub/Rap is valid only as part of the exact declared anchor, e.g. [Verse 1: Male A Main, deep tone].
 - Never split a section tag and a singer anchor into two separate bracket lines. Bad: [Verse 2] then [Male A Main]. Good: [Verse 2: Male A Main, short cue].
 - In multi-vocal lyrics, every sung or vocal-ad-lib section must use one composite tag with the exact matching anchor declared in [Vocals], such as Male A Main or Female B Lead, followed by one short current-song performance cue. Do not invent lettered structural sections or an undefined singer. Bare or anchor-only sung tags are invalid; only truly non-vocal sections may omit a performance cue.
 - Every sung structural section tag must be followed by at least one real lyric/ad-lib line before the next structural tag. Do not output empty multi-vocal section blocks. Parenthesized non-lexical human sounds count as vocal ad-libs; crackle, rain, echo, and other production cues do not count as lyrics.
@@ -31953,15 +32182,15 @@ ${languageMixCardPlan}
 - Selected mode: Custom.
 - Use this exact section order without omission, replacement, renaming, or extra sections:
 ${exactStructureText}
-- Output lyric sections in this exact order. Do not add numbering such as Rap Section 1, Rap Section 2, Bridge 2, Member 1, or Member 2 unless that exact text exists in the custom structure.
-- Every sung custom section must be one composite tag: [Selected Section: Acoustic Voice, short cue]. Bad: [Rap Section 1: Member 1] then [저승사자: male]. Good: [Rap Section: Tired Male Rap, dry authority].
-- If a custom section includes an ONLY vocal placement cue such as (ONLY Low Rap Vocal, creaky growl), use that exact vocal label inside the lyric tag: [Verse: ONLY Low Rap Vocal, creaky growl].
+- Output lyric sections in this exact order. Standard chronological families in the structure already carry mandatory 1-based numbers: Verse 1/2, Pre-Chorus 1/2, Chorus 1/2, Hook 1/2, Refrain 1/2, and Rap Section 1/2. Preserve those exact numbers. Do not invent singer-based labels such as Member 1/2 or number unique sections such as Intro, Bridge, Final Chorus, and Outro.
+- Every sung custom section must be one composite tag: [Selected Section: Acoustic Voice, short cue]. Bad: [Rap Section 1: Member 1] then [저승사자: male]. Good: [Rap Section 1: Tired Male Rap, dry authority].
+- If a custom section includes an ONLY vocal placement cue such as (ONLY Low Rap Vocal, creaky growl), use that exact vocal label inside the lyric tag: [Verse 1: ONLY Low Rap Vocal, creaky growl].
 - If a section includes All Voices or two singer anchors joined by +, do NOT use ONLY.
 - Break and Stop are standalone transition sections with no lyric lines, but they must still include a short cue after the colon, e.g. [Break : current-song transition cue].
 - Instrumental and Interlude sections must never include vocal labels such as Lead Vocal, Low Rap Vocal, Wet Rap Vocal, or All Voices.
 - Drop is not automatically Instrumental in lyric songs. If Drop functions as a vocal/hook release, it may use lyric lines and a sung cue; keep it instrumental-only only when the user explicitly marked it as instrumental/no vocal.
 - If a custom section is marked Instrumental or Interlude, its section tag must stay instrumental-only: no vocalist, no humming, no 구음, no ad-libs, no sung lyric lines.
-- If the same selected section appears multiple times in the custom order, repeat the exact same section name each time rather than inventing numbers.
+- If a standard chronological family appears multiple times in the custom order, keep the exact sequential numbers already shown in the required structure. Repeated user-created nonstandard section names remain unchanged.
 - Each tag in parentheses is a real arrangement instruction. Apply it musically, not just as a label.
 - Special Sections Guide (if used):
   - Refrain: A short familiar refrain where the same lyric phrase and melodic idea repeat clearly and catchily; it may contain lyric lines and a section tag. If Refrain appears in the chosen structure, it must return at least twice rather than appearing only once.
@@ -31972,7 +32201,7 @@ ${exactStructureText}
   - Climax: The highest point of energy and emotional intensity.
 - Do not collapse this into a generic pop structure.
 - If Situation is active, use Situation only as character identity and story context. The user's custom section order, instrumental setting, vocal placement, and rap/instrumental ownership are higher priority and must not be rewritten.
-- Rap Section must remain rap delivery. If a Rap Section has a single vocal placement, use [Rap Section: ONLY {label}, rhythmic rap delivery]. Never turn a Rap Section into a sung female vocal unless the user explicitly placed a female rap vocal there.
+- Rap Section must remain rap delivery. If a Rap Section has a single vocal placement, use [Rap Section 1: ONLY {label}, rhythmic rap delivery]. Never turn a Rap Section into a sung female vocal unless the user explicitly placed a female rap vocal there.
 - Instrumental/Interlude custom sections must include the exact selected instrument/point-sound cue from the custom structure tag when available, e.g. [Instrumental : Melody Lead Synth] or [Interlude : soft synth break]. They must include no vocal, no humming, no chant, no ad-lib, and no lyric lines.
 - Do not copy UI-only gender/role tokens like ONLY Male, ONLY Female Main Vocal, Male, Female, or Instrumental break into lyric tags. Use only the resolved acoustic label from [Vocals] plus one short performance cue.
 - Do not invent undefined vocal labels such as Bright Rap Vocal unless that exact label was defined in [Vocals] or selected by the user.
@@ -31999,14 +32228,14 @@ ${exactStructureText}
 - Output the structural sections in this order. Do not omit, merge, rename, or absorb required structural sections into another tag.
 - When the selected mode is Stable, the visible ten-section order is immutable. Never replace Verse 2 with Rap Section, even when a rapper role or Rap AUTO/ON is active. Keep the [Verse 2] label and let the rap-capable singer use rhythmic or rap delivery inside that Verse 2 instead.
 - If the required structure includes Intro, keep Intro as the opening/prologue section. Intro may be lyric-free when it functions as instrumental, ambient, foley, texture, mood-setting, or buildup opening. It may also contain one very short ad-lib, spoken aside, hook phrase, foley-like vocal moment, or atmospheric vocal line when it naturally fits the genre, scene, and flow. Avoid both extremes: do not force Verse/Rap/Chorus body lyrics into Intro, and do not always leave Intro as tag-only. Do not treat a tag-only Intro as an error.
-- Preserve the exact section labels written in the required structure. Do not add 1/2, A/B/C, or singer-based suffixes unless that exact label already appears in the required structure. Stable keeps repeated [Pre-Chorus] and [Chorus] labels unnumbered exactly as displayed, while [Verse 1] and [Verse 2] remain distinct.
+- Preserve the exact numbered section labels written in the required structure. Verse, Pre-Chorus, Chorus, Hook, Refrain, and Rap Section use 1-based chronological numbers in Recommended, Stable, Experimental, and Custom. Never remove those numbers, replace them with A/B/C, or create singer-based structural suffixes.
 - Every sung or vocal-ad-lib section tag MUST use a fresh current-song performance cue. Do not inject a fixed fallback phrase and do not leave a sung tag bare. Derive each cue from the section's lyric body, structural role, neighbouring contrast, selected vocal character, and [Arrangement] arc. Do NOT put space-texture labels such as tunnel echo, bathroom reverb, spatial texture, room reverb, or reverb-only cues inside sung lyric section tags; keep them as production/standalone sound cues.
 - The structure is fixed, but section cue wording is NOT fixed. Do not reuse canned cues such as processed, soft swell, fading out, emotional build, controlled emotional turn, or high-energy hook as one-word/generic answers.
 - If the fixed structure includes Refrain, keep every Refrain occurrence and make it feel like a returning short phrase. Do not reduce Refrain to a one-time section.
 - Each sung cue should name one real local performance behavior; add a second cue only when it describes a different, audible local change. Do not force two anchors into every tag.
 - Standalone texture/effect bracket cue lines such as [breath sound], [youth choir backing], [soft choir ahh], or [Instrumental intro, synth] are NOT structural sections and must never replace Verse, Pre-Chorus, Chorus, Bridge, Refrain, Rap Section, or Outro.
 - Keep performance/emotion cues inside the parent section tag after the colon. Real sound effects, vocal effects, ambience, and texture-event cues must be standalone square-bracket cue lines directly under the relevant section tag, not Korean parenthetical lyric lines.
-- Do not merge [Chorus] into [Outro]. Good: [Chorus] as its own section, then [Outro] as its own section.
+- Do not merge [Chorus 1] or [Chorus 2] into [Outro]. Good: each numbered Chorus stays in its own section, then [Outro] stays separate.
 - Instrumental or Interlude sections may carry short sound cues, but do not turn them into sung lyric sections. Interlude must stay lyric-free and vocal-free. In lyric songs, do not automatically leave Drop empty; when Drop serves the song as a hook/release, write concise lyric lines and make the Drop cue match a vocal/hook drop.
 - Break and Stop are standalone transition tags with no lyric lines, but they must still include a short cue after the colon, e.g. [Break : current-song transition cue].
 - Final Chorus, Final Hook, and Hook are valid only when they appear in the required blueprint. Keep them distinct from earlier Chorus or Hook sections.
@@ -32158,7 +32387,7 @@ ${buildV1LyricWritingStyleInstruction(params)}
 - Preserve vocal emotion and spatial texture: [Vocals] must include emotional delivery, not only technique; [Atmosphere] must include selected space/ambience cues when present.
 - If the vocal UI mode is solo or exactly one vocalist is selected, [Vocals] must stay a single solo vocalist. Band, K-band, Buzz-inspired, rock band, and band-ballad references may affect instruments/arrangement, but must NOT create group/duo/split/main-rap-harmony vocal roles.
 - LYRIC LINE BREAK RULE (MANDATORY): section tags must be standalone lines, then lyrics must start on the next line. Never write [Section : cue] lyric on one line. Do not output paragraph-style lyric blocks. Split every long Korean line into short singable phrase lines so rhythm is visible.
-- LYRIC COMPLETION RULE (MANDATORY): Never end the lyric at [Stop], [Break], [Drop], or [Build-up]. A transition cut must be followed by a compact payoff such as [Bridge], [Chorus] or [Final Hook], and [Outro]. If the front half becomes dense, shorten earlier lines rather than dropping the final payoff.
+- LYRIC COMPLETION RULE (MANDATORY): Never end the lyric at [Stop], [Break], [Drop], or [Build-up]. A transition cut must be followed by a compact payoff such as [Bridge], [Chorus 1] or [Final Hook], and [Outro]. If the front half becomes dense, shorten earlier lines rather than dropping the final payoff.
 - LYRIC-SONG DROP RULE: For songs with lyrics, a Drop in the required structure is a possible vocal hook/release section, not an automatic instrumental gap. Do not output repeated empty Drop blocks. Give a Drop 2-4 concise hook/release lyric lines when it carries the song's payoff; keep it lyric-free only when the user explicitly requested instrumental/no-vocal/BGM behavior or when another adjacent hook already carries the full payoff.
 - LYRIC DENSITY SAFETY RULE: Do not satisfy this by counting lines only. Short lines, fragments, pauses, and one-word hooks are allowed when they work musically, but the full lyric must still have enough meaningful sung content: concrete scene/detail, character action, repeated desire, and emotional movement. Do not make every line long; instead expand underdeveloped sections with usable song content.
 - In compact experimental structures, Intro may be instrumental/ambient and lyric-free, but content-bearing sections must not become empty or mostly tag-only. Do not use fixed line quotas; distribute lyric mass by the current tempo, melodic space, Story Context, and each section's relative function. Outro must close the thought without a dangling unfinished phrase.
@@ -32502,8 +32731,8 @@ ${multiVocalLyricTagAnchorInstruction}
 - Returning sections must describe their changed behavior instead of reusing the same cue. The final Chorus/Hook should execute the final payoff from [Arrangement].
 - MANDATORY multi-speaker rule: [] means structure/speaker tags, () means ad-libs only.
 - If there are two or more actual vocalists, every sung section should use one composite bracket tag with the exact matching anchor from [Vocals], such as [Section: Male A Main, short style]. Never use an anchor absent from [Vocals].
-- If [Vocals] defines A/B/C/D identities, lyric tags must reuse the exact matching gender + letter + role anchors for sung sections, including D or later voices when active. Do not remove the role, replace the identity with a tone label, or change gender. Use [Chorus: All Voices, ...] only for real shared moments.
-- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag with an exact declared anchor, such as [Rap Section: Male D Rap, dry delivery].
+- If [Vocals] defines A/B/C/D identities, lyric tags must reuse the exact matching gender + letter + role anchors for sung sections, including D or later voices when active. Do not remove the role, replace the identity with a tone label, or change gender. Use [Chorus 1: All Voices, ...] only for real shared moments.
+- Do not use (Role) at the start of lyric lines; convert it to a composite Suno tag with an exact declared anchor, such as [Rap Section 1: Male D Rap, dry delivery].
 - Solo songs: do NOT repeat the vocalist identity in section tags. Keep only the changing performance and local movement, such as register, breath, phrasing, exposure, restraint, ornament, intensity, or release. Keep a rap label only for an actual Rap Section.
 - Solo section tags should normally contain one performance cue and, when the section truly changes, one local contrast cue. Do not fill both slots with synonyms.
 - Use short inline performance tags only for specific lines: [whisper], [held breath], [tremble], [open voice].
@@ -32518,10 +32747,10 @@ ${multiVocalLyricTagAnchorInstruction}
 - For sung sections, prefer composite tags because Suno follows them better: [Section: exact singer anchor, short cue]. Do not split section and singer into separate tags unless the section is instrumental or purely SFX. If an Intro is vocal/humming, keep it as one composite tag such as [Intro: Male A Main, hum].
 - Correct multi-speaker format uses the exact A/B identities and roles from [Vocals], for example a Verse owned by Male A Main followed later by a section owned by Female B Lead. Do not copy a preset tone or emotion phrase from an example.
 - Chorus ownership is flexible, but arrangement wording controls it. Do not split one Chorus into many 1-2 line Chorus fragments just to change singers. Use one combined Chorus tag for shared hooks, or one short Chorus Response tag only when it is musically necessary. If the arrangement is parallel monologue / 평행 독백형 / one-sided monologue, the chorus should be owned by one acoustic voice, not A/B line-by-line dialogue. The other voice may appear only as one short parenthetical aside/ad-lib if needed. Use call-response choruses only when call-response is explicitly selected.
-- Do NOT use "Mixed Vocal Duo". Shared singing labels are allowed only in final shared sections or explicit group moments: [Chorus: All Voices, ...], [Final Hook: All Voices, ...], [Chorus: All Female Voices, ...], or [Chorus: All Male Voices, ...]. Do not use All Voices in Verse, Pre-Chorus, Bridge, or Breakdown; keep those owned by one acoustic voice label.
+- Do NOT use "Mixed Vocal Duo". Shared singing labels are allowed only in final shared sections or explicit group moments: [Chorus 1: All Voices, ...], [Final Hook: All Voices, ...], [Chorus 1: All Female Voices, ...], or [Chorus 1: All Male Voices, ...]. Do not use All Voices in Verse, Pre-Chorus, Bridge, or Breakdown; keep those owned by one acoustic voice label.
 Use the resolved A/B/C/D ownership from [Vocals] through exact matching gender + letter + role anchors. A shared Chorus or Final Chorus may use All Voices only when the current arrangement truly calls for a shared payoff; do not copy a preset cue phrase.
 - For actual duo/group conflict songs, do NOT collapse both characters into one generic narrator. However, do NOT force every section to alternate A/B line by line. Use acoustic composite tags only where that voice actually owns or interrupts that part.
-- Do NOT default every chorus to A/B/A/B dialogue. In parallel monologue, use one exact defined owner such as [Chorus: Male A Main, led hook] or [Chorus: Female B Lead, led hook]. [Chorus: call-response hook] is allowed only when the arrangement explicitly says call-response.
+- Do NOT default every chorus to A/B/A/B dialogue. In parallel monologue, use one exact defined owner such as [Chorus 1: Male A Main, led hook] or [Chorus 1: Female B Lead, led hook]. [Chorus 1: call-response hook] is allowed only when the arrangement explicitly says call-response.
 - When a section is call-response, keep each role block short, usually 2-4 lines. When a section is solo-led, one speaker may own the full section with only short interruptions or ad-libs from the other.
 - Avoid blended vocals when Arrangement says separated dialogue or call-response.
 - In custom structures, do not drop section labels in Chorus, Hook, Rap Section, Breakdown, Bridge, or Outro when they contain lyrics.

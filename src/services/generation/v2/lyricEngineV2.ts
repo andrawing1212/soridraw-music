@@ -38,12 +38,12 @@ const KOREAN_SECTION_MAP: Record<string, string> = {
 const SECTION_ALIASES: Array<[RegExp, string]> = [
   [/^intro$/i, "Intro"],
   [/^verse(?:\s+[a-z0-9]+)?$/i, "Verse"],
-  [/^pre[-\s]?chorus$/i, "Pre-Chorus"],
-  [/^chorus$/i, "Chorus"],
+  [/^pre[-\s]?chorus(?:\s+[a-z0-9]+)?$/i, "Pre-Chorus"],
   [/^final\s+chorus$/i, "Final Chorus"],
-  [/^hook$/i, "Hook"],
-  [/^refrain$/i, "Refrain"],
-  [/^rap(?:\s+section|\s+part)?$/i, "Rap Section"],
+  [/^chorus(?:\s+[a-z0-9]+)?$/i, "Chorus"],
+  [/^hook(?:\s+[a-z0-9]+)?$/i, "Hook"],
+  [/^refrain(?:\s+[a-z0-9]+)?$/i, "Refrain"],
+  [/^rap(?:\s+section|\s+part)?(?:\s+[a-z0-9]+)?$/i, "Rap Section"],
   [/^bridge(?:\s+[a-z0-9]+)?$/i, "Bridge"],
   [/^build[-\s]?up$/i, "Build-Up"],
   [/^drop$/i, "Drop"],
@@ -57,6 +57,25 @@ const SECTION_ALIASES: Array<[RegExp, string]> = [
 const LYRIC_FREE_SECTIONS = new Set(["Intro", "Interlude", "Instrumental", "Break", "Stop"]);
 const PRODUCTION_LABELS = /^(Genre|Sound|Mood|Vocals|Production|Instruments|Atmosphere|Arrangement)$/i;
 
+const NUMBERED_SECTION_FAMILIES = new Set(["Verse", "Pre-Chorus", "Chorus", "Hook", "Refrain", "Rap Section"]);
+
+function numberChronologicalSections(text: string): string {
+  const seen = new Map<string, number>();
+  return cleanWhitespace(text)
+    .split("\n")
+    .map((line) => {
+      const match = line.trim().match(/^\[([^:\]\n]+)(?::([^\]]*))?\]$/);
+      if (!match) return line;
+      const section = match[1].trim();
+      if (!NUMBERED_SECTION_FAMILIES.has(section)) return line;
+      const next = (seen.get(section) || 0) + 1;
+      seen.set(section, next);
+      const cue = String(match[2] || "").trim();
+      return `[${section} ${next}${cue ? `: ${cue}` : ""}]`;
+    })
+    .join("\n");
+}
+
 export function buildV2LyricQualityInstruction(): string {
   return `V2 LYRIC ENGINE — ISOLATED QUALITY RULES
 - Treat Version 2 lyrics as a separate lyric engine, not as Classic's repaired output.
@@ -65,7 +84,7 @@ export function buildV2LyricQualityInstruction(): string {
 - Do not use generic translated-poem language or abstract mood-word repetition.
 - Do not expose production terms, prompt labels, or internal analysis in lyrics.
 - Use English section tags only. Keep section tags on standalone lines, then put lyric lines below.
-- Prefer clean tags such as [Verse: conversational], [Chorus: simple hook], [Bridge: quiet turn].
+- Use mandatory chronological numbers for standard repeated families in every structure mode: [Verse 1: conversational], [Pre-Chorus 1: rising], [Chorus 1: simple hook], then Verse 2/Pre-Chorus 2/Chorus 2 as they return. Hook, Refrain, and Rap Section follow the same 1-based rule. Unique sections such as Intro, Bridge, Final Chorus, and Outro stay unnumbered.
 - Keep Chorus/Hook short, repeatable, and memorable. Let Verse/Rap carry detail when needed.
 - If rap is not explicitly active, do not force a Rap Section.`;
 }
@@ -267,5 +286,6 @@ export function sanitizeV2GeneratedLyrics(lyrics: string, options: V2LyricSaniti
   }
   text = removeEmptySungBlocks(text);
   text = collapseAdjacentDuplicateSections(text);
+  text = numberChronologicalSections(text);
   return cleanWhitespace(text);
 }

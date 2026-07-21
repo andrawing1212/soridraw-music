@@ -26049,33 +26049,16 @@ function isV1ActionablePerformanceCuePart(part: string): boolean {
   return true;
 }
 
-function isV1PerformanceCueRequiredSection(
-  sectionName: string,
-  lines: string[],
-  index: number,
-  params?: GenerateSongParams,
-): boolean {
+function isV1PerformanceCueRequiredSection(sectionName: string, lines: string[], index: number): boolean {
   const section = normalizeLyricSectionDisplayName(sectionName || '');
   if (!hasLyricBodyLinesAfterSectionTag(lines, index)) return false;
   if (/^(?:Break|Stop|Interlude|Instrumental|Instrumental Opening|Solo|Guitar Solo|Drum Break)$/i.test(section)) return false;
-
-  // Custom mode must use the same performance-cue contract as the built-in structures.
-  // Resolve custom/nonstandard section names through the active blueprint instead of relying
-  // only on the standard-name regex. Transition/instrumental entries remain protected.
-  if (params) {
-    const blueprint = getV1SectionBlueprint(params);
-    const entry = blueprint.entries.find((candidate) => candidate.name.toLowerCase() === section.toLowerCase());
-    if (entry) {
-      if (!entry.allowsLyrics || entry.kind === 'transition' || entry.kind === 'instrumental') return false;
-      return true;
-    }
-  }
-
   return /^(?:Intro|Verse(?:\s+[A-Z0-9]+)?|Pre[-\s]?Chorus(?:\s+[A-Z0-9]+)?|Chorus(?:\s+[A-Z0-9]+)?|Final\s+Chorus|Hook(?:\s+[A-Z0-9]+)?|Final\s+Hook|Refrain(?:\s+[A-Z0-9]+)?|Rap\s+Section(?:\s+[A-Z0-9]+)?|Build[-\s]?Up|Drop|Breakdown|Bridge(?:\s+[A-Z0-9]+)?|Climax|Outro)$/i.test(section);
 }
 
 function collectV1SectionPerformanceCueIssues(lyrics: string, params: GenerateSongParams): V1SectionPerformanceCueIssue[] {
   if (isGenerationEngineV2(params) || !isVocalLyricSong(params)) return [];
+  if (params.songStructure === 'custom') return [];
   if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return [];
   const lines = String(lyrics || '').replace(/\r\n?/g, '\n').split('\n');
   const issues: V1SectionPerformanceCueIssue[] = [];
@@ -26085,7 +26068,7 @@ function collectV1SectionPerformanceCueIssues(lyrics: string, params: GenerateSo
     const parsed = parseGuardBracketSectionTag(line);
     if (!parsed) return;
     const section = normalizeLyricSectionDisplayName(parsed.rawSection);
-    if (!isV1PerformanceCueRequiredSection(section, lines, index, params)) return;
+    if (!isV1PerformanceCueRequiredSection(section, lines, index)) return;
 
     const anchor = extractV1AnchorFromCueBody(parsed.body, params);
     const cueParts = v1PerformanceCuePartsFromBody(parsed.body, params);
@@ -27486,14 +27469,7 @@ function finalizeV1PublicLyricOutputIntegrity(lyrics: string, params: GenerateSo
   finalText = collapseAdjacentDuplicateStructuralSections(finalText, params);
   finalText = removeV1OrphanSectionSkeletonsAtPublicBoundary(finalText, params);
   finalText = tightenV1EmbeddedDropHookBlocks(finalText);
-  const cleaned = finalText.replace(/\n{3,}/g, '\n\n').trim();
-  // Legacy public formatting normalizes numbered families for internal matching. Custom mode
-  // previously avoided this path entirely, so enabling the shared performance plan exposed that
-  // flattening. Re-seal the active Custom blueprint at the true public boundary so Verse 1/2,
-  // Pre-Chorus 1/2, Chorus 1/2, user-created names, and Stop/Break ownership stay exact.
-  return params.songStructure === 'custom'
-    ? applyV1SectionBlueprintGuard(cleaned, params)
-    : cleaned;
+  return finalText.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function applyV1GeneratedSectionPerformancePlan(
@@ -27508,6 +27484,7 @@ function applyV1GeneratedSectionPerformancePlan(
   ).trim();
   if (!source || isGenerationEngineV2(params) || !isVocalLyricSong(params)) return source;
   if (isProtectedLyricPreserveMode(params) || userExplicitlyDisablesSectionPerformanceCues(params)) return source;
+  if (params.songStructure === 'custom') return source;
 
   const normalizedPlan = isV1CanonicalSectionPerformancePlan(rawPlan)
     ? rawPlan
@@ -27636,7 +27613,7 @@ function applyV1GeneratedSectionPerformancePlan(
       .map((cue) => sanitizeV1GeneratedPlanSoundCue(cue, sectionRepairContext))
       .filter(Boolean);
 
-    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index, params)
+    const requiresCue = isV1PerformanceCueRequiredSection(section, lines, index)
       || (/^Intro$/i.test(section) && Boolean(item?.performanceCue || item?.alternatePerformanceCue || adjacentPerformance[0]));
     const promptDerivedCue = buildV1PromptDerivedPerformanceCue(
       productionPrompt,

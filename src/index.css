@@ -2170,3 +2170,26 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     font-size: 10px !important;
   }
 }
+
+/* Vocal character summaries keep horizontal drag while making the native rail nearly invisible. */
+.vocal-character-horizontal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar {
+  height: 2px;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}

@@ -4265,7 +4265,7 @@ function buildSelectedMultiVocalRolePrompt(params: GenerateSongParams): string {
   const total = Math.max(info.total || 0, existingMembers.length, info.mode === 'duo' ? 2 : 0);
   if (total < 2) return '';
 
-  const fallbackGender = info.gender === 'male' ? 'male' : 'female';
+  const fallbackGender = info.gender === 'male' ? 'male' : info.gender === 'female' ? 'female' : '';
   const members = Array.from({ length: Math.min(total, Math.max(2, existingMembers.length)) }, (_unused, index) => {
     return existingMembers[index] || {
       gender: fallbackGender,
@@ -4415,7 +4415,7 @@ function buildVocalPrompt(vocal: VocalConfig, subGenres: string[]): string {
         const characterPrompt = buildVocalCharacterPrompt(m, undefined);
         if (!hasRoles && !hasTone && !characterPrompt) return null;
 
-        const genderStr = m.gender === "male" ? "Male" : "Female";
+        const genderStr = m.gender === "male" ? "Male" : m.gender === "female" ? "Female" : "Unspecified";
         const rolesStr = hasRoles ? m.roles.join(", ") : "";
         const roleForLabel = rolesStr || getDefaultMultiVocalRole(idx, vocal.members?.length ?? 0, Boolean(vocal.rap));
         const toneValue = m.toneId
@@ -5083,7 +5083,7 @@ function buildAppliedKeywordPayload(
         .map((r) => r.charAt(0).toUpperCase() + r.slice(1))
         .join("/");
       vocalDescription.push(
-        `${m.gender === "male" ? "Male" : "Female"}(${roles})`,
+        `${m.gender === "male" ? "Male" : m.gender === "female" ? "Female" : "Vocal"}(${roles})`,
       );
     });
   }
@@ -5856,15 +5856,16 @@ function buildVocal(params: GenerateSongParams): string {
   if (hasMembers) {
     const membersOutput = v
       .members!.map((m, idx) => {
-        const genderLabel = m.gender === "male" ? "Male" : "Female";
+        const genderLabel = m.gender === "male" ? "Male" : m.gender === "female" ? "Female" : "";
         let toneLabel = "";
         if (m.toneId) {
           toneLabel = resolveVocalToneValue(m.toneId);
         }
 
-        let finalLabel = toneLabel || genderLabel;
+        let finalLabel = toneLabel || genderLabel || "Vocal";
         if (
           toneLabel &&
+          genderLabel &&
           !toneLabel.toLowerCase().includes(genderLabel.toLowerCase())
         ) {
           finalLabel = `${genderLabel} ${toneLabel}`;
@@ -6912,7 +6913,7 @@ function getMemberGenderLabel(
   const info = getVocalModeInfo(params.vocal);
   if (info.gender === "male") return "male";
   if (info.gender === "female") return "female";
-  return index === 0 ? "male" : "female";
+  return "";
 }
 
 function compactVocalToneForPrompt(value: string): string {
@@ -21275,7 +21276,7 @@ function getStableMultiVocalLyricTagEntries(params: GenerateSongParams): Array<{
   if (!labels.length || (!info.isMulti && !hasStoryboardVoiceIdentity(params))) return [];
   const existingMembers = Array.isArray(params.vocal?.members) ? params.vocal!.members! : [];
   const total = Math.max(info.total || 0, existingMembers.length, info.mode === 'duo' ? 2 : 0);
-  const fallbackGender = info.gender === 'male' ? 'male' : 'female';
+  const fallbackGender = info.gender === 'male' ? 'male' : info.gender === 'female' ? 'female' : '';
 
   return labels.map((label, index) => {
     const member = existingMembers[index];

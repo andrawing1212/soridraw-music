@@ -117,7 +117,7 @@ export interface VocalCharacterSelection {
 
 export interface VocalMember {
   id: string;
-  gender: 'male' | 'female';
+  gender: 'male' | 'female' | 'neutral';
   roles: VocalRole[];
   toneId?: string;
   tonePrompt?: string;

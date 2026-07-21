@@ -455,12 +455,16 @@ function buildVocalRoleText(members: VocalMember[], fallback?: { maleCount?: num
   if (members.length === 0) {
     return vocalRoleTextFromCounts(fallback?.maleCount || 0, fallback?.femaleCount || 0, fallback?.vocalMode || "");
   }
-  if (members.length === 1) return `${members[0].gender === "male" ? "남성" : "여성"} 솔로 보컬`;
+  if (members.length === 1) return members[0].gender === "male" ? "남성 솔로 보컬" : members[0].gender === "female" ? "여성 솔로 보컬" : "성별 미지정 솔로 보컬";
   if (maleCount > 0 && femaleCount > 0) {
     if (members.length === 2) return "남녀 듀엣 보컬";
     return `남성 ${maleCount}명과 여성 ${femaleCount}명의 혼성 보컬`;
   }
-  if (members.length === 2) return `${maleCount > 0 ? "남성" : "여성"} 듀엣 보컬`;
+  if (members.length === 2) {
+    if (maleCount === 0 && femaleCount === 0) return "성별 미지정 듀엣 보컬";
+    return `${maleCount > 0 ? "남성" : "여성"} 듀엣 보컬`;
+  }
+  if (maleCount === 0 && femaleCount === 0) return `성별 미지정 ${members.length}인 보컬 그룹`;
   return `${maleCount > 0 ? "남성" : "여성"} ${members.length}인 보컬 그룹`;
 }
 

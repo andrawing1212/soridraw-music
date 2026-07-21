@@ -225,7 +225,7 @@ function summarizeVocal(vocal: any, params?: any): string {
     parts.push(`${members.length} vocal member setup`);
     members.slice(0, 4).forEach((member: any, index: number) => {
       const roles = Array.isArray(member.roles) ? member.roles.join("/") : "vocal";
-      parts.push(`Vocal ${index + 1}: ${member.gender || "any"}, ${roles}${member.tonePrompt ? `, ${member.tonePrompt}` : ""}`);
+      parts.push(`Vocal ${index + 1}: ${member.gender === "neutral" ? "any" : (member.gender || "any")}, ${roles}${member.tonePrompt ? `, ${member.tonePrompt}` : ""}`);
     });
   } else if (male || female) {
     parts.push(`${male} male / ${female} female vocal count`);

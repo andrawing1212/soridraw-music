@@ -229,3 +229,14 @@ Only a structure with no usable core target is marked `target-missing`. Lyric Pr
 - Custom/nonstandard sung section names are resolved through the active Section Blueprint instead of a fixed standard-name list. Transition and instrumental entries remain lyric-free and are excluded from vocal-cue enforcement.
 - Section-role diagnostics for Main/Lead/Rap ownership and shared final payoff now also inspect Custom songs. Existing user/director overrides still suppress only the specific default role rule they explicitly replace.
 - No stock performance phrase, fixed singer assignment, lyric rewrite, section reorder, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.
+
+## 80차 Section cue independent visibility toggles
+
+- Adds two compact controls directly below Section Structure: `보컬 큐` and `악기 큐`. Both default to ON for backward compatibility, and the visible row contains only the label and ON/OFF switch; detailed guidance is shown through the existing help popup.
+- The switches control only the public lyric notation layer. Section Role Engine, numbered Section Blueprint ownership, multi-vocal assignment, Section Performance Plan, Hook Blueprint, and internal Arrangement planning remain active in all four combinations.
+- Vocal cue OFF removes visible delivery/phrasing/register wording from section tags. Multi-vocal songs still retain the singer/role anchor required for ownership, while solo songs may use the bare numbered section tag.
+- Instrument cue OFF removes standalone instrument, production, transition, and arrangement cue lines from the public lyric. It does not disable the internal musical plan or future cue-quality improvements.
+- The four combinations are supported independently: ON/ON keeps both cue types, ON/OFF keeps vocal cues only, OFF/ON keeps instrument cues plus required singer ownership, and OFF/OFF keeps only structural tags, required singer ownership, lyrics, and ad-libs.
+- The selected flags are stored in `appliedKeywords.sectionCueOptions`, restored when prior settings/templates are reapplied, and passed through V1 generation, V2 generation, and lyric-only regeneration. Missing legacy values resolve to ON/ON.
+- No Firebase/Auth/Firestore/Functions/Rules change, storage migration, API-count change, or existing lyric-content hardcoding is introduced.
+

@@ -10,8 +10,8 @@ export interface V1VocalAnchorConfig {
 
 export interface V1VocalAnchorDescriptor {
   id: string;
-  gender: 'male' | 'female';
-  genderLabel: 'Male' | 'Female';
+  gender: 'male' | 'female' | 'neutral';
+  genderLabel: 'Male' | 'Female' | '';
   roleLabel: string;
   promptAnchor: string;
   sectionAnchor: string;
@@ -94,10 +94,12 @@ export function resolveV1VocalAnchorDescriptors(vocal?: V1VocalAnchorConfig): V1
 
   return Array.from({ length: Math.min(total, 26) }, (_unused, index) => {
     const member = members[index];
-    const gender: 'male' | 'female' = member?.gender
-      || fallbackGenders[index]
-      || (allFemaleFallback ? 'female' : 'male');
-    const genderLabel = gender === 'female' ? 'Female' : 'Male';
+    const memberGender = member?.gender;
+    const gender: 'male' | 'female' | 'neutral' = memberGender === 'male' || memberGender === 'female' || memberGender === 'neutral'
+      ? memberGender
+      : fallbackGenders[index]
+        || (allFemaleFallback ? 'female' : 'neutral');
+    const genderLabel: 'Male' | 'Female' | '' = gender === 'female' ? 'Female' : gender === 'male' ? 'Male' : '';
     const id = String.fromCharCode(65 + index);
     const roleLabel = resolveRoleLabel(member, index, total, Boolean(vocal?.rap));
     return {
@@ -105,8 +107,10 @@ export function resolveV1VocalAnchorDescriptors(vocal?: V1VocalAnchorConfig): V1
       gender,
       genderLabel,
       roleLabel,
-      promptAnchor: `${id}: ${genderLabel} ${roleLabel}`,
-      sectionAnchor: `${genderLabel} ${id} ${roleLabel}`,
+      promptAnchor: `${id}: ${[genderLabel, roleLabel].filter(Boolean).join(' ')}`,
+      sectionAnchor: genderLabel
+        ? `${[genderLabel, id, roleLabel].filter(Boolean).join(' ')}`
+        : `Vocal ${id} ${roleLabel}`,
     };
   });
 }

@@ -179,6 +179,7 @@ const CUSTOM_STYLE_PREFIX = '__custom_style__:';
 const CUSTOM_SOUND_PREFIX = '__custom_sound__:';
 const CUSTOM_MOOD_PREFIX = '__custom_mood__:';
 const CUSTOM_THEME_PREFIX = '__custom_theme__:';
+const MAX_GROUP_VOCAL_MEMBERS = 5;
 
 const makeCustomKeywordId = (prefix: string, text: string) => `${prefix}${encodeURIComponent(text.trim())}`;
 
@@ -2727,13 +2728,12 @@ function safeVocalTagPart(value: string) {
     .trim();
 }
 
-function getMemberVisibleName(member: VocalMember, index: number, members: VocalMember[]) {
-  const sameGenderBefore = members.slice(0, index).filter((item) => item.gender === member.gender).length + 1;
-  return `${member.gender === 'male' ? '남성' : '여성'}${sameGenderBefore}`;
+function getMemberVisibleName(_member: VocalMember, index: number, _members: VocalMember[]) {
+  return `보컬${String.fromCharCode(65 + index)}`;
 }
 
 function inferVocalActualLabel(member: VocalMember) {
-  const genderLabel = member.gender === 'male' ? 'Male' : 'Female';
+  const genderLabel = member.gender === 'male' ? 'Male' : member.gender === 'female' ? 'Female' : '';
   const role = member.roles?.includes('rapper') ? 'Rap Vocal' : 'Vocal';
   const char = member.character || {};
   const phrase = [
@@ -2747,20 +2747,20 @@ function inferVocalActualLabel(member: VocalMember) {
   ].filter(Boolean).join(' ').toLowerCase();
 
   if (role === 'Rap Vocal') {
-    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return `Low ${genderLabel} Rap Vocal`;
-    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return `Wet ${genderLabel} Rap Vocal`;
-    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return `Creaky ${genderLabel} Rap Vocal`;
-    if (/bright|head|clear|두성|맑/.test(phrase)) return `Bright ${genderLabel} Rap Vocal`;
-    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return `Playful ${genderLabel} Rap Vocal`;
-    return `${genderLabel} Rap Vocal`;
+    if (/deep|heavy|chest|low|묵직|흉성/.test(phrase)) return ['Low', genderLabel, 'Rap Vocal'].filter(Boolean).join(' ');
+    if (/wet|nasal|glissando|젖은|비성/.test(phrase)) return ['Wet', genderLabel, 'Rap Vocal'].filter(Boolean).join(' ');
+    if (/creaky|growl|rough|거친|크리키/.test(phrase)) return ['Creaky', genderLabel, 'Rap Vocal'].filter(Boolean).join(' ');
+    if (/bright|head|clear|두성|맑/.test(phrase)) return ['Bright', genderLabel, 'Rap Vocal'].filter(Boolean).join(' ');
+    if (/playful|flip|click|rhythmic|톡톡|글로탈/.test(phrase)) return ['Playful', genderLabel, 'Rap Vocal'].filter(Boolean).join(' ');
+    return [genderLabel, 'Rap Vocal'].filter(Boolean).join(' ');
   }
 
-  if (/hollow|distant|empty|공허/.test(phrase)) return `Hollow ${genderLabel} Vocal`;
-  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return `Airy ${genderLabel} Vocal`;
-  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return `Clear ${genderLabel} Vocal`;
-  if (/wet|nasal|젖은|비성/.test(phrase)) return `Wet ${genderLabel} Vocal`;
-  if (/deep|heavy|chest|low|묵직/.test(phrase)) return `Deep ${genderLabel} Vocal`;
-  return `${genderLabel} Vocal`;
+  if (/hollow|distant|empty|공허/.test(phrase)) return ['Hollow', genderLabel, 'Vocal'].filter(Boolean).join(' ');
+  if (/airy|falsetto|breath|에어리|팔세토|브레시/.test(phrase)) return ['Airy', genderLabel, 'Vocal'].filter(Boolean).join(' ');
+  if (/clear|bright|head|first-love|맑|첫사랑/.test(phrase)) return ['Clear', genderLabel, 'Vocal'].filter(Boolean).join(' ');
+  if (/wet|nasal|젖은|비성/.test(phrase)) return ['Wet', genderLabel, 'Vocal'].filter(Boolean).join(' ');
+  if (/deep|heavy|chest|low|묵직/.test(phrase)) return ['Deep', genderLabel, 'Vocal'].filter(Boolean).join(' ');
+  return [genderLabel, 'Vocal'].filter(Boolean).join(' ');
 }
 
 function compactVocalLyricCueText(value: string, isRap: boolean) {
@@ -5663,7 +5663,9 @@ function App() {
   const [selectedVocalToneId, setSelectedVocalToneId] = useState<string | undefined>(undefined);
   const [maleCount, setMaleCount] = useState(0);
   const [femaleCount, setFemaleCount] = useState(0);
-  const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([]);
+  const [vocalMembers, setVocalMembers] = useState<VocalMember[]>([
+    { id: 'member_default_solo', gender: 'neutral', roles: ['main'] },
+  ]);
   const [vocalRandomActivationKey, setVocalRandomActivationKey] = useState(0);
   const [rapEnabled, setRapEnabled] = useState(false);
   const [rapMode, setRapMode] = useState<RapMode>(() => readStoredRapMode());
@@ -5675,59 +5677,68 @@ function App() {
     writeStoredRapMode(rapMode);
   }, [rapMode]);
   useEffect(() => {
-    const total = maleCount + femaleCount;
-    if (total === 0) {
-      if (vocalMembers.length > 0) setVocalMembers([]);
-      return;
-    }
+    const minimumCount = vocalMode === 'group' ? 2 : 1;
+    const currentM = vocalMembers.filter((member) => member.gender === 'male').length;
+    const currentF = vocalMembers.filter((member) => member.gender === 'female').length;
+    const hasMinimumCards = vocalMembers.length >= minimumCount;
 
-    // If counts match members, do nothing (preserve custom order/settings)
-    const currentM = vocalMembers.filter(m => m.gender === 'male').length;
-    const currentF = vocalMembers.filter(m => m.gender === 'female').length;
-    if (currentM === maleCount && currentF === femaleCount && vocalMembers.length === total) return;
+    if (currentM === maleCount && currentF === femaleCount && hasMinimumCards) return;
 
-    setVocalMembers(prev => {
-      const newMembers: VocalMember[] = [];
-      let mRemaining = maleCount;
-      let fRemaining = femaleCount;
+    setVocalMembers((previous) => {
+      const next = previous.slice(0, vocalMode === 'solo' ? 1 : MAX_GROUP_VOCAL_MEMBERS).map((member) => ({ ...member }));
+      const targetMinimum = vocalMode === 'group' ? 2 : 1;
 
-      // Try to preserve existing members' roles and tones if gender matches
-      // In group mode, we might have a custom order, so we try to match by index first
-      for (let i = 0; i < total; i++) {
-        const existing = prev[i];
-        let gender: 'male' | 'female' = 'male';
-        
-        if (mRemaining > 0) {
-          gender = 'male';
-          mRemaining--;
-        } else {
-          gender = 'female';
-          fRemaining--;
-        }
-
-        if (existing && existing.gender === gender) {
-          newMembers.push(existing);
-        } else {
-          // Assign default roles
-          let roles: VocalRole[] = [];
-          if (vocalMode === 'solo') {
-            roles = ['main'];
-          } else if (vocalMode === 'duo') {
-            roles = i === 0 ? ['main'] : ['sub'];
-          } else {
-            if (i === 0) roles = ['main'];
-            else if (i === 1) roles = ['lead'];
-            else roles = ['sub'];
-          }
-
-          newMembers.push({
-            id: `member_${Date.now()}_${i}`,
-            gender,
-            roles,
-          });
-        }
+      while (next.length < targetMinimum) {
+        const index = next.length;
+        next.push({
+          id: `member_default_${vocalMode}_${index}_${Date.now()}`,
+          gender: 'neutral',
+          roles: index === 0 ? ['main'] : index === 1 ? ['lead'] : ['sub'],
+        });
       }
-      return newMembers;
+
+      let maleRemaining = Math.max(0, maleCount);
+      let femaleRemaining = Math.max(0, femaleCount);
+
+      // Preserve already assigned genders only while the matching external count still requests them.
+      for (let index = 0; index < next.length; index += 1) {
+        const member = next[index];
+        if (member.gender === 'male' && maleRemaining > 0) {
+          maleRemaining -= 1;
+          continue;
+        }
+        if (member.gender === 'female' && femaleRemaining > 0) {
+          femaleRemaining -= 1;
+          continue;
+        }
+        next[index] = { ...member, gender: 'neutral' };
+      }
+
+      const assignGender = (gender: 'male' | 'female') => {
+        const neutralIndex = next.findIndex((member) => member.gender === 'neutral');
+        if (neutralIndex >= 0) {
+          next[neutralIndex] = { ...next[neutralIndex], gender };
+          return;
+        }
+        if (next.length >= MAX_GROUP_VOCAL_MEMBERS || vocalMode === 'solo') return;
+        const index = next.length;
+        next.push({
+          id: `member_${Date.now()}_${index}`,
+          gender,
+          roles: index === 0 ? ['main'] : index === 1 ? ['lead'] : ['sub'],
+        });
+      };
+
+      while (maleRemaining > 0) {
+        assignGender('male');
+        maleRemaining -= 1;
+      }
+      while (femaleRemaining > 0) {
+        assignGender('female');
+        femaleRemaining -= 1;
+      }
+
+      return next;
     });
   }, [maleCount, femaleCount, vocalMode]);
 
@@ -6139,8 +6150,13 @@ function App() {
     setSelectedInstrumentSounds(templateSounds);
 
     // 4. Vocal Settings
-    setMaleCount(template.maleCount ?? 0);
-    setFemaleCount(template.femaleCount ?? 0);
+    const templateMaleCount = template.maleCount ?? 0;
+    const templateFemaleCount = template.femaleCount ?? 0;
+    const templateVocalTotal = templateMaleCount + templateFemaleCount;
+    setMaleCount(templateMaleCount);
+    setFemaleCount(templateFemaleCount);
+    if (templateVocalTotal > 1) setVocalMode('group');
+    else if (templateVocalTotal === 1) setVocalMode('solo');
     setRapEnabled(template.rapEnabled ?? false);
     setRapMode((template as any).rapMode || (template.rapEnabled ? 'on' : 'off'));
     
@@ -7979,8 +7995,14 @@ const toggleCycleVariantSelection = (
     if (appliedKeywords.vocal) {
       const v = appliedKeywords.vocal;
       setSelectedVocalToneId(undefined);
-      if (v.mode) setVocalMode(v.mode);
-      if (v.members) setVocalMembers(v.members);
+      const restoredVocalMode: VocalMode = v.mode === 'group' ? 'group' : 'solo';
+      if (v.mode) setVocalMode(restoredVocalMode);
+      if (v.members) {
+        const restoredMembers = v.members.slice(0, restoredVocalMode === 'solo' ? 1 : MAX_GROUP_VOCAL_MEMBERS);
+        setVocalMembers(restoredMembers);
+        setMaleCount(restoredMembers.filter((member) => member.gender === 'male').length);
+        setFemaleCount(restoredMembers.filter((member) => member.gender === 'female').length);
+      }
     }
 
     const appliedTempoSource = String((appliedKeywords as any).tempoSource || '').trim().toLowerCase();
@@ -8788,7 +8810,7 @@ const toggleCycleVariantSelection = (
     setVocalMode('solo');
     setMaleCount(0);
     setFemaleCount(0);
-    setVocalMembers([]);
+    setVocalMembers([{ id: 'member_default_solo', gender: 'neutral', roles: ['main'] }]);
     setRapEnabled(false);
     setCustomStructure([]);
 
@@ -9698,7 +9720,7 @@ const saveRecentSong = async (newSong: any) => {
           rap: requestedRapEnabled,
           rapMode: requestedRapMode,
           mode: vocalMode,
-          members: vocalMembers,
+          members: vocalMembers.slice(0, vocalMode === 'solo' ? 1 : MAX_GROUP_VOCAL_MEMBERS),
         },
         tempo: tempoInfo,
         isRandomTempo: tempoSource === 'random',
@@ -10053,7 +10075,7 @@ const saveRecentSong = async (newSong: any) => {
     };
     const vocalSummary = vocalMembers.length > 0
       ? vocalMembers.map((member, index) => {
-          const gender = member.gender === 'male' ? '남성' : '여성';
+          const gender = member.gender === 'male' ? '남성' : member.gender === 'female' ? '여성' : '성별 미지정';
           const roles = member.roles.map((role) => roleLabelMap[role]).filter(Boolean).join('/');
           return `${gender} ${String.fromCharCode(65 + index)}${roles ? ` ${roles}` : ''}`;
         }).join(' · ')
@@ -13358,7 +13380,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 setFemaleCount(0);
                 setVocalMode('solo');
                 setSelectedVocalToneId(undefined);
-                setVocalMembers([]);
+                setVocalMembers([{ id: 'member_default_solo', gender: 'neutral', roles: ['main'] }]);
               }}
               onHover={setHoveredItem}
               onLongPressStart={handleLongPressStart}
@@ -15746,6 +15768,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         .vocal-character-slider-male::-webkit-slider-thumb {
           background: rgb(96, 165, 250);
         }
+        .vocal-character-slider-neutral::-webkit-slider-thumb {
+          background: rgb(255, 180, 0);
+        }
         .vocal-character-slider:active::-webkit-slider-thumb {
           cursor: grabbing;
           transform: scale(1.04);
@@ -15772,6 +15797,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         }
         .vocal-character-slider-male::-moz-range-thumb {
           background: rgb(96, 165, 250);
+        }
+        .vocal-character-slider-neutral::-moz-range-thumb {
+          background: rgb(255, 180, 0);
         }
         .vocal-character-slider-center-marker {
           position: absolute;
@@ -15834,6 +15862,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         }
         .vocal-character-dual-handle-male {
           background: rgb(96, 165, 250);
+        }
+        .vocal-character-dual-handle-neutral {
+          background: rgb(255, 180, 0);
         }
         @keyframes marquee-right {
           0% { transform: translateX(-50%); }
@@ -21236,7 +21267,7 @@ const isTrotLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['
 const isDanceLikeGenre = (genreHints?: string[]) => hasGenreSignal(genreHints, ['edm', 'house', 'dance', 'disco', 'funk', 'kpop', 'k-pop', 'jpop', 'j-pop']);
 
 const buildRandomVocalCharacter = (
-  gender: 'male' | 'female',
+  gender: VocalMember['gender'],
   index: number,
   total: number,
   genreHints?: string[],
@@ -21249,15 +21280,15 @@ const buildRandomVocalCharacter = (
   const isDance = isDanceLikeGenre(genreHints);
 
   const voiceTonePools: string[][] = [
-    gender === 'male' ? ['heavy', 'husky_tone', 'dry'] : ['clear', 'bright', 'wet'],
-    gender === 'male' ? ['calm', 'dry', 'lazy'] : ['airy', 'first_love', 'clear'],
-    gender === 'male' ? ['wet', 'bright', 'heavy'] : ['hollow', 'lazy', 'wet'],
+    gender === 'male' ? ['heavy', 'husky_tone', 'dry'] : gender === 'female' ? ['clear', 'bright', 'wet'] : ['calm', 'clear', 'airy'],
+    gender === 'male' ? ['calm', 'dry', 'lazy'] : gender === 'female' ? ['airy', 'first_love', 'clear'] : ['dry', 'relaxed', 'clear'],
+    gender === 'male' ? ['wet', 'bright', 'heavy'] : gender === 'female' ? ['hollow', 'lazy', 'wet'] : ['wet', 'bright', 'hollow'],
   ];
-  if (isRap || isRock) voiceTonePools.unshift(gender === 'male' ? ['dry', 'husky_tone', 'heavy'] : ['bright', 'dry', 'husky_tone']);
+  if (isRap || isRock) voiceTonePools.unshift(gender === 'male' ? ['dry', 'husky_tone', 'heavy'] : gender === 'female' ? ['bright', 'dry', 'husky_tone'] : ['dry', 'bright', 'husky_tone']);
   if (isRnb) voiceTonePools.unshift(['wet', 'lazy', 'clear']);
   if (isDreamy) voiceTonePools.unshift(['airy', 'hollow', 'lazy']);
   if (isDance) voiceTonePools.unshift(['bright', 'clear', 'wet']);
-  if (isTrot) voiceTonePools.unshift(gender === 'male' ? ['heavy', 'wet', 'husky_tone'] : ['wet', 'clear', 'bright']);
+  if (isTrot) voiceTonePools.unshift(gender === 'male' ? ['heavy', 'wet', 'husky_tone'] : gender === 'female' ? ['wet', 'clear', 'bright'] : ['wet', 'clear', 'calm']);
 
   const personalityPools: string[][] = [
     ['relaxed', 'cool', 'plain'],
@@ -21296,7 +21327,9 @@ const buildRandomVocalCharacter = (
     ageLevel: getRandomLevel(index % 2 === 0 ? [4, 5, 6, 7] : [5, 6, 7, 8]),
     rangeLevel: gender === 'male'
       ? getRandomLevel(index % 2 === 0 ? [3, 4, 5, 6] : [4, 5, 6, 7])
-      : getRandomLevel(index % 2 === 0 ? [6, 7, 8, 9] : [5, 6, 7, 8]),
+      : gender === 'female'
+        ? getRandomLevel(index % 2 === 0 ? [6, 7, 8, 9] : [5, 6, 7, 8])
+        : getRandomLevel([4, 5, 6, 7, 8]),
     deliveryLevel: isRap
       ? getRandomLevel([9, 10, 11])
       : isRock
@@ -21351,7 +21384,7 @@ const buildAutoVocalRoles = (index: number, total: number, genreHints?: string[]
 };
 
 const createRandomVocalMember = (
-  gender: 'male' | 'female',
+  gender: VocalMember['gender'],
   index: number,
   total: number,
   genreHints?: string[],
@@ -21413,8 +21446,8 @@ const isDefaultAutoGroupMembers = (members: VocalMember[], maleCount: number, fe
   if (maleCount !== 1 || femaleCount !== 1 || members.length !== 2) return false;
   const [first, second] = members;
   if (!first || !second) return false;
-  const firstDefault = first.gender === 'male' && isArrayEqual(first.roles || [], ['main']) && !first.character && !first.toneId;
-  const secondDefault = second.gender === 'female' && isArrayEqual(second.roles || [], ['lead']) && !second.character && !second.toneId;
+  const firstDefault = first.gender === 'neutral' && isArrayEqual(first.roles || [], ['main']) && !first.character && !first.toneId;
+  const secondDefault = second.gender === 'neutral' && isArrayEqual(second.roles || [], ['lead']) && !second.character && !second.toneId;
   return firstDefault && secondDefault;
 };
 
@@ -21626,18 +21659,23 @@ function VocalControlComponent({
 
   useStableContentHeight(contentRef, setContentHeight, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, rapMode, isKoreanEnglishMix, englishMixRatio]);
 
+  const createDefaultMember = (index: number, mode: VocalMode): VocalMember => ({
+    id: `member_default_${mode}_${index}_${Date.now()}`,
+    gender: 'neutral',
+    roles: index === 0 ? ['main'] : index === 1 ? ['lead'] : ['sub'],
+  });
+
   const handleModeClick = (mode: VocalMode) => {
     const nextMode = mode === 'duo' ? 'group' : mode;
     const isModeChanging = vocalMode !== nextMode;
     onModeChange(nextMode);
 
-    // 모드 버튼은 이제 성별/인원을 자동으로 채우지 않는다.
-    // 비어 있는 상태에서 랜덤을 누르면 솔로는 남/여 랜덤, 그룹은 동성 2~3인 랜덤으로 구성한다.
-    // 사용자가 직접 성별이나 멤버를 고른 뒤 랜덤을 누르면 구성은 유지하고 캐릭터만 랜덤 적용한다.
     if (isModeChanging) {
       onMaleChange(0);
       onFemaleChange(0);
-      onMembersChange([]);
+      onMembersChange(nextMode === 'group'
+        ? [createDefaultMember(0, nextMode), createDefaultMember(1, nextMode)]
+        : [createDefaultMember(0, nextMode)]);
       markVocalEmptySelection();
     }
 
@@ -21645,75 +21683,83 @@ function VocalControlComponent({
   };
 
   const handleGenderToggle = (gender: 'male' | 'female') => {
-    if (vocalMode === 'solo') {
-      // Solo mode: selected gender button toggles off to random solo.
-      // male only = solo male, female only = solo female, none = random solo.
-      onMembersChange([]);
-      if (gender === 'male') {
-        if (maleCount > 0 && femaleCount === 0) {
-          onMaleChange(0);
-          onFemaleChange(0);
-          markVocalEmptySelection();
-        } else {
-          onMaleChange(1);
-          onFemaleChange(0);
-          markVocalManualSelection();
-        }
-      } else {
-        if (femaleCount > 0 && maleCount === 0) {
-          onMaleChange(0);
-          onFemaleChange(0);
-          markVocalEmptySelection();
-        } else {
-          onMaleChange(0);
-          onFemaleChange(1);
-          markVocalManualSelection();
-        }
-      }
-    } else if (vocalMode === 'group') {
-      // Group mode has explicit add/remove member controls.
-      // Gender buttons are not used here.
-      return;
-    }
+    if (vocalMode !== 'solo') return;
+
+    const current = vocalMembers[0] || createDefaultMember(0, 'solo');
+    const nextGender = current.gender === gender ? 'neutral' : gender;
+    onMembersChange([{ ...current, gender: nextGender }]);
+    onMaleChange(nextGender === 'male' ? 1 : 0);
+    onFemaleChange(nextGender === 'female' ? 1 : 0);
+    if (nextGender === 'neutral') markVocalEmptySelection();
+    else markVocalManualSelection();
+
     onHover({ 
       id: gender, 
       label: gender === 'male' ? 'Male' : 'Female', 
       labelKo: gender === 'male' ? '남성' : '여성', 
-      description: `${gender === 'male' ? '남성' : '여성'} 보컬 비중을 조절합니다.`, 
+      description: nextGender === 'neutral'
+        ? '성별 지정을 해제하고 성별 미지정 솔로 보컬로 사용합니다.'
+        : `${gender === 'male' ? '남성' : '여성'} 솔로 보컬을 선택합니다.`, 
       _ts: Date.now() 
     });
   };
 
   const handleAddMember = (gender: 'male' | 'female') => {
-    if (maleCount + femaleCount >= 7) return;
-    
+    if (vocalMode !== 'group') return;
+
+    const neutralIndex = vocalMembers.findIndex((member) => member.gender === 'neutral');
+    if (neutralIndex >= 0) {
+      const nextMembers = vocalMembers.map((member, index) => index === neutralIndex ? { ...member, gender } : member);
+      onMembersChange(nextMembers);
+      if (gender === 'male') onMaleChange(maleCount + 1);
+      else onFemaleChange(femaleCount + 1);
+      markVocalManualSelection();
+      return;
+    }
+
+    if (vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS) return;
+
     const newMember: VocalMember = {
       id: `member_${Date.now()}`,
       gender,
-      // 첫 번째 그룹 멤버만 메인으로 시작하고, 이후 멤버는 사용자가 직접 역할을 선택한다.
-      roles: vocalMembers.length === 0 ? ['main'] : [],
+      roles: vocalMembers.length === 0
+        ? ['main']
+        : vocalMembers.length === 1
+          ? ['lead']
+          : vocalMembers.length === 2 && isRapLikeGenre(genreHints)
+            ? ['rapper']
+            : ['sub'],
     };
-    
-    const newMembers = [...vocalMembers, newMember];
-    onMembersChange(newMembers);
+    onMembersChange([...vocalMembers, newMember]);
     if (gender === 'male') onMaleChange(maleCount + 1);
     else onFemaleChange(femaleCount + 1);
     markVocalManualSelection();
   };
 
   const handleRemoveMember = (idx: number) => {
-    // Group mode allows removing the last member too.
-    // When all members are removed, generation treats it as a random group vocal.
     const member = vocalMembers[idx];
     if (!member) return;
 
-    const newMembers = vocalMembers.filter((_, i) => i !== idx);
-    onMembersChange(newMembers);
+    if (vocalMode === 'solo') {
+      onMembersChange([createDefaultMember(0, 'solo')]);
+      onMaleChange(0);
+      onFemaleChange(0);
+      markVocalEmptySelection();
+      return;
+    }
+
+    if (vocalMembers.length <= 2) {
+      const nextMembers = vocalMembers.map((item, index) => index === idx
+        ? { ...createDefaultMember(index, 'group'), id: item.id }
+        : item);
+      onMembersChange(nextMembers);
+    } else {
+      onMembersChange(vocalMembers.filter((_, index) => index !== idx));
+    }
 
     if (member.gender === 'male') onMaleChange(Math.max(0, maleCount - 1));
-    else onFemaleChange(Math.max(0, femaleCount - 1));
-    if (newMembers.length > 0) markVocalManualSelection();
-    else markVocalEmptySelection();
+    if (member.gender === 'female') onFemaleChange(Math.max(0, femaleCount - 1));
+    markVocalManualSelection();
   };
 
   const handleUpdateMember = (idx: number, updates: Partial<VocalMember>) => {
@@ -22011,56 +22057,25 @@ function VocalControlComponent({
       return;
     }
 
-    const total = maleCount + femaleCount;
-    const hasManualSoloGender = vocalMode === 'solo' && total === 1 && vocalCompositionSource === 'manual';
-    const hasManualGroupComposition = vocalMode === 'group' && vocalMembers.length > 0 && vocalCompositionSource === 'manual';
+    const activeMembers = vocalMembers.length > 0
+      ? vocalMembers
+      : [createDefaultMember(0, vocalMode)];
+    const nextMembers = activeMembers.map((member, index) => ({
+      ...member,
+      // Random changes the character only. Gender, member count, mode, and roles stay fixed.
+      character: buildRandomVocalCharacter(member.gender, index, activeMembers.length, genreHints),
+    }));
 
-    if (vocalMode === 'solo') {
-      const currentRandomGender: 'male' | 'female' | null = maleCount > 0 && femaleCount === 0
-        ? 'male'
-        : femaleCount > 0 && maleCount === 0
-          ? 'female'
-          : null;
-      const gender: 'male' | 'female' = hasManualSoloGender
-        ? (maleCount > 0 ? 'male' : 'female')
-        : currentRandomGender
-          ? (currentRandomGender === 'male' ? 'female' : 'male')
-          : (Math.random() < 0.5 ? 'male' : 'female');
-      const nextMember = createRandomVocalMember(gender, 0, 1, genreHints);
-      nextMember.roles = buildAutoVocalRoles(0, 1, genreHints);
-      onModeChange('solo');
-      onMaleChange(gender === 'male' ? 1 : 0);
-      onFemaleChange(gender === 'female' ? 1 : 0);
-      onMembersChange([nextMember]);
-      setIsVocalRandomActive(true);
-      setVocalCompositionSource(hasManualSoloGender ? 'manual' : 'random');
-      onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: hasManualSoloGender ? '선택한 솔로 성별은 유지하고 보컬 캐릭터만 랜덤 적용했습니다.' : '솔로 남성/여성 중 하나와 보컬 캐릭터를 랜덤 적용했습니다.', _ts: Date.now() });
-      return;
-    }
-
-    if (hasManualGroupComposition) {
-      const nextMembers = vocalMembers.map((member, index) => ({
-        ...member,
-        character: buildRandomVocalCharacter(member.gender, index, vocalMembers.length, genreHints),
-      }));
-      onMembersChange(nextMembers);
-      setIsVocalRandomActive(true);
-      setVocalCompositionSource('manual');
-      onHover({ id: 'vocal-random', label: 'Random Vocal Character', labelKo: '보컬 캐릭터 랜덤', description: '직접 구성한 그룹 인원과 역할은 유지하고 보컬 캐릭터만 랜덤 적용했습니다.', _ts: Date.now() });
-      return;
-    }
-
-    const preferredCount = vocalCompositionSource === 'random' && (vocalMembers.length === 2 || vocalMembers.length === 3)
-      ? (vocalMembers.length === 2 ? 3 : 2)
-      : undefined;
-    const nextMembers = createRandomVocalGroupMembers(genreHints, preferredCount);
-    onModeChange('group');
-    onMaleChange(nextMembers.filter((member) => member.gender === 'male').length);
-    onFemaleChange(nextMembers.filter((member) => member.gender === 'female').length);
     onMembersChange(nextMembers);
     setIsVocalRandomActive(true);
-    setVocalCompositionSource('random');
-    onHover({ id: 'vocal-random', label: 'Random Group Vocal', labelKo: '그룹 보컬 랜덤', description: '남성/여성/혼성 그룹 중 하나로 2~3명을 랜덤 구성하고 각 보컬 캐릭터를 다르게 적용했습니다.', _ts: Date.now() });
+    setVocalCompositionSource(vocalCompositionSource === 'empty' ? 'manual' : vocalCompositionSource);
+    onHover({
+      id: 'vocal-random',
+      label: 'Random Vocal Character',
+      labelKo: '보컬 캐릭터 랜덤',
+      description: '현재 성별·인원·역할은 그대로 두고 보컬 캐릭터만 랜덤 적용했습니다.',
+      _ts: Date.now(),
+    });
   };
 
   const cycleRapMode = () => {
@@ -22123,7 +22138,7 @@ function VocalControlComponent({
               rapMode === 'on'
                 ? "bg-[#FFB400] text-[#171717] border-black/20 soridraw-selected-strong"
                 : rapMode === 'auto'
-                  ? "bg-[#FFB400]/18 text-[#FFD36A] border-black/20"
+                  ? "bg-btn-bg text-[#FFB400] border-btn-border hover:bg-btn-hover"
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
             )}
             title={`랩 모드 ${rapMode.toUpperCase()} · 클릭하여 AUTO → OFF → ON 순환`}
@@ -22156,9 +22171,9 @@ function VocalControlComponent({
           <button
             type="button"
             onClick={handleRandomVocal}
-            onMouseEnter={() => onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '보컬 구성 또는 보컬 캐릭터를 현재 선택 상태에 맞게 랜덤 적용합니다.' })}
+            onMouseEnter={() => onHover({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '현재 성별·인원·역할은 유지하고 보컬 캐릭터만 랜덤 적용합니다.' })}
             onMouseLeave={() => onHover(null)}
-            onTouchStart={() => onLongPressStart({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '보컬 구성 또는 보컬 캐릭터를 현재 선택 상태에 맞게 랜덤 적용합니다.' })}
+            onTouchStart={() => onLongPressStart({ id: 'vocal-random', label: 'Random Vocal', labelKo: '보컬 랜덤', description: '현재 성별·인원·역할은 유지하고 보컬 캐릭터만 랜덤 적용합니다.' })}
             onTouchEnd={onLongPressEnd}
             onTouchCancel={onLongPressEnd}
             className={cn(
@@ -22246,15 +22261,15 @@ function VocalControlComponent({
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleAddMember('male')}
-                disabled={maleCount + femaleCount >= 7}
-                onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
+                disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
+                onMouseEnter={() => onHover({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 남성 성별을 지정합니다.' : '남성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
-                onTouchStart={() => onLongPressStart({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: '남성 보컬 멤버를 1명 추가합니다.' })}
+                onTouchStart={() => onLongPressStart({ id: 'add-male', label: 'Add Male Member', labelKo: '남성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 남성 성별을 지정합니다.' : '남성 보컬 멤버를 1명 추가합니다.' })}
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
                   "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
-                  maleCount + femaleCount < 7
+                  vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
                     ? "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-600/20"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
@@ -22264,15 +22279,15 @@ function VocalControlComponent({
               </button>
               <button
                 onClick={() => handleAddMember('female')}
-                disabled={maleCount + femaleCount >= 7}
-                onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
+                disabled={vocalMembers.length >= MAX_GROUP_VOCAL_MEMBERS && !vocalMembers.some((member) => member.gender === 'neutral')}
+                onMouseEnter={() => onHover({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 여성 성별을 지정합니다.' : '여성 보컬 멤버를 1명 추가합니다.' })}
                 onMouseLeave={() => onHover(null)}
-                onTouchStart={() => onLongPressStart({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: '여성 보컬 멤버를 1명 추가합니다.' })}
+                onTouchStart={() => onLongPressStart({ id: 'add-female', label: 'Add Female Member', labelKo: '여성 멤버 추가', description: vocalMembers.some((member) => member.gender === 'neutral') ? '성별이 없는 기본 보컬에 여성 성별을 지정합니다.' : '여성 보컬 멤버를 1명 추가합니다.' })}
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
                   "py-3 px-2 rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2.5",
-                  maleCount + femaleCount < 7
+                  vocalMembers.length < MAX_GROUP_VOCAL_MEMBERS || vocalMembers.some((member) => member.gender === 'neutral')
                     ? "bg-pink-600/10 border-pink-500/20 text-pink-400 hover:bg-pink-600/20"
                     : "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-50 cursor-not-allowed"
                 )}
@@ -22328,16 +22343,22 @@ function VocalControlComponent({
           {vocalMembers.length > 0 && (
             <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-color)]">
               <div className="flex items-center justify-between px-1">
-                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버 ({vocalMembers.length}/7)</p>
+                <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버 ({vocalMembers.length}/{vocalMode === 'solo' ? 1 : MAX_GROUP_VOCAL_MEMBERS})</p>
                 <span className="text-[9px] text-[var(--text-secondary)] opacity-50">연령 · 음역 · 창법 · 기교</span>
               </div>
-              <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className={cn("grid gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar items-start", vocalMode === 'solo' ? "grid-cols-1" : "grid-cols-2")}>
                 {vocalMembers.map((member, idx) => {
-                  const sameGenderIndex = vocalMembers
-                    .slice(0, idx + 1)
-                    .filter(item => item.gender === member.gender).length - 1;
-                  const memberLetter = String.fromCharCode(97 + sameGenderIndex);
-                  const memberDisplayName = `${member.gender === 'male' ? '남자보컬' : '여자보컬'}${memberLetter}`;
+                  const memberLetter = String.fromCharCode(65 + idx);
+                  const memberDisplayName = member.gender === 'male'
+                    ? `남성${memberLetter}`
+                    : member.gender === 'female'
+                      ? `여성${memberLetter}`
+                      : `보컬${memberLetter}`;
+                  const memberAccent = member.gender === 'male'
+                    ? { dot: 'bg-blue-400', text: 'text-[#4B6280]', hoverBorder: 'hover:border-[#4B6280]/45 hover:bg-[#4B6280]/5', hoverText: 'group-hover/character:text-[#4B6280]' }
+                    : member.gender === 'female'
+                      ? { dot: 'bg-pink-400', text: 'text-[#73495D]', hoverBorder: 'hover:border-[#73495D]/45 hover:bg-[#73495D]/5', hoverText: 'group-hover/character:text-[#73495D]' }
+                      : { dot: 'bg-[#FFB400]', text: 'text-[#D89A00]', hoverBorder: 'hover:border-[#FFB400]/45 hover:bg-[#FFB400]/5', hoverText: 'group-hover/character:text-[#FFB400]' };
                   const roleLabels: Record<VocalRole, { label: string, labelKo: string, description: string }> = {
                     main: { label: 'Main Vocal', labelKo: '메인', description: '곡의 중심이 되는 메인 보컬 역할을 수행합니다.' },
                     lead: { label: 'Lead Vocal', labelKo: '리드', description: '메인 보컬을 보조하며 곡의 흐름을 이끄는 역할을 수행합니다.' },
@@ -22351,13 +22372,13 @@ function VocalControlComponent({
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <span className={cn(
                           "w-2 h-2 rounded-full shrink-0",
-                          member.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
+                          memberAccent.dot
                         )} />
                         <span className="shrink-0 text-xs font-bold text-[var(--text-primary)]">
                           {memberDisplayName}
                         </span>
                         <span className="h-4 w-px shrink-0 bg-[var(--border-color)]" />
-                        <div className="flex min-w-0 flex-wrap items-center gap-1">
+                        <div className="flex min-w-0 flex-nowrap items-center gap-0.5">
                           {(['main', 'lead', 'sub', 'rapper'] as VocalRole[]).map(role => {
                             const isActive = member.roles.includes(role);
                             const isRoleLimitReached = member.roles.length >= 2;
@@ -22380,7 +22401,7 @@ function VocalControlComponent({
                                 onTouchEnd={onLongPressEnd}
                                 onTouchCancel={onLongPressEnd}
                                 className={cn(
-                                  "px-2.5 py-1 rounded-md text-[12px] font-bold transition-all border",
+                                  "px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
                                   isActive
                                     ? "bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
                                     : isRoleLimitReached
@@ -22421,9 +22442,7 @@ function VocalControlComponent({
                         }}
                         className={cn(
                           "w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all group/character",
-                          member.gender === 'male'
-                            ? "hover:border-[#4B6280]/45 hover:bg-[#4B6280]/5"
-                            : "hover:border-[#73495D]/45 hover:bg-[#73495D]/5"
+                          memberAccent.hoverBorder
                         )}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -22431,16 +22450,48 @@ function VocalControlComponent({
                             <div className="flex items-center gap-2">
                               <span className={cn(
                                 "text-[12px] font-black tracking-tight",
-                                member.gender === 'male' ? "text-[#4B6280]" : "text-[#73495D]"
+                                memberAccent.text
                               )}>보컬 캐릭터 만들기</span>
                             </div>
-                            <p className="mt-1 text-[12px] font-bold text-[var(--text-primary)] truncate">
+                            <div
+                              className="vocal-character-horizontal-scroll mt-1 max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap pb-[3px] text-[12px] font-bold text-[var(--text-primary)] cursor-grab active:cursor-grabbing touch-pan-x select-none"
+                              onMouseDown={(event) => {
+                                event.stopPropagation();
+                                const target = event.currentTarget;
+                                const startX = event.pageX;
+                                const startScrollLeft = target.scrollLeft;
+                                let didDrag = false;
+
+                                const onMove = (moveEvent: MouseEvent) => {
+                                  const deltaX = moveEvent.pageX - startX;
+                                  if (Math.abs(deltaX) > 3) didDrag = true;
+                                  target.scrollLeft = startScrollLeft - deltaX;
+                                };
+
+                                const onUp = () => {
+                                  if (didDrag) target.dataset.dragged = 'true';
+                                  document.removeEventListener('mousemove', onMove);
+                                  document.removeEventListener('mouseup', onUp);
+                                };
+
+                                document.addEventListener('mousemove', onMove);
+                                document.addEventListener('mouseup', onUp);
+                              }}
+                              onClick={(event) => {
+                                const target = event.currentTarget;
+                                if (target.dataset.dragged === 'true') {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  delete target.dataset.dragged;
+                                }
+                              }}
+                            >
                               {getVocalCharacterSummary(member)}
-                            </p>
+                            </div>
                           </div>
                           <div className={cn(
                             "shrink-0 p-1 text-[var(--text-secondary)] transition-colors",
-                            member.gender === 'male' ? "group-hover/character:text-[#4B6280]" : "group-hover/character:text-[#73495D]"
+                            memberAccent.hoverText
                           )}>
                             <Edit2 className="w-[22px] h-[22px]" />
                           </div>
@@ -22607,10 +22658,10 @@ function VocalControlComponent({
                     <div className="flex items-center gap-2">
                       <span className={cn(
                         "h-2.5 w-2.5 rounded-full",
-                        editingVocalMember.gender === 'male' ? "bg-blue-400" : "bg-pink-400"
+                        editingVocalMember.gender === 'male' ? "bg-blue-400" : editingVocalMember.gender === 'female' ? "bg-pink-400" : "bg-[#FFB400]"
                       )} />
                       <h4 className="text-lg font-black text-[var(--text-primary)]">
-                        {editingVocalMember.gender === 'male' ? '남성' : '여성'} {editingVocalMemberIndex + 1} 캐릭터
+                        {editingVocalMember.gender === 'male' ? '남성' : editingVocalMember.gender === 'female' ? '여성' : '보컬'} {editingVocalMemberIndex + 1} 캐릭터
                       </h4>
                     </div>
                     <p className="mt-1 truncate text-xs font-bold text-[#FFD36A]">{getVocalCharacterSummary({ ...editingVocalMember, character: localVocalCharacterDraft })}</p>
@@ -22677,7 +22728,11 @@ function VocalControlComponent({
                           const isCardActive = !isDefault || !isSecondaryDefault;
                           const mainPercent = config.steps.length > 1 ? ((value - 1) / (config.steps.length - 1)) * 100 : 50;
                           const secondaryPercent = config.steps.length > 1 ? ((secondaryValue - 1) / (config.steps.length - 1)) * 100 : 50;
-                          const mainHandleClass = editingVocalMember?.gender === 'female' ? 'vocal-character-dual-handle-female' : 'vocal-character-dual-handle-male';
+                          const mainHandleClass = editingVocalMember?.gender === 'female'
+                            ? 'vocal-character-dual-handle-female'
+                            : editingVocalMember?.gender === 'male'
+                              ? 'vocal-character-dual-handle-male'
+                              : 'vocal-character-dual-handle-neutral';
                           return (
                             <div
                               key={config.key}
@@ -22737,7 +22792,14 @@ function VocalControlComponent({
                                     step={1}
                                     value={value}
                                     onChange={(event) => updateLocalVocalCharacter({ [config.key]: Number(event.currentTarget.value) } as Partial<NonNullable<VocalMember['character']>>)}
-                                    className={cn("vocal-character-slider w-full", editingVocalMember?.gender === 'female' ? 'vocal-character-slider-female' : 'vocal-character-slider-male')}
+                                    className={cn(
+                                      "vocal-character-slider w-full",
+                                      editingVocalMember?.gender === 'female'
+                                        ? 'vocal-character-slider-female'
+                                        : editingVocalMember?.gender === 'male'
+                                          ? 'vocal-character-slider-male'
+                                          : 'vocal-character-slider-neutral'
+                                    )}
                                     aria-label={config.titleKo}
                                   />
                                 </div>

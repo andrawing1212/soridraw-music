@@ -248,3 +248,51 @@ Only a structure with no usable core target is marked `target-missing`. Lyric Pr
 - Each resolved slot carries one structural body policy from the existing Section Registry: required, optional, or forbidden. This reuses the existing format/safety policy rather than adding lyric-content hardcoding.
 - Missing tags and order are application-owned. Only an actually empty required body may use the existing single targeted correction request. Whole-lyric regeneration and structure reroll are not used.
 - Unselected language cards stay empty. No story phrase, scene, lyric sentence, genre-specific subject, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.
+
+## 90차 Development-section minimum-substance safety
+
+- The dynamic 89차 Blueprint contract remains the structural owner. This change does not force Stable sections into Recommended, Experimental, or Custom songs; it only evaluates the development slots that the current song actually selected.
+- The first V1 request now states a minimum-substance safety for `expansive` development roles such as Verse and Rap Section. A non-lexical parenthesized ad-lib plus one or two tiny fragments cannot satisfy the section's development role by itself.
+- This safety is not a normal line-count template. A section passes when it has either enough distinct lexical thought units or enough total lexical substance. Long meaningful lines and short rhythmic lines are both valid.
+- The internal emergency floor is adjusted by the selected lyric-length mode. Rap Section receives a slightly higher floor than Verse because its registered role is denser rhythmic development. These numeric floors are deliberately limited to detecting extreme collapse and are never exposed as target line counts in the generation prompt.
+- Parenthesized non-lexical vocal sounds such as `(음, 음...)`, `(우-)`, and `(아...)` remain valid performance material but are excluded from development-substance counting. Lexical parenthetical thoughts remain eligible.
+- When the first response still collapses a selected expansive development slot, the existing single correction allowance requests only concise new lines for that exact slot. Existing lyrics, singer ownership, cues, Hook Blueprint, section order, Story Context, and other sections remain untouched.
+- User/director instructions explicitly requesting a one-line, minimal, brief, or short named development section override the safety floor. Direct-lyrics original-preserve mode remains immutable.
+- No fixed lyric sentence, story scene, genre-specific subject, replacement phrase pool, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.
+- The final hard-ban editor remains an output-safety request rather than a discretionary quality correction. It still shares the absolute three-request ceiling, but it is not blocked solely because the one allowed section-density correction already ran.
+
+## 91차 Dynamic Blueprint exact-slot structured output
+
+- V1 lyrics use the song-specific resolved Blueprint as a tuple-like structured-output contract.
+- Each selected language card has exact array length, per-position `sectionId`, `sectionIndex`, and `sectionName` enums, plus required/forbidden body constraints.
+- Unselected language cards are schema-locked to an empty array.
+- Targeted body repair uses the same exact target tuple contract.
+- One allowed correction operation may use one temporary-error model fallback; the fallback still counts toward the absolute three-request ceiling but does not consume a second correction allowance.
+- This locks format and safety only. No lyric phrase, scene, genre story, or fixed universal section sequence is introduced.
+
+## 92차 Supported dynamic-slot schema recovery
+
+- Gemini runtime rejected the 91차 tuple keyword `prefixItems` before token generation, so every normal request fell into the simplified emergency path. The unsupported keyword is removed from both first-generation and targeted-repair schemas.
+- Selected language cards still require the exact current Blueprint slot count through supported `minItems` and `maxItems`.
+- Each returned slot is limited to the current Blueprint's allowed IDs, indexes, and names. Exact ID/index/name pairing, order, lyric policy, and completion are then verified by the existing application-owned renderer and final Blueprint contract inspector.
+- Targeted repair follows the same supported schema and accepts only the current repair targets; invalid duplicates or mismatched triples are ignored rather than inserted into another section.
+- This restores the normal one-call path. A second call is reserved only for a real missing/underdeveloped required slot or another existing permitted safety correction, under the absolute three-request ceiling.
+- No lyric sentence, genre story, scene, universal section sequence, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.
+
+## 93차 Numeric-index schema compatibility and schema-error cost guard
+
+- Gemini accepts string enums for the current Blueprint `sectionId` and `sectionName`, but rejected numeric values inside the `sectionIndex` enum before token generation.
+- The numeric enum is removed from both first-generation and targeted section-body repair schemas. `sectionIndex` remains a required integer, while exact range, order, and ID/name/index pairing stay application-owned contract checks.
+- String allow-lists, exact language-card slot count, dynamic Blueprint locking, and the final completion inspector remain unchanged.
+- Request/response-schema configuration errors are now identified separately from creative-generation failures. A `400 INVALID_ARGUMENT` carrying response-schema markers is surfaced immediately and cannot launch the paid compact emergency generation path.
+- Real temporary 429/5xx/unavailable failures still use the existing bounded model fallback. A genuine non-schema generation failure may still use the existing one-shot compact safety result under the absolute request budget.
+- No lyric sentence, story scene, genre subject, universal section order, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.
+
+## 94차 Gemini temporary-error fallback and schema-surface reduction
+
+- The 93차 targeted section repair could display a real `503 UNAVAILABLE` error but fail to start its bounded fallback because the retry classifier serialized native `Error` objects as `{}` and therefore lost `error.message`.
+- Gemini error inspection now reads native `message`, `name`, numeric code, status, nested SDK error/cause/response/data/details fields, and a safe serialized form. Temporary `429/5xx/UNAVAILABLE/DEADLINE_EXCEEDED` failures can therefore use the existing one-time fallback, while `400 response_schema` development errors are explicitly blocked from any paid fallback.
+- V1 first-generation and targeted-repair schemas no longer use dynamic string enums for `sectionId` or `sectionName`. The supported schema now enforces only types and exact array counts; the already-existing application contract validates the exact `sectionId + sectionIndex + sectionName` combination, order, duplicates, lyric policy, and final completeness before publishing.
+- The initial dynamic Blueprint instruction adds a same-response self-audit for object count, order, identifiers, and non-blank required lyric bodies. This reduces missing Final Chorus/Outro-style bodies without adding another request.
+- Targeted repair candidates are deduplicated and revalidated against the locked Blueprint before a repair schema is built. Invalid/duplicate targets cannot inflate item counts or be inserted into another section.
+- No stock lyric, fixed scene, genre story, universal section order, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced. The absolute three-request ceiling and one correction-operation ceiling remain unchanged.

@@ -3,7 +3,21 @@ import React, { createContext, useContext, useState, useRef, useEffect, useCallb
 export interface Track {
   url: string;
   title: string;
+  id?: string;
+  trackId?: string;
+  taskId?: string;
+  audioUrl?: string;
   imageUrl?: string;
+  creatorDisplayId?: string;
+  ownerNickname?: string;
+  creatorNickname?: string;
+  ownerEmail?: string;
+  creatorEmail?: string;
+  style?: string;
+  prompt?: string;
+  status?: string;
+  createdAt?: number;
+  requestPayload?: unknown;
   parent?: any;
   index?: number;
   duration?: number;

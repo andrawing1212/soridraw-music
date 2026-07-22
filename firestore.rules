@@ -35,11 +35,38 @@ service cloud.firestore {
     }
 
     // Users collection
+    // Membership, payment and account-control fields are server/admin authority only.
+    // Client-maintained counters remain UI statistics and must never be trusted for entitlement checks.
     match /users/{uid} {
+      function isValidSelfCreate() {
+        return request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+          'createdAt', 'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
+          'role', 'accountStatus', 'paymentStatus', 'favoriteCount', 'songGeneratedCount'
+        ]) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.role == 'free' &&
+        request.resource.data.accountStatus == 'active' &&
+        request.resource.data.paymentStatus == 'none' &&
+        request.resource.data.favoriteCount == 0 &&
+        request.resource.data.songGeneratedCount == 0;
+      }
+
+      function isValidSelfUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+          'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
+          'nickname', 'updatedAt', 'lyricClicheGuard',
+          'favoriteCount', 'songGeneratedCount',
+          'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
+        ]) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+      }
+
       allow get: if isOwner(uid) || isAdmin();
       allow list: if isAdmin();
-      allow create: if isOwner(uid) && request.resource.data.role == 'free';
-      allow update: if isAdmin() || (isOwner(uid) && request.resource.data.role == resource.data.role);
+      allow create: if isOwner(uid) && isValidSelfCreate();
+      allow update: if isAdmin() || (isOwner(uid) && isValidSelfUpdate());
     }
 
     // Favorites collection
@@ -83,6 +110,12 @@ service cloud.firestore {
     match /user_api_keys/{uid} {
       allow read, write: if false;
     }
+
+    // Server-side Gemini abuse guard. Never exposed to clients.
+    match /gemini_request_guards/{uid} {
+      allow read, write: if false;
+    }
+
 
     // Suno API Tracks
     match /suno_tracks/{uid}/tracks/{trackId} {

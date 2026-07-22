@@ -25,6 +25,7 @@ const CONTEXT_LABELS: Record<string, string> = {
   generateSongCompactFallback: '간소화 긴급 생성',
   repairClassicAtmosphereFromSource: '분위기 문장 보완',
   repairMissingV1Sections: '누락 섹션 보완',
+  repairV1SectionBodies: '섹션 본문 보완',
   repairSparseLyrics: '가사 밀도 보완',
   repairSparseLyricsSecondPass: '가사 밀도 2차 보완',
   languageMixWholeLyricRetry: '언어 혼합 재작성',
@@ -147,7 +148,7 @@ export default function AdminGeminiAuditPage() {
     >
       <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-xs leading-5 text-amber-100/75">
         현재 기록은 <strong className="text-amber-200">이 브라우저·이 기기에서 발생한 호출만</strong> 저장합니다. 프롬프트와 가사 원문은 저장하지 않고, 호출 사유·모델·토큰·시간·오류만 보관합니다.<br />
-        곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 3회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회, 금지어 교정이 필요할 때만 보통 2회입니다.
+        곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 3회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 보통 2회입니다.
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -63,11 +63,11 @@ type MusicApiGenerateModalProps = {
     includeLyrics: boolean;
     lyricLanguages: LanguageCode[];
     generationCount: number;
-    isKoreanEnglishMix?: boolean;
-    englishMixRatio?: number;
+    isKoreanEnglishMix: boolean;
+    englishMixRatio: number;
     languageMixTargetLanguages?: LanguageCode[];
     rapMode?: RapMode;
-    rapEnabled?: boolean;
+    rapEnabled: boolean;
     generationEngineVersion?: GenerationEngineVersion;
     lyricWritingStyle?: V1LyricWritingStyle;
   }) => void;

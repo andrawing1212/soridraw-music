@@ -1343,7 +1343,7 @@ export default function GlobalPlayer() {
                       <SkipForward className="w-6 h-6 fill-current" />
                    </button>
                    <button 
-                    onClick={() => setRepeatMode(m => m === 'none' ? 'all' : m === 'all' ? 'one' : 'none')} 
+                    onClick={() => setRepeatMode(repeatMode === 'none' ? 'all' : repeatMode === 'all' ? 'one' : 'none')} 
                     className={`p-2 transition-all ${repeatMode !== 'none' ? 'text-[#FFBB22]' : 'text-white/40 hover:text-white/80'}`}
                    >
                       {repeatMode === 'one' ? <Repeat1 className="w-5 h-5" /> : <Repeat className="w-5 h-5" />}

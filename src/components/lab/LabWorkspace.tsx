@@ -499,7 +499,7 @@ function IngredientChip({ ingredient, onStartDrag }: { ingredient: LabIngredient
         WebkitUserDrag: 'none',
         background: `linear-gradient(135deg, ${tone.coreA}18, ${tone.coreB}18), rgba(255,255,255,0.055)`,
         boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.05), 0 0 24px ${tone.coreB}12`,
-      }}
+      } as React.CSSProperties}
     >
       <Grip className="h-3.5 w-3.5 text-white/26" />
       <span draggable={false}>{ingredient.label}</span>
@@ -707,7 +707,7 @@ function MapNodeView({ node, mode, active, moving, onRemoveItem, onStartMove }: 
         boxShadow: active || moving
           ? `0 0 0 2px ${tone.coreA}B8, 0 0 54px ${tone.coreB}4A, 0 20px 68px rgba(0,0,0,0.5)`
           : `0 0 0 1px rgba(255,255,255,0.07), 0 0 ${14 + percent * 0.28}px ${tone.coreB}1F, 0 18px 52px rgba(0,0,0,0.44)`,
-      }}
+      } as React.CSSProperties}
     >
       <div
         className="pointer-events-none absolute inset-0 rounded-full"
@@ -768,7 +768,7 @@ function CanvasNodeView({ node, active, moving, connecting, connectionCount, onR
         boxShadow: active || moving || connecting
           ? `0 0 0 2px ${tone.coreA}B8, 0 0 54px ${tone.coreB}4A, 0 20px 68px rgba(0,0,0,0.5)`
           : `0 0 0 1px rgba(255,255,255,0.07), 0 0 ${14 + percent * 0.28}px ${tone.coreB}1F, 0 18px 52px rgba(0,0,0,0.44)`,
-      }}
+      } as React.CSSProperties}
     >
       <div
         className="pointer-events-none absolute inset-0 rounded-full"
@@ -859,7 +859,7 @@ function CanvasMaterialNodeView({ material, active, connectionCount, onToggle, o
           : material.connected
             ? `0 0 0 1.5px ${nodeTone.coreA}88, 0 0 ${isSmall ? 18 : 28}px ${nodeTone.glow}24, 0 12px 34px rgba(0,0,0,0.42)`
             : `0 0 0 1px rgba(255,255,255,0.07), 0 0 ${isSmall ? 14 : 22}px ${nodeTone.glow}17, 0 12px 34px rgba(0,0,0,0.42)`,
-      }}
+      } as React.CSSProperties}
     >
       <div
         className="pointer-events-none absolute inset-0 rounded-full"

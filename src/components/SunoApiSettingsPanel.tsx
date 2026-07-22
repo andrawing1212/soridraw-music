@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, ExternalLink, Key, Music2, RefreshCw, Sparkles, Trash2, X, XCircle } from 'lucide-react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '../firebase';
+import { auth, getFirebaseAppCheckToken } from '../firebase';
 
 const PROJECT_ID = "soridraw-app-866a5";
 const REGION = "us-central1";
@@ -323,11 +323,13 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
 
  try {
  const token = await user.getIdToken();
+ const appCheckToken = await getFirebaseAppCheckToken();
  const res = await fetch(`${BASE_URL}/getGoogleGeminiApiKeyStatus`, {
  method: "POST",
  headers: {
  "Content-Type": "application/json",
- "Authorization": `Bearer ${token}`
+ "Authorization": `Bearer ${token}`,
+ ...(appCheckToken ? { "X-Firebase-AppCheck": appCheckToken } : {})
  },
  body: JSON.stringify({})
  });
@@ -354,11 +356,13 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setMessage('');
  try {
  const token = await user.getIdToken();
+ const appCheckToken = await getFirebaseAppCheckToken();
  const res = await fetch(`${BASE_URL}/saveGoogleGeminiApiKey`, {
  method: "POST",
  headers: {
  "Content-Type": "application/json",
- "Authorization": `Bearer ${token}`
+ "Authorization": `Bearer ${token}`,
+ ...(appCheckToken ? { "X-Firebase-AppCheck": appCheckToken } : {})
  },
  body: JSON.stringify({ apiKey: googleApiKey.trim() })
  });
@@ -388,11 +392,13 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  setMessage('');
  try {
  const token = await user.getIdToken();
+ const appCheckToken = await getFirebaseAppCheckToken();
  const res = await fetch(`${BASE_URL}/deleteGoogleGeminiApiKey`, {
  method: "POST",
  headers: {
  "Content-Type": "application/json",
- "Authorization": `Bearer ${token}`
+ "Authorization": `Bearer ${token}`,
+ ...(appCheckToken ? { "X-Firebase-AppCheck": appCheckToken } : {})
  },
  body: JSON.stringify({})
  });
@@ -634,7 +640,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  type="google"
  title="Google Gemini API Key"
  description="가사/프롬프트 생성을 위한 개인 Google API Key"
- guideText="Google AI Studio에서 Gemini API Key를 발급받아 입력합니다. 이 키는 현재 로그인 계정 기준으로 이 브라우저에 저장되며, 가사/프롬프트 생성 요청에 사용됩니다."
+ guideText="Google AI Studio에서 Gemini API Key를 발급받아 입력합니다. 키 원문은 브라우저에 저장되지 않고 로그인 계정의 Firebase 서버 보관소에 저장되며, Gemini 호출도 서버에서 실행됩니다."
  createUrl={GOOGLE_API_CREATE_URL}
  inputValue={googleApiKey}
  setInputValue={setGoogleApiKey}

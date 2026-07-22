@@ -12,7 +12,10 @@ function sectionLoadLines(blueprint: V1SectionBlueprint): string {
       : entry.requiresLyrics
         ? 'must carry role-appropriate lyric or vocal content'
         : 'may stay lyric-free or use only role-appropriate sparse vocal content';
-    return `${index + 1}. ${entry.name} — ${describeV1SectionMass(entry.massClass)}; ${lyricPolicy}; ${entry.lyricRole}`;
+    const substanceFloor = entry.massClass === 'expansive'
+      ? 'minimum substance safety: carry several distinct lexical thought units and real progression; non-lexical parenthesized ad-libs do not satisfy development mass'
+      : '';
+    return `${index + 1}. ${entry.name} — ${describeV1SectionMass(entry.massClass)}; ${lyricPolicy}; ${entry.lyricRole}${substanceFloor ? `; ${substanceFloor}` : ''}`;
   }).join('\n');
 }
 
@@ -43,6 +46,8 @@ export function buildV1AdaptiveLyricFlowInstruction(
 - Selected overall length mode: ${lengthMode}. Tempo input: ${tempoText}. Blueprint contains ${lyricRequired} required sung sections, ${optional} optional/sparse vocal sections, and ${lyricFree} lyric-free sections.
 - Do not use fixed line counts, syllable quotas, character quotas, or a genre-name lyric-density table. Judge every section relative to the other sections in this exact song.
 - First decide the song's natural verbal density from tempo articulation, melodic sustain, rhythmic speech load, hook repetition, arrangement space, Story Context, and vocal formation. Then distribute that mass according to each section's structural role.
+- The minimum-substance safety is not a fixed line quota. It only prevents an expansive development slot from collapsing into one non-lexical ad-lib plus one or two fragmentary lyric lines. Two long, meaningful lines may carry enough substance; several short but distinct lines may also carry enough substance.
+- Parenthesized non-lexical humming or ad-libs such as (음, 음...), (우-), or (아...) may support performance, but they do not count as the concrete scene/action/desire progression required from Verse, Rap Section, or another expansive development slot.
 - Tempo is a phrasing constraint, not a word-count multiplier. Fast music may use short rapid fragments or spacious chants; slow music may use sparse held notes or detailed storytelling.
 - Verse and Rap Section are the main homes for new information. Pre-Chorus and Build-Up compress and raise pressure. Chorus and Hook preserve the memorable center. Refrain is a brief recurring phrase identity, not another Verse. Bridge changes viewpoint or meaning. Drop releases; Breakdown strips back; Outro closes.
 - Structures with many Break, Stop, Instrumental, Interlude, Drop, Breakdown, or Theme spaces must not become accidentally incomplete. When the selected overall length calls for fuller storytelling, move genuine new substance into Verse, Rap Section, Bridge, Theme, or another development-capable role instead of padding every section.

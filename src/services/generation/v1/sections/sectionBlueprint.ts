@@ -496,13 +496,14 @@ export function buildV1SectionSlotContractInstruction(params: V1SectionEnginePar
       : entry.allowsLyrics
         ? 'LYRIC_BODY_OPTIONAL'
         : 'LYRIC_BODY_FORBIDDEN';
-    return `${index + 1}. id=${entry.id} | name=${entry.name} | ${policy}`;
+    return `${index + 1}. sectionIndex=${index + 1} | id=${entry.id} | name=${entry.name} | ${policy}`;
   }).join('\n');
   return `V1 DYNAMIC SECTION SLOT CONTRACT — ${blueprint.contractId} (ABSOLUTE):
 - The structure was already resolved once for this song. Recommended, Stable, Experimental, and Custom all use the exact resolved slots below; do not reroll or reinterpret the structure while writing.
 - In the V1 JSON response, lyrics.korean and lyrics.english are section-object arrays. Return one object for every slot in each requested language card, in this exact order. Never omit, merge, rename, duplicate, or append a slot. If a lyric card language is not selected, return an empty array for that card.
-- sectionId and sectionName must exactly match the contract. bodyLines contains lyric/ad-lib lines only. productionCues contains real instrument, ambience, texture, effect, or transition cues only, without square brackets.
-- LYRIC_BODY_REQUIRED slots must contain at least one real lyric or vocal ad-lib line. LYRIC_BODY_OPTIONAL slots may use an empty body when musically appropriate. LYRIC_BODY_FORBIDDEN slots must use an empty body.
+- sectionId, sectionIndex, and sectionName must exactly match the contract and the array position. bodyLines contains lyric/ad-lib lines only. productionCues contains real instrument, ambience, texture, effect, or transition cues only, without square brackets.
+- LYRIC_BODY_REQUIRED slots must contain at least one real non-blank lyric or vocal ad-lib line. An empty array, an empty string, whitespace, or production-cue text does not satisfy a required lyric body. LYRIC_BODY_OPTIONAL slots may use an empty body when musically appropriate. LYRIC_BODY_FORBIDDEN slots must use an empty body.
+- Before returning JSON, silently audit the completed card against this exact contract: object count, array order, sectionId, sectionIndex, sectionName, and every required body's non-blank content. Repair any omission inside the same response instead of ending early.
 - Custom user-created section names remain exactly as resolved. This contract controls only structure; it never hard-codes story content, wording, imagery, or vocal character.
 ${slots}`;
 }

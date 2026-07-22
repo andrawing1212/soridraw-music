@@ -137,30 +137,40 @@ export const backfillMissingAuthUsers = onCall(
 );
 
 const ALLOWED_ORIGINS = [
+  "https://soridraw-music-git-preview-andrawing1212.vercel.app",
   "https://soridraw-music.vercel.app",
+  "https://soridraw.web.app",
+  "https://soridraw.firebaseapp.com",
   "https://soridraw-app-866a5.web.app",
-  "https://soridraw-app-866a5.firebaseapp.com"
+  "https://soridraw-app-866a5.firebaseapp.com",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "http://localhost:5173",
 ];
 
 const handleCors = (req: any, res: any) => {
-  const origin = req.headers.origin;
-  
-  if (origin) {
-    if (ALLOWED_ORIGINS.includes(origin)) {
-      res.set("Access-Control-Allow-Origin", origin);
-    } else {
-      res.set("Access-Control-Allow-Origin", origin);
-    }
-  } else {
-    res.set("Access-Control-Allow-Origin", "*");
-  }
-  
+  const origin = String(req.headers.origin || "").trim();
+  const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
+  const isAiStudioPreview = /^https:\/\/[a-z0-9-]+\.usercontent\.goog$/i.test(origin);
+  const allowed = Boolean(origin && (ALLOWED_ORIGINS.includes(origin) || isAiStudioPreview));
+
+  res.set("Vary", "Origin");
+  res.set("Cache-Control", "no-store");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
+
+  if (allowed) {
+    res.set("Access-Control-Allow-Origin", origin);
+  } else if (isEmulator && (!origin || origin.startsWith("http://localhost:"))) {
+    res.set("Access-Control-Allow-Origin", origin || "http://localhost:5173");
+  } else {
+    res.status(403).json({ error: "Origin is not allowed", code: "ORIGIN_NOT_ALLOWED", ok: false });
+    return true;
+  }
 
   if (req.method === "OPTIONS") {
     res.status(204).send("");
-    return true; // CORS preflight handled
+    return true;
   }
   return false;
 };
@@ -180,6 +190,234 @@ const verifyAuth = async (req: any, res: any): Promise<string | null> => {
     res.status(401).json({ error: "Unauthorized", ok: false });
     return null;
   }
+};
+
+const verifyAppCheckForRequest = async (req: any, res: any): Promise<boolean> => {
+  const token = String(req.headers["x-firebase-appcheck"] || "").trim();
+  const enforce = process.env.ENFORCE_APP_CHECK === "true";
+  if (!token) {
+    if (enforce) {
+      res.status(401).json({ error: "App Check token is required", code: "APP_CHECK_REQUIRED", ok: false });
+      return false;
+    }
+    return true;
+  }
+  try {
+    await admin.appCheck().verifyToken(token);
+    return true;
+  } catch (error) {
+    if (!enforce) {
+      console.warn("[App Check monitor] invalid token accepted while enforcement is disabled:", error instanceof Error ? error.message : String(error));
+      return true;
+    }
+    res.status(401).json({ error: "Invalid App Check token", code: "APP_CHECK_INVALID", ok: false });
+    return false;
+  }
+};
+
+const GEMINI_ALLOWED_MODELS = new Set([
+  "gemini-3.5-flash",
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+]);
+const GEMINI_MAX_REQUEST_BYTES = 900_000;
+const GEMINI_MAX_REQUESTS_PER_MINUTE = 12;
+const GEMINI_MAX_ACTIVE_REQUESTS = 2;
+const GEMINI_MAX_REQUESTS_PER_SESSION = 3;
+const GEMINI_GUARD_STALE_MS = 3 * 60 * 1000;
+const GEMINI_SESSION_WINDOW_MS = 10 * 60 * 1000;
+const getStoredGeminiApiKey = async (uid: string): Promise<string> => {
+  // Read the current server-only key for every real Gemini request. One Firestore read is
+  // intentionally preferred over caching private keys in warm instance memory, so key
+  // deletion or replacement takes effect immediately across all Function instances.
+  const snap = await admin.firestore().collection("user_api_keys").doc(uid).get();
+  return String(snap.data()?.googleGeminiApiKey || "").trim();
+};
+
+const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promise<void> => {
+  const db = admin.firestore();
+  const guardRef = db.collection("gemini_request_guards").doc(uid);
+  const userRef = db.collection("users").doc(uid);
+  const now = Date.now();
+
+  await db.runTransaction(async (tx) => {
+    const [userSnap, guardSnap] = await Promise.all([tx.get(userRef), tx.get(guardRef)]);
+    const userData = userSnap.data() || {};
+    const role = String(userData.role || "free");
+    const accountStatus = String(userData.accountStatus || "active");
+    if (role !== "admin" && accountStatus !== "active") {
+      throw new HttpsError("permission-denied", "현재 계정 상태에서는 Gemini 생성을 사용할 수 없습니다.");
+    }
+
+    const data = guardSnap.data() || {};
+    const activeUpdatedAt = Number(data.activeUpdatedAt || 0);
+    const staleActive = !activeUpdatedAt || now - activeUpdatedAt > GEMINI_GUARD_STALE_MS;
+    const activeCount = staleActive ? 0 : Math.max(0, Number(data.activeCount || 0));
+    if (activeCount >= GEMINI_MAX_ACTIVE_REQUESTS) {
+      throw new HttpsError("resource-exhausted", "동시에 실행할 수 있는 Gemini 요청 수를 초과했습니다.");
+    }
+
+    const minuteWindowStart = Number(data.minuteWindowStart || 0);
+    const sameMinuteWindow = minuteWindowStart > 0 && now - minuteWindowStart < 60_000;
+    const minuteCount = sameMinuteWindow ? Math.max(0, Number(data.minuteCount || 0)) : 0;
+    if (minuteCount >= GEMINI_MAX_REQUESTS_PER_MINUTE) {
+      throw new HttpsError("resource-exhausted", "짧은 시간에 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    const sessionWindowStart = Number(data.sessionWindowStart || 0);
+    const sameSessionWindow = sessionWindowStart > 0 && now - sessionWindowStart < GEMINI_SESSION_WINDOW_MS;
+    const sessionCounts = sameSessionWindow && data.sessionCounts && typeof data.sessionCounts === "object"
+      ? { ...data.sessionCounts }
+      : {};
+    const sessionCount = Math.max(0, Number(sessionCounts[sessionId] || 0));
+    if (sessionCount >= GEMINI_MAX_REQUESTS_PER_SESSION) {
+      throw new HttpsError("resource-exhausted", "곡 하나의 Gemini 호출 상한에 도달했습니다.");
+    }
+    sessionCounts[sessionId] = sessionCount + 1;
+
+    tx.set(guardRef, {
+      activeCount: activeCount + 1,
+      activeUpdatedAt: now,
+      minuteWindowStart: sameMinuteWindow ? minuteWindowStart : now,
+      minuteCount: minuteCount + 1,
+      sessionWindowStart: sameSessionWindow ? sessionWindowStart : now,
+      sessionCounts,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+};
+
+const releaseGeminiRequestGuard = async (uid: string): Promise<void> => {
+  const db = admin.firestore();
+  const guardRef = db.collection("gemini_request_guards").doc(uid);
+  try {
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(guardRef);
+      if (!snap.exists) return;
+      const activeCount = Math.max(0, Number(snap.data()?.activeCount || 0) - 1);
+      tx.set(guardRef, {
+        activeCount,
+        activeUpdatedAt: Date.now(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+  } catch (error) {
+    console.warn("[Gemini Guard] failed to release active request:", error instanceof Error ? error.message : String(error));
+  }
+};
+
+const extractGeminiErrorStatus = (error: unknown): number => {
+  const anyError = error as any;
+  const candidates = [anyError?.status, anyError?.statusCode, anyError?.code, anyError?.error?.code];
+  for (const value of candidates) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 400 && parsed <= 599) return parsed;
+  }
+  const message = error instanceof Error ? error.message : String(error || "");
+  const match = message.match(/\b(400|401|403|404|408|409|429|500|502|503|504)\b/);
+  return match ? Number(match[1]) : 500;
+};
+
+const sanitizeGeminiErrorMessage = (error: unknown, apiKey: string): string => {
+  const raw = error instanceof Error ? error.message : String(error || "Gemini request failed");
+  return raw.split(apiKey).join("[REDACTED]").replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]").slice(0, 600);
+};
+
+const normalizeGeminiContent = (value: any): any => {
+  if (typeof value === "string") {
+    return { role: "user", parts: [{ text: value }] };
+  }
+  if (value && typeof value === "object" && Array.isArray(value.parts)) return value;
+  return value;
+};
+
+const validateGeminiTextOnlyRequest = (requestPayload: any): void => {
+  const request = requestPayload && typeof requestPayload === "object" ? requestPayload : null;
+  if (!request) throw new HttpsError("invalid-argument", "Invalid Gemini request payload.");
+  const config = request.config && typeof request.config === "object" ? request.config : {};
+  if (request.tools || request.toolConfig || config.tools || config.toolConfig) {
+    throw new HttpsError("invalid-argument", "Gemini tools are not allowed on the SORIDRAW text proxy.");
+  }
+
+  let textChars = 0;
+  const inspectContent = (content: any) => {
+    if (typeof content === "string") {
+      textChars += content.length;
+      return;
+    }
+    if (!content || typeof content !== "object" || !Array.isArray(content.parts)) {
+      throw new HttpsError("invalid-argument", "Gemini contents must contain text parts only.");
+    }
+    for (const part of content.parts) {
+      const keys = part && typeof part === "object" ? Object.keys(part) : [];
+      if (!part || typeof part.text !== "string" || keys.some((key) => key !== "text")) {
+        throw new HttpsError("invalid-argument", "Inline files, media and function calls are not allowed.");
+      }
+      textChars += part.text.length;
+    }
+  };
+
+  const contents = Array.isArray(request.contents) ? request.contents : [request.contents];
+  if (!contents.length || contents.length > 16) {
+    throw new HttpsError("invalid-argument", "Invalid Gemini contents count.");
+  }
+  contents.forEach(inspectContent);
+  if (typeof config.systemInstruction === "string") textChars += config.systemInstruction.length;
+  else if (config.systemInstruction?.parts) inspectContent(config.systemInstruction);
+  if (textChars <= 0 || textChars > 500_000) {
+    throw new HttpsError("invalid-argument", "Gemini text payload is empty or too large.");
+  }
+};
+
+const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
+  const model = String(requestPayload?.model || "").trim();
+  const config = requestPayload?.config && typeof requestPayload.config === "object"
+    ? { ...requestPayload.config }
+    : {};
+  const systemInstruction = config.systemInstruction;
+  const safetySettings = config.safetySettings;
+  const tools = config.tools;
+  const toolConfig = config.toolConfig;
+  delete config.systemInstruction;
+  delete config.safetySettings;
+  delete config.tools;
+  delete config.toolConfig;
+
+  const rawContents = requestPayload?.contents;
+  const contents = Array.isArray(rawContents)
+    ? rawContents.map(normalizeGeminiContent)
+    : [normalizeGeminiContent(rawContents)];
+  const body: any = {
+    contents,
+    generationConfig: config,
+  };
+  if (systemInstruction) {
+    body.systemInstruction = typeof systemInstruction === "string"
+      ? { parts: [{ text: systemInstruction }] }
+      : systemInstruction;
+  }
+  if (safetySettings) body.safetySettings = safetySettings;
+  if (tools) body.tools = tools;
+  if (toolConfig) body.toolConfig = toolConfig;
+
+  const upstream = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  const payload = await upstream.json().catch(() => null);
+  if (!upstream.ok) {
+    const error = new Error(String(payload?.error?.message || `Gemini request failed (${upstream.status})`));
+    (error as any).status = upstream.status;
+    (error as any).code = payload?.error?.status || upstream.status;
+    throw error;
+  }
+  return payload || {};
 };
 
 const pickFirstString = (...values: any[]): string => {
@@ -779,17 +1017,23 @@ export const saveGoogleGeminiApiKey = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
+    if (!(await verifyAppCheckForRequest(req, res))) return;
 
     const apiKey = req.body?.apiKey;
-    if (!apiKey || typeof apiKey !== "string" || apiKey.trim() === "") {
+    if (!apiKey || typeof apiKey !== "string") {
       res.status(400).json({ error: "Google Gemini API Key is required", ok: false });
+      return;
+    }
+    const normalizedApiKey = apiKey.trim();
+    if (normalizedApiKey.length < 20 || normalizedApiKey.length > 200 || !/^[A-Za-z0-9_-]+$/.test(normalizedApiKey)) {
+      res.status(400).json({ error: "Google Gemini API Key 형식을 확인해주세요.", code: "INVALID_GEMINI_KEY_FORMAT", ok: false });
       return;
     }
 
     const db = admin.firestore();
 
     await db.collection("user_api_keys").doc(uid).set({
-      googleGeminiApiKey: apiKey.trim(),
+      googleGeminiApiKey: normalizedApiKey,
       hasGoogleGeminiApiKey: true,
       googleGeminiProvider: "Google AI Studio",
       googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -813,6 +1057,7 @@ export const deleteGoogleGeminiApiKey = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
+    if (!(await verifyAppCheckForRequest(req, res))) return;
 
     const db = admin.firestore();
 
@@ -840,6 +1085,7 @@ export const getGoogleGeminiApiKeyStatus = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
+    if (!(await verifyAppCheckForRequest(req, res))) return;
 
     const db = admin.firestore();
     const docSnap = await db.collection("user_api_keys").doc(uid).get();
@@ -863,32 +1109,102 @@ export const getGoogleGeminiApiKey = onRequest(
   { region: "us-central1" },
   async (req, res) => {
     if (handleCors(req, res)) return;
+    res.status(410).json({
+      ok: false,
+      code: "GEMINI_KEY_CLIENT_ACCESS_REMOVED",
+      error: "Gemini API keys are no longer returned to the browser.",
+    });
+  }
+);
 
+export const generateGeminiContent = onRequest(
+  {
+    region: "us-central1",
+    timeoutSeconds: 180,
+    memory: "512MiB",
+    concurrency: 20,
+    maxInstances: 30,
+  },
+  async (req, res) => {
+    if (handleCors(req, res)) return;
     if (req.method !== "POST") {
-      res.status(405).json({ error: "Method Not Allowed" });
+      res.status(405).json({ error: "Method Not Allowed", ok: false });
       return;
     }
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
+    if (!(await verifyAppCheckForRequest(req, res))) return;
 
-    const db = admin.firestore();
-    const docSnap = await db.collection("user_api_keys").doc(uid).get();
-
-    if (!docSnap.exists) {
-      res.status(404).json({ ok: false, hasGoogleGeminiApiKey: false, error: "Google Gemini API Key not found." });
+    const serializedLength = Buffer.byteLength(JSON.stringify(req.body || {}), "utf8");
+    if (serializedLength > GEMINI_MAX_REQUEST_BYTES) {
+      res.status(413).json({ error: "Gemini request is too large", code: "REQUEST_TOO_LARGE", ok: false });
       return;
     }
 
-    const docData = docSnap.data() || {};
-    const apiKey = typeof docData.googleGeminiApiKey === "string" ? docData.googleGeminiApiKey.trim() : "";
+    const requestPayload = req.body?.request;
+    const model = String(requestPayload?.model || "").trim();
+    const sessionId = String(req.body?.sessionId || "").trim();
+    const context = String(req.body?.context || "Gemini 호출").trim().slice(0, 120);
+    const fallbackAttempt = Math.max(1, Math.min(3, Math.round(Number(req.body?.fallbackAttempt) || 1)));
 
-    if (!apiKey) {
-      res.status(404).json({ ok: false, hasGoogleGeminiApiKey: false, error: "Google Gemini API Key not found." });
+    if (!requestPayload || typeof requestPayload !== "object" || !model || !GEMINI_ALLOWED_MODELS.has(model)) {
+      res.status(400).json({ error: "Unsupported Gemini request", code: "INVALID_GEMINI_REQUEST", ok: false });
+      return;
+    }
+    try {
+      validateGeminiTextOnlyRequest(requestPayload);
+    } catch (validationError) {
+      const message = validationError instanceof Error ? validationError.message : "Invalid Gemini request";
+      res.status(400).json({ error: message, code: "INVALID_GEMINI_TEXT_REQUEST", ok: false });
+      return;
+    }
+    if (!sessionId || sessionId.length > 160 || !/^[A-Za-z0-9._:-]+$/.test(sessionId)) {
+      res.status(400).json({ error: "Invalid Gemini session ID", code: "INVALID_SESSION_ID", ok: false });
       return;
     }
 
-    res.json({ ok: true, hasGoogleGeminiApiKey: true, apiKey });
+    let guardAcquired = false;
+    let apiKey = "";
+    try {
+      await acquireGeminiRequestGuard(uid, sessionId);
+      guardAcquired = true;
+      apiKey = await getStoredGeminiApiKey(uid);
+      if (!apiKey) {
+        res.status(404).json({ error: "Google Gemini API Key is not registered", code: "GEMINI_KEY_NOT_FOUND", ok: false });
+        return;
+      }
+
+      const response = await callGeminiGenerateContent(apiKey, requestPayload);
+      const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
+        ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
+        : "";
+      res.json({
+        ok: true,
+        text,
+        usageMetadata: response.usageMetadata || null,
+        modelVersion: response.modelVersion || model,
+        responseId: response.responseId || null,
+        promptFeedback: response.promptFeedback || null,
+        context,
+        fallbackAttempt,
+      });
+    } catch (error) {
+      const requestError = error as any;
+      if (requestError instanceof HttpsError) {
+        const status = requestError.code === "permission-denied" ? 403 : requestError.code === "resource-exhausted" ? 429 : 400;
+        res.status(status).json({ error: requestError.message, code: requestError.code, ok: false });
+        return;
+      }
+      const status = extractGeminiErrorStatus(error);
+      res.status(status).json({
+        error: sanitizeGeminiErrorMessage(error, apiKey),
+        code: status === 429 ? "GEMINI_RATE_LIMITED" : status >= 500 ? "GEMINI_UPSTREAM_UNAVAILABLE" : "GEMINI_UPSTREAM_ERROR",
+        ok: false,
+      });
+    } finally {
+      if (guardAcquired) await releaseGeminiRequestGuard(uid);
+    }
   }
 );
 

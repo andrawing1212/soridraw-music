@@ -253,7 +253,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistDragging, setPlaylistDragging] = useState<{ section: 'normal' | 'shared'; playlistId: string } | null>(null);
   const playlistButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const playlistBarRefs = useRef<Record<'normal' | 'shared', HTMLDivElement | null>>({ normal: null, shared: null });
-  const playlistPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const playlistPressTimerRef = useRef<number | null>(null);
   const playlistDragRef = useRef<{
     section: 'normal' | 'shared';
     playlistId: string;

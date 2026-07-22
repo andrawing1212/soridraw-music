@@ -550,6 +550,8 @@ export interface GenerateSongParams {
 
 export interface SongResult {
   title: string;
+  createdAt?: number;
+  updatedAt?: number;
   englishTitle?: string;
   koreanTitle?: string;
   lyrics: {

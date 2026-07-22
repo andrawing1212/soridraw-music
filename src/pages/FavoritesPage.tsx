@@ -741,7 +741,7 @@ export default function FavoritesPage({
   const [musicNoteFolderDragging, setMusicNoteFolderDragging] = useState<{ mode: MusicNoteFolderMode; folderId: string } | null>(null);
   const musicNoteFolderButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const musicNoteFolderBarRefs = useRef<Record<MusicNoteFolderMode, HTMLDivElement | null>>({ myNote: null, sharedNote: null });
-  const musicNoteFolderPressTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const musicNoteFolderPressTimerRef = useRef<number | null>(null);
   const musicNoteFolderDragRef = useRef<{
     mode: MusicNoteFolderMode;
     folderId: string;

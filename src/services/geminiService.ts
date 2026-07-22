@@ -1,5 +1,7 @@
 console.log("🔥 NEW GEMINI ACTIVE");
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type, type GoogleGenAI } from "@google/genai";
+import { auth } from "../firebase";
+import { createGeminiServerProxy } from "./geminiProxyClient";
 import {
   BASE_PROMPTS,
   GENRE_GROUPS,
@@ -142,18 +144,17 @@ function getInstrumentalBgmDefaultTempo(params: Pick<GenerateSongParams, 'genre'
   return `${min}–${max} BPM`;
 }
 
-function getAI(apiKeyOverride?: string | null) {
-  const apiKey = String(apiKeyOverride || import.meta.env.VITE_GEMINI_API_KEY || '').trim();
-
-  if (!apiKey) {
-    throw new Error(
-      "Google Gemini API Key가 등록되어 있지 않습니다. 마이페이지에서 개인 Google Gemini API Key를 등록해주세요.",
-    );
+function getAI(_apiKeyOverride?: string | null) {
+  const uid = String(auth.currentUser?.uid || '').trim();
+  if (!uid) {
+    throw new Error('로그인이 필요합니다.');
   }
 
-  if (!aiInstance || aiInstanceKey !== apiKey) {
-    aiInstance = new GoogleGenAI({ apiKey });
-    aiInstanceKey = apiKey;
+  // The personal Gemini key never enters the browser. Prompt construction remains in the app,
+  // while the authenticated Firebase Function reads the user key and calls Gemini server-side.
+  if (!aiInstance || aiInstanceKey !== uid) {
+    aiInstance = createGeminiServerProxy();
+    aiInstanceKey = uid;
   }
 
   return aiInstance;
@@ -205,24 +206,42 @@ function isInitialSongGenerationContext(context: string): boolean {
     || clean.startsWith('generateSong v2');
 }
 
-function consumeGeminiGenerationRequestBudget(sessionId: string, context: string): void {
+function isFinalHardBanSafetyContext(context: string): boolean {
+  const clean = String(context || '').trim();
+  return clean === 'rewriteLyricHardBanCards'
+    || clean === 'rewriteLyricHardBanLines'
+    || clean === 'rewriteLyricHardBanLinesSecondPass';
+}
+
+function consumeGeminiGenerationRequestBudget(
+  sessionId: string,
+  context: string,
+  fallbackAttempt = 1,
+): void {
   const budget = geminiGenerationRequestBudgets.get(sessionId);
   if (!budget) return;
 
-  const isCorrection = !isInitialSongGenerationContext(context);
+  // Final hard-ban editing is an output-safety obligation, not a discretionary quality retry.
+  // It still consumes the absolute 3-request ceiling, but it must not be blocked merely because
+  // the one allowed structure/density quality correction already ran.
+  const isCorrection = !isInitialSongGenerationContext(context) && !isFinalHardBanSafetyContext(context);
+  const isNewCorrectionOperation = isCorrection && fallbackAttempt <= 1;
   if (budget.usedRequests >= budget.maxRequests) {
     throw new GeminiRequestBudgetExceededError(
       `곡 생성 Gemini 호출 상한(${budget.maxRequests}회)에 도달해 ${context} 호출을 생략했습니다.`,
     );
   }
-  if (isCorrection && budget.usedCorrectionRequests >= budget.maxCorrectionRequests) {
+  // A temporary 429/5xx failure inside the single permitted correction may retry once on the
+  // fallback model. That physical fallback request still consumes the absolute request ceiling,
+  // but it is not a second correction operation.
+  if (isNewCorrectionOperation && budget.usedCorrectionRequests >= budget.maxCorrectionRequests) {
     throw new GeminiRequestBudgetExceededError(
       `곡 생성 자동 보정 호출 상한(${budget.maxCorrectionRequests}회)에 도달해 ${context} 호출을 생략했습니다.`,
     );
   }
 
   budget.usedRequests += 1;
-  if (isCorrection) budget.usedCorrectionRequests += 1;
+  if (isNewCorrectionOperation) budget.usedCorrectionRequests += 1;
 }
 
 function withGeminiAuditRequestMeta<T extends object>(
@@ -257,11 +276,21 @@ function getAuditedAI(
           ? geminiAuditRequestMeta.get(params)
           : undefined;
         const context = meta?.context || 'Gemini 호출';
-        consumeGeminiGenerationRequestBudget(sessionId, context);
+        consumeGeminiGenerationRequestBudget(sessionId, context, meta?.fallbackAttempt || 1);
         const startedAtMs = Date.now();
         const model = String(params?.model || 'unknown');
         try {
-          const response = await target.generateContent.call(target, params);
+          const forwardedParams = params && typeof params === 'object'
+            ? {
+                ...params,
+                __soridrawMeta: {
+                  sessionId,
+                  context,
+                  fallbackAttempt: meta?.fallbackAttempt || 1,
+                },
+              }
+            : params;
+          const response = await target.generateContent.call(target, forwardedParams);
           recordGeminiAuditCall({
             sessionId,
             context,
@@ -318,31 +347,116 @@ const GEMINI_FALLBACK_STABILITY_INSTRUCTION = `
 - Return valid JSON exactly matching the requested schema.
 `.trim();
 
-function describeGeminiError(error: any): string {
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error || "");
+function collectGeminiErrorFragments(
+  error: any,
+  depth = 0,
+  seen: Set<any> = new Set(),
+): string[] {
+  if (error == null || depth > 4) return [];
+  if (typeof error === 'string' || typeof error === 'number' || typeof error === 'boolean') {
+    return [String(error)];
   }
+  if (typeof error !== 'object') return [String(error)];
+  if (seen.has(error)) return [];
+  seen.add(error);
+
+  const fragments: string[] = [];
+  const push = (value: unknown) => {
+    const text = String(value ?? '').trim();
+    if (text) fragments.push(text);
+  };
+
+  push(error.name);
+  push(error.message);
+  push(error.status);
+  push(error.statusText);
+  push(error.code);
+
+  const nestedKeys = ['error', 'cause', 'response', 'data', 'details', 'body'];
+  nestedKeys.forEach((key) => {
+    if ((error as any)[key] != null) {
+      fragments.push(...collectGeminiErrorFragments((error as any)[key], depth + 1, seen));
+    }
+  });
+
+  try {
+    const serialized = JSON.stringify(error, Object.getOwnPropertyNames(error));
+    if (serialized && serialized !== '{}') fragments.push(serialized);
+  } catch {
+    // Ignore circular/non-serializable SDK internals. The explicit fields above are enough.
+  }
+
+  return fragments;
+}
+
+function describeGeminiError(error: any): string {
+  return Array.from(new Set(collectGeminiErrorFragments(error)))
+    .join(' | ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getGeminiErrorCode(error: any): number {
+  const candidates = [
+    error?.code,
+    error?.error?.code,
+    error?.response?.status,
+    error?.response?.data?.code,
+    error?.cause?.code,
+  ];
+  for (const value of candidates) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  const text = describeGeminiError(error);
+  const match = text.match(/(?:^|\D)(400|401|403|404|408|409|429|500|502|503|504)(?:\D|$)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function getGeminiErrorStatus(error: any): string {
+  const candidates = [
+    error?.status,
+    error?.error?.status,
+    error?.response?.data?.status,
+    error?.cause?.status,
+  ];
+  for (const value of candidates) {
+    const normalized = String(value || '').trim().toUpperCase();
+    if (normalized) return normalized;
+  }
+  const text = describeGeminiError(error).toUpperCase();
+  const known = ['RESOURCE_EXHAUSTED', 'UNAVAILABLE', 'DEADLINE_EXCEEDED', 'INVALID_ARGUMENT'];
+  return known.find((status) => text.includes(status)) || '';
+}
+
+function isGeminiRequestSchemaError(error: any): boolean {
+  const text = describeGeminiError(error).toLowerCase();
+  const status = getGeminiErrorStatus(error);
+  const code = getGeminiErrorCode(error);
+  const hasSchemaMarker = (
+    text.includes('generation_config.response_schema') ||
+    text.includes('response_schema') ||
+    text.includes('invalid json payload') ||
+    text.includes('unknown name') ||
+    text.includes('fieldviolations') ||
+    text.includes('invalid value at generation_config')
+  );
+  return hasSchemaMarker && (code === 400 || status === 'INVALID_ARGUMENT' || !code);
 }
 
 function isGeminiRetryableError(error: any): boolean {
   const text = describeGeminiError(error).toLowerCase();
-  const status = error?.status || error?.error?.status || "";
-  const code = error?.code || error?.error?.code || 0;
+  const status = getGeminiErrorStatus(error);
+  const code = getGeminiErrorCode(error);
+  // 429 / quota exhaustion is project-level and usually affects fallback models too.
+  // Stop immediately so one user action cannot burn another request against the same personal project.
   return (
-    code === 429 ||
     code === 500 ||
     code === 502 ||
     code === 503 ||
     code === 504 ||
-    status === "RESOURCE_EXHAUSTED" ||
     status === "UNAVAILABLE" ||
     status === "DEADLINE_EXCEEDED" ||
-    text.includes("429") ||
-    text.includes("quota") ||
-    text.includes("rate limit") ||
-    text.includes("resource_exhausted") ||
     text.includes("overloaded") ||
     text.includes("unavailable") ||
     text.includes("temporarily")
@@ -362,8 +476,8 @@ function withFallbackSafetyInstruction(config: any, attemptIndex: number): any {
 
 function getGeminiFallbackReason(error: any): string {
   const text = describeGeminiError(error).toLowerCase();
-  const status = String(error?.status || error?.error?.status || "").toLowerCase();
-  const code = Number(error?.code || error?.error?.code || 0);
+  const status = getGeminiErrorStatus(error).toLowerCase();
+  const code = getGeminiErrorCode(error);
   if (code === 429 || status.includes("resource_exhausted") || text.includes("quota")) return "quota_or_rate_limit";
   if (text.includes("rate limit") || text.includes("429")) return "quota_or_rate_limit";
   if (status.includes("unavailable") || text.includes("unavailable") || text.includes("overloaded")) return "model_unavailable_or_overloaded";
@@ -446,9 +560,13 @@ async function generateContentWithModelFallback(
       }
       console.warn(`[SORIDRAW Gemini Fallback] ${context}: ${model} failed`, error);
       // Do not launch another paid request for a prompt/schema/content error.
-      // Retry at most once, and only when the API explicitly reports a temporary,
-      // quota/rate-limit, unavailable, or server-side failure.
-      if (!isGeminiRetryableError(error) || i >= limitedModelChain.length - 1) {
+      // Retry at most once, and only for a temporary unavailable/server-side failure.
+      // A 429/quota error stops immediately because the personal-project quota is shared.
+      if (
+        isGeminiRequestSchemaError(error)
+        || !isGeminiRetryableError(error)
+        || i >= limitedModelChain.length - 1
+      ) {
         throw error;
       }
     }
@@ -4818,6 +4936,7 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
 
 type V1SectionSlotResponse = {
   sectionId?: string;
+  sectionIndex?: number;
   sectionName?: string;
   productionCues?: unknown[];
   bodyLines?: unknown[];
@@ -25453,6 +25572,77 @@ function sectionMeaningScoreForDensity(lines: string[], params: GenerateSongPara
   return { chars, bodyLines, hasSubstantialLine };
 }
 
+function isNonLexicalParenthesizedAdlibForDensity(line: string): boolean {
+  const trimmed = String(line || '').trim();
+  if (!/^\([^)]{1,80}\)$/.test(trimmed)) return false;
+  const inner = trimmed
+    .slice(1, -1)
+    .toLowerCase()
+    .replace(/[\s,，.!?…·'"“”‘’~\-_/\\:;]+/g, '');
+  if (!inner) return true;
+  return /^(?:(?:o+h+|a+h+|u+h+|wo+a+h+|mm+|hmm+|la+|na+|da+)|[아어오우으음흠하후워예에이])+$/i.test(inner);
+}
+
+type V1DevelopmentSubstanceScore = {
+  chars: number;
+  meaningfulUnits: number;
+  bodyLines: string[];
+};
+
+function scoreV1DevelopmentSubstance(
+  lines: string[],
+  params: GenerateSongParams,
+): V1DevelopmentSubstanceScore {
+  const lexicalLines = lyricDensityBodyLines(lines.join('\n'), params)
+    .filter((line) => !isNonLexicalParenthesizedAdlibForDensity(line));
+  const unique = new Map<string, string>();
+  lexicalLines.forEach((line) => {
+    const key = String(line || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9가-힣]+/g, '');
+    if (!key || unique.has(key)) return;
+    unique.set(key, line);
+  });
+  const bodyLines = [...unique.values()];
+  return {
+    chars: lyricDensityTextLength(bodyLines),
+    meaningfulUnits: bodyLines.filter((line) => lyricDensityTextLength([line]) >= 4).length,
+    bodyLines,
+  };
+}
+
+function v1DevelopmentSubstanceFloor(
+  sectionName: string,
+  params: GenerateSongParams,
+): { meaningfulUnits: number; chars: number } {
+  const mode = lyricDensityLengthMode(params);
+  const isRap = /^Rap\s+Section$/i.test(baseV1SectionName(sectionName));
+  const base = mode === 'very-short'
+    ? { meaningfulUnits: 2, chars: 16 }
+    : mode === 'short'
+      ? { meaningfulUnits: 2, chars: 22 }
+      : mode === 'long'
+        ? { meaningfulUnits: 4, chars: 42 }
+        : { meaningfulUnits: 3, chars: 28 };
+  return isRap
+    ? { meaningfulUnits: base.meaningfulUnits + 1, chars: base.chars + 12 }
+    : base;
+}
+
+function isV1DevelopmentSectionBelowSafetyFloor(
+  entry: ReturnType<typeof getV1SectionBlueprint>['entries'][number],
+  lines: string[],
+  params: GenerateSongParams,
+): boolean {
+  if (!entry.requiresLyrics || entry.roleFamily !== 'development' || entry.massClass !== 'expansive') return false;
+  if (userExplicitlyRequestsCompactV1DevelopmentSection(params, entry.name)) return false;
+  const score = scoreV1DevelopmentSubstance(lines, params);
+  const floor = v1DevelopmentSubstanceFloor(entry.name, params);
+  // This is an extreme-collapse guard, not a line quota: either enough distinct lexical units
+  // OR enough total lexical substance passes. Only sections below both measurements are repaired.
+  return score.meaningfulUnits < floor.meaningfulUnits && score.chars < floor.chars;
+}
+
 function hasRepeatedTinyPaddingOnly(lines: string[], params: GenerateSongParams): boolean {
   const body = lyricDensityBodyLines(lines.join('\n'), params);
   if (body.length < 3) return false;
@@ -25776,30 +25966,40 @@ function collectUnderdevelopedV1Sections(
   const blueprint = getV1SectionBlueprint(params);
   const aligned = alignVisibleV1SectionsToBlueprint(lyrics, params);
   const byIndex = new Map(aligned.map((item) => [item.expectedIndex, item.block]));
-  const groups = new Map<string, Array<{ expectedIndex: number; entry: (typeof blueprint.entries)[number]; score: ReturnType<typeof sectionMeaningScoreForDensity> }>>();
+  const groups = new Map<string, Array<{ expectedIndex: number; entry: (typeof blueprint.entries)[number]; score: V1DevelopmentSubstanceScore }>>();
+  const targets: V1SectionBodyRepairTarget[] = [];
 
   blueprint.entries.forEach((entry, expectedIndex) => {
-    const base = baseV1SectionName(entry.name);
-    if (!/^(?:Verse|Rap Section)$/i.test(base) || !entry.requiresLyrics) return;
+    if (!entry.requiresLyrics || entry.roleFamily !== 'development' || entry.massClass !== 'expansive') return;
     const block = byIndex.get(expectedIndex);
     if (!block) return;
-    const score = sectionMeaningScoreForDensity(block.bodyLines, params);
+    const score = scoreV1DevelopmentSubstance(block.bodyLines, params);
     if (!score.bodyLines.length || !score.chars) return;
+    if (isV1DevelopmentSectionBelowSafetyFloor(entry, block.bodyLines, params)) {
+      targets.push({
+        sectionId: entry.id,
+        expectedIndex,
+        name: entry.name,
+        role: entry.lyricRole,
+        reason: 'underdeveloped',
+      });
+    }
+    const base = baseV1SectionName(entry.name);
+    if (!/^(?:Verse|Rap Section)$/i.test(base)) return;
     const key = base.toLowerCase();
     const list = groups.get(key) || [];
     list.push({ expectedIndex, entry, score });
     groups.set(key, list);
   });
 
-  const targets: V1SectionBodyRepairTarget[] = [];
   groups.forEach((items) => {
     if (items.length < 2) return;
-    const reference = [...items].sort((a, b) => b.score.chars - a.score.chars || b.score.bodyLines.length - a.score.bodyLines.length)[0];
-    if (!reference || reference.score.bodyLines.length < 2 || reference.score.chars < 18) return;
+    const reference = [...items].sort((a, b) => b.score.chars - a.score.chars || b.score.meaningfulUnits - a.score.meaningfulUnits)[0];
+    if (!reference || reference.score.meaningfulUnits < 2 || reference.score.chars < 18) return;
     items.forEach((item) => {
       if (item === reference || userExplicitlyRequestsCompactV1DevelopmentSection(params, item.entry.name)) return;
-      const currentLines = item.score.bodyLines.length;
-      const referenceLines = reference.score.bodyLines.length;
+      const currentLines = item.score.meaningfulUnits;
+      const referenceLines = reference.score.meaningfulUnits;
       const lineCollapse = currentLines * 1.6 < referenceLines;
       const charCollapse = item.score.chars * 1.6 < reference.score.chars;
       if (!lineCollapse && !charCollapse) return;
@@ -25839,10 +26039,12 @@ function applyGeneratedV1SectionBodies(
   let current = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
   const blueprint = getV1SectionBlueprint(params);
   const generatedById = new Map<string, string[]>();
+  const targets = collectV1SectionBodyRepairTargets(current, params);
+  const targetById = new Map(targets.map((item) => [item.sectionId, item]));
 
   generatedSections.forEach((item) => {
     const expectedEntry = blueprint.entries[item.sectionIndex - 1];
-    if (!expectedEntry || expectedEntry.id !== item.sectionId) return;
+    if (!expectedEntry || expectedEntry.id !== item.sectionId || !targetById.has(item.sectionId)) return;
     const normalized = normalizeV1SectionName(item.sectionName, blueprint.customNames).toLowerCase();
     if (normalized !== normalizeV1SectionName(expectedEntry.name, blueprint.customNames).toLowerCase()) return;
     const body = (item.bodyLines || [])
@@ -25853,11 +26055,11 @@ function applyGeneratedV1SectionBodies(
     if (body.length) generatedById.set(item.sectionId, body);
   });
 
-  const targets = collectMissingRequiredV1Sections(current, params)
+  const applicableTargets = targets
     .filter((item) => generatedById.has(item.sectionId))
     .sort((a, b) => b.expectedIndex - a.expectedIndex);
 
-  targets.forEach((item) => {
+  applicableTargets.forEach((item) => {
     const body = generatedById.get(item.sectionId) || [];
     if (!body.length) return;
     const lines = current.replace(/\r\n?/g, '\n').split('\n');
@@ -25865,11 +26067,24 @@ function applyGeneratedV1SectionBodies(
     const existing = aligned.find((candidate) => candidate.expectedIndex === item.expectedIndex);
 
     if (existing) {
-      const preservedCues = lines
+      const existingContent = lines
         .slice(existing.block.start + 1, existing.block.end)
         .map((line) => String(line || '').trim())
-        .filter((line) => /^\[[^\]]+\]$/.test(line));
-      const replacement = [...preservedCues, ...body];
+        .filter(Boolean);
+      const existingKeys = new Set(existingContent.map((line) => line.toLowerCase().replace(/[^a-z0-9가-힣]+/g, '')).filter(Boolean));
+      const dedupedBody = body.filter((line) => {
+        const key = line.toLowerCase().replace(/[^a-z0-9가-힣]+/g, '');
+        if (!key || existingKeys.has(key)) return false;
+        existingKeys.add(key);
+        return true;
+      });
+      if (!dedupedBody.length) return;
+      const replacement = item.reason === 'underdeveloped'
+        ? [...existingContent, ...dedupedBody]
+        : [
+          ...existingContent.filter((line) => /^\[[^\]]+\]$/.test(line)),
+          ...dedupedBody,
+        ];
       lines.splice(existing.block.start + 1, existing.block.end - existing.block.start - 1, ...replacement);
       current = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
       return;
@@ -25889,7 +26104,7 @@ function applyGeneratedV1SectionBodies(
   return applyV1SectionBlueprintGuard(current, params);
 }
 
-async function repairMissingV1RequiredSectionsWithGemini(
+async function repairTargetedV1SectionBodiesWithGemini(
   ai: GoogleGenAI,
   lyrics: string,
   params: GenerateSongParams,
@@ -25898,18 +26113,30 @@ async function repairMissingV1RequiredSectionsWithGemini(
 ): Promise<string> {
   if (isGenerationEngineV2(params)) return lyrics;
   const guarded = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
-  const targets = collectMissingRequiredV1Sections(guarded, params);
+  const blueprint = getV1SectionBlueprint(params);
+  const seenTargetIndexes = new Set<number>();
+  const targets = collectV1SectionBodyRepairTargets(guarded, params).filter((item) => {
+    if (!Number.isInteger(item.expectedIndex) || item.expectedIndex < 0) return false;
+    if (seenTargetIndexes.has(item.expectedIndex)) return false;
+    const expected = blueprint.entries[item.expectedIndex];
+    if (!expected || expected.id !== item.sectionId) return false;
+    seenTargetIndexes.add(item.expectedIndex);
+    return true;
+  });
   if (!targets.length) return guarded;
 
-  const blueprint = getV1SectionBlueprint(params);
   const storyContext = String((params as any).__v1StoryContext || '').trim();
-  const systemInstruction = `You are SORIDRAW's missing-section body repair stage.
-Write lyric bodies only for the explicitly listed missing required sections in ${languageLabel}.
+  const systemInstruction = `You are SORIDRAW's targeted section-body completion stage.
+Write lyric-body additions only for the explicitly listed target sections in ${languageLabel}.
 
 ABSOLUTE RULES:
 - Preserve every existing lyric line, hook, section, singer assignment, and production cue. Do not rewrite the supplied lyric.
-- Return content only for the requested missing target sections. Do not alter any existing section, tag, cue, or lyric line. Do not add, remove, rename, merge, split, or reorder any section.
-- Follow each missing section's current-song role and connect naturally between its neighbouring sections.
+- Return content only for the requested target sections. Do not alter any existing section, tag, cue, or lyric line. Do not add, remove, rename, merge, split, or reorder any section.
+- For repairReason=missing, return the complete missing lyric body.
+- For repairReason=underdeveloped, return only concise NEW lines that extend the existing section. Do not repeat, paraphrase, translate, replace, or delete its current lines.
+- A development section must carry real lexical scene, action, desire, relationship detail, attitude, or consequence. Parenthesized non-lexical humming/ad-libs do not satisfy that substance by themselves.
+- This is a safety completion, not a fixed line-count rewrite. Add only enough meaningful material to restore the section's role and current-song density.
+- Follow each target section's current-song role and connect naturally between its neighbouring sections.
 - Preserve the current Story Context, character voice, emotional progression, language-mix style, and approximate language balance. Quality and singability come before percentage arithmetic.
 - Do not copy a neighbouring section, restart the story, translate adjacent lines redundantly, or introduce stock phrases.
 - bodyLines must contain sung lyric or vocal-ad-lib lines only. Do not include square-bracket section tags, production cues, explanations, markdown, or numbering.
@@ -25926,7 +26153,12 @@ ABSOLUTE RULES:
           exactSectionOrderText: blueprint.exactOrderText,
           currentLyrics: guarded.slice(0, 7000),
           sectionContractId: blueprint.contractId,
-          exactSectionSlots: blueprint.entries.map((entry) => ({ sectionId: entry.id, sectionName: entry.name })),
+          exactSectionSlots: blueprint.entries.map((entry, index) => ({
+            sectionId: entry.id,
+            sectionIndex: index + 1,
+            sectionName: entry.name,
+            bodyPolicy: entry.requiresLyrics ? 'required' : entry.allowsLyrics ? 'optional' : 'forbidden',
+          })),
           targetSections: targets.map((item) => ({
             sectionId: item.sectionId,
             sectionIndex: item.expectedIndex + 1,
@@ -25952,17 +26184,22 @@ ABSOLUTE RULES:
                     bodyLines: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING },
+                      minItems: 1,
                     },
                   },
                   required: ['sectionId', 'sectionIndex', 'sectionName', 'bodyLines'],
+                  additionalProperties: false,
                 },
+                minItems: targets.length,
+                maxItems: targets.length,
               },
             },
             required: ['sections'],
+            additionalProperties: false,
           },
         },
       },
-      'repairMissingV1Sections',
+      'repairV1SectionBodies',
     );
     const parsed = parseGeminiJsonObject(response?.text || '{}');
     const generated = Array.isArray(parsed?.sections) ? parsed.sections : [];
@@ -25978,7 +26215,7 @@ ABSOLUTE RULES:
     );
     return inspectV1SectionContractCompletion(repaired, params).complete ? repaired : lyrics;
   } catch (error) {
-    console.warn('[SORIDRAW V1 Section Engine] missing-section body repair skipped:', error);
+    console.warn('[SORIDRAW V1 Section Engine] targeted section-body repair skipped:', error);
     return lyrics;
   }
 }
@@ -25999,18 +26236,19 @@ async function repairSparseLyricsWithGemini(
     return enforceLyricSectionBlockSpacing(originalSource, params);
   }
 
-  // V1 dynamic blueprint contract: soft quality differences never trigger a rewrite.
-  // Only a required slot that is actually absent/empty receives one targeted body-completion call.
+  // V1 dynamic blueprint contract: broad quality preferences never trigger a whole-lyric rewrite.
+  // Only a missing required slot or an expansive development slot below the minimum-substance
+  // safety floor receives one targeted body-completion call.
   if (!isGenerationEngineV2(params)) {
     const locallyGuarded = applyV1SectionBlueprintGuard(
       cleanupGhostOpeningIntroAndEmptySungTags(originalSource, params),
       params,
     );
-    const missingRequired = collectMissingRequiredV1Sections(locallyGuarded || originalSource, params);
-    if (!missingRequired.length) {
+    const sectionTargets = collectV1SectionBodyRepairTargets(locallyGuarded || originalSource, params);
+    if (!sectionTargets.length) {
       return enforceLyricSectionBlockSpacing(locallyGuarded || originalSource, params);
     }
-    const repaired = await repairMissingV1RequiredSectionsWithGemini(
+    const repaired = await repairTargetedV1SectionBodiesWithGemini(
       ai,
       locallyGuarded || originalSource,
       params,
@@ -26061,7 +26299,7 @@ async function repairSparseLyricsWithGemini(
   // V1 section architecture is engine-owned. Repair only the missing required section body
   // before considering a full-lyric rewrite, so existing lyric quality and language mixing stay intact.
   if (!isGenerationEngineV2(params) && (catastrophicRepairNeeded || targetedSectionRepairNeeded)) {
-    const targetedRepair = await repairMissingV1RequiredSectionsWithGemini(
+    const targetedRepair = await repairTargetedV1SectionBodiesWithGemini(
       ai,
       applyV1SectionBlueprintGuard(originalSource, params),
       params,
@@ -32533,10 +32771,14 @@ ${selectedNativeScriptInstruction}
 - Do not invent pseudo-sound phrases such as (어스름한 소리), (우울한 소리), or (분위기 소리). A valid SFX cue must be a real audible event.
 - Do not start lyrics with a naked sound-palette bracket such as [soft synth, bass] before any section. First write a real section tag, then place any sound/vocal-effect cue under it as a standalone bracket line.`;
 
+  const v1ResponseBlueprint = (!params.isNoLyrics && !isGenerationEngineV2(params))
+    ? getV1SectionBlueprint(params)
+    : null;
   const v1SectionSlotItemSchema = {
     type: Type.OBJECT,
     properties: {
       sectionId: { type: Type.STRING },
+      sectionIndex: { type: Type.INTEGER },
       sectionName: { type: Type.STRING },
       productionCues: {
         type: Type.ARRAY,
@@ -32547,11 +32789,56 @@ ${selectedNativeScriptInstruction}
         items: { type: Type.STRING },
       },
     },
-    required: ['sectionId', 'sectionName', 'productionCues', 'bodyLines'],
+    required: ['sectionId', 'sectionIndex', 'sectionName', 'productionCues', 'bodyLines'],
+    additionalProperties: false,
+  };
+  const buildSupportedV1SectionSlotItemSchema = () => {
+    if (!v1ResponseBlueprint) return v1SectionSlotItemSchema;
+    return {
+      type: Type.OBJECT,
+      properties: {
+        sectionId: {
+          type: Type.STRING,
+        },
+        sectionIndex: {
+          type: Type.INTEGER,
+        },
+        sectionName: {
+          type: Type.STRING,
+        },
+        productionCues: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+        bodyLines: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      required: ['sectionId', 'sectionIndex', 'sectionName', 'productionCues', 'bodyLines'],
+      additionalProperties: false,
+    };
+  };
+  const buildV1LanguageCardSchema = (selected: boolean) => {
+    if (!v1ResponseBlueprint || !selected) {
+      return {
+        type: Type.ARRAY,
+        items: v1SectionSlotItemSchema,
+        minItems: 0,
+        maxItems: 0,
+      };
+    }
+    const exactCount = v1ResponseBlueprint.entries.length;
+    return {
+      type: Type.ARRAY,
+      items: buildSupportedV1SectionSlotItemSchema(),
+      minItems: exactCount,
+      maxItems: exactCount,
+    };
   };
   const lyricsJsonShapeExample = isGenerationEngineV2(params)
     ? '"lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }'
-    : '"lyrics": { "english": [{ "sectionId": "exact contract slot id", "sectionName": "exact contract slot name", "productionCues": ["production cue without brackets"], "bodyLines": ["lyric or ad-lib line"] }], "korean": [{ "sectionId": "exact contract slot id", "sectionName": "exact contract slot name", "productionCues": ["production cue without brackets"], "bodyLines": ["lyric or ad-lib line"] }] }';
+    : '"lyrics": { "english": [{ "sectionId": "exact contract slot id", "sectionIndex": 1, "sectionName": "exact contract slot name", "productionCues": ["production cue without brackets"], "bodyLines": ["lyric or ad-lib line"] }], "korean": [{ "sectionId": "exact contract slot id", "sectionIndex": 1, "sectionName": "exact contract slot name", "productionCues": ["production cue without brackets"], "bodyLines": ["lyric or ad-lib line"] }] }';
   const lyricsResponseSchema = params.isNoLyrics
     ? {}
     : {
@@ -32563,10 +32850,11 @@ ${selectedNativeScriptInstruction}
                 korean: { type: Type.STRING },
               }
             : {
-                english: { type: Type.ARRAY, items: v1SectionSlotItemSchema },
-                korean: { type: Type.ARRAY, items: v1SectionSlotItemSchema },
+                english: buildV1LanguageCardSchema(requestedLyricLanguages.some((lang) => lang !== 'ko')),
+                korean: buildV1LanguageCardSchema(requestedLyricLanguages.includes('ko')),
               },
           required: ["english", "korean"],
+          additionalProperties: false,
         },
       };
   const hookBlueprintResponseSchema = (!params.isNoLyrics && !isGenerationEngineV2(params))
@@ -33465,11 +33753,15 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     // The normal chain already used at most two models for a real temporary API failure.
     // Starting another fallback chain here caused four sequential paid requests and very long tails.
     // A compact one-shot fallback is reserved only for non-retryable prompt/schema/content errors.
+    if (isGeminiRequestSchemaError(fallbackError)) {
+      console.error("[SORIDRAW Generation Guard] request/schema configuration error; paid compact fallback blocked:", fallbackError);
+      throw fallbackError;
+    }
     if (isGeminiRetryableError(fallbackError)) {
       console.warn("[SORIDRAW Generation Guard] retryable model chain exhausted; no duplicate minimal chain:", fallbackError);
       response = null;
     } else {
-      console.warn("[SORIDRAW Generation Guard] prompt/schema failure; trying one compact response:", fallbackError);
+      console.warn("[SORIDRAW Generation Guard] non-schema generation failure; trying one compact response:", fallbackError);
       try {
         response = await ai.models.generateContent(withGeminiAuditRequestMeta({
           model: GEMINI_TEXT_MODEL_CHAIN[0],

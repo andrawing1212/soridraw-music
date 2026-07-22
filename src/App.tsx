@@ -503,7 +503,7 @@ import {
   deleteField,
   query as firestoreQuery
 } from 'firebase/firestore';
-import { auth, googleProvider, db } from './firebase';
+import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
@@ -612,8 +612,8 @@ class ErrorBoundary extends Component<any, any> {
       let errorMessage = "알 수 없는 오류가 발생했습니다.";
       
       if (error?.message) {
-        if (error.message.includes("VITE_GEMINI_API_KEY")) {
-          errorMessage = "Gemini API 키가 설정되지 않았습니다. 설정을 확인해주세요.";
+        if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(error.message)) {
+          errorMessage = "마이페이지에서 개인 Gemini API 키를 등록해주세요.";
         } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
           errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
         } else {
@@ -2290,7 +2290,7 @@ function SecondaryScrollControl() {
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerCancel}
               animate={{ y: isDragging ? dragY : 0 }}
-              transition={isDragging ? { type: "just" } : { type: "spring", stiffness: 400, damping: 30 }}
+              transition={isDragging ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 30 }}
               className={cn(
                 "w-6 h-6 rounded-full bg-zinc-900/80 backdrop-blur-md border border-brand-orange/40 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing pointer-events-auto touch-none transition-colors",
                 isDragging ? "border-brand-orange bg-zinc-800" : "hover:border-brand-orange/60"
@@ -3115,14 +3115,15 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
     setIsProfileOpen(false);
   };
 
-  const topNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
+  const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
     { key: 'home', path: '/', label: '홈', icon: HomeIcon },
     { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },
     { key: 'musicNote', path: '/history', label: '뮤직노트', icon: HeartIcon },
     { key: 'library', path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
     { key: 'lab', path: '/lab', label: '실험실', icon: FlaskConical },
     { key: 'myPage', path: '/my-page', label: '마이페이지', icon: UserIcon },
-  ].filter((item) => canShowMenu(item.key));
+  ];
+  const topNavItems = allTopNavItems.filter((item) => canShowMenu(item.key));
   const preferredLandingPath = menuVisibility.home
     ? '/'
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
@@ -3531,6 +3532,25 @@ const GOOGLE_GEMINI_API_KEY_STORAGE_BASE = 'soridraw_google_gemini_api_key';
 const GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_google_gemini_api_key_registered';
 const SUNO_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_suno_api_key_registered';
 
+const purgeLegacyGoogleGeminiApiKeyCache = () => {
+  try {
+    const rawPrefix = `${GOOGLE_GEMINI_API_KEY_STORAGE_BASE}_`;
+    const registeredPrefix = `${GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE}_`;
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(rawPrefix) && !key.startsWith(registeredPrefix)) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // localStorage may be unavailable.
+  }
+};
+
+// Older builds briefly cached the raw personal key in localStorage. Purge every legacy
+// user-scoped copy as soon as this secured build loads.
+purgeLegacyGoogleGeminiApiKeyCache();
+
 const getUserScopedStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
 
 const getStoredGoogleGeminiApiKey = (_uid?: string | null): string => {
@@ -3561,23 +3581,30 @@ const fetchGoogleGeminiApiKeyFromServer = async (user: User | null | undefined):
   if (!user?.uid) return '';
 
   const token = await user.getIdToken();
-  const res = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/getGoogleGeminiApiKey`, {
+  const appCheckToken = await getFirebaseAppCheckToken();
+  const res = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/getGoogleGeminiApiKeyStatus`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`,
+      ...(appCheckToken ? { 'X-Firebase-AppCheck': appCheckToken } : {}),
     },
     body: JSON.stringify({}),
   });
 
   const result = await res.json().catch(() => null);
-  if (res.ok && result?.ok && typeof result.apiKey === 'string' && result.apiKey.trim()) {
-    const apiKey = result.apiKey.trim();
-    cacheGoogleGeminiApiKey(user.uid, apiKey);
-    return apiKey;
+  const registered = Boolean(
+    res.ok && result?.ok && (
+      result.hasGoogleGeminiApiKey || result.registered || result.hasApiKey || result.exists
+    )
+  );
+  if (registered) {
+    // This is only an internal availability marker. The actual key never enters the browser.
+    cacheGoogleGeminiApiKey(user.uid, 'server-managed');
+    return 'server-managed';
   }
 
-  if (res.status === 404) clearCachedGoogleGeminiApiKey(user.uid);
+  clearCachedGoogleGeminiApiKey(user.uid);
   return '';
 };
 
@@ -9943,8 +9970,8 @@ const saveRecentSong = async (newSong: any) => {
         console.log('Generation cancelled');
       } else {
         console.error(error);
-        if (rawErrorMessage.includes('VITE_GEMINI_API_KEY')) {
-          errorMessage = 'API 키가 설정되지 않았습니다. 설정을 확인해주세요.';
+        if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(rawErrorMessage)) {
+          errorMessage = '마이페이지에서 개인 Gemini API 키를 등록해주세요.';
         } else if (/quota|rate.?limit|resource_exhausted|429/i.test(rawErrorMessage)) {
           errorMessage = 'Gemini 사용 한도 또는 요청 제한에 도달했습니다. 잠시 후 다시 시도해주세요.';
         } else if (/network|fetch|unavailable|overloaded|503|504/i.test(rawErrorMessage)) {
@@ -12993,7 +13020,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               const combo = getRecommendedSoundComboVariant(variantId);
               if (combo) {
                 recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
-                  Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([, comboId]) => comboId !== variantId)
+                  Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([comboVariantId]) => comboVariantId !== variantId)
                 );
               }
               toggleCycleVariantSelection(variantId, selectedPointSounds, setSelectedPointSounds);
@@ -13231,7 +13258,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           )}
                           <button
                             type="button"
-                            onClick={closeStoryboardModal}
+                            onClick={() => closeStoryboardModal()}
                             className="p-2 rounded-xl bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
                             title="닫기"
                             aria-label="스토리보드 닫기"
@@ -16132,7 +16159,7 @@ const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, de
 
   const contentTransition = isMobile 
     ? { duration: 0 } 
-    : { duration: 0.22, ease: [0.16, 1, 0.3, 1] };
+    : { duration: 0.22, ease: [0.16, 1, 0.3, 1] as const };
 
   return (
     <Portal>
@@ -16573,8 +16600,7 @@ const GenreCategorySection = React.memo(GenreCategorySectionComponent, (prev, ne
          prev.isRandomized === next.isRandomized &&
          prev.isLocked === next.isLocked &&
          prev.isExpanded === next.isExpanded &&
-         prev.groups === next.groups &&
-         prev.directInput?.selectedText === next.directInput?.selectedText;
+         prev.groups === next.groups;
 });
 
 function GenreSelectModal({

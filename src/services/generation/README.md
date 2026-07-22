@@ -240,3 +240,11 @@ Only a structure with no usable core target is marked `target-missing`. Lyric Pr
 - The selected flags are stored in `appliedKeywords.sectionCueOptions`, restored when prior settings/templates are reapplied, and passed through V1 generation, V2 generation, and lyric-only regeneration. Missing legacy values resolve to ON/ON.
 - No Firebase/Auth/Firestore/Functions/Rules change, storage migration, API-count change, or existing lyric-content hardcoding is introduced.
 
+
+## 89차 Dynamic Section Blueprint slot contract
+
+- Recommended, Stable, Experimental, and Custom resolve one song-specific V1 Section Blueprint before the first Gemini request. Random structure selection stops at that boundary and the same locked contract is reused through prompting, parsing, repair, rendering, and final validation.
+- V1 lyric JSON now uses dynamic section arrays (`sectionId`, `sectionName`, `productionCues`, `bodyLines`) instead of a fixed pop-only key set. The application renders the exact resolved slots in order, so Experimental and Custom names remain valid without forcing Stable sections that were never selected.
+- Each resolved slot carries one structural body policy from the existing Section Registry: required, optional, or forbidden. This reuses the existing format/safety policy rather than adding lyric-content hardcoding.
+- Missing tags and order are application-owned. Only an actually empty required body may use the existing single targeted correction request. Whole-lyric regeneration and structure reroll are not used.
+- Unselected language cards stay empty. No story phrase, scene, lyric sentence, genre-specific subject, Firebase/Auth/Firestore/Functions change, or saved-data migration is introduced.

@@ -62,6 +62,7 @@ import {
 import {
   applyV1SectionBlueprintGuard,
   buildV1SectionBlueprintInstruction,
+  buildV1SectionSlotContractInstruction,
   formatV1SectionBlueprintOrder,
   getV1SectionBlueprint,
   isV1StructuralSectionTag,
@@ -75,6 +76,7 @@ import {
   resolveV1HookRolePlan,
   resolveV1VocalAnchorDescriptors,
   type V1HookRolePlan,
+  type V1SectionBlueprint,
 } from "./generation/v1/sections";
 
 let aiInstance: GoogleGenAI | null = null;
@@ -643,6 +645,7 @@ interface GenerateSongParams {
   generationEngineVersion?: GenerationEngineVersion;
   lyricWritingStyle?: V1LyricWritingStyle;
   __geminiAuditSessionId?: string;
+  __v1SectionBlueprintContract?: V1SectionBlueprint;
 }
 
 function resolveSectionCueOptions(params?: Pick<GenerateSongParams, 'sectionCueOptions'> | null): SectionCueOptions {
@@ -4723,6 +4726,9 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
       ]).join(' / '),
       geminiApiKey: String((first as any).geminiApiKey || '').trim(),
       __geminiAuditSessionId: String((first as any).__geminiAuditSessionId || '').trim() || undefined,
+      __v1SectionBlueprintContract: (first as any).__v1SectionBlueprintContract,
+      generationIndex: Number.isFinite(Number((first as any).generationIndex)) ? Number((first as any).generationIndex) : undefined,
+      generationCount: Number.isFinite(Number((first as any).generationCount)) ? Number((first as any).generationCount) : undefined,
       recentGeneratedTitles: (((first as any).recentGeneratedTitles ?? []) as unknown[])
         .map((value) => String(value ?? '').trim())
         .filter(Boolean)
@@ -4808,6 +4814,83 @@ function normalizeArgs(args: GenerateSongInput): GenerateSongParams {
     customThemeInput: uniqueNormalizedValues(extractSoridrawCustomKeywordValues(themes ?? [], 'theme')).join(' / '),
     customMoodInput: uniqueNormalizedValues(extractSoridrawCustomKeywordValues(moods ?? [], 'mood')).join(' / '),
   };
+}
+
+type V1SectionSlotResponse = {
+  sectionId?: string;
+  sectionName?: string;
+  productionCues?: unknown[];
+  bodyLines?: unknown[];
+};
+
+function cleanV1SectionSlotLine(value: unknown): string {
+  return String(value ?? '')
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function renderV1SectionSlotCard(value: unknown, params: GenerateSongParams): string {
+  if (typeof value === 'string') return value.trim();
+  if (!Array.isArray(value)) return '';
+
+  const blueprint = getV1SectionBlueprint(params);
+  const slots = value as V1SectionSlotResponse[];
+  const used = new Set<number>();
+  const rendered: string[] = [];
+
+  blueprint.entries.forEach((entry, expectedIndex) => {
+    const expectedName = normalizeV1SectionName(entry.name, blueprint.customNames).toLowerCase();
+    let slotIndex = slots.findIndex((slot, index) => !used.has(index) && String(slot?.sectionId || '') === entry.id);
+    if (slotIndex < 0) {
+      slotIndex = slots.findIndex((slot, index) => (
+        !used.has(index)
+        && normalizeV1SectionName(String(slot?.sectionName || ''), blueprint.customNames).toLowerCase() === expectedName
+      ));
+    }
+    // Schema-constrained models occasionally damage an ID/name while preserving the exact array
+    // length and order. Use the same-position slot only in that fully aligned case so a harmless
+    // label typo does not spend the single correction call. Never position-map a shortened array.
+    if (slotIndex < 0 && slots.length === blueprint.entries.length && !used.has(expectedIndex)) {
+      slotIndex = expectedIndex;
+    }
+    if (slotIndex >= 0) used.add(slotIndex);
+    const slot = slotIndex >= 0 ? slots[slotIndex] : undefined;
+
+    const productionCues = Array.isArray(slot?.productionCues)
+      ? slot!.productionCues!
+        .map(cleanV1SectionSlotLine)
+        .filter(Boolean)
+        .filter((line) => !isV1StructuralSectionTag(`[${line}]`, blueprint.customNames))
+      : [];
+    const bodyLines = Array.isArray(slot?.bodyLines)
+      ? slot!.bodyLines!
+        .flatMap((line) => String(line ?? '').replace(/\r\n?/g, '\n').split('\n'))
+        .map(cleanV1SectionSlotLine)
+        .filter(Boolean)
+        .filter((line) => !/^\[[^\]]+\]$/.test(line))
+      : [];
+
+    rendered.push(`[${entry.name}]`);
+    rendered.push(...productionCues.map((cue) => `[${cue.replace(/^\[|\]$/g, '').trim()}]`));
+    if (entry.allowsLyrics) rendered.push(...bodyLines);
+    rendered.push('');
+  });
+
+  return rendered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function normalizeV1SectionSlotLyricsResult(result: any, params: GenerateSongParams): void {
+  if (!result?.lyrics || isGenerationEngineV2(params)) return;
+  const requestedLanguages = new Set((params.lyricLanguages || []).map((language) => String(language || '').trim()));
+  const wantsKoreanCard = requestedLanguages.has('ko');
+  const wantsSecondaryCard = Array.from(requestedLanguages).some((language) => language && language !== 'ko');
+  result.lyrics.korean = wantsKoreanCard
+    ? renderV1SectionSlotCard(result.lyrics.korean, params)
+    : '';
+  result.lyrics.english = wantsSecondaryCard
+    ? renderV1SectionSlotCard(result.lyrics.english, params)
+    : '';
 }
 
 function normalizeEnglishMixRatio(value: unknown): number {
@@ -25471,30 +25554,53 @@ function isProtectedLyricPreserveMode(params: GenerateSongParams): boolean {
 }
 
 
+type V1SectionContractCompletionReport = {
+  contractId: string;
+  complete: boolean;
+  orderMatches: boolean;
+  expectedOrder: string[];
+  actualOrder: string[];
+  missingRequired: string[];
+};
+
+function inspectV1SectionContractCompletion(
+  lyrics: string,
+  params: GenerateSongParams,
+): V1SectionContractCompletionReport {
+  const blueprint = getV1SectionBlueprint(params);
+  const source = String(lyrics || '').trim();
+  const visibleBlocks = source ? extractV1VisibleSectionBlocks(source, params) : [];
+  const expectedOrder = blueprint.entries.map((entry) => normalizeV1SectionName(entry.name, blueprint.customNames));
+  const actualOrder = visibleBlocks.map((block) => normalizeV1SectionName(block.rawSection, blueprint.customNames));
+  const orderMatches = actualOrder.length === expectedOrder.length
+    && actualOrder.every((name, index) => name.toLowerCase() === expectedOrder[index].toLowerCase());
+  const missingRequired = blueprint.entries
+    .map((entry, index) => ({ entry, block: visibleBlocks[index] }))
+    .filter(({ entry, block }) => (
+      entry.requiresLyrics
+      && (!block || !block.bodyLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params)))
+    ))
+    .map(({ entry }) => entry.name);
+  return {
+    contractId: blueprint.contractId,
+    complete: Boolean(source) && orderMatches && missingRequired.length === 0,
+    orderMatches,
+    expectedOrder,
+    actualOrder,
+    missingRequired,
+  };
+}
+
 function hasCatastrophicV1LyricStructureFailure(lyrics: string, params: GenerateSongParams): boolean {
   const source = String(lyrics || '').trim();
   if (!source) return true;
   const bodyLines = lyricDensityBodyLines(source, params);
   if (bodyLines.length < 2) return true;
 
-  // The numbered V1 blueprint is the public contract in every mode, including Custom.
-  // Do not flatten Chorus 1/2 or Pre-Chorus 1/2 into one family during validation.
+  const contractReport = inspectV1SectionContractCompletion(source, params);
+  if (!contractReport.complete) return true;
   const blueprint = getV1SectionBlueprint(params);
   const visibleBlocks = extractV1VisibleSectionBlocks(source, params);
-  const expectedOrder = blueprint.entries
-    .map((entry) => normalizeV1SectionName(entry.name, blueprint.customNames).toLowerCase().replace(/\s+/g, ' '));
-  const actualOrder = visibleBlocks
-    .map((block) => normalizeV1SectionName(block.rawSection, blueprint.customNames).toLowerCase().replace(/\s+/g, ' '));
-  if (actualOrder.length !== expectedOrder.length
-    || actualOrder.some((section, index) => section !== expectedOrder[index])) return true;
-
-  const hasEmptyRequired = blueprint.entries.some((entry, index) => {
-    if (!entry.requiresLyrics) return false;
-    const block = visibleBlocks[index];
-    if (!block) return true;
-    return !block.bodyLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params));
-  });
-  if (hasEmptyRequired) return true;
   if (hasV1NumberedSectionOwnershipOverflow(visibleBlocks, blueprint, params)) return true;
 
   // Only failures that make section ownership impossible are catastrophic.
@@ -25518,6 +25624,7 @@ type V1VisibleSectionBlock = {
 };
 
 type V1SectionBodyRepairTarget = {
+  sectionId: string;
   expectedIndex: number;
   name: string;
   role: string;
@@ -25639,6 +25746,7 @@ function collectMissingRequiredV1Sections(
       return !block.bodyLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params));
     })
     .map(({ entry, expectedIndex }) => ({
+      sectionId: entry.id,
       expectedIndex,
       name: entry.name,
       role: entry.lyricRole,
@@ -25696,6 +25804,7 @@ function collectUnderdevelopedV1Sections(
       const charCollapse = item.score.chars * 1.6 < reference.score.chars;
       if (!lineCollapse && !charCollapse) return;
       targets.push({
+        sectionId: item.entry.id,
         expectedIndex: item.expectedIndex,
         name: item.entry.name,
         role: item.entry.lyricRole,
@@ -25725,28 +25834,31 @@ function collectV1SectionBodyRepairTargets(
 function applyGeneratedV1SectionBodies(
   lyrics: string,
   params: GenerateSongParams,
-  generatedSections: Array<{ sectionName: string; bodyLines: string[] }>,
+  generatedSections: Array<{ sectionId: string; sectionIndex: number; sectionName: string; bodyLines: string[] }>,
 ): string {
   let current = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
   const blueprint = getV1SectionBlueprint(params);
-  const generatedByName = new Map<string, string[]>();
+  const generatedById = new Map<string, string[]>();
 
   generatedSections.forEach((item) => {
+    const expectedEntry = blueprint.entries[item.sectionIndex - 1];
+    if (!expectedEntry || expectedEntry.id !== item.sectionId) return;
     const normalized = normalizeV1SectionName(item.sectionName, blueprint.customNames).toLowerCase();
+    if (normalized !== normalizeV1SectionName(expectedEntry.name, blueprint.customNames).toLowerCase()) return;
     const body = (item.bodyLines || [])
       .flatMap((line) => String(line || '').replace(/\r\n?/g, '\n').split('\n'))
       .map((line) => String(line || '').trim())
       .filter(Boolean)
       .filter((line) => !/^\[[^\]]+\]$/.test(line));
-    if (normalized && body.length) generatedByName.set(normalized, body);
+    if (body.length) generatedById.set(item.sectionId, body);
   });
 
-  const targets = collectV1SectionBodyRepairTargets(current, params)
-    .filter((item) => generatedByName.has(normalizeV1SectionName(item.name, blueprint.customNames).toLowerCase()))
+  const targets = collectMissingRequiredV1Sections(current, params)
+    .filter((item) => generatedById.has(item.sectionId))
     .sort((a, b) => b.expectedIndex - a.expectedIndex);
 
   targets.forEach((item) => {
-    const body = generatedByName.get(normalizeV1SectionName(item.name, blueprint.customNames).toLowerCase()) || [];
+    const body = generatedById.get(item.sectionId) || [];
     if (!body.length) return;
     const lines = current.replace(/\r\n?/g, '\n').split('\n');
     const aligned = alignVisibleV1SectionsToBlueprint(current, params);
@@ -25786,17 +25898,17 @@ async function repairMissingV1RequiredSectionsWithGemini(
 ): Promise<string> {
   if (isGenerationEngineV2(params)) return lyrics;
   const guarded = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
-  const targets = collectV1SectionBodyRepairTargets(guarded, params);
+  const targets = collectMissingRequiredV1Sections(guarded, params);
   if (!targets.length) return guarded;
 
   const blueprint = getV1SectionBlueprint(params);
   const storyContext = String((params as any).__v1StoryContext || '').trim();
   const systemInstruction = `You are SORIDRAW's missing-section body repair stage.
-Write lyric bodies only for the explicitly listed missing or structurally underdeveloped sections in ${languageLabel}.
+Write lyric bodies only for the explicitly listed missing required sections in ${languageLabel}.
 
 ABSOLUTE RULES:
 - Preserve every existing lyric line, hook, section, singer assignment, and production cue. Do not rewrite the supplied lyric.
-- Return content only for the requested target sections. For an underdeveloped section, replace only that section's lyric body; preserve its existing tag and production cues. Do not add, remove, rename, merge, split, or reorder any section.
+- Return content only for the requested missing target sections. Do not alter any existing section, tag, cue, or lyric line. Do not add, remove, rename, merge, split, or reorder any section.
 - Follow each missing section's current-song role and connect naturally between its neighbouring sections.
 - Preserve the current Story Context, character voice, emotional progression, language-mix style, and approximate language balance. Quality and singability come before percentage arithmetic.
 - Do not copy a neighbouring section, restart the story, translate adjacent lines redundantly, or introduce stock phrases.
@@ -25811,9 +25923,13 @@ ABSOLUTE RULES:
         contents: JSON.stringify({
           storyContext,
           productionDirection: String(productionPrompt || '').slice(0, 1800),
-          exactSectionOrder: blueprint.exactOrderText,
+          exactSectionOrderText: blueprint.exactOrderText,
           currentLyrics: guarded.slice(0, 7000),
+          sectionContractId: blueprint.contractId,
+          exactSectionSlots: blueprint.entries.map((entry) => ({ sectionId: entry.id, sectionName: entry.name })),
           targetSections: targets.map((item) => ({
+            sectionId: item.sectionId,
+            sectionIndex: item.expectedIndex + 1,
             sectionName: item.name,
             sectionRole: item.role,
             repairReason: item.reason,
@@ -25830,13 +25946,15 @@ ABSOLUTE RULES:
                 items: {
                   type: Type.OBJECT,
                   properties: {
+                    sectionId: { type: Type.STRING },
+                    sectionIndex: { type: Type.INTEGER },
                     sectionName: { type: Type.STRING },
                     bodyLines: {
                       type: Type.ARRAY,
                       items: { type: Type.STRING },
                     },
                   },
-                  required: ['sectionName', 'bodyLines'],
+                  required: ['sectionId', 'sectionIndex', 'sectionName', 'bodyLines'],
                 },
               },
             },
@@ -25852,11 +25970,13 @@ ABSOLUTE RULES:
       guarded,
       params,
       generated.map((item: any) => ({
+        sectionId: String(item?.sectionId || ''),
+        sectionIndex: Number(item?.sectionIndex || 0),
         sectionName: String(item?.sectionName || ''),
         bodyLines: Array.isArray(item?.bodyLines) ? item.bodyLines.map((line: any) => String(line || '')) : [],
       })),
     );
-    return hasCatastrophicV1LyricStructureFailure(repaired, params) ? lyrics : repaired;
+    return inspectV1SectionContractCompletion(repaired, params).complete ? repaired : lyrics;
   } catch (error) {
     console.warn('[SORIDRAW V1 Section Engine] missing-section body repair skipped:', error);
     return lyrics;
@@ -25879,15 +25999,28 @@ async function repairSparseLyricsWithGemini(
     return enforceLyricSectionBlockSpacing(originalSource, params);
   }
 
-  // 88차 호출 최적화: V1은 섹션 품질 문제로 Gemini를 다시 호출하지 않는다.
-  // 번호/태그/빈 스켈레톤은 코드 기반 Section Blueprint Guard로 정리하고,
-  // 실제 가사 본문이 짧거나 일부 섹션이 약해도 완성된 곡을 그대로 반환한다.
+  // V1 dynamic blueprint contract: soft quality differences never trigger a rewrite.
+  // Only a required slot that is actually absent/empty receives one targeted body-completion call.
   if (!isGenerationEngineV2(params)) {
     const locallyGuarded = applyV1SectionBlueprintGuard(
       cleanupGhostOpeningIntroAndEmptySungTags(originalSource, params),
       params,
     );
-    return enforceLyricSectionBlockSpacing(locallyGuarded || originalSource, params);
+    const missingRequired = collectMissingRequiredV1Sections(locallyGuarded || originalSource, params);
+    if (!missingRequired.length) {
+      return enforceLyricSectionBlockSpacing(locallyGuarded || originalSource, params);
+    }
+    const repaired = await repairMissingV1RequiredSectionsWithGemini(
+      ai,
+      locallyGuarded || originalSource,
+      params,
+      productionPrompt,
+      languageLabel,
+    );
+    return enforceLyricSectionBlockSpacing(
+      applyV1SectionBlueprintGuard(repaired || originalSource, params),
+      params,
+    );
   }
 
   // Repair must not treat locally-created ghost skeletons as real empty lyric sections.
@@ -30459,6 +30592,7 @@ function stripSpatialAndEraKeywordsFromLyrics(lyrics: string, params: GenerateSo
 }
 
 const V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY = '__v1ResolvedHookBlueprint';
+const V1_INTERNAL_SECTION_BLUEPRINT_CONTRACT_KEY = '__v1SectionBlueprintContract';
 
 interface V1ResolvedHookBlueprint {
   patterns: V1HookPattern[];
@@ -32030,6 +32164,10 @@ export async function generateSong(
     const resolvedHookBlueprint = route === 'v2'
       ? undefined
       : (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] as V1ResolvedHookBlueprint | undefined;
+    const resolvedSectionContract = route === 'v2'
+      ? undefined
+      : (generated as any)?.[V1_INTERNAL_SECTION_BLUEPRINT_CONTRACT_KEY] as V1SectionBlueprint | undefined;
+    if (resolvedSectionContract) params.__v1SectionBlueprintContract = resolvedSectionContract;
 
     // Bind the exact public section/hook structure first. The cliché guard must inspect the same
     // lyric strings that users will actually see; otherwise a later hook return can reintroduce a
@@ -32051,18 +32189,21 @@ export async function generateSong(
 
     if (route !== 'v2' && guarded?.lyrics) {
       guarded = finalizeV1SongAfterHardBan(guarded, params, resolvedHookBlueprint);
-      const finalStructuralFailures = [
-        String(guarded.lyrics.korean || '').trim(),
-        String(guarded.lyrics.english || '').trim(),
-      ].filter(Boolean).filter((lyrics) => hasCatastrophicV1LyricStructureFailure(lyrics, params));
-      if (finalStructuralFailures.length) {
-        // Section-quality repair is fail-open. The user explicitly requires generation to complete
-        // even when a one-time local repair cannot fully satisfy a soft density preference.
-        // Preserve the completed, numbered lyric instead of converting a quality warning into
-        // a full generation failure.
-        console.warn('[SORIDRAW V1 Section Engine] final structure warning preserved completed song:', {
-          cards: finalStructuralFailures.length,
-        });
+      const finalContractFailures = [
+        { card: 'korean', lyrics: String(guarded.lyrics.korean || '').trim() },
+        { card: 'secondary', lyrics: String(guarded.lyrics.english || '').trim() },
+      ]
+        .filter((item) => Boolean(item.lyrics))
+        .map((item) => ({ ...item, report: inspectV1SectionContractCompletion(item.lyrics, params) }))
+        .filter((item) => !item.report.complete);
+      if (finalContractFailures.length) {
+        const details = finalContractFailures.map((item) => {
+          const missing = item.report.missingRequired.length
+            ? `누락/빈 필수 섹션: ${item.report.missingRequired.join(', ')}`
+            : '확정 섹션 순서 불일치';
+          return `${item.card}(${item.report.contractId}) ${missing}`;
+        }).join(' / ');
+        throw new Error(`확정된 섹션 구조를 끝까지 완성하지 못했습니다. 추가 전체 재생성은 하지 않았습니다. ${details}`);
       }
       if (String(guarded.lyrics.korean || '').trim()) {
         assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);
@@ -32076,6 +32217,8 @@ export async function generateSong(
     assertNoFinalLyricHardBanViolations(guarded, params);
     delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
     delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
+    delete (generated as any)?.[V1_INTERNAL_SECTION_BLUEPRINT_CONTRACT_KEY];
+    delete (guarded as any)?.[V1_INTERNAL_SECTION_BLUEPRINT_CONTRACT_KEY];
     finishGeminiAuditSession(auditSessionId, 'success', {
       resultLabel: String((guarded as any)?.title || '').trim() || `${route.toUpperCase()} 곡 생성`,
     });
@@ -32114,6 +32257,12 @@ async function generateSongLegacy(
     (params as any).instrumentalBgmMode = true;
   }
   params.lyricLanguages = params.isNoLyrics ? [] : requestedLyricLanguages;
+  if (!isGenerationEngineV2(params)) {
+    params.__v1SectionBlueprintContract = getV1SectionBlueprint({
+      ...params,
+      __v1SectionBlueprintContract: undefined,
+    });
+  }
 
   if (isGenerationEngineV2(params)) {
     return generateSongV2(params, {
@@ -32384,15 +32533,39 @@ ${selectedNativeScriptInstruction}
 - Do not invent pseudo-sound phrases such as (어스름한 소리), (우울한 소리), or (분위기 소리). A valid SFX cue must be a real audible event.
 - Do not start lyrics with a naked sound-palette bracket such as [soft synth, bass] before any section. First write a real section tag, then place any sound/vocal-effect cue under it as a standalone bracket line.`;
 
+  const v1SectionSlotItemSchema = {
+    type: Type.OBJECT,
+    properties: {
+      sectionId: { type: Type.STRING },
+      sectionName: { type: Type.STRING },
+      productionCues: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+      },
+      bodyLines: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+      },
+    },
+    required: ['sectionId', 'sectionName', 'productionCues', 'bodyLines'],
+  };
+  const lyricsJsonShapeExample = isGenerationEngineV2(params)
+    ? '"lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }'
+    : '"lyrics": { "english": [{ "sectionId": "exact contract slot id", "sectionName": "exact contract slot name", "productionCues": ["production cue without brackets"], "bodyLines": ["lyric or ad-lib line"] }], "korean": [{ "sectionId": "exact contract slot id", "sectionName": "exact contract slot name", "productionCues": ["production cue without brackets"], "bodyLines": ["lyric or ad-lib line"] }] }';
   const lyricsResponseSchema = params.isNoLyrics
     ? {}
     : {
         lyrics: {
           type: Type.OBJECT,
-          properties: {
-            english: { type: Type.STRING },
-            korean: { type: Type.STRING },
-          },
+          properties: isGenerationEngineV2(params)
+            ? {
+                english: { type: Type.STRING },
+                korean: { type: Type.STRING },
+              }
+            : {
+                english: { type: Type.ARRAY, items: v1SectionSlotItemSchema },
+                korean: { type: Type.ARRAY, items: v1SectionSlotItemSchema },
+              },
           required: ["english", "korean"],
         },
       };
@@ -32529,6 +32702,9 @@ ${languageMixCardPlan}
   const v1SectionBlueprintInstruction = !isGenerationEngineV2(params)
     ? buildV1SectionBlueprintInstruction(params)
     : '';
+  const v1SectionSlotContractInstruction = !isGenerationEngineV2(params) && !params.isNoLyrics
+    ? buildV1SectionSlotContractInstruction(params)
+    : '';
 
   const structureInstruction =
     params.songStructure === "custom" &&
@@ -32630,6 +32806,8 @@ ${exactStructureText}
 You are a professional music composer and lyricist.
 
 ${sectionPerformancePlanOutputInstruction}
+
+${v1SectionSlotContractInstruction}
 
 ${styleIntentSingleSourceInstruction}
 
@@ -32906,7 +33084,7 @@ ${isGenerationEngineV2(params) ? '' : '  "storyAtmosphere": "Concise natural-Eng
       ? ""
       : `,
   "hookBlueprint": { "pattern": "all selected pattern names", "koreanHookCore": "complete compact Korean primary hook line", "secondaryHookCore": "same primary hook meaning in the secondary language", "koreanMicroHook": "one visible token for One-word Hook, otherwise empty", "secondaryMicroHook": "same micro-hook meaning, otherwise empty", "koreanPreviewFragment": "short incomplete preview for Hook Preview, otherwise empty", "secondaryPreviewFragment": "same preview meaning, otherwise empty", "koreanVariantHook": "controlled alternate hook with the same rhythm/frame and one changed semantic slot for Variation Repeat, otherwise empty", "secondaryVariantHook": "same controlled alternate meaning, otherwise empty", "koreanCallLine": "lead call for Call-response, otherwise empty", "secondaryCallLine": "same lead-call function, otherwise empty", "koreanResponse": "different answer for Call-response, otherwise empty", "secondaryResponse": "same answer function, otherwise empty", "koreanEchoResponse": "short fragment of primary hook for Echo-response, otherwise empty", "secondaryEchoResponse": "same echo function, otherwise empty", "koreanPostChorusTag": "separate short tag for Post-Chorus Tag, otherwise empty", "secondaryPostChorusTag": "same tag meaning, otherwise empty", "koreanChorusB": "B-half payoff for A/B Split, otherwise empty", "secondaryChorusB": "same B-half function, otherwise empty", "koreanChorus2Shift": "complete new surrounding line for the first middle core-return evolution, empty only for Fixed Chorus", "secondaryChorus2Shift": "same middle core-return evolution function", "koreanFinalShift": "complete new surrounding line for the final role-linked payoff, empty only for Fixed Chorus", "secondaryFinalShift": "same final role-linked payoff function" },
-  "lyrics": { "english": "Full lyrics in the selected non-Korean language, or empty if no non-Korean language is selected.", "korean": "Full Korean lyrics, or empty if Korean is not selected." }`
+  ${lyricsJsonShapeExample}`
   }
 }
 
@@ -33332,6 +33510,9 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
 
   if (!params.isNoLyrics && (!result.lyrics || typeof result.lyrics !== "object")) {
     throw new Error("정상적인 곡 가사를 생성하지 못했습니다. 다시 생성 버튼을 눌러주세요.");
+  }
+  if (!params.isNoLyrics && !isGenerationEngineV2(params)) {
+    normalizeV1SectionSlotLyricsResult(result, params);
   }
 
   const resolvedV1StoryContext = normalizeV1StoryContextResult((result as any).storyContext, params);
@@ -33991,6 +34172,10 @@ ${retryCardContract}
     // Keep the resolved contract only until generateSong() completes the hard-ban and final
     // structural boundary. It is deleted before the public SongResult is returned.
     (result as any)[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY] = resolvedV1HookBlueprint;
+  }
+
+  if (!isGenerationEngineV2(params) && params.__v1SectionBlueprintContract) {
+    (result as any)[V1_INTERNAL_SECTION_BLUEPRINT_CONTRACT_KEY] = params.__v1SectionBlueprintContract;
   }
 
   (result as any).userInput = params.userInput ?? "";

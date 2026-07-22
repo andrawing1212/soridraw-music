@@ -1,5 +1,6 @@
 export {
   buildV1SectionBlueprintInstruction,
+  buildV1SectionSlotContractInstruction,
   createV1SectionBlueprint,
   formatV1SectionBlueprintOrder,
   getV1SectionBlueprint,

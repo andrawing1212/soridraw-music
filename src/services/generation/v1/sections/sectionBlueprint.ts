@@ -42,6 +42,7 @@ export interface V1SectionEngineParams {
   generationIndex?: number;
   tempo?: string;
   lyricsLength?: string;
+  __v1SectionBlueprintContract?: V1SectionBlueprint;
   vocal?: {
     rap?: boolean;
     rapMode?: 'auto' | 'off' | 'on' | string;
@@ -70,6 +71,7 @@ export interface V1SectionBlueprintEntry {
 }
 
 export interface V1SectionBlueprint {
+  contractId: string;
   mode: 'recommended' | 'stable' | 'experimental' | 'custom';
   profile: V1SectionProfile | 'custom' | 'instrumental';
   entries: V1SectionBlueprintEntry[];
@@ -390,11 +392,10 @@ function makeEntries(rawEntries: Array<{ name: string; customTags: string[] }>, 
     const definition = getV1SectionDefinition(name);
     const rolePolicy = getV1SectionRolePolicy(name);
     const group = occurrenceGroup(name);
-    const key = name.toLowerCase();
     const occurrence = (seen.get(group) || 0) + 1;
     seen.set(group, occurrence);
     return {
-      id: `${index}-${key}-${occurrence}`,
+      id: `slot-${index + 1}`,
       name,
       baseName: definition.canonical,
       occurrence,
@@ -456,6 +457,56 @@ function userExplicitlyRequestsLyricFreeOutro(params: V1SectionEngineParams): bo
   return /(?:\boutro\b|ending|아웃트로|종주부|후주).{0,48}(?:\blyric[-\s]?free\b|\bno\s+(?:lyrics?|vocals?)\b|\binstrumental(?:-only)?\b|가사\s*(?:없이|없게|제외)|보컬\s*(?:없이|없게|제외)|연주만|인스트루멘탈)|(?:\blyric[-\s]?free\b|\bno\s+(?:lyrics?|vocals?)\b|\binstrumental(?:-only)?\b|가사\s*(?:없이|없게|제외)|보컬\s*(?:없이|없게|제외)|연주만|인스트루멘탈).{0,48}(?:\boutro\b|ending|아웃트로|종주부|후주)/i.test(directText);
 }
 
+
+function buildBlueprintContractId(
+  mode: V1SectionBlueprint['mode'],
+  profile: V1SectionBlueprint['profile'],
+  entries: V1SectionBlueprintEntry[],
+): string {
+  const source = [
+    mode,
+    profile,
+    ...entries.map((entry) => [
+      entry.id,
+      entry.name,
+      entry.kind,
+      entry.requiresLyrics ? 'required' : entry.allowsLyrics ? 'optional' : 'forbidden',
+      ...entry.customTags,
+    ].join('|')),
+  ].join('::');
+  return `v1-${mode}-${simpleSectionHash(source).toString(36)}`;
+}
+
+function isUsableLockedBlueprint(value: unknown): value is V1SectionBlueprint {
+  if (!value || typeof value !== 'object') return false;
+  const blueprint = value as V1SectionBlueprint;
+  return Boolean(
+    blueprint.contractId
+    && Array.isArray(blueprint.entries)
+    && blueprint.entries.length > 0
+    && blueprint.entries.every((entry) => entry && typeof entry.id === 'string' && typeof entry.name === 'string'),
+  );
+}
+
+export function buildV1SectionSlotContractInstruction(params: V1SectionEngineParams): string {
+  const blueprint = getV1SectionBlueprint(params);
+  const slots = blueprint.entries.map((entry, index) => {
+    const policy = entry.requiresLyrics
+      ? 'LYRIC_BODY_REQUIRED'
+      : entry.allowsLyrics
+        ? 'LYRIC_BODY_OPTIONAL'
+        : 'LYRIC_BODY_FORBIDDEN';
+    return `${index + 1}. id=${entry.id} | name=${entry.name} | ${policy}`;
+  }).join('\n');
+  return `V1 DYNAMIC SECTION SLOT CONTRACT — ${blueprint.contractId} (ABSOLUTE):
+- The structure was already resolved once for this song. Recommended, Stable, Experimental, and Custom all use the exact resolved slots below; do not reroll or reinterpret the structure while writing.
+- In the V1 JSON response, lyrics.korean and lyrics.english are section-object arrays. Return one object for every slot in each requested language card, in this exact order. Never omit, merge, rename, duplicate, or append a slot. If a lyric card language is not selected, return an empty array for that card.
+- sectionId and sectionName must exactly match the contract. bodyLines contains lyric/ad-lib lines only. productionCues contains real instrument, ambience, texture, effect, or transition cues only, without square brackets.
+- LYRIC_BODY_REQUIRED slots must contain at least one real lyric or vocal ad-lib line. LYRIC_BODY_OPTIONAL slots may use an empty body when musically appropriate. LYRIC_BODY_FORBIDDEN slots must use an empty body.
+- Custom user-created section names remain exactly as resolved. This contract controls only structure; it never hard-codes story content, wording, imagery, or vocal character.
+${slots}`;
+}
+
 export function createV1SectionBlueprint(params: V1SectionEngineParams): V1SectionBlueprint {
   const resolved = resolveSequence(params);
   const customNames = getV1CustomSectionNames(params.customStructure || []);
@@ -466,7 +517,9 @@ export function createV1SectionBlueprint(params: V1SectionEngineParams): V1Secti
       : entry
   ));
   const vocalAnchors = resolveV1VocalAnchors(params);
+  const contractId = buildBlueprintContractId(resolved.mode, resolved.profile, entries);
   return {
+    contractId,
     mode: resolved.mode,
     profile: resolved.profile,
     entries,
@@ -480,9 +533,12 @@ export function createV1SectionBlueprint(params: V1SectionEngineParams): V1Secti
 }
 
 export function getV1SectionBlueprint(params: V1SectionEngineParams): V1SectionBlueprint {
-  // Song-structure state can change between generations while the surrounding object identity
-  // remains the same. Always rebuild from current values so a previous Recommended/Experimental
-  // blueprint can never leak into the next generation.
+  // A generation request locks one dynamic blueprint contract before the first Gemini call.
+  // Every later prompt, parser, repair, renderer, and validator must reuse that exact snapshot.
+  // Outside an active generation request we still rebuild from current UI values.
+  if (isUsableLockedBlueprint(params.__v1SectionBlueprintContract)) {
+    return params.__v1SectionBlueprintContract;
+  }
   return createV1SectionBlueprint(params);
 }
 

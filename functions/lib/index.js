@@ -339,6 +339,23 @@ const validateGeminiTextOnlyRequest = (requestPayload) => {
         throw new https_1.HttpsError("invalid-argument", "Gemini text payload is empty or too large.");
     }
 };
+const sanitizeLegacyGeminiResponseSchema = (value) => {
+    if (Array.isArray(value)) {
+        return value.map(sanitizeLegacyGeminiResponseSchema);
+    }
+    if (!value || typeof value !== "object")
+        return value;
+    const sanitized = {};
+    for (const [key, child] of Object.entries(value)) {
+        // The legacy Gemini generateContent `responseSchema` protobuf does not accept
+        // JSON Schema's `additionalProperties`. The browser SDK previously normalized
+        // this field, but the server REST proxy must remove it explicitly.
+        if (key === "additionalProperties")
+            continue;
+        sanitized[key] = sanitizeLegacyGeminiResponseSchema(child);
+    }
+    return sanitized;
+};
 const callGeminiGenerateContent = async (apiKey, requestPayload) => {
     var _a, _b;
     const model = String((requestPayload === null || requestPayload === void 0 ? void 0 : requestPayload.model) || "").trim();
@@ -352,6 +369,9 @@ const callGeminiGenerateContent = async (apiKey, requestPayload) => {
     delete config.safetySettings;
     delete config.tools;
     delete config.toolConfig;
+    if (config.responseSchema) {
+        config.responseSchema = sanitizeLegacyGeminiResponseSchema(config.responseSchema);
+    }
     const rawContents = requestPayload === null || requestPayload === void 0 ? void 0 : requestPayload.contents;
     const contents = Array.isArray(rawContents)
         ? rawContents.map(normalizeGeminiContent)

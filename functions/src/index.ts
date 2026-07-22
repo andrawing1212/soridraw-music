@@ -371,6 +371,23 @@ const validateGeminiTextOnlyRequest = (requestPayload: any): void => {
   }
 };
 
+const sanitizeLegacyGeminiResponseSchema = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(sanitizeLegacyGeminiResponseSchema);
+  }
+  if (!value || typeof value !== "object") return value;
+
+  const sanitized: Record<string, any> = {};
+  for (const [key, child] of Object.entries(value)) {
+    // The legacy Gemini generateContent `responseSchema` protobuf does not accept
+    // JSON Schema's `additionalProperties`. The browser SDK previously normalized
+    // this field, but the server REST proxy must remove it explicitly.
+    if (key === "additionalProperties") continue;
+    sanitized[key] = sanitizeLegacyGeminiResponseSchema(child);
+  }
+  return sanitized;
+};
+
 const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
   const config = requestPayload?.config && typeof requestPayload.config === "object"
@@ -384,6 +401,9 @@ const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): P
   delete config.safetySettings;
   delete config.tools;
   delete config.toolConfig;
+  if (config.responseSchema) {
+    config.responseSchema = sanitizeLegacyGeminiResponseSchema(config.responseSchema);
+  }
 
   const rawContents = requestPayload?.contents;
   const contents = Array.isArray(rawContents)

@@ -12,6 +12,20 @@ function normalizeProxyError(status: number, payload: any): Error {
   return error;
 }
 
+function normalizeModelRequest(params: any): any {
+  if (!params || typeof params !== 'object') return params;
+  const next = { ...params };
+  const model = String(next.model || '').trim();
+  if ((model === 'gemini-3.6-flash' || model === 'gemini-3.5-flash-lite') && next.config) {
+    const config = { ...next.config };
+    delete config.temperature;
+    delete config.topP;
+    delete config.topK;
+    next.config = config;
+  }
+  return next;
+}
+
 async function generateContentViaFirebase(params: any): Promise<any> {
   const user = auth.currentUser;
   if (!user?.uid) {
@@ -20,7 +34,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
 
   const idToken = await user.getIdToken();
   const appCheckToken = await getFirebaseAppCheckToken();
-  const requestParams = params && typeof params === 'object' ? { ...params } : params;
+  const requestParams = normalizeModelRequest(params);
   const meta = requestParams?.__soridrawMeta || {};
   if (requestParams && typeof requestParams === 'object') {
     delete requestParams.__soridrawMeta;

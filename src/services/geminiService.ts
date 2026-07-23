@@ -325,23 +325,21 @@ function getAuditedAI(
   }) as GoogleGenAI;
 }
 
-// Adaptive availability routing for song generation.
-// The last model that actually succeeded is tried first. A model that returns a transient
-// 5xx/network error is cooled down briefly, then the next independent model is tried.
+// Stable production model priority for song generation.
+// Default order is always 3.6 Flash -> 3.5 Flash -> 3.5 Flash-Lite.
+// A model that returns a transient 5xx/network error is only moved behind healthy models
+// for a short cooldown, then automatically returns to its fixed priority position.
 // Keep the chain to three calls because the Functions session guard allows at most three attempts.
 const GEMINI_TEXT_MODEL_CHAIN = [
-  "gemini-3-flash-preview",
+  "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-2.5-flash",
+  "gemini-3.5-flash-lite",
 ];
-const GEMINI_MODEL_HEALTH_STORAGE_KEY = "soridraw.geminiModelHealth.v1";
-const GEMINI_MODEL_PREFERRED_MS = 20 * 60 * 1000;
+const GEMINI_MODEL_HEALTH_STORAGE_KEY = "soridraw.geminiModelHealth.v2";
 const GEMINI_MODEL_COOLDOWN_MS = 2 * 60 * 1000;
 const GEMINI_MODEL_FALLBACK_DELAY_MS = 800;
 
 type GeminiModelHealthState = {
-  preferredModel?: string;
-  preferredUntil?: number;
   cooldownUntil?: Record<string, number>;
 };
 
@@ -355,8 +353,6 @@ function readGeminiModelHealth(): GeminiModelHealthState {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return geminiModelHealthMemory;
     const next: GeminiModelHealthState = {
-      preferredModel: typeof parsed.preferredModel === "string" ? parsed.preferredModel : "",
-      preferredUntil: Number(parsed.preferredUntil) || 0,
       cooldownUntil: parsed.cooldownUntil && typeof parsed.cooldownUntil === "object"
         ? parsed.cooldownUntil
         : {},
@@ -381,42 +377,28 @@ function writeGeminiModelHealth(state: GeminiModelHealthState): void {
 function getAdaptiveGeminiModelChain(modelChain: string[]): string[] {
   const uniqueModels = Array.from(new Set(modelChain.filter(Boolean))).slice(0, 3);
   const now = Date.now();
-  const state = readGeminiModelHealth();
-  const cooldownUntil = state.cooldownUntil || {};
-  const preferred = state.preferredModel
-    && Number(state.preferredUntil || 0) > now
-    && uniqueModels.includes(state.preferredModel)
-    ? state.preferredModel
-    : "";
-  const remaining = uniqueModels.filter((model) => model !== preferred);
-  const healthy = remaining.filter((model) => Number(cooldownUntil[model] || 0) <= now);
-  const cooling = remaining
+  const cooldownUntil = readGeminiModelHealth().cooldownUntil || {};
+  const healthy = uniqueModels.filter((model) => Number(cooldownUntil[model] || 0) <= now);
+  const cooling = uniqueModels
     .filter((model) => Number(cooldownUntil[model] || 0) > now)
     .sort((a, b) => Number(cooldownUntil[a] || 0) - Number(cooldownUntil[b] || 0));
-  return [preferred, ...healthy, ...cooling].filter(Boolean);
+  return [...healthy, ...cooling];
 }
 
 function markGeminiModelSuccess(model: string): void {
   const state = readGeminiModelHealth();
   const cooldownUntil = { ...(state.cooldownUntil || {}) };
   delete cooldownUntil[model];
-  writeGeminiModelHealth({
-    preferredModel: model,
-    preferredUntil: Date.now() + GEMINI_MODEL_PREFERRED_MS,
-    cooldownUntil,
-  });
+  writeGeminiModelHealth({ cooldownUntil });
 }
 
 function markGeminiModelTransientFailure(model: string): void {
   const state = readGeminiModelHealth();
-  const cooldownUntil = {
-    ...(state.cooldownUntil || {}),
-    [model]: Date.now() + GEMINI_MODEL_COOLDOWN_MS,
-  };
   writeGeminiModelHealth({
-    preferredModel: state.preferredModel === model ? "" : state.preferredModel,
-    preferredUntil: state.preferredModel === model ? 0 : state.preferredUntil,
-    cooldownUntil,
+    cooldownUntil: {
+      ...(state.cooldownUntil || {}),
+      [model]: Date.now() + GEMINI_MODEL_COOLDOWN_MS,
+    },
   });
 }
 

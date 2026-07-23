@@ -43,14 +43,14 @@ The Vercel test host currently skips client App Check initialization because its
 
 The V1 song generator now fails open after temporary Gemini correction failures: banned-term lines are removed locally as a last resort, missing required slots receive a minimal structural completion, and an otherwise usable song is no longer discarded solely because an Outro/Bridge body repair failed.
 
-## Gemini temporary availability routing
+## Gemini production availability routing
 
-When Gemini 3.5 Flash returns repeated 503/high-demand or gateway/network failures, the web app now tries `gemini-3-flash-preview` first and keeps `gemini-3.5-flash` as the immediate fallback. Network-level `Failed to fetch`, gateway timeout, and CORS-shaped timeout responses are treated as retryable model failures rather than launching the old compact retry on the same congested model.
+## 107차 Gemini 안정 모델 3단계 교체
 
-## 106차 Gemini 가용성 적응 라우팅
-
-- 곡 생성 모델을 한 모델에 고정하지 않고, 실제로 마지막에 성공한 모델을 다음 생성의 1순위로 사용합니다.
-- 503/504/네트워크 오류가 난 모델은 2분간 후순위로 보내고 다른 모델로 전환합니다.
-- `gemini-3-flash-preview`와 `gemini-3.5-flash`가 모두 혼잡할 때 안정형 `gemini-2.5-flash`를 3차 안전망으로 사용합니다.
-- 한 생성 세션의 최대 모델 호출은 기존 Functions 제한과 같은 3회입니다.
-- Vercel 테스트앱의 실패 중인 App Check 토큰 요청은 다시 임시 중지했습니다. AI Studio 디버그 App Check와 Firebase Hosting용 실제 App Check 경로는 유지합니다.
+- 곡 생성 기본 우선순위를 `gemini-3.6-flash` → `gemini-3.5-flash` → `gemini-3.5-flash-lite`로 고정합니다.
+- 503/504/네트워크 오류가 난 모델만 2분간 후순위로 보내고, 시간이 지나면 원래 우선순위로 자동 복귀합니다.
+- 더 이상 제공되지 않는 `gemini-2.5-flash`와 Preview 모델을 곡 생성 안전망에서 제거했습니다.
+- Gemini 3.6 Flash와 3.5 Flash-Lite 요청에서는 더 이상 지원되지 않는 sampling 필드(`temperature`, `topP`, `topK`)를 전송 전에 제거합니다.
+- Functions 모델 허용 목록에도 3.6 Flash와 3.5 Flash-Lite를 추가했으므로, 이 버전은 관련 Functions 재배포가 필요합니다.
+- 한 생성 세션의 최대 모델 호출은 기존과 동일하게 3회입니다.
+- Vercel 테스트앱의 App Check는 별도 문제로 계속 임시 비활성 상태이며, 이번 모델 교체와 분리합니다.

@@ -51,13 +51,16 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@13.34.0
 
-      - name: Deploy Firebase Functions only
+      - name: Deploy Music API Functions only
         id: deploy
         continue-on-error: true
         shell: bash
         run: |
           set -o pipefail
-          firebase deploy --only functions --project soridraw-app-866a5 --non-interactive 2>&1 | tee firebase-functions-deploy.log
+          firebase deploy \
+            --only functions:saveSunoApiKey,functions:deleteSunoApiKey,functions:getSunoApiKeyStatus,functions:fetchSunoShareMetadata,functions:getSunoRemainingCredits,functions:getSunoRemainingCreditsAfterComplete,functions:createSunoTrack,functions:getSunoTrackStatus \
+            --project soridraw-app-866a5 \
+            --non-interactive 2>&1 | tee firebase-functions-deploy.log
 
       - name: Report result to trigger issue
         if: always() && github.event_name == 'issues'
@@ -72,10 +75,10 @@ jobs:
             try {
               log = fs.readFileSync('firebase-functions-deploy.log', 'utf8');
             } catch {}
-            const lines = log.split('\n').slice(-100).join('\n').slice(-8000);
+            const lines = log.split('\n').slice(-120).join('\n').slice(-9000);
             const body = outcome === 'success'
-              ? `✅ Firebase Functions deployment succeeded.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\n\n<details><summary>Deployment log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`
-              : `❌ Firebase Functions deployment failed.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\n\n<details><summary>Error log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`;
+              ? `✅ Music API Firebase Functions deployment succeeded.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\nThe unrelated legacy \`syncAuthUserToFirestore(us-east1)\` function was not modified.\n\n<details><summary>Deployment log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`
+              : `❌ Music API Firebase Functions deployment failed.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\nThe unrelated legacy \`syncAuthUserToFirestore(us-east1)\` function was not modified.\n\n<details><summary>Error log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

@@ -15,8 +15,22 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
+const isAiStudioPreview = (() => {
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname.toLowerCase();
+  return /^ais-dev-[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.run\.app$/.test(hostname);
+})();
+
+// AI Studio previews run inside an ephemeral run.app development host where
+// reCAPTCHA Enterprise can fail. Firebase's debug provider is enabled only
+// for that explicit host pattern; deployed Vercel/Firebase/custom domains
+// continue to use real reCAPTCHA Enterprise attestation.
+if (isAiStudioPreview && typeof self !== "undefined") {
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+}
+
 let appCheck = null;
-const DEFAULT_APP_CHECK_SITE_KEY = "6Ld7iWAtAAAAAIJQFwoYsnfxl1elxKE1Qtcqcs8H";
+const DEFAULT_APP_CHECK_SITE_KEY = "6LdIj2AtAAAAABDxZXGWs5ub8LcQGsFkxgPbAoI1";
 const appCheckSiteKey = String(
   import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || DEFAULT_APP_CHECK_SITE_KEY
 ).trim();

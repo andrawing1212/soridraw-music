@@ -325,20 +325,107 @@ function getAuditedAI(
   }) as GoogleGenAI;
 }
 
-// Availability-first order for song generation. Gemini 3.5 Flash remains available as the
-// immediate fallback, but the preview Flash model is tried first while 3.5 Flash is returning
-// repeated 503/high-demand responses. This keeps one user action from waiting through the full
-// Cloud Function timeout before the already-proven fallback model is attempted.
+// Adaptive availability routing for song generation.
+// The last model that actually succeeded is tried first. A model that returns a transient
+// 5xx/network error is cooled down briefly, then the next independent model is tried.
+// Keep the chain to three calls because the Functions session guard allows at most three attempts.
 const GEMINI_TEXT_MODEL_CHAIN = [
   "gemini-3-flash-preview",
   "gemini-3.5-flash",
-  "gemini-3.1-flash-lite",
   "gemini-2.5-flash",
-  "gemini-2.5-flash-lite",
 ];
-const GEMINI_TEMPORARY_PREFERRED_MODEL_MS = 15 * 60 * 1000;
-let geminiTemporaryPreferredModel = '';
-let geminiTemporaryPreferredUntil = 0;
+const GEMINI_MODEL_HEALTH_STORAGE_KEY = "soridraw.geminiModelHealth.v1";
+const GEMINI_MODEL_PREFERRED_MS = 20 * 60 * 1000;
+const GEMINI_MODEL_COOLDOWN_MS = 2 * 60 * 1000;
+const GEMINI_MODEL_FALLBACK_DELAY_MS = 800;
+
+type GeminiModelHealthState = {
+  preferredModel?: string;
+  preferredUntil?: number;
+  cooldownUntil?: Record<string, number>;
+};
+
+let geminiModelHealthMemory: GeminiModelHealthState = { cooldownUntil: {} };
+
+function readGeminiModelHealth(): GeminiModelHealthState {
+  if (typeof window === "undefined") return geminiModelHealthMemory;
+  try {
+    const raw = window.localStorage.getItem(GEMINI_MODEL_HEALTH_STORAGE_KEY);
+    if (!raw) return geminiModelHealthMemory;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return geminiModelHealthMemory;
+    const next: GeminiModelHealthState = {
+      preferredModel: typeof parsed.preferredModel === "string" ? parsed.preferredModel : "",
+      preferredUntil: Number(parsed.preferredUntil) || 0,
+      cooldownUntil: parsed.cooldownUntil && typeof parsed.cooldownUntil === "object"
+        ? parsed.cooldownUntil
+        : {},
+    };
+    geminiModelHealthMemory = next;
+    return next;
+  } catch {
+    return geminiModelHealthMemory;
+  }
+}
+
+function writeGeminiModelHealth(state: GeminiModelHealthState): void {
+  geminiModelHealthMemory = state;
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(GEMINI_MODEL_HEALTH_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage can be blocked in privacy mode. In-memory routing still works for this page session.
+  }
+}
+
+function getAdaptiveGeminiModelChain(modelChain: string[]): string[] {
+  const uniqueModels = Array.from(new Set(modelChain.filter(Boolean))).slice(0, 3);
+  const now = Date.now();
+  const state = readGeminiModelHealth();
+  const cooldownUntil = state.cooldownUntil || {};
+  const preferred = state.preferredModel
+    && Number(state.preferredUntil || 0) > now
+    && uniqueModels.includes(state.preferredModel)
+    ? state.preferredModel
+    : "";
+  const remaining = uniqueModels.filter((model) => model !== preferred);
+  const healthy = remaining.filter((model) => Number(cooldownUntil[model] || 0) <= now);
+  const cooling = remaining
+    .filter((model) => Number(cooldownUntil[model] || 0) > now)
+    .sort((a, b) => Number(cooldownUntil[a] || 0) - Number(cooldownUntil[b] || 0));
+  return [preferred, ...healthy, ...cooling].filter(Boolean);
+}
+
+function markGeminiModelSuccess(model: string): void {
+  const state = readGeminiModelHealth();
+  const cooldownUntil = { ...(state.cooldownUntil || {}) };
+  delete cooldownUntil[model];
+  writeGeminiModelHealth({
+    preferredModel: model,
+    preferredUntil: Date.now() + GEMINI_MODEL_PREFERRED_MS,
+    cooldownUntil,
+  });
+}
+
+function markGeminiModelTransientFailure(model: string): void {
+  const state = readGeminiModelHealth();
+  const cooldownUntil = {
+    ...(state.cooldownUntil || {}),
+    [model]: Date.now() + GEMINI_MODEL_COOLDOWN_MS,
+  };
+  writeGeminiModelHealth({
+    preferredModel: state.preferredModel === model ? "" : state.preferredModel,
+    preferredUntil: state.preferredModel === model ? 0 : state.preferredUntil,
+    cooldownUntil,
+  });
+}
+
+function waitForGeminiFallback(attemptIndex: number): Promise<void> {
+  if (attemptIndex <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, GEMINI_MODEL_FALLBACK_DELAY_MS * attemptIndex);
+  });
+}
 
 const GEMINI_FALLBACK_STABILITY_INSTRUCTION = `
 [FALLBACK MODEL SAFETY MODE]
@@ -539,18 +626,7 @@ async function generateContentWithModelFallback(
   let firstFallbackReason: string | null = null;
   const attemptedModels: string[] = [];
 
-  const baseLimitedModelChain = modelChain.slice(0, 2);
-  const hasTemporaryPreferredModel = Boolean(
-    geminiTemporaryPreferredModel
-    && geminiTemporaryPreferredUntil > Date.now()
-    && baseLimitedModelChain.includes(geminiTemporaryPreferredModel),
-  );
-  const limitedModelChain = hasTemporaryPreferredModel
-    ? [
-      geminiTemporaryPreferredModel,
-      ...baseLimitedModelChain.filter((model) => model !== geminiTemporaryPreferredModel),
-    ]
-    : baseLimitedModelChain;
+  const limitedModelChain = getAdaptiveGeminiModelChain(modelChain);
   for (let i = 0; i < limitedModelChain.length; i += 1) {
     const model = limitedModelChain[i];
     attemptedModels.push(model);
@@ -562,6 +638,7 @@ async function generateContentWithModelFallback(
     try {
       if (i > 0) {
         console.warn(`[SORIDRAW Gemini Fallback] ${context}: retrying with ${model}`);
+        await waitForGeminiFallback(i);
       }
       const response = await ai.models.generateContent(
         withGeminiAuditRequestMeta(paramsForAttempt, context, i + 1),
@@ -573,24 +650,20 @@ async function generateContentWithModelFallback(
         fallbackReason: i > 0 ? firstFallbackReason || "generation_error" : null,
         attemptedModels,
       } satisfies GeminiModelUsageInfo;
-      if (i > 0 || hasTemporaryPreferredModel) {
-        geminiTemporaryPreferredModel = model;
-        geminiTemporaryPreferredUntil = Date.now() + GEMINI_TEMPORARY_PREFERRED_MODEL_MS;
-      }
+      markGeminiModelSuccess(model);
       return response;
     } catch (error) {
       lastError = error;
-      if (hasTemporaryPreferredModel && model === geminiTemporaryPreferredModel) {
-        geminiTemporaryPreferredModel = '';
-        geminiTemporaryPreferredUntil = 0;
-      }
       if (!firstFailedModel) {
         firstFailedModel = model;
         firstFallbackReason = getGeminiFallbackReason(error);
       }
       console.warn(`[SORIDRAW Gemini Fallback] ${context}: ${model} failed`, error);
+      if (isGeminiRetryableError(error)) {
+        markGeminiModelTransientFailure(model);
+      }
       // Do not launch another paid request for a prompt/schema/content error.
-      // Retry at most once, and only for a temporary unavailable/server-side failure.
+      // Continue only through the bounded three-model chain, and only for a temporary unavailable/server-side failure.
       // A 429/quota error stops immediately because the personal-project quota is shared.
       if (
         isGeminiRequestSchemaError(error)
@@ -33883,7 +33956,7 @@ ${params.specialPrompt ? `- SPECIAL INSTRUCTION: ${params.specialPrompt}` : ""}
     );
   } catch (fallbackError: any) {
     responseError = fallbackError;
-    // The normal chain already used at most two models for a real temporary API failure.
+    // The normal chain already used the bounded adaptive model set for a real temporary API failure.
     // Starting another fallback chain here caused four sequential paid requests and very long tails.
     // A compact one-shot fallback is reserved only for non-retryable prompt/schema/content errors.
     if (isGeminiRequestSchemaError(fallbackError)) {

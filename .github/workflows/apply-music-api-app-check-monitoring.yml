@@ -1,0 +1,194 @@
+name: Apply Music API App Check Monitoring
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-music-api-app-check-monitoring.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Apply scoped App Check monitoring patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          functions_path = root / 'functions/src/index.ts'
+          firebase_path = root / 'src/firebase.js'
+          workflow_path = root / '.github/workflows/apply-music-api-app-check-monitoring.yml'
+
+          functions_text = functions_path.read_text(encoding='utf-8')
+
+          def patch_function_after_auth(text: str, function_name: str) -> str:
+              marker = f'export const {function_name} = onRequest('
+              start = text.find(marker)
+              if start < 0:
+                  raise RuntimeError(f'Missing function marker: {function_name}')
+              next_export = text.find('\nexport const ', start + len(marker))
+              end = len(text) if next_export < 0 else next_export
+              segment = text[start:end]
+              guard = f'    if (!(await verifyAppCheckForRequest(req, res, "{function_name}"))) return;\n'
+              if guard in segment:
+                  return text
+              anchor = '    const uid = await verifyAuth(req, res);\n    if (!uid) return;\n'
+              if segment.count(anchor) != 1:
+                  raise RuntimeError(f'Auth anchor mismatch in {function_name}')
+              segment = segment.replace(anchor, anchor + guard, 1)
+              return text[:start] + segment + text[end:]
+
+          for name in [
+              'saveSunoApiKey',
+              'deleteSunoApiKey',
+              'getSunoApiKeyStatus',
+              'fetchSunoShareMetadata',
+              'getSunoRemainingCredits',
+              'getSunoRemainingCreditsAfterComplete',
+              'createSunoTrack',
+          ]:
+              functions_text = patch_function_after_auth(functions_text, name)
+
+          status_name = 'getSunoTrackStatus'
+          status_marker = f'export const {status_name} = onRequest('
+          status_start = functions_text.find(status_marker)
+          if status_start < 0:
+              raise RuntimeError('Missing getSunoTrackStatus')
+          status_segment = functions_text[status_start:]
+          status_guard = '    if (!(await verifyAppCheckForRequest(req, res, "getSunoTrackStatus"))) return;\n\n'
+          if status_guard not in status_segment:
+              status_anchor = '    let body = req.body;\n'
+              if status_segment.count(status_anchor) != 1:
+                  raise RuntimeError('getSunoTrackStatus body anchor mismatch')
+              status_segment = status_segment.replace(status_anchor, status_guard + status_anchor, 1)
+              functions_text = functions_text[:status_start] + status_segment
+
+          for name in [
+              'saveSunoApiKey',
+              'deleteSunoApiKey',
+              'getSunoApiKeyStatus',
+              'fetchSunoShareMetadata',
+              'getSunoRemainingCredits',
+              'getSunoRemainingCreditsAfterComplete',
+              'createSunoTrack',
+              'getSunoTrackStatus',
+          ]:
+              expected = f'verifyAppCheckForRequest(req, res, "{name}")'
+              if functions_text.count(expected) != 1:
+                  raise RuntimeError(f'Unexpected App Check guard count for {name}: {functions_text.count(expected)}')
+
+          functions_path.write_text(functions_text, encoding='utf-8')
+
+          firebase_text = firebase_path.read_text(encoding='utf-8')
+          guard_marker = 'const CLOUD_FUNCTIONS_HOST = "us-central1-soridraw-app-866a5.cloudfunctions.net";'
+          if guard_marker not in firebase_text:
+              anchor = '};\nexport const auth = getAuth(app);'
+              if firebase_text.count(anchor) != 1:
+                  raise RuntimeError('firebase.js App Check insertion anchor mismatch')
+              guard_code = r'''
+};
+
+const CLOUD_FUNCTIONS_HOST = "us-central1-soridraw-app-866a5.cloudfunctions.net";
+const CLOUD_FUNCTIONS_FETCH_GUARD_FLAG = "__soridrawAppCheckFetchGuardInstalled";
+
+const installCloudFunctionsAppCheckFetchGuard = () => {
+  if (typeof window === "undefined" || typeof window.fetch !== "function") return;
+  if (window[CLOUD_FUNCTIONS_FETCH_GUARD_FLAG]) return;
+
+  const originalFetch = window.fetch.bind(window);
+  window[CLOUD_FUNCTIONS_FETCH_GUARD_FLAG] = true;
+
+  window.fetch = async (input, init) => {
+    let parsedUrl;
+    try {
+      const rawUrl = typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input?.url || "";
+      parsedUrl = new URL(rawUrl, window.location.href);
+    } catch {
+      return originalFetch(input, init);
+    }
+
+    if (parsedUrl.hostname !== CLOUD_FUNCTIONS_HOST) {
+      return originalFetch(input, init);
+    }
+
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    if (init?.headers) {
+      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+    }
+
+    const appCheckToken = await getFirebaseAppCheckToken();
+    if (appCheckToken && !headers.has("X-Firebase-AppCheck")) {
+      headers.set("X-Firebase-AppCheck", appCheckToken);
+    }
+
+    const response = await originalFetch(input, { ...(init || {}), headers });
+    const status = response.headers.get("X-SORIDRAW-App-Check-Status");
+    if (status) {
+      console.info(`[SORIDRAW App Check] ${parsedUrl.pathname}: ${status}`);
+    }
+    return response;
+  };
+};
+
+installCloudFunctionsAppCheckFetchGuard();
+export const auth = getAuth(app);'''
+              firebase_text = firebase_text.replace(anchor, guard_code, 1)
+
+          if firebase_text.count(guard_marker) != 1:
+              raise RuntimeError('Unexpected cloud functions fetch guard count')
+
+          firebase_path.write_text(firebase_text, encoding='utf-8')
+
+          if workflow_path.exists():
+              workflow_path.unlink()
+          PY
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Type check web app
+        run: npm run lint
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
+
+      - name: Commit verified patch to main
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "security: monitor App Check on Music API functions"
+          git push origin HEAD:main

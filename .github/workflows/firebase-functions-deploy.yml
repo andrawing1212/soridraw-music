@@ -48,6 +48,23 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
+      - name: Resolve deployment service account
+        id: account
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          let email = '';
+          const credentialsPath = process.env.GOOGLE_GHA_CREDS_PATH || '';
+          try {
+            if (credentialsPath && fs.existsSync(credentialsPath)) {
+              const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+              email = String(credentials.client_email || '');
+            }
+          } catch {}
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `email=${email}\n`);
+          NODE
+
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@13.34.0
 
@@ -64,18 +81,20 @@ jobs:
         uses: actions/github-script@v7
         env:
           DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          SERVICE_ACCOUNT: ${{ steps.account.outputs.email }}
         with:
           script: |
             const fs = require('fs');
             const outcome = process.env.DEPLOY_OUTCOME || 'unknown';
+            const serviceAccount = process.env.SERVICE_ACCOUNT || 'unknown';
             let log = '';
             try {
               log = fs.readFileSync('firebase-functions-deploy.log', 'utf8');
             } catch {}
             const lines = log.split('\n').slice(-80).join('\n').slice(-6000);
             const body = outcome === 'success'
-              ? `✅ Firebase Functions deployment succeeded.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\n\n<details><summary>Deployment log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`
-              : `❌ Firebase Functions deployment failed.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\n\n<details><summary>Error log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`;
+              ? `✅ Firebase Functions deployment succeeded.\n\nProject: \`soridraw-app-866a5\`\nService account: \`${serviceAccount}\`\nHosting was not deployed.\n\n<details><summary>Deployment log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`
+              : `❌ Firebase Functions deployment failed.\n\nProject: \`soridraw-app-866a5\`\nService account: \`${serviceAccount}\`\nHosting was not deployed.\n\n<details><summary>Error log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,

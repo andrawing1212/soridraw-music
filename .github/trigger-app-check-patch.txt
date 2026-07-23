@@ -1,1 +1,0 @@
-Trigger the one-time Music API App Check patch workflow. This file is temporary and will be removed by the workflow commit.

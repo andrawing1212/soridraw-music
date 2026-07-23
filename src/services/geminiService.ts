@@ -1,4 +1,3 @@
-console.log("🔥 NEW GEMINI ACTIVE");
 import { Type, type GoogleGenAI } from "@google/genai";
 import { auth } from "../firebase";
 import { createGeminiServerProxy } from "./geminiProxyClient";
@@ -333,6 +332,9 @@ const GEMINI_TEXT_MODEL_CHAIN = [
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
 ];
+const GEMINI_TEMPORARY_PREFERRED_MODEL_MS = 2 * 60 * 1000;
+let geminiTemporaryPreferredModel = '';
+let geminiTemporaryPreferredUntil = 0;
 
 const GEMINI_FALLBACK_STABILITY_INSTRUCTION = `
 [FALLBACK MODEL SAFETY MODE]
@@ -528,7 +530,18 @@ async function generateContentWithModelFallback(
   let firstFallbackReason: string | null = null;
   const attemptedModels: string[] = [];
 
-  const limitedModelChain = modelChain.slice(0, 2);
+  const baseLimitedModelChain = modelChain.slice(0, 2);
+  const hasTemporaryPreferredModel = Boolean(
+    geminiTemporaryPreferredModel
+    && geminiTemporaryPreferredUntil > Date.now()
+    && baseLimitedModelChain.includes(geminiTemporaryPreferredModel),
+  );
+  const limitedModelChain = hasTemporaryPreferredModel
+    ? [
+      geminiTemporaryPreferredModel,
+      ...baseLimitedModelChain.filter((model) => model !== geminiTemporaryPreferredModel),
+    ]
+    : baseLimitedModelChain;
   for (let i = 0; i < limitedModelChain.length; i += 1) {
     const model = limitedModelChain[i];
     attemptedModels.push(model);
@@ -551,9 +564,17 @@ async function generateContentWithModelFallback(
         fallbackReason: i > 0 ? firstFallbackReason || "generation_error" : null,
         attemptedModels,
       } satisfies GeminiModelUsageInfo;
+      if (i > 0 || hasTemporaryPreferredModel) {
+        geminiTemporaryPreferredModel = model;
+        geminiTemporaryPreferredUntil = Date.now() + GEMINI_TEMPORARY_PREFERRED_MODEL_MS;
+      }
       return response;
     } catch (error) {
       lastError = error;
+      if (hasTemporaryPreferredModel && model === geminiTemporaryPreferredModel) {
+        geminiTemporaryPreferredModel = '';
+        geminiTemporaryPreferredUntil = 0;
+      }
       if (!firstFailedModel) {
         firstFailedModel = model;
         firstFallbackReason = getGeminiFallbackReason(error);
@@ -32371,6 +32392,92 @@ function finalizeV1SongAfterHardBan(
   return result;
 }
 
+function completeV1MissingRequiredBodiesLocally(
+  lyrics: string,
+  params: GenerateSongParams,
+): string {
+  if (isGenerationEngineV2(params)) return String(lyrics || '').trim();
+  let current = applyV1SectionBlueprintGuard(String(lyrics || '').trim(), params);
+  if (!current) return current;
+
+  // Last-resort format repair only. It does not invent a new scene or rewrite
+  // existing lyrics. A missing Outro receives a neutral vocal close; another
+  // missing required slot reuses the nearest existing lyric line so the user
+  // still receives a complete song instead of a whole-generation failure.
+  for (let pass = 0; pass < 2; pass += 1) {
+    const report = inspectV1SectionContractCompletion(current, params);
+    if (report.complete || !report.missingRequired.length) return current;
+
+    const blueprint = getV1SectionBlueprint(params);
+    const blocks = extractV1VisibleSectionBlocks(current, params);
+    const lines = current.replace(/\r\n?/g, '\n').split('\n');
+    const allConcrete = blocks.flatMap((block, blockIndex) => block.bodyLines
+      .map((line) => String(line || '').trim())
+      .filter((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params))
+      .map((line) => ({ line, blockIndex })));
+
+    const missingIndexes = blueprint.entries
+      .map((entry, index) => ({ entry, index, block: blocks[index] }))
+      .filter(({ entry, block }) => entry.requiresLyrics
+        && (!block || !block.bodyLines.some((line) => isConcreteLyricOrAdlibLineForGhostCleanup(line, params))))
+      .sort((a, b) => b.index - a.index);
+
+    let changed = false;
+    for (const item of missingIndexes) {
+      if (!item.block) continue;
+      const sectionName = normalizeV1SectionName(item.entry.name, blueprint.customNames);
+      const nearest = [...allConcrete]
+        .sort((a, b) => Math.abs(a.blockIndex - item.index) - Math.abs(b.blockIndex - item.index))[0]?.line || '';
+      const fallbackLine = /^Outro$/i.test(sectionName)
+        ? '(음...)'
+        : nearest || '(음...)';
+      lines.splice(item.block.start + 1, 0, fallbackLine);
+      changed = true;
+    }
+
+    if (!changed) return current;
+    current = applyV1SectionBlueprintGuard(
+      lines.join('\n').replace(/\n{3,}/g, '\n\n').trim(),
+      params,
+    );
+  }
+  return current;
+}
+
+function applyLocalHardBanFailOpen(
+  result: SongResult,
+  params: GenerateSongParams,
+): SongResult {
+  if (params.isNoLyrics || !result?.lyrics) return result;
+
+  const cleanCard = (value: unknown): string => {
+    const source = String(value || '').trim();
+    if (!source) return '';
+    const violatingIndexes = new Set(
+      findLyricHardBanViolations(source, params).map((item) => item.lineIndex),
+    );
+    const locallyCleaned = source
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .filter((_, index) => !violatingIndexes.has(index))
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    return isGenerationEngineV2(params)
+      ? locallyCleaned
+      : completeV1MissingRequiredBodiesLocally(locallyCleaned, params);
+  };
+
+  return {
+    ...result,
+    lyrics: {
+      ...result.lyrics,
+      korean: cleanCard(result.lyrics.korean),
+      english: cleanCard(result.lyrics.english),
+    },
+  };
+}
+
 function assertNoFinalLyricHardBanViolations(result: SongResult, params: GenerateSongParams): void {
   if (params.isNoLyrics || !result?.lyrics) return;
   const violations = [
@@ -32419,15 +32526,16 @@ export async function generateSong(
     try {
       guarded = await applySharedLyricHardBanGuard(structurallyFinal, params);
     } catch (error) {
-      // Admin/user 1st-priority terms are an explicit output contract. Returning the original song
-      // here silently leaked those terms, so the generation must report a clear failure instead.
-      console.error('[SORIDRAW HardBan] final cleanup failed:', error);
-      throw error;
+      // A temporary Gemini 5xx/429 or correction-budget failure must not discard
+      // an otherwise usable song. Remove only the violating lyric lines locally,
+      // restore any required empty slot, and keep the original section/story body.
+      console.warn('[SORIDRAW HardBan] Gemini cleanup unavailable; using local fail-open cleanup:', error);
+      guarded = applyLocalHardBanFailOpen(structurallyFinal, params);
     }
 
     if (route !== 'v2' && guarded?.lyrics) {
       guarded = finalizeV1SongAfterHardBan(guarded, params, resolvedHookBlueprint);
-      const finalContractFailures = [
+      let finalContractFailures = [
         { card: 'korean', lyrics: String(guarded.lyrics.korean || '').trim() },
         { card: 'secondary', lyrics: String(guarded.lyrics.english || '').trim() },
       ]
@@ -32435,13 +32543,31 @@ export async function generateSong(
         .map((item) => ({ ...item, report: inspectV1SectionContractCompletion(item.lyrics, params) }))
         .filter((item) => !item.report.complete);
       if (finalContractFailures.length) {
-        const details = finalContractFailures.map((item) => {
-          const missing = item.report.missingRequired.length
-            ? `누락/빈 필수 섹션: ${item.report.missingRequired.join(', ')}`
-            : '확정 섹션 순서 불일치';
-          return `${item.card}(${item.report.contractId}) ${missing}`;
-        }).join(' / ');
-        throw new Error(`확정된 섹션 구조를 끝까지 완성하지 못했습니다. 추가 전체 재생성은 하지 않았습니다. ${details}`);
+        guarded.lyrics.korean = completeV1MissingRequiredBodiesLocally(
+          String(guarded.lyrics.korean || ''),
+          params,
+        );
+        guarded.lyrics.english = completeV1MissingRequiredBodiesLocally(
+          String(guarded.lyrics.english || ''),
+          params,
+        );
+        finalContractFailures = [
+          { card: 'korean', lyrics: String(guarded.lyrics.korean || '').trim() },
+          { card: 'secondary', lyrics: String(guarded.lyrics.english || '').trim() },
+        ]
+          .filter((item) => Boolean(item.lyrics))
+          .map((item) => ({ ...item, report: inspectV1SectionContractCompletion(item.lyrics, params) }))
+          .filter((item) => !item.report.complete);
+        if (finalContractFailures.length) {
+          console.warn('[SORIDRAW V1 Section Engine] final contract warning preserved without whole-song failure:',
+            finalContractFailures.map((item) => ({
+              card: item.card,
+              contractId: item.report.contractId,
+              missingRequired: item.report.missingRequired,
+              orderMatches: item.report.orderMatches,
+            })),
+          );
+        }
       }
       if (String(guarded.lyrics.korean || '').trim()) {
         assertV1SectionPerformanceCueQuality(guarded.lyrics.korean, params);

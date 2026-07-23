@@ -15,11 +15,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-const isAiStudioPreview = (() => {
-  if (typeof window === "undefined") return false;
-  const hostname = window.location.hostname.toLowerCase();
-  return /^ais-dev-[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.run\.app$/.test(hostname);
-})();
+const currentHostname = typeof window === "undefined"
+  ? ""
+  : window.location.hostname.toLowerCase();
+const isAiStudioPreview = /^ais-dev-[a-z0-9-]+-[0-9]+\.[a-z0-9-]+\.run\.app$/.test(currentHostname);
+const isVercelTestApp = currentHostname === "soridraw-music.vercel.app";
+const isFirebaseHostedApp = currentHostname === "soridraw.web.app"
+  || currentHostname === "soridraw.firebaseapp.com"
+  || currentHostname === "soridraw-app-866a5.web.app"
+  || currentHostname === "soridraw-app-866a5.firebaseapp.com";
 
 // AI Studio previews run inside an ephemeral run.app development host where
 // reCAPTCHA Enterprise can fail. Firebase's debug provider is enabled only
@@ -30,11 +34,15 @@ if (isAiStudioPreview && typeof self !== "undefined") {
 }
 
 let appCheck = null;
-// Public reCAPTCHA Enterprise site key registered to this Firebase web app.
-// Keep one source of truth here so a stale Vercel/AI Studio environment value
-// cannot silently override the Firebase App Check registration.
+// The current reCAPTCHA Enterprise registration returns HTTP 400 on the Vercel
+// test domain. Enforcement is still disabled, so repeatedly requesting an
+// unusable token only slows the test app and floods DevTools. Keep the working
+// AI Studio debug path and Firebase-hosted production path, but temporarily
+// skip client App Check on the Vercel test host until its Cloud Console domain/
+// site-key registration is corrected and verified.
 const APP_CHECK_SITE_KEY = "6LdIj2AtAAAAABDxZXGWs5ub8LcQGsFkxgPbAoI1";
-if (APP_CHECK_SITE_KEY && typeof window !== "undefined") {
+const shouldInitializeAppCheck = isAiStudioPreview || isFirebaseHostedApp;
+if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefined") {
   try {
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
@@ -43,6 +51,8 @@ if (APP_CHECK_SITE_KEY && typeof window !== "undefined") {
   } catch (error) {
     console.warn("[Firebase App Check] initialization skipped:", error);
   }
+} else if (isVercelTestApp) {
+  console.info("[Firebase App Check] Vercel test app: temporarily disabled pending provider registration fix");
 }
 
 export const getFirebaseAppCheckToken = async () => {

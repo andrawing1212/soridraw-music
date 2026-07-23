@@ -36,3 +36,9 @@ npm run build
 See `docs/SORIDRAW_SECURITY_COST_PLAN.md` for App Check activation, server limits, remaining console work, and the staged KMS migration plan.
 
 The public App Check site key is bound in `src/firebase.js`; deployment environments must not override it with a stale Vite variable.
+
+## Temporary test-app App Check mode
+
+The Vercel test host currently skips client App Check initialization because its reCAPTCHA Enterprise token exchange returns HTTP 400. Enforcement must remain disabled until the Cloud Console website-key domains and Firebase App Check registration are corrected and the test host reports `valid`. AI Studio debug App Check and Firebase-hosted App Check paths remain in the code.
+
+The V1 song generator now fails open after temporary Gemini correction failures: banned-term lines are removed locally as a last resort, missing required slots receive a minimal structural completion, and an otherwise usable song is no longer discarded solely because an Outro/Bridge body repair failed.

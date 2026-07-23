@@ -1,0 +1,35 @@
+name: Source Snapshot Diagnostic
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  snapshot:
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'SOURCE SNAPSHOT DIAGNOSTIC 20260723'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Create tracked source archive
+        run: git archive --format=zip --output=github-main-source.zip HEAD
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-main-source
+          path: github-main-source.zip
+          retention-days: 1
+
+      - name: Report run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "SOURCE_SNAPSHOT_READY run_id=${{ github.run_id }} sha=${{ github.sha }}"

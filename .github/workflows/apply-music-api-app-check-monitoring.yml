@@ -6,12 +6,16 @@ on:
       - main
     paths:
       - .github/workflows/apply-music-api-app-check-monitoring.yml
+  issues:
+    types:
+      - opened
 
 permissions:
   contents: write
 
 jobs:
   patch-and-verify:
+    if: github.event_name == 'push' || github.event.issue.title == 'RUN MUSIC API APP CHECK PATCH'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 

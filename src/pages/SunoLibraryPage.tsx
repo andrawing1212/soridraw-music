@@ -1411,7 +1411,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             const displayName = data.nickname || data.displayName || data.name || data.email || uid;
             if (displayName) nextMap[uid] = String(displayName);
           } catch (error) {
-            console.warn('Failed to fetch playlist creator name:', uid, error);
+            console.warn('Failed to fetch playlist creator name:', error);
           }
         })
       );

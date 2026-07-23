@@ -30,14 +30,14 @@ if (isAiStudioPreview && typeof self !== "undefined") {
 }
 
 let appCheck = null;
-const DEFAULT_APP_CHECK_SITE_KEY = "6LdIj2AtAAAAABDxZXGWs5ub8LcQGsFkxgPbAoI1";
-const appCheckSiteKey = String(
-  import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || DEFAULT_APP_CHECK_SITE_KEY
-).trim();
-if (appCheckSiteKey && typeof window !== "undefined") {
+// Public reCAPTCHA Enterprise site key registered to this Firebase web app.
+// Keep one source of truth here so a stale Vercel/AI Studio environment value
+// cannot silently override the Firebase App Check registration.
+const APP_CHECK_SITE_KEY = "6LdIj2AtAAAAABDxZXGWs5ub8LcQGsFkxgPbAoI1";
+if (APP_CHECK_SITE_KEY && typeof window !== "undefined") {
   try {
     appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
       isTokenAutoRefreshEnabled: true,
     });
   } catch (error) {

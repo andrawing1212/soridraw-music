@@ -556,42 +556,18 @@ enum OperationType {
 interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
+  resource: string | null;
 }
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
     operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+    // Keep only the collection-level name. Never include user IDs, emails,
+    // provider details, document IDs, or full Firestore paths in browser logs.
+    resource: path ? path.split('/')[0] || null : null,
+  };
+  console.error('Firestore Error:', errInfo);
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -5288,12 +5264,10 @@ function App() {
 
   // 2. CORE FUNCTIONS NEXT (BEFORE ANY USEEFFECT)
   const handleLogout = async () => {
-    console.log('[ForceLogout Client] handleLogout called');
     try {
       const currentUser = auth.currentUser;
 
       if (currentUser) {
-        console.log(`[ForceLogout Client] handleLogout - Updating Firestore for UID: ${currentUser.uid}`);
         const userDocRef = doc(db, 'users', currentUser.uid);
 
         try {
@@ -5302,9 +5276,8 @@ function App() {
             lastLogoutAt: Date.now(),
             lastSeenAt: Date.now()
           }, { merge: true });
-          console.log('[ForceLogout Client] handleLogout - Firestore update successful');
         } catch (dbErr) {
-          console.error("[ForceLogout Client] handleLogout - Firestore update failed:", dbErr);
+          console.error("[ForceLogout] Firestore update failed:", dbErr);
         }
       }
 
@@ -5314,9 +5287,7 @@ function App() {
 
       clearCachedUserRole();
       setCachedUserRoleHint(null);
-      console.log('[ForceLogout Client] handleLogout - Calling signOut(auth)');
       await signOut(auth);
-      console.log('[ForceLogout Client] handleLogout - signOut(auth) successful');
       navigate('/', { replace: true });
 
     } catch (error) {
@@ -5325,7 +5296,6 @@ function App() {
   };
 
   const performForcedLogout = async ({ silent }: { silent: boolean }) => {
-    console.log(`[ForceLogout Client] performForcedLogout triggered (silent: ${silent})`);
     try {
       if (!silent) {
         setIsForcedLogoutModalOpen(true);
@@ -5347,7 +5317,7 @@ function App() {
       await signOut(auth);
       navigate('/', { replace: true });
     } catch (error) {
-      console.error("[ForceLogout Client] Error during forced logout:", error);
+      console.error("[ForceLogout] Error during forced logout:", error);
       // Even if updateDoc fails, we should try to sign out
       clearCachedUserRole();
       setCachedUserRoleHint(null);
@@ -5544,7 +5514,6 @@ function App() {
       }
 
       if (result?.user) {
-        console.log("[Auth] Popup login successful for:", result.user.uid);
         try {
           await ensureAuthUserDocument(result.user);
         } catch (dbErr) {
@@ -5566,7 +5535,6 @@ function App() {
       try {
         const result = await getRedirectResult(auth);
         if (result?.user) {
-          console.log("[Auth] Redirect login successful for:", result.user.uid);
           try {
             await ensureAuthUserDocument(result.user);
           } catch (dbErr) {
@@ -5830,18 +5798,9 @@ function App() {
       const fetchedTags = snapshot.docs.map(doc => ({
         ...doc.data()
       })) as SectionTag[];
-      console.log(`[Tags Debug] Fetched ${fetchedTags.length} tags`);
       setSectionTags(fetchedTags);
     }, (err) => {
       console.error("Error fetching section tags for user UI:", err);
-      // Detailed logging for permissions error
-      if (err.message.includes('permission')) {
-        console.error("[Tags Debug] Current User Auth State:", {
-          uid: auth.currentUser?.uid,
-          email: auth.currentUser?.email,
-          emailVerified: auth.currentUser?.emailVerified
-        });
-      }
     });
 
     return () => unsubscribe();
@@ -6589,7 +6548,6 @@ const toggleCycleVariantSelection = (
     let interval: NodeJS.Timeout | null = null;
     
     if (isForcedLogoutModalOpen) {
-      console.log("[ForceLogout Client] Modal opened - Countdown timer started");
       setForcedLogoutCountdown(10);
       isForcedLogoutProcessingRef.current = false;
       
@@ -6600,7 +6558,6 @@ const toggleCycleVariantSelection = (
             // Auto-logout when countdown reaches 0
                     if (!isForcedLogoutProcessingRef.current) {
                       isForcedLogoutProcessingRef.current = true;
-                      console.log("[ForceLogout Client] Auto-logout triggered by timer");
                       handleLogout().then(() => {
                         setIsForcedLogoutModalOpen(false);
                         navigate('/');
@@ -6648,12 +6605,6 @@ const toggleCycleVariantSelection = (
                      forceLogoutTime > sessionStartTime && 
                      forceLogoutTime > lastForcedLogoutTimeRef.current;
       
-      console.log(`[ForceLogout Client] shouldProcessForceLogout check:
-        - forceLogoutTime: ${forceLogoutTime} (${forceLogoutTime > 0 ? new Date(forceLogoutTime).toLocaleString() : 'N/A'})
-        - sessionStartTime: ${sessionStartTime} (${sessionStartTime > 0 ? new Date(sessionStartTime).toLocaleString() : 'N/A'})
-        - lastProcessedTime: ${lastForcedLogoutTimeRef.current}
-        - result: ${result}`);
-
       if (!result) return false;
       lastForcedLogoutTimeRef.current = forceLogoutTime;
       return true;
@@ -6726,12 +6677,11 @@ const toggleCycleVariantSelection = (
             }
 
             if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
-              console.log('[ForceLogout Client] Re-entry detection triggered. Executing silent logout.');
               await performForcedLogout({ silent: true });
               return;
             }
           } catch (error) {
-            console.error('[Auth Debug] Initial force logout check failed:', error);
+            console.error('[Auth] Initial force logout check failed:', error);
           } finally {
             hasCompletedForceLogoutReentryCheckRef.current = true;
           }
@@ -6741,7 +6691,6 @@ const toggleCycleVariantSelection = (
 
         // Sync user role in real-time
         unsubUserDoc = onSnapshot(userRef, (docSnap) => {
-          console.log('[ForceLogout Client] User document snapshot received');
           if (docSnap.exists()) {
             const data = docSnap.data();
             {
@@ -6772,7 +6721,6 @@ const toggleCycleVariantSelection = (
             }
 
             if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
-              console.log('[ForceLogout Client] Real-time detection triggered. Showing modal.');
               setIsForcedLogoutModalOpen(true);
             }
           } else {
@@ -6792,11 +6740,9 @@ const toggleCycleVariantSelection = (
         });
 
         const syncUserDoc = async () => {
-          console.log("[Auth Debug] syncUserDoc triggered for:", currentUser.uid);
           try {
             const userRef = doc(db, 'users', currentUser.uid);
             const userSnap = await getDoc(userRef);
-            console.log("[Auth Debug] User Doc Exists:", userSnap.exists());
 
             const safeSessionData = {
               uid: currentUser.uid,
@@ -9775,9 +9721,6 @@ const saveRecentSong = async (newSong: any) => {
         },
       };
 
-      console.log("SELECTED GENRE:", selectedGenres);
-      console.log("SELECTED SUB GENRE:", subGenre);
-      console.log("GENERATE PAYLOAD:", payload);
 
       const generatedResults: SongResult[] = [];
       const generationBatchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -15625,7 +15568,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               <button
                 onClick={async () => {
                   if (!isForcedLogoutProcessingRef.current) {
-                    console.log("[ForceLogout Client] Manual logout button clicked in modal");
                     isForcedLogoutProcessingRef.current = true;
                     setIsForcedLogoutModalOpen(false);
                     await handleLogout();

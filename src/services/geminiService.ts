@@ -32606,8 +32606,6 @@ async function generateSongLegacy(
       `[Audio quality improved to masterpiece]`,
     ].join("\n"));
   }
-  console.log("🔥 generateSong called");
-  console.log("🔥 FINAL PROMPT:", finalPrompt);
   const rawStructureText = buildStructureText(
     params.songStructure,
     resolvedStructure,

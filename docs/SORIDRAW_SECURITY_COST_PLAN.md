@@ -35,11 +35,11 @@
 ### 콘솔 설정 후 활성화
 
 1. Firebase Console > App Check에서 Web 앱을 reCAPTCHA Enterprise로 등록한다.
-2. 공개 사이트 키를 `VITE_FIREBASE_APP_CHECK_SITE_KEY`에 설정한다.
+2. Firebase App Check에 등록한 공개 사이트 키와 `src/firebase.js`의 고정 사이트 키가 일치하는지 확인한다.
 3. 먼저 `ENFORCE_APP_CHECK=false`로 정상 토큰 비율을 확인한다.
 4. 이상이 없으면 Functions 환경변수를 `ENFORCE_APP_CHECK=true`로 변경한다.
 
-App Check 사이트 키는 공개 키이며 Gemini 개인 API 키가 아니다.
+App Check 사이트 키는 공개 키이며 Gemini 개인 API 키가 아니다. Vercel/AI Studio 환경변수로 덮어쓰지 않는다.
 
 ## 질문 1: 곡마다 서버에서 키를 읽으면 비용이 큰가?
 
@@ -91,6 +91,7 @@ Gemini 토큰비 보호만을 목적으로 Free/Basic/Pro에 강한 일일 생�
 ### 100차: App Check 모니터링 및 검증
 
 - Vercel 테스트앱과 정식 도메인은 reCAPTCHA Enterprise로 토큰 발급 상태 확인
+- reCAPTCHA Enterprise 허용 도메인에 `soridraw-music.vercel.app`, `soridraw.web.app`, `soridraw.firebaseapp.com`, `soridraw-app-866a5.web.app`, `soridraw-app-866a5.firebaseapp.com`을 등록
 - AI Studio 프리뷰는 `ais-dev-...run.app` 호스트에서만 Firebase 공식 디버그 제공자를 사용
 - AI Studio에서 출력된 디버그 토큰은 Firebase App Check의 `디버그 토큰 관리`에 직접 등록
 - 서버 검증 결과가 두 환경 모두 `valid`인지 확인

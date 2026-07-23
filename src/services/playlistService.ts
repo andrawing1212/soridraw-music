@@ -108,9 +108,8 @@ export const ensureDefaultPlaylists = async (uid: string) => {
   if (hasBatchOperations) {
     try {
       await batch.commit();
-      console.log(`[Playlist] Default playlists ensured/created for user: ${uid}`);
     } catch (error) {
-      console.error(`[Playlist] Failed to ensure default playlists for user: ${uid}`, error);
+      console.error("[Playlist] Failed to ensure default playlists:", error);
     }
   }
 };

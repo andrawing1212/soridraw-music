@@ -356,13 +356,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     try {
       const q = query(collection(db, 'users'), orderBy(sortBy, 'desc'));
       const snapshot = await getDocs(q);
-      console.log(`[Admin Debug] Fetched ${snapshot.size} users`);
       const fetchedUsers = snapshot.docs.map(docSnap => {
         const data = docSnap.data();
-        // Log all users who have a lastLogoutAt to see if it's actually there
-        if (data.lastLogoutAt) {
-          console.log(`[Admin Debug] User ${data.email || docSnap.id} has lastLogoutAt:`, data.lastLogoutAt);
-        }
         return {
           uid: docSnap.id,
           email: data.email || null,
@@ -525,8 +520,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
 
 const handleForceLogout = async () => {
-  console.log("%c[ForceLogout UI] EXECUTION START", "color: orange; font-weight: bold; font-size: 14px;");
-  console.log("[ForceLogout UI] Current selectedUser:", selectedUser);
   
   if (!selectedUser) {
     console.warn("[ForceLogout UI] No selected user found in state.");
@@ -534,9 +527,6 @@ const handleForceLogout = async () => {
   }
   
   const isSelf = auth.currentUser?.uid === selectedUser.uid;
-  console.log("[ForceLogout UI] Target UID:", selectedUser.uid);
-  console.log("[ForceLogout UI] Admin UID:", auth.currentUser?.uid);
-  console.log("[ForceLogout UI] Is Self Logout Attempt:", isSelf);
 
   if (isSelf) {
     console.warn("[ForceLogout UI] Self-logout blocked.");
@@ -544,14 +534,11 @@ const handleForceLogout = async () => {
     return;
   }
 
-  console.log("[ForceLogout UI] Confirmation bypassed for test.");
 
-  console.log("[ForceLogout UI] Starting process...");
   setIsForceLoggingOut(true);
   setForceLogoutResult(null);
 
   try {
-    console.log("[ForceLogout UI] Step 1: Requesting Admin Token...");
     const token = await auth.currentUser?.getIdToken();
     
     if (!token) {
@@ -560,10 +547,7 @@ const handleForceLogout = async () => {
       setIsForceLoggingOut(false);
       return;
     }
-    console.log("[ForceLogout UI] Token acquired (starts with):", token.substring(0, 10));
 
-    console.log("[ForceLogout UI] Step 2: Fetching API endpoint...");
-    console.log("[ForceLogout UI] Payload:", { targetUid: selectedUser.uid, disableUser: editStatus === 'banned' });
     
     const response = await fetch('/api/admin/force-logout', {
       method: 'POST',
@@ -577,7 +561,6 @@ const handleForceLogout = async () => {
       })
     });
 
-    console.log("[ForceLogout UI] Fetch status:", response.status, response.statusText);
     const text = await response.text();
     let result;
     try {
@@ -585,13 +568,11 @@ const handleForceLogout = async () => {
     } catch {
       result = {};
     }
-    console.log("[ForceLogout UI] Response JSON:", result);
     
     if (response.ok) {
-      console.log("[ForceLogout UI] API Response Success:", result);
       setForceLogoutResult({ success: true, message: result.message || '강제 로그아웃 처리가 완료되었습니다.' });
     } else {
-      console.error("[ForceLogout UI] API Response Failure:", result);
+      console.error("[ForceLogout UI] Request failed with status:", response.status);
       alert("강제 로그아웃 실패");
       setForceLogoutResult({ success: false, message: result.error || '처리에 실패했습니다.' });
       return;
@@ -601,7 +582,6 @@ const handleForceLogout = async () => {
     setForceLogoutResult({ success: false, message: '네트워크 또는 서버 오류가 발생했습니다.' });
   } finally {
     setIsForceLoggingOut(false);
-    console.log("[ForceLogout UI] EXECUTION END");
   }
 };
 
@@ -687,11 +667,6 @@ const handleForceLogout = async () => {
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}시간 전`;
     return new Date(timestamp).toLocaleDateString();
   };
-
-  console.log("[Admin Debug] Rendering Page - isAdmin:", isAdmin, "user:", auth.currentUser?.email);
-  if (selectedUser) {
-    console.log("[Admin Debug] Selected User in State:", selectedUser.uid, "ForceLogout Disabled:", isForceLoggingOut || (auth.currentUser?.uid === selectedUser?.uid));
-  }
 
   if (!isAdmin) {
     return (

@@ -5,7 +5,7 @@
 Use Node.js 20.x. The root `.nvmrc` and `package.json` engine field keep the web app aligned with Firebase Functions.
 
 1. Copy `.env.example` to the environment used by the web build.
-2. Register the Firebase web app with App Check and set the public reCAPTCHA Enterprise site key when ready.
+2. Register the Firebase web app with App Check and keep the reCAPTCHA Enterprise key domains aligned with the deployed app domains.
 3. Install dependencies and start the app.
 
 ```bash
@@ -34,3 +34,5 @@ npm run build
 - Do not configure `VITE_GEMINI_API_KEY`; private Gemini keys must never be included in a Vite client build.
 
 See `docs/SORIDRAW_SECURITY_COST_PLAN.md` for App Check activation, server limits, remaining console work, and the staged KMS migration plan.
+
+The public App Check site key is bound in `src/firebase.js`; deployment environments must not override it with a stale Vite variable.

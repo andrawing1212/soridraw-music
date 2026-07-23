@@ -2,11 +2,9 @@ name: Firebase Functions Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - .github/workflows/firebase-functions-deploy.yml
+  issues:
+    types:
+      - opened
 
 concurrency:
   group: firebase-functions-deploy
@@ -15,9 +13,11 @@ concurrency:
 permissions:
   contents: read
   id-token: write
+  issues: write
 
 jobs:
   deploy-functions:
+    if: github.event_name != 'issues' || github.event.issue.title == 'DEPLOY FIREBASE FUNCTIONS'
     name: Build and deploy Firebase Functions only
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
@@ -50,4 +52,37 @@ jobs:
         run: npm install --global firebase-tools@13.34.0
 
       - name: Deploy Firebase Functions only
-        run: firebase deploy --only functions --project soridraw-app-866a5 --non-interactive
+        id: deploy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          firebase deploy --only functions --project soridraw-app-866a5 --non-interactive 2>&1 | tee firebase-functions-deploy.log
+
+      - name: Report result to trigger issue
+        if: always() && github.event_name == 'issues'
+        uses: actions/github-script@v7
+        env:
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const outcome = process.env.DEPLOY_OUTCOME || 'unknown';
+            let log = '';
+            try {
+              log = fs.readFileSync('firebase-functions-deploy.log', 'utf8');
+            } catch {}
+            const lines = log.split('\n').slice(-80).join('\n').slice(-6000);
+            const body = outcome === 'success'
+              ? `✅ Firebase Functions deployment succeeded.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\n\n<details><summary>Deployment log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`
+              : `❌ Firebase Functions deployment failed.\n\nProject: \`soridraw-app-866a5\`\nHosting was not deployed.\n\n<details><summary>Error log tail</summary>\n\n\`\`\`text\n${lines}\n\`\`\`\n</details>`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+      - name: Fail when deployment failed
+        if: steps.deploy.outcome != 'success'
+        run: exit 1

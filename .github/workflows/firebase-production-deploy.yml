@@ -38,10 +38,11 @@ jobs:
       - name: Build production app
         run: npm run build
 
-      - name: Deploy Firebase Hosting only
+      - name: Deploy official Firebase Hosting site only
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW_APP_866A5 }}
           channelId: live
           projectId: soridraw-app-866a5
+          target: production

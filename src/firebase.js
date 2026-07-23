@@ -34,14 +34,12 @@ if (isAiStudioPreview && typeof self !== "undefined") {
 }
 
 let appCheck = null;
-// The current reCAPTCHA Enterprise registration returns HTTP 400 on the Vercel
-// test domain. Enforcement is still disabled, so repeatedly requesting an
-// unusable token only slows the test app and floods DevTools. Keep the working
-// AI Studio debug path and Firebase-hosted production path, but temporarily
-// skip client App Check on the Vercel test host until its Cloud Console domain/
-// site-key registration is corrected and verified.
-const APP_CHECK_SITE_KEY = "6LdIj2AtAAAAABDxZXGWs5ub8LcQGsFkxgPbAoI1";
-const shouldInitializeAppCheck = isAiStudioPreview || isFirebaseHostedApp;
+// Use the reCAPTCHA Enterprise site key that is registered to this Firebase web
+// app and whose website-key domain list includes the Vercel test host and the
+// Firebase production hosts. AI Studio keeps the registered debug-provider
+// path; deployed Vercel/Firebase hosts use real reCAPTCHA Enterprise attestation.
+const APP_CHECK_SITE_KEY = "6Ld7iWAtAAAAAIJQFwoYsnfxl1elxKE1Qtcqcs8H";
+const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseHostedApp;
 if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefined") {
   try {
     appCheck = initializeAppCheck(app, {
@@ -51,8 +49,6 @@ if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefin
   } catch (error) {
     console.warn("[Firebase App Check] initialization skipped:", error);
   }
-} else if (isVercelTestApp) {
-  console.info("[Firebase App Check] Vercel test app: temporarily disabled pending provider registration fix");
 }
 
 export const getFirebaseAppCheckToken = async () => {

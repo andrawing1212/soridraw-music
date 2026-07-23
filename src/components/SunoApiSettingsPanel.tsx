@@ -640,7 +640,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
  type="google"
  title="Google Gemini API Key"
  description="가사/프롬프트 생성을 위한 개인 Google API Key"
- guideText="Google AI Studio에서 Gemini API Key를 발급받아 입력합니다. 키 원문은 브라우저에 저장되지 않고 로그인 계정의 Firebase 서버 보관소에 저장되며, Gemini 호출도 서버에서 실행됩니다."
+ guideText="Google AI Studio에서 새 승인(Auth) API Key를 발급받아 입력합니다. 기존 Standard 키도 당분간 사용할 수 있지만 Google 공지에 따라 2026년 9월부터 거부될 예정이므로 새 승인 키로 교체해야 합니다. 키 원문은 브라우저에 저장되지 않고 로그인 계정의 Firebase 서버 보관소에 저장되며, Gemini 호출도 서버에서 실행됩니다."
  createUrl={GOOGLE_API_CREATE_URL}
  inputValue={googleApiKey}
  setInputValue={setGoogleApiKey}

@@ -882,3 +882,182 @@
 - 커스텀 섹션 순서, 번호, 사용자 정의 이름, 명시적 태그, 가사 본문과 훅은 재설계하지 않는다.
 - 특정 퍼포먼스 문구·고정 보컬 배정·가사 예문을 하드코딩하지 않는다.
 - Firebase Auth, Firestore, Functions, Rules, 환경변수 및 저장 구조는 변경하지 않는다.
+
+## 80차 — 섹션 보컬 큐·악기 큐 독립 표시 토글
+
+### UI와 기본값
+- 섹션 구조 바로 아래에 `보컬 큐`, `악기 큐` 두 개의 독립 토글을 둔다. 화면에는 이름과 ON/OFF 버튼만 표시하고 자세한 설명은 기존 도움말 팝업에서 제공한다.
+- 기존 사용자와 저장본 호환을 위해 값이 없으면 둘 다 ON으로 해석한다. 템플릿 적용, 이전 곡 설정 재적용, 가사 재생성에도 같은 선택값을 복원한다.
+
+### 4가지 출력 조합
+- ON / ON: 섹션 태그의 보컬 표현 큐와 독립 악기·편곡 큐를 모두 표시한다.
+- ON / OFF: 보컬 표현 큐만 표시하고 독립 악기·편곡 큐 줄은 숨긴다.
+- OFF / ON: 보컬 표현 문구는 숨기되 다중 보컬의 가창 담당 앵커는 유지하고, 악기·편곡 큐는 표시한다. 솔로곡은 번호가 붙은 기본 섹션 태그만 남길 수 있다.
+- OFF / OFF: 구조 태그, 다중 보컬 소유권에 필요한 담당 앵커, 가사·애드리브만 표시한다.
+
+### 엔진 연동 원칙
+- 두 토글은 공개 가사에 보이는 표기만 제어한다. Section Role Engine, Section Blueprint 번호·소유권, Section Performance Plan, Hook Blueprint, 보컬 배정, 내부 Arrangement 계획은 OFF에서도 계속 작동한다.
+- 따라서 이후 보컬 큐·악기 큐 생성 품질을 개선하더라도 UI 토글은 최종 출력 정책만 제어하며, 생성 엔진과 직접 결합되지 않아 기능 연동이 깨지지 않는다.
+- 선택값은 `appliedKeywords.sectionCueOptions`로 보존되고 V1, V2, 가사 단독 재생성의 최종 공개 경계에서 동일하게 적용된다.
+
+### 안전 범위
+- 특정 보컬 큐·악기 큐 문장, 가사 예문, 고정 섹션 내용을 하드코딩하지 않는다.
+- Firebase Auth, Firestore, Functions, Rules, 환경변수 및 저장 문서 구조는 변경하지 않는다.
+
+
+## 88차 Gemini 호출 예산 / 후처리 원칙
+
+- 곡 생성 1건의 실제 Gemini API 요청은 중앙 예산으로 최대 3회까지 허용한다.
+- 자동 품질 보정 호출은 최대 1회만 허용한다.
+- 정상 경로는 최초 곡 생성 1회다.
+- 첫 모델이 일시적인 API 오류로 실패한 경우에만 대체 모델 1회를 허용한다.
+- V1 누락 섹션·가사 밀도·언어 혼합 비율·Atmosphere 문장 문제는 추가 Gemini 호출 없이 코드 기반 정리 또는 원본 보존으로 처리한다.
+- 강한 금지어가 실제 최종 가사에 남은 경우에만 한 번의 통합 교정 호출을 허용한다. 한국어·외국어 카드가 동시에 걸려도 한 호출로 묶는다.
+- 제목 누락만으로 별도 Gemini 호출을 시작하지 않는다.
+- 호출 상한은 감사 화면에서 확인 가능하며, 상한을 넘는 호출은 API 요청 전에 차단된다.
+
+## 89차 — 곡별 동적 Section Blueprint 슬롯 계약
+
+### 핵심 원칙
+- 안정형 전체 구조를 모든 곡에 공통 강제하지 않는다.
+- 추천형·안정형·실험형·커스텀은 생성 시작 전에 각 곡의 Section Blueprint를 한 번만 확정한다.
+- 추천형과 실험형의 랜덤 선택은 Blueprint 확정 전까지만 허용하고, 최초 Gemini 호출 이후에는 같은 곡 안에서 구조를 다시 뽑거나 해석하지 않는다.
+- 커스텀은 사용자가 지정한 실제 순서와 비표준 섹션명을 그대로 계약으로 사용한다. 사용자가 넣지 않은 Bridge, Final Chorus, Outro 등을 임의로 추가하지 않는다.
+
+### 동적 슬롯 출력
+- V1 최초 응답의 가사는 고정 `verse1/chorus1` 필드가 아니라 `sectionId`, `sectionName`, `productionCues`, `bodyLines`를 가진 동적 배열로 받는다.
+- 앱이 확정 Blueprint 순서대로 슬롯을 조립하므로 모델이 중간 또는 뒤쪽 태그를 빼더라도 섹션 소유권과 정확한 위치가 사라지지 않는다.
+- 선택되지 않은 언어 카드는 빈 값으로 유지하며, 한국어 전용 생성에서 보조 언어용 빈 슬롯 묶음을 만들지 않는다.
+
+### 슬롯별 가사 정책
+- `LYRIC_BODY_REQUIRED`: Verse, Chorus, Rap Section 등 실제 가창 본문이 필요한 슬롯.
+- `LYRIC_BODY_OPTIONAL`: Intro, Build-Up, Drop, Theme, Climax처럼 곡 설계에 따라 짧은 보컬 또는 무가사로 둘 수 있는 슬롯.
+- `LYRIC_BODY_FORBIDDEN`: Instrumental, Interlude, Break, Stop.
+- 이 정책은 구조와 안전을 위한 제한이며, 가사 소재·장면·문장·이미지·말투는 고정하지 않는다.
+
+### 누락 처리와 호출 상한
+- 태그·순서·번호는 앱이 Blueprint 계약으로 조립한다.
+- 필수 가창 슬롯의 실제 본문만 비어 있을 때 해당 슬롯 본문만 한 번 보완한다. 기존 가사 전체 재작성과 구조 재추첨은 하지 않는다.
+- 보완 응답은 `sectionId + sectionIndex + sectionName`이 모두 계약과 일치할 때만 제자리에 삽입한다.
+- 최종 공개 직전에 확정 계약과 실제 결과를 다시 비교한다. 선택된 필수 슬롯을 끝까지 완성하지 못한 경우 불완전한 곡을 정상 완료로 표시하지 않는다.
+- 88차의 곡당 Gemini 최대 3회 절대 상한과 자동 보정 호출 상한은 유지한다.
+
+### 안전 범위
+- 신규 콘텐츠 하드코딩은 추가하지 않는다. 이미 존재하던 Section Registry의 `가사 필수 / 선택 / 금지` 구조 정책과 88차 호출 상한만 재사용하며, 특정 장르의 소재·가사 문장·장면·대체 문구·고정 스토리는 넣지 않는다.
+- Firebase Auth, Firestore, Functions, Rules, 환경변수와 저장 문서 구조는 변경하지 않는다.
+
+## 90차 - 전개 섹션 최소 실질 밀도 안전선
+
+### 적용 범위
+- 89차에서 곡마다 확정된 동적 Section Blueprint를 그대로 사용한다.
+- 추천형·안정형·실험형·커스텀 전체에 동일한 고정 구조를 강제하지 않는다.
+- 이번 곡의 Blueprint에서 `development + expansive`로 확정된 Verse, Rap Section 및 같은 역할의 슬롯만 검사한다.
+
+### 최초 생성 예방
+- 최초 Gemini 지시문에서 전개 섹션은 장면·행동·관계·욕망·태도·결과 중 실제 진행을 담아야 한다고 명시한다.
+- `(음, 음...)`, `(우-)`, `(아...)` 같은 비어휘 괄호 애드리브는 퍼포먼스로는 유지하지만 전개 내용량으로 계산하지 않는다.
+- 한두 개의 긴 의미 문장 또는 여러 개의 짧은 리듬 문장 모두 허용한다. 생성 프롬프트에는 고정 줄 수를 요구하지 않는다.
+
+### 제한적 하드코딩 안전선
+- 극단적으로 비어 있는 전개 섹션만 찾기 위해 `가사 길이 모드 + 역할`에 따른 내부 최저선을 둔다.
+- 판정은 `고유한 의미 단위 수`와 `전체 어휘량`을 동시에 본다. 둘 중 하나라도 충분하면 통과하므로 일반 작사 형식을 고정하지 않는다.
+- Rap Section은 기존 섹션 역할 정의상 Verse보다 촘촘한 전개를 담당하므로 안전선만 소폭 높인다.
+- 사용자가 특정 섹션을 한 줄·짧게·미니멀하게 직접 요청한 경우 이 안전선보다 사용자 지시가 우선한다.
+
+### 보완 방식과 호출 제한
+- 최초 결과가 안전선 아래로 붕괴한 경우에만 자동 보정 허용 1회를 사용한다.
+- 누락 섹션은 전체 본문을 받고, 밀도 부족 섹션은 기존 줄을 보존한 채 추가할 새 줄만 받는다.
+- 전체 가사 재작성, 구조 재추첨, 기존 줄 교체, 다른 섹션 변경은 금지한다.
+- 곡당 실제 API 최대 3회와 자동 보정 최대 1회 제한은 유지한다.
+
+### 안전 범위
+- 특정 가사 문장, 장면, 소재, 말투, 장르별 이야기 내용을 하드코딩하지 않는다.
+- Firebase Auth, Firestore, Functions, Rules, 환경변수 및 저장 문서 구조는 변경하지 않는다.
+- 최종 1순위 금지어 교정은 품질 보정이 아니라 출력 안전 단계로 분리한다. 절대 3회 상한에는 포함되지만, 섹션 밀도 보정 1회가 이미 실행됐다는 이유만으로 차단하지 않는다.
+
+## 91차 — 동적 Blueprint 정확 슬롯 스키마와 보완 fallback
+
+### 최초 응답 구조 강제
+- 89차에서 곡별로 확정한 Recommended, Stable, Experimental, Custom Blueprint를 그대로 사용한다. 공통 팝 구조나 특정 섹션 이름을 새로 강제하지 않는다.
+- 선택된 각 언어 카드의 구조화 출력 배열은 현재 곡의 슬롯 수와 정확히 같은 `minItems/maxItems`를 가진다.
+- 배열의 각 위치는 `prefixItems`로 잠그며, `sectionId`, `sectionIndex`, `sectionName`을 해당 Blueprint 슬롯의 단일 enum 값으로 제한한다.
+- 필수 가창 슬롯은 구조화 출력 단계부터 `bodyLines` 최소 1개를 요구하고, 가사 금지 슬롯은 `bodyLines` 최대 0개로 제한한다.
+- 선택하지 않은 언어 카드는 정확히 빈 배열만 허용한다.
+
+### 보완 응답과 호출 예산
+- 누락 또는 극단적 밀도 부족 슬롯의 보완 응답도 대상 슬롯 수·순서·ID·이름을 같은 방식으로 정확히 잠근다.
+- 하나의 허용된 보완 작업이 429/5xx/503 같은 일시적 API 오류로 실패하면 대체 모델 1회를 같은 보완 작업의 fallback으로 허용한다.
+- fallback 물리 요청은 곡당 실제 요청 최대 3회 상한에 포함되지만, 별도의 두 번째 품질 보정으로 계산하지 않는다.
+- 따라서 정상 1회, 최초 호출 + 보완 1회, 또는 최초 호출 + 보완 실패 + fallback의 최대 3회 경로만 가능하며 무한 재호출은 불가능하다.
+
+### 하드코딩 범위
+- 이번 제한은 현재 곡에서 이미 확정된 슬롯의 수·순서·식별자·가사 허용 정책을 API 스키마로 고정하는 형식/안전 하드코딩이다.
+- 가사 문장, 소재, 장면, 말투, 장르별 이야기, 특정 섹션 조합은 고정하지 않는다.
+- Firebase Auth, Firestore, Functions, Rules, 환경변수와 저장 문서 구조는 변경하지 않는다.
+
+## 92차 — Gemini 지원 스키마 기반 동적 슬롯 복구
+
+### 91차 오류 수정
+- 실제 Gemini 런타임이 `responseSchema.prefixItems`를 지원하지 않아 최초 요청이 토큰 생성 전 `400 INVALID_ARGUMENT`로 실패하고 모든 곡이 간소화 긴급 생성으로 넘어가던 문제를 수정한다.
+- 최초 생성과 타깃 섹션 보완 스키마에서 `prefixItems`를 완전히 제거한다.
+
+### 지원되는 계약 방식
+- 선택된 언어 카드 배열은 현재 곡 Blueprint 슬롯 수와 같은 `minItems/maxItems`를 유지한다.
+- 배열 항목의 `sectionId`, `sectionIndex`, `sectionName`은 현재 Blueprint에 존재하는 값만 허용한다.
+- 정확한 ID·순번·이름 조합, Blueprint 순서, 가사 필수·선택·금지 정책은 앱의 기존 렌더러와 최종 계약 검사기가 다시 검증한다.
+- 타깃 보완도 현재 보완 대상 값만 허용하며, 중복·불일치 슬롯은 다른 섹션에 잘못 삽입하지 않는다.
+
+### 호출 영향
+- 정상 곡은 다시 최초 Gemini 호출 1회 경로를 사용한다.
+- 실제 필수 슬롯 누락 또는 극단적 밀도 부족이 확인될 때만 기존 허용 범위 안에서 보완 호출을 사용한다.
+- 곡당 실제 API 요청 최대 3회와 자동 보정 상한은 유지한다.
+
+### 안전 범위
+- 특정 가사, 장면, 소재, 장르별 이야기, 고정 섹션 조합을 추가하지 않는다.
+- Firebase Auth, Firestore, Functions, Rules, 환경변수 및 저장 문서 구조는 변경하지 않는다.
+
+## 93차 — 숫자 슬롯 인덱스 스키마 호환 및 개발 오류 비용 차단
+
+### 원인 수정
+- Gemini 구조화 출력은 `sectionIndex`의 숫자 enum을 문자열 enum처럼 검증해 `400 INVALID_ARGUMENT`을 반환했다.
+- 최초 생성과 타깃 섹션 보완 스키마에서 숫자 enum을 제거하고 `sectionIndex`는 필수 정수로만 수신한다.
+- 현재 Blueprint의 정확한 범위·순서·`sectionId + sectionIndex + sectionName` 결합은 기존 앱 코드 검증과 최종 계약 검사에서 계속 강제한다.
+- 문자열인 `sectionId`, `sectionName`의 현재 곡 허용값과 언어 카드별 정확 슬롯 수는 유지한다.
+
+### 불필요한 추가 호출 차단
+- `generation_config.response_schema`, `response_schema`, `fieldViolations`, `Invalid JSON payload` 등 스키마 설정 표식이 있는 `400 INVALID_ARGUMENT`은 개발 설정 오류로 분리한다.
+- 이 오류는 토큰 0으로 끝난 뒤 `간소화 긴급 생성`을 유료 호출하는 대신 즉시 실패로 표시한다.
+- 실제 429·5xx·모델 과부하 같은 일시 오류의 제한된 fallback과 실제 생성 결과의 누락 슬롯 보완은 기존 절대 호출 상한 안에서 유지한다.
+
+### 변경하지 않는 범위
+- 동적 추천·실험형·커스텀 Blueprint, 섹션 밀도 기준, 곡 길이 로직, 가사 내용 자유도는 변경하지 않는다.
+- 가사 문장·소재·장면·말투 하드코딩과 Firebase/Auth/Firestore/Functions/저장 구조 변경은 없다.
+
+## 94차 — 일시 오류 fallback 복구 및 스키마 위험 축소
+
+### 정확한 원인 수정
+- 93차의 누락 섹션 보완에서 실제 `503 UNAVAILABLE`이 발생해도 대체 모델 호출이 시작되지 않은 원인은, 재시도 판별기가 네이티브 `Error`를 `JSON.stringify()`하여 `{}`로 읽고 `message` 안의 503·UNAVAILABLE 정보를 잃었기 때문이다.
+- 오류 판별은 이제 `message`, `name`, 코드, 상태, 중첩 `error/cause/response/data/details`를 함께 읽는다.
+- 실제 429·5xx·UNAVAILABLE·DEADLINE_EXCEEDED만 기존 제한 안에서 대체 모델 1회를 허용한다.
+- `response_schema`가 포함된 400 개발 설정 오류는 재시도 가능 오류와 명시적으로 분리해 유료 fallback을 실행하지 않는다.
+
+### 구조화 출력 안정화
+- 최초 생성과 섹션 보완 스키마에서 동적 `sectionId/sectionName` enum을 제거한다. 과거 숫자 enum·`prefixItems`처럼 런타임 호환성 차이로 최초 요청 전체가 깨지는 위험을 줄인다.
+- API 스키마는 자료형과 현재 곡의 정확한 슬롯 개수만 담당한다.
+- 정확한 슬롯 ID·순번·이름 결합, 순서, 중복, 가사 필수·선택·금지 정책은 잠긴 Blueprint와 앱 코드가 최종 검증한다.
+- 최초 응답 전 내부 자체 점검 지시를 추가해 모든 필수 슬롯의 `bodyLines`가 실제 비어 있지 않은지 같은 응답 안에서 확인하도록 한다.
+- 보완 대상은 호출 전에 Blueprint 기준으로 중복 제거·재검증한다.
+
+### 호출 및 데이터 안전
+- 정상 결과는 1회, 실제 누락 시 보완 1회, 보완이 일시 오류일 때만 대체 모델 1회로 최대 3회다.
+- 새로운 가사 문장·장면·소재·장르별 스토리 하드코딩은 없다.
+- Firebase Auth, Firestore, Functions, Rules, 환경변수와 저장 문서 구조는 변경하지 않는다.
+
+## 95차 — Gemini Server Proxy / Security Cost Guard
+
+- Client prompt engine remains in `src/services/geminiService.ts`.
+- Actual Gemini HTTP request is routed through `src/services/geminiProxyClient.ts` to Firebase Function `generateGeminiContent`.
+- The browser never receives `googleGeminiApiKey`.
+- Server guard enforces 2 concurrent requests, 12 requests/minute, and 3 requests/session per user.
+- 429 quota errors stop immediately; only temporary 5xx/unavailable errors may use one fallback model.
+- App Check code is prepared and becomes mandatory only after Firebase Console registration and `ENFORCE_APP_CHECK=true`.

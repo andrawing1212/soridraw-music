@@ -1,6 +1,6 @@
 # SORIDRAW Security & Cost Plan
 
-## 99차까지 적용 상태
+## 101차까지 적용 상태
 
 ### 적용 완료
 
@@ -90,30 +90,43 @@ Gemini 토큰비 보호만을 목적으로 Free/Basic/Pro에 강한 일일 생�
 
 ### 100차: App Check 모니터링 및 검증
 
-- AI Studio와 Vercel 테스트앱에서 클라이언트 토큰 발급 상태 확인
+- Vercel 테스트앱과 정식 도메인은 reCAPTCHA Enterprise로 토큰 발급 상태 확인
+- AI Studio 프리뷰는 `ais-dev-...run.app` 호스트에서만 Firebase 공식 디버그 제공자를 사용
+- AI Studio에서 출력된 디버그 토큰은 Firebase App Check의 `디버그 토큰 관리`에 직접 등록
 - 서버 검증 결과가 두 환경 모두 `valid`인지 확인
-- 누락·오류 상태가 있으면 도메인과 reCAPTCHA Enterprise 설정을 먼저 수정
+- 강제 적용은 아직 하지 않음
 
-### 101차: Gemini App Check 강제 적용
+### 101차: 새 Gemini 승인 키 호환 — 적용 완료
+
+- 기존 Standard 키(`AIza...`)와 새 승인 키(`AQ....`)를 모두 입력·저장 가능하게 유지
+- 새 승인 키의 점(`.`) 문자를 허용하고, 미래 형식 변경에 대비해 특정 접두사만 강제하지 않음
+- Gemini REST 요청은 URL 쿼리 `?key=` 대신 공식 `x-goog-api-key` 헤더로 전달
+- 기존 `user_api_keys/{uid}` 문서와 `googleGeminiApiKey` 필드를 그대로 유지해 데이터 마이그레이션 불필요
+- API 키가 오류 메시지에 섞여도 Standard/승인 키 모두 서버 응답에서 마스킹
+- Google 측 승인 키 활성화 문제(`ACCESS_TOKEN_TYPE_UNSUPPORTED`)를 별도 오류 코드로 구분
+- Google 공식 안내에 따라 2026년 9월 전에 Standard 키를 승인 키로 교체하도록 UI 안내 추가
+
+### 102차: 콘솔 로그 경량화
+
+- ForceLogout/Auth/선택값/전체 프롬프트 반복 로그 제거
+- API 키·사용자 문서·프롬프트 원문이 콘솔에 남지 않도록 정리
+- 실제 오류와 보안 검증 상태 로그만 최소 유지
+
+### 103차: Gemini App Check 강제 적용
 
 - `generateGeminiContent`부터 `ENFORCE_APP_CHECK=true` 적용
 - 토큰 없는 직접 요청이 401로 차단되는지 확인
 - AI Studio와 테스트앱 생성 성공을 다시 확인한 뒤 키 관리 함수로 확대
 
-### 102차: 개인 키 저장 강화
+### 104차: 개인 키 저장 강화
 
 - Cloud KMS 키 리소스 생성 후 개인 API 키 envelope encryption 적용
 - 기존 평문 키를 읽어 암호화 문서로 안전하게 마이그레이션
 - 마이그레이션 완료 전 기존 필드 삭제 금지
 
-### 103차: Functions 런타임·SDK 정리
+### 105차 이후: 런타임·전체 보호·비용 관제
 
-- Node.js 22 이상 지원 런타임으로 안전 전환
-- Firebase Functions SDK 업데이트
-- 의존성 취약점 재검사 및 기존 Functions 회귀 테스트
-
-### 104차 이후: 전체 보호·비용 관제
-
+- Node.js 지원 런타임과 Firebase Functions SDK를 안전하게 업데이트
 - Suno 키 저장/삭제/생성/크레딧 확인에도 동일한 보호 적용
 - 동일 작업 ID 중복 요청 방지
 - Cloud Billing 예산 알림과 Functions/Firestore 사용량 대시보드 구성

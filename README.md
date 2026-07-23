@@ -29,6 +29,8 @@ npm run build
 - The key is stored in the server-only Firestore document `user_api_keys/{uid}`.
 - The browser never receives the key and never calls Gemini directly.
 - The authenticated Firebase Function `generateGeminiContent` reads the current key and calls Gemini server-side.
+- The proxy sends Gemini credentials with the official `x-goog-api-key` request header and accepts both legacy Standard keys and new authorization keys issued by AI Studio.
+- Google states that Standard keys will be rejected starting September 2026, so users should migrate to a new authorization key before then.
 - Do not configure `VITE_GEMINI_API_KEY`; private Gemini keys must never be included in a Vite client build.
 
 See `docs/SORIDRAW_SECURITY_COST_PLAN.md` for App Check activation, server limits, remaining console work, and the staged KMS migration plan.

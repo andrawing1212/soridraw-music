@@ -325,7 +325,20 @@ const extractGeminiErrorStatus = (error) => {
 };
 const sanitizeGeminiErrorMessage = (error, apiKey) => {
     const raw = error instanceof Error ? error.message : String(error || "Gemini request failed");
-    return raw.split(apiKey).join("[REDACTED]").replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]").slice(0, 600);
+    const withoutExactKey = apiKey ? raw.split(apiKey).join("[REDACTED]") : raw;
+    return withoutExactKey
+        .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
+        .replace(/AQ\.[0-9A-Za-z._~-]{16,}/g, "[REDACTED]")
+        .slice(0, 600);
+};
+const normalizeGeminiApiKey = (value) => String(value || "").trim();
+const isSupportedGeminiApiKeyFormat = (apiKey) => {
+    // Google does not guarantee one permanent prefix or length. Treat the key as an opaque
+    // printable token, reject whitespace/control characters, and let Gemini perform the
+    // authoritative validity check. This supports both AIza... and AQ.... formats.
+    return apiKey.length >= 20
+        && apiKey.length <= 512
+        && !/[\s\u0000-\u001F\u007F]/.test(apiKey);
 };
 const normalizeGeminiContent = (value) => {
     if (typeof value === "string") {
@@ -392,7 +405,7 @@ const sanitizeLegacyGeminiResponseSchema = (value) => {
     return sanitized;
 };
 const callGeminiGenerateContent = async (apiKey, requestPayload) => {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const model = String((requestPayload === null || requestPayload === void 0 ? void 0 : requestPayload.model) || "").trim();
     const config = (requestPayload === null || requestPayload === void 0 ? void 0 : requestPayload.config) && typeof requestPayload.config === "object"
         ? Object.assign({}, requestPayload.config) : {};
@@ -426,16 +439,23 @@ const callGeminiGenerateContent = async (apiKey, requestPayload) => {
         body.tools = tools;
     if (toolConfig)
         body.toolConfig = toolConfig;
-    const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const upstream = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+        },
         body: JSON.stringify(body),
     });
     const payload = await upstream.json().catch(() => null);
     if (!upstream.ok) {
         const error = new Error(String(((_a = payload === null || payload === void 0 ? void 0 : payload.error) === null || _a === void 0 ? void 0 : _a.message) || `Gemini request failed (${upstream.status})`));
+        const upstreamReason = Array.isArray((_b = payload === null || payload === void 0 ? void 0 : payload.error) === null || _b === void 0 ? void 0 : _b.details)
+            ? String(((_c = payload.error.details.find((detail) => typeof (detail === null || detail === void 0 ? void 0 : detail.reason) === "string")) === null || _c === void 0 ? void 0 : _c.reason) || "")
+            : "";
         error.status = upstream.status;
-        error.code = ((_b = payload === null || payload === void 0 ? void 0 : payload.error) === null || _b === void 0 ? void 0 : _b.status) || upstream.status;
+        error.code = ((_d = payload === null || payload === void 0 ? void 0 : payload.error) === null || _d === void 0 ? void 0 : _d.status) || upstream.status;
+        error.reason = upstreamReason;
         throw error;
     }
     return payload || {};
@@ -939,14 +959,17 @@ exports.saveGoogleGeminiApiKey = (0, https_1.onRequest)({ region: "us-central1" 
         return;
     if (!(await verifyAppCheckForRequest(req, res, "saveGoogleGeminiApiKey")))
         return;
-    const apiKey = (_a = req.body) === null || _a === void 0 ? void 0 : _a.apiKey;
-    if (!apiKey || typeof apiKey !== "string") {
+    const normalizedApiKey = normalizeGeminiApiKey((_a = req.body) === null || _a === void 0 ? void 0 : _a.apiKey);
+    if (!normalizedApiKey) {
         res.status(400).json({ error: "Google Gemini API Key is required", ok: false });
         return;
     }
-    const normalizedApiKey = apiKey.trim();
-    if (normalizedApiKey.length < 20 || normalizedApiKey.length > 200 || !/^[A-Za-z0-9_-]+$/.test(normalizedApiKey)) {
-        res.status(400).json({ error: "Google Gemini API Key 형식을 확인해주세요.", code: "INVALID_GEMINI_KEY_FORMAT", ok: false });
+    if (!isSupportedGeminiApiKeyFormat(normalizedApiKey)) {
+        res.status(400).json({
+            error: "Google AI Studio에서 발급한 Gemini API Key 형식을 확인해주세요.",
+            code: "INVALID_GEMINI_KEY_FORMAT",
+            ok: false,
+        });
         return;
     }
     const db = admin.firestore();
@@ -1095,11 +1118,17 @@ exports.generateGeminiContent = (0, https_1.onRequest)({
             return;
         }
         const status = extractGeminiErrorStatus(error);
-        res.status(status).json({
-            error: sanitizeGeminiErrorMessage(error, apiKey),
-            code: status === 429 ? "GEMINI_RATE_LIMITED" : status >= 500 ? "GEMINI_UPSTREAM_UNAVAILABLE" : "GEMINI_UPSTREAM_ERROR",
-            ok: false,
-        });
+        const upstreamReason = String((requestError === null || requestError === void 0 ? void 0 : requestError.reason) || "").trim();
+        const isAuthKeyActivationError = upstreamReason === "ACCESS_TOKEN_TYPE_UNSUPPORTED";
+        res.status(status).json(Object.assign(Object.assign({ error: isAuthKeyActivationError
+                ? "새 Gemini 승인 키가 Google API에서 아직 정상 인증되지 않았습니다. AI Studio의 키 연결 프로젝트와 Gemini API 활성화 상태를 확인한 뒤 다시 시도해주세요."
+                : sanitizeGeminiErrorMessage(error, apiKey), code: isAuthKeyActivationError
+                ? "GEMINI_AUTH_KEY_NOT_READY"
+                : status === 429
+                    ? "GEMINI_RATE_LIMITED"
+                    : status >= 500
+                        ? "GEMINI_UPSTREAM_UNAVAILABLE"
+                        : "GEMINI_UPSTREAM_ERROR" }, (upstreamReason ? { upstreamReason } : {})), { ok: false }));
     }
     finally {
         if (guardAcquired)

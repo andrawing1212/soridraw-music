@@ -368,7 +368,22 @@ const extractGeminiErrorStatus = (error: unknown): number => {
 
 const sanitizeGeminiErrorMessage = (error: unknown, apiKey: string): string => {
   const raw = error instanceof Error ? error.message : String(error || "Gemini request failed");
-  return raw.split(apiKey).join("[REDACTED]").replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]").slice(0, 600);
+  const withoutExactKey = apiKey ? raw.split(apiKey).join("[REDACTED]") : raw;
+  return withoutExactKey
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
+    .replace(/AQ\.[0-9A-Za-z._~-]{16,}/g, "[REDACTED]")
+    .slice(0, 600);
+};
+
+const normalizeGeminiApiKey = (value: unknown): string => String(value || "").trim();
+
+const isSupportedGeminiApiKeyFormat = (apiKey: string): boolean => {
+  // Google does not guarantee one permanent prefix or length. Treat the key as an opaque
+  // printable token, reject whitespace/control characters, and let Gemini perform the
+  // authoritative validity check. This supports both AIza... and AQ.... formats.
+  return apiKey.length >= 20
+    && apiKey.length <= 512
+    && !/[\s\u0000-\u001F\u007F]/.test(apiKey);
 };
 
 const normalizeGeminiContent = (value: any): any => {
@@ -469,18 +484,25 @@ const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): P
   if (toolConfig) body.toolConfig = toolConfig;
 
   const upstream = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
       body: JSON.stringify(body),
     },
   );
   const payload = await upstream.json().catch(() => null);
   if (!upstream.ok) {
     const error = new Error(String(payload?.error?.message || `Gemini request failed (${upstream.status})`));
+    const upstreamReason = Array.isArray(payload?.error?.details)
+      ? String(payload.error.details.find((detail: any) => typeof detail?.reason === "string")?.reason || "")
+      : "";
     (error as any).status = upstream.status;
     (error as any).code = payload?.error?.status || upstream.status;
+    (error as any).reason = upstreamReason;
     throw error;
   }
   return payload || {};
@@ -1085,14 +1107,17 @@ export const saveGoogleGeminiApiKey = onRequest(
     if (!uid) return;
     if (!(await verifyAppCheckForRequest(req, res, "saveGoogleGeminiApiKey"))) return;
 
-    const apiKey = req.body?.apiKey;
-    if (!apiKey || typeof apiKey !== "string") {
+    const normalizedApiKey = normalizeGeminiApiKey(req.body?.apiKey);
+    if (!normalizedApiKey) {
       res.status(400).json({ error: "Google Gemini API Key is required", ok: false });
       return;
     }
-    const normalizedApiKey = apiKey.trim();
-    if (normalizedApiKey.length < 20 || normalizedApiKey.length > 200 || !/^[A-Za-z0-9_-]+$/.test(normalizedApiKey)) {
-      res.status(400).json({ error: "Google Gemini API Key 형식을 확인해주세요.", code: "INVALID_GEMINI_KEY_FORMAT", ok: false });
+    if (!isSupportedGeminiApiKeyFormat(normalizedApiKey)) {
+      res.status(400).json({
+        error: "Google AI Studio에서 발급한 Gemini API Key 형식을 확인해주세요.",
+        code: "INVALID_GEMINI_KEY_FORMAT",
+        ok: false,
+      });
       return;
     }
 
@@ -1263,9 +1288,20 @@ export const generateGeminiContent = onRequest(
         return;
       }
       const status = extractGeminiErrorStatus(error);
+      const upstreamReason = String(requestError?.reason || "").trim();
+      const isAuthKeyActivationError = upstreamReason === "ACCESS_TOKEN_TYPE_UNSUPPORTED";
       res.status(status).json({
-        error: sanitizeGeminiErrorMessage(error, apiKey),
-        code: status === 429 ? "GEMINI_RATE_LIMITED" : status >= 500 ? "GEMINI_UPSTREAM_UNAVAILABLE" : "GEMINI_UPSTREAM_ERROR",
+        error: isAuthKeyActivationError
+          ? "새 Gemini 승인 키가 Google API에서 아직 정상 인증되지 않았습니다. AI Studio의 키 연결 프로젝트와 Gemini API 활성화 상태를 확인한 뒤 다시 시도해주세요."
+          : sanitizeGeminiErrorMessage(error, apiKey),
+        code: isAuthKeyActivationError
+          ? "GEMINI_AUTH_KEY_NOT_READY"
+          : status === 429
+            ? "GEMINI_RATE_LIMITED"
+            : status >= 500
+              ? "GEMINI_UPSTREAM_UNAVAILABLE"
+              : "GEMINI_UPSTREAM_ERROR",
+        ...(upstreamReason ? { upstreamReason } : {}),
         ok: false,
       });
     } finally {

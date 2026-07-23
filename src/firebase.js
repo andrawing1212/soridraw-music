@@ -16,7 +16,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 let appCheck = null;
-const appCheckSiteKey = String(import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || "").trim();
+const DEFAULT_APP_CHECK_SITE_KEY = "6Ld7iWAtAAAAAIJQFwoYsnfxl1elxKE1Qtcqcs8H";
+const appCheckSiteKey = String(
+  import.meta.env.VITE_FIREBASE_APP_CHECK_SITE_KEY || DEFAULT_APP_CHECK_SITE_KEY
+).trim();
 if (appCheckSiteKey && typeof window !== "undefined") {
   try {
     appCheck = initializeAppCheck(app, {
@@ -29,12 +32,17 @@ if (appCheckSiteKey && typeof window !== "undefined") {
 }
 
 export const getFirebaseAppCheckToken = async () => {
-  if (!appCheck) return "";
+  if (!appCheck) {
+    console.info("[Firebase App Check] token status: disabled");
+    return "";
+  }
   try {
     const result = await getAppCheckToken(appCheck, false);
-    return result?.token || "";
+    const token = result?.token || "";
+    console.info(`[Firebase App Check] token status: ${token ? "available" : "missing"}`);
+    return token;
   } catch (error) {
-    console.warn("[Firebase App Check] token unavailable:", error);
+    console.warn("[Firebase App Check] token status: unavailable", error);
     return "";
   }
 };

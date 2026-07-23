@@ -41,6 +41,9 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     }),
   });
 
+  const appCheckStatus = response.headers.get('X-SORIDRAW-App-Check-Status') || 'not-reported';
+  console.info(`[SORIDRAW App Check] server status: ${appCheckStatus}`);
+
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {
     throw normalizeProxyError(response.status, payload);

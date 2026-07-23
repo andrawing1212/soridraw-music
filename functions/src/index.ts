@@ -136,6 +136,8 @@ export const backfillMissingAuthUsers = onCall(
   }
 );
 
+const APP_CHECK_STATUS_HEADER = "X-SORIDRAW-App-Check-Status";
+
 const ALLOWED_ORIGINS = [
   "https://soridraw-music-git-preview-andrawing1212.vercel.app",
   "https://soridraw-music.vercel.app",
@@ -152,12 +154,16 @@ const handleCors = (req: any, res: any) => {
   const origin = String(req.headers.origin || "").trim();
   const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
   const isAiStudioPreview = /^https:\/\/[a-z0-9-]+\.usercontent\.goog$/i.test(origin);
-  const allowed = Boolean(origin && (ALLOWED_ORIGINS.includes(origin) || isAiStudioPreview));
+  const isAiStudioRunPreview = /^https:\/\/ais-dev-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$/i.test(origin);
+  const allowed = Boolean(
+    origin && (ALLOWED_ORIGINS.includes(origin) || isAiStudioPreview || isAiStudioRunPreview)
+  );
 
   res.set("Vary", "Origin");
   res.set("Cache-Control", "no-store");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Firebase-AppCheck");
+  res.set("Access-Control-Expose-Headers", APP_CHECK_STATUS_HEADER);
 
   if (allowed) {
     res.set("Access-Control-Allow-Origin", origin);
@@ -192,11 +198,51 @@ const verifyAuth = async (req: any, res: any): Promise<string | null> => {
   }
 };
 
-const verifyAppCheckForRequest = async (req: any, res: any): Promise<boolean> => {
+type AppCheckMonitorStatus = "valid" | "missing" | "invalid";
+
+const classifyAppCheckOrigin = (originValue: unknown): string => {
+  const origin = String(originValue || "").trim().toLowerCase();
+  if (!origin) return "none";
+  if (origin === "https://soridraw-music.vercel.app") return "test-app";
+  if (origin === "https://soridraw.web.app" || origin === "https://soridraw.firebaseapp.com") return "official-app";
+  if (/^https:\/\/ais-dev-[a-z0-9-]+(?:\.[a-z0-9-]+)*\.run\.app$/i.test(origin)) return "ai-studio";
+  if (/^https:\/\/[a-z0-9-]+\.usercontent\.goog$/i.test(origin)) return "ai-studio-usercontent";
+  if (origin.startsWith("http://localhost:")) return "localhost";
+  return "other-allowed";
+};
+
+const reportAppCheckStatus = (
+  req: any,
+  res: any,
+  operation: string,
+  status: AppCheckMonitorStatus,
+  enforce: boolean,
+  accepted: boolean,
+): void => {
+  const headerValue = status === "valid"
+    ? "valid"
+    : `${status}-${accepted ? "accepted" : "blocked"}`;
+  res.set(APP_CHECK_STATUS_HEADER, headerValue);
+  console.info("[App Check monitor]", JSON.stringify({
+    operation,
+    status,
+    enforcement: enforce ? "enabled" : "disabled",
+    accepted,
+    originType: classifyAppCheckOrigin(req.headers.origin),
+  }));
+};
+
+const verifyAppCheckForRequest = async (
+  req: any,
+  res: any,
+  operation: string,
+): Promise<boolean> => {
   const token = String(req.headers["x-firebase-appcheck"] || "").trim();
   const enforce = process.env.ENFORCE_APP_CHECK === "true";
   if (!token) {
-    if (enforce) {
+    const accepted = !enforce;
+    reportAppCheckStatus(req, res, operation, "missing", enforce, accepted);
+    if (!accepted) {
       res.status(401).json({ error: "App Check token is required", code: "APP_CHECK_REQUIRED", ok: false });
       return false;
     }
@@ -204,12 +250,12 @@ const verifyAppCheckForRequest = async (req: any, res: any): Promise<boolean> =>
   }
   try {
     await admin.appCheck().verifyToken(token);
+    reportAppCheckStatus(req, res, operation, "valid", enforce, true);
     return true;
-  } catch (error) {
-    if (!enforce) {
-      console.warn("[App Check monitor] invalid token accepted while enforcement is disabled:", error instanceof Error ? error.message : String(error));
-      return true;
-    }
+  } catch {
+    const accepted = !enforce;
+    reportAppCheckStatus(req, res, operation, "invalid", enforce, accepted);
+    if (accepted) return true;
     res.status(401).json({ error: "Invalid App Check token", code: "APP_CHECK_INVALID", ok: false });
     return false;
   }
@@ -1037,7 +1083,7 @@ export const saveGoogleGeminiApiKey = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
-    if (!(await verifyAppCheckForRequest(req, res))) return;
+    if (!(await verifyAppCheckForRequest(req, res, "saveGoogleGeminiApiKey"))) return;
 
     const apiKey = req.body?.apiKey;
     if (!apiKey || typeof apiKey !== "string") {
@@ -1077,7 +1123,7 @@ export const deleteGoogleGeminiApiKey = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
-    if (!(await verifyAppCheckForRequest(req, res))) return;
+    if (!(await verifyAppCheckForRequest(req, res, "deleteGoogleGeminiApiKey"))) return;
 
     const db = admin.firestore();
 
@@ -1105,7 +1151,7 @@ export const getGoogleGeminiApiKeyStatus = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
-    if (!(await verifyAppCheckForRequest(req, res))) return;
+    if (!(await verifyAppCheckForRequest(req, res, "getGoogleGeminiApiKeyStatus"))) return;
 
     const db = admin.firestore();
     const docSnap = await db.collection("user_api_keys").doc(uid).get();
@@ -1154,7 +1200,7 @@ export const generateGeminiContent = onRequest(
 
     const uid = await verifyAuth(req, res);
     if (!uid) return;
-    if (!(await verifyAppCheckForRequest(req, res))) return;
+    if (!(await verifyAppCheckForRequest(req, res, "generateGeminiContent"))) return;
 
     const serializedLength = Buffer.byteLength(JSON.stringify(req.body || {}), "utf8");
     if (serializedLength > GEMINI_MAX_REQUEST_BYTES) {

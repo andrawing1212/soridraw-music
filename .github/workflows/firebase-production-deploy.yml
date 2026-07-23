@@ -3,9 +3,7 @@ name: Firebase Production Deploy
 on:
   push:
     branches:
-      - main
-    paths:
-      - .deploy/production-trigger.txt
+      - production
   workflow_dispatch:
 
 concurrency:
@@ -22,7 +20,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Checkout latest main
+      - name: Checkout approved production commit
         uses: actions/checkout@v4
 
       - name: Set up Node.js 20

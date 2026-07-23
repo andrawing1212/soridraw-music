@@ -9,6 +9,7 @@
     ]
   },
   "hosting": {
+    "target": "production",
     "public": "dist",
     "rewrites": [
       {

@@ -325,14 +325,18 @@ function getAuditedAI(
   }) as GoogleGenAI;
 }
 
+// Availability-first order for song generation. Gemini 3.5 Flash remains available as the
+// immediate fallback, but the preview Flash model is tried first while 3.5 Flash is returning
+// repeated 503/high-demand responses. This keeps one user action from waiting through the full
+// Cloud Function timeout before the already-proven fallback model is attempted.
 const GEMINI_TEXT_MODEL_CHAIN = [
-  "gemini-3.5-flash",
   "gemini-3-flash-preview",
+  "gemini-3.5-flash",
   "gemini-3.1-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
 ];
-const GEMINI_TEMPORARY_PREFERRED_MODEL_MS = 2 * 60 * 1000;
+const GEMINI_TEMPORARY_PREFERRED_MODEL_MS = 15 * 60 * 1000;
 let geminiTemporaryPreferredModel = '';
 let geminiTemporaryPreferredUntil = 0;
 
@@ -461,7 +465,12 @@ function isGeminiRetryableError(error: any): boolean {
     status === "DEADLINE_EXCEEDED" ||
     text.includes("overloaded") ||
     text.includes("unavailable") ||
-    text.includes("temporarily")
+    text.includes("temporarily") ||
+    text.includes("failed to fetch") ||
+    text.includes("networkerror") ||
+    text.includes("network request failed") ||
+    text.includes("gateway timeout") ||
+    text.includes("cors")
   );
 }
 

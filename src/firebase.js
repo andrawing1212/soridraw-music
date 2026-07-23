@@ -115,7 +115,16 @@ const installCloudFunctionsAppCheckFetchGuard = () => {
   };
 };
 
-installCloudFunctionsAppCheckFetchGuard();
+// AI Studio preview and local/unknown hosts must not replace the global fetch
+// implementation. Some preview sandboxes expose fetch as a protected property,
+// and assigning to it can stop the Firebase module before React mounts.
+if (isVercelTestApp || isFirebaseHostedApp) {
+  try {
+    installCloudFunctionsAppCheckFetchGuard();
+  } catch (error) {
+    console.warn("[SORIDRAW App Check] Functions fetch guard skipped:", error);
+  }
+}
 
 export const auth = getAuth(app);
 

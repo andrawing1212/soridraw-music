@@ -38,7 +38,7 @@ let appCheck = null;
 // app and whose website-key domain list includes the Vercel test host and the
 // Firebase production hosts. AI Studio keeps the registered debug-provider
 // path; deployed Vercel/Firebase hosts use real reCAPTCHA Enterprise attestation.
-const APP_CHECK_SITE_KEY = "6Ld7iWAtAAAAAIJQFwoYsnfxl1elxKE1Qtcqcs8H";
+const APP_CHECK_SITE_KEY = "6Ld7iWAtAAAAAIJQFw0ySnfxl1elxKE1Qtcqcs8H";
 const shouldInitializeAppCheck = isAiStudioPreview || isVercelTestApp || isFirebaseHostedApp;
 if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefined") {
   try {

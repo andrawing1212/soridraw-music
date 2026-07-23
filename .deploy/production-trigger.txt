@@ -3,5 +3,6 @@ SORIDRAW production deployment trigger.
 This file is updated only after the user explicitly requests an official Firebase production deployment.
 Updating this file triggers the GitHub Actions workflow that builds the latest main branch and deploys Firebase Hosting only.
 
-Last production deployment request: 2026-07-24
+Last production deployment request: 2026-07-24 03:37 KST
 Baseline: SORIDRAW 110
+Request ID: production-20260724-0337

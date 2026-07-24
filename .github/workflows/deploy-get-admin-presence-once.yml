@@ -37,7 +37,11 @@ jobs:
           set -euo pipefail
           AUTH_MODE=""
 
-          if [ -n "${BACKEND_SERVICE_ACCOUNT}" ]; then
+          if [ -n "${FIREBASE_TOKEN_SECRET}" ]; then
+            echo "::add-mask::${FIREBASE_TOKEN_SECRET}"
+            echo "FIREBASE_TOKEN_RUNTIME=${FIREBASE_TOKEN_SECRET}" >> "${GITHUB_ENV}"
+            AUTH_MODE="firebase_token"
+          elif [ -n "${BACKEND_SERVICE_ACCOUNT}" ]; then
             printf '%s' "${BACKEND_SERVICE_ACCOUNT}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
             echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
             AUTH_MODE="backend_service_account"
@@ -53,10 +57,6 @@ jobs:
             printf '%s' "${GOOGLE_CREDENTIALS_SECRET}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
             echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
             AUTH_MODE="google_credentials"
-          elif [ -n "${FIREBASE_TOKEN_SECRET}" ]; then
-            echo "::add-mask::${FIREBASE_TOKEN_SECRET}"
-            echo "FIREBASE_TOKEN_RUNTIME=${FIREBASE_TOKEN_SECRET}" >> "${GITHUB_ENV}"
-            AUTH_MODE="firebase_token"
           elif [ -n "${LEGACY_HOSTING_SERVICE_ACCOUNT}" ]; then
             printf '%s' "${LEGACY_HOSTING_SERVICE_ACCOUNT}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
             echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"

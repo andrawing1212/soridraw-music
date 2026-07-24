@@ -3884,6 +3884,9 @@ function App() {
   const [emailVerificationMessage, setEmailVerificationMessage] = useState<string | null>(null);
   const [isEmailVerificationActionPending, setIsEmailVerificationActionPending] = useState(false);
   const [emailVerificationRevision, setEmailVerificationRevision] = useState(0);
+  const emailVerificationHistoryPushedRef = useRef(false);
+  const suppressEmailVerificationPopRef = useRef(false);
+  const emailVerificationAutoSendRef = useRef('');
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
   const [isForcedLogoutModalOpen, setIsForcedLogoutModalOpen] = useState(false);
   const [forcedLogoutCountdown, setForcedLogoutCountdown] = useState(10);
@@ -5415,6 +5418,7 @@ function App() {
         return;
       }
       await currentUser.getIdToken(true);
+      releaseEmailVerificationHistory();
       setEmailVerificationMessage(null);
       setEmailVerificationRevision((revision) => revision + 1);
       setEmailVerificationGate('idle');
@@ -5427,7 +5431,6 @@ function App() {
   };
 
   const handleEmailVerificationLogout = async () => {
-    if (isEmailVerificationActionPending) return;
     setIsEmailVerificationActionPending(true);
     try {
       await signOut(auth);
@@ -5436,6 +5439,24 @@ function App() {
     } finally {
       setIsEmailVerificationActionPending(false);
     }
+  };
+
+  const releaseEmailVerificationHistory = () => {
+    if (!emailVerificationHistoryPushedRef.current) return;
+    suppressEmailVerificationPopRef.current = true;
+    emailVerificationHistoryPushedRef.current = false;
+    window.history.back();
+    window.setTimeout(() => {
+      suppressEmailVerificationPopRef.current = false;
+    }, 500);
+  };
+
+  const requestCloseEmailVerificationGate = () => {
+    if (emailVerificationHistoryPushedRef.current) {
+      window.history.back();
+      return;
+    }
+    void handleEmailVerificationLogout();
   };
 
   const handleEmailAuth = async (event?: React.FormEvent) => {
@@ -5485,17 +5506,9 @@ function App() {
           setAuthMessage('같은 이메일이 이미 다른 로그인 방식으로 가입되어 있습니다. 기존 로그인 방식으로 로그인해주세요.');
           return;
         }
-        const credential = await createUserWithEmailAndPassword(auth, email, password);
+        await createUserWithEmailAndPassword(auth, email, password);
         setEmailVerificationGate('required');
-        setEmailVerificationMessage(null);
-        auth.languageCode = 'ko';
-        try {
-          await sendEmailVerification(credential.user, EMAIL_VERIFICATION_ACTION_SETTINGS);
-          setEmailVerificationMessage('가입 확인 메일을 보냈습니다. 메일의 인증 링크를 누른 뒤 아래에서 인증 완료를 확인해주세요.');
-        } catch (verificationError: any) {
-          console.error('Initial email verification send error:', verificationError);
-          setEmailVerificationMessage(`계정은 만들어졌지만 인증메일을 보내지 못했습니다. 아래 버튼으로 다시 보내주세요. (${verificationError?.code || 'unknown'})`);
-        }
+        setEmailVerificationMessage('가입이 완료되었습니다. 인증메일을 자동으로 보내고 있습니다.');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -6580,6 +6593,69 @@ const toggleCycleVariantSelection = (
     setEmailVerificationGate('required');
     setEmailVerificationMessage((current) => current || '이메일 인증이 필요합니다. 인증메일을 받은 뒤 완료 여부를 확인해주세요.');
   }, [emailVerificationRevision, isUserRoleReady, user, userRole]);
+
+  useEffect(() => {
+    if (!user || emailVerificationGate !== 'required') return;
+
+    const signInMarker = user.metadata.lastSignInTime || user.metadata.creationTime || 'current';
+    const autoSendKey = `${user.uid}:${signInMarker}`;
+    if (emailVerificationAutoSendRef.current === autoSendKey) return;
+
+    const storageKey = `soridraw-email-verification-auto-sent:${autoSendKey}`;
+    try {
+      if (sessionStorage.getItem(storageKey) === '1') {
+        emailVerificationAutoSendRef.current = autoSendKey;
+        return;
+      }
+      sessionStorage.setItem(storageKey, '1');
+    } catch {
+      // Session storage can be unavailable in restricted browser modes.
+    }
+
+    emailVerificationAutoSendRef.current = autoSendKey;
+    void sendVerificationEmailToCurrentUser(
+      '인증메일을 자동으로 보냈습니다. 메일의 인증 링크를 누른 뒤 인증 완료를 확인해주세요.'
+    );
+  }, [emailVerificationGate, user]);
+
+  useEffect(() => {
+    if (!user || emailVerificationGate === 'idle') return;
+
+    const modalHistoryKey = '__soridrawEmailVerificationGate';
+    const currentState = window.history.state || {};
+    if (!currentState[modalHistoryKey]) {
+      window.history.pushState(
+        { ...currentState, [modalHistoryKey]: true },
+        '',
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      );
+    }
+    emailVerificationHistoryPushedRef.current = true;
+
+    const handlePopState = () => {
+      if (suppressEmailVerificationPopRef.current) {
+        suppressEmailVerificationPopRef.current = false;
+        emailVerificationHistoryPushedRef.current = false;
+        return;
+      }
+      if (!emailVerificationHistoryPushedRef.current) return;
+      emailVerificationHistoryPushedRef.current = false;
+      void handleEmailVerificationLogout();
+    };
+
+    const handleVerificationEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      requestCloseEmailVerificationGate();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('keydown', handleVerificationEscape, true);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('keydown', handleVerificationEscape, true);
+    };
+  }, [emailVerificationGate, user]);
 
   const isAdminMenuUser = useMemo(() => {
     if (isAdminUser) return true;
@@ -12520,8 +12596,17 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <motion.div
               initial={{ opacity: 0, y: 16, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              className="w-full max-w-[430px] rounded-2xl border border-white/12 bg-[#151313] p-6 shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
+              className="relative w-full max-w-[430px] rounded-2xl border border-white/12 bg-[#151313] p-6 shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
             >
+              <button
+                type="button"
+                onClick={requestCloseEmailVerificationGate}
+                aria-label="이메일 인증 창 닫기"
+                className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition-all hover:bg-white/[0.07] hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
               {emailVerificationGate === 'checking' ? (
                 <div className="flex min-h-40 flex-col items-center justify-center text-center">
                   <Loader2 className="h-7 w-7 animate-spin text-[#F2C587]" />
@@ -12564,7 +12649,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                     <button
                       type="button"
-                      onClick={handleEmailVerificationLogout}
+                      onClick={requestCloseEmailVerificationGate}
                       disabled={isEmailVerificationActionPending}
                       className="h-10 w-full rounded-xl text-xs font-black text-white/45 transition-all hover:bg-white/[0.05] hover:text-white/70 disabled:opacity-50"
                     >

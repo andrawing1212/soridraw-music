@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   deploy-functions:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY SORIDRAW FUNCTIONS ONLY 20260724'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY SORIDRAW FUNCTIONS ONLY RETRY 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -46,12 +46,28 @@ jobs:
         run: npm install --global firebase-tools@13.34.0
 
       - name: Deploy changed Functions only
+        id: deploy
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set +e
           firebase deploy \
             --only functions:syncAuthUserToFirestore,functions:backfillMissingAuthUsers,functions:getAdminAuthDirectory,functions:adminForceLogoutUser,functions:adminResetEmailVerification,functions:adminDeleteUserAccount \
             --project soridraw-app-866a5 \
-            --non-interactive
+            --non-interactive 2>&1 | tee /tmp/firebase-functions-deploy.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            {
+              echo '❌ FIREBASE_FUNCTIONS_DEPLOY_DETAILS'
+              echo
+              echo '```text'
+              tail -n 120 /tmp/firebase-functions-deploy.log
+              echo '```'
+            } > /tmp/firebase-functions-deploy-comment.md
+            gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/firebase-functions-deploy-comment.md
+          fi
+          exit "$code"
 
       - name: Report success
         if: success()

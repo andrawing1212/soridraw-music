@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   configure-auth-template:
-    if: github.event.issue.title == 'CONFIGURE SORIDRAW AUTH EMAIL TEMPLATE 20260724'
+    if: github.event.issue.title == 'CONFIGURE SORIDRAW AUTH EMAIL TEMPLATE DIAG 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -73,3 +73,10 @@ jobs:
           jq -e '.notification.sendEmail.verifyEmailTemplate.senderDisplayName == "SORIDRAW" and .notification.sendEmail.verifyEmailTemplate.subject == "SORIDRAW 이메일 인증을 완료해주세요" and .notification.sendEmail.verifyEmailTemplate.bodyFormat == "HTML" and .notification.sendEmail.callbackUri == "https://soridraw-music.vercel.app/auth/action"' /tmp/verify.json >/dev/null
 
           gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "✅ AUTH_TEMPLATE_CONFIG_SUCCESS sender_display=SORIDRAW format=HTML action_url=https://soridraw-music.vercel.app/auth/action"
+
+      - name: Report workflow failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "❌ AUTH_TEMPLATE_WORKFLOW_FAILED run_id=${{ github.run_id }}"

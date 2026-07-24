@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -83,7 +83,47 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
       - name: Deploy getAdminPresence only
-        run: npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-deploy.log
 
       - name: Verify deployed Functions list
-        run: npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive | grep -i getAdminPresence
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-verify.log
+          grep -i getAdminPresence /tmp/get-admin-presence-verify.log
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "status=${JOB_STATUS}"
+            echo "run_id=${RUN_ID}"
+            echo "commit=${COMMIT_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "function=getAdminPresence"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if [ -f /tmp/get-admin-presence-deploy.log ]; then
+              echo
+              echo "--- deploy log tail ---"
+              tail -n 60 /tmp/get-admin-presence-deploy.log
+            fi
+            if [ -f /tmp/get-admin-presence-verify.log ]; then
+              echo
+              echo "--- verify log tail ---"
+              tail -n 30 /tmp/get-admin-presence-verify.log
+            fi
+          } > .deploy/functions-get-admin-presence-result.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/functions-get-admin-presence-result.txt
+          git commit -m "chore: record getAdminPresence deployment result" || true
+          git push

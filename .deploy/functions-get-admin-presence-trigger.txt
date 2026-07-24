@@ -1,4 +1,4 @@
 Deploy getAdminPresence schemaVersion 2 from SORIDRAW 29th ZIP.
 Requested: 2026-07-24
 Target project: soridraw-app-866a5
-Attempt: 2 (self-reporting workflow)
+Attempt: 3 (robust patch workflow)

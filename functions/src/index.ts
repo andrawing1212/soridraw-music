@@ -46,7 +46,7 @@ const assertManageableTarget = async (
 };
 
 
-export const syncAuthUserToFirestore = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
+export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().onCreate(async (user: admin.auth.UserRecord) => {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(user.uid);
   const snap = await userRef.get();

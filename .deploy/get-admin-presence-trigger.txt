@@ -1,3 +1,4 @@
-Deploy getAdminPresence from current main.
-Requested: 2026-07-24T23:40:02Z
+Deploy getAdminPresence schemaVersion 2 retry after Cloud Build confirmation.
+Requested: 2026-07-24T23:47:21Z
 Target project: soridraw-app-866a5
+Attempt: 5

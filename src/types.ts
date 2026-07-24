@@ -590,6 +590,14 @@ export interface AppUserInfo {
   isOnline?: boolean;
   lastSeenAt?: number;
   forceLogoutAt?: number;
+  providerIds?: string[];
+  emailVerified?: boolean;
+  authDisabled?: boolean;
+  authDeleted?: boolean;
+  authDeletedAt?: number;
+  authDeletedEmail?: string | null;
+  authLastSignInAt?: number;
+  emailVerificationResetAt?: number;
   
   // Subscription info
   planName?: string;

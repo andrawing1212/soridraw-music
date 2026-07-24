@@ -4,6 +4,47 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
+const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
+  (user.providerData || [])
+    .map((provider) => provider.providerId)
+    .filter((providerId): providerId is string => Boolean(providerId));
+
+const requireAdminCaller = async (request: { auth?: { uid: string } | null }) => {
+  const requesterUid = request.auth?.uid;
+  if (!requesterUid) {
+    throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
+  }
+
+  const db = admin.firestore();
+  const requesterSnap = await db.collection("users").doc(requesterUid).get();
+  if (requesterSnap.data()?.role !== "admin") {
+    throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+  }
+
+  return { db, requesterUid };
+};
+
+const assertManageableTarget = async (
+  db: admin.firestore.Firestore,
+  requesterUid: string,
+  targetUid: string
+) => {
+  if (!targetUid) {
+    throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
+  }
+  if (targetUid === requesterUid) {
+    throw new HttpsError("failed-precondition", "관리자 본인 계정에는 이 작업을 실행할 수 없습니다.");
+  }
+
+  const targetRef = db.collection("users").doc(targetUid);
+  const targetSnap = await targetRef.get();
+  if (targetSnap.data()?.role === "admin") {
+    throw new HttpsError("failed-precondition", "관리자 계정은 보호 대상이라 이 작업을 실행할 수 없습니다.");
+  }
+
+  return { targetRef, targetData: targetSnap.data() || {} };
+};
+
 
 export const syncAuthUserToFirestore = functions.auth.user().onCreate(async (user: admin.auth.UserRecord) => {
   const db = admin.firestore();
@@ -15,9 +56,7 @@ export const syncAuthUserToFirestore = functions.auth.user().onCreate(async (use
     : Date.now();
   const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
 
-  const providerIds = (user.providerData || [])
-    .map((provider: any) => provider.providerId)
-    .filter(Boolean);
+  const providerIds = getAuthProviderIds(user);
 
   const sessionData = {
     uid: user.uid,
@@ -25,6 +64,8 @@ export const syncAuthUserToFirestore = functions.auth.user().onCreate(async (use
     displayName: user.displayName || "",
     photoURL: user.photoURL || "",
     providerIds,
+    emailVerified: user.emailVerified,
+    authDisabled: user.disabled,
     lastLoginAt: safeCreatedAt,
     lastSeenAt: safeCreatedAt,
     isOnline: false,
@@ -89,9 +130,7 @@ export const backfillMissingAuthUsers = onCall(
             ? new Date(authUser.metadata.creationTime).getTime()
             : Date.now();
           const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
-          const providerIds = (authUser.providerData || [])
-            .map((provider: any) => provider.providerId)
-            .filter(Boolean);
+          const providerIds = getAuthProviderIds(authUser);
 
           await userRef.set({
             uid: authUser.uid,
@@ -99,6 +138,8 @@ export const backfillMissingAuthUsers = onCall(
             displayName: authUser.displayName || "",
             photoURL: authUser.photoURL || "",
             providerIds,
+            emailVerified: authUser.emailVerified,
+            authDisabled: authUser.disabled,
             createdAt: safeCreatedAt,
             lastLoginAt: safeCreatedAt,
             lastSeenAt: safeCreatedAt,
@@ -132,6 +173,180 @@ export const backfillMissingAuthUsers = onCall(
       missingUserDocs,
       createdUserDocs,
       failedUsers,
+    };
+  }
+);
+
+
+export const getAdminAuthDirectory = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    await requireAdminCaller(request);
+
+    const requestedMax = Number(request.data?.maxResults || 1000);
+    const maxResults = Math.min(1000, Math.max(1, Number.isFinite(requestedMax) ? Math.floor(requestedMax) : 1000));
+    const pageTokenRaw = String(request.data?.pageToken || "").trim();
+    const page = await admin.auth().listUsers(maxResults, pageTokenRaw || undefined);
+
+    return {
+      users: page.users.map((authUser) => ({
+        uid: authUser.uid,
+        email: authUser.email || "",
+        displayName: authUser.displayName || "",
+        photoURL: authUser.photoURL || "",
+        providerIds: getAuthProviderIds(authUser),
+        emailVerified: authUser.emailVerified,
+        disabled: authUser.disabled,
+        creationTime: authUser.metadata.creationTime || null,
+        lastSignInTime: authUser.metadata.lastSignInTime || null,
+      })),
+      nextPageToken: page.pageToken || null,
+    };
+  }
+);
+
+export const adminForceLogoutUser = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireAdminCaller(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
+    const now = Date.now();
+
+    try {
+      await admin.auth().revokeRefreshTokens(targetUid);
+    } catch (error: any) {
+      if (error?.code !== "auth/user-not-found") throw error;
+    }
+
+    await targetRef.set({
+      forceLogoutAt: now,
+      lastLogoutAt: now,
+      lastSeenAt: now,
+      isOnline: false,
+      lastAdminAuthAction: "force-logout",
+      lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastAdminAuthActionBy: requesterUid,
+    }, { merge: true });
+
+    return { ok: true, targetUid, forceLogoutAt: now };
+  }
+);
+
+export const adminResetEmailVerification = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireAdminCaller(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
+    const authUser = await admin.auth().getUser(targetUid);
+    const providerIds = getAuthProviderIds(authUser);
+
+    if (!providerIds.includes("password") || providerIds.some((providerId) => providerId !== "password")) {
+      throw new HttpsError("failed-precondition", "순수 이메일·비밀번호 가입 회원만 이메일 인증을 초기화할 수 있습니다.");
+    }
+
+    const now = Date.now();
+    await admin.auth().updateUser(targetUid, { emailVerified: false });
+    await admin.auth().revokeRefreshTokens(targetUid);
+    await targetRef.set({
+      providerIds,
+      emailVerified: false,
+      authDisabled: authUser.disabled,
+      emailVerificationResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      emailVerificationResetAtMs: now,
+      emailVerificationResetBy: requesterUid,
+      forceLogoutAt: now,
+      lastLogoutAt: now,
+      lastSeenAt: now,
+      isOnline: false,
+      lastAdminAuthAction: "reset-email-verification",
+      lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastAdminAuthActionBy: requesterUid,
+    }, { merge: true });
+
+    return {
+      ok: true,
+      targetUid,
+      email: authUser.email || "",
+      emailVerified: false,
+      forceLogoutAt: now,
+    };
+  }
+);
+
+export const adminDeleteUserAccount = onCall(
+  { region: "us-central1", timeoutSeconds: 60 },
+  async (request) => {
+    const { db, requesterUid } = await requireAdminCaller(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    const confirmEmail = String(request.data?.confirmEmail || "").trim().toLowerCase();
+    const { targetRef, targetData } = await assertManageableTarget(db, requesterUid, targetUid);
+
+    let authUser: admin.auth.UserRecord | null = null;
+    try {
+      authUser = await admin.auth().getUser(targetUid);
+    } catch (error: any) {
+      if (error?.code !== "auth/user-not-found") throw error;
+    }
+
+    const targetEmail = String(authUser?.email || targetData.email || "").trim();
+    if (targetEmail && confirmEmail !== targetEmail.toLowerCase()) {
+      throw new HttpsError("invalid-argument", "회원 이메일 확인값이 일치하지 않습니다.");
+    }
+
+    const providerIds = authUser ? getAuthProviderIds(authUser) : (
+      Array.isArray(targetData.providerIds) ? targetData.providerIds.filter((value: unknown) => typeof value === "string") : []
+    );
+    const now = Date.now();
+
+    await targetRef.set({
+      accountStatus: "banned",
+      forceLogoutAt: now,
+      lastLogoutAt: now,
+      lastSeenAt: now,
+      isOnline: false,
+      authDeletionPendingAt: admin.firestore.FieldValue.serverTimestamp(),
+      authDeletionPendingBy: requesterUid,
+    }, { merge: true });
+
+    if (authUser) {
+      await admin.auth().revokeRefreshTokens(targetUid);
+      await admin.auth().deleteUser(targetUid);
+    }
+
+    const cleanupBatch = db.batch();
+    cleanupBatch.delete(db.collection("user_api_keys").doc(targetUid));
+    cleanupBatch.delete(db.collection("gemini_request_guards").doc(targetUid));
+    cleanupBatch.set(targetRef, {
+      accountStatus: "banned",
+      authDeleted: true,
+      authDeletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      authDeletedAtMs: now,
+      authDeletedBy: requesterUid,
+      authDeletedEmail: targetEmail,
+      authDeletedProviderIds: providerIds,
+      authDisabled: true,
+      emailVerified: false,
+      isOnline: false,
+      forceLogoutAt: now,
+      lastLogoutAt: now,
+      adminDeletionContentPolicy: "retain-user-content",
+      lastAdminAuthAction: "delete-auth-account",
+      lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
+      lastAdminAuthActionBy: requesterUid,
+      authDeletionPendingAt: admin.firestore.FieldValue.delete(),
+      authDeletionPendingBy: admin.firestore.FieldValue.delete(),
+    }, { merge: true });
+    await cleanupBatch.commit();
+
+    return {
+      ok: true,
+      targetUid,
+      email: targetEmail,
+      providerIds,
+      authDeleted: true,
+      userContentRetained: true,
     };
   }
 );

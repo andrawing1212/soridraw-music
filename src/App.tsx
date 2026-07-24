@@ -504,6 +504,7 @@ import {
   query as firestoreQuery
 } from 'firebase/firestore';
 import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
+import { EMAIL_VERIFICATION_ACTION_SETTINGS } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
@@ -540,9 +541,10 @@ const isPureInstrumentalBgmGenreSelection = (ids: Array<string | null | undefine
   const cleanIds = ids.filter((id): id is string => Boolean(id));
   return cleanIds.length > 0 && cleanIds.every(isInstrumentalBgmGenreId);
 };
-import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
+import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserSessionPersistence, browserLocalPersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification, fetchSignInMethodsForEmail, type User } from 'firebase/auth';
 
 type AuthMode = 'login' | 'signup' | 'reset';
+type EmailVerificationGate = 'idle' | 'checking' | 'required';
 
 enum OperationType {
   CREATE = 'create',
@@ -3047,7 +3049,30 @@ function FeatureUnavailablePage({ label, fallbackPath }: { label: string; fallba
   );
 }
 
+const EmailVerificationActionPageLazy = lazy(() => import('./components/EmailVerificationActionPage'));
+
 export default function AppWrapper() {
+  const location = useLocation();
+
+  if (location.pathname === '/auth/action') {
+    return (
+      <ErrorBoundary>
+        <Suspense
+          fallback={(
+            <main className="flex min-h-screen items-center justify-center bg-[#100e0f] px-4 text-white">
+              <div className="text-center">
+                <p className="text-[11px] font-black tracking-[0.28em] text-[#F2C587]">SORIDRAW</p>
+                <p className="mt-4 text-sm font-bold text-white/60">이메일 인증 화면을 불러오고 있습니다.</p>
+              </div>
+            </main>
+          )}
+        >
+          <EmailVerificationActionPageLazy />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <GlobalPlayerProvider>
@@ -3057,7 +3082,7 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, rememberLogin, setRememberLogin, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; rememberLogin: boolean; setRememberLogin: React.Dispatch<React.SetStateAction<boolean>>; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -3270,17 +3295,6 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 />
               </a>
             </>
-          )}
-          {location.pathname === '/' && !user && (
-            <label className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.035] px-2.5 py-2 text-[10px] font-bold text-white/50">
-              <input
-                type="checkbox"
-                checked={rememberLogin}
-                onChange={(e) => setRememberLogin(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border border-white/20 accent-sky-500"
-              />
-              로그인 유지
-            </label>
           )}
           {user ? (
             <>
@@ -3865,6 +3879,11 @@ function App() {
   const [cachedUserRoleHint, setCachedUserRoleHint] = useState<CachedUserRole | null>(readCachedUserRole);
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isUserRoleReady, setIsUserRoleReady] = useState(false);
+  const [emailVerificationGate, setEmailVerificationGate] = useState<EmailVerificationGate>('idle');
+  const [emailVerificationMessage, setEmailVerificationMessage] = useState<string | null>(null);
+  const [isEmailVerificationActionPending, setIsEmailVerificationActionPending] = useState(false);
+  const [emailVerificationRevision, setEmailVerificationRevision] = useState(0);
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
   const [isForcedLogoutModalOpen, setIsForcedLogoutModalOpen] = useState(false);
   const [forcedLogoutCountdown, setForcedLogoutCountdown] = useState(10);
@@ -5337,7 +5356,7 @@ function App() {
     return `인증 처리 중 오류가 발생했습니다. (${code})`;
   };
 
-  const prepareEmailAuthAttempt = async () => {
+  const prepareAuthAttempt = async () => {
     localStorage.setItem('rememberLogin', String(rememberLogin));
     await setPersistence(auth, rememberLogin ? browserLocalPersistence : browserSessionPersistence);
   };
@@ -5352,6 +5371,71 @@ function App() {
     if (isLoggingIn) return;
     setIsAuthModalOpen(false);
     setAuthMessage(null);
+  };
+
+  const sendVerificationEmailToCurrentUser = async (message = '인증메일을 보냈습니다. 메일함의 링크를 눌러주세요.') => {
+    const currentUser = auth.currentUser;
+    if (!currentUser || !currentUser.email) {
+      setEmailVerificationMessage('인증할 이메일 계정을 찾을 수 없습니다. 다시 로그인해주세요.');
+      return false;
+    }
+
+    setIsEmailVerificationActionPending(true);
+    try {
+      auth.languageCode = 'ko';
+      await sendEmailVerification(currentUser, EMAIL_VERIFICATION_ACTION_SETTINGS);
+      setEmailVerificationMessage(message);
+      return true;
+    } catch (error: any) {
+      console.error('Email verification send error:', error);
+      const code = error?.code || 'unknown';
+      setEmailVerificationMessage(
+        code === 'auth/too-many-requests'
+          ? '인증메일 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
+          : `인증메일을 보내지 못했습니다. 다시 시도해주세요. (${code})`
+      );
+      return false;
+    } finally {
+      setIsEmailVerificationActionPending(false);
+    }
+  };
+
+  const handleCheckEmailVerification = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setEmailVerificationMessage('로그인 정보가 없습니다. 다시 로그인해주세요.');
+      return;
+    }
+
+    setIsEmailVerificationActionPending(true);
+    try {
+      await currentUser.reload();
+      if (!currentUser.emailVerified) {
+        setEmailVerificationMessage('아직 이메일 인증이 확인되지 않았습니다. 메일의 인증 링크를 먼저 눌러주세요.');
+        return;
+      }
+      await currentUser.getIdToken(true);
+      setEmailVerificationMessage(null);
+      setEmailVerificationRevision((revision) => revision + 1);
+      setEmailVerificationGate('idle');
+    } catch (error: any) {
+      console.error('Email verification check error:', error);
+      setEmailVerificationMessage(`인증 상태를 확인하지 못했습니다. 다시 시도해주세요. (${error?.code || 'unknown'})`);
+    } finally {
+      setIsEmailVerificationActionPending(false);
+    }
+  };
+
+  const handleEmailVerificationLogout = async () => {
+    if (isEmailVerificationActionPending) return;
+    setIsEmailVerificationActionPending(true);
+    try {
+      await signOut(auth);
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+    } finally {
+      setIsEmailVerificationActionPending(false);
+    }
   };
 
   const handleEmailAuth = async (event?: React.FormEvent) => {
@@ -5393,7 +5477,7 @@ function App() {
 
     setIsLoggingIn(true);
     try {
-      await prepareEmailAuthAttempt();
+      await prepareAuthAttempt();
 
       if (authMode === 'signup') {
         const methods = await fetchSignInMethodsForEmail(auth, email);
@@ -5401,7 +5485,17 @@ function App() {
           setAuthMessage('같은 이메일이 이미 다른 로그인 방식으로 가입되어 있습니다. 기존 로그인 방식으로 로그인해주세요.');
           return;
         }
-        await createUserWithEmailAndPassword(auth, email, password);
+        const credential = await createUserWithEmailAndPassword(auth, email, password);
+        setEmailVerificationGate('required');
+        setEmailVerificationMessage(null);
+        auth.languageCode = 'ko';
+        try {
+          await sendEmailVerification(credential.user, EMAIL_VERIFICATION_ACTION_SETTINGS);
+          setEmailVerificationMessage('가입 확인 메일을 보냈습니다. 메일의 인증 링크를 누른 뒤 아래에서 인증 완료를 확인해주세요.');
+        } catch (verificationError: any) {
+          console.error('Initial email verification send error:', verificationError);
+          setEmailVerificationMessage(`계정은 만들어졌지만 인증메일을 보내지 못했습니다. 아래 버튼으로 다시 보내주세요. (${verificationError?.code || 'unknown'})`);
+        }
       } else {
         await signInWithEmailAndPassword(auth, email, password);
       }
@@ -5476,7 +5570,7 @@ function App() {
     };
 
     try {
-      localStorage.setItem('rememberLogin', String(rememberLogin));
+      await prepareAuthAttempt();
 
       // Environment check
       const hostname = window.location.hostname;
@@ -6458,6 +6552,35 @@ const toggleCycleVariantSelection = (
   }, [unlockGlobalSearchScrollLock]);
   
   const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
+  useEffect(() => {
+    if (!user) {
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+      return;
+    }
+
+    const usesPasswordLogin = user.providerData.some((provider) => provider.providerId === 'password');
+    if (!usesPasswordLogin || user.emailVerified) {
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+      return;
+    }
+
+    if (!isUserRoleReady) {
+      setEmailVerificationGate('checking');
+      return;
+    }
+
+    if (userRole === 'admin') {
+      setEmailVerificationGate('idle');
+      setEmailVerificationMessage(null);
+      return;
+    }
+
+    setEmailVerificationGate('required');
+    setEmailVerificationMessage((current) => current || '이메일 인증이 필요합니다. 인증메일을 받은 뒤 완료 여부를 확인해주세요.');
+  }, [emailVerificationRevision, isUserRoleReady, user, userRole]);
+
   const isAdminMenuUser = useMemo(() => {
     if (isAdminUser) return true;
     if (cachedUserRoleHint?.role !== 'admin') return false;
@@ -6613,6 +6736,7 @@ const toggleCycleVariantSelection = (
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setIsAuthReady(true);
+      setIsUserRoleReady(!currentUser);
       if (!currentUser) {
         setUserLyricClicheGuard(null);
         setIsUserLyricClicheGuardReady(true);
@@ -6666,6 +6790,7 @@ const toggleCycleVariantSelection = (
             {
               const verifiedRole = (data.role || 'free') as UserRole;
               setUserRole(verifiedRole);
+              setIsUserRoleReady(true);
               const roleCache = { uid: currentUser.uid, role: verifiedRole };
               setCachedUserRoleHint(roleCache);
               writeCachedUserRole(currentUser.uid, verifiedRole);
@@ -6683,6 +6808,7 @@ const toggleCycleVariantSelection = (
           } catch (error) {
             console.error('[Auth] Initial force logout check failed:', error);
           } finally {
+            setIsUserRoleReady(true);
             hasCompletedForceLogoutReentryCheckRef.current = true;
           }
         };
@@ -6696,6 +6822,7 @@ const toggleCycleVariantSelection = (
             {
               const verifiedRole = (data.role || 'free') as UserRole;
               setUserRole(verifiedRole);
+              setIsUserRoleReady(true);
               const roleCache = { uid: currentUser.uid, role: verifiedRole };
               setCachedUserRoleHint(roleCache);
               writeCachedUserRole(currentUser.uid, verifiedRole);
@@ -6726,6 +6853,7 @@ const toggleCycleVariantSelection = (
           } else {
             // Initial signup fallback
             setUserRole('free');
+            setIsUserRoleReady(true);
             const roleCache = { uid: currentUser.uid, role: 'free' as UserRole };
             setCachedUserRoleHint(roleCache);
             writeCachedUserRole(currentUser.uid, 'free');
@@ -6735,6 +6863,7 @@ const toggleCycleVariantSelection = (
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
+          setIsUserRoleReady(true);
           setUserLyricClicheGuard(null);
           setIsUserLyricClicheGuardReady(true);
         });
@@ -12370,6 +12499,70 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+      {user && emailVerificationGate !== 'idle' && (
+        <Portal>
+          <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/78 px-4 py-8 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="w-full max-w-[430px] rounded-2xl border border-white/12 bg-[#151313] p-6 shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
+            >
+              {emailVerificationGate === 'checking' ? (
+                <div className="flex min-h-40 flex-col items-center justify-center text-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-[#F2C587]" />
+                  <p className="mt-4 text-sm font-black text-white">계정 확인 중</p>
+                  <p className="mt-1 text-xs font-bold text-white/50">이메일 인증 상태와 관리자 예외 여부를 확인하고 있습니다.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F2C587]/20 bg-[#F2C587]/10">
+                    <Shield className="h-6 w-6 text-[#F2C587]" />
+                  </div>
+                  <h2 className="mt-4 text-xl font-black text-white">이메일 인증이 필요합니다</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-white/58">
+                    <span className="text-white">{user.email}</span> 주소로 받은 인증메일의 링크를 한 번만 눌러주세요. 인증 전에는 앱을 사용할 수 없습니다.
+                  </p>
+
+                  {emailVerificationMessage && (
+                    <div className="mt-4 rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2.5 text-xs font-bold leading-5 text-[#FFE08A]">
+                      {emailVerificationMessage}
+                    </div>
+                  )}
+
+                  <div className="mt-5 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCheckEmailVerification}
+                      disabled={isEmailVerificationActionPending}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
+                    >
+                      {isEmailVerificationActionPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                      인증 완료 확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sendVerificationEmailToCurrentUser()}
+                      disabled={isEmailVerificationActionPending}
+                      className="h-11 w-full rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-black text-white transition-all hover:bg-white/[0.1] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      인증메일 다시 보내기
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEmailVerificationLogout}
+                      disabled={isEmailVerificationActionPending}
+                      className="h-10 w-full rounded-xl text-xs font-black text-white/45 transition-all hover:bg-white/[0.05] hover:text-white/70 disabled:opacity-50"
+                    >
+                      다른 계정으로 로그인
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        </Portal>
+      )}
+
       {/* Account Status Banner */}
       {user && userStatus !== 'active' && !isAdminUser && (
         <Portal>
@@ -12653,6 +12846,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     Google로 계속하기
                   </button>
 
+                  {authMode !== 'reset' && (
+                    <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/12 px-3 py-2.5 text-xs font-bold text-white/60 transition-all hover:border-white/15 hover:text-white/75">
+                      <input
+                        type="checkbox"
+                        checked={rememberLogin}
+                        onChange={(event) => setRememberLogin(event.target.checked)}
+                        disabled={isLoggingIn}
+                        className="h-4 w-4 rounded border border-white/20 accent-sky-500 disabled:opacity-60"
+                      />
+                      로그인 유지
+                    </label>
+                  )}
+
                   <div className="my-4 flex items-center gap-3">
                     <div className="h-px flex-1 bg-white/10" />
                     <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/32">or</span>
@@ -12748,7 +12954,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} rememberLogin={rememberLogin} setRememberLogin={setRememberLogin} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
 
       <Routes>
         <Route path="/" element={

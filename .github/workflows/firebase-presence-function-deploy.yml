@@ -1,0 +1,65 @@
+name: Firebase Presence Function Deploy
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: firebase-presence-function-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  deploy-presence-function:
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY FIREBASE PRESENCE FUNCTION 20260724'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@13.34.0
+
+      - name: Deploy getAdminPresence only
+        run: |
+          firebase deploy \
+            --only functions:getAdminPresence \
+            --project soridraw-app-866a5 \
+            --non-interactive
+
+      - name: Report result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "${{ github.repository }}" --body "PRESENCE_FUNCTION_DEPLOY_RESULT status=${JOB_STATUS} run_id=${RUN_ID}"

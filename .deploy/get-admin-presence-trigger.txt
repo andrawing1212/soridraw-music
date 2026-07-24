@@ -1,4 +1,4 @@
-Deploy getAdminPresence schemaVersion 2 retry after Cloud Build confirmation.
-Requested: 2026-07-24T23:47:21Z
+Deploy getAdminPresence schemaVersion 2 after required IAM roles confirmed.
+Requested: 2026-07-24T23:56:45Z
 Target project: soridraw-app-866a5
-Attempt: 5
+Attempt: 6

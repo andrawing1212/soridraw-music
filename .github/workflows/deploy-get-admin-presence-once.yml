@@ -24,6 +24,51 @@ jobs:
       - name: Checkout main
         uses: actions/checkout@v4
 
+      - name: Select Firebase deployment credential
+        shell: bash
+        env:
+          BACKEND_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW_APP_866A5 }}
+          BACKEND_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW_APP_866A5_JSON }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SA_KEY }}
+          GOOGLE_CREDENTIALS_SECRET: ${{ secrets.GOOGLE_CREDENTIALS }}
+          FIREBASE_TOKEN_SECRET: ${{ secrets.FIREBASE_TOKEN }}
+          LEGACY_HOSTING_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+        run: |
+          set -euo pipefail
+          AUTH_MODE=""
+
+          if [ -n "${BACKEND_SERVICE_ACCOUNT}" ]; then
+            printf '%s' "${BACKEND_SERVICE_ACCOUNT}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
+            AUTH_MODE="backend_service_account"
+          elif [ -n "${BACKEND_SERVICE_ACCOUNT_JSON}" ]; then
+            printf '%s' "${BACKEND_SERVICE_ACCOUNT_JSON}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
+            AUTH_MODE="backend_service_account_json"
+          elif [ -n "${GCP_SERVICE_ACCOUNT_KEY}" ]; then
+            printf '%s' "${GCP_SERVICE_ACCOUNT_KEY}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
+            AUTH_MODE="gcp_sa_key"
+          elif [ -n "${GOOGLE_CREDENTIALS_SECRET}" ]; then
+            printf '%s' "${GOOGLE_CREDENTIALS_SECRET}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
+            AUTH_MODE="google_credentials"
+          elif [ -n "${FIREBASE_TOKEN_SECRET}" ]; then
+            echo "::add-mask::${FIREBASE_TOKEN_SECRET}"
+            echo "FIREBASE_TOKEN_RUNTIME=${FIREBASE_TOKEN_SECRET}" >> "${GITHUB_ENV}"
+            AUTH_MODE="firebase_token"
+          elif [ -n "${LEGACY_HOSTING_SERVICE_ACCOUNT}" ]; then
+            printf '%s' "${LEGACY_HOSTING_SERVICE_ACCOUNT}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
+            echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
+            AUTH_MODE="legacy_hosting_service_account"
+          else
+            echo "No Firebase deployment credential secret is configured." >&2
+            exit 1
+          fi
+
+          echo "AUTH_MODE=${AUTH_MODE}" >> "${GITHUB_ENV}"
+          echo "Selected authentication mode: ${AUTH_MODE}"
+
       - name: Set up Node.js 20
         uses: actions/setup-node@v4
         with:
@@ -95,22 +140,25 @@ jobs:
       - name: Build Functions
         run: npm --prefix functions run build
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-
       - name: Deploy getAdminPresence only
         shell: bash
         run: |
           set -o pipefail
-          npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-deploy.log
+          if [ "${AUTH_MODE}" = "firebase_token" ]; then
+            npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive --token "${FIREBASE_TOKEN_RUNTIME}" 2>&1 | tee /tmp/get-admin-presence-deploy.log
+          else
+            npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-deploy.log
+          fi
 
       - name: Verify deployed Functions list
         shell: bash
         run: |
           set -o pipefail
-          npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-verify.log
+          if [ "${AUTH_MODE}" = "firebase_token" ]; then
+            npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive --token "${FIREBASE_TOKEN_RUNTIME}" 2>&1 | tee /tmp/get-admin-presence-verify.log
+          else
+            npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-verify.log
+          fi
           grep -i getAdminPresence /tmp/get-admin-presence-verify.log
 
       - name: Record deployment result
@@ -127,11 +175,12 @@ jobs:
             echo "commit=${COMMIT_SHA}"
             echo "target_project=soridraw-app-866a5"
             echo "function=getAdminPresence"
+            echo "auth_mode=${AUTH_MODE:-not_selected}"
             echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             if [ -f /tmp/get-admin-presence-deploy.log ]; then
               echo
               echo "--- deploy log tail ---"
-              tail -n 60 /tmp/get-admin-presence-deploy.log
+              tail -n 80 /tmp/get-admin-presence-deploy.log
             fi
             if [ -f /tmp/get-admin-presence-verify.log ]; then
               echo

@@ -11092,6 +11092,13 @@ ${normalizePromptForDisplay(result.prompt)}
     }
   };
 
+  const handleRecentSongTitleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void saveRecentSongEdit();
+  };
+
   const getStudioSongFingerprint = (song: SongResult | null | undefined): string => {
     if (!song) return '';
     const applied = (song.appliedKeywords || {}) as any;
@@ -13960,6 +13967,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.koreanTitle}
                           onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                          onKeyDown={handleRecentSongTitleInputKeyDown}
                           className="w-full rounded-xl border border-[#e3a13a]/35 bg-black/20 px-3 py-2 text-center text-[18px] font-extrabold text-[#f4bc63] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                           placeholder="한국어 제목"
                         />
@@ -13968,6 +13976,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.secondaryTitle}
                           onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                          onKeyDown={handleRecentSongTitleInputKeyDown}
                           className="w-full rounded-xl border border-[#e3a13a]/20 bg-black/15 px-3 py-1.5 text-center text-[15px] font-bold text-[#e3a13a] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                           placeholder="외국어 제목"
                         />
@@ -14152,6 +14161,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <input
                                   value={recentSongEditDraft.koreanTitle}
                                   onChange={(event) => updateRecentSongTitleDraft('koreanTitle', event.target.value)}
+                                  onKeyDown={handleRecentSongTitleInputKeyDown}
                                   className="w-full rounded-2xl border border-[#e3a13a]/35 bg-black/20 px-4 py-3 text-center text-xl md:text-2xl font-extrabold text-[#f4bc63] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder="한국어 제목"
                                 />
@@ -14160,6 +14170,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 <input
                                   value={recentSongEditDraft.secondaryTitle}
                                   onChange={(event) => updateRecentSongTitleDraft('secondaryTitle', event.target.value)}
+                                  onKeyDown={handleRecentSongTitleInputKeyDown}
                                   className="w-full rounded-2xl border border-[#e3a13a]/20 bg-black/15 px-4 py-2.5 text-center text-base md:text-lg font-bold text-[#e3a13a] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
                                   placeholder="외국어 제목"
                                 />
@@ -15299,6 +15310,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <input
                           value={recentSongEditDraft.koreanTitle}
                           onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, koreanTitle: event.target.value } : prev)}
+                          onKeyDown={handleRecentSongTitleInputKeyDown}
                           placeholder="한글 제목"
                           className={cn(
                             "w-full rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15",
@@ -15323,6 +15335,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <input
                             value={recentSongEditDraft.secondaryTitle}
                             onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, secondaryTitle: event.target.value } : prev)}
+                            onKeyDown={handleRecentSongTitleInputKeyDown}
                             placeholder="보조 제목"
                             className="min-w-0 flex-1 rounded-2xl border border-[#cd8c31]/20 bg-[var(--input-bg)] px-4 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[#cd8c31]/50 focus:ring-2 focus:ring-[#cd8c31]/15"
                           />

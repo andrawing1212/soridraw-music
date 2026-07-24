@@ -110,9 +110,9 @@ const EMPTY_CONFIRM: ConfirmState = {
   onConfirm: () => undefined,
 };
 
-const getDayDiff = (timestamp?: number) => {
+const getDayDiff = (timestamp?: number, now = Date.now()) => {
   if (!timestamp) return 0;
-  return (Date.now() - timestamp) / 86_400_000;
+  return (now - timestamp) / 86_400_000;
 };
 
 const isForceLoggedOut = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>) => {
@@ -123,7 +123,8 @@ const isForceLoggedOut = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt'
 };
 
 const getPresenceState = (
-  user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>
+  user: Pick<AppUserInfo, 'isOnline' | 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>,
+  now = Date.now()
 ): PresenceState => {
   if (isForceLoggedOut(user)) return 'forced';
   const loginTime = user.lastLoginAt || 0;
@@ -135,7 +136,7 @@ const getPresenceState = (
   if (logoutTime > 0 && logoutTime >= latestActivity) return 'loggedOut';
   if (!latestActivity) return 'loggedOut';
 
-  const diff = Date.now() - latestActivity;
+  const diff = now - latestActivity;
   if (diff < AWAY_MS) return 'loggedIn';
   if (diff < IDLE_MS) return 'away';
   if (diff < LOGGED_OUT_MS) return 'idle';
@@ -153,14 +154,26 @@ const getProviderKind = (user: AppUserInfo): ProviderKind => {
   return 'unknown';
 };
 
+const getRecentActivityAt = (
+  user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>
+) => {
+  const latest = Math.max(
+    user.lastSeenAt || 0,
+    user.lastLoginAt || 0,
+    user.lastLogoutAt || 0,
+    user.forceLogoutAt || 0
+  );
+  return latest > 0 ? latest : undefined;
+};
+
 const formatTimestamp = (timestamp?: number) => {
   if (!timestamp) return '기록 없음';
   return new Date(timestamp).toLocaleString('ko-KR');
 };
 
-const formatLastSeen = (timestamp?: number) => {
+const formatLastSeen = (timestamp?: number, now = Date.now()) => {
   if (!timestamp) return '기록 없음';
-  const diff = Date.now() - timestamp;
+  const diff = Math.max(0, now - timestamp);
   if (diff < 60_000) return '방금 전';
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`;
@@ -261,11 +274,11 @@ const VerificationBadge = ({ user }: { user: AppUserInfo }) => {
   return <span className="inline-flex items-center gap-1 rounded-full border border-zinc-400/20 bg-zinc-400/10 px-2.5 py-1 text-[10px] font-black text-zinc-400"><AlertCircle className="w-3 h-3" />확인 필요</span>;
 };
 
-const PresenceBadge = ({ user }: { user: AppUserInfo }) => {
+const PresenceBadge = ({ user, now = Date.now() }: { user: AppUserInfo; now?: number }) => {
   if (user.authDeleted || user.authDeletedAt) {
     return <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />탈퇴됨</span>;
   }
-  const presence = getPresenceState(user);
+  const presence = getPresenceState(user, now);
   const config: Record<PresenceState, { label: string; className: string }> = {
     loggedIn: { label: '활동중', className: 'text-emerald-400' },
     away: { label: '자리비움', className: 'text-amber-300' },
@@ -307,11 +320,17 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [actionResult, setActionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [confirmModal, setConfirmModal] = useState<ConfirmState>(EMPTY_CONFIRM);
   const [confirmText, setConfirmText] = useState('');
+  const [presenceClock, setPresenceClock] = useState(() => Date.now());
   const detailHistoryRef = useRef(false);
 
   useEffect(() => {
     if (isAdminProp !== undefined) setIsAdmin(isAdminProp);
   }, [isAdminProp]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setPresenceClock(Date.now()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     if (!auth.currentUser || isAdminProp !== undefined) return;
@@ -426,11 +445,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       if (provider === 'google') google += 1;
       if (provider === 'email') email += 1;
       if ((provider === 'email' || provider === 'linked') && user.emailVerified === false) unverified += 1;
-      const presence = getPresenceState(user);
+      const presence = getPresenceState(user, presenceClock);
       if (presence === 'loggedIn' || presence === 'away' || presence === 'idle') online += 1;
     });
     return { total: usersWithAuth.length, online, google, email, unverified, deleted };
-  }, [usersWithAuth]);
+  }, [presenceClock, usersWithAuth]);
 
   const filteredUsers = useMemo(() => usersWithAuth.filter((user) => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -444,7 +463,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || user.accountStatus === statusFilter;
     const matchesPayment = paymentFilter === 'all' || user.paymentStatus === paymentFilter;
-    const presence = getPresenceState(user);
+    const presence = getPresenceState(user, presenceClock);
     const matchesPresence = presenceFilter === 'all'
       || (presenceFilter === 'loggedIn' && (presence === 'loggedIn' || presence === 'away' || presence === 'idle'))
       || (presenceFilter === 'loggedOut' && (presence === 'loggedOut' || presence === 'forced'));
@@ -453,12 +472,12 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       || (verificationFilter === 'verified' && provider !== 'deleted' && (provider === 'google' || user.emailVerified === true))
       || (verificationFilter === 'unverified' && provider !== 'deleted' && (provider === 'email' || provider === 'linked') && user.emailVerified === false);
     return matchesSearch && matchesProvider && matchesRole && matchesStatus && matchesPayment && matchesPresence && matchesVerification;
-  }), [paymentFilter, presenceFilter, providerFilter, roleFilter, searchTerm, statusFilter, usersWithAuth, verificationFilter]);
+  }), [paymentFilter, presenceClock, presenceFilter, providerFilter, roleFilter, searchTerm, statusFilter, usersWithAuth, verificationFilter]);
 
   const getBadgeInfo = (user: AppUserInfo) => {
     if (user.authDeleted || user.authDeletedAt) return { label: '탈퇴됨', className: 'text-red-300', dot: 'bg-red-400' };
     if (isForceLoggedOut(user)) return { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' };
-    const inactiveDays = getDayDiff(user.lastLoginAt);
+    const inactiveDays = getDayDiff(user.lastLoginAt, presenceClock);
     if (inactiveDays >= DORMANT_DAYS) return { label: '휴면회원', className: 'text-red-300', dot: 'bg-red-400' };
     if (inactiveDays >= LONG_INACTIVE_DAYS) return { label: '장기 미접속', className: 'text-orange-300', dot: 'bg-orange-400' };
     if (user.accountStatus === 'banned') return { label: '정지', className: 'text-red-300', dot: 'bg-red-400' };
@@ -777,7 +796,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
           <div className="rounded-[28px] border border-white/10 bg-white/[0.025] py-20 text-center text-sm font-bold text-[var(--text-secondary)]">조건에 맞는 회원이 없습니다.</div>
         ) : filteredUsers.map((user) => {
           const badge = getBadgeInfo(user);
-          const recentTime = user.authLastSignInAt || user.lastSeenAt || user.lastLoginAt;
+          const recentTime = getRecentActivityAt(user);
           return (
             <button
               key={user.uid}
@@ -799,10 +818,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     <span className={cn('inline-flex items-center gap-1 font-bold', badge.className)}><span className={cn('w-1.5 h-1.5 rounded-full', badge.dot)} />{badge.label}</span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={user} /><VerificationBadge user={user} /></div>
+                  <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 md:hidden">
+                    <PresenceBadge user={user} now={presenceClock} />
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--text-secondary)]"><Clock className="w-3 h-3" />{formatLastSeen(recentTime, presenceClock)}</span>
+                  </div>
                 </div>
                 <div className="hidden md:flex w-36 flex-col items-end gap-1 shrink-0">
-                  <PresenceBadge user={user} />
-                  <span className="text-[10px] font-bold text-[var(--text-secondary)]">{formatLastSeen(recentTime)}</span>
+                  <PresenceBadge user={user} now={presenceClock} />
+                  <span className="text-[10px] font-bold text-[var(--text-secondary)]">{formatLastSeen(recentTime, presenceClock)}</span>
                 </div>
                 <ChevronRight className="w-5 h-5 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-brand-orange" />
               </div>
@@ -857,7 +880,13 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Activity className="w-4 h-4 text-brand-orange" />활동 정보</h3>
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <div className="rounded-2xl bg-black/25 p-3"><span className="text-[10px] font-bold text-zinc-500">가입일</span><p className="mt-1 text-xs font-black text-zinc-200">{formatTimestamp(selectedUser.createdAt)}</p></div>
-                      <div className="rounded-2xl bg-black/25 p-3"><span className="text-[10px] font-bold text-zinc-500">최근 활동</span><p className="mt-1 text-xs font-black text-zinc-200">{formatLastSeen(selectedUser.lastSeenAt || selectedUser.lastLoginAt)}</p></div>
+                      <div className="rounded-2xl bg-black/25 p-3">
+                        <span className="text-[10px] font-bold text-zinc-500">최근 활동</span>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <PresenceBadge user={selectedUser} now={presenceClock} />
+                          <span className="text-xs font-black text-zinc-200">{formatLastSeen(getRecentActivityAt(selectedUser), presenceClock)}</span>
+                        </div>
+                      </div>
                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Music className="w-3 h-3" />생성곡</span><p className="mt-1 text-lg font-black text-white">{selectedUser.songGeneratedCount}</p></div>
                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Heart className="w-3 h-3" />뮤직노트</span><p className="mt-1 text-lg font-black text-white">{selectedUser.favoriteCount}</p></div>
                     </div>

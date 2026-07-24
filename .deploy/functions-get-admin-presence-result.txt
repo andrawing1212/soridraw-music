@@ -1,0 +1,6 @@
+status=failure
+run_id=30132739010
+commit=4ea6c8fb27778a84d8d0ce4a63de8206ca81ed80
+target_project=soridraw-app-866a5
+function=getAdminPresence
+finished_at=2026-07-24T23:03:23Z

@@ -1,0 +1,173 @@
+name: Deploy getAdminPresence with IAM fix once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/functions-get-admin-presence-iam-trigger.txt
+
+concurrency:
+  group: deploy-get-admin-presence-iam-once
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Grant minimum IAM and deploy getAdminPresence
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Prepare backend service account credential
+        shell: bash
+        env:
+          BACKEND_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW_APP_866A5 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKEND_SERVICE_ACCOUNT}" ]; then
+            echo "Backend Firebase service account secret is missing." >&2
+            exit 1
+          fi
+          printf '%s' "${BACKEND_SERVICE_ACCOUNT}" > "${RUNNER_TEMP}/firebase-backend-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${RUNNER_TEMP}/firebase-backend-sa.json" >> "${GITHUB_ENV}"
+          DEPLOYER_EMAIL=$(python -c "import json; print(json.load(open('${RUNNER_TEMP}/firebase-backend-sa.json'))['client_email'])")
+          echo "DEPLOYER_EMAIL=${DEPLOYER_EMAIL}" >> "${GITHUB_ENV}"
+          echo "Backend deployer credential prepared."
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: soridraw-app-866a5
+
+      - name: Authenticate gcloud
+        shell: bash
+        run: gcloud auth activate-service-account "${DEPLOYER_EMAIL}" --key-file="${GOOGLE_APPLICATION_CREDENTIALS}" --project=soridraw-app-866a5 --quiet
+
+      - name: Grant deployer Service Account User on App Engine runtime account
+        shell: bash
+        run: |
+          set -o pipefail
+          gcloud iam service-accounts add-iam-policy-binding \
+            soridraw-app-866a5@appspot.gserviceaccount.com \
+            --member="serviceAccount:${DEPLOYER_EMAIL}" \
+            --role="roles/iam.serviceAccountUser" \
+            --project=soridraw-app-866a5 \
+            --quiet 2>&1 | tee /tmp/get-admin-presence-iam.log
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Apply 29th ZIP getAdminPresence schema patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('functions/src/index.ts')
+          source = path.read_text(encoding='utf-8')
+          start = source.index('export const getAdminPresence = onCall(')
+          end = source.index('export const adminForceLogoutUser', start)
+          block = source[start:end]
+          lines = block.splitlines()
+
+          empty_response_ok = False
+          for index, line in enumerate(lines):
+              stripped = line.strip()
+              if stripped == 'return { ok: true, checkedAt: Date.now(), presence: {} };':
+                  indent = line[:len(line) - len(line.lstrip())]
+                  lines[index] = indent + 'return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };'
+                  empty_response_ok = True
+                  break
+              if stripped == 'return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };':
+                  empty_response_ok = True
+                  break
+
+          populated_response_ok = False
+          for index in range(len(lines) - 2):
+              if (
+                  lines[index].strip() == 'ok: true,'
+                  and lines[index + 1].strip() == 'schemaVersion: 2,'
+                  and lines[index + 2].strip() == 'checkedAt: Date.now(),'
+              ):
+                  populated_response_ok = True
+                  break
+              if (
+                  lines[index].strip() == 'ok: true,'
+                  and lines[index + 1].strip() == 'checkedAt: Date.now(),'
+                  and lines[index + 2].strip() == 'presence,'
+              ):
+                  indent = lines[index + 1][:len(lines[index + 1]) - len(lines[index + 1].lstrip())]
+                  lines.insert(index + 1, indent + 'schemaVersion: 2,')
+                  populated_response_ok = True
+                  break
+
+          if not empty_response_ok or not populated_response_ok:
+              raise SystemExit('Could not patch getAdminPresence responses')
+
+          patched_block = '\n'.join(lines)
+          if block.endswith('\n'):
+              patched_block += '\n'
+          source = source[:start] + patched_block + source[end:]
+          path.write_text(source, encoding='utf-8')
+          print('getAdminPresence schemaVersion=2 patch applied')
+          PY
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Deploy getAdminPresence only
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-deploy.log
+
+      - name: Verify deployed Functions list
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-verify.log
+          grep -i getAdminPresence /tmp/get-admin-presence-verify.log
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          {
+            echo "status=${JOB_STATUS}"
+            echo "run_id=${RUN_ID}"
+            echo "commit=${COMMIT_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "function=getAdminPresence"
+            echo "iam_target=soridraw-app-866a5@appspot.gserviceaccount.com"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            for file in /tmp/get-admin-presence-iam.log /tmp/get-admin-presence-deploy.log /tmp/get-admin-presence-verify.log; do
+              if [ -f "${file}" ]; then
+                echo
+                echo "--- $(basename "${file}") tail ---"
+                tail -n 80 "${file}"
+              fi
+            done
+          } > .deploy/functions-get-admin-presence-iam-result.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/functions-get-admin-presence-iam-result.txt
+          git commit -m "chore: record IAM function deployment result" || true
+          git push

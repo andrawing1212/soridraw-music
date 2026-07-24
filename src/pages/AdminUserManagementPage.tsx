@@ -72,7 +72,18 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
 };
 
 const ADMIN_PAGE_SIZE = 20;
-const ADMIN_PRESENCE_REFRESH_INTERVAL_MS = 60_000;
+const PRESENCE_CLOCK_TICK_MS = 60_000;
+const ADMIN_PRESENCE_REFRESH_STORAGE_KEY = 'soridraw:admin-presence-refresh-ms';
+const ADMIN_PRESENCE_REFRESH_DEFAULT_MS = 60_000;
+const ADMIN_PRESENCE_REFRESH_OPTIONS = [
+  { value: 30_000, label: '30초' },
+  { value: 60_000, label: '60초' },
+  { value: 120_000, label: '2분' },
+  { value: 300_000, label: '5분' },
+  { value: 600_000, label: '10분' },
+  { value: 0, label: '끄기' },
+] as const;
+type AdminPresenceRefreshInterval = typeof ADMIN_PRESENCE_REFRESH_OPTIONS[number]['value'];
 const LONG_INACTIVE_DAYS = 180;
 const DORMANT_DAYS = 365;
 const OFFLINE_TO_LOGGED_OUT_MS = 2 * 24 * 60 * 60 * 1000;
@@ -443,6 +454,15 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [confirmModal, setConfirmModal] = useState<ConfirmState>(EMPTY_CONFIRM);
   const [confirmText, setConfirmText] = useState('');
   const [presenceClock, setPresenceClock] = useState(() => Date.now());
+  const [presenceRefreshIntervalMs, setPresenceRefreshIntervalMs] = useState<AdminPresenceRefreshInterval>(() => {
+    if (typeof window === 'undefined') return ADMIN_PRESENCE_REFRESH_DEFAULT_MS;
+    const storedValue = window.localStorage.getItem(ADMIN_PRESENCE_REFRESH_STORAGE_KEY);
+    if (storedValue === null) return ADMIN_PRESENCE_REFRESH_DEFAULT_MS;
+    const stored = Number(storedValue);
+    return ADMIN_PRESENCE_REFRESH_OPTIONS.some((option) => option.value === stored)
+      ? stored as AdminPresenceRefreshInterval
+      : ADMIN_PRESENCE_REFRESH_DEFAULT_MS;
+  });
   const [livePresence, setLivePresence] = useState<Record<string, LivePresenceSummary>>({});
   const [isPresenceSyncing, setIsPresenceSyncing] = useState(false);
   const [presenceSyncError, setPresenceSyncError] = useState<string | null>(null);
@@ -457,9 +477,15 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   }, [isAdminProp]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => setPresenceClock(Date.now()), ADMIN_PRESENCE_REFRESH_INTERVAL_MS);
+    const intervalId = window.setInterval(() => setPresenceClock(Date.now()), PRESENCE_CLOCK_TICK_MS);
     return () => window.clearInterval(intervalId);
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(ADMIN_PRESENCE_REFRESH_STORAGE_KEY, String(presenceRefreshIntervalMs));
+    }
+  }, [presenceRefreshIntervalMs]);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid || '';
@@ -694,24 +720,30 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   useEffect(() => {
     if (!isAdmin || !presenceTargetKey) return;
     void fetchPresence();
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void fetchPresence();
-    }, ADMIN_PRESENCE_REFRESH_INTERVAL_MS);
+    const intervalId = presenceRefreshIntervalMs > 0
+      ? window.setInterval(() => {
+        if (document.visibilityState === 'visible') void fetchPresence();
+      }, presenceRefreshIntervalMs)
+      : null;
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') void fetchPresence();
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => {
-      window.clearInterval(intervalId);
+      if (intervalId !== null) window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [fetchPresence, isAdmin, presenceTargetKey]);
+  }, [fetchPresence, isAdmin, presenceRefreshIntervalMs, presenceTargetKey]);
 
   const presenceDisplayMode: PresenceDisplayMode = presenceSyncError
     ? 'error'
     : hasPresenceSynced
       ? 'ready'
       : 'checking';
+
+  const presenceRefreshLabel = presenceRefreshIntervalMs === 0
+    ? '자동 확인 꺼짐'
+    : `${ADMIN_PRESENCE_REFRESH_OPTIONS.find((option) => option.value === presenceRefreshIntervalMs)?.label || '60초'} 자동 확인`;
 
   const currentAdminUid = auth.currentUser?.uid || '';
   const currentAdminUser = usersWithAuth.find((item) => item.uid === currentAdminUid);
@@ -1065,7 +1097,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             </span>
             <span className={cn('inline-flex items-center gap-2', presenceSyncError ? 'text-amber-300' : hasPresenceSynced ? 'text-sky-300' : 'text-zinc-300')}>
               {isPresenceSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : presenceSyncError ? <AlertCircle className="w-3.5 h-3.5" /> : hasPresenceSynced ? <Activity className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {isPresenceSyncing ? '접속 상태 확인 중' : presenceSyncError || (hasPresenceSynced ? '접속 상태 서버 연결됨 · 60초 자동 확인' : '접속 상태 첫 확인 중')}
+              {isPresenceSyncing ? '접속 상태 확인 중' : presenceSyncError || (hasPresenceSynced ? `접속 상태 서버 연결됨 · ${presenceRefreshLabel}` : '접속 상태 첫 확인 중')}
             </span>
             {localPresenceDiagnostic && (
               <span className={cn('inline-flex items-center gap-2', localPresenceDiagnostic.status === 'connected' ? 'text-emerald-300' : localPresenceDiagnostic.status === 'error' ? 'text-amber-300' : 'text-zinc-300')}>
@@ -1074,8 +1106,21 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               </span>
             )}
           </div>
-          <div className="flex items-center justify-between gap-3 md:justify-end">
+          <div className="flex flex-wrap items-center justify-between gap-2 md:justify-end">
             {currentAdminUser && <PresenceBadge user={currentAdminUser} livePresence={currentAdminLive} displayMode={presenceDisplayMode} />}
+            <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-black text-zinc-300">
+              <span className="whitespace-nowrap">자동 갱신</span>
+              <select
+                value={presenceRefreshIntervalMs}
+                onChange={(event) => setPresenceRefreshIntervalMs(Number(event.target.value) as AdminPresenceRefreshInterval)}
+                className="h-7 rounded-lg border border-white/10 bg-[#171717] px-2 text-[11px] font-black text-zinc-100 outline-none focus:border-brand-orange/40"
+                aria-label="접속 상태 자동 갱신 주기"
+              >
+                {ADMIN_PRESENCE_REFRESH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
             <button type="button" onClick={() => void fetchPresence()} disabled={isPresenceSyncing} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-zinc-200 hover:border-brand-orange/30 hover:text-brand-orange disabled:opacity-50">지금 확인</button>
           </div>
         </div>

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY SORIDRAW 17 TEST FUNCTIONS RETRY 20260724'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY SORIDRAW 17 TEST FUNCTIONS RETRY2 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -51,7 +51,24 @@ jobs:
         run: npm ci
 
       - name: Type check app
-        run: npm run lint
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          npm run lint 2>&1 | tee /tmp/soridraw-lint.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            {
+              echo '❌ TYPE_CHECK_FAILED'
+              echo
+              echo '```text'
+              tail -n 80 /tmp/soridraw-lint.log
+              echo '```'
+            } > /tmp/soridraw-lint-comment.md
+            gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body-file /tmp/soridraw-lint-comment.md
+          fi
+          exit "$code"
 
       - name: Build test app
         run: npm run build

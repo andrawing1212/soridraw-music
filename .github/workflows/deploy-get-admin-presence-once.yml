@@ -42,31 +42,49 @@ jobs:
           start = source.index('export const getAdminPresence = onCall(')
           end = source.index('export const adminForceLogoutUser', start)
           block = source[start:end]
+          lines = block.splitlines()
 
-          old_empty = 'return { ok: true, checkedAt: Date.now(), presence: {} };'
-          new_empty = 'return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };'
-          if old_empty in block:
-              block = block.replace(old_empty, new_empty, 1)
-          elif new_empty not in block:
-              raise SystemExit('Could not locate empty getAdminPresence response')
+          empty_response_ok = False
+          for index, line in enumerate(lines):
+              stripped = line.strip()
+              if stripped == 'return { ok: true, checkedAt: Date.now(), presence: {} };':
+                  indent = line[:len(line) - len(line.lstrip())]
+                  lines[index] = indent + 'return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };'
+                  empty_response_ok = True
+                  break
+              if stripped == 'return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };':
+                  empty_response_ok = True
+                  break
 
-          old_result = '''    return {
-            ok: true,
-            checkedAt: Date.now(),
-            presence,
-          };'''
-          new_result = '''    return {
-            ok: true,
-            schemaVersion: 2,
-            checkedAt: Date.now(),
-            presence,
-          };'''
-          if old_result in block:
-              block = block.replace(old_result, new_result, 1)
-          elif new_result not in block:
-              raise SystemExit('Could not locate populated getAdminPresence response')
+          populated_response_ok = False
+          for index in range(len(lines) - 2):
+              if (
+                  lines[index].strip() == 'ok: true,'
+                  and lines[index + 1].strip() == 'schemaVersion: 2,'
+                  and lines[index + 2].strip() == 'checkedAt: Date.now(),'
+              ):
+                  populated_response_ok = True
+                  break
 
-          source = source[:start] + block + source[end:]
+              if (
+                  lines[index].strip() == 'ok: true,'
+                  and lines[index + 1].strip() == 'checkedAt: Date.now(),'
+                  and lines[index + 2].strip() == 'presence,'
+              ):
+                  indent = lines[index + 1][:len(lines[index + 1]) - len(lines[index + 1].lstrip())]
+                  lines.insert(index + 1, indent + 'schemaVersion: 2,')
+                  populated_response_ok = True
+                  break
+
+          if not empty_response_ok:
+              raise SystemExit('Could not patch empty getAdminPresence response')
+          if not populated_response_ok:
+              raise SystemExit('Could not patch populated getAdminPresence response')
+
+          patched_block = '\n'.join(lines)
+          if block.endswith('\n'):
+              patched_block += '\n'
+          source = source[:start] + patched_block + source[end:]
           path.write_text(source, encoding='utf-8')
           print('getAdminPresence schemaVersion=2 patch applied')
           PY

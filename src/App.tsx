@@ -6720,14 +6720,29 @@ const toggleCycleVariantSelection = (
       return Number.isFinite(ms) ? ms : 0;
     };
 
-    const shouldProcessForceLogout = (forceLogoutAtValue: any, targetUser: User | null) => {
-      const forceLogoutTime = getTimestampMs(forceLogoutAtValue);
+    const shouldProcessForceLogout = (userData: any, targetUser: User | null) => {
+      const forceLogoutTime = getTimestampMs(userData?.forceLogoutAt);
       const sessionStartTime = getSessionStartTime(targetUser);
-      
-      const result = forceLogoutTime > 0 && sessionStartTime > 0 && 
-                     forceLogoutTime > sessionStartTime && 
+
+      // 이메일 인증 초기화는 기존 세션만 종료해야 한다. 초기화 직후 새로 로그인한
+      // 세션까지 같은 forceLogoutAt으로 다시 끊으면 사용자가 인증 안내 화면에
+      // 진입하지 못하므로, 재로그인 시각이 초기화 시각과 같거나 이후면 허용한다.
+      const verificationResetTime = Number(userData?.emailVerificationResetAtMs || 0);
+      const isEmailVerificationReset =
+        userData?.lastAdminAuthAction === 'reset-email-verification' &&
+        verificationResetTime > 0 &&
+        Math.abs(forceLogoutTime - verificationResetTime) <= 5000;
+      const isFreshLoginAfterVerificationReset =
+        isEmailVerificationReset &&
+        sessionStartTime > 0 &&
+        sessionStartTime + 5000 >= verificationResetTime;
+
+      if (isFreshLoginAfterVerificationReset) return false;
+
+      const result = forceLogoutTime > 0 && sessionStartTime > 0 &&
+                     forceLogoutTime > sessionStartTime &&
                      forceLogoutTime > lastForcedLogoutTimeRef.current;
-      
+
       if (!result) return false;
       lastForcedLogoutTimeRef.current = forceLogoutTime;
       return true;
@@ -6801,7 +6816,7 @@ const toggleCycleVariantSelection = (
               if (status === 'banned') setIsBanModalOpen(true);
             }
 
-            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
+            if (shouldProcessForceLogout(data, currentUser)) {
               await performForcedLogout({ silent: true });
               return;
             }
@@ -6847,7 +6862,7 @@ const toggleCycleVariantSelection = (
               return;
             }
 
-            if (shouldProcessForceLogout(data.forceLogoutAt, currentUser)) {
+            if (shouldProcessForceLogout(data, currentUser)) {
               setIsForcedLogoutModalOpen(true);
             }
           } else {

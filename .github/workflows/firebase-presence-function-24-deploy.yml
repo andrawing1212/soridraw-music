@@ -1,0 +1,96 @@
+name: Firebase Presence Function 24 Deploy
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: firebase-presence-function-24-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  deploy-presence-function:
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY FIREBASE PRESENCE FUNCTION 24 20260724'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Apply 24th presence database URL fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('functions/src/index.ts')
+          text = path.read_text(encoding='utf-8')
+          old = 'admin.initializeApp();'
+          new = 'admin.initializeApp({\n  databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",\n});'
+          if new in text:
+              print('Database URL fix already present.')
+          elif old in text:
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('Applied database URL fix.')
+          else:
+              raise SystemExit('Expected admin.initializeApp() pattern was not found.')
+          PY
+
+      - name: Commit function source fix
+        shell: bash
+        run: |
+          if git diff --quiet -- functions/src/index.ts; then
+            echo 'No source change required.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add functions/src/index.ts
+            git commit -m 'fix: configure Realtime Database for presence function'
+            git push origin HEAD:main
+          fi
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@13.34.0
+
+      - name: Deploy getAdminPresence only
+        run: |
+          firebase deploy \
+            --only functions:getAdminPresence \
+            --project soridraw-app-866a5 \
+            --non-interactive
+
+      - name: Report result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "${{ github.repository }}" --body "PRESENCE_FUNCTION_24_DEPLOY_RESULT status=${JOB_STATUS} run_id=${RUN_ID}"

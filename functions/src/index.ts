@@ -369,7 +369,7 @@ export const getAdminPresence = onCall(
     )).slice(0, 50) as string[];
 
     if (uids.length === 0) {
-      return { ok: true, checkedAt: Date.now(), presence: {} };
+      return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };
     }
 
     let rows: ReadonlyArray<readonly [string, AdminPresenceSummary]>;
@@ -394,6 +394,7 @@ export const getAdminPresence = onCall(
 
     return {
       ok: true,
+      schemaVersion: 2,
       checkedAt: Date.now(),
       presence,
     };

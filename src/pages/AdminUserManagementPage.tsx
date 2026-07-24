@@ -6,6 +6,7 @@ import {
   getDocs,
   orderBy,
   query,
+  serverTimestamp,
   updateDoc,
 } from 'firebase/firestore';
 import { auth, db, functions, httpsCallable } from '../firebase';
@@ -165,17 +166,24 @@ const getPresenceState = (
   livePresence?: LivePresenceSummary,
   now = Date.now()
 ): PresenceState => {
-  if (isForceLoggedOut(user)) return 'forced';
+  // A currently detected session is always the strongest signal. This also
+  // prevents an old force-logout audit timestamp from hiding a later login.
   if (livePresence?.state === 'active') return 'active';
   if (livePresence?.state === 'away') return 'away';
   if (livePresence?.state === 'background') return 'background';
 
   const loginTime = user.lastLoginAt || 0;
+  const forceLogoutTime = user.forceLogoutAt || 0;
   const adminOverrideAt = user.adminPresenceStateAt || 0;
-  if (adminOverrideAt > loginTime) {
+  // A manual correction made after the latest login/force-logout must win.
+  // This lets an administrator change an old "강제 로그아웃" badge to
+  // "오프라인" without deleting the security audit timestamp itself.
+  if (adminOverrideAt > loginTime && adminOverrideAt >= forceLogoutTime) {
     if (user.adminPresenceState === 'loggedOut') return 'loggedOut';
     if (user.adminPresenceState === 'offline') return 'offline';
   }
+
+  if (isForceLoggedOut(user)) return 'forced';
 
   const logoutTime = user.lastLogoutAt || 0;
   const latestActualActivity = Math.max(
@@ -362,7 +370,7 @@ const PresenceBadge = ({ user, livePresence, displayMode = 'ready' }: { user: Ap
     away: { label: '자리비움', className: 'text-amber-300' },
     background: { label: '백그라운드', className: 'text-sky-300' },
     offline: { label: '오프라인', className: 'text-zinc-300' },
-    loggedOut: { label: '로그아웃', className: 'text-red-400' },
+    loggedOut: { label: '로그아웃', className: 'text-zinc-500' },
     forced: { label: '강제 로그아웃', className: 'text-red-400' },
   };
   const current = config[presence];
@@ -370,15 +378,21 @@ const PresenceBadge = ({ user, livePresence, displayMode = 'ready' }: { user: Ap
 };
 
 
-const DevicePresenceList = ({ user, livePresence, now }: { user: AppUserInfo; livePresence?: LivePresenceSummary; now: number }) => {
+const DevicePresenceList = ({ user, livePresence, now, backendSchemaReady }: { user: AppUserInfo; livePresence?: LivePresenceSummary; now: number; backendSchemaReady: boolean }) => {
   const devices = livePresence?.devices || [];
   const overallPresence = getPresenceState(user, livePresence, now);
 
   if (devices.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-5 text-center">
-        <p className="text-xs font-black text-zinc-300">저장된 기기 기록이 없습니다.</p>
-        <p className="mt-1 text-[10px] font-bold text-zinc-600">이 버전 적용 후 회원이 다시 접속하면 브라우저별 기록이 자동으로 쌓입니다.</p>
+      <div className={cn('rounded-2xl border border-dashed bg-black/20 px-4 py-5 text-center', backendSchemaReady ? 'border-white/10' : 'border-amber-400/20')}>
+        <p className={cn('text-xs font-black', backendSchemaReady ? 'text-zinc-300' : 'text-amber-300')}>
+          {backendSchemaReady ? '저장된 기기 기록이 없습니다.' : '기기별 접속 서버가 아직 구버전입니다.'}
+        </p>
+        <p className="mt-1 text-[10px] font-bold text-zinc-600">
+          {backendSchemaReady
+            ? '이 버전 적용 후 회원이 다시 접속하면 브라우저별 기록이 자동으로 쌓입니다.'
+            : 'getAdminPresence Function과 Realtime Database Rules를 먼저 배포한 뒤 다시 확인해주세요.'}
+        </p>
       </div>
     );
   }
@@ -394,7 +408,7 @@ const DevicePresenceList = ({ user, livePresence, now }: { user: AppUserInfo; li
           away: { label: '자리비움', className: 'text-amber-300', dot: 'bg-amber-300' },
           background: { label: '백그라운드', className: 'text-sky-300', dot: 'bg-sky-300' },
           offline: { label: '오프라인', className: 'text-zinc-300', dot: 'bg-zinc-500' },
-          loggedOut: { label: '로그아웃', className: 'text-red-300', dot: 'bg-red-400' },
+          loggedOut: { label: '로그아웃', className: 'text-zinc-500', dot: 'bg-zinc-600' },
           forced: { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' },
         };
         const current = config[effectiveState];
@@ -467,6 +481,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const [isPresenceSyncing, setIsPresenceSyncing] = useState(false);
   const [presenceSyncError, setPresenceSyncError] = useState<string | null>(null);
   const [hasPresenceSynced, setHasPresenceSynced] = useState(false);
+  const [devicePresenceBackendSchemaReady, setDevicePresenceBackendSchemaReady] = useState(false);
   const [localPresenceDiagnostic, setLocalPresenceDiagnostic] = useState<PresenceDiagnostic | null>(() => readPresenceDiagnostic(auth.currentUser?.uid || ''));
   const [visibleCount, setVisibleCount] = useState(ADMIN_PAGE_SIZE);
   const presenceRequestInFlightRef = useRef(false);
@@ -661,6 +676,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       const callable = httpsCallable(functions, 'getAdminPresence');
       const response = await callable({ uids: targetUids });
       const payload: any = response.data || {};
+      const backendSchemaReady = Number(payload.schemaVersion || 0) >= 2;
+      setDevicePresenceBackendSchemaReady(backendSchemaReady);
       const next: Record<string, LivePresenceSummary> = {};
       Object.entries(payload.presence || {}).forEach(([uid, value]) => {
         const raw = value as any;
@@ -710,6 +727,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     } catch (error) {
       console.error('Failed to load Realtime presence:', error);
       setHasPresenceSynced(false);
+      setDevicePresenceBackendSchemaReady(false);
       setPresenceSyncError(error?.message || '접속 상태 서버에 연결하지 못했습니다.');
     } finally {
       presenceRequestInFlightRef.current = false;
@@ -751,7 +769,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   const getBadgeInfo = (user: AppUserInfo) => {
     if (user.authDeleted || user.authDeletedAt) return { label: '탈퇴됨', className: 'text-red-300', dot: 'bg-red-400' };
-    if (isForceLoggedOut(user)) return { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' };
+    const effectivePresence = getPresenceState(user, livePresence[user.uid], presenceClock);
+    if (effectivePresence === 'forced') return { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' };
     const inactiveDays = getDayDiff(user.lastLoginAt, presenceClock);
     if (inactiveDays >= DORMANT_DAYS) return { label: '휴면회원', className: 'text-red-300', dot: 'bg-red-400' };
     if (inactiveDays >= LONG_INACTIVE_DAYS) return { label: '장기 미접속', className: 'text-orange-300', dot: 'bg-orange-400' };
@@ -873,7 +892,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         ? `${label}으로 표시를 보정합니다. 실제 접속 중인 세션은 활동중 상태가 우선하며, 회원이 다시 로그인하면 이 보정은 자동으로 무효화됩니다.`
         : '수동 보정을 해제하고 실시간 접속 기록과 2일 자동 판정 기준으로 되돌립니다.',
       confirmLabel: '상태 적용',
-      tone: state === 'loggedOut' ? 'danger' : 'brand',
+      tone: 'brand',
       onConfirm: async () => {
         if (!selectedUser || !auth.currentUser) return;
         closeConfirm();
@@ -882,7 +901,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         try {
           const updates: Record<string, unknown> = {
             adminPresenceState: state,
-            adminPresenceStateAt: state ? Date.now() : null,
+            adminPresenceStateAt: state ? serverTimestamp() : null,
             adminPresenceStateBy: state ? auth.currentUser.uid : null,
           };
           if (state) updates.isOnline = false;
@@ -1144,9 +1163,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
               ? 'bg-amber-300'
               : presence === 'background'
                 ? 'bg-sky-300'
-                : presence === 'loggedOut' || presence === 'forced'
+                : presence === 'forced'
                   ? 'bg-red-400'
-                  : 'bg-zinc-500';
+                  : presence === 'loggedOut'
+                    ? 'bg-zinc-600'
+                    : 'bg-zinc-500';
           const recentTime = getRecentActivityAt(user, live);
           return (
             <button
@@ -1264,7 +1285,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[10px] font-black text-sky-300">총 {livePresence[selectedUser.uid].deviceCount}개</span>}
                   </div>
                   <div className="mt-4">
-                    <DevicePresenceList user={selectedUser} livePresence={livePresence[selectedUser.uid]} now={presenceClock} />
+                    <DevicePresenceList user={selectedUser} livePresence={livePresence[selectedUser.uid]} now={presenceClock} backendSchemaReady={devicePresenceBackendSchemaReady} />
                   </div>
                 </section>
 
@@ -1316,7 +1337,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
                     <button onClick={() => requestPresenceOverride(null)} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-black text-zinc-300 hover:border-emerald-400/30 hover:text-emerald-300 disabled:opacity-35"><RefreshCw className="w-4 h-4" />자동 판정</button>
                     <button onClick={() => requestPresenceOverride('offline')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-400/20 bg-zinc-400/[0.06] px-4 py-3 text-xs font-black text-zinc-200 hover:border-zinc-300/40 disabled:opacity-35"><Activity className="w-4 h-4" />오프라인 표시</button>
-                    <button onClick={() => requestPresenceOverride('loggedOut')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-xs font-black text-red-300 hover:bg-red-400/15 disabled:opacity-35"><LogOut className="w-4 h-4" />로그아웃 표시</button>
+                    <button onClick={() => requestPresenceOverride('loggedOut')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-600/30 bg-zinc-700/20 px-4 py-3 text-xs font-black text-zinc-400 hover:border-zinc-500/50 hover:text-zinc-300 disabled:opacity-35"><LogOut className="w-4 h-4" />로그아웃 표시</button>
                   </div>
                   <p className="mt-3 text-[10px] font-bold text-zinc-600">오프라인 상태가 2일을 넘으면 기존 회원을 포함해 자동으로 로그아웃으로 표시됩니다. 실제 인증 세션 종료는 아래 강제 로그아웃을 사용합니다.</p>
                 </section>

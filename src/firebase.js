@@ -67,64 +67,9 @@ export const getFirebaseAppCheckToken = async () => {
   }
 };
 
-const CLOUD_FUNCTIONS_HOST = "us-central1-soridraw-app-866a5.cloudfunctions.net";
-const CLOUD_FUNCTIONS_FETCH_GUARD_FLAG = "__soridrawAppCheckFetchGuardInstalled";
-
-// Every SORIDRAW HTTP Function request receives the same App Check token path.
-// Missing/invalid tokens are still accepted until server enforcement is enabled.
-const installCloudFunctionsAppCheckFetchGuard = () => {
-  if (typeof window === "undefined" || typeof window.fetch !== "function") return;
-  if (window[CLOUD_FUNCTIONS_FETCH_GUARD_FLAG]) return;
-
-  const originalFetch = window.fetch.bind(window);
-  window[CLOUD_FUNCTIONS_FETCH_GUARD_FLAG] = true;
-
-  window.fetch = async (input, init) => {
-    let parsedUrl;
-    try {
-      const rawUrl = typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input?.url || "";
-      parsedUrl = new URL(rawUrl, window.location.href);
-    } catch {
-      return originalFetch(input, init);
-    }
-
-    if (parsedUrl.hostname !== CLOUD_FUNCTIONS_HOST) {
-      return originalFetch(input, init);
-    }
-
-    const headers = new Headers(input instanceof Request ? input.headers : undefined);
-    if (init?.headers) {
-      new Headers(init.headers).forEach((value, key) => headers.set(key, value));
-    }
-
-    const appCheckToken = await getFirebaseAppCheckToken();
-    if (appCheckToken && !headers.has("X-Firebase-AppCheck")) {
-      headers.set("X-Firebase-AppCheck", appCheckToken);
-    }
-
-    const response = await originalFetch(input, { ...(init || {}), headers });
-    const status = response.headers.get("X-SORIDRAW-App-Check-Status");
-    if (status) {
-      console.info(`[SORIDRAW App Check] ${parsedUrl.pathname}: ${status}`);
-    }
-    return response;
-  };
-};
-
-// AI Studio preview and local/unknown hosts must not replace the global fetch
-// implementation. Some preview sandboxes expose fetch as a protected property,
-// and assigning to it can stop the Firebase module before React mounts.
-if (isVercelTestApp || isFirebaseHostedApp) {
-  try {
-    installCloudFunctionsAppCheckFetchGuard();
-  } catch (error) {
-    console.warn("[SORIDRAW App Check] Functions fetch guard skipped:", error);
-  }
-}
+// App Check tokens are requested explicitly by SORIDRAW API callers.
+// Do not replace window.fetch globally: Firebase Auth popup sign-in and other
+// browser integrations must keep the native fetch implementation.
 
 export const auth = getAuth(app);
 

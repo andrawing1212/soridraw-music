@@ -17,11 +17,6 @@ jobs:
     if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY FIREBASE REALTIME RULES 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
-      GCLOUD_PROJECT: soridraw-app-866a5
-      CLOUDSDK_CORE_PROJECT: soridraw-app-866a5
-      GOOGLE_CLOUD_QUOTA_PROJECT: soridraw-app-866a5
 
     steps:
       - name: Checkout main
@@ -38,15 +33,37 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-          project_id: soridraw-app-866a5
           create_credentials_file: true
           export_environment_variables: true
 
-      - name: Set target project and quota project
+      - name: Prepare deployment permissions and API
+        id: prepare
         shell: bash
         run: |
-          gcloud config set project soridraw-app-866a5
-          gcloud auth application-default set-quota-project soridraw-app-866a5 || true
+          set +e
+          sa_email=$(jq -r '.client_email // empty' "$GOOGLE_APPLICATION_CREDENTIALS")
+          home_project=$(printf '%s' "$sa_email" | sed -E 's/^[^@]+@([^.]+)\.iam\.gserviceaccount\.com$/\1/')
+          echo "$sa_email" > active-account.txt
+          echo "home_project=$home_project" > prepare.log
+
+          gcloud auth activate-service-account "$sa_email" --key-file="$GOOGLE_APPLICATION_CREDENTIALS" >> prepare.log 2>&1
+          activate_code=$?
+          echo "activate_code=$activate_code" >> prepare.log
+
+          gcloud services enable firebasedatabase.googleapis.com --project="$home_project" >> prepare.log 2>&1
+          api_code=$?
+          echo "api_enable_code=$api_code" >> prepare.log
+
+          gcloud projects add-iam-policy-binding soridraw-app-866a5 \
+            --member="serviceAccount:${sa_email}" \
+            --role="roles/firebasedatabase.admin" \
+            --condition=None >> prepare.log 2>&1
+          iam_code=$?
+          echo "iam_grant_code=$iam_code" >> prepare.log
+
+          echo "api_code=$api_code" >> "$GITHUB_OUTPUT"
+          echo "iam_code=$iam_code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@13.34.0
@@ -56,7 +73,6 @@ jobs:
         shell: bash
         run: |
           set +e
-          gcloud auth list --format='value(account)' > active-account.txt 2>&1
           firebase deploy \
             --only database \
             --project soridraw-app-866a5 \
@@ -87,6 +103,11 @@ jobs:
             echo 'Active account:'
             echo '```text'
             cat active-account.txt 2>/dev/null || true
+            echo '```'
+            echo
+            echo 'Preparation:'
+            echo '```text'
+            tail -n 80 prepare.log 2>/dev/null || true
             echo '```'
             echo
             echo 'Deploy output:'

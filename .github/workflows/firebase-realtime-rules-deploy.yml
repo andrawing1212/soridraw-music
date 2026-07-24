@@ -17,6 +17,11 @@ jobs:
     if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY FIREBASE REALTIME RULES 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+      GCLOUD_PROJECT: soridraw-app-866a5
+      CLOUDSDK_CORE_PROJECT: soridraw-app-866a5
+      GOOGLE_CLOUD_QUOTA_PROJECT: soridraw-app-866a5
 
     steps:
       - name: Checkout main
@@ -33,6 +38,15 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          project_id: soridraw-app-866a5
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set target project and quota project
+        shell: bash
+        run: |
+          gcloud config set project soridraw-app-866a5
+          gcloud auth application-default set-quota-project soridraw-app-866a5 || true
 
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@13.34.0
@@ -42,7 +56,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          gcloud auth list --filter=status:ACTIVE --format='value(account)' > active-account.txt 2>&1
+          gcloud auth list --format='value(account)' > active-account.txt 2>&1
           firebase deploy \
             --only database \
             --project soridraw-app-866a5 \
@@ -50,7 +64,7 @@ jobs:
           code=${PIPESTATUS[0]}
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           tail -n 60 deploy.log > deploy-tail.log
-          tail -n 80 firebase-debug.log > firebase-debug-tail.log 2>/dev/null || true
+          tail -n 100 firebase-debug.log > firebase-debug-tail.log 2>/dev/null || true
           exit 0
 
       - name: Report result

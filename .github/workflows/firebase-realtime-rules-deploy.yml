@@ -1,0 +1,55 @@
+name: Firebase Realtime Database Rules Deploy
+
+on:
+  issues:
+    types: [opened]
+
+concurrency:
+  group: firebase-realtime-rules-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  deploy-realtime-rules:
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DEPLOY FIREBASE REALTIME RULES 20260724'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@13.34.0
+
+      - name: Deploy Realtime Database rules only
+        run: |
+          firebase deploy \
+            --only database \
+            --project soridraw-app-866a5 \
+            --non-interactive
+
+      - name: Report result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "${{ github.repository }}" --body "REALTIME_RULES_DEPLOY_RESULT status=${JOB_STATUS} run_id=${RUN_ID}"

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   deploy-hosting:
-    if: github.event.issue.title == 'PRODUCTION CSP LOGIN FIX RETRY2 20260724'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'PRODUCTION CSP LOGIN FIX RETRY3 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -33,31 +33,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type check
+        run: npm run lint
+
       - name: Build production app
         run: npm run build
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+      - name: Deploy official Firebase Hosting only
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
-
-      - name: Install Firebase CLI
-        run: npm install --global firebase-tools@13.34.0
-
-      - name: Deploy Firebase Hosting only with diagnostics
-        id: deploy
-        shell: bash
-        run: |
-          set +e
-          firebase deploy --only hosting --project soridraw-app-866a5 --non-interactive 2>&1 | tee firebase-deploy.log
-          code=${PIPESTATUS[0]}
-          echo "exit_code=${code}" >> "$GITHUB_OUTPUT"
-          exit 0
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          channelId: live
+          projectId: soridraw
 
       - name: Verify production headers
-        id: verify
-        if: steps.deploy.outputs.exit_code == '0'
-        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -69,28 +59,16 @@ jobs:
           fi
           curl -fsS --max-time 30 https://soridraw.web.app/ >/dev/null
 
-      - name: Report result
-        if: always()
+      - name: Report success
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
-          DEPLOY_CODE: ${{ steps.deploy.outputs.exit_code }}
-          VERIFY: ${{ steps.verify.outcome }}
-        shell: bash
-        run: |
-          sha="$(git rev-parse HEAD)"
-          {
-            if [[ "$DEPLOY_CODE" == "0" && "$VERIFY" == "success" ]]; then
-              echo "✅ PRODUCTION_CSP_LOGIN_FIX_SUCCESS sha=${sha} url=https://soridraw.web.app/"
-            else
-              echo "❌ PRODUCTION_CSP_LOGIN_FIX_FAILED sha=${sha} deploy_code=${DEPLOY_CODE:-missing} verify=${VERIFY}"
-              echo
-              echo '```text'
-              tail -n 80 firebase-deploy.log 2>/dev/null || true
-              echo '```'
-            fi
-          } > issue-comment.md
-          gh issue comment "$ISSUE_URL" --body-file issue-comment.md
-          if [[ "$DEPLOY_CODE" != "0" || "$VERIFY" != "success" ]]; then
-            exit 1
-          fi
+        run: gh issue comment "$ISSUE_URL" --body "✅ PRODUCTION_CSP_LOGIN_FIX_SUCCESS sha=$(git rev-parse HEAD) url=https://soridraw.web.app/"
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+        run: gh issue comment "$ISSUE_URL" --body "❌ PRODUCTION_CSP_LOGIN_FIX_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }}"

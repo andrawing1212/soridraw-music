@@ -1,0 +1,89 @@
+name: Deploy getAdminPresence once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/functions-get-admin-presence-trigger.txt
+
+concurrency:
+  group: deploy-get-admin-presence-once
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy getAdminPresence to Firebase
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Apply 29th ZIP getAdminPresence schema patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('functions/src/index.ts')
+          source = path.read_text(encoding='utf-8')
+          start = source.index('export const getAdminPresence = onCall(')
+          end = source.index('export const adminForceLogoutUser', start)
+          block = source[start:end]
+
+          old_empty = 'return { ok: true, checkedAt: Date.now(), presence: {} };'
+          new_empty = 'return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };'
+          if old_empty in block:
+              block = block.replace(old_empty, new_empty, 1)
+          elif new_empty not in block:
+              raise SystemExit('Could not locate empty getAdminPresence response')
+
+          old_result = '''    return {
+            ok: true,
+            checkedAt: Date.now(),
+            presence,
+          };'''
+          new_result = '''    return {
+            ok: true,
+            schemaVersion: 2,
+            checkedAt: Date.now(),
+            presence,
+          };'''
+          if old_result in block:
+              block = block.replace(old_result, new_result, 1)
+          elif new_result not in block:
+              raise SystemExit('Could not locate populated getAdminPresence response')
+
+          source = source[:start] + block + source[end:]
+          path.write_text(source, encoding='utf-8')
+          print('getAdminPresence schemaVersion=2 patch applied')
+          PY
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy getAdminPresence only
+        run: npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive
+
+      - name: Verify deployed Functions list
+        run: npx --yes firebase-tools@latest functions:list --project soridraw-app-866a5 --non-interactive | grep -i getAdminPresence

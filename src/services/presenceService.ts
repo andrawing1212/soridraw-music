@@ -10,6 +10,16 @@ import {
 import { realtimeDb } from '../firebase';
 
 export type ClientPresenceState = 'active' | 'away' | 'background';
+export type PresenceDiagnosticStatus = 'connecting' | 'connected' | 'error' | 'stopped';
+
+export type PresenceDiagnostic = {
+  uid: string;
+  status: PresenceDiagnosticStatus;
+  message: string;
+  updatedAt: number;
+};
+
+export const PRESENCE_DIAGNOSTIC_EVENT = 'soridraw:presence-diagnostic';
 
 export type PresenceController = {
   stop: () => Promise<void>;
@@ -27,6 +37,8 @@ const ACTIVITY_SYNC_MIN_MS = 5 * 60 * 1000;
 const HEARTBEAT_MS = 10 * 60 * 1000;
 const ACTIVITY_LOCAL_THROTTLE_MS = 15 * 1000;
 const IDLE_LOGOUT_LOCK_MS = 2 * 60 * 1000;
+const CONNECTION_SETUP_RETRY_MS = 5 * 1000;
+const PRESENCE_DIAGNOSTIC_KEY_PREFIX = 'soridraw_presence_diagnostic_';
 
 const buildSessionId = () => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -65,6 +77,32 @@ const safeStorageRemove = (key: string) => {
   }
 };
 
+const emitPresenceDiagnostic = (diagnostic: PresenceDiagnostic) => {
+  safeStorageSet(`${PRESENCE_DIAGNOSTIC_KEY_PREFIX}${diagnostic.uid}`, JSON.stringify(diagnostic));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PRESENCE_DIAGNOSTIC_EVENT, { detail: diagnostic }));
+  }
+};
+
+export const readPresenceDiagnostic = (uid: string): PresenceDiagnostic | null => {
+  if (!uid || typeof window === 'undefined') return null;
+  try {
+    const raw = safeStorageGet(`${PRESENCE_DIAGNOSTIC_KEY_PREFIX}${uid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.uid !== uid) return null;
+    if (!['connecting', 'connected', 'error', 'stopped'].includes(parsed.status)) return null;
+    return {
+      uid,
+      status: parsed.status,
+      message: String(parsed.message || ''),
+      updatedAt: safeNumber(parsed.updatedAt) || Date.now(),
+    };
+  } catch {
+    return null;
+  }
+};
+
 const safeNumber = (value: unknown) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
@@ -93,6 +131,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   let connectedUnsubscribe: Unsubscribe | null = null;
   let checkTimer: number | null = null;
   let pointerMoveTimer: number | null = null;
+  let connectionSetupRetryTimer: number | null = null;
 
   const storedActivityAt = safeNumber(safeStorageGet(activityKey));
   const authLastSignInAt = safeNumber(options.authLastSignInAt);
@@ -101,6 +140,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     ? Date.now()
     : storedActivityAt || Date.now();
   safeStorageSet(activityKey, String(lastActivityAt));
+  emitPresenceDiagnostic({ uid, status: 'connecting', message: 'Realtime Database 연결을 준비하고 있습니다.', updatedAt: Date.now() });
 
   const getDesiredState = (now = Date.now()): ClientPresenceState => {
     if (document.visibilityState !== 'visible') return 'background';
@@ -117,9 +157,6 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     const heartbeatDue = now - lastServerWriteAt >= HEARTBEAT_MS;
     if (!force && !stateChanged && !activityNeedsSync && !heartbeatDue) return;
 
-    currentState = nextState;
-    lastServerWriteAt = now;
-    lastSyncedActivityAt = lastActivityAt;
     await set(sessionRef, {
       sessionId,
       state: nextState,
@@ -128,6 +165,10 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       lastActivityAt,
       updatedAt: serverTimestamp(),
     });
+    currentState = nextState;
+    lastServerWriteAt = now;
+    lastSyncedActivityAt = lastActivityAt;
+    emitPresenceDiagnostic({ uid, status: 'connected', message: '접속 상태가 정상 기록되고 있습니다.', updatedAt: Date.now() });
   };
 
   const acquireIdleLogoutLock = () => {
@@ -202,16 +243,57 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   window.addEventListener('storage', handleStorage);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
-  connectedUnsubscribe = onValue(connectedRef, async (snapshot) => {
-    connected = snapshot.val() === true;
-    if (!connected || stopped) return;
-    try {
-      await onDisconnect(sessionRef).remove();
-      await onDisconnect(lastSeenRef).set(serverTimestamp());
-      await writeSession(true);
-    } catch (error) {
-      console.warn('[Presence] connection setup failed:', error);
+  const clearConnectionSetupRetry = () => {
+    if (connectionSetupRetryTimer !== null) {
+      window.clearTimeout(connectionSetupRetryTimer);
+      connectionSetupRetryTimer = null;
     }
+  };
+
+  const scheduleConnectionSetupRetry = () => {
+    if (stopped || !connected || connectionSetupRetryTimer !== null) return;
+    connectionSetupRetryTimer = window.setTimeout(() => {
+      connectionSetupRetryTimer = null;
+      void setupConnection();
+    }, CONNECTION_SETUP_RETRY_MS);
+  };
+
+  const setupConnection = async () => {
+    if (stopped || !connected) return;
+    clearConnectionSetupRetry();
+    try {
+      // Register stale-session cleanup before announcing this tab as online.
+      await onDisconnect(sessionRef).remove();
+      await writeSession(true);
+      // lastSeen registration is useful, but must not block the live session record.
+      try {
+        await onDisconnect(lastSeenRef).set(serverTimestamp());
+      } catch (lastSeenError) {
+        console.warn('[Presence] lastSeen onDisconnect setup failed:', lastSeenError);
+      }
+    } catch (error: any) {
+      currentState = null;
+      console.warn('[Presence] connection setup failed:', error);
+      emitPresenceDiagnostic({
+        uid,
+        status: 'error',
+        message: error?.message || '접속 상태 기록에 실패했습니다. 자동으로 다시 연결합니다.',
+        updatedAt: Date.now(),
+      });
+      scheduleConnectionSetupRetry();
+    }
+  };
+
+  connectedUnsubscribe = onValue(connectedRef, (snapshot) => {
+    connected = snapshot.val() === true;
+    if (!connected || stopped) {
+      clearConnectionSetupRetry();
+      if (!stopped) {
+        emitPresenceDiagnostic({ uid, status: 'connecting', message: '네트워크 연결을 기다리고 있습니다.', updatedAt: Date.now() });
+      }
+      return;
+    }
+    void setupConnection();
   });
 
   checkTimer = window.setInterval(checkState, 30_000);
@@ -224,6 +306,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     connectedUnsubscribe = null;
     if (checkTimer !== null) window.clearInterval(checkTimer);
     if (pointerMoveTimer !== null) window.clearTimeout(pointerMoveTimer);
+    clearConnectionSetupRetry();
     passiveEvents.forEach((eventName) => window.removeEventListener(eventName, markActivity));
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('storage', handleStorage);
@@ -237,6 +320,7 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     } catch (error) {
       console.warn('[Presence] cleanup deferred to onDisconnect:', error);
     }
+    emitPresenceDiagnostic({ uid, status: 'stopped', message: '접속 상태 기록이 종료되었습니다.', updatedAt: Date.now() });
   };
 
   return { stop, markActivity };

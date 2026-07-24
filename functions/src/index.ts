@@ -2,7 +2,9 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
-admin.initializeApp();
+admin.initializeApp({
+  databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
+});
 
 const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
   (user.providerData || [])

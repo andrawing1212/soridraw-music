@@ -38,18 +38,41 @@ jobs:
         run: npm install --global firebase-tools@13.34.0
 
       - name: Deploy Realtime Database rules only
+        id: deploy
+        shell: bash
         run: |
+          set +e
           firebase deploy \
             --only database \
             --project soridraw-app-866a5 \
-            --non-interactive
+            --non-interactive 2>&1 | tee deploy.log
+          code=${PIPESTATUS[0]}
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          tail -n 60 deploy.log > deploy-tail.log
+          exit 0
 
       - name: Report result
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          JOB_STATUS: ${{ job.status }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           RUN_ID: ${{ github.run_id }}
+          EXIT_CODE: ${{ steps.deploy.outputs.exit_code }}
+        shell: bash
         run: |
-          gh issue comment "$ISSUE_NUMBER" --repo "${{ github.repository }}" --body "REALTIME_RULES_DEPLOY_RESULT status=${JOB_STATUS} run_id=${RUN_ID}"
+          if [ "$EXIT_CODE" = "0" ]; then
+            status=success
+          else
+            status=failure
+          fi
+          {
+            echo "REALTIME_RULES_DEPLOY_RESULT status=${status} run_id=${RUN_ID}"
+            echo
+            echo '```text'
+            cat deploy-tail.log 2>/dev/null || true
+            echo '```'
+          } > comment.md
+          gh issue comment "$ISSUE_NUMBER" --repo "${{ github.repository }}" --body-file comment.md
+          if [ "$EXIT_CODE" != "0" ]; then
+            exit "$EXIT_CODE"
+          fi

@@ -69,8 +69,10 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
 };
 
 const ADMIN_PAGE_SIZE = 20;
+const ADMIN_PRESENCE_REFRESH_INTERVAL_MS = 60_000;
 const LONG_INACTIVE_DAYS = 180;
 const DORMANT_DAYS = 365;
+const OFFLINE_TO_LOGGED_OUT_MS = 2 * 24 * 60 * 60 * 1000;
 
 type PresenceState = 'active' | 'away' | 'background' | 'offline' | 'loggedOut' | 'forced';
 type PresenceDisplayMode = 'ready' | 'checking' | 'error';
@@ -84,7 +86,7 @@ type LivePresenceSummary = {
 type ProviderKind = 'google' | 'email' | 'linked' | 'unknown' | 'deleted';
 type ProviderFilter = 'all' | ProviderKind;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'deleted';
-type AdminAction = 'forceLogout' | 'resetEmail' | 'deleteUser' | null;
+type AdminAction = 'setPresence' | 'forceLogout' | 'resetEmail' | 'deleteUser' | null;
 
 type AuthDirectoryEntry = {
   uid: string;
@@ -126,12 +128,13 @@ const isForceLoggedOut = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt'
   const loginTime = user.lastLoginAt || 0;
   const logoutTime = user.lastLogoutAt || 0;
   const forceTime = user.forceLogoutAt || 0;
-  return forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime < forceTime);
+  return forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime <= forceTime);
 };
 
 const getPresenceState = (
-  user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>,
-  livePresence?: LivePresenceSummary
+  user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+  livePresence?: LivePresenceSummary,
+  now = Date.now()
 ): PresenceState => {
   if (isForceLoggedOut(user)) return 'forced';
   if (livePresence?.state === 'active') return 'active';
@@ -139,14 +142,28 @@ const getPresenceState = (
   if (livePresence?.state === 'background') return 'background';
 
   const loginTime = user.lastLoginAt || 0;
+  const adminOverrideAt = user.adminPresenceStateAt || 0;
+  if (adminOverrideAt > loginTime) {
+    if (user.adminPresenceState === 'loggedOut') return 'loggedOut';
+    if (user.adminPresenceState === 'offline') return 'offline';
+  }
+
   const logoutTime = user.lastLogoutAt || 0;
-  const recentActivity = Math.max(
+  const latestActualActivity = Math.max(
     livePresence?.lastActivityAt || 0,
-    livePresence?.lastSeenAt || 0,
-    user.lastSeenAt || 0,
     loginTime
   );
-  if (logoutTime > 0 && logoutTime >= recentActivity) return 'loggedOut';
+  // lastSeenAt is a connection/disconnect timestamp, not proof of user activity.
+  // Comparing logout against it made a normal logout appear as offline.
+  if (logoutTime > 0 && logoutTime >= latestActualActivity) return 'loggedOut';
+
+  const offlineSince = Math.max(
+    livePresence?.lastSeenAt || 0,
+    user.lastSeenAt || 0,
+    livePresence?.lastActivityAt || 0,
+    loginTime
+  );
+  if (offlineSince > 0 && now - offlineSince >= OFFLINE_TO_LOGGED_OUT_MS) return 'loggedOut';
   return 'offline';
 };
 
@@ -162,17 +179,28 @@ const getProviderKind = (user: AppUserInfo): ProviderKind => {
 };
 
 const getRecentActivityAt = (
-  user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt'>,
+  user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
   livePresence?: LivePresenceSummary
 ) => {
-  const latest = Math.max(
-    livePresence?.lastActivityAt || 0,
-    livePresence?.lastSeenAt || 0,
-    user.lastSeenAt || 0,
-    user.lastLoginAt || 0,
-    user.lastLogoutAt || 0,
-    user.forceLogoutAt || 0
-  );
+  const presence = getPresenceState(user, livePresence);
+  let latest = 0;
+
+  if (presence === 'active' || presence === 'away' || presence === 'background') {
+    // A disconnect timestamp is not user activity. Mixing lastSeenAt here caused
+    // idle users to jump from 5 minutes ago back to just now after reconnects.
+    latest = Math.max(
+      livePresence?.lastActivityAt || 0,
+      user.lastSeenAt || 0,
+      user.lastLoginAt || 0
+    );
+  } else if (presence === 'forced') {
+    latest = Math.max(user.forceLogoutAt || 0, user.lastLogoutAt || 0, user.lastSeenAt || 0);
+  } else if (presence === 'loggedOut') {
+    latest = Math.max(user.lastLogoutAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, user.lastLoginAt || 0);
+  } else {
+    latest = Math.max(livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, livePresence?.lastActivityAt || 0, user.lastLoginAt || 0);
+  }
+
   return latest > 0 ? latest : undefined;
 };
 
@@ -204,6 +232,11 @@ const parseUserDocument = (uid: string, data: Record<string, any>): AppUserInfo 
   isOnline: Boolean(data.isOnline),
   lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
   forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
+  adminPresenceState: data.adminPresenceState === 'offline' || data.adminPresenceState === 'loggedOut'
+    ? data.adminPresenceState
+    : null,
+  adminPresenceStateAt: data.adminPresenceStateAt ? getTimestampMs(data.adminPresenceStateAt) : undefined,
+  adminPresenceStateBy: data.adminPresenceStateBy || null,
   providerIds: Array.isArray(data.providerIds) ? data.providerIds : [],
   emailVerified: typeof data.emailVerified === 'boolean' ? data.emailVerified : undefined,
   authDisabled: Boolean(data.authDisabled),
@@ -300,7 +333,7 @@ const PresenceBadge = ({ user, livePresence, displayMode = 'ready' }: { user: Ap
     away: { label: '자리비움', className: 'text-amber-300' },
     background: { label: '백그라운드', className: 'text-sky-300' },
     offline: { label: '오프라인', className: 'text-zinc-300' },
-    loggedOut: { label: '로그아웃', className: 'text-zinc-300' },
+    loggedOut: { label: '로그아웃', className: 'text-red-400' },
     forced: { label: '강제 로그아웃', className: 'text-red-400' },
   };
   const current = config[presence];
@@ -352,7 +385,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   }, [isAdminProp]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => setPresenceClock(Date.now()), 30_000);
+    const intervalId = window.setInterval(() => setPresenceClock(Date.now()), ADMIN_PRESENCE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
   }, []);
 
@@ -481,11 +514,11 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       if (provider === 'google') google += 1;
       if (provider === 'email') email += 1;
       if ((provider === 'email' || provider === 'linked') && user.emailVerified === false) unverified += 1;
-      const presence = getPresenceState(user, livePresence[user.uid]);
+      const presence = getPresenceState(user, livePresence[user.uid], presenceClock);
       if (presence === 'active' || presence === 'away' || presence === 'background') online += 1;
     });
     return { total: usersWithAuth.length, online, google, email, unverified, deleted };
-  }, [livePresence, usersWithAuth]);
+  }, [livePresence, presenceClock, usersWithAuth]);
 
   const filteredUsers = useMemo(() => usersWithAuth.filter((user) => {
     const keyword = searchTerm.trim().toLowerCase();
@@ -499,7 +532,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || user.accountStatus === statusFilter;
     const matchesPayment = paymentFilter === 'all' || user.paymentStatus === paymentFilter;
-    const presence = getPresenceState(user, livePresence[user.uid]);
+    const presence = getPresenceState(user, livePresence[user.uid], presenceClock);
     const matchesPresence = presenceFilter === 'all'
       || (presenceFilter === 'loggedIn' && (presence === 'active' || presence === 'away' || presence === 'background'))
       || (presenceFilter === 'loggedOut' && (presence === 'offline' || presence === 'loggedOut' || presence === 'forced'));
@@ -508,7 +541,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       || (verificationFilter === 'verified' && provider !== 'deleted' && (provider === 'google' || user.emailVerified === true))
       || (verificationFilter === 'unverified' && provider !== 'deleted' && (provider === 'email' || provider === 'linked') && user.emailVerified === false);
     return matchesSearch && matchesProvider && matchesRole && matchesStatus && matchesPayment && matchesPresence && matchesVerification;
-  }), [livePresence, paymentFilter, presenceFilter, providerFilter, roleFilter, searchTerm, statusFilter, usersWithAuth, verificationFilter]);
+  }), [livePresence, paymentFilter, presenceClock, presenceFilter, providerFilter, roleFilter, searchTerm, statusFilter, usersWithAuth, verificationFilter]);
 
   useEffect(() => {
     setVisibleCount(ADMIN_PAGE_SIZE);
@@ -547,7 +580,9 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       setLivePresence((previous) => ({ ...previous, ...next }));
       setPresenceSyncError(null);
       setHasPresenceSynced(true);
-      setPresenceClock(Number(payload.checkedAt || Date.now()));
+      // Use one local clock source so the relative time never moves backward
+      // because of a small server/client clock difference.
+      setPresenceClock(Date.now());
     } catch (error) {
       console.error('Failed to load Realtime presence:', error);
       setHasPresenceSynced(false);
@@ -563,7 +598,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     void fetchPresence();
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') void fetchPresence();
-    }, 30_000);
+    }, ADMIN_PRESENCE_REFRESH_INTERVAL_MS);
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') void fetchPresence();
     };
@@ -696,6 +731,42 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
     } finally {
       setActiveAdminAction(null);
     }
+  };
+
+  const requestPresenceOverride = (state: 'offline' | 'loggedOut' | null) => {
+    if (!selectedUser) return;
+    const label = state === 'offline' ? '오프라인' : state === 'loggedOut' ? '로그아웃' : '자동 판정';
+    setConfirmModal({
+      isOpen: true,
+      title: `접속 상태 · ${label}`,
+      message: state
+        ? `${label}으로 표시를 보정합니다. 실제 접속 중인 세션은 활동중 상태가 우선하며, 회원이 다시 로그인하면 이 보정은 자동으로 무효화됩니다.`
+        : '수동 보정을 해제하고 실시간 접속 기록과 2일 자동 판정 기준으로 되돌립니다.',
+      confirmLabel: '상태 적용',
+      tone: state === 'loggedOut' ? 'danger' : 'brand',
+      onConfirm: async () => {
+        if (!selectedUser || !auth.currentUser) return;
+        closeConfirm();
+        setActiveAdminAction('setPresence');
+        setActionResult(null);
+        try {
+          const updates: Record<string, unknown> = {
+            adminPresenceState: state,
+            adminPresenceStateAt: state ? Date.now() : null,
+            adminPresenceStateBy: state ? auth.currentUser.uid : null,
+          };
+          if (state) updates.isOnline = false;
+          await updateDoc(doc(db, 'users', selectedUser.uid), updates);
+          setActionResult({ success: true, message: state ? `${label} 표시로 보정했습니다.` : '접속 상태를 자동 판정으로 되돌렸습니다.' });
+          await refreshAfterAction(selectedUser.uid);
+        } catch (error: any) {
+          console.error('Presence override failed:', error);
+          setActionResult({ success: false, message: error?.message || '접속 상태 보정에 실패했습니다.' });
+        } finally {
+          setActiveAdminAction(null);
+        }
+      },
+    });
   };
 
   const requestForceLogout = () => {
@@ -896,7 +967,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             </span>
             <span className={cn('inline-flex items-center gap-2', presenceSyncError ? 'text-amber-300' : hasPresenceSynced ? 'text-sky-300' : 'text-zinc-300')}>
               {isPresenceSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : presenceSyncError ? <AlertCircle className="w-3.5 h-3.5" /> : hasPresenceSynced ? <Activity className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              {isPresenceSyncing ? '접속 상태 확인 중' : presenceSyncError || (hasPresenceSynced ? '접속 상태 서버 연결됨 · 30초 자동 확인' : '접속 상태 첫 확인 중')}
+              {isPresenceSyncing ? '접속 상태 확인 중' : presenceSyncError || (hasPresenceSynced ? '접속 상태 서버 연결됨 · 60초 자동 확인' : '접속 상태 첫 확인 중')}
             </span>
             {localPresenceDiagnostic && (
               <span className={cn('inline-flex items-center gap-2', localPresenceDiagnostic.status === 'connected' ? 'text-emerald-300' : localPresenceDiagnostic.status === 'error' ? 'text-amber-300' : 'text-zinc-300')}>
@@ -923,8 +994,16 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         ) : visibleUsers.map((user) => {
           const badge = getBadgeInfo(user);
           const live = livePresence[user.uid];
-          const presence = getPresenceState(user, live);
-          const presenceDot = presence === 'active' ? 'bg-emerald-400' : presence === 'away' ? 'bg-amber-300' : presence === 'background' ? 'bg-sky-300' : presence === 'forced' ? 'bg-red-400' : 'bg-zinc-500';
+          const presence = getPresenceState(user, live, presenceClock);
+          const presenceDot = presence === 'active'
+            ? 'bg-emerald-400'
+            : presence === 'away'
+              ? 'bg-amber-300'
+              : presence === 'background'
+                ? 'bg-sky-300'
+                : presence === 'loggedOut' || presence === 'forced'
+                  ? 'bg-red-400'
+                  : 'bg-zinc-500';
           const recentTime = getRecentActivityAt(user, live);
           return (
             <button
@@ -1067,6 +1146,22 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     {saveStatus === 'error' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-red-300"><AlertCircle className="w-3.5 h-3.5" />저장 실패</span>}
                     <button onClick={handleUpdateUser} disabled={isSaving} className="inline-flex items-center gap-2 rounded-2xl bg-brand-orange px-5 py-2.5 text-xs font-black text-white shadow-[0_10px_24px_rgba(255,130,0,0.2)] hover:brightness-110 disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}설정 저장</button>
                   </div>
+                </section>
+
+                <section className={cn('rounded-3xl border border-white/10 bg-white/[0.03] p-5', (selectedUser.authDeleted || selectedUser.authDeletedAt) && 'opacity-60 pointer-events-none')}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-sky-400/10 flex items-center justify-center shrink-0"><Activity className="w-5 h-5 text-sky-300" /></div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-black text-zinc-100">접속 상태 수동 보정</h3>
+                      <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">오래된 회원 표시를 정리하는 기능입니다. 실제 접속이 감지되면 활동중·자리비움·백그라운드가 우선하며, 새 로그인 이후에는 수동 보정이 자동으로 무효화됩니다.</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <button onClick={() => requestPresenceOverride(null)} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-black text-zinc-300 hover:border-emerald-400/30 hover:text-emerald-300 disabled:opacity-35"><RefreshCw className="w-4 h-4" />자동 판정</button>
+                    <button onClick={() => requestPresenceOverride('offline')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-400/20 bg-zinc-400/[0.06] px-4 py-3 text-xs font-black text-zinc-200 hover:border-zinc-300/40 disabled:opacity-35"><Activity className="w-4 h-4" />오프라인 표시</button>
+                    <button onClick={() => requestPresenceOverride('loggedOut')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-xs font-black text-red-300 hover:bg-red-400/15 disabled:opacity-35"><LogOut className="w-4 h-4" />로그아웃 표시</button>
+                  </div>
+                  <p className="mt-3 text-[10px] font-bold text-zinc-600">오프라인 상태가 2일을 넘으면 기존 회원을 포함해 자동으로 로그아웃으로 표시됩니다. 실제 인증 세션 종료는 아래 강제 로그아웃을 사용합니다.</p>
                 </section>
 
                 <section className="rounded-3xl border border-red-400/15 bg-red-400/[0.035] p-5">

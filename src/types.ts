@@ -590,6 +590,9 @@ export interface AppUserInfo {
   isOnline?: boolean;
   lastSeenAt?: number;
   forceLogoutAt?: number;
+  adminPresenceState?: 'offline' | 'loggedOut' | null;
+  adminPresenceStateAt?: number;
+  adminPresenceStateBy?: string | null;
   providerIds?: string[];
   emailVerified?: boolean;
   authDisabled?: boolean;

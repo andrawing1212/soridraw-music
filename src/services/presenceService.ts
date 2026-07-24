@@ -130,7 +130,6 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   let idleLogoutTriggered = false;
   let connectedUnsubscribe: Unsubscribe | null = null;
   let checkTimer: number | null = null;
-  let pointerMoveTimer: number | null = null;
   let connectionSetupRetryTimer: number | null = null;
 
   const storedActivityAt = safeNumber(safeStorageGet(activityKey));
@@ -229,17 +228,10 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     }
   };
 
-  const handlePointerMove = () => {
-    if (pointerMoveTimer !== null) return;
-    pointerMoveTimer = window.setTimeout(() => {
-      pointerMoveTimer = null;
-      markActivity();
-    }, 1000);
-  };
-
-  const passiveEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'wheel', 'scroll'];
+  // Only deliberate interaction counts as activity. Mouse hover/pointer movement and
+  // programmatic scroll events previously refreshed idle time even when the user did nothing.
+  const passiveEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'wheel'];
   passiveEvents.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }));
-  window.addEventListener('pointermove', handlePointerMove, { passive: true });
   window.addEventListener('storage', handleStorage);
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -305,10 +297,8 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     connectedUnsubscribe?.();
     connectedUnsubscribe = null;
     if (checkTimer !== null) window.clearInterval(checkTimer);
-    if (pointerMoveTimer !== null) window.clearTimeout(pointerMoveTimer);
     clearConnectionSetupRetry();
     passiveEvents.forEach((eventName) => window.removeEventListener(eventName, markActivity));
-    window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('storage', handleStorage);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
 

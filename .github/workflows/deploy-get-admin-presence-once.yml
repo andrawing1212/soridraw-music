@@ -1,0 +1,82 @@
+name: Deploy getAdminPresence once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/get-admin-presence-trigger.txt
+
+concurrency:
+  group: deploy-get-admin-presence-once
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Deploy getAdminPresence to Firebase
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy getAdminPresence only
+        id: deploy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only functions:getAdminPresence --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/get-admin-presence-deploy.log
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          if [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            STATUS=success
+          else
+            STATUS=failure
+          fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "function=getAdminPresence"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "--- deploy log tail ---"
+            tail -n 80 /tmp/get-admin-presence-deploy.log 2>/dev/null || true
+          } > .deploy/get-admin-presence-deploy-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/get-admin-presence-deploy-result.txt
+          git commit -m "chore: record getAdminPresence deploy result" || true
+          git push origin HEAD:main
+
+      - name: Fail workflow when deploy failed
+        if: steps.deploy.outcome != 'success'
+        run: exit 1

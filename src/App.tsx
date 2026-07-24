@@ -504,7 +504,7 @@ import {
   query as firestoreQuery
 } from 'firebase/firestore';
 import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
-import { EMAIL_VERIFICATION_ACTION_SETTINGS } from './constants/emailVerification';
+import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
@@ -545,6 +545,22 @@ import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPer
 
 type AuthMode = 'login' | 'signup' | 'reset';
 type EmailVerificationGate = 'idle' | 'checking' | 'required';
+
+const getEmailVerificationCycleKey = (authUser: User, userData?: Record<string, any> | null) => {
+  const resetAt = Number(userData?.emailVerificationResetAtMs || 0);
+  const isResetCycle =
+    userData?.lastAdminAuthAction === 'reset-email-verification' &&
+    Number.isFinite(resetAt) &&
+    resetAt > 0;
+
+  if (isResetCycle) return `${authUser.uid}:reset:${resetAt}`;
+
+  const creationMs = authUser.metadata.creationTime
+    ? new Date(authUser.metadata.creationTime).getTime()
+    : 0;
+  const safeCreationMs = Number.isFinite(creationMs) && creationMs > 0 ? creationMs : 0;
+  return `${authUser.uid}:signup:${safeCreationMs || authUser.uid}`;
+};
 
 enum OperationType {
   CREATE = 'create',
@@ -3050,11 +3066,16 @@ function FeatureUnavailablePage({ label, fallbackPath }: { label: string; fallba
 }
 
 const EmailVerificationActionPageLazy = lazy(() => import('./components/EmailVerificationActionPage'));
+const EmailVerificationReturnPageLazy = lazy(() => import('./components/EmailVerificationReturnPage'));
 
 export default function AppWrapper() {
   const location = useLocation();
 
-  if (location.pathname === '/auth/action') {
+  if (location.pathname === '/auth/action' || location.pathname === '/auth/verified') {
+    const VerificationPage = location.pathname === '/auth/action'
+      ? EmailVerificationActionPageLazy
+      : EmailVerificationReturnPageLazy;
+
     return (
       <ErrorBoundary>
         <Suspense
@@ -3067,7 +3088,7 @@ export default function AppWrapper() {
             </main>
           )}
         >
-          <EmailVerificationActionPageLazy />
+          <VerificationPage />
         </Suspense>
       </ErrorBoundary>
     );
@@ -3884,6 +3905,9 @@ function App() {
   const [emailVerificationMessage, setEmailVerificationMessage] = useState<string | null>(null);
   const [isEmailVerificationActionPending, setIsEmailVerificationActionPending] = useState(false);
   const [emailVerificationRevision, setEmailVerificationRevision] = useState(0);
+  const [emailVerificationCycleKey, setEmailVerificationCycleKey] = useState<string | null>(null);
+  const [isEmailVerificationCycleReady, setIsEmailVerificationCycleReady] = useState(false);
+  const [emailVerificationResendSeconds, setEmailVerificationResendSeconds] = useState(0);
   const emailVerificationHistoryPushedRef = useRef(false);
   const suppressEmailVerificationPopRef = useRef(false);
   const emailVerificationAutoSendRef = useRef('');
@@ -5376,32 +5400,75 @@ function App() {
     setAuthMessage(null);
   };
 
-  const sendVerificationEmailToCurrentUser = async (message = '인증메일을 보냈습니다. 메일함의 링크를 눌러주세요.') => {
+  useEffect(() => {
+    if (!isAuthReady || user) return;
+    const params = new URLSearchParams(location.search);
+    if (params.get('auth') !== 'login') return;
+
+    setAuthMode('login');
+    setAuthMessage(null);
+    setIsAuthModalOpen(true);
+
+    params.delete('auth');
+    const nextSearch = params.toString();
+    navigate(`${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash}`, { replace: true });
+  }, [isAuthReady, location.hash, location.pathname, location.search, navigate, user]);
+
+  const sendVerificationEmailToCurrentUser = async ({
+    message = '인증메일을 보냈습니다. 메일함의 링크를 눌러주세요.',
+    source = 'manual',
+  }: {
+    message?: string;
+    source?: 'auto' | 'manual';
+  } = {}) => {
     const currentUser = auth.currentUser;
     if (!currentUser || !currentUser.email) {
       setEmailVerificationMessage('인증할 이메일 계정을 찾을 수 없습니다. 다시 로그인해주세요.');
       return false;
     }
 
+    if (source === 'manual' && emailVerificationResendSeconds > 0) {
+      setEmailVerificationMessage(`${emailVerificationResendSeconds}초 후 인증메일을 다시 보낼 수 있습니다.`);
+      return false;
+    }
+
     setIsEmailVerificationActionPending(true);
+    if (source === 'manual') setEmailVerificationResendSeconds(60);
+
     try {
       auth.languageCode = 'ko';
-      await sendEmailVerification(currentUser, EMAIL_VERIFICATION_ACTION_SETTINGS);
+      await sendEmailVerification(
+        currentUser,
+        buildEmailVerificationActionSettings(currentUser.uid)
+      );
+      setEmailVerificationResendSeconds(60);
       setEmailVerificationMessage(message);
       return true;
     } catch (error: any) {
       console.error('Email verification send error:', error);
       const code = error?.code || 'unknown';
-      setEmailVerificationMessage(
-        code === 'auth/too-many-requests'
-          ? '인증메일 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
-          : `인증메일을 보내지 못했습니다. 다시 시도해주세요. (${code})`
-      );
+      if (code === 'auth/too-many-requests') {
+        setEmailVerificationResendSeconds(300);
+        setEmailVerificationMessage(
+          '최근 인증메일 요청이 이미 처리되었습니다. 받은편지함과 스팸함을 확인하고 5분 후 다시 시도해주세요.'
+        );
+      } else {
+        setEmailVerificationMessage(`인증메일을 보내지 못했습니다. 다시 시도해주세요. (${code})`);
+      }
       return false;
     } finally {
       setIsEmailVerificationActionPending(false);
     }
   };
+
+
+  useEffect(() => {
+    if (emailVerificationResendSeconds <= 0) return;
+    const timer = window.setTimeout(() => {
+      setEmailVerificationResendSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [emailVerificationResendSeconds]);
 
   const handleCheckEmailVerification = async () => {
     const currentUser = auth.currentUser;
@@ -6595,28 +6662,49 @@ const toggleCycleVariantSelection = (
   }, [emailVerificationRevision, isUserRoleReady, user, userRole]);
 
   useEffect(() => {
-    if (!user || emailVerificationGate !== 'required') return;
+    if (
+      !user ||
+      emailVerificationGate !== 'required' ||
+      !isEmailVerificationCycleReady ||
+      !emailVerificationCycleKey
+    ) return;
 
-    const signInMarker = user.metadata.lastSignInTime || user.metadata.creationTime || 'current';
-    const autoSendKey = `${user.uid}:${signInMarker}`;
-    if (emailVerificationAutoSendRef.current === autoSendKey) return;
+    const runningKey = `running:${emailVerificationCycleKey}`;
+    const doneKey = `done:${emailVerificationCycleKey}`;
+    if (
+      emailVerificationAutoSendRef.current === runningKey ||
+      emailVerificationAutoSendRef.current === doneKey
+    ) return;
 
-    const storageKey = `soridraw-email-verification-auto-sent:${autoSendKey}`;
+    const storageKey = `soridraw-email-verification-auto-attempted:${emailVerificationCycleKey}`;
     try {
-      if (sessionStorage.getItem(storageKey) === '1') {
-        emailVerificationAutoSendRef.current = autoSendKey;
+      if (localStorage.getItem(storageKey)) {
+        emailVerificationAutoSendRef.current = doneKey;
+        setEmailVerificationMessage(
+          '이 인증 단계의 자동 발송은 이미 1회 처리되었습니다. 받은편지함과 스팸함을 확인하고, 메일이 없을 때만 재전송해주세요.'
+        );
         return;
       }
-      sessionStorage.setItem(storageKey, '1');
+      // 로그인·새로고침을 반복해도 같은 가입/초기화 단계에서는 자동 요청을
+      // 다시 보내지 않는다. 전송 실패 시에는 사용자가 재전송 버튼으로 시도한다.
+      localStorage.setItem(storageKey, String(Date.now()));
     } catch {
-      // Session storage can be unavailable in restricted browser modes.
+      // Storage can be unavailable in restricted browser modes.
     }
 
-    emailVerificationAutoSendRef.current = autoSendKey;
-    void sendVerificationEmailToCurrentUser(
-      '인증메일을 자동으로 보냈습니다. 메일의 인증 링크를 누른 뒤 인증 완료를 확인해주세요.'
-    );
-  }, [emailVerificationGate, user]);
+    emailVerificationAutoSendRef.current = runningKey;
+    void sendVerificationEmailToCurrentUser({
+      source: 'auto',
+      message: '인증메일을 자동으로 1회 보냈습니다. 메일의 인증 링크를 누른 뒤 인증 완료를 확인해주세요.',
+    }).finally(() => {
+      emailVerificationAutoSendRef.current = doneKey;
+    });
+  }, [
+    emailVerificationCycleKey,
+    emailVerificationGate,
+    isEmailVerificationCycleReady,
+    user,
+  ]);
 
   useEffect(() => {
     if (!user || emailVerificationGate === 'idle') return;
@@ -6828,6 +6916,10 @@ const toggleCycleVariantSelection = (
       setUser(currentUser);
       setIsAuthReady(true);
       setIsUserRoleReady(!currentUser);
+      setEmailVerificationCycleKey(null);
+      setIsEmailVerificationCycleReady(false);
+      setEmailVerificationResendSeconds(0);
+      emailVerificationAutoSendRef.current = '';
       if (!currentUser) {
         setUserLyricClicheGuard(null);
         setIsUserLyricClicheGuardReady(true);
@@ -6866,6 +6958,8 @@ const toggleCycleVariantSelection = (
           try {
             const userSnap = await getDoc(userRef);
             if (!userSnap.exists()) {
+              setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+              setIsEmailVerificationCycleReady(true);
               setUserLyricClicheGuard(null);
               setIsUserLyricClicheGuardReady(true);
               hasCompletedForceLogoutReentryCheckRef.current = true;
@@ -6873,6 +6967,8 @@ const toggleCycleVariantSelection = (
             }
 
             const data = userSnap.data();
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
+            setIsEmailVerificationCycleReady(true);
             setUserLyricClicheGuard({
               hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
               softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
@@ -6898,6 +6994,8 @@ const toggleCycleVariantSelection = (
             }
           } catch (error) {
             console.error('[Auth] Initial force logout check failed:', error);
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+            setIsEmailVerificationCycleReady(true);
           } finally {
             setIsUserRoleReady(true);
             hasCompletedForceLogoutReentryCheckRef.current = true;
@@ -6910,6 +7008,8 @@ const toggleCycleVariantSelection = (
         unsubUserDoc = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
+            setIsEmailVerificationCycleReady(true);
             {
               const verifiedRole = (data.role || 'free') as UserRole;
               setUserRole(verifiedRole);
@@ -6943,6 +7043,8 @@ const toggleCycleVariantSelection = (
             }
           } else {
             // Initial signup fallback
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+            setIsEmailVerificationCycleReady(true);
             setUserRole('free');
             setIsUserRoleReady(true);
             const roleCache = { uid: currentUser.uid, role: 'free' as UserRole };
@@ -6954,6 +7056,8 @@ const toggleCycleVariantSelection = (
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
+          setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+          setIsEmailVerificationCycleReady(true);
           setIsUserRoleReady(true);
           setUserLyricClicheGuard(null);
           setIsUserLyricClicheGuardReady(true);
@@ -12641,11 +12745,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                     <button
                       type="button"
-                      onClick={() => void sendVerificationEmailToCurrentUser()}
-                      disabled={isEmailVerificationActionPending}
+                      onClick={() => void sendVerificationEmailToCurrentUser({ source: 'manual' })}
+                      disabled={isEmailVerificationActionPending || emailVerificationResendSeconds > 0}
                       className="h-11 w-full rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-black text-white transition-all hover:bg-white/[0.1] disabled:cursor-wait disabled:opacity-60"
                     >
-                      인증메일 다시 보내기
+                      {emailVerificationResendSeconds > 0
+                        ? `${emailVerificationResendSeconds}초 후 다시 보내기`
+                        : '인증메일 다시 보내기'}
                     </button>
                     <button
                       type="button"

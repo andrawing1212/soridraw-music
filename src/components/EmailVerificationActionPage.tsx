@@ -1,8 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { applyActionCode, checkActionCode } from 'firebase/auth';
+import { applyActionCode, checkActionCode, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
 type VerificationState = 'checking' | 'success' | 'error';
+
+const clearCachedAuthHints = () => {
+  try {
+    localStorage.removeItem('soridraw_cached_user_role_v1');
+  } catch {
+    // Storage may be unavailable in restricted browser modes.
+  }
+};
 
 const getVerificationErrorMessage = (error: unknown) => {
   const code = (error as { code?: string } | null)?.code || 'unknown';
@@ -17,6 +25,7 @@ export default function EmailVerificationActionPage() {
   const hasHandledActionRef = useRef(false);
   const [status, setStatus] = useState<VerificationState>('checking');
   const [message, setMessage] = useState('인증 링크를 확인하고 있습니다.');
+  const [requiresLogin, setRequiresLogin] = useState(false);
 
   useEffect(() => {
     if (hasHandledActionRef.current) return;
@@ -35,16 +44,32 @@ export default function EmailVerificationActionPage() {
     let isCancelled = false;
     const verifyEmail = async () => {
       try {
-        await checkActionCode(auth, oobCode);
+        const actionInfo = await checkActionCode(auth, oobCode);
+        const targetEmail = String(actionInfo.data.email || '').trim().toLowerCase();
         await applyActionCode(auth, oobCode);
-        if (auth.currentUser) {
-          await auth.currentUser.reload();
-          await auth.currentUser.getIdToken(true);
+
+        const currentUser = auth.currentUser;
+        const currentEmail = String(currentUser?.email || '').trim().toLowerCase();
+        let loginRequired = !currentUser;
+
+        if (currentUser && targetEmail && currentEmail !== targetEmail) {
+          await signOut(auth);
+          clearCachedAuthHints();
+          loginRequired = true;
+        } else if (currentUser) {
+          await currentUser.reload();
+          await currentUser.getIdToken(true);
         }
+
         if (isCancelled) return;
         window.history.replaceState({}, '', '/auth/action?verified=1');
+        setRequiresLogin(loginRequired);
         setStatus('success');
-        setMessage('이메일 인증이 완료되었습니다.');
+        setMessage(
+          loginRequired
+            ? '이메일 인증은 완료되었습니다. 인증한 이메일 계정으로 로그인해주세요.'
+            : '현재 로그인된 계정의 이메일 인증이 완료되었습니다.'
+        );
       } catch (error) {
         if (isCancelled) return;
         console.error('Email verification action error:', error);
@@ -59,7 +84,7 @@ export default function EmailVerificationActionPage() {
     };
   }, []);
 
-  const goHome = () => window.location.assign('/');
+  const goHome = () => window.location.assign(requiresLogin ? '/?auth=login' : '/');
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#100e0f] px-4 py-10 text-white">
@@ -78,13 +103,13 @@ export default function EmailVerificationActionPage() {
           <>
             <div className="mx-auto mt-6 flex h-16 w-16 items-center justify-center rounded-full border border-emerald-300/20 bg-emerald-300/10 text-3xl font-black text-emerald-300">✓</div>
             <h1 className="mt-6 text-2xl font-black">이메일 인증 완료</h1>
-            <p className="mt-3 text-sm font-bold leading-6 text-white/60">{message}<br />이제 SORIDRAW를 이용할 수 있습니다.</p>
+            <p className="mt-3 text-sm font-bold leading-6 text-white/60">{message}</p>
             <button
               type="button"
               onClick={goHome}
               className="mt-7 h-12 w-full rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-5 text-sm font-black text-[#151313] transition-all hover:brightness-110"
             >
-              SORIDRAW 시작하기
+              {requiresLogin ? '인증한 계정으로 로그인' : 'SORIDRAW 시작하기'}
             </button>
           </>
         )}
@@ -99,10 +124,10 @@ export default function EmailVerificationActionPage() {
             </div>
             <button
               type="button"
-              onClick={goHome}
+              onClick={() => window.location.assign('/?auth=login')}
               className="mt-6 h-11 w-full rounded-xl border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white transition-all hover:bg-white/[0.1]"
             >
-              SORIDRAW로 돌아가기
+              로그인 화면으로 돌아가기
             </button>
           </>
         )}

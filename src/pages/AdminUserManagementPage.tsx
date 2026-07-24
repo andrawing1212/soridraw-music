@@ -1169,6 +1169,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     ? 'bg-zinc-600'
                     : 'bg-zinc-500';
           const recentTime = getRecentActivityAt(user, live);
+          const recentTimeClassName = presence === 'loggedOut' ? 'text-zinc-500' : 'text-zinc-300';
           return (
             <button
               key={user.uid}
@@ -1192,12 +1193,12 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={user} /><VerificationBadge user={user} /></div>
                   <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 md:hidden">
                     <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-sky-300">{live.deviceCount}개 기기</p>}</div>
-                    <span className="inline-flex items-center gap-1 text-xs font-black text-zinc-300"><Clock className="w-3.5 h-3.5" />{formatLastSeen(recentTime, presenceClock)}</span>
+                    <span className={cn('inline-flex items-center gap-1 text-xs font-black', recentTimeClassName)}><Clock className="w-3.5 h-3.5" />{formatLastSeen(recentTime, presenceClock)}</span>
                   </div>
                 </div>
                 <div className="hidden md:flex w-44 flex-col items-end gap-1.5 shrink-0">
                   <PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />
-                  <span className="text-xs font-black text-zinc-300">{formatLastSeen(recentTime, presenceClock)}</span>
+                  <span className={cn('text-xs font-black', recentTimeClassName)}>{formatLastSeen(recentTime, presenceClock)}</span>
                   {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{live.deviceCount}개 기기</span>}
                 </div>
                 <ChevronRight className="w-5 h-5 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-brand-orange" />
@@ -1266,7 +1267,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                         <span className="text-xs font-bold text-zinc-400">최근 활동</span>
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                           <PresenceBadge user={selectedUser} livePresence={livePresence[selectedUser.uid]} displayMode={presenceDisplayMode} />
-                          <span className="text-sm font-black text-zinc-100">{formatLastSeen(getRecentActivityAt(selectedUser, livePresence[selectedUser.uid]), presenceClock)}</span>
+                          <span className={cn('text-sm font-black', getPresenceState(selectedUser, livePresence[selectedUser.uid], presenceClock) === 'loggedOut' ? 'text-zinc-500' : 'text-zinc-100')}>{formatLastSeen(getRecentActivityAt(selectedUser, livePresence[selectedUser.uid]), presenceClock)}</span>
                           {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {livePresence[selectedUser.uid].connectionCount}개</span>}
                         </div>
                       </div>

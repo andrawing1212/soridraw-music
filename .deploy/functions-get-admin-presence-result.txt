@@ -1,10 +1,10 @@
 status=failure
-run_id=30133057232
-commit=e27ee3739eb3a10714e79014c32339a2dd4f80a0
+run_id=30133167591
+commit=6ba05a4686a3e61913fc1f4901c2dba05b4e1055
 target_project=soridraw-app-866a5
 function=getAdminPresence
 auth_mode=backend_service_account
-finished_at=2026-07-24T23:10:47Z
+finished_at=2026-07-24T23:13:10Z
 
 --- deploy log tail ---
 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead

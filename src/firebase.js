@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 const firebaseConfig = {
@@ -10,7 +11,8 @@ const firebaseConfig = {
   projectId: "soridraw-app-866a5",
   storageBucket: "soridraw-app-866a5.firebasestorage.app",
   messagingSenderId: "91309780603",
-  appId: "1:91309780603:web:cde703895e2cf31ecffcde"
+  appId: "1:91309780603:web:cde703895e2cf31ecffcde",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://soridraw-app-866a5-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -80,5 +82,6 @@ googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 export const db = getFirestore(app);
+export const realtimeDb = getDatabase(app);
 export const functions = getFunctions(app, "us-central1");
 export { httpsCallable };

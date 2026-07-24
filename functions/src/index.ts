@@ -24,6 +24,47 @@ const requireAdminCaller = async (request: { auth?: { uid: string } | null }) =>
   return { db, requesterUid };
 };
 
+
+const PRESENCE_SESSION_STALE_MS = 25 * 60 * 1000;
+
+type AdminPresenceSummary = {
+  state: "active" | "away" | "background" | "offline";
+  connectionCount: number;
+  lastActivityAt: number | null;
+  lastSeenAt: number | null;
+};
+
+const summarizePresenceRecord = (value: any, now = Date.now()): AdminPresenceSummary => {
+  const rawConnections = value?.connections && typeof value.connections === "object"
+    ? Object.values(value.connections)
+    : [];
+  const validConnections = rawConnections.filter((session: any) => {
+    const updatedAt = Number(session?.updatedAt || 0);
+    return Number.isFinite(updatedAt) && updatedAt > 0 && now - updatedAt <= PRESENCE_SESSION_STALE_MS;
+  }) as any[];
+
+  const states = validConnections.map((session) => String(session?.state || ""));
+  const state: AdminPresenceSummary["state"] = states.includes("active")
+    ? "active"
+    : states.includes("away")
+      ? "away"
+      : states.includes("background")
+        ? "background"
+        : "offline";
+  const lastActivityAt = validConnections.reduce((latest, session) => {
+    const candidate = Number(session?.lastActivityAt || 0);
+    return Number.isFinite(candidate) ? Math.max(latest, candidate) : latest;
+  }, 0);
+  const lastSeenAt = Number(value?.lastSeenAt || 0);
+
+  return {
+    state,
+    connectionCount: validConnections.length,
+    lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
+    lastSeenAt: Number.isFinite(lastSeenAt) && lastSeenAt > 0 ? lastSeenAt : null,
+  };
+};
+
 const assertManageableTarget = async (
   db: admin.firestore.Firestore,
   requesterUid: string,
@@ -201,6 +242,50 @@ export const getAdminAuthDirectory = onCall(
         lastSignInTime: authUser.metadata.lastSignInTime || null,
       })),
       nextPageToken: page.pageToken || null,
+    };
+  }
+);
+
+
+export const getAdminPresence = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    await requireAdminCaller(request);
+    const requestedUids = Array.isArray(request.data?.uids) ? request.data.uids : [];
+    const uids = Array.from(new Set(
+      requestedUids
+        .map((uid: unknown) => String(uid || "").trim())
+        .filter((uid: string) => uid.length > 0 && uid.length <= 128)
+    )).slice(0, 50) as string[];
+
+    if (uids.length === 0) {
+      return { ok: true, checkedAt: Date.now(), presence: {} };
+    }
+
+    let rows: ReadonlyArray<readonly [string, AdminPresenceSummary]>;
+    try {
+      const database = admin.database();
+      rows = await Promise.all(uids.map(async (uid) => {
+        const snapshot = await database.ref(`presence/${uid}`).get();
+        return [uid, summarizePresenceRecord(snapshot.val())] as const;
+      }));
+    } catch (error) {
+      console.error("Failed to read Realtime Database presence:", error);
+      throw new HttpsError(
+        "failed-precondition",
+        "Realtime Database를 생성하고 접속 상태 규칙을 배포한 뒤 다시 시도해주세요."
+      );
+    }
+
+    const presence: Record<string, AdminPresenceSummary> = {};
+    rows.forEach(([uid, summary]) => {
+      presence[uid] = summary;
+    });
+
+    return {
+      ok: true,
+      checkedAt: Date.now(),
+      presence,
     };
   }
 );

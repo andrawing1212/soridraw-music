@@ -504,6 +504,7 @@ import {
   query as firestoreQuery
 } from 'firebase/firestore';
 import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
+import { startUserPresence } from './services/presenceService';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
@@ -5307,6 +5308,7 @@ function App() {
       return false;
     }
   });
+  const presenceControllerRef = useRef<ReturnType<typeof startUserPresence> | null>(null);
 
   // 2. CORE FUNCTIONS NEXT (BEFORE ANY USEEFFECT)
   const handleLogout = async () => {
@@ -5333,6 +5335,8 @@ function App() {
 
       clearCachedUserRole();
       setCachedUserRoleHint(null);
+      await presenceControllerRef.current?.stop();
+      presenceControllerRef.current = null;
       await signOut(auth);
       navigate('/', { replace: true });
 
@@ -5360,6 +5364,8 @@ function App() {
 
       clearCachedUserRole();
       setCachedUserRoleHint(null);
+      await presenceControllerRef.current?.stop();
+      presenceControllerRef.current = null;
       await signOut(auth);
       navigate('/', { replace: true });
     } catch (error) {
@@ -5367,10 +5373,31 @@ function App() {
       // Even if updateDoc fails, we should try to sign out
       clearCachedUserRole();
       setCachedUserRoleHint(null);
+      await presenceControllerRef.current?.stop().catch(() => {});
+      presenceControllerRef.current = null;
       await signOut(auth).catch(() => {});
       navigate('/', { replace: true });
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+    const authLastSignInAt = user.metadata.lastSignInTime
+      ? new Date(user.metadata.lastSignInTime).getTime()
+      : 0;
+    const presence = startUserPresence(user.uid, {
+      authLastSignInAt: Number.isFinite(authLastSignInAt) ? authLastSignInAt : 0,
+      onIdleTimeout: async () => {
+        console.info('[Presence] 1시간 미사용으로 자동 로그아웃합니다.');
+        await handleLogout();
+      },
+    });
+    presenceControllerRef.current = presence;
+    return () => {
+      if (presenceControllerRef.current === presence) presenceControllerRef.current = null;
+      void presence.stop();
+    };
+  }, [user?.uid]);
 
   const getEmailAuthErrorMessage = (error: any) => {
     const code = error?.code || 'unknown';
@@ -5500,6 +5527,8 @@ function App() {
   const handleEmailVerificationLogout = async () => {
     setIsEmailVerificationActionPending(true);
     try {
+      await presenceControllerRef.current?.stop();
+      presenceControllerRef.current = null;
       await signOut(auth);
       setEmailVerificationGate('idle');
       setEmailVerificationMessage(null);
@@ -7443,9 +7472,6 @@ const toggleCycleVariantSelection = (
       handleLogin();
       return;
     }
-
-    // Activity indicator
-    updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
 
     const favoriteDeleteId = (song as any)?.firestoreId || (song as any)?.id;
     const forceDeleteFavoriteById = Boolean((song as any)?.__forceDeleteFavoriteById);
@@ -9498,10 +9524,6 @@ const saveRecentSong = async (newSong: any) => {
     }
 
     try {
-      // Activity indicator
-      if (user) {
-        updateDoc(doc(db, 'users', user.uid), { lastSeenAt: Date.now(), isOnline: true }).catch(() => {});
-      }
       let finalGenres = limitFusionGenreIds([...selectedGenres, ...subGenre]);
       const isFinalInstrumentalBgm = isPureInstrumentalBgmGenreSelection(finalGenres);
       if (!isFinalInstrumentalBgm && hasInstrumentalBgmGenreIds(finalGenres)) {

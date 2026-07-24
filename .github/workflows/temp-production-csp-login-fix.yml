@@ -14,40 +14,59 @@ permissions:
 
 jobs:
   deploy-hosting:
-    if: github.event.issue.title == 'PRODUCTION CSP LOGIN FIX 20260724'
+    if: github.event.issue.title == 'PRODUCTION CSP LOGIN FIX RETRY 20260724'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout main
+        id: checkout
         uses: actions/checkout@v4
         with:
           ref: main
 
       - name: Set up Node.js 20
+        id: node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install dependencies
+        id: install
+        continue-on-error: true
         run: npm ci
 
       - name: Build production app
+        id: build
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run build
 
       - name: Authenticate to Google Cloud
+        id: auth
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
       - name: Install Firebase CLI
+        id: cli
+        if: steps.auth.outcome == 'success'
+        continue-on-error: true
         run: npm install --global firebase-tools@13.34.0
 
       - name: Deploy Firebase Hosting only
+        id: deploy
+        if: steps.cli.outcome == 'success'
+        continue-on-error: true
         run: firebase deploy --only hosting --project soridraw-app-866a5 --non-interactive
 
       - name: Verify production headers
+        id: verify
+        if: steps.deploy.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -59,16 +78,24 @@ jobs:
           fi
           curl -fsS --max-time 30 https://soridraw.web.app/ >/dev/null
 
-      - name: Report success
-        if: success()
+      - name: Report result
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_URL: ${{ github.event.issue.html_url }}
-        run: gh issue comment "$ISSUE_URL" --body "✅ PRODUCTION_CSP_LOGIN_FIX_SUCCESS sha=$(git rev-parse HEAD) url=https://soridraw.web.app/"
-
-      - name: Report failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
-        run: gh issue comment "$ISSUE_URL" --body "❌ PRODUCTION_CSP_LOGIN_FIX_FAILED sha=$(git rev-parse HEAD)"
+          INSTALL: ${{ steps.install.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          AUTH: ${{ steps.auth.outcome }}
+          CLI: ${{ steps.cli.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+        shell: bash
+        run: |
+          sha="$(git rev-parse HEAD)"
+          body="PRODUCTION_CSP_LOGIN_FIX_RESULT sha=${sha} install=${INSTALL} build=${BUILD} auth=${AUTH} cli=${CLI} deploy=${DEPLOY} verify=${VERIFY} url=https://soridraw.web.app/"
+          if [[ "$DEPLOY" == "success" && "$VERIFY" == "success" ]]; then
+            gh issue comment "$ISSUE_URL" --body "✅ ${body}"
+          else
+            gh issue comment "$ISSUE_URL" --body "❌ ${body}"
+            exit 1
+          fi

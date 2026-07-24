@@ -1,0 +1,3 @@
+Grant minimum Service Account User permission and deploy getAdminPresence.
+Requested: 2026-07-24
+Target project: soridraw-app-866a5

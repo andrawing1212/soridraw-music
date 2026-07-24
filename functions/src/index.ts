@@ -29,41 +29,149 @@ const requireAdminCaller = async (request: { auth?: { uid: string } | null }) =>
 
 const PRESENCE_SESSION_STALE_MS = 25 * 60 * 1000;
 
-type AdminPresenceSummary = {
+type AdminPresenceDeviceSummary = {
+  deviceId: string;
+  label: string;
+  platform: string;
+  browser: string;
+  deviceType: "desktop" | "mobile" | "tablet";
   state: "active" | "away" | "background" | "offline";
   connectionCount: number;
   lastActivityAt: number | null;
   lastSeenAt: number | null;
+  updatedAt: number | null;
 };
 
-const summarizePresenceRecord = (value: any, now = Date.now()): AdminPresenceSummary => {
-  const rawConnections = value?.connections && typeof value.connections === "object"
-    ? Object.values(value.connections)
-    : [];
-  const validConnections = rawConnections.filter((session: any) => {
-    const updatedAt = Number(session?.updatedAt || 0);
-    return Number.isFinite(updatedAt) && updatedAt > 0 && now - updatedAt <= PRESENCE_SESSION_STALE_MS;
-  }) as any[];
+type AdminPresenceSummary = {
+  state: "active" | "away" | "background" | "offline";
+  connectionCount: number;
+  deviceCount: number;
+  lastActivityAt: number | null;
+  lastSeenAt: number | null;
+  devices: AdminPresenceDeviceSummary[];
+};
 
-  const states = validConnections.map((session) => String(session?.state || ""));
-  const state: AdminPresenceSummary["state"] = states.includes("active")
+const getPresenceStateFromSessions = (sessions: any[]): AdminPresenceSummary["state"] => {
+  const states = sessions.map((session) => String(session?.state || ""));
+  return states.includes("active")
     ? "active"
     : states.includes("away")
       ? "away"
       : states.includes("background")
         ? "background"
         : "offline";
-  const lastActivityAt = validConnections.reduce((latest, session) => {
-    const candidate = Number(session?.lastActivityAt || 0);
-    return Number.isFinite(candidate) ? Math.max(latest, candidate) : latest;
-  }, 0);
-  const lastSeenAt = Number(value?.lastSeenAt || 0);
+};
+
+const getLegacyDeviceLabel = (session: any) => {
+  const raw = String(session?.device || "");
+  if (raw === "mobile") return "모바일 브라우저";
+  if (raw === "tablet") return "태블릿 브라우저";
+  return "데스크톱 브라우저";
+};
+
+const safePresenceTimestamp = (value: unknown) => {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const summarizePresenceRecord = (value: any, now = Date.now()): AdminPresenceSummary => {
+  const rawConnectionEntries = value?.connections && typeof value.connections === "object"
+    ? Object.entries(value.connections)
+    : [];
+  const validConnections = rawConnectionEntries
+    .map(([connectionKey, session]) => ({ ...(session as any), connectionKey }))
+    .filter((session: any) => {
+      const updatedAt = safePresenceTimestamp(session?.updatedAt);
+      return updatedAt > 0 && now - updatedAt <= PRESENCE_SESSION_STALE_MS;
+    });
+
+  const rawDeviceEntries = value?.devices && typeof value.devices === "object"
+    ? Object.entries(value.devices)
+    : [];
+  const deviceRows = new Map<string, { record: any; sessions: any[] }>();
+
+  rawDeviceEntries.forEach(([deviceKey, record]) => {
+    const deviceId = String((record as any)?.deviceId || deviceKey || "").trim();
+    if (!deviceId) return;
+    deviceRows.set(deviceId, { record: record as any, sessions: [] });
+  });
+
+  validConnections.forEach((session: any) => {
+    const explicitDeviceId = String(session?.deviceId || "").trim();
+    const legacyId = `legacy-${String(session?.sessionId || session?.connectionKey || "unknown")}`;
+    const deviceId = explicitDeviceId || legacyId;
+    const existing = deviceRows.get(deviceId) || { record: {}, sessions: [] };
+    existing.sessions.push(session);
+    deviceRows.set(deviceId, existing);
+  });
+
+  const allDevices = Array.from(deviceRows.entries()).map(([deviceId, row]): AdminPresenceDeviceSummary => {
+    const sessions = row.sessions;
+    const latestSession = sessions.reduce((latest: any, session: any) => {
+      return safePresenceTimestamp(session?.updatedAt) > safePresenceTimestamp(latest?.updatedAt) ? session : latest;
+    }, null);
+    const record = row.record || {};
+    const state = sessions.length > 0 ? getPresenceStateFromSessions(sessions) : "offline";
+    const lastActivityAt = Math.max(
+      safePresenceTimestamp(record?.lastActivityAt),
+      ...sessions.map((session: any) => safePresenceTimestamp(session?.lastActivityAt))
+    );
+    const lastSeenAt = safePresenceTimestamp(record?.lastSeenAt);
+    const updatedAt = Math.max(
+      safePresenceTimestamp(record?.updatedAt),
+      ...sessions.map((session: any) => safePresenceTimestamp(session?.updatedAt))
+    );
+    const deviceTypeRaw = String(record?.deviceType || latestSession?.device || "desktop");
+    const deviceType: AdminPresenceDeviceSummary["deviceType"] = deviceTypeRaw === "mobile" || deviceTypeRaw === "tablet"
+      ? deviceTypeRaw
+      : "desktop";
+    const platform = String(record?.platform || latestSession?.platform || "").trim();
+    const browser = String(record?.browser || latestSession?.browser || "").trim();
+    const label = String(record?.label || latestSession?.deviceLabel || "").trim()
+      || getLegacyDeviceLabel(latestSession);
+
+    return {
+      deviceId,
+      label,
+      platform,
+      browser,
+      deviceType,
+      state,
+      connectionCount: sessions.length,
+      lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
+      lastSeenAt: lastSeenAt > 0 ? lastSeenAt : null,
+      updatedAt: updatedAt > 0 ? updatedAt : null,
+    };
+  });
+
+  const statePriority: Record<AdminPresenceDeviceSummary["state"], number> = {
+    active: 0,
+    away: 1,
+    background: 2,
+    offline: 3,
+  };
+  allDevices.sort((a, b) => {
+    const stateDiff = statePriority[a.state] - statePriority[b.state];
+    if (stateDiff !== 0) return stateDiff;
+    const aTime = Math.max(a.updatedAt || 0, a.lastActivityAt || 0, a.lastSeenAt || 0);
+    const bTime = Math.max(b.updatedAt || 0, b.lastActivityAt || 0, b.lastSeenAt || 0);
+    return bTime - aTime;
+  });
+
+  const state = getPresenceStateFromSessions(validConnections);
+  const lastActivityAt = allDevices.reduce((latest, device) => Math.max(latest, device.lastActivityAt || 0), 0);
+  const lastSeenAt = Math.max(
+    safePresenceTimestamp(value?.lastSeenAt),
+    ...allDevices.map((device) => device.lastSeenAt || 0)
+  );
 
   return {
     state,
     connectionCount: validConnections.length,
+    deviceCount: allDevices.length,
     lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
-    lastSeenAt: Number.isFinite(lastSeenAt) && lastSeenAt > 0 ? lastSeenAt : null,
+    lastSeenAt: lastSeenAt > 0 ? lastSeenAt : null,
+    devices: allDevices.slice(0, 10),
   };
 };
 

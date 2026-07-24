@@ -26,12 +26,15 @@ import {
   LogIn,
   LogOut,
   Mail,
+  Monitor,
   Music,
   RefreshCw,
   RotateCcw,
   Save,
   Search,
   Shield,
+  Smartphone,
+  Tablet,
   Trash2,
   User,
   UserRoundX,
@@ -77,11 +80,26 @@ const OFFLINE_TO_LOGGED_OUT_MS = 2 * 24 * 60 * 60 * 1000;
 type PresenceState = 'active' | 'away' | 'background' | 'offline' | 'loggedOut' | 'forced';
 type PresenceDisplayMode = 'ready' | 'checking' | 'error';
 
-type LivePresenceSummary = {
+type DevicePresenceSummary = {
+  deviceId: string;
+  label: string;
+  platform: string;
+  browser: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet';
   state: 'active' | 'away' | 'background' | 'offline';
   connectionCount: number;
   lastActivityAt?: number;
   lastSeenAt?: number;
+  updatedAt?: number;
+};
+
+type LivePresenceSummary = {
+  state: 'active' | 'away' | 'background' | 'offline';
+  connectionCount: number;
+  deviceCount: number;
+  lastActivityAt?: number;
+  lastSeenAt?: number;
+  devices: DevicePresenceSummary[];
 };
 type ProviderKind = 'google' | 'email' | 'linked' | 'unknown' | 'deleted';
 type ProviderFilter = 'all' | ProviderKind;
@@ -340,6 +358,60 @@ const PresenceBadge = ({ user, livePresence, displayMode = 'ready' }: { user: Ap
   return <span className={cn('inline-flex items-center gap-2 text-xs md:text-sm font-black', current.className)}><span className="w-2 h-2 rounded-full bg-current" />{current.label}</span>;
 };
 
+
+const DevicePresenceList = ({ user, livePresence, now }: { user: AppUserInfo; livePresence?: LivePresenceSummary; now: number }) => {
+  const devices = livePresence?.devices || [];
+  const overallPresence = getPresenceState(user, livePresence, now);
+
+  if (devices.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-5 text-center">
+        <p className="text-xs font-black text-zinc-300">저장된 기기 기록이 없습니다.</p>
+        <p className="mt-1 text-[10px] font-bold text-zinc-600">이 버전 적용 후 회원이 다시 접속하면 브라우저별 기록이 자동으로 쌓입니다.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {devices.map((device) => {
+        const effectiveState: PresenceState = (overallPresence === 'forced' || overallPresence === 'loggedOut') && device.state === 'offline'
+          ? overallPresence
+          : device.state;
+        const config: Record<PresenceState, { label: string; className: string; dot: string }> = {
+          active: { label: '활동중', className: 'text-emerald-300', dot: 'bg-emerald-400' },
+          away: { label: '자리비움', className: 'text-amber-300', dot: 'bg-amber-300' },
+          background: { label: '백그라운드', className: 'text-sky-300', dot: 'bg-sky-300' },
+          offline: { label: '오프라인', className: 'text-zinc-300', dot: 'bg-zinc-500' },
+          loggedOut: { label: '로그아웃', className: 'text-red-300', dot: 'bg-red-400' },
+          forced: { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' },
+        };
+        const current = config[effectiveState];
+        const DeviceIcon = device.deviceType === 'mobile' ? Smartphone : device.deviceType === 'tablet' ? Tablet : Monitor;
+        const recentAt = Math.max(device.lastActivityAt || 0, device.lastSeenAt || 0) || undefined;
+
+        return (
+          <div key={device.deviceId} className="rounded-2xl border border-white/[0.08] bg-black/25 p-3.5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]"><DeviceIcon className="h-4 w-4 text-zinc-300" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="truncate text-xs font-black text-zinc-100">{device.label || '브라우저 기기'}</p>
+                  <span className={cn('inline-flex items-center gap-1.5 text-[10px] font-black', current.className)}><span className={cn('h-1.5 w-1.5 rounded-full', current.dot)} />{current.label}</span>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-zinc-500">
+                  <span>{formatLastSeen(recentAt, now)}</span>
+                  {device.connectionCount > 0 && <span className="text-sky-300">열린 탭 {device.connectionCount}개</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(Boolean(isAdminProp));
@@ -570,11 +642,37 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
         const state: LivePresenceSummary['state'] = ['active', 'away', 'background', 'offline'].includes(rawState)
           ? rawState as LivePresenceSummary['state']
           : 'offline';
+        const devices: DevicePresenceSummary[] = Array.isArray(raw?.devices)
+          ? raw.devices.slice(0, 10).map((device: any) => {
+            const rawDeviceState = String(device?.state || 'offline');
+            const deviceState: DevicePresenceSummary['state'] = ['active', 'away', 'background', 'offline'].includes(rawDeviceState)
+              ? rawDeviceState as DevicePresenceSummary['state']
+              : 'offline';
+            const rawDeviceType = String(device?.deviceType || 'desktop');
+            const deviceType: DevicePresenceSummary['deviceType'] = rawDeviceType === 'mobile' || rawDeviceType === 'tablet'
+              ? rawDeviceType
+              : 'desktop';
+            return {
+              deviceId: String(device?.deviceId || ''),
+              label: String(device?.label || '브라우저 기기'),
+              platform: String(device?.platform || ''),
+              browser: String(device?.browser || ''),
+              deviceType,
+              state: deviceState,
+              connectionCount: Math.max(0, Number(device?.connectionCount || 0)),
+              lastActivityAt: Number(device?.lastActivityAt || 0) || undefined,
+              lastSeenAt: Number(device?.lastSeenAt || 0) || undefined,
+              updatedAt: Number(device?.updatedAt || 0) || undefined,
+            };
+          }).filter((device: DevicePresenceSummary) => Boolean(device.deviceId))
+          : [];
         next[uid] = {
           state,
           connectionCount: Math.max(0, Number(raw?.connectionCount || 0)),
+          deviceCount: Math.max(devices.length, Number.isFinite(Number(raw?.deviceCount)) ? Number(raw.deviceCount) : 0),
           lastActivityAt: Number(raw?.lastActivityAt || 0) || undefined,
           lastSeenAt: Number(raw?.lastSeenAt || 0) || undefined,
+          devices,
         };
       });
       setLivePresence((previous) => ({ ...previous, ...next }));
@@ -1027,13 +1125,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={user} /><VerificationBadge user={user} /></div>
                   <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 md:hidden">
-                    <PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />
+                    <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-sky-300">{live.deviceCount}개 기기</p>}</div>
                     <span className="inline-flex items-center gap-1 text-xs font-black text-zinc-300"><Clock className="w-3.5 h-3.5" />{formatLastSeen(recentTime, presenceClock)}</span>
                   </div>
                 </div>
                 <div className="hidden md:flex w-44 flex-col items-end gap-1.5 shrink-0">
                   <PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />
                   <span className="text-xs font-black text-zinc-300">{formatLastSeen(recentTime, presenceClock)}</span>
+                  {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{live.deviceCount}개 기기</span>}
                 </div>
                 <ChevronRight className="w-5 h-5 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-brand-orange" />
               </div>
@@ -1102,12 +1201,25 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                           <PresenceBadge user={selectedUser} livePresence={livePresence[selectedUser.uid]} displayMode={presenceDisplayMode} />
                           <span className="text-sm font-black text-zinc-100">{formatLastSeen(getRecentActivityAt(selectedUser, livePresence[selectedUser.uid]), presenceClock)}</span>
-                          {Boolean(livePresence[selectedUser.uid]?.connectionCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].connectionCount}개 기기·탭</span>}
+                          {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {livePresence[selectedUser.uid].connectionCount}개</span>}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Music className="w-3 h-3" />생성곡</span><p className="mt-1 text-lg font-black text-white">{selectedUser.songGeneratedCount}</p></div>
                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Heart className="w-3 h-3" />뮤직노트</span><p className="mt-1 text-lg font-black text-white">{selectedUser.favoriteCount}</p></div>
                     </div>
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Monitor className="w-4 h-4 text-brand-orange" />기기별 접속 현황</h3>
+                      <p className="mt-1.5 text-[10px] font-bold leading-relaxed text-zinc-600">같은 컴퓨터라도 Chrome과 Edge는 각각 표시됩니다. 같은 브라우저의 여러 탭은 하나의 기기로 묶고 열린 탭 수만 따로 보여줍니다.</p>
+                    </div>
+                    {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[10px] font-black text-sky-300">총 {livePresence[selectedUser.uid].deviceCount}개</span>}
+                  </div>
+                  <div className="mt-4">
+                    <DevicePresenceList user={selectedUser} livePresence={livePresence[selectedUser.uid]} now={presenceClock} />
                   </div>
                 </section>
 

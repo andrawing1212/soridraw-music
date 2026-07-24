@@ -5,6 +5,7 @@ import {
   remove,
   serverTimestamp,
   set,
+  update,
   type Unsubscribe,
 } from 'firebase/database';
 import { realtimeDb } from '../firebase';
@@ -47,12 +48,6 @@ const buildSessionId = () => {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 };
 
-const getDeviceLabel = () => {
-  if (typeof navigator === 'undefined') return 'web';
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
-};
-
-
 const safeStorageGet = (key: string) => {
   try {
     return localStorage.getItem(key);
@@ -75,6 +70,67 @@ const safeStorageRemove = (key: string) => {
   } catch {
     // Ignore browser storage restrictions.
   }
+};
+
+
+const PRESENCE_DEVICE_ID_KEY = 'soridraw_presence_device_id_v1';
+
+type PresenceDeviceInfo = {
+  label: string;
+  platform: string;
+  browser: string;
+  deviceType: 'desktop' | 'mobile' | 'tablet';
+};
+
+const getOrCreateDeviceId = () => {
+  const stored = safeStorageGet(PRESENCE_DEVICE_ID_KEY);
+  if (stored) return stored;
+  const next = buildSessionId();
+  safeStorageSet(PRESENCE_DEVICE_ID_KEY, next);
+  return next;
+};
+
+const getDeviceInfo = (): PresenceDeviceInfo => {
+  if (typeof navigator === 'undefined') {
+    return { label: '웹 브라우저', platform: 'Web', browser: 'Browser', deviceType: 'desktop' };
+  }
+
+  const userAgent = navigator.userAgent || '';
+  const platformHint = String((navigator as any).userAgentData?.platform || navigator.platform || '');
+  const isIPad = /iPad/i.test(userAgent) || (platformHint === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isIPhone = /iPhone|iPod/i.test(userAgent);
+  const isAndroid = /Android/i.test(userAgent);
+  const isMobile = /Mobile/i.test(userAgent) || isIPhone;
+
+  let platform = '기타 OS';
+  if (/Windows/i.test(userAgent) || /Win/i.test(platformHint)) platform = 'Windows';
+  else if (isIPad) platform = 'iPad';
+  else if (isIPhone) platform = 'iPhone';
+  else if (isAndroid) platform = 'Android';
+  else if (/CrOS/i.test(userAgent)) platform = 'ChromeOS';
+  else if (/Macintosh|Mac OS X/i.test(userAgent) || /Mac/i.test(platformHint)) platform = 'macOS';
+  else if (/Linux/i.test(userAgent) || /Linux/i.test(platformHint)) platform = 'Linux';
+
+  let browser = '브라우저';
+  if (/SamsungBrowser/i.test(userAgent)) browser = 'Samsung Internet';
+  else if (/EdgA|EdgiOS|Edg\//i.test(userAgent)) browser = 'Edge';
+  else if (/OPR\//i.test(userAgent)) browser = 'Opera';
+  else if (/FxiOS|Firefox\//i.test(userAgent)) browser = 'Firefox';
+  else if (/CriOS|Chrome\//i.test(userAgent)) browser = 'Chrome';
+  else if (/Safari\//i.test(userAgent)) browser = 'Safari';
+
+  const deviceType: PresenceDeviceInfo['deviceType'] = isIPad || (isAndroid && !isMobile)
+    ? 'tablet'
+    : isMobile || isAndroid
+      ? 'mobile'
+      : 'desktop';
+
+  return {
+    label: `${platform} · ${browser}`,
+    platform,
+    browser,
+    deviceType,
+  };
 };
 
 const emitPresenceDiagnostic = (diagnostic: PresenceDiagnostic) => {
@@ -114,10 +170,13 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   }
 
   const sessionId = buildSessionId();
-  const device = getDeviceLabel();
+  const deviceId = getOrCreateDeviceId();
+  const deviceInfo = getDeviceInfo();
   const activityKey = `soridraw_presence_last_activity_${uid}`;
   const logoutLockKey = `soridraw_presence_idle_logout_lock_${uid}`;
   const sessionRef = ref(realtimeDb, `presence/${uid}/connections/${sessionId}`);
+  const deviceRef = ref(realtimeDb, `presence/${uid}/devices/${deviceId}`);
+  const deviceLastSeenRef = ref(realtimeDb, `presence/${uid}/devices/${deviceId}/lastSeenAt`);
   const lastSeenRef = ref(realtimeDb, `presence/${uid}/lastSeenAt`);
   const connectedRef = ref(realtimeDb, '.info/connected');
 
@@ -158,9 +217,22 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
 
     await set(sessionRef, {
       sessionId,
+      deviceId,
+      device: deviceInfo.deviceType,
+      deviceLabel: deviceInfo.label,
+      platform: deviceInfo.platform,
+      browser: deviceInfo.browser,
       state: nextState,
-      device,
       visible: document.visibilityState === 'visible',
+      lastActivityAt,
+      updatedAt: serverTimestamp(),
+    });
+    await update(deviceRef, {
+      deviceId,
+      label: deviceInfo.label,
+      platform: deviceInfo.platform,
+      browser: deviceInfo.browser,
+      deviceType: deviceInfo.deviceType,
       lastActivityAt,
       updatedAt: serverTimestamp(),
     });
@@ -257,6 +329,13 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
       // Register stale-session cleanup before announcing this tab as online.
       await onDisconnect(sessionRef).remove();
       await writeSession(true);
+      // Device history is kept separately from live tab sessions so Chrome and Edge
+      // on the same computer remain visible as separate browser environments.
+      try {
+        await onDisconnect(deviceLastSeenRef).set(serverTimestamp());
+      } catch (deviceLastSeenError) {
+        console.warn('[Presence] device lastSeen onDisconnect setup failed:', deviceLastSeenError);
+      }
       // lastSeen registration is useful, but must not block the live session record.
       try {
         await onDisconnect(lastSeenRef).set(serverTimestamp());
@@ -304,8 +383,10 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
 
     try {
       await onDisconnect(sessionRef).cancel();
+      await onDisconnect(deviceLastSeenRef).cancel();
       await onDisconnect(lastSeenRef).cancel();
       await remove(sessionRef);
+      await update(deviceRef, { lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
       await set(lastSeenRef, serverTimestamp());
     } catch (error) {
       console.warn('[Presence] cleanup deferred to onDisconnect:', error);

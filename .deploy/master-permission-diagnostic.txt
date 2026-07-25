@@ -1,0 +1,3673 @@
+
+===== src/App.tsx =====
+--- lines 280-320 ---
+280:   VOCAL_VOICE_TONES,
+281:   VOCAL_PERSONALITIES
+282: } from './constants';
+283: import { VOCAL_TONES } from './constants/vocalTones';
+284: import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
+285: import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
+286: import {
+287:   getFirstEnabledNavigationPath,
+288:   normalizeNavigationVisibilitySettings,
+289:   readStoredNavigationVisibilitySettings,
+290:   type NavigationMenuAdminOnly,
+291:   type NavigationMenuKey,
+292:   type NavigationMenuVisibility,
+293:   type NavigationVisibilitySettings,
+294:   writeStoredNavigationVisibilitySettings,
+295: } from './constants/navigationVisibility';
+296: import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
+297: 
+298: 
+299: 
+300: const USER_CUSTOM_SECTIONS_STORAGE_KEY = 'soridraw_user_custom_sections_v1';
+301: const USER_CUSTOM_SECTION_TAGS_STORAGE_KEY = 'soridraw_user_custom_section_tags_v1';
+302: const USER_SAVED_STRUCTURES_STORAGE_KEY = 'soridraw_saved_structures_v1';
+303: const getSavedStructuresStorageKey = (uid?: string | null) => `${USER_SAVED_STRUCTURES_STORAGE_KEY}_${uid || 'guest'}`;
+304: 
+305: const safeReadJsonArray = <T,>(key: string): T[] => {
+306:   if (typeof window === 'undefined') return [];
+307:   try {
+308:     const raw = window.localStorage.getItem(key);
+309:     if (!raw) return [];
+310:     const parsed = JSON.parse(raw);
+311:     return Array.isArray(parsed) ? parsed : [];
+312:   } catch {
+313:     return [];
+314:   }
+315: };
+316: 
+317: const writeJsonArray = <T,>(key: string, value: T[]) => {
+318:   if (typeof window === 'undefined') return;
+319:   try {
+320:     window.localStorage.setItem(key, JSON.stringify(value));
+--- lines 2412-2462 ---
+2412:       clearAllFavorites={clearAllFavorites}
+2413:       unlockAllFavorites={unlockAllFavorites}
+2414:       lockAllFavorites={lockAllFavorites}
+2415:       user={user}
+2416:       onLogin={handleLogin}
+2417:       onHover={() => {}}
+2418:       hoveredItem={null}
+2419:       onLongPressStart={() => {}}
+2420:       onLongPressEnd={() => {}}
+2421:     />
+2422:   );
+2423: }
+2424: const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
+2425: const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
+2426: const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
+2427: const SunoLibraryPageLazy = lazy(() => import('./pages/SunoLibraryPage'));
+2428: const SunoApiSettingsPageLazy = lazy(() => import('./pages/SunoApiSettingsPage'));
+2429: const MyPageLazy = lazy(() => import('./pages/MyPage'));
+2430: const LabPageLazy = lazy(() => import('./pages/LabPage'));
+2431: const HomePageLazy = lazy(() => import('./pages/HomePage'));
+2432: const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
+2433: const AdminAppSettingsPageLazy = lazy(() => import('./pages/AdminAppSettingsPage'));
+2434: const AdminGeminiAuditPageLazy = lazy(() => import('./pages/AdminGeminiAuditPage'));
+2435: 
+2436: const TROT_GENRES = ['traditional-trot', 'semi-trot'];
+2437: 
+2438: const GENRE_BPM: Record<string, { min: number; max: number }> = {
+2439:   'ballad': { min: 60, max: 85 },
+2440:   'pop': { min: 100, max: 130 },
+2441:   'jazz': { min: 70, max: 120 },
+2442:   'rnb': { min: 65, max: 95 },
+2443:   'hip-hop': { min: 80, max: 110 },
+2444:   'rock': { min: 110, max: 150 },
+2445:   'metal': { min: 120, max: 160 },
+2446:   'latin': { min: 95, max: 135 },
+2447:   'dance': { min: 120, max: 140 },
+2448:   'synth': { min: 105, max: 135 },
+2449:   'electronic': { min: 115, max: 150 },
+2450:   'piano': { min: 40, max: 90 },
+2451:   'new-age': { min: 40, max: 80 },
+2452:   'country': { min: 85, max: 125 },
+2453:   'traditional-trot': { min: 60, max: 90 },
+2454:   'semi-trot': { min: 120, max: 150 },
+2455:   'jpop': { min: 115, max: 145 },
+2456:   'guitar': { min: 70, max: 130 }
+2457: };
+2458: 
+2459: const SUBGENRE_BPM: Record<string, { min: number; max: number }> = {
+2460:   'synth_pop': { min: 110, max: 135 },
+2461:   'disco': { min: 115, max: 130 },
+2462:   'electropop': { min: 120, max: 140 },
+--- lines 3168-3276 ---
+3168:     </ErrorBoundary>
+3169:   );
+3170: }
+3171: 
+3172: function Navigation({
+3173:   user,
+3174:   cachedHeaderIdentity,
+3175:   isAuthReady,
+3176:   handleLogin,
+3177:   isLoggingIn,
+3178:   handleLogout,
+3179:   isAdminUser,
+3180:   menuVisibility,
+3181:   menuAdminOnly,
+3182:   sunoLibrarySignal,
+3183:   sunoLibrarySignalDotClass,
+3184:   clearSunoLibrarySignal,
+3185: }: {
+3186:   user: User | null;
+3187:   cachedHeaderIdentity: CachedHeaderIdentity | null;
+3188:   isAuthReady: boolean;
+3189:   handleLogin: () => void;
+3190:   isLoggingIn: boolean;
+3191:   handleLogout: () => void;
+3192:   isAdminUser: boolean;
+3193:   menuVisibility: NavigationMenuVisibility;
+3194:   menuAdminOnly: NavigationMenuAdminOnly;
+3195:   sunoLibrarySignal: 'generating' | 'completed' | null;
+3196:   sunoLibrarySignalDotClass: string;
+3197:   clearSunoLibrarySignal: () => void;
+3198: }) {
+3199:   const [isExpanded, setIsExpanded] = useState(false);
+3200:   const [isProfileOpen, setIsProfileOpen] = useState(false);
+3201:   const navigate = useNavigate();
+3202:   const location = useLocation();
+3203:   const menuRef = useRef<HTMLDivElement>(null);
+3204:   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+3205:   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+3206:   const headerIdentity = user
+3207:     ? getHeaderIdentityFromUser(user)
+3208:     : !isAuthReady
+3209:       ? cachedHeaderIdentity
+3210:       : null;
+3211:   const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);
+3212:   const isActivePath = (path: string) => {
+3213:     if (path === '/') return location.pathname === '/';
+3214:     return location.pathname === path || location.pathname.startsWith(`${path}/`);
+3215:   };
+3216: 
+3217:   const canShowMenu = (key: NavigationMenuKey) => {
+3218:     if (!menuVisibility[key]) return false;
+3219:     if (menuAdminOnly[key] && !isAdminUser) return false;
+3220:     return true;
+3221:   };
+3222: 
+3223:   const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
+3224:     if (!isAuthReady) return;
+3225:     if (!user) {
+3226:       handleLogin();
+3227:       return;
+3228:     }
+3229:     if (options?.clearSuno) clearSunoLibrarySignal();
+3230:     if (location.pathname === path) {
+3231:       scrollToTop();
+3232:     } else {
+3233:       navigate(path);
+3234:     }
+3235:     setIsExpanded(false);
+3236:     setIsProfileOpen(false);
+3237:   };
+3238: 
+3239:   const allTopNavItems: Array<{ key: NavigationMenuKey; path: string; label: string; icon: React.ElementType; clearSuno?: boolean }> = [
+3240:     { key: 'home', path: '/', label: '홈', icon: HomeIcon },
+3241:     { key: 'studio', path: '/studio', label: '스튜디오', icon: Zap },
+3242:     { key: 'musicNote', path: '/history', label: '뮤직노트', icon: HeartIcon },
+3243:     { key: 'library', path: '/suno-library', label: '라이브러리', icon: Library, clearSuno: true },
+3244:     { key: 'lab', path: '/lab', label: '실험실', icon: FlaskConical },
+3245:     { key: 'myPage', path: '/my-page', label: '마이페이지', icon: UserIcon },
+3246:   ];
+3247:   const topNavItems = allTopNavItems.filter((item) => canShowMenu(item.key));
+3248:   const preferredLandingPath = menuVisibility.home
+3249:     ? '/'
+3250:     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
+3251: 
+3252:   // Collapse menu when clicking outside
+3253:   useEffect(() => {
+3254:     const handleClickOutside = (event: MouseEvent) => {
+3255:       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+3256:         setIsExpanded(false);
+3257:         setIsProfileOpen(false);
+3258:         if (timeoutRef.current) clearTimeout(timeoutRef.current);
+3259:       }
+3260:     };
+3261:     document.addEventListener('mousedown', handleClickOutside);
+3262:     return () => document.removeEventListener('mousedown', handleClickOutside);
+3263:   }, []);
+3264: 
+3265:   const handleMouseEnter = () => {
+3266:     if (timeoutRef.current) clearTimeout(timeoutRef.current);
+3267:     setIsExpanded(true);
+3268:   };
+3269: 
+3270:   const handleMouseLeave = () => {
+3271:     timeoutRef.current = setTimeout(() => {
+3272:       setIsExpanded(false);
+3273:       setIsProfileOpen(false);
+3274:     }, 2000);
+3275:   };
+3276: 
+--- lines 4709-4749 ---
+4709:     try {
+4710:       const saved = Number(localStorage.getItem(SUNO_LIBRARY_SIGNAL_STARTED_AT_KEY) || '');
+4711:       return Number.isFinite(saved) && saved > 0 ? saved : null;
+4712:     } catch {
+4713:       return null;
+4714:     }
+4715:   });
+4716: 
+4717: 
+4718:   const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(
+4719:     readStoredNavigationVisibilitySettings,
+4720:   );
+4721:   const menuVisibility = navigationVisibilitySettings.menuVisibility;
+4722:   const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
+4723:   const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
+4724:     hardBanTerms: [],
+4725:     softBanTerms: [],
+4726:   });
+4727:   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
+4728:   const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(false);
+4729:   const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
+4730:   const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
+4731: 
+4732:   useEffect(() => {
+4733:     const unsubscribe = onSnapshot(
+4734:       doc(db, 'app_settings', 'lyric_cliche_guard'),
+4735:       (snapshot) => {
+4736:         const data = snapshot.exists() ? snapshot.data() : null;
+4737:         setGlobalLyricClicheGuard({
+4738:           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
+4739:           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
+4740:         });
+4741:         setIsGlobalLyricClicheGuardReady(true);
+4742:       },
+4743:       (error) => {
+4744:         console.warn('Lyric cliche guard setting read failed. Keeping built-in defaults:', error);
+4745:         setGlobalLyricClicheGuard({ hardBanTerms: [], softBanTerms: [] });
+4746:         setIsGlobalLyricClicheGuardReady(true);
+4747:       },
+4748:     );
+4749: 
+--- lines 6755-6815 ---
+6755:         unlockGlobalSearchScrollLock();
+6756:       });
+6757:     };
+6758: 
+6759:     document.addEventListener('fullscreenchange', resetStudioModalsForFullscreen);
+6760:     document.addEventListener('webkitfullscreenchange', resetStudioModalsForFullscreen as EventListener);
+6761:     return () => {
+6762:       document.removeEventListener('fullscreenchange', resetStudioModalsForFullscreen);
+6763:       document.removeEventListener('webkitfullscreenchange', resetStudioModalsForFullscreen as EventListener);
+6764:     };
+6765:   }, [unlockGlobalSearchScrollLock]);
+6766:   
+6767:   const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
+6768:   useEffect(() => {
+6769:     if (!user) {
+6770:       setEmailVerificationGate('idle');
+6771:       setEmailVerificationMessage(null);
+6772:       return;
+6773:     }
+6774: 
+6775:     const usesPasswordLogin = user.providerData.some((provider) => provider.providerId === 'password');
+6776:     if (!usesPasswordLogin || user.emailVerified) {
+6777:       setEmailVerificationGate('idle');
+6778:       setEmailVerificationMessage(null);
+6779:       return;
+6780:     }
+6781: 
+6782:     if (!isUserRoleReady) {
+6783:       setEmailVerificationGate('checking');
+6784:       return;
+6785:     }
+6786: 
+6787:     if (userRole === 'admin') {
+6788:       setEmailVerificationGate('idle');
+6789:       setEmailVerificationMessage(null);
+6790:       return;
+6791:     }
+6792: 
+6793:     setEmailVerificationGate('required');
+6794:     setEmailVerificationMessage((current) => current || '이메일 인증이 필요합니다. 인증메일을 받은 뒤 완료 여부를 확인해주세요.');
+6795:   }, [emailVerificationRevision, isUserRoleReady, user, userRole]);
+6796: 
+6797:   useEffect(() => {
+6798:     if (
+6799:       !user ||
+6800:       emailVerificationGate !== 'required' ||
+6801:       !isEmailVerificationCycleReady ||
+6802:       !emailVerificationCycleKey
+6803:     ) return;
+6804: 
+6805:     const runningKey = `running:${emailVerificationCycleKey}`;
+6806:     const doneKey = `done:${emailVerificationCycleKey}`;
+6807:     if (
+6808:       emailVerificationAutoSendRef.current === runningKey ||
+6809:       emailVerificationAutoSendRef.current === doneKey
+6810:     ) return;
+6811: 
+6812:     const storageKey = `soridraw-email-verification-auto-attempted:${emailVerificationCycleKey}`;
+6813:     try {
+6814:       if (localStorage.getItem(storageKey)) {
+6815:         emailVerificationAutoSendRef.current = doneKey;
+--- lines 6869-6940 ---
+6869:       event.preventDefault();
+6870:       requestCloseEmailVerificationGate();
+6871:     };
+6872: 
+6873:     window.addEventListener('popstate', handlePopState);
+6874:     document.addEventListener('keydown', handleVerificationEscape, true);
+6875:     return () => {
+6876:       window.removeEventListener('popstate', handlePopState);
+6877:       document.removeEventListener('keydown', handleVerificationEscape, true);
+6878:     };
+6879:   }, [emailVerificationGate, user]);
+6880: 
+6881:   const isAdminMenuUser = useMemo(() => {
+6882:     if (isAdminUser) return true;
+6883:     if (cachedUserRoleHint?.role !== 'admin') return false;
+6884:     return !user || cachedUserRoleHint.uid === user.uid;
+6885:   }, [cachedUserRoleHint, isAdminUser, user]);
+6886:   const canAccessNavigationMenu = useCallback((key: NavigationMenuKey) => {
+6887:     if (isAdminUser) return true;
+6888:     if (!menuVisibility[key]) return false;
+6889:     if (menuAdminOnly[key]) return false;
+6890:     return true;
+6891:   }, [isAdminUser, menuAdminOnly, menuVisibility]);
+6892:   const menuVisibilityForCurrentUser = useMemo<NavigationMenuVisibility>(() => ({
+6893:     home: menuVisibility.home && (!menuAdminOnly.home || isAdminMenuUser),
+6894:     studio: menuVisibility.studio && (!menuAdminOnly.studio || isAdminMenuUser),
+6895:     musicNote: menuVisibility.musicNote && (!menuAdminOnly.musicNote || isAdminMenuUser),
+6896:     library: menuVisibility.library && (!menuAdminOnly.library || isAdminMenuUser),
+6897:     lab: menuVisibility.lab && (!menuAdminOnly.lab || isAdminMenuUser),
+6898:     myPage: menuVisibility.myPage && (!menuAdminOnly.myPage || isAdminMenuUser),
+6899:   }), [isAdminMenuUser, menuAdminOnly, menuVisibility]);
+6900:   const navigationFallbackPath = useMemo(() => {
+6901:     const accessibleVisibility: NavigationMenuVisibility = {
+6902:       home: menuVisibility.home && !menuAdminOnly.home,
+6903:       studio: menuVisibility.studio && !menuAdminOnly.studio,
+6904:       musicNote: menuVisibility.musicNote && !menuAdminOnly.musicNote,
+6905:       library: menuVisibility.library && !menuAdminOnly.library,
+6906:       lab: menuVisibility.lab && !menuAdminOnly.lab,
+6907:       myPage: menuVisibility.myPage && !menuAdminOnly.myPage,
+6908:     };
+6909:     return getFirstEnabledNavigationPath(accessibleVisibility);
+6910:   }, [menuAdminOnly, menuVisibility]);
+6911:   const effectiveUserTier: TagTier = useMemo(() => {
+6912:     if (userRole === 'admin' || userRole === 'pro') return 'pro';
+6913:     if (userRole === 'basic') return 'basic';
+6914:     return 'free';
+6915:   }, [userRole]);
+6916: 
+6917:   // Refs for stable access in callbacks
+6918:   const pinnedGenresRef = useRef(pinnedGenres);
+6919:   const pinnedThemesRef = useRef(pinnedThemes);
+6920:   const pinnedStylesRef = useRef(pinnedStyles);
+6921:   const pinnedInstrumentSoundsRef = useRef(pinnedInstrumentSounds);
+6922:   const historyRef = useRef(history);
+6923:   const historyIndexRef = useRef(historyIndex);
+6924:   const resultRef = useRef(result);
+6925:   const preserveHistoryIndexOnNextSnapshotRef = useRef<number | null>(null);
+6926:   const recentSongsReadyToCacheRef = useRef(false);
+6927:   const userRef = useRef(user);
+6928: 
+6929:   useEffect(() => { pinnedGenresRef.current = pinnedGenres; }, [pinnedGenres]);
+6930:   useEffect(() => { pinnedThemesRef.current = pinnedThemes; }, [pinnedThemes]);
+6931:   useEffect(() => { pinnedStylesRef.current = pinnedStyles; }, [pinnedStyles]);
+6932:   useEffect(() => { pinnedInstrumentSoundsRef.current = pinnedInstrumentSounds; }, [pinnedInstrumentSounds]);
+6933:   useEffect(() => { historyRef.current = history; }, [history]);
+6934:   useEffect(() => { historyIndexRef.current = historyIndex; }, [historyIndex]);
+6935:   useEffect(() => { resultRef.current = result; }, [result]);
+6936:   useEffect(() => { userRef.current = user; }, [user]);
+6937: 
+6938:   useEffect(() => {
+6939:     localStorage.setItem('rememberLogin', String(rememberLogin));
+6940:   }, [rememberLogin]);
+--- lines 13292-13350 ---
+13292:             </motion.div>
+13293:           </Portal>
+13294:         )}
+13295:       </AnimatePresence>
+13296: 
+13297:       <Navigation
+13298:         user={user}
+13299:         cachedHeaderIdentity={cachedHeaderIdentity}
+13300:         isAuthReady={isAuthReady}
+13301:         handleLogin={handleLogin}
+13302:         isLoggingIn={isLoggingIn}
+13303:         handleLogout={handleLogout}
+13304:         isAdminUser={isAdminMenuUser}
+13305:         menuVisibility={menuVisibility}
+13306:         menuAdminOnly={menuAdminOnly}
+13307:         sunoLibrarySignal={sunoLibrarySignal}
+13308:         sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
+13309:         clearSunoLibrarySignal={clearSunoLibrarySignal}
+13310:       />
+13311: 
+13312:       <Routes>
+13313:         <Route path="/" element={
+13314:           canAccessNavigationMenu('home') ? (
+13315:             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
+13316:               <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} menuVisibility={menuVisibilityForCurrentUser} />
+13317:             </Suspense>
+13318:           ) : (
+13319:             <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
+13320:           )
+13321:         } />
+13322:         <Route path="/studio" element={
+13323:           canAccessNavigationMenu('studio') ? (
+13324:           <>
+13325: 
+13326:               {/* Header */}
+13327:               <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+13328:                 <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
+13329:                   {/* Studio header search button */}
+13330:                   {user && (
+13331:                     <button
+13332:                       type="button"
+13333:                       onClick={openGlobalSearchModal}
+13334:                       className="absolute bottom-0 right-5 md:right-6 z-20 flex h-9 w-9 md:h-10 md:w-10 translate-y-1/2 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+13335:                       aria-label="통합 검색"
+13336:                       title="통합 검색"
+13337:                     >
+13338:                       <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
+13339:                     </button>
+13340:                   )}
+13341: 
+13342:                   <motion.div
+13343:                     initial={{ opacity: 0, y: -10 }}
+13344:                     animate={{ opacity: 1, y: 0 }}
+13345:                     className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
+13346:                   >
+13347:                     <h1 
+13348:                       className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+13349:                     >
+13350:                       <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+--- lines 15657-15819 ---
+15657:               </div>
+15658:             </motion.div>
+15659:           )}
+15660:         </AnimatePresence>
+15661:                 </>
+15662:               )}
+15663:             </main>
+15664:           </>
+15665:           ) : (
+15666:             <FeatureUnavailablePage label="스튜디오" fallbackPath={navigationFallbackPath} />
+15667:           )
+15668:         } />
+15669:         <Route
+15670:           path="/history"
+15671:           element={
+15672:             !canAccessNavigationMenu('musicNote') ? (
+15673:               <FeatureUnavailablePage label="뮤직노트" fallbackPath={navigationFallbackPath} />
+15674:             ) : !isAuthReady ? (
+15675:               <div className="min-h-screen flex items-center justify-center text-[var(--text-primary)] bg-[var(--bg-primary)]">
+15676:                 <div className="flex flex-col items-center gap-4">
+15677:                   <Loader2 className="w-8 h-8 animate-spin text-brand-orange" />
+15678:                   <p className="text-sm font-medium text-gray-400">사용자 정보를 불러오는 중...</p>
+15679:                 </div>
+15680:               </div>
+15681:             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
+15682:               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+15683:                 <HistoryRouteWrapper
+15684:                   isFavoritesLoading={isFavoritesLoading}
+15685:                   hasMoreFavorites={hasMoreFavorites}
+15686:                   isLoadingMoreFavorites={isLoadingMoreFavorites}
+15687:                   loadMoreFavorites={loadMoreFavorites}
+15688:                   searchFavoritesOnServer={searchFavoritesOnServer}
+15689:                   refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+15690:                   toggleFavorite={toggleFavorite}
+15691:                   updateFavorite={updateFavorite}
+15692:                   clearAllFavorites={clearAllFavorites}
+15693:                   unlockAllFavorites={unlockAllFavorites}
+15694:                   lockAllFavorites={lockAllFavorites}
+15695:                   user={user || auth.currentUser}
+15696:                   handleLogin={handleLogin}
+15697:                 />
+15698:               </Suspense>
+15699:             ) : (
+15700:               <Navigate to="/" replace />
+15701:             )
+15702:           }
+15703:         />
+15704:         <Route path="/archive" element={<Navigate to="/history" replace />} />
+15705:         <Route path="/library" element={<Navigate to="/history" replace />} />
+15706:         
+15707:         <Route path="/suno-library" element={
+15708:           canAccessNavigationMenu('library') ? (
+15709:             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
+15710:               <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+15711:             </Suspense>
+15712:           ) : (
+15713:             <FeatureUnavailablePage label="라이브러리" fallbackPath={navigationFallbackPath} />
+15714:           )
+15715:         } />
+15716:         <Route path="/suno-api-settings" element={
+15717:           canAccessNavigationMenu('myPage') ? (
+15718:             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
+15719:               <SunoApiSettingsPageLazy />
+15720:             </Suspense>
+15721:           ) : (
+15722:             <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+15723:           )
+15724:         } />
+15725:         <Route path="/my-page" element={
+15726:           !canAccessNavigationMenu('myPage') ? (
+15727:             <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+15728:           ) : user ? (
+15729:             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
+15730:               <MyPageLazy onLogout={handleLogout} />
+15731:             </Suspense>
+15732:           ) : (
+15733:             <Navigate to="/" replace />
+15734:           )
+15735:         } />
+15736:         <Route path="/lab" element={
+15737:           !canAccessNavigationMenu('lab') ? (
+15738:             <FeatureUnavailablePage label="실험실" fallbackPath={navigationFallbackPath} />
+15739:           ) : user ? (
+15740:             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-[#BBA8CA] animate-spin" /></div>}>
+15741:               <LabPageLazy />
+15742:             </Suspense>
+15743:           ) : (
+15744:             <Navigate to="/" replace />
+15745:           )
+15746:         } />
+15747:         
+15748:         {/* Admin Routes */}
+15749:         {isAdminUser ? (
+15750:           <>
+15751:             <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
+15752:             <Route path="/admin/users" element={
+15753:               <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
+15754:                 <AdminUserManagementPageLazy isAdmin={isAdminUser} />
+15755:               </Suspense>
+15756:             } />
+15757:             <Route path="/admin/vocals" element={
+15758:               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+15759:                 <AdminVocalTonesPageLazy isAdmin={isAdminUser} />
+15760:               </Suspense>
+15761:             } />
+15762:             <Route path="/admin/tags" element={
+15763:               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+15764:                 <AdminSectionTagsPageLazy isAdmin={isAdminUser} />
+15765:               </Suspense>
+15766:             } />
+15767:             <Route path="/admin/suno-api" element={
+15768:               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+15769:                 <AdminSunoApiPageLazy />
+15770:               </Suspense>
+15771:             } />
+15772:             <Route path="/admin/app-settings" element={
+15773:               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+15774:                 <AdminAppSettingsPageLazy />
+15775:               </Suspense>
+15776:             } />
+15777:             <Route path="/admin/gemini-audit" element={
+15778:               <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+15779:                 <AdminGeminiAuditPageLazy />
+15780:               </Suspense>
+15781:             } />
+15782:           </>
+15783:         ) : (
+15784:           <>
+15785:             <Route path="/admin" element={<Navigate to="/" replace />} />
+15786:             <Route path="/admin/users" element={<Navigate to="/" replace />} />
+15787:             <Route path="/admin/vocals" element={<Navigate to="/" replace />} />
+15788:             <Route path="/admin/tags" element={<Navigate to="/" replace />} />
+15789:             <Route path="/admin/suno-api" element={<Navigate to="/" replace />} />
+15790:             <Route path="/admin/app-settings" element={<Navigate to="/" replace />} />
+15791:             <Route path="/admin/gemini-audit" element={<Navigate to="/" replace />} />
+15792:           </>
+15793:         )}
+15794:       </Routes>
+15795:       <GlobalPlayer />
+15796: 
+15797:       {/* Tooltip / Description Overlay */}
+15798:       <AnimatePresence>
+15799:         {hoveredItem && (
+15800:           <motion.div
+15801:             initial={{ opacity: 0, x: '-50%' }}
+15802:             animate={{ 
+15803:               opacity: isTooltipHovered ? 0.1 : 1, 
+15804:               x: '-50%'
+15805:             }}
+15806:             exit={{ opacity: 0, x: '-50%' }}
+15807:             onMouseEnter={() => setIsTooltipHovered(true)}
+15808:             onMouseLeave={() => setIsTooltipHovered(false)}
+15809:             className={cn(
+15810:               "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
+15811:               location.pathname === '/studio' 
+15812:                 ? (!isActionButtonsCollapsed && shouldShowActionButtons
+15813:                     ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
+15814:                     : "bottom-10 max-w-[200px] md:max-w-[400px]")
+15815:                 : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
+15816:                     ? "bottom-[7.75rem] md:bottom-[8.75rem] max-w-[250px] md:max-w-[400px]"
+15817:                     : "bottom-10 max-w-[250px] md:max-w-[400px]")
+15818:             )}
+15819:           >
+
+===== src/components/AdminPageLayout.tsx =====
+--- lines 1-72 ---
+1: import React from 'react';
+2: import { Activity, Home, Users, Key, SlidersHorizontal } from 'lucide-react';
+3: import { useLocation, useNavigate } from 'react-router-dom';
+4: import { cn } from '../lib/utils';
+5: 
+6: type AdminPageLayoutProps = {
+7:   title: string;
+8:   description?: string;
+9:   actions?: React.ReactNode;
+10:   children: React.ReactNode;
+11: };
+12: 
+13: const ADMIN_TABS = [
+14:   { path: '/admin/users', label: '회원 관리', icon: Users },
+15:   { path: '/admin/suno-api', label: 'Suno API', icon: Key },
+16:   { path: '/admin/app-settings', label: '앱 설정', icon: SlidersHorizontal },
+17:   { path: '/admin/gemini-audit', label: 'Gemini 호출', icon: Activity },
+18: ];
+19: 
+20: export default function AdminPageLayout({ title, description, actions, children }: AdminPageLayoutProps) {
+21:   const navigate = useNavigate();
+22:   const location = useLocation();
+23: 
+24:   return (
+25:     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-24 pb-16">
+26:       <div className="max-w-7xl mx-auto space-y-5">
+27:         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+28:           {ADMIN_TABS.map((tab) => {
+29:             const Icon = tab.icon;
+30:             const active = location.pathname === tab.path;
+31:             return (
+32:               <button
+33:                 key={tab.path}
+34:                 onClick={() => navigate(tab.path)}
+35:                 className={cn(
+36:                   'inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0',
+37:                   active
+38:                     ? 'bg-brand-orange text-white shadow-[0_8px_18px_rgba(249,115,22,0.18)]'
+39:                     : 'bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-[var(--text-primary)] shadow-btn'
+40:                 )}
+41:               >
+42:                 <Icon className="w-3.5 h-3.5" />
+43:                 {tab.label}
+44:               </button>
+45:             );
+46:           })}
+47:         </div>
+48: 
+49:         <div className="flex items-start justify-between gap-4">
+50:           <div className="flex items-start gap-3 md:gap-4 min-w-0">
+51:             <button
+52:               onClick={() => navigate('/')}
+53:               className="w-12 h-12 md:w-13 md:h-13 rounded-2xl bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:text-brand-orange hover:bg-btn-hover transition-all flex items-center justify-center shadow-btn shrink-0"
+54:               aria-label="홈으로 이동"
+55:             >
+56:               <Home className="w-5 h-5" />
+57:             </button>
+58:             <div className="min-w-0 pt-0.5">
+59:               <h1 className="text-2xl md:text-4xl font-black text-[var(--text-primary)] tracking-tight">{title}</h1>
+60:               {description && (
+61:                 <p className="mt-1 text-sm md:text-base text-[var(--text-secondary)] break-keep">{description}</p>
+62:               )}
+63:             </div>
+64:           </div>
+65:           {actions && <div className="shrink-0">{actions}</div>}
+66:         </div>
+67: 
+68:         {children}
+69:       </div>
+70:     </div>
+71:   );
+72: }
+
+===== src/pages/AdminUserManagementPage.tsx =====
+--- lines 1-147 ---
+1: import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+2: import {
+3:   collection,
+4:   doc,
+5:   getDoc,
+6:   getDocs,
+7:   orderBy,
+8:   query,
+9:   serverTimestamp,
+10:   updateDoc,
+11: } from 'firebase/firestore';
+12: import { auth, db, functions, httpsCallable } from '../firebase';
+13: import { AccountStatus, AppUserInfo, PaymentStatus, UserRole } from '../types';
+14: import {
+15:   Activity,
+16:   AlertCircle,
+17:   AlertTriangle,
+18:   BadgeCheck,
+19:   BadgeX,
+20:   Ban,
+21:   CheckCircle2,
+22:   ChevronRight,
+23:   Clock,
+24:   FileText,
+25:   Heart,
+26:   Loader2,
+27:   LogIn,
+28:   LogOut,
+29:   Mail,
+30:   Monitor,
+31:   Music,
+32:   RefreshCw,
+33:   RotateCcw,
+34:   Save,
+35:   Search,
+36:   Shield,
+37:   Smartphone,
+38:   Tablet,
+39:   Trash2,
+40:   User,
+41:   UserRoundX,
+42:   Users,
+43:   X,
+44: } from 'lucide-react';
+45: import { AnimatePresence, motion } from 'motion/react';
+46: import { useNavigate } from 'react-router-dom';
+47: import AdminPageLayout from '../components/AdminPageLayout';
+48: import { cn } from '../lib/utils';
+49: import { getTimestampMs } from '../App';
+50: import { PRESENCE_DIAGNOSTIC_EVENT, readPresenceDiagnostic, type PresenceDiagnostic } from '../services/presenceService';
+51: 
+52: const ROLE_LABELS: Record<UserRole, string> = {
+53:   free: 'Free',
+54:   basic: 'Basic',
+55:   pro: 'Pro',
+56:   admin: 'Admin',
+57: };
+58: 
+59: const STATUS_LABELS: Record<AccountStatus, string> = {
+60:   active: '정상',
+61:   paused: '일시정지',
+62:   expired: '만료',
+63:   banned: '정지',
+64: };
+65: 
+66: const PAYMENT_LABELS: Record<PaymentStatus, string> = {
+67:   none: '없음',
+68:   active: '구독중',
+69:   canceled: '취소됨',
+70:   expired: '만료됨',
+71:   refunded: '환불됨',
+72:   trial: '체험판',
+73: };
+74: 
+75: const ADMIN_PAGE_SIZE = 20;
+76: const PRESENCE_CLOCK_TICK_MS = 60_000;
+77: const ADMIN_PRESENCE_REFRESH_STORAGE_KEY = 'soridraw:admin-presence-refresh-ms';
+78: const ADMIN_PRESENCE_REFRESH_DEFAULT_MS = 60_000;
+79: const ADMIN_PRESENCE_REFRESH_OPTIONS = [
+80:   { value: 30_000, label: '30초' },
+81:   { value: 60_000, label: '60초' },
+82:   { value: 120_000, label: '2분' },
+83:   { value: 300_000, label: '5분' },
+84:   { value: 600_000, label: '10분' },
+85:   { value: 0, label: '끄기' },
+86: ] as const;
+87: type AdminPresenceRefreshInterval = typeof ADMIN_PRESENCE_REFRESH_OPTIONS[number]['value'];
+88: const LONG_INACTIVE_DAYS = 180;
+89: const DORMANT_DAYS = 365;
+90: const OFFLINE_TO_LOGGED_OUT_MS = 2 * 24 * 60 * 60 * 1000;
+91: 
+92: type PresenceState = 'active' | 'away' | 'background' | 'offline' | 'loggedOut' | 'forced';
+93: type PresenceDisplayMode = 'ready' | 'checking' | 'error';
+94: 
+95: type DevicePresenceSummary = {
+96:   deviceId: string;
+97:   label: string;
+98:   platform: string;
+99:   browser: string;
+100:   deviceType: 'desktop' | 'mobile' | 'tablet';
+101:   state: 'active' | 'away' | 'background' | 'offline';
+102:   connectionCount: number;
+103:   lastActivityAt?: number;
+104:   lastSeenAt?: number;
+105:   updatedAt?: number;
+106: };
+107: 
+108: type LivePresenceSummary = {
+109:   state: 'active' | 'away' | 'background' | 'offline';
+110:   connectionCount: number;
+111:   deviceCount: number;
+112:   lastActivityAt?: number;
+113:   lastSeenAt?: number;
+114:   devices: DevicePresenceSummary[];
+115: };
+116: type ProviderKind = 'google' | 'email' | 'linked' | 'unknown' | 'deleted';
+117: type ProviderFilter = 'all' | ProviderKind;
+118: type VerificationFilter = 'all' | 'verified' | 'unverified' | 'deleted';
+119: type AdminAction = 'setPresence' | 'forceLogout' | 'resetEmail' | 'deleteUser' | null;
+120: 
+121: type AuthDirectoryEntry = {
+122:   uid: string;
+123:   email: string;
+124:   displayName: string;
+125:   photoURL: string;
+126:   providerIds: string[];
+127:   emailVerified: boolean;
+128:   disabled: boolean;
+129:   creationTime: string | null;
+130:   lastSignInTime: string | null;
+131: };
+132: 
+133: type ConfirmState = {
+134:   isOpen: boolean;
+135:   title: string;
+136:   message: string;
+137:   confirmLabel: string;
+138:   tone: 'brand' | 'danger';
+139:   requiredText?: string;
+140:   onConfirm: () => Promise<void> | void;
+141: };
+142: 
+143: const EMPTY_CONFIRM: ConfirmState = {
+144:   isOpen: false,
+145:   title: '',
+146:   message: '',
+147:   confirmLabel: '확인',
+--- lines 163-237 ---
+163: 
+164: const getLatestLivePresenceSignalAt = (livePresence?: LivePresenceSummary) => {
+165:   if (!livePresence) return 0;
+166:   return Math.max(
+167:     livePresence.lastActivityAt || 0,
+168:     ...livePresence.devices.flatMap((device) => [
+169:       device.updatedAt || 0,
+170:       device.lastActivityAt || 0,
+171:     ])
+172:   );
+173: };
+174: 
+175: const getEffectiveAdminPresenceOverride = (
+176:   user: Pick<AppUserInfo, 'lastLoginAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+177:   livePresence?: LivePresenceSummary
+178: ): 'offline' | 'loggedOut' | null => {
+179:   const adminOverrideAt = user.adminPresenceStateAt || 0;
+180:   if (!adminOverrideAt || !user.adminPresenceState) return null;
+181: 
+182:   const loginTime = user.lastLoginAt || 0;
+183:   const forceLogoutTime = user.forceLogoutAt || 0;
+184:   const latestLiveSignalAt = getLatestLivePresenceSignalAt(livePresence);
+185: 
+186:   // A manual correction wins over stale/ghost sessions that were recorded
+187:   // before the correction. A genuinely new login or a later live write
+188:   // automatically restores real-time presence.
+189:   if (adminOverrideAt <= loginTime || adminOverrideAt < forceLogoutTime || adminOverrideAt < latestLiveSignalAt) {
+190:     return null;
+191:   }
+192:   return user.adminPresenceState;
+193: };
+194: 
+195: const getEffectiveConnectionCount = (
+196:   user: Pick<AppUserInfo, 'lastLoginAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+197:   livePresence?: LivePresenceSummary
+198: ) => getEffectiveAdminPresenceOverride(user, livePresence) ? 0 : (livePresence?.connectionCount || 0);
+199: 
+200: const getPresenceState = (
+201:   user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+202:   livePresence?: LivePresenceSummary,
+203:   now = Date.now()
+204: ): PresenceState => {
+205:   const effectiveOverride = getEffectiveAdminPresenceOverride(user, livePresence);
+206:   if (effectiveOverride === 'loggedOut') return 'loggedOut';
+207:   if (effectiveOverride === 'offline') return 'offline';
+208: 
+209:   // Real-time presence wins only when it is newer than an administrator's
+210:   // manual correction. This prevents a stale ghost tab from blocking the
+211:   // requested offline/logged-out display forever.
+212:   if (livePresence?.state === 'active') return 'active';
+213:   if (livePresence?.state === 'away') return 'away';
+214:   if (livePresence?.state === 'background') return 'background';
+215: 
+216:   const loginTime = user.lastLoginAt || 0;
+217: 
+218:   if (isForceLoggedOut(user)) return 'forced';
+219: 
+220:   const logoutTime = user.lastLogoutAt || 0;
+221:   const latestActualActivity = Math.max(
+222:     livePresence?.lastActivityAt || 0,
+223:     loginTime
+224:   );
+225:   // lastSeenAt is a connection/disconnect timestamp, not proof of user activity.
+226:   // Comparing logout against it made a normal logout appear as offline.
+227:   if (logoutTime > 0 && logoutTime >= latestActualActivity) return 'loggedOut';
+228: 
+229:   const offlineSince = Math.max(
+230:     livePresence?.lastSeenAt || 0,
+231:     user.lastSeenAt || 0,
+232:     livePresence?.lastActivityAt || 0,
+233:     loginTime
+234:   );
+235:   if (offlineSince > 0 && now - offlineSince >= OFFLINE_TO_LOGGED_OUT_MS) return 'loggedOut';
+236:   return 'offline';
+237: };
+--- lines 275-395 ---
+275:     return (
+276:       <span className="inline-flex items-center gap-0.5 text-[16px] font-black tracking-[-0.06em]" title="Google·이메일 연결 회원" aria-label="Google·이메일 연결 회원">
+277:         <span className="text-sky-300">G</span>
+278:         <span className={isEmailVerified ? 'text-pink-400' : 'text-white'}>E</span>
+279:       </span>
+280:     );
+281:   }
+282: 
+283:   return <span className="text-[18px] font-black text-white" title="가입 방식 확인 필요" aria-label="가입 방식 확인 필요">?</span>;
+284: };
+285: 
+286: const getRecentActivityAt = (
+287:   user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+288:   livePresence?: LivePresenceSummary
+289: ) => {
+290:   const presence = getPresenceState(user, livePresence);
+291:   let latest = 0;
+292: 
+293:   if (presence === 'active' || presence === 'away' || presence === 'background') {
+294:     // A disconnect timestamp is not user activity. Mixing lastSeenAt here caused
+295:     // idle users to jump from 5 minutes ago back to just now after reconnects.
+296:     latest = Math.max(
+297:       livePresence?.lastActivityAt || 0,
+298:       user.lastSeenAt || 0,
+299:       user.lastLoginAt || 0
+300:     );
+301:   } else if (presence === 'forced') {
+302:     latest = Math.max(user.forceLogoutAt || 0, user.lastLogoutAt || 0, user.lastSeenAt || 0);
+303:   } else if (presence === 'loggedOut') {
+304:     latest = Math.max(user.adminPresenceStateAt || 0, user.lastLogoutAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, user.lastLoginAt || 0);
+305:   } else {
+306:     latest = Math.max(user.adminPresenceStateAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, livePresence?.lastActivityAt || 0, user.lastLoginAt || 0);
+307:   }
+308: 
+309:   return latest > 0 ? latest : undefined;
+310: };
+311: 
+312: const formatTimestamp = (timestamp?: number) => {
+313:   if (!timestamp) return '기록 없음';
+314:   return new Date(timestamp).toLocaleString('ko-KR');
+315: };
+316: 
+317: const formatLastSeen = (timestamp?: number, now = Date.now()) => {
+318:   if (!timestamp) return '기록 없음';
+319:   const diff = Math.max(0, now - timestamp);
+320:   if (diff < 60_000) return '방금 전';
+321:   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}분 전`;
+322:   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}시간 전`;
+323:   return new Date(timestamp).toLocaleDateString('ko-KR');
+324: };
+325: 
+326: const parseUserDocument = (uid: string, data: Record<string, any>): AppUserInfo => ({
+327:   uid,
+328:   email: data.email || null,
+329:   displayName: data.displayName || null,
+330:   nickname: data.nickname || null,
+331:   role: (data.role as UserRole) || 'free',
+332:   accountStatus: (data.accountStatus as AccountStatus) || 'active',
+333:   paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
+334:   createdAt: getTimestampMs(data.createdAt || Date.now()),
+335:   lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
+336:   lastLogoutAt: data.lastLogoutAt ? getTimestampMs(data.lastLogoutAt) : undefined,
+337:   isOnline: Boolean(data.isOnline),
+338:   lastSeenAt: data.lastSeenAt ? getTimestampMs(data.lastSeenAt) : undefined,
+339:   forceLogoutAt: data.forceLogoutAt ? getTimestampMs(data.forceLogoutAt) : undefined,
+340:   adminPresenceState: data.adminPresenceState === 'offline' || data.adminPresenceState === 'loggedOut'
+341:     ? data.adminPresenceState
+342:     : null,
+343:   adminPresenceStateAt: data.adminPresenceStateAt ? getTimestampMs(data.adminPresenceStateAt) : undefined,
+344:   adminPresenceStateBy: data.adminPresenceStateBy || null,
+345:   providerIds: Array.isArray(data.providerIds) ? data.providerIds : [],
+346:   emailVerified: typeof data.emailVerified === 'boolean' ? data.emailVerified : undefined,
+347:   authDisabled: Boolean(data.authDisabled),
+348:   authDeleted: Boolean(data.authDeleted),
+349:   authDeletedAt: data.authDeletedAtMs
+350:     ? Number(data.authDeletedAtMs)
+351:     : data.authDeletedAt
+352:       ? getTimestampMs(data.authDeletedAt)
+353:       : undefined,
+354:   authDeletedEmail: data.authDeletedEmail || null,
+355:   emailVerificationResetAt: data.emailVerificationResetAtMs
+356:     ? Number(data.emailVerificationResetAtMs)
+357:     : data.emailVerificationResetAt
+358:       ? getTimestampMs(data.emailVerificationResetAt)
+359:       : undefined,
+360:   planName: data.planName,
+361:   planStartAt: data.planStartAt ? getTimestampMs(data.planStartAt) : undefined,
+362:   planExpireAt: data.planExpireAt ? getTimestampMs(data.planExpireAt) : undefined,
+363:   nextBillingAt: data.nextBillingAt ? getTimestampMs(data.nextBillingAt) : undefined,
+364:   lastPaymentAt: data.lastPaymentAt ? getTimestampMs(data.lastPaymentAt) : undefined,
+365:   songGeneratedCount: Number(data.songGeneratedCount || 0),
+366:   favoriteCount: Number(data.favoriteCount || 0),
+367:   adminMemo: data.adminMemo || '',
+368: });
+369: 
+370: const ProviderBadge = ({ user }: { user: AppUserInfo }) => {
+371:   const kind = getProviderKind(user);
+372:   const config: Record<ProviderKind, { label: string; className: string; symbol: React.ReactNode }> = {
+373:     google: {
+374:       label: 'Google',
+375:       className: 'border-sky-400/25 bg-sky-400/10 text-sky-300',
+376:       symbol: <span className="font-black text-[10px]">G</span>,
+377:     },
+378:     email: {
+379:       label: '이메일',
+380:       className: 'border-violet-400/25 bg-violet-400/10 text-violet-300',
+381:       symbol: <Mail className="w-3 h-3" />,
+382:     },
+383:     linked: {
+384:       label: 'Google + 이메일',
+385:       className: 'border-fuchsia-400/25 bg-fuchsia-400/10 text-fuchsia-300',
+386:       symbol: <span className="font-black text-[10px]">G+</span>,
+387:     },
+388:     unknown: {
+389:       label: '확인 필요',
+390:       className: 'border-zinc-400/20 bg-zinc-400/10 text-zinc-400',
+391:       symbol: <AlertCircle className="w-3 h-3" />,
+392:     },
+393:     deleted: {
+394:       label: '탈퇴 계정',
+395:       className: 'border-red-400/25 bg-red-400/10 text-red-300',
+--- lines 450-776 ---
+450:   const devices = livePresence?.devices || [];
+451:   const overallPresence = getPresenceState(user, livePresence, now);
+452: 
+453:   if (devices.length === 0) {
+454:     return (
+455:       <div className={cn('rounded-2xl border border-dashed bg-black/20 px-4 py-5 text-center', backendSchemaReady ? 'border-white/10' : 'border-amber-400/20')}>
+456:         <p className={cn('text-xs font-black', backendSchemaReady ? 'text-zinc-300' : 'text-amber-300')}>
+457:           {backendSchemaReady ? '저장된 기기 기록이 없습니다.' : '기기별 접속 서버가 아직 구버전입니다.'}
+458:         </p>
+459:         <p className="mt-1 text-[10px] font-bold text-zinc-600">
+460:           {backendSchemaReady
+461:             ? '이 버전 적용 후 회원이 다시 접속하면 브라우저별 기록이 자동으로 쌓입니다.'
+462:             : 'getAdminPresence Function과 Realtime Database Rules를 먼저 배포한 뒤 다시 확인해주세요.'}
+463:         </p>
+464:       </div>
+465:     );
+466:   }
+467: 
+468:   return (
+469:     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+470:       {devices.map((device) => {
+471:         const manualOverride = getEffectiveAdminPresenceOverride(user, livePresence);
+472:         const effectiveState: PresenceState = manualOverride
+473:           ? manualOverride
+474:           : (overallPresence === 'forced' || overallPresence === 'loggedOut') && device.state === 'offline'
+475:             ? overallPresence
+476:             : device.state;
+477:         const effectiveConnectionCount = manualOverride ? 0 : device.connectionCount;
+478:         const config: Record<PresenceState, { label: string; className: string; dot: string }> = {
+479:           active: { label: '활동중', className: 'text-emerald-300', dot: 'bg-emerald-400' },
+480:           away: { label: '자리비움', className: 'text-amber-300', dot: 'bg-amber-300' },
+481:           background: { label: '백그라운드', className: 'text-sky-300', dot: 'bg-sky-300' },
+482:           offline: { label: '오프라인', className: 'text-zinc-300', dot: 'bg-zinc-500' },
+483:           loggedOut: { label: '로그아웃', className: 'text-zinc-500', dot: 'bg-zinc-600' },
+484:           forced: { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' },
+485:         };
+486:         const current = config[effectiveState];
+487:         const DeviceIcon = device.deviceType === 'mobile' ? Smartphone : device.deviceType === 'tablet' ? Tablet : Monitor;
+488:         const recentAt = Math.max(device.lastActivityAt || 0, device.lastSeenAt || 0) || undefined;
+489: 
+490:         return (
+491:           <div key={device.deviceId} className="rounded-2xl border border-white/[0.08] bg-black/25 p-3.5">
+492:             <div className="flex items-start gap-3">
+493:               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]"><DeviceIcon className="h-4 w-4 text-zinc-300" /></div>
+494:               <div className="min-w-0 flex-1">
+495:                 <div className="flex flex-wrap items-center justify-between gap-2">
+496:                   <p className="truncate text-xs font-black text-zinc-100">{device.label || '브라우저 기기'}</p>
+497:                   <span className={cn('inline-flex items-center gap-1.5 text-[10px] font-black', current.className)}><span className={cn('h-1.5 w-1.5 rounded-full', current.dot)} />{current.label}</span>
+498:                 </div>
+499:                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-zinc-500">
+500:                   <span>{formatLastSeen(recentAt, now)}</span>
+501:                   {effectiveConnectionCount > 0 && <span className="text-sky-300">열린 탭 {effectiveConnectionCount}개</span>}
+502:                 </div>
+503:               </div>
+504:             </div>
+505:           </div>
+506:         );
+507:       })}
+508:     </div>
+509:   );
+510: };
+511: 
+512: export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
+513:   const navigate = useNavigate();
+514:   const [isAdmin, setIsAdmin] = useState(Boolean(isAdminProp));
+515:   const [users, setUsers] = useState<AppUserInfo[]>([]);
+516:   const [authDirectory, setAuthDirectory] = useState<Record<string, AuthDirectoryEntry>>({});
+517:   const [isLoading, setIsLoading] = useState(true);
+518:   const [isAuthSyncing, setIsAuthSyncing] = useState(false);
+519:   const [authSyncError, setAuthSyncError] = useState<string | null>(null);
+520:   const [isBackfillingUsers, setIsBackfillingUsers] = useState(false);
+521:   const [searchTerm, setSearchTerm] = useState('');
+522:   const [providerFilter, setProviderFilter] = useState<ProviderFilter>('all');
+523:   const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>('all');
+524:   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
+525:   const [statusFilter, setStatusFilter] = useState<AccountStatus | 'all'>('all');
+526:   const [paymentFilter, setPaymentFilter] = useState<PaymentStatus | 'all'>('all');
+527:   const [presenceFilter, setPresenceFilter] = useState<'all' | 'loggedIn' | 'loggedOut'>('all');
+528:   const [sortBy, setSortBy] = useState<'createdAt' | 'lastLoginAt'>('createdAt');
+529:   const [selectedUser, setSelectedUser] = useState<AppUserInfo | null>(null);
+530:   const [isDetailOpen, setIsDetailOpen] = useState(false);
+531:   const [editRole, setEditRole] = useState<UserRole>('free');
+532:   const [editStatus, setEditStatus] = useState<AccountStatus>('active');
+533:   const [editPaymentStatus, setEditPaymentStatus] = useState<PaymentStatus>('none');
+534:   const [editPlanName, setEditPlanName] = useState('');
+535:   const [editMemo, setEditMemo] = useState('');
+536:   const [isSaving, setIsSaving] = useState(false);
+537:   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+538:   const [activeAdminAction, setActiveAdminAction] = useState<AdminAction>(null);
+539:   const [actionResult, setActionResult] = useState<{ success: boolean; message: string } | null>(null);
+540:   const [confirmModal, setConfirmModal] = useState<ConfirmState>(EMPTY_CONFIRM);
+541:   const [confirmText, setConfirmText] = useState('');
+542:   const [presenceClock, setPresenceClock] = useState(() => Date.now());
+543:   const [presenceRefreshIntervalMs, setPresenceRefreshIntervalMs] = useState<AdminPresenceRefreshInterval>(() => {
+544:     if (typeof window === 'undefined') return ADMIN_PRESENCE_REFRESH_DEFAULT_MS;
+545:     const storedValue = window.localStorage.getItem(ADMIN_PRESENCE_REFRESH_STORAGE_KEY);
+546:     if (storedValue === null) return ADMIN_PRESENCE_REFRESH_DEFAULT_MS;
+547:     const stored = Number(storedValue);
+548:     return ADMIN_PRESENCE_REFRESH_OPTIONS.some((option) => option.value === stored)
+549:       ? stored as AdminPresenceRefreshInterval
+550:       : ADMIN_PRESENCE_REFRESH_DEFAULT_MS;
+551:   });
+552:   const [livePresence, setLivePresence] = useState<Record<string, LivePresenceSummary>>({});
+553:   const [isPresenceSyncing, setIsPresenceSyncing] = useState(false);
+554:   const [presenceSyncError, setPresenceSyncError] = useState<string | null>(null);
+555:   const [hasPresenceSynced, setHasPresenceSynced] = useState(false);
+556:   const [devicePresenceBackendSchemaReady, setDevicePresenceBackendSchemaReady] = useState(false);
+557:   const [localPresenceDiagnostic, setLocalPresenceDiagnostic] = useState<PresenceDiagnostic | null>(() => readPresenceDiagnostic(auth.currentUser?.uid || ''));
+558:   const [visibleCount, setVisibleCount] = useState(ADMIN_PAGE_SIZE);
+559:   const presenceRequestInFlightRef = useRef(false);
+560:   const detailHistoryRef = useRef(false);
+561: 
+562:   useEffect(() => {
+563:     if (isAdminProp !== undefined) setIsAdmin(isAdminProp);
+564:   }, [isAdminProp]);
+565: 
+566:   useEffect(() => {
+567:     const intervalId = window.setInterval(() => setPresenceClock(Date.now()), PRESENCE_CLOCK_TICK_MS);
+568:     return () => window.clearInterval(intervalId);
+569:   }, []);
+570: 
+571:   useEffect(() => {
+572:     if (typeof window !== 'undefined') {
+573:       window.localStorage.setItem(ADMIN_PRESENCE_REFRESH_STORAGE_KEY, String(presenceRefreshIntervalMs));
+574:     }
+575:   }, [presenceRefreshIntervalMs]);
+576: 
+577:   useEffect(() => {
+578:     const uid = auth.currentUser?.uid || '';
+579:     if (!uid) return;
+580:     setLocalPresenceDiagnostic(readPresenceDiagnostic(uid));
+581:     const handleDiagnostic = (event: Event) => {
+582:       const detail = (event as CustomEvent<PresenceDiagnostic>).detail;
+583:       if (detail?.uid === uid) setLocalPresenceDiagnostic(detail);
+584:     };
+585:     window.addEventListener(PRESENCE_DIAGNOSTIC_EVENT, handleDiagnostic);
+586:     return () => window.removeEventListener(PRESENCE_DIAGNOSTIC_EVENT, handleDiagnostic);
+587:   }, [auth.currentUser?.uid]);
+588: 
+589:   useEffect(() => {
+590:     if (!auth.currentUser || isAdminProp !== undefined) return;
+591:     getDoc(doc(db, 'users', auth.currentUser.uid))
+592:       .then((snapshot) => setIsAdmin(snapshot.data()?.role === 'admin'))
+593:       .catch((error) => console.error('Admin check failed:', error));
+594:   }, [isAdminProp]);
+595: 
+596:   const fetchAuthDirectory = useCallback(async () => {
+597:     if (!isAdmin || !auth.currentUser) return;
+598:     setIsAuthSyncing(true);
+599:     setAuthSyncError(null);
+600:     try {
+601:       const callable = httpsCallable(functions, 'getAdminAuthDirectory');
+602:       const directory: Record<string, AuthDirectoryEntry> = {};
+603:       let pageToken: string | null = null;
+604:       let pageCount = 0;
+605:       do {
+606:         const response = await callable({ maxResults: 1000, pageToken });
+607:         const payload: any = response.data || {};
+608:         const pageUsers = Array.isArray(payload.users) ? payload.users : [];
+609:         pageUsers.forEach((entry: AuthDirectoryEntry) => {
+610:           if (entry?.uid) directory[entry.uid] = entry;
+611:         });
+612:         pageToken = typeof payload.nextPageToken === 'string' && payload.nextPageToken ? payload.nextPageToken : null;
+613:         pageCount += 1;
+614:       } while (pageToken && pageCount < 20);
+615:       setAuthDirectory(directory);
+616:     } catch (error: any) {
+617:       console.error('Failed to load Firebase Auth directory:', error);
+618:       setAuthSyncError('Auth 관리 기능을 배포한 뒤 로그인 방식과 인증 상태가 실시간으로 표시됩니다.');
+619:     } finally {
+620:       setIsAuthSyncing(false);
+621:     }
+622:   }, [isAdmin]);
+623: 
+624:   const fetchUsers = useCallback(async () => {
+625:     if (!isAdmin) return;
+626:     setIsLoading(true);
+627:     try {
+628:       const snapshot = await getDocs(query(collection(db, 'users'), orderBy(sortBy, 'desc')));
+629:       setUsers(snapshot.docs.map((item) => parseUserDocument(item.id, item.data())));
+630:       await fetchAuthDirectory();
+631:     } catch (error: any) {
+632:       console.error('Failed to fetch users:', error);
+633:       if (error?.code === 'permission-denied') alert('사용자 정보를 불러올 관리자 권한이 없습니다.');
+634:     } finally {
+635:       setIsLoading(false);
+636:     }
+637:   }, [fetchAuthDirectory, isAdmin, sortBy]);
+638: 
+639:   useEffect(() => {
+640:     void fetchUsers();
+641:   }, [fetchUsers]);
+642: 
+643:   useEffect(() => {
+644:     if (!isDetailOpen) {
+645:       detailHistoryRef.current = false;
+646:       return;
+647:     }
+648:     window.history.pushState({ modal: 'admin-user-detail' }, '');
+649:     detailHistoryRef.current = true;
+650:     const close = () => {
+651:       setIsDetailOpen(false);
+652:       detailHistoryRef.current = false;
+653:     };
+654:     const keydown = (event: KeyboardEvent) => {
+655:       if (event.key === 'Escape') close();
+656:     };
+657:     window.addEventListener('popstate', close);
+658:     window.addEventListener('keydown', keydown);
+659:     return () => {
+660:       window.removeEventListener('popstate', close);
+661:       window.removeEventListener('keydown', keydown);
+662:       if (detailHistoryRef.current) {
+663:         window.history.back();
+664:         detailHistoryRef.current = false;
+665:       }
+666:     };
+667:   }, [isDetailOpen]);
+668: 
+669:   const usersWithAuth = useMemo(() => users.map((user) => {
+670:     const entry = authDirectory[user.uid];
+671:     if (!entry) return user;
+672:     const lastSignInAt = entry.lastSignInTime ? new Date(entry.lastSignInTime).getTime() : undefined;
+673:     return {
+674:       ...user,
+675:       email: entry.email || user.email,
+676:       displayName: entry.displayName || user.displayName,
+677:       providerIds: entry.providerIds,
+678:       emailVerified: entry.emailVerified,
+679:       authDisabled: entry.disabled,
+680:       authLastSignInAt: Number.isFinite(lastSignInAt) ? lastSignInAt : user.authLastSignInAt,
+681:     };
+682:   }), [authDirectory, users]);
+683: 
+684:   useEffect(() => {
+685:     if (!selectedUser) return;
+686:     const latest = usersWithAuth.find((user) => user.uid === selectedUser.uid);
+687:     if (latest) setSelectedUser(latest);
+688:   }, [selectedUser?.uid, usersWithAuth]);
+689: 
+690:   const stats = useMemo(() => {
+691:     let online = 0;
+692:     let google = 0;
+693:     let email = 0;
+694:     let unverified = 0;
+695:     let deleted = 0;
+696:     usersWithAuth.forEach((user) => {
+697:       const provider = getProviderKind(user);
+698:       if (provider === 'deleted') deleted += 1;
+699:       if (provider === 'google') google += 1;
+700:       if (provider === 'email') email += 1;
+701:       if ((provider === 'email' || provider === 'linked') && user.emailVerified === false) unverified += 1;
+702:       const presence = getPresenceState(user, livePresence[user.uid], presenceClock);
+703:       if (presence === 'active' || presence === 'away' || presence === 'background') online += 1;
+704:     });
+705:     return { total: usersWithAuth.length, online, google, email, unverified, deleted };
+706:   }, [livePresence, presenceClock, usersWithAuth]);
+707: 
+708:   const filteredUsers = useMemo(() => usersWithAuth.filter((user) => {
+709:     const keyword = searchTerm.trim().toLowerCase();
+710:     const provider = getProviderKind(user);
+711:     const matchesSearch = !keyword
+712:       || user.email?.toLowerCase().includes(keyword)
+713:       || user.uid.toLowerCase().includes(keyword)
+714:       || user.displayName?.toLowerCase().includes(keyword)
+715:       || user.nickname?.toLowerCase().includes(keyword);
+716:     const matchesProvider = providerFilter === 'all' || provider === providerFilter;
+717:     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+718:     const matchesStatus = statusFilter === 'all' || user.accountStatus === statusFilter;
+719:     const matchesPayment = paymentFilter === 'all' || user.paymentStatus === paymentFilter;
+720:     const presence = getPresenceState(user, livePresence[user.uid], presenceClock);
+721:     const matchesPresence = presenceFilter === 'all'
+722:       || (presenceFilter === 'loggedIn' && (presence === 'active' || presence === 'away' || presence === 'background'))
+723:       || (presenceFilter === 'loggedOut' && (presence === 'offline' || presence === 'loggedOut' || presence === 'forced'));
+724:     const matchesVerification = verificationFilter === 'all'
+725:       || (verificationFilter === 'deleted' && provider === 'deleted')
+726:       || (verificationFilter === 'verified' && provider !== 'deleted' && (provider === 'google' || user.emailVerified === true))
+727:       || (verificationFilter === 'unverified' && provider !== 'deleted' && (provider === 'email' || provider === 'linked') && user.emailVerified === false);
+728:     return matchesSearch && matchesProvider && matchesRole && matchesStatus && matchesPayment && matchesPresence && matchesVerification;
+729:   }), [livePresence, paymentFilter, presenceClock, presenceFilter, providerFilter, roleFilter, searchTerm, statusFilter, usersWithAuth, verificationFilter]);
+730: 
+731:   useEffect(() => {
+732:     setVisibleCount(ADMIN_PAGE_SIZE);
+733:   }, [paymentFilter, presenceFilter, providerFilter, roleFilter, searchTerm, sortBy, statusFilter, verificationFilter]);
+734: 
+735:   const visibleUsers = useMemo(() => filteredUsers.slice(0, visibleCount), [filteredUsers, visibleCount]);
+736:   const presenceTargetUids = useMemo(() => Array.from(new Set([
+737:     ...(presenceFilter === 'all' ? visibleUsers : usersWithAuth.slice(0, 50)).map((user) => user.uid),
+738:     ...(selectedUser ? [selectedUser.uid] : []),
+739:   ])).slice(0, 50), [presenceFilter, selectedUser?.uid, usersWithAuth, visibleUsers]);
+740:   const presenceTargetKey = presenceTargetUids.join('|');
+741: 
+742:   const fetchPresence = useCallback(async () => {
+743:     const targetUids = presenceTargetKey ? presenceTargetKey.split('|') : [];
+744:     if (!isAdmin || !auth.currentUser || targetUids.length === 0 || presenceRequestInFlightRef.current) return;
+745:     presenceRequestInFlightRef.current = true;
+746:     setIsPresenceSyncing(true);
+747:     try {
+748:       const callable = httpsCallable(functions, 'getAdminPresence');
+749:       const response = await callable({ uids: targetUids });
+750:       const payload: any = response.data || {};
+751:       const backendSchemaReady = Number(payload.schemaVersion || 0) >= 2;
+752:       setDevicePresenceBackendSchemaReady(backendSchemaReady);
+753:       const next: Record<string, LivePresenceSummary> = {};
+754:       Object.entries(payload.presence || {}).forEach(([uid, value]) => {
+755:         const raw = value as any;
+756:         const rawState = String(raw?.state || 'offline');
+757:         const state: LivePresenceSummary['state'] = ['active', 'away', 'background', 'offline'].includes(rawState)
+758:           ? rawState as LivePresenceSummary['state']
+759:           : 'offline';
+760:         const devices: DevicePresenceSummary[] = Array.isArray(raw?.devices)
+761:           ? raw.devices.slice(0, 10).map((device: any) => {
+762:             const rawDeviceState = String(device?.state || 'offline');
+763:             const deviceState: DevicePresenceSummary['state'] = ['active', 'away', 'background', 'offline'].includes(rawDeviceState)
+764:               ? rawDeviceState as DevicePresenceSummary['state']
+765:               : 'offline';
+766:             const rawDeviceType = String(device?.deviceType || 'desktop');
+767:             const deviceType: DevicePresenceSummary['deviceType'] = rawDeviceType === 'mobile' || rawDeviceType === 'tablet'
+768:               ? rawDeviceType
+769:               : 'desktop';
+770:             return {
+771:               deviceId: String(device?.deviceId || ''),
+772:               label: String(device?.label || '브라우저 기기'),
+773:               platform: String(device?.platform || ''),
+774:               browser: String(device?.browser || ''),
+775:               deviceType,
+776:               state: deviceState,
+--- lines 796-1126 ---
+796:       // Use one local clock source so the relative time never moves backward
+797:       // because of a small server/client clock difference.
+798:       setPresenceClock(Date.now());
+799:     } catch (error) {
+800:       console.error('Failed to load Realtime presence:', error);
+801:       setHasPresenceSynced(false);
+802:       setDevicePresenceBackendSchemaReady(false);
+803:       setPresenceSyncError(error?.message || '접속 상태 서버에 연결하지 못했습니다.');
+804:     } finally {
+805:       presenceRequestInFlightRef.current = false;
+806:       setIsPresenceSyncing(false);
+807:     }
+808:   }, [isAdmin, presenceTargetKey]);
+809: 
+810:   useEffect(() => {
+811:     if (!isAdmin || !presenceTargetKey) return;
+812:     void fetchPresence();
+813:     const intervalId = presenceRefreshIntervalMs > 0
+814:       ? window.setInterval(() => {
+815:         if (document.visibilityState === 'visible') void fetchPresence();
+816:       }, presenceRefreshIntervalMs)
+817:       : null;
+818:     const handleVisibility = () => {
+819:       if (document.visibilityState === 'visible') void fetchPresence();
+820:     };
+821:     document.addEventListener('visibilitychange', handleVisibility);
+822:     return () => {
+823:       if (intervalId !== null) window.clearInterval(intervalId);
+824:       document.removeEventListener('visibilitychange', handleVisibility);
+825:     };
+826:   }, [fetchPresence, isAdmin, presenceRefreshIntervalMs, presenceTargetKey]);
+827: 
+828:   const presenceDisplayMode: PresenceDisplayMode = presenceSyncError
+829:     ? 'error'
+830:     : hasPresenceSynced
+831:       ? 'ready'
+832:       : 'checking';
+833: 
+834:   const presenceRefreshLabel = presenceRefreshIntervalMs === 0
+835:     ? '자동 확인 꺼짐'
+836:     : `${ADMIN_PRESENCE_REFRESH_OPTIONS.find((option) => option.value === presenceRefreshIntervalMs)?.label || '60초'} 자동 확인`;
+837: 
+838:   const currentAdminUid = auth.currentUser?.uid || '';
+839:   const currentAdminUser = usersWithAuth.find((item) => item.uid === currentAdminUid);
+840:   const currentAdminLive = currentAdminUid ? livePresence[currentAdminUid] : undefined;
+841: 
+842:   const getBadgeInfo = (user: AppUserInfo) => {
+843:     if (user.authDeleted || user.authDeletedAt) return { label: '탈퇴됨', className: 'text-red-300', dot: 'bg-red-400' };
+844:     const effectivePresence = getPresenceState(user, livePresence[user.uid], presenceClock);
+845:     if (effectivePresence === 'forced') return { label: '강제 로그아웃', className: 'text-red-300', dot: 'bg-red-400' };
+846:     const inactiveDays = getDayDiff(user.lastLoginAt, presenceClock);
+847:     if (inactiveDays >= DORMANT_DAYS) return { label: '휴면회원', className: 'text-red-300', dot: 'bg-red-400' };
+848:     if (inactiveDays >= LONG_INACTIVE_DAYS) return { label: '장기 미접속', className: 'text-orange-300', dot: 'bg-orange-400' };
+849:     if (user.accountStatus === 'banned') return { label: '정지', className: 'text-red-300', dot: 'bg-red-400' };
+850:     return { label: STATUS_LABELS[user.accountStatus], className: 'text-emerald-300', dot: 'bg-emerald-400' };
+851:   };
+852: 
+853:   const openDetail = (user: AppUserInfo) => {
+854:     setSelectedUser(user);
+855:     setEditRole(user.role);
+856:     setEditStatus(user.accountStatus);
+857:     setEditPaymentStatus(user.paymentStatus || 'none');
+858:     setEditPlanName(user.planName || '');
+859:     setEditMemo(user.adminMemo || '');
+860:     setSaveStatus('idle');
+861:     setActionResult(null);
+862:     setIsDetailOpen(true);
+863:   };
+864: 
+865:   const closeConfirm = () => {
+866:     setConfirmModal(EMPTY_CONFIRM);
+867:     setConfirmText('');
+868:   };
+869: 
+870:   const refreshAfterAction = async (targetUid: string) => {
+871:     await fetchUsers();
+872:     const freshSnapshot = await getDoc(doc(db, 'users', targetUid));
+873:     if (freshSnapshot.exists()) {
+874:       const base = parseUserDocument(targetUid, freshSnapshot.data());
+875:       const directory = authDirectory[targetUid];
+876:       setSelectedUser(directory ? {
+877:         ...base,
+878:         providerIds: directory.providerIds,
+879:         emailVerified: directory.emailVerified,
+880:         authDisabled: directory.disabled,
+881:       } : base);
+882:     }
+883:   };
+884: 
+885:   const executeUpdate = async () => {
+886:     if (!selectedUser || selectedUser.authDeleted) return;
+887:     setIsSaving(true);
+888:     setSaveStatus('idle');
+889:     closeConfirm();
+890:     try {
+891:       await updateDoc(doc(db, 'users', selectedUser.uid), {
+892:         role: editRole,
+893:         accountStatus: editStatus,
+894:         paymentStatus: editPaymentStatus,
+895:         planName: editPlanName,
+896:         adminMemo: editMemo,
+897:       });
+898:       setSaveStatus('success');
+899:       await refreshAfterAction(selectedUser.uid);
+900:     } catch (error) {
+901:       console.error('Failed to update user:', error);
+902:       setSaveStatus('error');
+903:     } finally {
+904:       setIsSaving(false);
+905:     }
+906:   };
+907: 
+908:   const handleUpdateUser = () => {
+909:     if (!selectedUser || selectedUser.authDeleted) return;
+910:     const isSelf = auth.currentUser?.uid === selectedUser.uid;
+911:     if (isSelf && selectedUser.role === 'admin' && editRole !== 'admin') {
+912:       alert('자기 자신의 관리자 권한은 해제할 수 없습니다.');
+913:       return;
+914:     }
+915:     if (isSelf && editStatus !== 'active') {
+916:       alert('자기 자신의 계정 상태는 제한할 수 없습니다.');
+917:       return;
+918:     }
+919:     const adminCount = usersWithAuth.filter((user) => user.role === 'admin' && !user.authDeleted).length;
+920:     if (adminCount <= 1 && selectedUser.role === 'admin' && editRole !== 'admin') {
+921:       alert('마지막 관리자 권한은 해제할 수 없습니다.');
+922:       return;
+923:     }
+924:     const needsConfirm = editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus;
+925:     if (!needsConfirm) {
+926:       void executeUpdate();
+927:       return;
+928:     }
+929:     setConfirmModal({
+930:       isOpen: true,
+931:       title: '회원 설정 변경',
+932:       message: '회원 등급 또는 계정 상태 변경은 즉시 적용됩니다.',
+933:       confirmLabel: '변경 적용',
+934:       tone: 'brand',
+935:       onConfirm: executeUpdate,
+936:     });
+937:   };
+938: 
+939:   const runAdminCallable = async (action: Exclude<AdminAction, null>, functionName: string, payload: Record<string, unknown>, successMessage: string) => {
+940:     if (!selectedUser) return;
+941:     closeConfirm();
+942:     setActiveAdminAction(action);
+943:     setActionResult(null);
+944:     try {
+945:       const callable = httpsCallable(functions, functionName);
+946:       await callable(payload);
+947:       setActionResult({ success: true, message: successMessage });
+948:       await refreshAfterAction(selectedUser.uid);
+949:     } catch (error: any) {
+950:       console.error(`${functionName} failed:`, error);
+951:       setActionResult({ success: false, message: error?.message || '관리자 작업에 실패했습니다.' });
+952:     } finally {
+953:       setActiveAdminAction(null);
+954:     }
+955:   };
+956: 
+957:   const requestPresenceOverride = (state: 'offline' | 'loggedOut' | null) => {
+958:     if (!selectedUser) return;
+959:     const label = state === 'offline' ? '오프라인' : state === 'loggedOut' ? '로그아웃' : '자동 판정';
+960:     setConfirmModal({
+961:       isOpen: true,
+962:       title: `접속 상태 · ${label}`,
+963:       message: state
+964:         ? `${label}으로 표시를 보정합니다. 현재 남아 있는 오래된 접속 기록보다 이 보정이 우선하며, 이후 새 로그인이나 새 활동이 감지되면 자동으로 실제 상태로 돌아갑니다.`
+965:         : '수동 보정을 해제하고 실시간 접속 기록과 2일 자동 판정 기준으로 되돌립니다.',
+966:       confirmLabel: '상태 적용',
+967:       tone: 'brand',
+968:       onConfirm: async () => {
+969:         if (!selectedUser || !auth.currentUser) return;
+970:         closeConfirm();
+971:         setActiveAdminAction('setPresence');
+972:         setActionResult(null);
+973:         try {
+974:           const updates: Record<string, unknown> = {
+975:             adminPresenceState: state,
+976:             adminPresenceStateAt: state ? serverTimestamp() : null,
+977:             adminPresenceStateBy: state ? auth.currentUser.uid : null,
+978:           };
+979:           if (state) updates.isOnline = false;
+980:           await updateDoc(doc(db, 'users', selectedUser.uid), updates);
+981:           setActionResult({ success: true, message: state ? `${label} 표시로 보정했습니다.` : '접속 상태를 자동 판정으로 되돌렸습니다.' });
+982:           await refreshAfterAction(selectedUser.uid);
+983:         } catch (error: any) {
+984:           console.error('Presence override failed:', error);
+985:           setActionResult({ success: false, message: error?.message || '접속 상태 보정에 실패했습니다.' });
+986:         } finally {
+987:           setActiveAdminAction(null);
+988:         }
+989:       },
+990:     });
+991:   };
+992: 
+993:   const requestForceLogout = () => {
+994:     if (!selectedUser) return;
+995:     setConfirmModal({
+996:       isOpen: true,
+997:       title: '강제 로그아웃',
+998:       message: '현재 로그인 세션을 종료하고 갱신 토큰을 무효화합니다. 회원은 다시 로그인할 수 있습니다.',
+999:       confirmLabel: '로그아웃 실행',
+1000:       tone: 'danger',
+1001:       onConfirm: () => runAdminCallable('forceLogout', 'adminForceLogoutUser', { targetUid: selectedUser.uid }, '강제 로그아웃이 완료되었습니다.'),
+1002:     });
+1003:   };
+1004: 
+1005:   const requestEmailVerificationReset = () => {
+1006:     if (!selectedUser) return;
+1007:     setConfirmModal({
+1008:       isOpen: true,
+1009:       title: '이메일 인증 초기화',
+1010:       message: '인증 완료 상태를 미인증으로 되돌리고 현재 세션을 종료합니다. 다음 로그인 때 이메일 인증을 다시 받아야 합니다.',
+1011:       confirmLabel: '인증 초기화',
+1012:       tone: 'danger',
+1013:       onConfirm: () => runAdminCallable('resetEmail', 'adminResetEmailVerification', { targetUid: selectedUser.uid }, '이메일 인증이 초기화되었습니다. 다음 로그인 때 재인증이 필요합니다.'),
+1014:     });
+1015:   };
+1016: 
+1017:   const requestDeleteUser = () => {
+1018:     if (!selectedUser) return;
+1019:     const requiredText = selectedUser.email || selectedUser.authDeletedEmail || selectedUser.uid;
+1020:     setConfirmText('');
+1021:     setConfirmModal({
+1022:       isOpen: true,
+1023:       title: '강제 탈퇴 · Auth 계정 삭제',
+1024:       message: 'Firebase 로그인 계정과 저장된 개인 API 키를 삭제합니다. 생성곡·뮤직노트·플레이리스트는 실수 방지를 위해 보존되며, 삭제된 계정으로는 다시 로그인할 수 없습니다.',
+1025:       confirmLabel: '강제 탈퇴 실행',
+1026:       tone: 'danger',
+1027:       requiredText,
+1028:       onConfirm: () => runAdminCallable('deleteUser', 'adminDeleteUserAccount', {
+1029:         targetUid: selectedUser.uid,
+1030:         confirmEmail: selectedUser.email || selectedUser.authDeletedEmail || '',
+1031:       }, '강제 탈퇴가 완료되었습니다. 로그인 계정은 삭제되고 사용자 콘텐츠는 보존됩니다.'),
+1032:     });
+1033:   };
+1034: 
+1035:   const requestBackfillMissingUsers = () => {
+1036:     setConfirmModal({
+1037:       isOpen: true,
+1038:       title: 'Auth 누락회원 복구',
+1039:       message: 'Firebase Authentication에는 있지만 Firestore 회원목록에 없는 계정만 복구합니다. 기존 회원 정보는 덮어쓰지 않습니다.',
+1040:       confirmLabel: '누락회원 복구',
+1041:       tone: 'brand',
+1042:       onConfirm: async () => {
+1043:         closeConfirm();
+1044:         setIsBackfillingUsers(true);
+1045:         try {
+1046:           const callable = httpsCallable(functions, 'backfillMissingAuthUsers');
+1047:           const response = await callable({ dryRun: false });
+1048:           const data: any = response.data || {};
+1049:           const failedCount = Array.isArray(data.failedUsers) ? data.failedUsers.length : 0;
+1050:           setActionResult({
+1051:             success: failedCount === 0,
+1052:             message: `누락 ${Number(data.missingUserDocs || 0)}명 중 ${Number(data.createdUserDocs || 0)}명을 복구했습니다. 실패 ${failedCount}명`,
+1053:           });
+1054:           await fetchUsers();
+1055:         } catch (error: any) {
+1056:           console.error('backfillMissingAuthUsers failed:', error);
+1057:           setActionResult({ success: false, message: error?.message || '누락회원 복구에 실패했습니다.' });
+1058:         } finally {
+1059:           setIsBackfillingUsers(false);
+1060:         }
+1061:       },
+1062:     });
+1063:   };
+1064: 
+1065:   if (!isAdmin) {
+1066:     return (
+1067:       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-6">
+1068:         <div className="text-center space-y-4">
+1069:           <Shield className="w-12 h-12 text-red-400 mx-auto" />
+1070:           <h1 className="text-2xl font-black text-[var(--text-primary)]">접근 권한이 없습니다</h1>
+1071:           <button onClick={() => navigate('/')} className="px-6 py-3 rounded-2xl bg-brand-orange text-white font-bold">홈으로</button>
+1072:         </div>
+1073:       </div>
+1074:     );
+1075:   }
+1076: 
+1077:   const selectedProvider = selectedUser ? getProviderKind(selectedUser) : 'unknown';
+1078:   const selectedIsProtected = Boolean(selectedUser && (selectedUser.role === 'admin' || auth.currentUser?.uid === selectedUser.uid));
+1079:   const canResetEmailVerification = Boolean(
+1080:     selectedUser
+1081:       && selectedProvider === 'email'
+1082:       && selectedUser.emailVerified === true
+1083:       && !selectedIsProtected
+1084:       && !selectedUser.authDeleted
+1085:       && !selectedUser.authDeletedAt
+1086:   );
+1087: 
+1088:   const metricCards = [
+1089:     { label: '전체 회원', value: stats.total, icon: Users, className: 'text-white' },
+1090:     { label: '현재 접속', value: stats.online, icon: Activity, className: 'text-emerald-300' },
+1091:     { label: 'Google 가입', value: stats.google, icon: BadgeCheck, className: 'text-sky-300' },
+1092:     { label: '이메일 가입', value: stats.email, icon: Mail, className: 'text-violet-300' },
+1093:     { label: '이메일 미인증', value: stats.unverified, icon: BadgeX, className: 'text-amber-300' },
+1094:     { label: '강제 탈퇴', value: stats.deleted, icon: UserRoundX, className: 'text-red-300' },
+1095:   ];
+1096: 
+1097:   return (
+1098:     <AdminPageLayout
+1099:       title="회원 관리"
+1100:       description="가입 방식, 이메일 인증, 등급과 계정 상태를 한 화면에서 관리합니다."
+1101:       actions={(
+1102:         <div className="flex items-center gap-2">
+1103:           <button
+1104:             onClick={requestBackfillMissingUsers}
+1105:             disabled={isBackfillingUsers}
+1106:             className="hidden md:inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-2.5 text-xs font-black text-[var(--text-secondary)] hover:bg-white/[0.07] hover:text-[var(--text-primary)] disabled:opacity-50"
+1107:           >
+1108:             {isBackfillingUsers ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+1109:             누락 복구
+1110:           </button>
+1111:           <button
+1112:             onClick={() => { void fetchUsers(); void fetchPresence(); }}
+1113:             disabled={isLoading || isAuthSyncing || isPresenceSyncing}
+1114:             className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-2.5 text-xs font-black text-[var(--text-primary)] hover:bg-white/[0.08] disabled:opacity-50"
+1115:           >
+1116:             <RefreshCw className={cn('w-4 h-4', (isLoading || isAuthSyncing || isPresenceSyncing) && 'animate-spin')} />
+1117:             새로고침
+1118:           </button>
+1119:         </div>
+1120:       )}
+1121:     >
+1122:       <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2.5">
+1123:         {metricCards.map(({ label, value, icon: Icon, className }) => (
+1124:           <div key={label} className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.055] to-white/[0.018] p-4 shadow-[0_10px_35px_rgba(0,0,0,0.16)]">
+1125:             <div className={cn('flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.12em]', className)}>
+1126:               <Icon className="w-3.5 h-3.5" />{label}
+--- lines 1147-1238 ---
+1147:               <option value="google">Google</option>
+1148:               <option value="email">이메일</option>
+1149:               <option value="linked">연결 계정</option>
+1150:               <option value="unknown">확인 필요</option>
+1151:               <option value="deleted">탈퇴 계정</option>
+1152:             </select>
+1153:             <select value={verificationFilter} onChange={(event) => setVerificationFilter(event.target.value as VerificationFilter)} className="h-12 rounded-2xl border border-white/10 bg-black/20 px-3 text-xs font-bold text-[var(--text-primary)] outline-none">
+1154:               <option value="all">전체 인증 상태</option>
+1155:               <option value="verified">인증 완료</option>
+1156:               <option value="unverified">미인증</option>
+1157:               <option value="deleted">탈퇴됨</option>
+1158:             </select>
+1159:             <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as UserRole | 'all')} className="h-12 rounded-2xl border border-white/10 bg-black/20 px-3 text-xs font-bold text-[var(--text-primary)] outline-none">
+1160:               <option value="all">전체 등급</option>
+1161:               {Object.entries(ROLE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+1162:             </select>
+1163:             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as AccountStatus | 'all')} className="h-12 rounded-2xl border border-white/10 bg-black/20 px-3 text-xs font-bold text-[var(--text-primary)] outline-none">
+1164:               <option value="all">전체 계정 상태</option>
+1165:               {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+1166:             </select>
+1167:             <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value as PaymentStatus | 'all')} className="h-12 rounded-2xl border border-white/10 bg-black/20 px-3 text-xs font-bold text-[var(--text-primary)] outline-none">
+1168:               <option value="all">전체 결제 상태</option>
+1169:               {Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+1170:             </select>
+1171:             <select value={presenceFilter} onChange={(event) => setPresenceFilter(event.target.value as 'all' | 'loggedIn' | 'loggedOut')} className="h-12 rounded-2xl border border-white/10 bg-black/20 px-3 text-xs font-bold text-[var(--text-primary)] outline-none">
+1172:               <option value="all">전체 접속 상태</option>
+1173:               <option value="loggedIn">접속·자리비움</option>
+1174:               <option value="loggedOut">로그아웃</option>
+1175:             </select>
+1176:             <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'createdAt' | 'lastLoginAt')} className="h-12 rounded-2xl border border-white/10 bg-black/20 px-3 text-xs font-bold text-[var(--text-primary)] outline-none col-span-2 md:col-span-1">
+1177:               <option value="createdAt">가입일순</option>
+1178:               <option value="lastLoginAt">최근 접속순</option>
+1179:             </select>
+1180:           </div>
+1181:         </div>
+1182:         <div className="mt-3 grid gap-2 rounded-2xl border border-white/[0.08] bg-black/20 px-3 py-3 text-xs font-bold text-[var(--text-secondary)] md:grid-cols-[auto_1fr_auto] md:items-center">
+1183:           <span>검색 결과 {filteredUsers.length}명</span>
+1184:           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+1185:             <span className={cn('inline-flex items-center gap-2', authSyncError ? 'text-amber-300' : 'text-emerald-300')}>
+1186:               {isAuthSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : authSyncError ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+1187:               {isAuthSyncing ? 'Firebase Auth 확인 중' : authSyncError || 'Firebase Auth 연결됨'}
+1188:             </span>
+1189:             <span className={cn('inline-flex items-center gap-2', presenceSyncError ? 'text-amber-300' : hasPresenceSynced ? 'text-sky-300' : 'text-zinc-300')}>
+1190:               {isPresenceSyncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : presenceSyncError ? <AlertCircle className="w-3.5 h-3.5" /> : hasPresenceSynced ? <Activity className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+1191:               {isPresenceSyncing ? '접속 상태 확인 중' : presenceSyncError || (hasPresenceSynced ? `접속 상태 서버 연결됨 · ${presenceRefreshLabel}` : '접속 상태 첫 확인 중')}
+1192:             </span>
+1193:             {localPresenceDiagnostic && (
+1194:               <span className={cn('inline-flex items-center gap-2', localPresenceDiagnostic.status === 'connected' ? 'text-emerald-300' : localPresenceDiagnostic.status === 'error' ? 'text-amber-300' : 'text-zinc-300')}>
+1195:                 {localPresenceDiagnostic.status === 'connected' ? <CheckCircle2 className="w-3.5 h-3.5" /> : localPresenceDiagnostic.status === 'error' ? <AlertCircle className="w-3.5 h-3.5" /> : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+1196:                 현재 기기: {localPresenceDiagnostic.status === 'connected' ? '기록 정상' : localPresenceDiagnostic.status === 'error' ? '자동 재연결 중' : '연결 준비 중'}
+1197:               </span>
+1198:             )}
+1199:           </div>
+1200:           <div className="flex flex-wrap items-center justify-between gap-2 md:justify-end">
+1201:             {currentAdminUser && <PresenceBadge user={currentAdminUser} livePresence={currentAdminLive} displayMode={presenceDisplayMode} />}
+1202:             <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-black text-zinc-300">
+1203:               <span className="whitespace-nowrap">자동 갱신</span>
+1204:               <select
+1205:                 value={presenceRefreshIntervalMs}
+1206:                 onChange={(event) => setPresenceRefreshIntervalMs(Number(event.target.value) as AdminPresenceRefreshInterval)}
+1207:                 className="h-7 rounded-lg border border-white/10 bg-[#171717] px-2 text-[11px] font-black text-zinc-100 outline-none focus:border-brand-orange/40"
+1208:                 aria-label="접속 상태 자동 갱신 주기"
+1209:               >
+1210:                 {ADMIN_PRESENCE_REFRESH_OPTIONS.map((option) => (
+1211:                   <option key={option.value} value={option.value}>{option.label}</option>
+1212:                 ))}
+1213:               </select>
+1214:             </label>
+1215:             <button type="button" onClick={() => void fetchPresence()} disabled={isPresenceSyncing} className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-black text-zinc-200 hover:border-brand-orange/30 hover:text-brand-orange disabled:opacity-50">지금 확인</button>
+1216:           </div>
+1217:         </div>
+1218:       </section>
+1219: 
+1220:       <section className="space-y-2.5">
+1221:         {isLoading ? (
+1222:           <div className="rounded-[28px] border border-white/10 bg-white/[0.025] py-24 text-center">
+1223:             <Loader2 className="w-8 h-8 animate-spin text-brand-orange mx-auto" />
+1224:             <p className="mt-3 text-sm font-bold text-[var(--text-secondary)]">회원 정보를 불러오는 중입니다.</p>
+1225:           </div>
+1226:         ) : filteredUsers.length === 0 ? (
+1227:           <div className="rounded-[28px] border border-white/10 bg-white/[0.025] py-20 text-center text-sm font-bold text-[var(--text-secondary)]">조건에 맞는 회원이 없습니다.</div>
+1228:         ) : visibleUsers.map((user) => {
+1229:           const badge = getBadgeInfo(user);
+1230:           const live = livePresence[user.uid];
+1231:           const presence = getPresenceState(user, live, presenceClock);
+1232:           const presenceDot = presence === 'active'
+1233:             ? 'bg-emerald-400'
+1234:             : presence === 'away'
+1235:               ? 'bg-amber-300'
+1236:               : presence === 'background'
+1237:                 ? 'bg-sky-300'
+1238:                 : presence === 'forced'
+--- lines 1247-1474 ---
+1247:               key={user.uid}
+1248:               onClick={() => openDetail(user)}
+1249:               className="group w-full rounded-[22px] border border-white/10 bg-gradient-to-r from-white/[0.045] to-white/[0.018] p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-brand-orange/35 hover:bg-white/[0.065] hover:shadow-[0_18px_45px_rgba(0,0,0,0.22)]"
+1250:             >
+1251:               <div className="flex items-center gap-3 md:gap-4">
+1252:                 <div className={cn('relative w-11 h-11 md:w-12 md:h-12 rounded-2xl border flex items-center justify-center shrink-0', user.authDeleted ? 'border-red-400/20 bg-red-400/10' : 'border-white/10 bg-black/20')}>
+1253:                   <AuthAccountMark user={user} />
+1254:                   <span className={cn('absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full border-2 border-[#181818]', presenceDot)} />
+1255:                 </div>
+1256:                 <div className="min-w-0 flex-1">
+1257:                   <div className="flex flex-wrap items-center gap-2">
+1258:                     <span className={cn('truncate text-sm md:text-base font-black', user.authDeleted ? 'text-zinc-500 line-through' : 'text-[var(--text-primary)]')}>{user.displayName || user.nickname || '이름 없음'}</span>
+1259:                     <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase', user.role === 'admin' ? 'bg-red-500/15 text-red-300' : user.role === 'pro' ? 'bg-orange-500/15 text-orange-300' : user.role === 'basic' ? 'bg-blue-500/15 text-blue-300' : 'bg-zinc-500/15 text-zinc-400')}>{ROLE_LABELS[user.role]}</span>
+1260:                   </div>
+1261:                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-secondary)]">
+1262:                     <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" />{user.email || user.authDeletedEmail || '이메일 없음'}</span>
+1263:                     <span className={cn('inline-flex items-center gap-1 font-bold', badge.className)}><span className={cn('w-1.5 h-1.5 rounded-full', badge.dot)} />{badge.label}</span>
+1264:                   </div>
+1265:                   <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 md:hidden">
+1266:                     <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-amber-300">{live.deviceCount}개 기기</p>}</div>
+1267:                     <span className={cn('inline-flex items-center gap-1 text-xs font-black', recentTimeClassName)}><Clock className="w-3.5 h-3.5" />{formatLastSeen(recentTime, presenceClock)}</span>
+1268:                   </div>
+1269:                 </div>
+1270:                 <div className="hidden md:flex w-44 flex-col items-end gap-1.5 shrink-0">
+1271:                   <PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />
+1272:                   <span className={cn('text-xs font-black', recentTimeClassName)}>{formatLastSeen(recentTime, presenceClock)}</span>
+1273:                   {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-amber-300">{live.deviceCount}개 기기</span>}
+1274:                 </div>
+1275:                 <ChevronRight className="w-5 h-5 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-brand-orange" />
+1276:               </div>
+1277:             </button>
+1278:           );
+1279:         })}
+1280:         {visibleCount < filteredUsers.length && (
+1281:           <button
+1282:             type="button"
+1283:             onClick={() => setVisibleCount((count) => count + ADMIN_PAGE_SIZE)}
+1284:             className="w-full rounded-[20px] border border-white/10 bg-white/[0.025] py-3 text-xs font-black text-zinc-300 hover:border-brand-orange/30 hover:text-brand-orange"
+1285:           >
+1286:             다음 {Math.min(ADMIN_PAGE_SIZE, filteredUsers.length - visibleCount)}명 더 보기
+1287:           </button>
+1288:         )}
+1289:       </section>
+1290: 
+1291:       <AnimatePresence>
+1292:         {isDetailOpen && selectedUser && (
+1293:           <div className="fixed inset-0 z-[180] flex items-center justify-center p-3 md:p-6" onClick={() => setIsDetailOpen(false)}>
+1294:             <motion.div className="absolute inset-0 bg-black/75 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+1295:             <motion.div
+1296:               initial={{ opacity: 0, y: 24, scale: 0.98 }}
+1297:               animate={{ opacity: 1, y: 0, scale: 1 }}
+1298:               exit={{ opacity: 0, y: 24, scale: 0.98 }}
+1299:               onClick={(event) => event.stopPropagation()}
+1300:               className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-[30px] border border-white/12 bg-[#141414] shadow-[0_30px_100px_rgba(0,0,0,0.65)]"
+1301:             >
+1302:               <header className="border-b border-white/10 bg-gradient-to-r from-white/[0.06] to-transparent px-5 py-5 md:px-7">
+1303:                 <div className="flex items-start gap-4">
+1304:                   <div className="w-13 h-13 rounded-2xl border border-white/10 bg-black/30 flex items-center justify-center shrink-0">
+1305:                     {selectedUser.authDeleted ? <UserRoundX className="w-6 h-6 text-red-300" /> : <User className="w-6 h-6 text-zinc-200" />}
+1306:                   </div>
+1307:                   <div className="min-w-0 flex-1">
+1308:                     <div className="flex flex-wrap items-center gap-2">
+1309:                       <h2 className="truncate text-xl font-black text-white">{selectedUser.displayName || selectedUser.nickname || '이름 없음'}</h2>
+1310:                       <span className="rounded-lg bg-brand-orange/15 px-2 py-1 text-[10px] font-black uppercase text-brand-orange">{ROLE_LABELS[selectedUser.role]}</span>
+1311:                     </div>
+1312:                     <p className="mt-1 truncate text-xs font-medium text-zinc-400">{selectedUser.email || selectedUser.authDeletedEmail || '이메일 없음'}</p>
+1313:                     <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={selectedUser} /><VerificationBadge user={selectedUser} /></div>
+1314:                   </div>
+1315:                   <button onClick={() => setIsDetailOpen(false)} className="w-10 h-10 rounded-2xl border border-white/10 bg-white/[0.04] flex items-center justify-center text-zinc-400 hover:bg-white/10 hover:text-white"><X className="w-5 h-5" /></button>
+1316:                 </div>
+1317:               </header>
+1318: 
+1319:               <div className="overflow-y-auto p-5 md:p-7 space-y-5">
+1320:                 <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+1321:                   <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+1322:                     <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Shield className="w-4 h-4 text-brand-orange" />로그인 · 인증</h3>
+1323:                     <div className="mt-4 space-y-3 text-xs">
+1324:                       <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">가입 방식</span><ProviderBadge user={selectedUser} /></div>
+1325:                       <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">인증 상태</span><VerificationBadge user={selectedUser} /></div>
+1326:                       <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">Auth 비활성화</span><span className={cn('font-bold', selectedUser.authDisabled ? 'text-red-300' : 'text-emerald-300')}>{selectedUser.authDisabled ? '예' : '아니오'}</span></div>
+1327:                       <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">최근 Auth 로그인</span><span className="text-right font-bold text-zinc-200">{formatTimestamp(selectedUser.authLastSignInAt)}</span></div>
+1328:                       {selectedUser.emailVerificationResetAt && <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">인증 초기화</span><span className="text-right font-bold text-amber-300">{formatTimestamp(selectedUser.emailVerificationResetAt)}</span></div>}
+1329:                       {selectedUser.authDeletedAt && <div className="flex items-center justify-between gap-3"><span className="text-zinc-500">강제 탈퇴</span><span className="text-right font-bold text-red-300">{formatTimestamp(selectedUser.authDeletedAt)}</span></div>}
+1330:                     </div>
+1331:                   </div>
+1332: 
+1333:                   <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+1334:                     <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Activity className="w-4 h-4 text-brand-orange" />활동 정보</h3>
+1335:                     <div className="mt-4 grid grid-cols-2 gap-2">
+1336:                       <div className="rounded-2xl bg-black/25 p-3"><span className="text-[10px] font-bold text-zinc-500">가입일</span><p className="mt-1 text-xs font-black text-zinc-200">{formatTimestamp(selectedUser.createdAt)}</p></div>
+1337:                       <div className="rounded-2xl bg-black/25 p-3">
+1338:                         <span className="text-xs font-bold text-zinc-400">최근 활동</span>
+1339:                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+1340:                           <PresenceBadge user={selectedUser} livePresence={livePresence[selectedUser.uid]} displayMode={presenceDisplayMode} />
+1341:                           <span className={cn('text-sm font-black', getPresenceState(selectedUser, livePresence[selectedUser.uid], presenceClock) === 'loggedOut' ? 'text-zinc-500' : 'text-zinc-100')}>{formatLastSeen(getRecentActivityAt(selectedUser, livePresence[selectedUser.uid]), presenceClock)}</span>
+1342:                           {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {getEffectiveConnectionCount(selectedUser, livePresence[selectedUser.uid])}개</span>}
+1343:                         </div>
+1344:                       </div>
+1345:                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Music className="w-3 h-3" />생성곡</span><p className="mt-1 text-lg font-black text-white">{selectedUser.songGeneratedCount}</p></div>
+1346:                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Heart className="w-3 h-3" />뮤직노트</span><p className="mt-1 text-lg font-black text-white">{selectedUser.favoriteCount}</p></div>
+1347:                     </div>
+1348:                   </div>
+1349:                 </section>
+1350: 
+1351:                 <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+1352:                   <div className="flex flex-wrap items-start justify-between gap-3">
+1353:                     <div>
+1354:                       <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Monitor className="w-4 h-4 text-brand-orange" />기기별 접속 현황</h3>
+1355:                       <p className="mt-1.5 text-[10px] font-bold leading-relaxed text-zinc-600">같은 컴퓨터라도 Chrome과 Edge는 각각 표시됩니다. 같은 브라우저의 여러 탭은 하나의 기기로 묶고 열린 탭 수만 따로 보여줍니다.</p>
+1356:                     </div>
+1357:                     {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-3 py-1 text-[10px] font-black text-sky-300">총 {livePresence[selectedUser.uid].deviceCount}개</span>}
+1358:                   </div>
+1359:                   <div className="mt-4">
+1360:                     <DevicePresenceList user={selectedUser} livePresence={livePresence[selectedUser.uid]} now={presenceClock} backendSchemaReady={devicePresenceBackendSchemaReady} />
+1361:                   </div>
+1362:                 </section>
+1363: 
+1364:                 <section className={cn('rounded-3xl border border-white/10 bg-white/[0.03] p-5', (selectedUser.authDeleted || selectedUser.authDeletedAt) && 'opacity-60 pointer-events-none')}>
+1365:                   <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Save className="w-4 h-4 text-brand-orange" />회원 설정</h3>
+1366:                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+1367:                     <div>
+1368:                       <label className="mb-2 block text-[10px] font-black text-zinc-500">회원 등급</label>
+1369:                       <div className="grid grid-cols-4 gap-1.5">
+1370:                         {(Object.keys(ROLE_LABELS) as UserRole[]).map((role) => <button key={role} onClick={() => setEditRole(role)} className={cn('rounded-xl border py-2 text-[10px] font-black transition', editRole === role ? 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/[0.05]')}>{ROLE_LABELS[role]}</button>)}
+1371:                       </div>
+1372:                     </div>
+1373:                     <div>
+1374:                       <label className="mb-2 block text-[10px] font-black text-zinc-500">계정 상태</label>
+1375:                       <div className="grid grid-cols-4 gap-1.5">
+1376:                         {(Object.keys(STATUS_LABELS) as AccountStatus[]).map((status) => <button key={status} onClick={() => setEditStatus(status)} className={cn('rounded-xl border py-2 text-[10px] font-black transition', editStatus === status ? status === 'banned' ? 'border-red-400 bg-red-400/15 text-red-300' : 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/[0.05]')}>{STATUS_LABELS[status]}</button>)}
+1377:                       </div>
+1378:                     </div>
+1379:                     <div>
+1380:                       <label className="mb-2 block text-[10px] font-black text-zinc-500">플랜명</label>
+1381:                       <input value={editPlanName} onChange={(event) => setEditPlanName(event.target.value)} placeholder="예: Pro Plan" className="h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-xs text-white outline-none focus:border-brand-orange/60" />
+1382:                     </div>
+1383:                     <div>
+1384:                       <label className="mb-2 block text-[10px] font-black text-zinc-500">결제 상태</label>
+1385:                       <select value={editPaymentStatus} onChange={(event) => setEditPaymentStatus(event.target.value as PaymentStatus)} className="h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-xs font-bold text-white outline-none">
+1386:                         {Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+1387:                       </select>
+1388:                     </div>
+1389:                   </div>
+1390:                   <div className="mt-4">
+1391:                     <label className="mb-2 flex items-center gap-1.5 text-[10px] font-black text-zinc-500"><FileText className="w-3 h-3" />관리자 메모</label>
+1392:                     <textarea value={editMemo} onChange={(event) => setEditMemo(event.target.value)} placeholder="회원 관련 메모를 남겨주세요." className="h-24 w-full resize-none rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-white outline-none focus:border-brand-orange/60" />
+1393:                   </div>
+1394:                   <div className="mt-4 flex items-center justify-end gap-2">
+1395:                     {saveStatus === 'success' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300"><CheckCircle2 className="w-3.5 h-3.5" />저장 완료</span>}
+1396:                     {saveStatus === 'error' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-red-300"><AlertCircle className="w-3.5 h-3.5" />저장 실패</span>}
+1397:                     <button onClick={handleUpdateUser} disabled={isSaving} className="inline-flex items-center gap-2 rounded-2xl bg-brand-orange px-5 py-2.5 text-xs font-black text-white shadow-[0_10px_24px_rgba(255,130,0,0.2)] hover:brightness-110 disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}설정 저장</button>
+1398:                   </div>
+1399:                 </section>
+1400: 
+1401:                 <section className={cn('rounded-3xl border border-white/10 bg-white/[0.03] p-5', (selectedUser.authDeleted || selectedUser.authDeletedAt) && 'opacity-60 pointer-events-none')}>
+1402:                   <div className="flex items-start gap-3">
+1403:                     <div className="w-10 h-10 rounded-2xl bg-sky-400/10 flex items-center justify-center shrink-0"><Activity className="w-5 h-5 text-sky-300" /></div>
+1404:                     <div className="min-w-0 flex-1">
+1405:                       <h3 className="text-sm font-black text-zinc-100">접속 상태 수동 보정</h3>
+1406:                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">오래된 회원 표시를 정리하는 기능입니다. 실제 접속이 감지되면 활동중·자리비움·백그라운드가 우선하며, 새 로그인 이후에는 수동 보정이 자동으로 무효화됩니다.</p>
+1407:                     </div>
+1408:                   </div>
+1409:                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+1410:                     <button onClick={() => requestPresenceOverride(null)} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-black text-zinc-300 hover:border-emerald-400/30 hover:text-emerald-300 disabled:opacity-35"><RefreshCw className="w-4 h-4" />자동 판정</button>
+1411:                     <button onClick={() => requestPresenceOverride('offline')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-400/20 bg-zinc-400/[0.06] px-4 py-3 text-xs font-black text-zinc-200 hover:border-zinc-300/40 disabled:opacity-35"><Activity className="w-4 h-4" />오프라인 표시</button>
+1412:                     <button onClick={() => requestPresenceOverride('loggedOut')} disabled={Boolean(activeAdminAction)} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-600/30 bg-zinc-700/20 px-4 py-3 text-xs font-black text-zinc-400 hover:border-zinc-500/50 hover:text-zinc-300 disabled:opacity-35"><LogOut className="w-4 h-4" />로그아웃 표시</button>
+1413:                   </div>
+1414:                   <p className="mt-3 text-[10px] font-bold text-zinc-600">오프라인 상태가 2일을 넘으면 기존 회원을 포함해 자동으로 로그아웃으로 표시됩니다. 실제 인증 세션 종료는 아래 강제 로그아웃을 사용합니다.</p>
+1415:                 </section>
+1416: 
+1417:                 <section className="rounded-3xl border border-red-400/15 bg-red-400/[0.035] p-5">
+1418:                   <div className="flex items-start gap-3">
+1419:                     <div className="w-10 h-10 rounded-2xl bg-red-400/10 flex items-center justify-center shrink-0"><AlertTriangle className="w-5 h-5 text-red-300" /></div>
+1420:                     <div className="min-w-0 flex-1">
+1421:                       <h3 className="text-sm font-black text-red-200">관리자 보안 작업</h3>
+1422:                       <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">관리자 본인과 다른 관리자 계정은 보호됩니다. 강제 탈퇴는 Firebase Auth 계정과 개인 API 키를 삭제하고 사용자 콘텐츠는 보존합니다.</p>
+1423:                     </div>
+1424:                   </div>
+1425:                   <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2">
+1426:                     <button onClick={requestForceLogout} disabled={Boolean(activeAdminAction) || selectedIsProtected || Boolean(selectedUser.authDeleted || selectedUser.authDeletedAt)} className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-black text-zinc-200 hover:border-amber-400/30 hover:text-amber-200 disabled:opacity-35"><LogOut className="w-4 h-4" />강제 로그아웃</button>
+1427:                     <button onClick={requestEmailVerificationReset} disabled={Boolean(activeAdminAction) || !canResetEmailVerification} className="flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-black text-zinc-200 hover:border-violet-400/30 hover:text-violet-200 disabled:opacity-35"><RotateCcw className="w-4 h-4" />이메일 인증 초기화</button>
+1428:                     <button onClick={requestDeleteUser} disabled={Boolean(activeAdminAction) || selectedIsProtected || Boolean(selectedUser.authDeleted || selectedUser.authDeletedAt)} className="flex items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-xs font-black text-red-200 hover:bg-red-400/20 disabled:opacity-35"><Trash2 className="w-4 h-4" />강제 탈퇴</button>
+1429:                   </div>
+1430:                   {!canResetEmailVerification && selectedProvider !== 'email' && !selectedUser.authDeleted && <p className="mt-3 text-[10px] font-bold text-zinc-600">이메일 인증 초기화는 순수 이메일·비밀번호 가입 회원에게만 적용됩니다.</p>}
+1431:                   <AnimatePresence>{actionResult && <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className={cn('mt-3 rounded-2xl border px-4 py-3 text-[11px] font-bold', actionResult.success ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-red-400/20 bg-red-400/10 text-red-300')}>{activeAdminAction && <Loader2 className="mr-2 inline w-3.5 h-3.5 animate-spin" />}{actionResult.message}</motion.div>}</AnimatePresence>
+1432:                 </section>
+1433: 
+1434:                 <section className="rounded-3xl border border-white/10 bg-black/20 p-4 text-[10px] text-zinc-600">
+1435:                   <div className="flex flex-col gap-1"><span>UID: <span className="font-mono text-zinc-400">{selectedUser.uid}</span></span><span>최근 로그인: {formatTimestamp(selectedUser.lastLoginAt)}</span><span>최근 로그아웃: {formatTimestamp(selectedUser.lastLogoutAt)}</span></div>
+1436:                 </section>
+1437:               </div>
+1438:             </motion.div>
+1439:           </div>
+1440:         )}
+1441:       </AnimatePresence>
+1442: 
+1443:       <AnimatePresence>
+1444:         {confirmModal.isOpen && (
+1445:           <div className="fixed inset-0 z-[220] flex items-center justify-center p-4" onClick={closeConfirm}>
+1446:             <motion.div className="absolute inset-0 bg-black/80 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+1447:             <motion.div onClick={(event) => event.stopPropagation()} initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 12 }} className="relative w-full max-w-md rounded-[28px] border border-white/12 bg-[#171717] p-6 shadow-[0_25px_90px_rgba(0,0,0,0.7)]">
+1448:               <div className={cn('w-11 h-11 rounded-2xl flex items-center justify-center', confirmModal.tone === 'danger' ? 'bg-red-400/10 text-red-300' : 'bg-brand-orange/10 text-brand-orange')}>{confirmModal.tone === 'danger' ? <AlertTriangle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}</div>
+1449:               <h3 className="mt-4 text-lg font-black text-white">{confirmModal.title}</h3>
+1450:               <p className="mt-2 text-sm leading-relaxed text-zinc-400">{confirmModal.message}</p>
+1451:               {confirmModal.requiredText && (
+1452:                 <div className="mt-4 rounded-2xl border border-red-400/15 bg-red-400/[0.035] p-3">
+1453:                   <p className="text-[10px] font-bold text-zinc-500">실행하려면 아래 내용을 그대로 입력하세요.</p>
+1454:                   <p className="mt-1 break-all font-mono text-xs font-black text-red-200">{confirmModal.requiredText}</p>
+1455:                   <input value={confirmText} onChange={(event) => setConfirmText(event.target.value)} className="mt-3 h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-xs text-white outline-none focus:border-red-400/50" />
+1456:                 </div>
+1457:               )}
+1458:               <div className="mt-6 grid grid-cols-2 gap-2">
+1459:                 <button onClick={closeConfirm} className="rounded-2xl border border-white/10 bg-white/[0.035] py-3 text-xs font-black text-zinc-300 hover:bg-white/[0.07]">취소</button>
+1460:                 <button
+1461:                   onClick={() => void confirmModal.onConfirm()}
+1462:                   disabled={Boolean(confirmModal.requiredText && confirmText.trim() !== confirmModal.requiredText)}
+1463:                   className={cn('rounded-2xl py-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-30', confirmModal.tone === 'danger' ? 'bg-red-500 hover:bg-red-400' : 'bg-brand-orange hover:brightness-110')}
+1464:                 >
+1465:                   {confirmModal.confirmLabel}
+1466:                 </button>
+1467:               </div>
+1468:             </motion.div>
+1469:           </div>
+1470:         )}
+1471:       </AnimatePresence>
+1472:     </AdminPageLayout>
+1473:   );
+1474: }
+
+===== functions/src/index.ts =====
+--- lines 1-563 ---
+1: import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+2: import * as functions from "firebase-functions/v1";
+3: import * as admin from "firebase-admin";
+4: 
+5: admin.initializeApp({
+6:   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
+7: });
+8: 
+9: const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
+10:   (user.providerData || [])
+11:     .map((provider) => provider.providerId)
+12:     .filter((providerId): providerId is string => Boolean(providerId));
+13: 
+14: const requireAdminCaller = async (request: { auth?: { uid: string } | null }) => {
+15:   const requesterUid = request.auth?.uid;
+16:   if (!requesterUid) {
+17:     throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
+18:   }
+19: 
+20:   const db = admin.firestore();
+21:   const requesterSnap = await db.collection("users").doc(requesterUid).get();
+22:   if (requesterSnap.data()?.role !== "admin") {
+23:     throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+24:   }
+25: 
+26:   return { db, requesterUid };
+27: };
+28: 
+29: 
+30: const PRESENCE_SESSION_STALE_MS = 25 * 60 * 1000;
+31: 
+32: type AdminPresenceDeviceSummary = {
+33:   deviceId: string;
+34:   label: string;
+35:   platform: string;
+36:   browser: string;
+37:   deviceType: "desktop" | "mobile" | "tablet";
+38:   state: "active" | "away" | "background" | "offline";
+39:   connectionCount: number;
+40:   lastActivityAt: number | null;
+41:   lastSeenAt: number | null;
+42:   updatedAt: number | null;
+43: };
+44: 
+45: type AdminPresenceSummary = {
+46:   state: "active" | "away" | "background" | "offline";
+47:   connectionCount: number;
+48:   deviceCount: number;
+49:   lastActivityAt: number | null;
+50:   lastSeenAt: number | null;
+51:   devices: AdminPresenceDeviceSummary[];
+52: };
+53: 
+54: const getPresenceStateFromSessions = (sessions: any[]): AdminPresenceSummary["state"] => {
+55:   const states = sessions.map((session) => String(session?.state || ""));
+56:   return states.includes("active")
+57:     ? "active"
+58:     : states.includes("away")
+59:       ? "away"
+60:       : states.includes("background")
+61:         ? "background"
+62:         : "offline";
+63: };
+64: 
+65: const getLegacyDeviceLabel = (session: any) => {
+66:   const raw = String(session?.device || "");
+67:   if (raw === "mobile") return "모바일 브라우저";
+68:   if (raw === "tablet") return "태블릿 브라우저";
+69:   return "데스크톱 브라우저";
+70: };
+71: 
+72: const safePresenceTimestamp = (value: unknown) => {
+73:   const parsed = Number(value || 0);
+74:   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+75: };
+76: 
+77: const summarizePresenceRecord = (value: any, now = Date.now()): AdminPresenceSummary => {
+78:   const rawConnectionEntries = value?.connections && typeof value.connections === "object"
+79:     ? Object.entries(value.connections)
+80:     : [];
+81:   const validConnections = rawConnectionEntries
+82:     .map(([connectionKey, session]) => ({ ...(session as any), connectionKey }))
+83:     .filter((session: any) => {
+84:       const updatedAt = safePresenceTimestamp(session?.updatedAt);
+85:       return updatedAt > 0 && now - updatedAt <= PRESENCE_SESSION_STALE_MS;
+86:     });
+87: 
+88:   const rawDeviceEntries = value?.devices && typeof value.devices === "object"
+89:     ? Object.entries(value.devices)
+90:     : [];
+91:   const deviceRows = new Map<string, { record: any; sessions: any[] }>();
+92: 
+93:   rawDeviceEntries.forEach(([deviceKey, record]) => {
+94:     const deviceId = String((record as any)?.deviceId || deviceKey || "").trim();
+95:     if (!deviceId) return;
+96:     deviceRows.set(deviceId, { record: record as any, sessions: [] });
+97:   });
+98: 
+99:   validConnections.forEach((session: any) => {
+100:     const explicitDeviceId = String(session?.deviceId || "").trim();
+101:     const legacyId = `legacy-${String(session?.sessionId || session?.connectionKey || "unknown")}`;
+102:     const deviceId = explicitDeviceId || legacyId;
+103:     const existing = deviceRows.get(deviceId) || { record: {}, sessions: [] };
+104:     existing.sessions.push(session);
+105:     deviceRows.set(deviceId, existing);
+106:   });
+107: 
+108:   const allDevices = Array.from(deviceRows.entries()).map(([deviceId, row]): AdminPresenceDeviceSummary => {
+109:     const sessions = row.sessions;
+110:     const latestSession = sessions.reduce((latest: any, session: any) => {
+111:       return safePresenceTimestamp(session?.updatedAt) > safePresenceTimestamp(latest?.updatedAt) ? session : latest;
+112:     }, null);
+113:     const record = row.record || {};
+114:     const state = sessions.length > 0 ? getPresenceStateFromSessions(sessions) : "offline";
+115:     const lastActivityAt = Math.max(
+116:       safePresenceTimestamp(record?.lastActivityAt),
+117:       ...sessions.map((session: any) => safePresenceTimestamp(session?.lastActivityAt))
+118:     );
+119:     const lastSeenAt = safePresenceTimestamp(record?.lastSeenAt);
+120:     const updatedAt = Math.max(
+121:       safePresenceTimestamp(record?.updatedAt),
+122:       ...sessions.map((session: any) => safePresenceTimestamp(session?.updatedAt))
+123:     );
+124:     const deviceTypeRaw = String(record?.deviceType || latestSession?.device || "desktop");
+125:     const deviceType: AdminPresenceDeviceSummary["deviceType"] = deviceTypeRaw === "mobile" || deviceTypeRaw === "tablet"
+126:       ? deviceTypeRaw
+127:       : "desktop";
+128:     const platform = String(record?.platform || latestSession?.platform || "").trim();
+129:     const browser = String(record?.browser || latestSession?.browser || "").trim();
+130:     const label = String(record?.label || latestSession?.deviceLabel || "").trim()
+131:       || getLegacyDeviceLabel(latestSession);
+132: 
+133:     return {
+134:       deviceId,
+135:       label,
+136:       platform,
+137:       browser,
+138:       deviceType,
+139:       state,
+140:       connectionCount: sessions.length,
+141:       lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
+142:       lastSeenAt: lastSeenAt > 0 ? lastSeenAt : null,
+143:       updatedAt: updatedAt > 0 ? updatedAt : null,
+144:     };
+145:   });
+146: 
+147:   const statePriority: Record<AdminPresenceDeviceSummary["state"], number> = {
+148:     active: 0,
+149:     away: 1,
+150:     background: 2,
+151:     offline: 3,
+152:   };
+153:   allDevices.sort((a, b) => {
+154:     const stateDiff = statePriority[a.state] - statePriority[b.state];
+155:     if (stateDiff !== 0) return stateDiff;
+156:     const aTime = Math.max(a.updatedAt || 0, a.lastActivityAt || 0, a.lastSeenAt || 0);
+157:     const bTime = Math.max(b.updatedAt || 0, b.lastActivityAt || 0, b.lastSeenAt || 0);
+158:     return bTime - aTime;
+159:   });
+160: 
+161:   const state = getPresenceStateFromSessions(validConnections);
+162:   const lastActivityAt = allDevices.reduce((latest, device) => Math.max(latest, device.lastActivityAt || 0), 0);
+163:   const lastSeenAt = Math.max(
+164:     safePresenceTimestamp(value?.lastSeenAt),
+165:     ...allDevices.map((device) => device.lastSeenAt || 0)
+166:   );
+167: 
+168:   return {
+169:     state,
+170:     connectionCount: validConnections.length,
+171:     deviceCount: allDevices.length,
+172:     lastActivityAt: lastActivityAt > 0 ? lastActivityAt : null,
+173:     lastSeenAt: lastSeenAt > 0 ? lastSeenAt : null,
+174:     devices: allDevices.slice(0, 10),
+175:   };
+176: };
+177: 
+178: const assertManageableTarget = async (
+179:   db: admin.firestore.Firestore,
+180:   requesterUid: string,
+181:   targetUid: string
+182: ) => {
+183:   if (!targetUid) {
+184:     throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
+185:   }
+186:   if (targetUid === requesterUid) {
+187:     throw new HttpsError("failed-precondition", "관리자 본인 계정에는 이 작업을 실행할 수 없습니다.");
+188:   }
+189: 
+190:   const targetRef = db.collection("users").doc(targetUid);
+191:   const targetSnap = await targetRef.get();
+192:   if (targetSnap.data()?.role === "admin") {
+193:     throw new HttpsError("failed-precondition", "관리자 계정은 보호 대상이라 이 작업을 실행할 수 없습니다.");
+194:   }
+195: 
+196:   return { targetRef, targetData: targetSnap.data() || {} };
+197: };
+198: 
+199: 
+200: export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().onCreate(async (user: admin.auth.UserRecord) => {
+201:   const db = admin.firestore();
+202:   const userRef = db.collection("users").doc(user.uid);
+203:   const snap = await userRef.get();
+204: 
+205:   const createdAtMs = user.metadata.creationTime
+206:     ? new Date(user.metadata.creationTime).getTime()
+207:     : Date.now();
+208:   const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+209: 
+210:   const providerIds = getAuthProviderIds(user);
+211: 
+212:   const sessionData = {
+213:     uid: user.uid,
+214:     email: user.email || "",
+215:     displayName: user.displayName || "",
+216:     photoURL: user.photoURL || "",
+217:     providerIds,
+218:     emailVerified: user.emailVerified,
+219:     authDisabled: user.disabled,
+220:     lastLoginAt: safeCreatedAt,
+221:     lastSeenAt: safeCreatedAt,
+222:     isOnline: false,
+223:   };
+224: 
+225:   if (snap.exists) {
+226:     await userRef.set(sessionData, { merge: true });
+227:     return;
+228:   }
+229: 
+230:   await userRef.set({
+231:     ...sessionData,
+232:     createdAt: safeCreatedAt,
+233:     role: "free",
+234:     accountStatus: "active",
+235:     paymentStatus: "none",
+236:     favoriteCount: 0,
+237:     songGeneratedCount: 0,
+238:   });
+239: });
+240: 
+241: 
+242: export const backfillMissingAuthUsers = onCall(
+243:   { region: "us-central1" },
+244:   async (request) => {
+245:     const requesterUid = request.auth?.uid;
+246:     if (!requesterUid) {
+247:       throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
+248:     }
+249: 
+250:     const db = admin.firestore();
+251:     const requesterSnap = await db.collection("users").doc(requesterUid).get();
+252:     if (requesterSnap.data()?.role !== "admin") {
+253:       throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+254:     }
+255: 
+256:     const dryRun = request.data?.dryRun === true;
+257:     let pageToken: string | undefined;
+258:     let totalAuthUsers = 0;
+259:     let existingUserDocs = 0;
+260:     let missingUserDocs = 0;
+261:     let createdUserDocs = 0;
+262:     const failedUsers: Array<{ uid: string; email: string; error: string }> = [];
+263: 
+264:     do {
+265:       const page = await admin.auth().listUsers(1000, pageToken);
+266:       for (const authUser of page.users) {
+267:         totalAuthUsers += 1;
+268:         const userRef = db.collection("users").doc(authUser.uid);
+269:         const userSnap = await userRef.get();
+270: 
+271:         if (userSnap.exists) {
+272:           existingUserDocs += 1;
+273:           continue;
+274:         }
+275: 
+276:         missingUserDocs += 1;
+277:         if (dryRun) continue;
+278: 
+279:         try {
+280:           const createdAtMs = authUser.metadata.creationTime
+281:             ? new Date(authUser.metadata.creationTime).getTime()
+282:             : Date.now();
+283:           const safeCreatedAt = Number.isFinite(createdAtMs) ? createdAtMs : Date.now();
+284:           const providerIds = getAuthProviderIds(authUser);
+285: 
+286:           await userRef.set({
+287:             uid: authUser.uid,
+288:             email: authUser.email || "",
+289:             displayName: authUser.displayName || "",
+290:             photoURL: authUser.photoURL || "",
+291:             providerIds,
+292:             emailVerified: authUser.emailVerified,
+293:             authDisabled: authUser.disabled,
+294:             createdAt: safeCreatedAt,
+295:             lastLoginAt: safeCreatedAt,
+296:             lastSeenAt: safeCreatedAt,
+297:             isOnline: false,
+298:             role: "free",
+299:             planTier: "free",
+300:             accountStatus: "active",
+301:             paymentStatus: "none",
+302:             favoriteCount: 0,
+303:             songGeneratedCount: 0,
+304:             backfilledAt: admin.firestore.FieldValue.serverTimestamp(),
+305:             backfillSource: "auth-list-users",
+306:           });
+307:           createdUserDocs += 1;
+308:         } catch (error: any) {
+309:           failedUsers.push({
+310:             uid: authUser.uid,
+311:             email: authUser.email || "",
+312:             error: error?.message || String(error),
+313:           });
+314:         }
+315:       }
+316:       pageToken = page.pageToken;
+317:     } while (pageToken);
+318: 
+319:     return {
+320:       ok: failedUsers.length === 0,
+321:       dryRun,
+322:       totalAuthUsers,
+323:       existingUserDocs,
+324:       missingUserDocs,
+325:       createdUserDocs,
+326:       failedUsers,
+327:     };
+328:   }
+329: );
+330: 
+331: 
+332: export const getAdminAuthDirectory = onCall(
+333:   { region: "us-central1" },
+334:   async (request) => {
+335:     await requireAdminCaller(request);
+336: 
+337:     const requestedMax = Number(request.data?.maxResults || 1000);
+338:     const maxResults = Math.min(1000, Math.max(1, Number.isFinite(requestedMax) ? Math.floor(requestedMax) : 1000));
+339:     const pageTokenRaw = String(request.data?.pageToken || "").trim();
+340:     const page = await admin.auth().listUsers(maxResults, pageTokenRaw || undefined);
+341: 
+342:     return {
+343:       users: page.users.map((authUser) => ({
+344:         uid: authUser.uid,
+345:         email: authUser.email || "",
+346:         displayName: authUser.displayName || "",
+347:         photoURL: authUser.photoURL || "",
+348:         providerIds: getAuthProviderIds(authUser),
+349:         emailVerified: authUser.emailVerified,
+350:         disabled: authUser.disabled,
+351:         creationTime: authUser.metadata.creationTime || null,
+352:         lastSignInTime: authUser.metadata.lastSignInTime || null,
+353:       })),
+354:       nextPageToken: page.pageToken || null,
+355:     };
+356:   }
+357: );
+358: 
+359: 
+360: export const getAdminPresence = onCall(
+361:   { region: "us-central1" },
+362:   async (request) => {
+363:     await requireAdminCaller(request);
+364:     const requestedUids = Array.isArray(request.data?.uids) ? request.data.uids : [];
+365:     const uids = Array.from(new Set(
+366:       requestedUids
+367:         .map((uid: unknown) => String(uid || "").trim())
+368:         .filter((uid: string) => uid.length > 0 && uid.length <= 128)
+369:     )).slice(0, 50) as string[];
+370: 
+371:     if (uids.length === 0) {
+372:       return { ok: true, schemaVersion: 2, checkedAt: Date.now(), presence: {} };
+373:     }
+374: 
+375:     let rows: ReadonlyArray<readonly [string, AdminPresenceSummary]>;
+376:     try {
+377:       const database = admin.database();
+378:       rows = await Promise.all(uids.map(async (uid) => {
+379:         const snapshot = await database.ref(`presence/${uid}`).get();
+380:         return [uid, summarizePresenceRecord(snapshot.val())] as const;
+381:       }));
+382:     } catch (error) {
+383:       console.error("Failed to read Realtime Database presence:", error);
+384:       throw new HttpsError(
+385:         "failed-precondition",
+386:         "Realtime Database를 생성하고 접속 상태 규칙을 배포한 뒤 다시 시도해주세요."
+387:       );
+388:     }
+389: 
+390:     const presence: Record<string, AdminPresenceSummary> = {};
+391:     rows.forEach(([uid, summary]) => {
+392:       presence[uid] = summary;
+393:     });
+394: 
+395:     return {
+396:       ok: true,
+397:       schemaVersion: 2,
+398:       checkedAt: Date.now(),
+399:       presence,
+400:     };
+401:   }
+402: );
+403: 
+404: export const adminForceLogoutUser = onCall(
+405:   { region: "us-central1" },
+406:   async (request) => {
+407:     const { db, requesterUid } = await requireAdminCaller(request);
+408:     const targetUid = String(request.data?.targetUid || "").trim();
+409:     const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
+410:     const now = Date.now();
+411: 
+412:     try {
+413:       await admin.auth().revokeRefreshTokens(targetUid);
+414:     } catch (error: any) {
+415:       if (error?.code !== "auth/user-not-found") throw error;
+416:     }
+417: 
+418:     await targetRef.set({
+419:       forceLogoutAt: now,
+420:       lastLogoutAt: now,
+421:       lastSeenAt: now,
+422:       isOnline: false,
+423:       lastAdminAuthAction: "force-logout",
+424:       lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
+425:       lastAdminAuthActionBy: requesterUid,
+426:     }, { merge: true });
+427: 
+428:     return { ok: true, targetUid, forceLogoutAt: now };
+429:   }
+430: );
+431: 
+432: export const adminResetEmailVerification = onCall(
+433:   { region: "us-central1" },
+434:   async (request) => {
+435:     const { db, requesterUid } = await requireAdminCaller(request);
+436:     const targetUid = String(request.data?.targetUid || "").trim();
+437:     const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
+438:     const authUser = await admin.auth().getUser(targetUid);
+439:     const providerIds = getAuthProviderIds(authUser);
+440: 
+441:     if (!providerIds.includes("password") || providerIds.some((providerId) => providerId !== "password")) {
+442:       throw new HttpsError("failed-precondition", "순수 이메일·비밀번호 가입 회원만 이메일 인증을 초기화할 수 있습니다.");
+443:     }
+444: 
+445:     const now = Date.now();
+446:     await admin.auth().updateUser(targetUid, { emailVerified: false });
+447:     await admin.auth().revokeRefreshTokens(targetUid);
+448:     await targetRef.set({
+449:       providerIds,
+450:       emailVerified: false,
+451:       authDisabled: authUser.disabled,
+452:       emailVerificationResetAt: admin.firestore.FieldValue.serverTimestamp(),
+453:       emailVerificationResetAtMs: now,
+454:       emailVerificationResetBy: requesterUid,
+455:       forceLogoutAt: now,
+456:       lastLogoutAt: now,
+457:       lastSeenAt: now,
+458:       isOnline: false,
+459:       lastAdminAuthAction: "reset-email-verification",
+460:       lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
+461:       lastAdminAuthActionBy: requesterUid,
+462:     }, { merge: true });
+463: 
+464:     return {
+465:       ok: true,
+466:       targetUid,
+467:       email: authUser.email || "",
+468:       emailVerified: false,
+469:       forceLogoutAt: now,
+470:     };
+471:   }
+472: );
+473: 
+474: export const adminDeleteUserAccount = onCall(
+475:   { region: "us-central1", timeoutSeconds: 60 },
+476:   async (request) => {
+477:     const { db, requesterUid } = await requireAdminCaller(request);
+478:     const targetUid = String(request.data?.targetUid || "").trim();
+479:     const confirmEmail = String(request.data?.confirmEmail || "").trim().toLowerCase();
+480:     const { targetRef, targetData } = await assertManageableTarget(db, requesterUid, targetUid);
+481: 
+482:     let authUser: admin.auth.UserRecord | null = null;
+483:     try {
+484:       authUser = await admin.auth().getUser(targetUid);
+485:     } catch (error: any) {
+486:       if (error?.code !== "auth/user-not-found") throw error;
+487:     }
+488: 
+489:     const targetEmail = String(authUser?.email || targetData.email || "").trim();
+490:     if (targetEmail && confirmEmail !== targetEmail.toLowerCase()) {
+491:       throw new HttpsError("invalid-argument", "회원 이메일 확인값이 일치하지 않습니다.");
+492:     }
+493: 
+494:     const providerIds = authUser ? getAuthProviderIds(authUser) : (
+495:       Array.isArray(targetData.providerIds) ? targetData.providerIds.filter((value: unknown) => typeof value === "string") : []
+496:     );
+497:     const now = Date.now();
+498: 
+499:     await targetRef.set({
+500:       accountStatus: "banned",
+501:       forceLogoutAt: now,
+502:       lastLogoutAt: now,
+503:       lastSeenAt: now,
+504:       isOnline: false,
+505:       authDeletionPendingAt: admin.firestore.FieldValue.serverTimestamp(),
+506:       authDeletionPendingBy: requesterUid,
+507:     }, { merge: true });
+508: 
+509:     if (authUser) {
+510:       await admin.auth().revokeRefreshTokens(targetUid);
+511:       await admin.auth().deleteUser(targetUid);
+512:     }
+513: 
+514:     const cleanupBatch = db.batch();
+515:     cleanupBatch.delete(db.collection("user_api_keys").doc(targetUid));
+516:     cleanupBatch.delete(db.collection("gemini_request_guards").doc(targetUid));
+517:     cleanupBatch.set(targetRef, {
+518:       accountStatus: "banned",
+519:       authDeleted: true,
+520:       authDeletedAt: admin.firestore.FieldValue.serverTimestamp(),
+521:       authDeletedAtMs: now,
+522:       authDeletedBy: requesterUid,
+523:       authDeletedEmail: targetEmail,
+524:       authDeletedProviderIds: providerIds,
+525:       authDisabled: true,
+526:       emailVerified: false,
+527:       isOnline: false,
+528:       forceLogoutAt: now,
+529:       lastLogoutAt: now,
+530:       adminDeletionContentPolicy: "retain-user-content",
+531:       lastAdminAuthAction: "delete-auth-account",
+532:       lastAdminAuthActionAt: admin.firestore.FieldValue.serverTimestamp(),
+533:       lastAdminAuthActionBy: requesterUid,
+534:       authDeletionPendingAt: admin.firestore.FieldValue.delete(),
+535:       authDeletionPendingBy: admin.firestore.FieldValue.delete(),
+536:     }, { merge: true });
+537:     await cleanupBatch.commit();
+538: 
+539:     return {
+540:       ok: true,
+541:       targetUid,
+542:       email: targetEmail,
+543:       providerIds,
+544:       authDeleted: true,
+545:       userContentRetained: true,
+546:     };
+547:   }
+548: );
+549: 
+550: const APP_CHECK_STATUS_HEADER = "X-SORIDRAW-App-Check-Status";
+551: 
+552: const ALLOWED_ORIGINS = [
+553:   "https://soridraw-music-git-preview-andrawing1212.vercel.app",
+554:   "https://soridraw-music.vercel.app",
+555:   "https://soridraw.web.app",
+556:   "https://soridraw.firebaseapp.com",
+557:   "https://soridraw-app-866a5.web.app",
+558:   "https://soridraw-app-866a5.firebaseapp.com",
+559:   "http://localhost:3000",
+560:   "http://localhost:4173",
+561:   "http://localhost:5173",
+562: ];
+563: 
+--- lines 592-632 ---
+592:   return false;
+593: };
+594: 
+595: const verifyAuth = async (req: any, res: any): Promise<string | null> => {
+596:   const authHeader = req.headers.authorization;
+597:   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+598:     res.status(401).json({ error: "Unauthorized", ok: false });
+599:     return null;
+600:   }
+601:   
+602:   const token = authHeader.split("Bearer ")[1];
+603:   try {
+604:     const decodedToken = await admin.auth().verifyIdToken(token);
+605:     return decodedToken.uid;
+606:   } catch (error) {
+607:     res.status(401).json({ error: "Unauthorized", ok: false });
+608:     return null;
+609:   }
+610: };
+611: 
+612: type AppCheckMonitorStatus = "valid" | "missing" | "invalid";
+613: 
+614: const classifyAppCheckOrigin = (originValue: unknown): string => {
+615:   const origin = String(originValue || "").trim().toLowerCase();
+616:   if (!origin) return "none";
+617:   if (origin === "https://soridraw-music.vercel.app") return "test-app";
+618:   if (origin === "https://soridraw.web.app" || origin === "https://soridraw.firebaseapp.com") return "official-app";
+619:   if (/^https:\/\/ais-dev-[a-z0-9-]+(?:\.[a-z0-9-]+)*\.run\.app$/i.test(origin)) return "ai-studio";
+620:   if (/^https:\/\/[a-z0-9-]+\.usercontent\.goog$/i.test(origin)) return "ai-studio-usercontent";
+621:   if (origin.startsWith("http://localhost:")) return "localhost";
+622:   return "other-allowed";
+623: };
+624: 
+625: const reportAppCheckStatus = (
+626:   req: any,
+627:   res: any,
+628:   operation: string,
+629:   status: AppCheckMonitorStatus,
+630:   enforce: boolean,
+631:   accepted: boolean,
+632: ): void => {
+--- lines 651-788 ---
+651:   const token = String(req.headers["x-firebase-appcheck"] || "").trim();
+652:   const enforce = process.env.ENFORCE_APP_CHECK === "true";
+653:   if (!token) {
+654:     const accepted = !enforce;
+655:     reportAppCheckStatus(req, res, operation, "missing", enforce, accepted);
+656:     if (!accepted) {
+657:       res.status(401).json({ error: "App Check token is required", code: "APP_CHECK_REQUIRED", ok: false });
+658:       return false;
+659:     }
+660:     return true;
+661:   }
+662:   try {
+663:     await admin.appCheck().verifyToken(token);
+664:     reportAppCheckStatus(req, res, operation, "valid", enforce, true);
+665:     return true;
+666:   } catch {
+667:     const accepted = !enforce;
+668:     reportAppCheckStatus(req, res, operation, "invalid", enforce, accepted);
+669:     if (accepted) return true;
+670:     res.status(401).json({ error: "Invalid App Check token", code: "APP_CHECK_INVALID", ok: false });
+671:     return false;
+672:   }
+673: };
+674: 
+675: const GEMINI_ALLOWED_MODELS = new Set([
+676:   "gemini-3.6-flash",
+677:   "gemini-3.5-flash",
+678:   "gemini-3.5-flash-lite",
+679:   "gemini-3.1-flash-lite",
+680:   "gemini-2.5-flash-lite",
+681: ]);
+682: const GEMINI_MAX_REQUEST_BYTES = 900_000;
+683: const GEMINI_MAX_REQUESTS_PER_MINUTE = 12;
+684: const GEMINI_MAX_ACTIVE_REQUESTS = 2;
+685: const GEMINI_MAX_REQUESTS_PER_SESSION = 3;
+686: const GEMINI_GUARD_STALE_MS = 3 * 60 * 1000;
+687: const GEMINI_SESSION_WINDOW_MS = 10 * 60 * 1000;
+688: const getStoredGeminiApiKey = async (uid: string): Promise<string> => {
+689:   // Read the current server-only key for every real Gemini request. One Firestore read is
+690:   // intentionally preferred over caching private keys in warm instance memory, so key
+691:   // deletion or replacement takes effect immediately across all Function instances.
+692:   const snap = await admin.firestore().collection("user_api_keys").doc(uid).get();
+693:   return String(snap.data()?.googleGeminiApiKey || "").trim();
+694: };
+695: 
+696: const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promise<void> => {
+697:   const db = admin.firestore();
+698:   const guardRef = db.collection("gemini_request_guards").doc(uid);
+699:   const userRef = db.collection("users").doc(uid);
+700:   const now = Date.now();
+701: 
+702:   await db.runTransaction(async (tx) => {
+703:     const [userSnap, guardSnap] = await Promise.all([tx.get(userRef), tx.get(guardRef)]);
+704:     const userData = userSnap.data() || {};
+705:     const role = String(userData.role || "free");
+706:     const accountStatus = String(userData.accountStatus || "active");
+707:     if (role !== "admin" && accountStatus !== "active") {
+708:       throw new HttpsError("permission-denied", "현재 계정 상태에서는 Gemini 생성을 사용할 수 없습니다.");
+709:     }
+710: 
+711:     const data = guardSnap.data() || {};
+712:     const activeUpdatedAt = Number(data.activeUpdatedAt || 0);
+713:     const staleActive = !activeUpdatedAt || now - activeUpdatedAt > GEMINI_GUARD_STALE_MS;
+714:     const activeCount = staleActive ? 0 : Math.max(0, Number(data.activeCount || 0));
+715:     if (activeCount >= GEMINI_MAX_ACTIVE_REQUESTS) {
+716:       throw new HttpsError("resource-exhausted", "동시에 실행할 수 있는 Gemini 요청 수를 초과했습니다.");
+717:     }
+718: 
+719:     const minuteWindowStart = Number(data.minuteWindowStart || 0);
+720:     const sameMinuteWindow = minuteWindowStart > 0 && now - minuteWindowStart < 60_000;
+721:     const minuteCount = sameMinuteWindow ? Math.max(0, Number(data.minuteCount || 0)) : 0;
+722:     if (minuteCount >= GEMINI_MAX_REQUESTS_PER_MINUTE) {
+723:       throw new HttpsError("resource-exhausted", "짧은 시간에 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+724:     }
+725: 
+726:     const sessionWindowStart = Number(data.sessionWindowStart || 0);
+727:     const sameSessionWindow = sessionWindowStart > 0 && now - sessionWindowStart < GEMINI_SESSION_WINDOW_MS;
+728:     const sessionCounts = sameSessionWindow && data.sessionCounts && typeof data.sessionCounts === "object"
+729:       ? { ...data.sessionCounts }
+730:       : {};
+731:     const sessionCount = Math.max(0, Number(sessionCounts[sessionId] || 0));
+732:     if (sessionCount >= GEMINI_MAX_REQUESTS_PER_SESSION) {
+733:       throw new HttpsError("resource-exhausted", "곡 하나의 Gemini 호출 상한에 도달했습니다.");
+734:     }
+735:     sessionCounts[sessionId] = sessionCount + 1;
+736: 
+737:     tx.set(guardRef, {
+738:       activeCount: activeCount + 1,
+739:       activeUpdatedAt: now,
+740:       minuteWindowStart: sameMinuteWindow ? minuteWindowStart : now,
+741:       minuteCount: minuteCount + 1,
+742:       sessionWindowStart: sameSessionWindow ? sessionWindowStart : now,
+743:       sessionCounts,
+744:       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+745:     }, { merge: true });
+746:   });
+747: };
+748: 
+749: const releaseGeminiRequestGuard = async (uid: string): Promise<void> => {
+750:   const db = admin.firestore();
+751:   const guardRef = db.collection("gemini_request_guards").doc(uid);
+752:   try {
+753:     await db.runTransaction(async (tx) => {
+754:       const snap = await tx.get(guardRef);
+755:       if (!snap.exists) return;
+756:       const activeCount = Math.max(0, Number(snap.data()?.activeCount || 0) - 1);
+757:       tx.set(guardRef, {
+758:         activeCount,
+759:         activeUpdatedAt: Date.now(),
+760:         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+761:       }, { merge: true });
+762:     });
+763:   } catch (error) {
+764:     console.warn("[Gemini Guard] failed to release active request:", error instanceof Error ? error.message : String(error));
+765:   }
+766: };
+767: 
+768: const extractGeminiErrorStatus = (error: unknown): number => {
+769:   const anyError = error as any;
+770:   const candidates = [anyError?.status, anyError?.statusCode, anyError?.code, anyError?.error?.code];
+771:   for (const value of candidates) {
+772:     const parsed = Number(value);
+773:     if (Number.isFinite(parsed) && parsed >= 400 && parsed <= 599) return parsed;
+774:   }
+775:   const message = error instanceof Error ? error.message : String(error || "");
+776:   const match = message.match(/\b(400|401|403|404|408|409|429|500|502|503|504)\b/);
+777:   return match ? Number(match[1]) : 500;
+778: };
+779: 
+780: const sanitizeGeminiErrorMessage = (error: unknown, apiKey: string): string => {
+781:   const raw = error instanceof Error ? error.message : String(error || "Gemini request failed");
+782:   const withoutExactKey = apiKey ? raw.split(apiKey).join("[REDACTED]") : raw;
+783:   return withoutExactKey
+784:     .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
+785:     .replace(/AQ\.[0-9A-Za-z._~-]{16,}/g, "[REDACTED]")
+786:     .slice(0, 600);
+787: };
+788: 
+--- lines 790-830 ---
+790: 
+791: const isSupportedGeminiApiKeyFormat = (apiKey: string): boolean => {
+792:   // Google does not guarantee one permanent prefix or length. Treat the key as an opaque
+793:   // printable token, reject whitespace/control characters, and let Gemini perform the
+794:   // authoritative validity check. This supports both AIza... and AQ.... formats.
+795:   return apiKey.length >= 20
+796:     && apiKey.length <= 512
+797:     && !/[\s\u0000-\u001F\u007F]/.test(apiKey);
+798: };
+799: 
+800: const normalizeGeminiContent = (value: any): any => {
+801:   if (typeof value === "string") {
+802:     return { role: "user", parts: [{ text: value }] };
+803:   }
+804:   if (value && typeof value === "object" && Array.isArray(value.parts)) return value;
+805:   return value;
+806: };
+807: 
+808: const validateGeminiTextOnlyRequest = (requestPayload: any): void => {
+809:   const request = requestPayload && typeof requestPayload === "object" ? requestPayload : null;
+810:   if (!request) throw new HttpsError("invalid-argument", "Invalid Gemini request payload.");
+811:   const config = request.config && typeof request.config === "object" ? request.config : {};
+812:   if (request.tools || request.toolConfig || config.tools || config.toolConfig) {
+813:     throw new HttpsError("invalid-argument", "Gemini tools are not allowed on the SORIDRAW text proxy.");
+814:   }
+815: 
+816:   let textChars = 0;
+817:   const inspectContent = (content: any) => {
+818:     if (typeof content === "string") {
+819:       textChars += content.length;
+820:       return;
+821:     }
+822:     if (!content || typeof content !== "object" || !Array.isArray(content.parts)) {
+823:       throw new HttpsError("invalid-argument", "Gemini contents must contain text parts only.");
+824:     }
+825:     for (const part of content.parts) {
+826:       const keys = part && typeof part === "object" ? Object.keys(part) : [];
+827:       if (!part || typeof part.text !== "string" || keys.some((key) => key !== "text")) {
+828:         throw new HttpsError("invalid-argument", "Inline files, media and function calls are not allowed.");
+829:       }
+830:       textChars += part.text.length;
+--- lines 1523-1620 ---
+1523:       res.status(400).json({ error: "Google Gemini API Key is required", ok: false });
+1524:       return;
+1525:     }
+1526:     if (!isSupportedGeminiApiKeyFormat(normalizedApiKey)) {
+1527:       res.status(400).json({
+1528:         error: "Google AI Studio에서 발급한 Gemini API Key 형식을 확인해주세요.",
+1529:         code: "INVALID_GEMINI_KEY_FORMAT",
+1530:         ok: false,
+1531:       });
+1532:       return;
+1533:     }
+1534: 
+1535:     const db = admin.firestore();
+1536: 
+1537:     await db.collection("user_api_keys").doc(uid).set({
+1538:       googleGeminiApiKey: normalizedApiKey,
+1539:       hasGoogleGeminiApiKey: true,
+1540:       googleGeminiProvider: "Google AI Studio",
+1541:       googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1542:       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1543:       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+1544:     }, { merge: true });
+1545: 
+1546:     res.json({ ok: true, hasGoogleGeminiApiKey: true });
+1547:   }
+1548: );
+1549: 
+1550: export const deleteGoogleGeminiApiKey = onRequest(
+1551:   { region: "us-central1" },
+1552:   async (req, res) => {
+1553:     if (handleCors(req, res)) return;
+1554: 
+1555:     if (req.method !== "POST") {
+1556:       res.status(405).json({ error: "Method Not Allowed" });
+1557:       return;
+1558:     }
+1559: 
+1560:     const uid = await verifyAuth(req, res);
+1561:     if (!uid) return;
+1562:     if (!(await verifyAppCheckForRequest(req, res, "deleteGoogleGeminiApiKey"))) return;
+1563: 
+1564:     const db = admin.firestore();
+1565: 
+1566:     await db.collection("user_api_keys").doc(uid).set({
+1567:       googleGeminiApiKey: admin.firestore.FieldValue.delete(),
+1568:       hasGoogleGeminiApiKey: false,
+1569:       googleGeminiProvider: admin.firestore.FieldValue.delete(),
+1570:       googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1571:       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1572:     }, { merge: true });
+1573: 
+1574:     res.json({ ok: true, hasGoogleGeminiApiKey: false });
+1575:   }
+1576: );
+1577: 
+1578: export const getGoogleGeminiApiKeyStatus = onRequest(
+1579:   { region: "us-central1" },
+1580:   async (req, res) => {
+1581:     if (handleCors(req, res)) return;
+1582: 
+1583:     if (req.method !== "POST") {
+1584:       res.status(405).json({ error: "Method Not Allowed" });
+1585:       return;
+1586:     }
+1587: 
+1588:     const uid = await verifyAuth(req, res);
+1589:     if (!uid) return;
+1590:     if (!(await verifyAppCheckForRequest(req, res, "getGoogleGeminiApiKeyStatus"))) return;
+1591: 
+1592:     const db = admin.firestore();
+1593:     const docSnap = await db.collection("user_api_keys").doc(uid).get();
+1594: 
+1595:     if (!docSnap.exists) {
+1596:       res.json({ ok: true, hasGoogleGeminiApiKey: false });
+1597:       return;
+1598:     }
+1599: 
+1600:     const docData = docSnap.data() || {};
+1601:     res.json({
+1602:       ok: true,
+1603:       hasGoogleGeminiApiKey: Boolean(docData.hasGoogleGeminiApiKey && docData.googleGeminiApiKey),
+1604:       provider: docData.googleGeminiProvider || null,
+1605:       updatedAt: timestampToIso(docData.googleGeminiUpdatedAt),
+1606:     });
+1607:   }
+1608: );
+1609: 
+1610: export const getGoogleGeminiApiKey = onRequest(
+1611:   { region: "us-central1" },
+1612:   async (req, res) => {
+1613:     if (handleCors(req, res)) return;
+1614:     res.status(410).json({
+1615:       ok: false,
+1616:       code: "GEMINI_KEY_CLIENT_ACCESS_REMOVED",
+1617:       error: "Gemini API keys are no longer returned to the browser.",
+1618:     });
+1619:   }
+1620: );
+--- lines 1731-1866 ---
+1731:       return;
+1732:     }
+1733: 
+1734:     const uid = await verifyAuth(req, res);
+1735:     if (!uid) return;
+1736: 
+1737:     const apiKey = req.body?.apiKey;
+1738:     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim() === '') {
+1739:       res.status(400).json({ error: "API Key is required" });
+1740:       return;
+1741:     }
+1742: 
+1743:     const db = admin.firestore();
+1744:     const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
+1745: 
+1746:     await apiKeyDocRef.set({
+1747:       // Keep Music API in the same uid-scoped document as Gemini.
+1748:       // Duplicate legacy/explicit field names so every client and function reads the same account-level key.
+1749:       sunoApiKey: apiKey.trim(),
+1750:       musicApiKey: apiKey.trim(),
+1751:       hasSunoApiKey: true,
+1752:       hasMusicApiKey: true,
+1753:       provider: 'sunoapi.org',
+1754:       musicApiProvider: 'sunoapi.org',
+1755:       sunoApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1756:       musicApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1757:       sunoRemainingCredits: admin.firestore.FieldValue.delete(),
+1758:       sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.delete(),
+1759:       sunoRemainingCreditsSourceTrackId: admin.firestore.FieldValue.delete(),
+1760:       sunoRemainingCreditsSourceTaskId: admin.firestore.FieldValue.delete(),
+1761:       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+1762:       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1763:     }, { merge: true });
+1764: 
+1765:     const savedSnap = await apiKeyDocRef.get();
+1766:     const savedData = savedSnap.data() || {};
+1767:     console.log("[Music API Key] saved", {
+1768:       uid,
+1769:       docExists: savedSnap.exists,
+1770:       hasStoredKey: hasStoredSunoApiKeyInDoc(savedData),
+1771:       hasSunoApiKey: Boolean(savedData.hasSunoApiKey),
+1772:       hasMusicApiKey: Boolean(savedData.hasMusicApiKey),
+1773:     });
+1774: 
+1775:     res.json(buildSunoApiKeyStatusPayload(savedData));
+1776:   }
+1777: );
+1778: 
+1779: export const deleteSunoApiKey = onRequest(
+1780:   { region: "us-central1" },
+1781:   async (req, res) => {
+1782:     if (handleCors(req, res)) return;
+1783: 
+1784:     if (req.method !== "POST") {
+1785:       res.status(405).json({ error: "Method Not Allowed" });
+1786:       return;
+1787:     }
+1788: 
+1789:     const uid = await verifyAuth(req, res);
+1790:     if (!uid) return;
+1791: 
+1792:     const db = admin.firestore();
+1793:     const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
+1794: 
+1795:     await apiKeyDocRef.set({
+1796:       sunoApiKey: admin.firestore.FieldValue.delete(),
+1797:       musicApiKey: admin.firestore.FieldValue.delete(),
+1798:       hasSunoApiKey: false,
+1799:       hasMusicApiKey: false,
+1800:       provider: admin.firestore.FieldValue.delete(),
+1801:       musicApiProvider: admin.firestore.FieldValue.delete(),
+1802:       sunoApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1803:       musicApiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1804:       sunoRemainingCredits: admin.firestore.FieldValue.delete(),
+1805:       sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.delete(),
+1806:       sunoRemainingCreditsSourceTrackId: admin.firestore.FieldValue.delete(),
+1807:       sunoRemainingCreditsSourceTaskId: admin.firestore.FieldValue.delete(),
+1808:       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1809:     }, { merge: true });
+1810: 
+1811:     const deletedSnap = await apiKeyDocRef.get();
+1812:     const deletedData = deletedSnap.data() || {};
+1813:     console.log("[Music API Key] deleted", {
+1814:       uid,
+1815:       docExists: deletedSnap.exists,
+1816:       hasStoredKey: hasStoredSunoApiKeyInDoc(deletedData),
+1817:       hasSunoApiKey: Boolean(deletedData.hasSunoApiKey),
+1818:       hasMusicApiKey: Boolean(deletedData.hasMusicApiKey),
+1819:     });
+1820: 
+1821:     res.json(buildSunoApiKeyStatusPayload(deletedData));
+1822:   }
+1823: );
+1824: 
+1825: export const getSunoApiKeyStatus = onRequest(
+1826:   { region: "us-central1", invoker: "public" },
+1827:   async (req, res) => {
+1828:     if (handleCors(req, res)) return;
+1829: 
+1830:     if (req.method !== "POST") {
+1831:       res.status(405).json({ error: "Method Not Allowed" });
+1832:       return;
+1833:     }
+1834: 
+1835:     const uid = await verifyAuth(req, res);
+1836:     if (!uid) return;
+1837: 
+1838:     const db = admin.firestore();
+1839: 
+1840:     const docSnap = await db.collection('user_api_keys').doc(uid).get();
+1841: 
+1842:     const docData = docSnap.exists ? (docSnap.data() || {}) : {};
+1843:     const statusPayload = buildSunoApiKeyStatusPayload(docData);
+1844:     console.log("[Music API Key] status", {
+1845:       uid,
+1846:       docExists: docSnap.exists,
+1847:       hasStoredKey: hasStoredSunoApiKeyInDoc(docData),
+1848:       hasSunoApiKey: Boolean(docData.hasSunoApiKey),
+1849:       hasMusicApiKey: Boolean(docData.hasMusicApiKey),
+1850:       statusHasKey: statusPayload.hasSunoApiKey,
+1851:     });
+1852: 
+1853:     res.json(statusPayload);
+1854:   }
+1855: );
+1856: 
+1857: export const fetchSunoShareMetadata = onRequest(
+1858:   { region: "us-central1", invoker: "public" },
+1859:   async (req, res) => {
+1860:     if (handleCors(req, res)) return;
+1861: 
+1862:     if (req.method !== "POST") {
+1863:       res.status(405).json({ error: "Method Not Allowed", ok: false });
+1864:       return;
+1865:     }
+1866: 
+--- lines 1937-1977 ---
+1937:   { region: "us-central1" },
+1938:   async (req, res) => {
+1939:     if (handleCors(req, res)) return;
+1940: 
+1941:     if (req.method !== "POST") {
+1942:       res.status(405).json({ error: "Method Not Allowed" });
+1943:       return;
+1944:     }
+1945: 
+1946:     const uid = await verifyAuth(req, res);
+1947:     if (!uid) return;
+1948: 
+1949:     const db = admin.firestore();
+1950:     const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
+1951:     const apiKeyDoc = await apiKeyDocRef.get();
+1952: 
+1953:     if (!apiKeyDoc.exists) {
+1954:       res.status(400).json({ error: "Suno API Key not found for this user.", ok: false });
+1955:       return;
+1956:     }
+1957: 
+1958:     const apiKeyData = apiKeyDoc.data() || {};
+1959:     const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
+1960: 
+1961:     if (!sunoApiKey) {
+1962:       res.status(400).json({ error: "Suno API Key is empty.", ok: false });
+1963:       return;
+1964:     }
+1965: 
+1966:     try {
+1967:       const creditRes = await fetch("https://api.sunoapi.org/api/v1/generate/credit", {
+1968:         method: "GET",
+1969:         headers: {
+1970:           "Authorization": `Bearer ${sunoApiKey}`
+1971:         }
+1972:       });
+1973: 
+1974:       if (!creditRes.ok) {
+1975:         const errText = await creditRes.text();
+1976:         console.error("Suno credit API HTTP Error:", errText);
+1977:         res.status(500).json({ error: "Suno credit API HTTP Error", details: errText, ok: false });
+--- lines 1979-2021 ---
+1979:       }
+1980: 
+1981:       const creditData = await creditRes.json();
+1982:       const remainingCredits = extractRemainingCredits(creditData);
+1983: 
+1984:       if (remainingCredits === null) {
+1985:         res.status(500).json({ error: "Unable to parse remaining credits", details: creditData, ok: false });
+1986:         return;
+1987:       }
+1988: 
+1989:       await apiKeyDocRef.set({
+1990:         sunoRemainingCredits: remainingCredits,
+1991:         sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1992:         sunoRemainingCreditsSource: "settings-manual",
+1993:         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+1994:       }, { merge: true });
+1995: 
+1996:       res.json({
+1997:         ok: true,
+1998:         remainingCredits,
+1999:         checkedAt: new Date().toISOString(),
+2000:         source: "settings-manual",
+2001:         apiResponse: creditData
+2002:       });
+2003:     } catch (error: any) {
+2004:       console.error(error);
+2005:       sendSunoExternalConnectionError(res, error);
+2006:     }
+2007:   }
+2008: );
+2009: 
+2010: export const getSunoRemainingCreditsAfterComplete = onRequest(
+2011:   { region: "us-central1" },
+2012:   async (req, res) => {
+2013:     if (handleCors(req, res)) return;
+2014: 
+2015:     if (req.method !== "POST") {
+2016:       res.status(405).json({ error: "Method Not Allowed" });
+2017:       return;
+2018:     }
+2019: 
+2020:     const uid = await verifyAuth(req, res);
+2021:     if (!uid) return;
+--- lines 2025-2065 ---
+2025:       try { body = JSON.parse(body); } catch (e) {}
+2026:     }
+2027:     body = body || {};
+2028: 
+2029:     const trackId = pickFirstString(body.trackId, body.data?.trackId);
+2030:     const taskId = pickFirstString(body.taskId, body.data?.taskId);
+2031: 
+2032:     if (!trackId) {
+2033:       res.status(400).json({ error: "The trackId cannot be empty", ok: false });
+2034:       return;
+2035:     }
+2036: 
+2037:     const db = admin.firestore();
+2038:     const trackRef = db.collection("suno_tracks").doc(uid).collection("tracks").doc(trackId);
+2039:     const trackSnap = await trackRef.get();
+2040: 
+2041:     if (!trackSnap.exists) {
+2042:       res.status(404).json({ error: "Track not found", ok: false });
+2043:       return;
+2044:     }
+2045: 
+2046:     const trackData = trackSnap.data() || {};
+2047:     if (taskId && trackData.taskId && trackData.taskId !== taskId) {
+2048:       res.status(400).json({ error: "Task ID mismatch", ok: false });
+2049:       return;
+2050:     }
+2051: 
+2052:     const status = String(trackData.status || "").toLowerCase();
+2053:     const isCompleted = ["completed", "success", "complete", "succeeded"].includes(status);
+2054:     if (!isCompleted || !hasSunoTrackAudio(trackData)) {
+2055:       res.status(409).json({
+2056:         ok: false,
+2057:         error: "Track is not completed yet. Credits are checked only after completed audio is available.",
+2058:         status: trackData.status || null
+2059:       });
+2060:       return;
+2061:     }
+2062: 
+2063:     const apiKeyDocRef = db.collection('user_api_keys').doc(uid);
+2064:     const apiKeyDoc = await apiKeyDocRef.get();
+2065: 
+--- lines 2104-2152 ---
+2104:       }
+2105: 
+2106:       const creditData = await creditRes.json();
+2107:       const remainingCredits = extractRemainingCredits(creditData);
+2108: 
+2109:       if (remainingCredits === null) {
+2110:         res.status(500).json({ error: "Unable to parse remaining credits", details: creditData, ok: false });
+2111:         return;
+2112:       }
+2113: 
+2114:       await apiKeyDocRef.set({
+2115:         sunoRemainingCredits: remainingCredits,
+2116:         sunoRemainingCreditsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+2117:         sunoRemainingCreditsSourceTrackId: trackId,
+2118:         sunoRemainingCreditsSourceTaskId: trackData.taskId || taskId || null,
+2119:         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+2120:       }, { merge: true });
+2121: 
+2122:       await trackRef.set({
+2123:         creditCheckedAfterComplete: true,
+2124:         creditCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+2125:         remainingCreditsAfterComplete: remainingCredits,
+2126:       }, { merge: true });
+2127: 
+2128:       res.json({
+2129:         ok: true,
+2130:         alreadyChecked: false,
+2131:         remainingCredits,
+2132:         sourceTrackId: trackId,
+2133:         sourceTaskId: trackData.taskId || taskId || null,
+2134:         apiResponse: creditData
+2135:       });
+2136:     } catch (error: any) {
+2137:       console.error(error);
+2138:       sendSunoExternalConnectionError(res, error);
+2139:     }
+2140:   }
+2141: );
+2142: 
+2143: export const createSunoTrack = onRequest(
+2144:   { region: "us-central1" },
+2145:   async (req, res) => {
+2146:     if (handleCors(req, res)) return;
+2147: 
+2148:     if (req.method !== "POST") {
+2149:       res.status(405).json({ error: "Method Not Allowed" });
+2150:       return;
+2151:     }
+2152: 
+--- lines 2165-2205 ---
+2165: 
+2166:     const title = body.title || "Untitled";
+2167:     const lyricsText = body.lyrics || "";
+2168:     const stylePrompt = body.style || body.prompt || "";
+2169:     const appliedKeywords = body.appliedKeywords || null;
+2170:     const dryRun = body.dryRun === true || body.dryRun === "true";
+2171:     const sunoModelVersion = normalizeSunoModelVersion(
+2172:       body.sunoModelVersion,
+2173:       body.sunoVersion,
+2174:       body.model
+2175:     );
+2176: 
+2177:     const db = admin.firestore();
+2178:     const apiKeyDoc = await db.collection('user_api_keys').doc(uid).get();
+2179: 
+2180:     if (!apiKeyDoc.exists && !dryRun) {
+2181:       res.status(400).json({ error: "Suno API Key not found. Please set it in settings." });
+2182:       return;
+2183:     }
+2184: 
+2185:     const apiKeyData = apiKeyDoc.data();
+2186:     const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
+2187: 
+2188:     if (!sunoApiKey && !dryRun) {
+2189:       res.status(400).json({ error: "Suno API Key is empty." });
+2190:       return;
+2191:     }
+2192: 
+2193:     try {
+2194:         const sunoPayload: any = {
+2195:           custom_mode: true,
+2196:           customMode: true,
+2197:           instrumental: typeof body.instrumental === "boolean" ? body.instrumental : false,
+2198:           model: sunoModelVersion,
+2199:           sunoVersion: sunoModelVersion,
+2200:           sunoModelVersion,
+2201:           title: title,
+2202:           prompt: lyricsText,
+2203:           style: stylePrompt,
+2204:           lyrics: lyricsText,
+2205:           appliedKeywords: appliedKeywords,
+--- lines 2221-2262 ---
+2221:           style: stylePrompt,
+2222:           lyrics: lyricsText,
+2223:           status: 'completed',
+2224:           provider: 'dryRun',
+2225:           model: sunoModelVersion,
+2226:           sunoVersion: sunoModelVersion,
+2227:           audioUrl: '',
+2228:           imageUrl: '',
+2229:           appliedKeywords: appliedKeywords,
+2230:           requestPayload: {
+2231:             ...sunoPayload
+2232:           },
+2233:           createdAt: admin.firestore.FieldValue.serverTimestamp(),
+2234:           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+2235:         };
+2236: 
+2237:         await trackRef.set(trackData);
+2238: 
+2239:         res.json({
+2240:           ok: true,
+2241:           dryRun: true,
+2242:           trackId: trackId,
+2243:           taskId: trackData.taskId,
+2244:           appliedKeywords: trackData.appliedKeywords,
+2245:           requestPayload: trackData.requestPayload
+2246:         });
+2247:         return;
+2248:       }
+2249: 
+2250:       const sunoRes = await fetch("https://api.sunoapi.org/api/v1/generate", {
+2251:         method: "POST",
+2252:         headers: {
+2253:           "Content-Type": "application/json",
+2254:           "Authorization": `Bearer ${sunoApiKey}`
+2255:         },
+2256:         body: JSON.stringify(sunoPayload)
+2257:       });
+2258: 
+2259:       if (!sunoRes.ok) {
+2260:         const errText = await sunoRes.text();
+2261:         console.error("Suno API HTTP Error:", errText);
+2262:         res.status(500).json({ error: "Suno API HTTP Error", details: errText });
+--- lines 2274-2314 ---
+2274:         taskId: taskId,
+2275:         apiResponse: data,
+2276:         requestPayload: sunoPayload,
+2277:         prompt: stylePrompt,
+2278:         style: stylePrompt,
+2279:         title: sunoPayload.title,
+2280:         lyrics: lyricsText,
+2281:         status: isFailed ? "failed" : "submitted",
+2282:         provider: "sunoapi.org",
+2283:         model: sunoModelVersion,
+2284:         sunoVersion: sunoModelVersion,
+2285:         appliedKeywords: appliedKeywords,
+2286:         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+2287:       };
+2288: 
+2289:       await trackRef.set(trackData);
+2290: 
+2291:       if (isFailed) {
+2292:          res.status(400).json({ error: data?.msg || "Failed to create track based on SunoAPI response", details: data });
+2293:          return;
+2294:       }
+2295: 
+2296:       res.json({ ok: true, trackId: trackRef.id, taskId: taskId, model: sunoModelVersion, sunoVersion: sunoModelVersion });
+2297:     } catch (error: any) {
+2298:       console.error(error);
+2299:       res.status(500).json({ error: "Failed to create track", details: error.message });
+2300:     }
+2301:   }
+2302: );
+2303: 
+2304: export const getSunoTrackStatus = onRequest(
+2305:   { region: "us-central1" },
+2306:   async (req, res) => {
+2307:     if (handleCors(req, res)) return;
+2308: 
+2309:     if (req.method !== "POST") {
+2310:       res.status(405).json({ error: "Method Not Allowed" });
+2311:       return;
+2312:     }
+2313: 
+2314:     let body = req.body;
+--- lines 2355-2395 ---
+2355:       if (typeof ownerUid === "string" && ownerUid.trim()) {
+2356:         targetUid = ownerUid.trim();
+2357:         isPublicCheckRequired = true;
+2358:       } else {
+2359:         res.status(401).json({ error: "Unauthorized. Login required or provide ownerUid." });
+2360:         return;
+2361:       }
+2362:     }
+2363: 
+2364:     // After the guard above, targetUid is guaranteed to be a string.
+2365:     const safeTargetUid: string = targetUid;
+2366: 
+2367:     const db = admin.firestore();
+2368:     
+2369:     // Check if public if we are using ownerUid without auth
+2370:     if (isPublicCheckRequired) {
+2371:       const publicTrackSnap = await db
+2372:       .collection("suno_tracks")
+2373:       .doc(safeTargetUid)
+2374:       .collection("tracks")
+2375:       .doc(trackId)
+2376:       .get();
+2377:       if (!publicTrackSnap.exists || publicTrackSnap.data()?.isPublic !== true) {
+2378:         res.status(403).json({ error: "Track is not public or not found." });
+2379:         return;
+2380:       }
+2381:     }
+2382: 
+2383:       const apiKeyDoc = await db
+2384:       .collection("user_api_keys")
+2385:       .doc(safeTargetUid)
+2386:       .get();
+2387: 
+2388:     if (!apiKeyDoc.exists) {
+2389:       res.status(400).json({ error: "Suno API Key not found for this user." });
+2390:       return;
+2391:     }
+2392: 
+2393:     const apiKeyData = apiKeyDoc.data();
+2394:     const sunoApiKey = getStoredSunoApiKeyFromDoc(apiKeyData);
+2395: 
+--- lines 2487-2527 ---
+2487:           status = "processing";
+2488:         } else {
+2489:           status = String(data?.status || responseData?.status || status || "processing").toLowerCase();
+2490:         }
+2491:       } else {
+2492:          console.warn("External API reported missing taskId. Not changing track status to failed.", data);
+2493:       }
+2494: 
+2495:       const updates: any = {
+2496:         apiStatusResponse: data,
+2497:         sunoData: sunoData,
+2498:         audioUrls: audioUrls,
+2499:         updatedAt: admin.firestore.FieldValue.serverTimestamp()
+2500:       };
+2501:       
+2502:       if (!isMissingTaskIdError) {
+2503:         updates.status = status;
+2504:       }
+2505: 
+2506:       let finalAudioUrl = "";
+2507:       let finalImageUrl = "";
+2508: 
+2509:       const first = Array.isArray(sunoData) ? sunoData.find((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url)) || sunoData[0] : null;
+2510: 
+2511:       finalAudioUrl =
+2512:         pickFirstString(
+2513:           first?.audioUrl,
+2514:           first?.streamAudioUrl,
+2515:           first?.audio_url,
+2516:           first?.stream_audio_url,
+2517:           first?.sourceAudioUrl,
+2518:           first?.sourceStreamAudioUrl,
+2519:           responseObj?.audioUrl,
+2520:           responseObj?.audio_url
+2521:         );
+2522: 
+2523:       finalImageUrl =
+2524:         pickFirstString(
+2525:           first?.imageUrl,
+2526:           first?.image_url,
+2527:           first?.sourceImageUrl,
+--- lines 2539-2576 ---
+2539: 
+2540:       await trackRef.update(updates);
+2541: 
+2542:       // Also update suno_shares snapshot if it exists
+2543:       const shareRef = db.collection('suno_shares').doc(trackId);
+2544:       const shareSnap = await shareRef.get();
+2545:       if (shareSnap.exists) {
+2546:         // If status completed, update snapshot fields
+2547:         const shareUpdate: any = {
+2548:           status: status,
+2549:           sunoData: sunoData,
+2550:           apiStatusResponse: data,
+2551:           updatedAt: admin.firestore.FieldValue.serverTimestamp()
+2552:         };
+2553:         if (finalAudioUrl) shareUpdate.audioUrl = finalAudioUrl;
+2554:         if (finalImageUrl) shareUpdate.imageUrl = finalImageUrl;
+2555:         if (duration) shareUpdate.duration = duration;
+2556: 
+2557:         await shareRef.update(shareUpdate);
+2558:       }
+2559: 
+2560:       res.json({
+2561:         ok: true,
+2562:         status: status,
+2563:         audioUrl: finalAudioUrl,
+2564:         streamAudioUrl: finalAudioUrl,
+2565:         imageUrl: finalImageUrl,
+2566:         audioUrls: audioUrls,
+2567:         sunoData: sunoData,
+2568:         apiStatusResponse: data
+2569:       });
+2570:       
+2571:     } catch (error: any) {
+2572:       console.error(error);
+2573:       res.status(500).json({ error: "Failed to fetch track status", details: error.message });
+2574:     }
+2575:   }
+2576: );
+
+===== firestore.rules =====
+--- lines 2-134 ---
+2: service cloud.firestore {
+3:   match /databases/{database}/documents {
+4: 
+5:     // 1. Helper Functions
+6:     function isAuthenticated() {
+7:       return request.auth != null;
+8:     }
+9: 
+10:     function isOwner(userId) {
+11:       return isAuthenticated() && request.auth.uid == userId;
+12:     }
+13: 
+14:     function isAdmin() {
+15:       return isAuthenticated() &&
+16:         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+17:         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+18:     }
+19: 
+20:     // 2. Collection Rules
+21: 
+22:     // [Section Tags] Managed by admin, read by all
+23:     match /section_tags/{tagId} {
+24:       allow read: if true;
+25:       allow write: if isAdmin();
+26:     }
+27: 
+28:     // [Admin only] Live & Draft collections
+29:     match /section_tags_live/{tagId} {
+30:       allow read, write: if isAdmin();
+31:     }
+32: 
+33:     match /section_tags_draft/{tagId} {
+34:       allow read, write: if isAdmin();
+35:     }
+36: 
+37:     // Users collection
+38:     // Membership, payment and account-control fields are server/admin authority only.
+39:     // Client-maintained counters remain UI statistics and must never be trusted for entitlement checks.
+40:     match /users/{uid} {
+41:       function isValidSelfCreate() {
+42:         return request.resource.data.keys().hasOnly([
+43:           'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+44:           'createdAt', 'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
+45:           'role', 'accountStatus', 'paymentStatus', 'favoriteCount', 'songGeneratedCount'
+46:         ]) &&
+47:         request.resource.data.uid == uid &&
+48:         request.resource.data.role == 'free' &&
+49:         request.resource.data.accountStatus == 'active' &&
+50:         request.resource.data.paymentStatus == 'none' &&
+51:         request.resource.data.favoriteCount == 0 &&
+52:         request.resource.data.songGeneratedCount == 0;
+53:       }
+54: 
+55:       function isValidSelfUpdate() {
+56:         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+57:           'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+58:           'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
+59:           'nickname', 'updatedAt', 'lyricClicheGuard',
+60:           'favoriteCount', 'songGeneratedCount',
+61:           'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
+62:         ]) &&
+63:         (!('uid' in request.resource.data) || request.resource.data.uid == uid);
+64:       }
+65: 
+66:       allow get: if isOwner(uid) || isAdmin();
+67:       allow list: if isAdmin();
+68:       allow create: if isOwner(uid) && isValidSelfCreate();
+69:       allow update: if isAdmin() || (isOwner(uid) && isValidSelfUpdate());
+70:     }
+71: 
+72:     // Favorites collection
+73:     match /favorites/{favoriteId} {
+74:       allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+75:       allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+76:       allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+77:       allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+78:       allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+79:     }
+80: 
+81:     // User recent songs
+82:     match /user_recent_songs/{uid} {
+83:       allow read: if isOwner(uid) || isAdmin();
+84:       allow write: if isOwner(uid) || isAdmin();
+85:     }
+86: 
+87:     // User custom structures
+88:     match /user_structures/{uid} {
+89:       allow read, write: if isOwner(uid) || isAdmin();
+90:     }
+91: 
+92:     // User Suno Playlists
+93:     match /user_playlists/{uid}/lists/{playlistId} {
+94:       allow read, write: if isOwner(uid) || isAdmin();
+95: 
+96:       match /items/{itemId} {
+97:         allow read, write: if isOwner(uid) || isAdmin();
+98:       }
+99:     }
+100: 
+101:     // App Settings
+102:     // navigation_visibility is read by the app so the public menu can react to admin toggles.
+103:     // Writes remain admin-only.
+104:     match /app_settings/{docId} {
+105:       allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard'] || isAdmin();
+106:       allow write: if isAdmin();
+107:     }
+108: 
+109:     // Suno API User Keys - Handled entirely by Firebase Functions
+110:     match /user_api_keys/{uid} {
+111:       allow read, write: if false;
+112:     }
+113: 
+114:     // Server-side Gemini abuse guard. Never exposed to clients.
+115:     match /gemini_request_guards/{uid} {
+116:       allow read, write: if false;
+117:     }
+118: 
+119: 
+120:     // Suno API Tracks
+121:     match /suno_tracks/{uid}/tracks/{trackId} {
+122:       allow read: if request.auth != null && request.auth.uid == uid;
+123:       allow read: if resource.data.isPublic == true;
+124:       allow write: if request.auth != null && request.auth.uid == uid;
+125:     }
+126: 
+127:     // Suno public tracks for collectionGroup("tracks")
+128:     match /{path=**}/tracks/{trackId} {
+129:       allow read: if resource.data.isPublic == true;
+130:     }
+131: 
+132:     // Suno API Shares
+133:     match /suno_shares/{shareId} {
+134:       function isValidShare(data) {
+--- lines 145-215 ---
+145:       }
+146: 
+147:       function isValidPrivateShareUpdate(data) {
+148:         return data.ownerUid is string &&
+149:                data.ownerUid.size() <= 128 &&
+150:                data.trackId is string &&
+151:                data.title is string &&
+152:                data.isPublic == false;
+153:       }
+154: 
+155:       allow read: if resource.data.isPublic == true ||
+156:                    isOwner(resource.data.ownerUid) ||
+157:                    isAdmin();
+158: 
+159:       allow create: if isAuthenticated() &&
+160:                      request.resource.data.ownerUid == request.auth.uid &&
+161:                      isValidShare(request.resource.data);
+162: 
+163:       allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+164:                     request.resource.data.ownerUid == resource.data.ownerUid &&
+165:                     (isValidShare(request.resource.data) || isValidPrivateShareUpdate(request.resource.data));
+166: 
+167:       allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+168:     }
+169: 
+170:     // Music Note Shares
+171:     match /music_note_shares/{shareId} {
+172:       function isValidMusicNoteShare(data) {
+173:         return data.ownerUid is string &&
+174:                data.ownerUid.size() <= 128 &&
+175:                data.title is string &&
+176:                data.isPublic is bool &&
+177:                data.songs is list &&
+178:                data.songs.size() > 0 &&
+179:                data.songs.size() <= 50;
+180:       }
+181: 
+182:       allow read: if resource.data.isPublic == true ||
+183:                    isOwner(resource.data.ownerUid) ||
+184:                    isAdmin();
+185: 
+186:       allow create: if isAuthenticated() &&
+187:                      request.resource.data.ownerUid == request.auth.uid &&
+188:                      isValidMusicNoteShare(request.resource.data);
+189: 
+190:       allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+191:                     request.resource.data.ownerUid == resource.data.ownerUid &&
+192:                     isValidMusicNoteShare(request.resource.data);
+193: 
+194:       allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+195:     }
+196: 
+197:     // Playlist Likes
+198:     match /playlist_like_counts/{trackGlobalId} {
+199:       allow read: if isAuthenticated();
+200:       allow create, update: if isAuthenticated();
+201:       allow delete: if isAdmin();
+202:     }
+203: 
+204:     match /playlist_likes/{trackGlobalId}/users/{uid} {
+205:       allow read: if isAuthenticated();
+206:       allow create, delete: if isOwner(uid);
+207:       allow update: if false;
+208:     }
+209: 
+210:     // 3. Default Deny
+211:     match /{document=**} {
+212:       allow read, write: if false;
+213:     }
+214:   }
+215: }

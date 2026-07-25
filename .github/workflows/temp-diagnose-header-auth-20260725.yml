@@ -10,26 +10,26 @@ permissions:
 
 jobs:
   diagnose:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641F'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641G'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Collect onAuthStateChanged excerpts
+      - name: Collect Navigation call excerpts
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           lines = Path('src/App.tsx').read_text(encoding='utf-8').splitlines()
-          hits=[i for i,line in enumerate(lines,1) if 'onAuthStateChanged' in line or 'setIsAuthReady' in line or 'setUser(' in line]
+          hits=[i for i,line in enumerate(lines,1) if '<Navigation' in line]
           out=[]
           for i in hits:
-              start=max(1,i-30); end=min(len(lines),i+50)
+              start=max(1,i-12); end=min(len(lines),i+25)
               out.append(f'=== around line {i}: {start}-{end} ===')
               for n in range(start,end+1):
                   out.append(f'{n}: {lines[n-1]}')
-          Path('auth-listener-diagnostic.txt').write_text('\n'.join(out),encoding='utf-8')
+          Path('navigation-call-diagnostic.txt').write_text('\n'.join(out),encoding='utf-8')
           PY
       - name: Report excerpts
         env:
@@ -39,7 +39,7 @@ jobs:
         run: |
           {
             echo '```text'
-            head -c 60000 auth-listener-diagnostic.txt
+            cat navigation-call-diagnostic.txt
             echo
             echo '```'
           } > body.md

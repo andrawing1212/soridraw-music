@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getAuth, initializeAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -73,9 +73,33 @@ export const getFirebaseAppCheckToken = async () => {
 // Do not replace window.fetch globally: Firebase Auth popup sign-in and other
 // browser integrations must keep the native fetch implementation.
 
-export const auth = getAuth(app);
+const readRememberLoginPreference = () => {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem("rememberLogin") === "true";
+  } catch {
+    return false;
+  }
+};
 
-setPersistence(auth, browserLocalPersistence).catch(console.error);
+const initialAuthPersistence = readRememberLoginPreference()
+  ? browserLocalPersistence
+  : browserSessionPersistence;
+
+export const auth = (() => {
+  try {
+    return initializeAuth(app, { persistence: initialAuthPersistence });
+  } catch (error) {
+    // Vite hot reload can reuse an already initialized Auth instance.
+    // Keep the saved login preference aligned without forcing every browser
+    // into local persistence.
+    const existingAuth = getAuth(app);
+    void setPersistence(existingAuth, initialAuthPersistence).catch((persistenceError) => {
+      console.warn("[Firebase Auth] persistence setup failed:", persistenceError);
+    });
+    return existingAuth;
+  }
+})();
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

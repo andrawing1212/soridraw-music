@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { onAuthStateChanged, signOut, updateProfile, User } from 'firebase/auth';
+import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import {
  ArrowLeft,
@@ -242,7 +242,11 @@ function FeatureBadge({ state }: { state: FeatureState }) {
  return <span className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-white/56">잠김</span>;
 }
 
-export default function MyPage() {
+type MyPageProps = {
+ onLogout: () => Promise<void> | void;
+};
+
+export default function MyPage({ onLogout }: MyPageProps) {
  const navigate = useNavigate();
  const location = useLocation();
  const [user, setUser] = useState<User | null>(auth.currentUser);
@@ -406,9 +410,8 @@ export default function MyPage() {
  }, [isSavingPersonalCliche, personalClicheDraft.hardBanText, personalClicheDraft.softBanText, user?.uid]);
 
  const handleLogout = useCallback(async () => {
- await signOut(auth);
- navigate('/');
- }, [navigate]);
+ await onLogout();
+ }, [onLogout]);
 
  if (!user) {
  return (

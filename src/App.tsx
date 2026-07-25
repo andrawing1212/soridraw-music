@@ -15602,7 +15602,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
           ) : user ? (
             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
-              <MyPageLazy />
+              <MyPageLazy onLogout={handleLogout} />
             </Suspense>
           ) : (
             <Navigate to="/" replace />

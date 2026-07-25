@@ -1,4 +1,6 @@
 import {
+  goOffline,
+  goOnline,
   onDisconnect,
   onValue,
   ref,
@@ -168,6 +170,10 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
   if (!uid || typeof window === 'undefined' || typeof document === 'undefined') {
     return { stop: async () => undefined, markActivity: () => undefined };
   }
+
+  // A previous sign-out may have intentionally closed the RTDB socket so its
+  // onDisconnect cleanup can run. Reopen it before creating the next session.
+  goOnline(realtimeDb);
 
   const sessionId = buildSessionId();
   const deviceId = getOrCreateDeviceId();
@@ -381,16 +387,31 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     window.removeEventListener('storage', handleStorage);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
 
+    let explicitCleanupSucceeded = false;
     try {
-      await onDisconnect(sessionRef).cancel();
-      await onDisconnect(deviceLastSeenRef).cancel();
-      await onDisconnect(lastSeenRef).cancel();
+      // Remove the live session while the user credential is still usable.
+      // Do not cancel onDisconnect first: if Auth changes during cleanup, the
+      // server-side disconnect hook must remain available as the fallback.
       await remove(sessionRef);
       await update(deviceRef, { lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
       await set(lastSeenRef, serverTimestamp());
+      explicitCleanupSucceeded = true;
     } catch (error) {
-      console.warn('[Presence] cleanup deferred to onDisconnect:', error);
+      console.warn('[Presence] explicit cleanup failed; using onDisconnect fallback:', error);
     }
+
+    if (explicitCleanupSucceeded) {
+      await Promise.allSettled([
+        onDisconnect(sessionRef).cancel(),
+        onDisconnect(deviceLastSeenRef).cancel(),
+        onDisconnect(lastSeenRef).cancel(),
+      ]);
+    }
+
+    // Closing this tab's RTDB socket immediately executes any remaining
+    // onDisconnect cleanup. Presence is the only RTDB feature in this app, and
+    // the next login calls goOnline() before starting a new session.
+    goOffline(realtimeDb);
     emitPresenceDiagnostic({ uid, status: 'stopped', message: '접속 상태 기록이 종료되었습니다.', updatedAt: Date.now() });
   };
 

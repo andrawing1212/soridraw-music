@@ -161,27 +161,59 @@ const isForceLoggedOut = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt'
   return forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime <= forceTime);
 };
 
+const getLatestLivePresenceSignalAt = (livePresence?: LivePresenceSummary) => {
+  if (!livePresence) return 0;
+  return Math.max(
+    livePresence.lastActivityAt || 0,
+    ...livePresence.devices.flatMap((device) => [
+      device.updatedAt || 0,
+      device.lastActivityAt || 0,
+    ])
+  );
+};
+
+const getEffectiveAdminPresenceOverride = (
+  user: Pick<AppUserInfo, 'lastLoginAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+  livePresence?: LivePresenceSummary
+): 'offline' | 'loggedOut' | null => {
+  const adminOverrideAt = user.adminPresenceStateAt || 0;
+  if (!adminOverrideAt || !user.adminPresenceState) return null;
+
+  const loginTime = user.lastLoginAt || 0;
+  const forceLogoutTime = user.forceLogoutAt || 0;
+  const latestLiveSignalAt = getLatestLivePresenceSignalAt(livePresence);
+
+  // A manual correction wins over stale/ghost sessions that were recorded
+  // before the correction. A genuinely new login or a later live write
+  // automatically restores real-time presence.
+  if (adminOverrideAt <= loginTime || adminOverrideAt < forceLogoutTime || adminOverrideAt < latestLiveSignalAt) {
+    return null;
+  }
+  return user.adminPresenceState;
+};
+
+const getEffectiveConnectionCount = (
+  user: Pick<AppUserInfo, 'lastLoginAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+  livePresence?: LivePresenceSummary
+) => getEffectiveAdminPresenceOverride(user, livePresence) ? 0 : (livePresence?.connectionCount || 0);
+
 const getPresenceState = (
   user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
   livePresence?: LivePresenceSummary,
   now = Date.now()
 ): PresenceState => {
-  // A currently detected session is always the strongest signal. This also
-  // prevents an old force-logout audit timestamp from hiding a later login.
+  const effectiveOverride = getEffectiveAdminPresenceOverride(user, livePresence);
+  if (effectiveOverride === 'loggedOut') return 'loggedOut';
+  if (effectiveOverride === 'offline') return 'offline';
+
+  // Real-time presence wins only when it is newer than an administrator's
+  // manual correction. This prevents a stale ghost tab from blocking the
+  // requested offline/logged-out display forever.
   if (livePresence?.state === 'active') return 'active';
   if (livePresence?.state === 'away') return 'away';
   if (livePresence?.state === 'background') return 'background';
 
   const loginTime = user.lastLoginAt || 0;
-  const forceLogoutTime = user.forceLogoutAt || 0;
-  const adminOverrideAt = user.adminPresenceStateAt || 0;
-  // A manual correction made after the latest login/force-logout must win.
-  // This lets an administrator change an old "강제 로그아웃" badge to
-  // "오프라인" without deleting the security audit timestamp itself.
-  if (adminOverrideAt > loginTime && adminOverrideAt >= forceLogoutTime) {
-    if (user.adminPresenceState === 'loggedOut') return 'loggedOut';
-    if (user.adminPresenceState === 'offline') return 'offline';
-  }
 
   if (isForceLoggedOut(user)) return 'forced';
 
@@ -233,9 +265,9 @@ const getRecentActivityAt = (
   } else if (presence === 'forced') {
     latest = Math.max(user.forceLogoutAt || 0, user.lastLogoutAt || 0, user.lastSeenAt || 0);
   } else if (presence === 'loggedOut') {
-    latest = Math.max(user.lastLogoutAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, user.lastLoginAt || 0);
+    latest = Math.max(user.adminPresenceStateAt || 0, user.lastLogoutAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, user.lastLoginAt || 0);
   } else {
-    latest = Math.max(livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, livePresence?.lastActivityAt || 0, user.lastLoginAt || 0);
+    latest = Math.max(user.adminPresenceStateAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, livePresence?.lastActivityAt || 0, user.lastLoginAt || 0);
   }
 
   return latest > 0 ? latest : undefined;
@@ -400,9 +432,13 @@ const DevicePresenceList = ({ user, livePresence, now, backendSchemaReady }: { u
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {devices.map((device) => {
-        const effectiveState: PresenceState = (overallPresence === 'forced' || overallPresence === 'loggedOut') && device.state === 'offline'
-          ? overallPresence
-          : device.state;
+        const manualOverride = getEffectiveAdminPresenceOverride(user, livePresence);
+        const effectiveState: PresenceState = manualOverride
+          ? manualOverride
+          : (overallPresence === 'forced' || overallPresence === 'loggedOut') && device.state === 'offline'
+            ? overallPresence
+            : device.state;
+        const effectiveConnectionCount = manualOverride ? 0 : device.connectionCount;
         const config: Record<PresenceState, { label: string; className: string; dot: string }> = {
           active: { label: '활동중', className: 'text-emerald-300', dot: 'bg-emerald-400' },
           away: { label: '자리비움', className: 'text-amber-300', dot: 'bg-amber-300' },
@@ -426,7 +462,7 @@ const DevicePresenceList = ({ user, livePresence, now, backendSchemaReady }: { u
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-zinc-500">
                   <span>{formatLastSeen(recentAt, now)}</span>
-                  {device.connectionCount > 0 && <span className="text-sky-300">열린 탭 {device.connectionCount}개</span>}
+                  {effectiveConnectionCount > 0 && <span className="text-sky-300">열린 탭 {effectiveConnectionCount}개</span>}
                 </div>
               </div>
             </div>
@@ -889,7 +925,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       isOpen: true,
       title: `접속 상태 · ${label}`,
       message: state
-        ? `${label}으로 표시를 보정합니다. 실제 접속 중인 세션은 활동중 상태가 우선하며, 회원이 다시 로그인하면 이 보정은 자동으로 무효화됩니다.`
+        ? `${label}으로 표시를 보정합니다. 현재 남아 있는 오래된 접속 기록보다 이 보정이 우선하며, 이후 새 로그인이나 새 활동이 감지되면 자동으로 실제 상태로 돌아갑니다.`
         : '수동 보정을 해제하고 실시간 접속 기록과 2일 자동 판정 기준으로 되돌립니다.',
       confirmLabel: '상태 적용',
       tone: 'brand',
@@ -1268,7 +1304,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                           <PresenceBadge user={selectedUser} livePresence={livePresence[selectedUser.uid]} displayMode={presenceDisplayMode} />
                           <span className={cn('text-sm font-black', getPresenceState(selectedUser, livePresence[selectedUser.uid], presenceClock) === 'loggedOut' ? 'text-zinc-500' : 'text-zinc-100')}>{formatLastSeen(getRecentActivityAt(selectedUser, livePresence[selectedUser.uid]), presenceClock)}</span>
-                          {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {livePresence[selectedUser.uid].connectionCount}개</span>}
+                          {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {getEffectiveConnectionCount(selectedUser, livePresence[selectedUser.uid])}개</span>}
                         </div>
                       </div>
                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Music className="w-3 h-3" />생성곡</span><p className="mt-1 text-lg font-black text-white">{selectedUser.songGeneratedCount}</p></div>

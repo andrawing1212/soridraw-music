@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'APPLY HEADER REFRESH FIX 20260725 0641'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'APPLY HEADER REFRESH FIX 20260725 0641 RETRY'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -43,6 +43,9 @@ jobs:
           path = Path('src/App.tsx')
           text = path.read_text(encoding='utf-8')
 
+          def block(*lines: str) -> str:
+              return '\n'.join(lines)
+
           def once(old: str, new: str, label: str):
               global text
               count = text.count(old)
@@ -60,156 +63,205 @@ jobs:
               print(f'OK {label}: {count}')
 
           once(
-              "type AuthMode = 'login' | 'signup' | 'reset';\ntype EmailVerificationGate = 'idle' | 'checking' | 'required';\n\nconst getEmailVerificationCycleKey",
-              """type AuthMode = 'login' | 'signup' | 'reset';
-          type EmailVerificationGate = 'idle' | 'checking' | 'required';
-
-          type CachedHeaderIdentity = {
-            uid: string;
-            displayName: string;
-            photoURL: string;
-          };
-
-          const HEADER_IDENTITY_CACHE_KEY = 'soridraw_header_identity_v1';
-
-          const getHeaderIdentityStorage = (): Storage | null => {
-            if (typeof window === 'undefined') return null;
-            try {
-              return window.localStorage.getItem('rememberLogin') === 'true'
-                ? window.localStorage
-                : window.sessionStorage;
-            } catch {
-              return null;
-            }
-          };
-
-          const readCachedHeaderIdentity = (): CachedHeaderIdentity | null => {
-            const storage = getHeaderIdentityStorage();
-            if (!storage) return null;
-            try {
-              const raw = storage.getItem(HEADER_IDENTITY_CACHE_KEY);
-              if (!raw) return null;
-              const parsed = JSON.parse(raw);
-              const uid = String(parsed?.uid || '').trim();
-              if (!uid) return null;
-              return {
-                uid,
-                displayName: String(parsed?.displayName || 'My'),
-                photoURL: String(parsed?.photoURL || ''),
-              };
-            } catch {
-              return null;
-            }
-          };
-
-          const getHeaderIdentityFromUser = (
-            authUser: Pick<User, 'uid' | 'displayName' | 'photoURL'>,
-          ): CachedHeaderIdentity => ({
-            uid: authUser.uid,
-            displayName: authUser.displayName || 'My',
-            photoURL: authUser.photoURL || '',
-          });
-
-          const writeCachedHeaderIdentity = (identity: CachedHeaderIdentity) => {
-            if (typeof window === 'undefined') return;
-            try {
-              const storage = getHeaderIdentityStorage();
-              if (!storage) return;
-              storage.setItem(HEADER_IDENTITY_CACHE_KEY, JSON.stringify(identity));
-              const otherStorage = storage === window.localStorage
-                ? window.sessionStorage
-                : window.localStorage;
-              otherStorage.removeItem(HEADER_IDENTITY_CACHE_KEY);
-            } catch {}
-          };
-
-          const clearCachedHeaderIdentity = () => {
-            if (typeof window === 'undefined') return;
-            try { window.localStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}
-            try { window.sessionStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}
-          };
-
-          const getEmailVerificationCycleKey""",
+              block(
+                  "type AuthMode = 'login' | 'signup' | 'reset';",
+                  "type EmailVerificationGate = 'idle' | 'checking' | 'required';",
+                  '',
+                  'const getEmailVerificationCycleKey',
+              ),
+              block(
+                  "type AuthMode = 'login' | 'signup' | 'reset';",
+                  "type EmailVerificationGate = 'idle' | 'checking' | 'required';",
+                  '',
+                  'type CachedHeaderIdentity = {',
+                  '  uid: string;',
+                  '  displayName: string;',
+                  '  photoURL: string;',
+                  '};',
+                  '',
+                  "const HEADER_IDENTITY_CACHE_KEY = 'soridraw_header_identity_v1';",
+                  '',
+                  'const getHeaderIdentityStorage = (): Storage | null => {',
+                  "  if (typeof window === 'undefined') return null;",
+                  '  try {',
+                  "    return window.localStorage.getItem('rememberLogin') === 'true'",
+                  '      ? window.localStorage',
+                  '      : window.sessionStorage;',
+                  '  } catch {',
+                  '    return null;',
+                  '  }',
+                  '};',
+                  '',
+                  'const readCachedHeaderIdentity = (): CachedHeaderIdentity | null => {',
+                  '  const storage = getHeaderIdentityStorage();',
+                  '  if (!storage) return null;',
+                  '  try {',
+                  '    const raw = storage.getItem(HEADER_IDENTITY_CACHE_KEY);',
+                  '    if (!raw) return null;',
+                  '    const parsed = JSON.parse(raw);',
+                  "    const uid = String(parsed?.uid || '').trim();",
+                  '    if (!uid) return null;',
+                  '    return {',
+                  '      uid,',
+                  "      displayName: String(parsed?.displayName || 'My'),",
+                  "      photoURL: String(parsed?.photoURL || ''),",
+                  '    };',
+                  '  } catch {',
+                  '    return null;',
+                  '  }',
+                  '};',
+                  '',
+                  'const getHeaderIdentityFromUser = (',
+                  "  authUser: Pick<User, 'uid' | 'displayName' | 'photoURL'>,",
+                  '): CachedHeaderIdentity => ({',
+                  '  uid: authUser.uid,',
+                  "  displayName: authUser.displayName || 'My',",
+                  "  photoURL: authUser.photoURL || '',",
+                  '});',
+                  '',
+                  'const writeCachedHeaderIdentity = (identity: CachedHeaderIdentity) => {',
+                  "  if (typeof window === 'undefined') return;",
+                  '  try {',
+                  '    const storage = getHeaderIdentityStorage();',
+                  '    if (!storage) return;',
+                  '    storage.setItem(HEADER_IDENTITY_CACHE_KEY, JSON.stringify(identity));',
+                  '    const otherStorage = storage === window.localStorage',
+                  '      ? window.sessionStorage',
+                  '      : window.localStorage;',
+                  '    otherStorage.removeItem(HEADER_IDENTITY_CACHE_KEY);',
+                  '  } catch {}',
+                  '};',
+                  '',
+                  'const clearCachedHeaderIdentity = () => {',
+                  "  if (typeof window === 'undefined') return;",
+                  '  try { window.localStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}',
+                  '  try { window.sessionStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}',
+                  '};',
+                  '',
+                  'const getEmailVerificationCycleKey',
+              ),
               'header identity helpers',
           )
 
-          old_navigation = "function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {"
-          new_navigation = """function Navigation({
-            user,
-            cachedHeaderIdentity,
-            isAuthReady,
-            handleLogin,
-            isLoggingIn,
-            handleLogout,
-            isAdminUser,
-            menuVisibility,
-            menuAdminOnly,
-            sunoLibrarySignal,
-            sunoLibrarySignalDotClass,
-            clearSunoLibrarySignal,
-          }: {
-            user: User | null;
-            cachedHeaderIdentity: CachedHeaderIdentity | null;
-            isAuthReady: boolean;
-            handleLogin: () => void;
-            isLoggingIn: boolean;
-            handleLogout: () => void;
-            isAdminUser: boolean;
-            menuVisibility: NavigationMenuVisibility;
-            menuAdminOnly: NavigationMenuAdminOnly;
-            sunoLibrarySignal: 'generating' | 'completed' | null;
-            sunoLibrarySignalDotClass: string;
-            clearSunoLibrarySignal: () => void;
-          }) {"""
-          once(old_navigation, new_navigation, 'Navigation props')
+          once(
+              "function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {",
+              block(
+                  'function Navigation({',
+                  '  user,',
+                  '  cachedHeaderIdentity,',
+                  '  isAuthReady,',
+                  '  handleLogin,',
+                  '  isLoggingIn,',
+                  '  handleLogout,',
+                  '  isAdminUser,',
+                  '  menuVisibility,',
+                  '  menuAdminOnly,',
+                  '  sunoLibrarySignal,',
+                  '  sunoLibrarySignalDotClass,',
+                  '  clearSunoLibrarySignal,',
+                  '}: {',
+                  '  user: User | null;',
+                  '  cachedHeaderIdentity: CachedHeaderIdentity | null;',
+                  '  isAuthReady: boolean;',
+                  '  handleLogin: () => void;',
+                  '  isLoggingIn: boolean;',
+                  '  handleLogout: () => void;',
+                  '  isAdminUser: boolean;',
+                  '  menuVisibility: NavigationMenuVisibility;',
+                  '  menuAdminOnly: NavigationMenuAdminOnly;',
+                  "  sunoLibrarySignal: 'generating' | 'completed' | null;",
+                  '  sunoLibrarySignalDotClass: string;',
+                  '  clearSunoLibrarySignal: () => void;',
+                  '}) {',
+              ),
+              'Navigation props',
+          )
 
           once(
-              "  const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);\n  const isActivePath",
-              """  const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-            const headerIdentity = user
-              ? getHeaderIdentityFromUser(user)
-              : !isAuthReady
-                ? cachedHeaderIdentity
-                : null;
-            const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);
-            const isActivePath""",
+              block(
+                  '  const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);',
+                  '  const isActivePath',
+              ),
+              block(
+                  '  const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);',
+                  '  const headerIdentity = user',
+                  '    ? getHeaderIdentityFromUser(user)',
+                  '    : !isAuthReady',
+                  '      ? cachedHeaderIdentity',
+                  '      : null;',
+                  '  const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);',
+                  '  const isActivePath',
+              ),
               'header identity derivation',
           )
 
           once(
-              "  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {\n    if (!user) {",
-              """  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
-              if (!isAuthReady) return;
-              if (!user) {""",
+              block(
+                  '  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {',
+                  '    if (!user) {',
+              ),
+              block(
+                  '  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {',
+                  '    if (!isAuthReady) return;',
+                  '    if (!user) {',
+              ),
               'auth restore navigation guard',
           )
 
-          # External site shortcuts are not protected data. Keep their layout mounted
-          # from the first paint, even while Firebase restores the user session.
           once(
-              "        <div className=\"flex min-w-[176px] shrink-0 items-center justify-end gap-2.5\">\n          {user && (\n            <>",
-              "        <div className=\"flex min-w-[176px] shrink-0 items-center justify-end gap-2.5\">\n          <>",
-              'desktop site shortcut start',
-          )
-          once(
-              "            </>\n          )}\n          {user ? (\n            <>",
-              "            </>\n          {headerIdentity ? (\n            <>",
-              'desktop site shortcut end and profile cache',
+              block(
+                  '        <div className="flex min-w-[176px] shrink-0 items-center justify-end gap-2.5">',
+                  '          {user && (',
+                  '            <>',
+              ),
+              block(
+                  '        <div className="flex min-w-[176px] shrink-0 items-center justify-end gap-2.5">',
+                  '          <>',
+              ),
+              'desktop shortcut first-paint mount',
           )
 
           once(
-              "              {user ? (\n                <button",
-              "              {headerIdentity ? (\n                <button",
+              block(
+                  '            </>',
+                  '          )}',
+                  '          {user ? (',
+                  '            <>',
+              ),
+              block(
+                  '            </>',
+                  '          {headerIdentity ? (',
+                  '            <>',
+              ),
+              'desktop cached profile conditional',
+          )
+
+          once(
+              block(
+                  '              {user ? (',
+                  '                <button',
+              ),
+              block(
+                  '              {headerIdentity ? (',
+                  '                <button',
+              ),
               'mobile cached profile conditional',
           )
 
           once(
-              "                  onClick={() => {\n                    setIsProfileOpen((prev) => !prev);\n                    setIsExpanded(false);\n                  }}",
-              """                  onClick={() => {
-                    if (!user || !isAuthReady) return;
-                    setIsProfileOpen((prev) => !prev);
-                    setIsExpanded(false);
-                  }}""",
+              block(
+                  '                  onClick={() => {',
+                  '                    setIsProfileOpen((prev) => !prev);',
+                  '                    setIsExpanded(false);',
+                  '                  }}',
+              ),
+              block(
+                  '                  onClick={() => {',
+                  '                    if (!user || !isAuthReady) return;',
+                  '                    setIsProfileOpen((prev) => !prev);',
+                  '                    setIsExpanded(false);',
+                  '                  }}',
+              ),
               'mobile profile click guard',
           )
 
@@ -226,86 +278,83 @@ jobs:
           )
 
           exact_count(
-              'className="h-full w-full object-cover"\n                  loading="lazy"',
-              'className="h-full w-full object-cover"\n                  loading="eager"\n                  fetchPriority="high"',
+              block(
+                  'className="h-full w-full object-cover"',
+                  '                  loading="lazy"',
+              ),
+              block(
+                  'className="h-full w-full object-cover"',
+                  '                  loading="eager"',
+                  '                  fetchPriority="high"',
+              ),
               3,
               'eager static shortcut icons',
           )
 
           once(
-              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
-                  alt="Profile"
-                  className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
-                  referrerPolicy="no-referrer"""",
-              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
-                  alt="Profile"
-                  className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
-                  referrerPolicy="no-referrer"
-                  loading="eager"
-                  fetchPriority="high"""",
-              'eager desktop profile image',
-          )
-          once(
-              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
-                    alt="Profile"
-                    className="h-8 w-8 rounded-xl object-cover"
-                    referrerPolicy="no-referrer"""",
-              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
-                    alt="Profile"
-                    className="h-8 w-8 rounded-xl object-cover"
-                    referrerPolicy="no-referrer"
-                    loading="eager"
-                    fetchPriority="high"""",
-              'eager mobile profile image',
-          )
-
-          once(
-              "  const [user, setUser] = useState<User | null>(null);",
-              """  const [user, setUser] = useState<User | null>(() => auth.currentUser);
-            const [cachedHeaderIdentity, setCachedHeaderIdentity] = useState<CachedHeaderIdentity | null>(
-              readCachedHeaderIdentity,
-            );""",
+              '  const [user, setUser] = useState<User | null>(null);',
+              block(
+                  '  const [user, setUser] = useState<User | null>(() => auth.currentUser);',
+                  '  const [cachedHeaderIdentity, setCachedHeaderIdentity] = useState<CachedHeaderIdentity | null>(',
+                  '    readCachedHeaderIdentity,',
+                  '  );',
+              ),
               'initial cached identity state',
           )
 
           once(
-              "    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {\n      setUser(currentUser);\n      setIsAuthReady(true);",
-              """    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-              setUser(currentUser);
-              if (currentUser) {
-                const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);
-                setCachedHeaderIdentity(nextHeaderIdentity);
-                writeCachedHeaderIdentity(nextHeaderIdentity);
-              } else {
-                setCachedHeaderIdentity(null);
-                clearCachedHeaderIdentity();
-              }
-              setIsAuthReady(true);""",
+              block(
+                  '    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {',
+                  '      setUser(currentUser);',
+                  '      setIsAuthReady(true);',
+              ),
+              block(
+                  '    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {',
+                  '      setUser(currentUser);',
+                  '      if (currentUser) {',
+                  '        const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);',
+                  '        setCachedHeaderIdentity(nextHeaderIdentity);',
+                  '        writeCachedHeaderIdentity(nextHeaderIdentity);',
+                  '      } else {',
+                  '        setCachedHeaderIdentity(null);',
+                  '        clearCachedHeaderIdentity();',
+                  '      }',
+                  '      setIsAuthReady(true);',
+              ),
               'auth listener cache sync',
           )
 
           once(
-              "      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />",
-              """      <Navigation
-                user={user}
-                cachedHeaderIdentity={cachedHeaderIdentity}
-                isAuthReady={isAuthReady}
-                handleLogin={handleLogin}
-                isLoggingIn={isLoggingIn}
-                handleLogout={handleLogout}
-                isAdminUser={isAdminMenuUser}
-                menuVisibility={menuVisibility}
-                menuAdminOnly={menuAdminOnly}
-                sunoLibrarySignal={sunoLibrarySignal}
-                sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
-                clearSunoLibrarySignal={clearSunoLibrarySignal}
-              />""",
+              '      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />',
+              block(
+                  '      <Navigation',
+                  '        user={user}',
+                  '        cachedHeaderIdentity={cachedHeaderIdentity}',
+                  '        isAuthReady={isAuthReady}',
+                  '        handleLogin={handleLogin}',
+                  '        isLoggingIn={isLoggingIn}',
+                  '        handleLogout={handleLogout}',
+                  '        isAdminUser={isAdminMenuUser}',
+                  '        menuVisibility={menuVisibility}',
+                  '        menuAdminOnly={menuAdminOnly}',
+                  '        sunoLibrarySignal={sunoLibrarySignal}',
+                  '        sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}',
+                  '        clearSunoLibrarySignal={clearSunoLibrarySignal}',
+                  '      />',
+              ),
               'Navigation call props',
           )
 
           once(
-              '                  aria-label="계정 메뉴"\n                  title="계정 메뉴"',
-              '                  aria-label="계정 메뉴"\n                  title="계정 메뉴"\n                  aria-busy={isHeaderAuthPending}',
+              block(
+                  '                  aria-label="계정 메뉴"',
+                  '                  title="계정 메뉴"',
+              ),
+              block(
+                  '                  aria-label="계정 메뉴"',
+                  '                  title="계정 메뉴"',
+                  '                  aria-busy={isHeaderAuthPending}',
+              ),
               'pending profile accessibility state',
           )
 

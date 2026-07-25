@@ -1,0 +1,4 @@
+Apply simplified G/E authentication marks to admin member cards.
+Baseline: user-approved 32nd state on latest main.
+Target: Vercel test app only.
+Requested: 2026-07-25T08:10:50Z

@@ -1,7 +1,0 @@
-Apply 36th correction to the master permission UI.
-Show only master/admin accounts, never all members.
-Admin assignment remains in member detail and is visible only to master.
-Remove decorative borders and use neutral white/zinc tones.
-Deploy to Vercel test app only. Official Firebase Hosting: do not deploy.
-Requested: 2026-07-25T13:44:15Z
-Workflow syntax corrected: 2026-07-25T14:03:00Z

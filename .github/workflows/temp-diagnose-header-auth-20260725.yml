@@ -10,36 +10,26 @@ permissions:
 
 jobs:
   diagnose:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641E'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641F'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Collect auth initialization excerpts
+      - name: Collect onAuthStateChanged excerpts
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
           lines = Path('src/App.tsx').read_text(encoding='utf-8').splitlines()
-          rx = re.compile(r'const \[user|isAuthReady|onAuthStateChanged|setUser\(|auth\.currentUser', re.I)
-          ranges=[]
-          for i,line in enumerate(lines,1):
-              if rx.search(line):
-                  ranges.append((max(1,i-12),min(len(lines),i+20)))
-          merged=[]
-          for start,end in sorted(ranges):
-              if not merged or start>merged[-1][1]+1:
-                  merged.append([start,end])
-              else:
-                  merged[-1][1]=max(merged[-1][1],end)
+          hits=[i for i,line in enumerate(lines,1) if 'onAuthStateChanged' in line or 'setIsAuthReady' in line or 'setUser(' in line]
           out=[]
-          for start,end in merged:
-              out.append(f'=== lines {start}-{end} ===')
+          for i in hits:
+              start=max(1,i-30); end=min(len(lines),i+50)
+              out.append(f'=== around line {i}: {start}-{end} ===')
               for n in range(start,end+1):
                   out.append(f'{n}: {lines[n-1]}')
-          Path('auth-init-diagnostic.txt').write_text('\n'.join(out),encoding='utf-8')
+          Path('auth-listener-diagnostic.txt').write_text('\n'.join(out),encoding='utf-8')
           PY
       - name: Report excerpts
         env:
@@ -49,7 +39,7 @@ jobs:
         run: |
           {
             echo '```text'
-            head -c 60000 auth-init-diagnostic.txt
+            head -c 60000 auth-listener-diagnostic.txt
             echo
             echo '```'
           } > body.md

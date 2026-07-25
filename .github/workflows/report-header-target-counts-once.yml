@@ -1,0 +1,63 @@
+name: Report header target counts once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/report-header-target-counts-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Count targets
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('src/App.tsx').read_text(encoding='utf-8')
+          targets = {
+            'auth helper anchor': "type AuthMode = 'login' | 'signup' | 'reset';\ntype EmailVerificationGate = 'idle' | 'checking' | 'required';\n\nconst getEmailVerificationCycleKey",
+            'navigation signature': "function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {",
+            'profile ref anchor': "  const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);\n  const isActivePath",
+            'goToTopNav anchor': "  const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {\n    if (!user) {",
+            'desktop site conditional': "        <div className=\"flex min-w-[176px] shrink-0 items-center justify-end gap-2.5\">\n          {user && (",
+            'desktop profile conditional': "            </>\n          )}\n          {user ? (\n            <>",
+            'mobile profile conditional': "              {user ? (\n                <button",
+            'mobile profile click': "                  onClick={() => {\n                    setIsProfileOpen((prev) => !prev);\n                    setIsExpanded(false);\n                  }}",
+            'profile source': "src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}",
+            'display name': "{user.displayName || 'My'}",
+            'site icon lazy class': 'className="h-full w-full object-cover"\n                  loading="lazy"',
+            'desktop profile exact': """src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  alt="Profile"
+                  className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
+                  referrerPolicy="no-referrer"""",
+            'mobile profile exact': """src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                    alt="Profile"
+                    className="h-8 w-8 rounded-xl object-cover"
+                    referrerPolicy="no-referrer"""",
+            'user state': "  const [user, setUser] = useState<User | null>(null);",
+            'auth listener': "    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {\n      setUser(currentUser);\n      setIsAuthReady(true);",
+            'explicit logout': "      await presenceControllerRef.current?.stop();\n      presenceControllerRef.current = null;\n      await signOut(auth);",
+            'forced fallback': "      await presenceControllerRef.current?.stop().catch(() => {});\n      presenceControllerRef.current = null;\n      await signOut(auth).catch(() => {});",
+            'navigation call': "      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />",
+            'aria account menu': '                  aria-label="계정 메뉴"\n                  title="계정 메뉴"',
+          }
+          out=[f'{name}: {text.count(target)}' for name,target in targets.items()]
+          Path('.deploy/header-target-counts.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
+          PY
+      - name: Commit report
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/header-target-counts.txt
+          git commit -m "chore: report header refresh target counts"
+          git push origin HEAD:main

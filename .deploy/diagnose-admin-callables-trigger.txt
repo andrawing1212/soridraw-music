@@ -1,0 +1,2 @@
+Collect admin callable and route guard references.
+Requested: 2026-07-25T11:12:00Z

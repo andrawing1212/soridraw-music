@@ -1,0 +1,70 @@
+name: Diagnose master permissions once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .deploy/diagnose-master-permissions-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Collect relevant source excerpts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          specs = {
+            'src/App.tsx': [r'isAdminMenuUser', r'Admin.*Lazy', r'<Route', r'role\s*===\s*[\'\"]admin', r'adminMenu', r'menuVisibility', r'AdminPage'],
+            'src/components/AdminPageLayout.tsx': [r'.*'],
+            'src/pages/AdminUserManagementPage.tsx': [r'role', r'ROLE_LABELS', r'updateDoc', r'httpsCallable', r'selectedUser', r'admin'],
+            'functions/src/index.ts': [r'requireAdminCaller', r'role', r'admin', r'updateUser', r'listAuthUsers', r'setUser', r'getAdminPresence'],
+            'firestore.rules': [r'isAdmin', r'role', r'users', r'admin'],
+          }
+
+          output=[]
+          for filename, patterns in specs.items():
+            path=Path(filename)
+            output.append(f'\n===== {filename} =====')
+            if not path.exists():
+              output.append('MISSING')
+              continue
+            lines=path.read_text(encoding='utf-8').splitlines()
+            if patterns == [r'.*']:
+              ranges=[(1,len(lines))]
+            else:
+              hits=[]
+              regexes=[re.compile(p,re.I) for p in patterns]
+              for i,line in enumerate(lines,1):
+                if any(rx.search(line) for rx in regexes):
+                  hits.append(i)
+              ranges=[]
+              for i in hits:
+                start=max(1,i-12); end=min(len(lines),i+28)
+                if not ranges or start>ranges[-1][1]+1:
+                  ranges.append([start,end])
+                else:
+                  ranges[-1][1]=max(ranges[-1][1],end)
+            for start,end in ranges:
+              output.append(f'--- lines {start}-{end} ---')
+              for n in range(start,end+1):
+                output.append(f'{n}: {lines[n-1]}')
+          Path('.deploy/master-permission-diagnostic.txt').write_text('\n'.join(output)+'\n',encoding='utf-8')
+          PY
+      - name: Commit diagnostic
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/master-permission-diagnostic.txt
+          git commit -m "chore: report master permission integration points"
+          git push origin HEAD:main

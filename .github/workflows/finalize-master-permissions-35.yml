@@ -54,7 +54,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
-      - name: Bootstrap and verify representative master
+      - name: Bootstrap representative master through deployed Function
         shell: bash
         run: |
           node <<'NODE'
@@ -64,36 +64,40 @@ jobs:
             projectId: 'soridraw-app-866a5',
           });
 
-          const permissions = {
-            userManagement: true,
-            vocalManagement: true,
-            sectionTagManagement: true,
-            sunoApiManagement: true,
-            appSettings: true,
-            geminiAudit: true,
-          };
+          const FIREBASE_API_KEY = 'AIzaSyB_XyRUffNmJ5iugtvqx_3yY-rLi6PaumA';
+          const FUNCTION_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net/ensureMasterAccess';
 
           (async () => {
             const authUser = await admin.auth().getUserByEmail('andrawing1212@gmail.com');
-            const ref = admin.firestore().collection('users').doc(authUser.uid);
-            await ref.set({
-              role: 'admin',
-              staffRole: 'master',
-              adminPermissions: permissions,
-              staffRoleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              staffRoleUpdatedBy: authUser.uid,
-              masterBootstrapSource: 'github-actions-finalize-master35',
-            }, { merge: true });
+            const customToken = await admin.auth().createCustomToken(authUser.uid);
 
-            const snap = await ref.get();
-            const data = snap.data() || {};
-            const verified = data.role === 'admin'
-              && data.staffRole === 'master'
-              && Object.entries(permissions).every(([key, value]) => data.adminPermissions?.[key] === value);
-
-            if (!verified) {
-              throw new Error('MASTER_BOOTSTRAP_VERIFY_FAILED');
+            const signInResponse = await fetch(
+              `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${FIREBASE_API_KEY}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: customToken, returnSecureToken: true }),
+              },
+            );
+            const signInPayload = await signInResponse.json();
+            if (!signInResponse.ok || !signInPayload.idToken) {
+              throw new Error(`CUSTOM_TOKEN_EXCHANGE_FAILED: ${JSON.stringify(signInPayload)}`);
             }
+
+            const callableResponse = await fetch(FUNCTION_URL, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${signInPayload.idToken}`,
+              },
+              body: JSON.stringify({ data: {} }),
+            });
+            const callablePayload = await callableResponse.json();
+            const result = callablePayload.result || callablePayload.data;
+            if (!callableResponse.ok || !result?.ok || result.staffRole !== 'master') {
+              throw new Error(`MASTER_FUNCTION_FAILED: ${JSON.stringify(callablePayload)}`);
+            }
+
             console.log(`MASTER_BOOTSTRAP_SUCCESS uid=${authUser.uid}`);
           })().catch((error) => {
             console.error(error);

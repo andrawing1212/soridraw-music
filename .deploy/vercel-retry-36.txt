@@ -1,3 +1,4 @@
 Retry Vercel test deployment for SORIDRAW 36 after build-rate-limit.
 Source baseline: 5969407c02a54de0f357470dc66051680de5790c
 Official Firebase Hosting: do not deploy.
+Retry after cooldown: 2026-07-25T14:09:00Z

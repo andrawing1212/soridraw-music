@@ -1,4 +1,4 @@
-Deploy getAdminPresence schemaVersion 2 after IAM propagation delay.
-Requested: 2026-07-25T00:09:59Z
-Target project: soridraw-app-866a5
-Attempt: 8
+Temporarily trigger the approved admin member G/E UI update.
+Baseline: user-defined 32nd state.
+Target: Vercel test app only.
+Requested: 2026-07-25T08:10:50Z

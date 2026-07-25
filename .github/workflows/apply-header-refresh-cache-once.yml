@@ -218,17 +218,38 @@ jobs:
               'use cached display name',
           )
 
-          for src in ['/flowmusic-icon.png', '/elevenlabs-icon.png', '/suno-icon.webp']:
-              old = f'''src=\"{src}\"\n                  alt='''
-              if old not in text:
-                  raise SystemExit(f'static icon source not found: {src}')
-          replace_count('loading="lazy"', 'loading="eager"\n                  fetchPriority="high"', 3, 'eager-load site icons')
-
           replace_count(
-              'referrerPolicy="no-referrer"\n                  />',
-              'referrerPolicy="no-referrer"\n                  loading="eager"\n                  fetchPriority="high"\n                  />',
-              2,
-              'eager-load profile images',
+              'className="h-full w-full object-cover"\n                  loading="lazy"',
+              'className="h-full w-full object-cover"\n                  loading="eager"\n                  fetchPriority="high"',
+              3,
+              'eager-load three site icons',
+          )
+
+          replace_once(
+              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  alt="Profile"
+                  className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
+                  referrerPolicy="no-referrer"""",
+              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  alt="Profile"
+                  className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
+                  referrerPolicy="no-referrer"
+                  loading="eager"
+                  fetchPriority="high"""",
+              'eager-load desktop profile image',
+          )
+          replace_once(
+              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                    alt="Profile"
+                    className="h-8 w-8 rounded-xl object-cover"
+                    referrerPolicy="no-referrer"""",
+              """src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                    alt="Profile"
+                    className="h-8 w-8 rounded-xl object-cover"
+                    referrerPolicy="no-referrer"
+                    loading="eager"
+                    fetchPriority="high"""",
+              'eager-load mobile profile image',
           )
 
           replace_once(
@@ -256,16 +277,16 @@ jobs:
               'sync cached identity from auth listener',
           )
 
-          replace_count(
-              "      await presenceControllerRef.current?.stop();\n      presenceControllerRef.current = null;\n      await signOut(auth);",
-              """      await presenceControllerRef.current?.stop();
+          explicit_logout_old = "      await presenceControllerRef.current?.stop();\n      presenceControllerRef.current = null;\n      await signOut(auth);"
+          explicit_logout_new = """      await presenceControllerRef.current?.stop();
               presenceControllerRef.current = null;
               setCachedHeaderIdentity(null);
               clearCachedHeaderIdentity();
-              await signOut(auth);""",
-              3,
-              'clear cached identity on explicit logout',
-          )
+              await signOut(auth);"""
+          explicit_count = text.count(explicit_logout_old)
+          if explicit_count < 2:
+              raise SystemExit(f'clear cached identity on explicit logout: expected at least 2 matches, found {explicit_count}')
+          text = text.replace(explicit_logout_old, explicit_logout_new)
 
           replace_once(
               "      await presenceControllerRef.current?.stop().catch(() => {});\n      presenceControllerRef.current = null;\n      await signOut(auth).catch(() => {});",
@@ -296,8 +317,6 @@ jobs:
               'pass cached identity into Navigation',
           )
 
-          # Keep the cached profile visually stable while auth is resolving without
-          # allowing protected actions to run before Firebase confirms the session.
           replace_once(
               '                  aria-label="계정 메뉴"\n                  title="계정 메뉴"',
               '                  aria-label="계정 메뉴"\n                  title="계정 메뉴"\n                  aria-busy={isHeaderAuthPending}',

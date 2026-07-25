@@ -247,6 +247,42 @@ const getProviderKind = (user: AppUserInfo): ProviderKind => {
   return 'unknown';
 };
 
+const AuthAccountMark = ({ user }: { user: AppUserInfo }) => {
+  const provider = getProviderKind(user);
+  if (provider === 'deleted') {
+    return <UserRoundX className="w-5 h-5 text-red-300" />;
+  }
+
+  if (provider === 'google') {
+    return <span className="text-[15px] font-black tracking-[-0.04em] text-sky-300" title="Google 인증 회원" aria-label="Google 인증 회원">G</span>;
+  }
+
+  if (provider === 'email') {
+    const isVerified = user.emailVerified === true;
+    return (
+      <span
+        className={cn('text-[15px] font-black tracking-[-0.04em]', isVerified ? 'text-violet-300' : 'text-white')}
+        title={isVerified ? '이메일 인증 회원' : '이메일 미인증 회원'}
+        aria-label={isVerified ? '이메일 인증 회원' : '이메일 미인증 회원'}
+      >
+        E
+      </span>
+    );
+  }
+
+  if (provider === 'linked') {
+    const isEmailVerified = user.emailVerified === true;
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[13px] font-black tracking-[-0.06em]" title="Google·이메일 연결 회원" aria-label="Google·이메일 연결 회원">
+        <span className="text-sky-300">G</span>
+        <span className={isEmailVerified ? 'text-violet-300' : 'text-white'}>E</span>
+      </span>
+    );
+  }
+
+  return <span className="text-[15px] font-black text-white" title="가입 방식 확인 필요" aria-label="가입 방식 확인 필요">?</span>;
+};
+
 const getRecentActivityAt = (
   user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
   livePresence?: LivePresenceSummary
@@ -1214,7 +1250,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
             >
               <div className="flex items-center gap-3 md:gap-4">
                 <div className={cn('relative w-11 h-11 md:w-12 md:h-12 rounded-2xl border flex items-center justify-center shrink-0', user.authDeleted ? 'border-red-400/20 bg-red-400/10' : 'border-white/10 bg-black/20')}>
-                  {user.authDeleted ? <UserRoundX className="w-5 h-5 text-red-300" /> : <User className="w-5 h-5 text-zinc-300" />}
+                  <AuthAccountMark user={user} />
                   <span className={cn('absolute -right-0.5 -bottom-0.5 w-3 h-3 rounded-full border-2 border-[#181818]', presenceDot)} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -1226,7 +1262,6 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                     <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" />{user.email || user.authDeletedEmail || '이메일 없음'}</span>
                     <span className={cn('inline-flex items-center gap-1 font-bold', badge.className)}><span className={cn('w-1.5 h-1.5 rounded-full', badge.dot)} />{badge.label}</span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={user} /><VerificationBadge user={user} /></div>
                   <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 md:hidden">
                     <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-amber-300">{live.deviceCount}개 기기</p>}</div>
                     <span className={cn('inline-flex items-center gap-1 text-xs font-black', recentTimeClassName)}><Clock className="w-3.5 h-3.5" />{formatLastSeen(recentTime, presenceClock)}</span>

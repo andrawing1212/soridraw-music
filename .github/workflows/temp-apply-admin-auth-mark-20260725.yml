@@ -1,8 +1,11 @@
 name: Apply admin auth mark UI 20260725
 
 on:
-  issues:
-    types: [opened]
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/apply-admin-auth-mark-trigger.txt
 
 concurrency:
   group: apply-admin-auth-mark-ui-20260725
@@ -10,11 +13,9 @@ concurrency:
 
 permissions:
   contents: write
-  issues: write
 
 jobs:
   apply:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'APPLY ADMIN AUTH MARK UI 20260725'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -32,12 +33,9 @@ jobs:
           cache: npm
 
       - name: Apply simple G E auth marks
-        id: apply
-        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
-          python - <<'PY' 2>&1 | tee admin-auth-mark.log
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('src/pages/AdminUserManagementPage.tsx')
@@ -49,7 +47,6 @@ jobs:
               if count != 1:
                   raise RuntimeError(f'{label}: expected 1 match, found {count}')
               text = text.replace(old, new, 1)
-              print(f'OK {label}')
 
           provider_anchor = """const getProviderKind = (user: AppUserInfo): ProviderKind => {
   if (user.authDeleted || user.authDeletedAt) return 'deleted';
@@ -129,31 +126,18 @@ const getRecentActivityAt"""
           )
 
           path.write_text(text, encoding='utf-8')
-          print('Admin member auth mark UI transformation complete')
           PY
 
       - name: Install dependencies
-        id: install
-        if: steps.apply.outcome == 'success'
-        continue-on-error: true
         run: npm ci --no-audit --no-fund
 
       - name: Type check
-        id: lint
-        if: steps.install.outcome == 'success'
-        continue-on-error: true
         run: npm run lint
 
       - name: Build web app
-        id: build
-        if: steps.lint.outcome == 'success'
-        continue-on-error: true
         run: npm run build
 
       - name: Commit and push UI
-        id: commit
-        if: steps.build.outcome == 'success'
-        continue-on-error: true
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -161,30 +145,3 @@ const getRecentActivityAt"""
           git add src/pages/AdminUserManagementPage.tsx
           git commit -m "style: simplify member auth status to G E marks"
           git push origin HEAD:main
-
-      - name: Report result
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
-          APPLY: ${{ steps.apply.outcome }}
-          INSTALL: ${{ steps.install.outcome }}
-          LINT: ${{ steps.lint.outcome }}
-          BUILD: ${{ steps.build.outcome }}
-          COMMIT: ${{ steps.commit.outcome }}
-        shell: bash
-        run: |
-          {
-            echo "ADMIN_AUTH_MARK_RESULT apply=${APPLY} install=${INSTALL} lint=${LINT} build=${BUILD} commit=${COMMIT}"
-            if [[ "$COMMIT" == "success" ]]; then
-              echo "✅ UI committed: $(git rev-parse HEAD)"
-            else
-              echo "❌ UI did not complete"
-              echo
-              echo '```text'
-              tail -n 120 admin-auth-mark.log 2>/dev/null || true
-              echo '```'
-            fi
-          } > result.md
-          gh issue comment "$ISSUE_URL" --body-file result.md
-          if [[ "$COMMIT" != "success" ]]; then exit 1; fi

@@ -1,0 +1,509 @@
+name: Apply master admin list UI fix 36
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .deploy/apply-master-admin-list-ui-fix-36-trigger.txt
+
+concurrency:
+  group: apply-master-admin-list-ui-fix-36
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Replace master permissions page
+        shell: bash
+        run: |
+          cat > src/pages/MasterPermissionsPage.tsx <<'TSX'
+          import React, { useCallback, useEffect, useMemo, useState } from 'react';
+          import { collection, getDocs, query, where } from 'firebase/firestore';
+          import { httpsCallable } from 'firebase/functions';
+          import { CheckCircle2, Crown, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
+          import AdminPageLayout from '../components/AdminPageLayout';
+          import { ADMIN_PERMISSION_DEFINITIONS, FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
+          import { cn } from '../lib/utils';
+          import { auth, db, functions } from '../firebase';
+          import type { AdminPermissions, AppUserInfo, StaffRole } from '../types';
+          import { getTimestampMs } from '../App';
+
+          const parseUser = (uid: string, data: Record<string, any>): AppUserInfo => ({
+            uid,
+            email: data.email || null,
+            displayName: data.displayName || null,
+            nickname: data.nickname || null,
+            role: data.role || 'free',
+            staffRole: normalizeStaffRole(data),
+            adminPermissions: normalizeAdminPermissions(data),
+            staffBaseRole: data.staffBaseRole || null,
+            accountStatus: data.accountStatus || 'active',
+            paymentStatus: data.paymentStatus || 'none',
+            createdAt: getTimestampMs(data.createdAt || Date.now()),
+            lastLoginAt: data.lastLoginAt ? getTimestampMs(data.lastLoginAt) : undefined,
+            songGeneratedCount: Number(data.songGeneratedCount || 0),
+            favoriteCount: Number(data.favoriteCount || 0),
+            adminMemo: data.adminMemo || '',
+          });
+
+          const samePermissions = (a: AdminPermissions, b: AdminPermissions) =>
+            ADMIN_PERMISSION_DEFINITIONS.every(({ key }) => a[key] === b[key]);
+
+          export default function MasterPermissionsPage() {
+            const [admins, setAdmins] = useState<AppUserInfo[]>([]);
+            const [drafts, setDrafts] = useState<Record<string, AdminPermissions>>({});
+            const [searchTerm, setSearchTerm] = useState('');
+            const [isLoading, setIsLoading] = useState(true);
+            const [savingUid, setSavingUid] = useState<string | null>(null);
+            const [message, setMessage] = useState<{ success: boolean; text: string } | null>(null);
+
+            const loadAdmins = useCallback(async () => {
+              setIsLoading(true);
+              setMessage(null);
+              try {
+                const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'admin')));
+                const nextAdmins = snapshot.docs
+                  .map((item) => parseUser(item.id, item.data()))
+                  .filter((user) => normalizeStaffRole(user) !== null)
+                  .sort((a, b) => {
+                    const order = (role: StaffRole) => role === 'master' ? 0 : 1;
+                    return order(a.staffRole || null) - order(b.staffRole || null)
+                      || (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '', 'ko');
+                  });
+
+                setAdmins(nextAdmins);
+                setDrafts(Object.fromEntries(nextAdmins.map((user) => [
+                  user.uid,
+                  user.staffRole === 'master'
+                    ? { ...FULL_ADMIN_PERMISSIONS }
+                    : { ...normalizeAdminPermissions(user) },
+                ])));
+              } catch (error: any) {
+                console.error('Failed to load admin permissions:', error);
+                setMessage({ success: false, text: error?.message || '관리자 권한 목록을 불러오지 못했습니다.' });
+              } finally {
+                setIsLoading(false);
+              }
+            }, []);
+
+            useEffect(() => { void loadAdmins(); }, [loadAdmins]);
+
+            const filteredAdmins = useMemo(() => {
+              const keyword = searchTerm.trim().toLowerCase();
+              if (!keyword) return admins;
+              return admins.filter((user) => [user.displayName, user.nickname, user.email, user.uid]
+                .some((value) => String(value || '').toLowerCase().includes(keyword)));
+            }, [admins, searchTerm]);
+
+            const updatePermission = (uid: string, key: keyof AdminPermissions) => {
+              setDrafts((current) => ({
+                ...current,
+                [uid]: {
+                  ...(current[uid] || normalizeAdminPermissions(admins.find((user) => user.uid === uid))),
+                  [key]: !(current[uid] || normalizeAdminPermissions(admins.find((user) => user.uid === uid)))[key],
+                },
+              }));
+              setMessage(null);
+            };
+
+            const saveAdmin = async (user: AppUserInfo) => {
+              if (user.staffRole === 'master') return;
+              const permissions = drafts[user.uid] || normalizeAdminPermissions(user);
+              setSavingUid(user.uid);
+              setMessage(null);
+              try {
+                const callable = httpsCallable(functions, 'masterSetAdminAccess');
+                await callable({ targetUid: user.uid, staffRole: 'admin', adminPermissions: permissions });
+                setMessage({ success: true, text: `${user.displayName || user.email || '관리자'} 권한을 저장했습니다.` });
+                await loadAdmins();
+              } catch (error: any) {
+                console.error('masterSetAdminAccess failed:', error);
+                setMessage({ success: false, text: error?.message || '권한 저장에 실패했습니다.' });
+              } finally {
+                setSavingUid(null);
+              }
+            };
+
+            const currentUid = auth.currentUser?.uid || '';
+
+            return (
+              <AdminPageLayout
+                title="마스터 권한"
+                description="현재 관리자만 표시하며 페이지별 접근 권한을 설정합니다."
+                actions={(
+                  <button
+                    type="button"
+                    onClick={() => void loadAdmins()}
+                    disabled={isLoading}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-white/[0.06] px-3.5 text-xs font-black text-zinc-200 hover:bg-white/[0.10] disabled:opacity-40"
+                  >
+                    <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+                    새로고침
+                  </button>
+                )}
+              >
+                <div className="space-y-4">
+                  <div className="rounded-3xl bg-white/[0.035] p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/[0.07] text-zinc-200">
+                        <ShieldCheck className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-black text-zinc-100">관리자 전용 목록</h2>
+                        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                          일반 회원은 이 페이지에서 불러오지 않습니다. 관리자 지정과 해제는 회원 관리 상세 화면에서 마스터만 수행합니다.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
+                    <input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="관리자 이름, 이메일 또는 UID 검색"
+                      className="h-12 w-full rounded-2xl bg-white/[0.045] pl-11 pr-4 text-sm text-white outline-none transition focus:bg-white/[0.075]"
+                    />
+                  </div>
+
+                  {message && (
+                    <div className={cn(
+                      'rounded-2xl px-4 py-3 text-xs font-bold',
+                      message.success ? 'bg-white/[0.065] text-zinc-200' : 'bg-red-400/10 text-red-300'
+                    )}>
+                      {message.text}
+                    </div>
+                  )}
+
+                  {isLoading ? (
+                    <div className="flex min-h-52 items-center justify-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {filteredAdmins.map((user) => {
+                        const isMaster = user.staffRole === 'master';
+                        const draft = drafts[user.uid] || normalizeAdminPermissions(user);
+                        const savedPermissions = isMaster ? FULL_ADMIN_PERMISSIONS : normalizeAdminPermissions(user);
+                        const changed = !isMaster && !samePermissions(draft, savedPermissions);
+
+                        return (
+                          <div
+                            key={user.uid}
+                            className={cn('rounded-3xl bg-white/[0.035] p-4 md:p-5', isMaster && 'bg-white/[0.065]')}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="truncate text-sm font-black text-zinc-100">
+                                    {user.displayName || user.nickname || '이름 없음'}
+                                  </h3>
+                                  <span className="rounded-full bg-white/[0.08] px-2 py-1 text-[10px] font-black text-zinc-300">
+                                    {isMaster ? 'MASTER' : 'ADMIN'}
+                                  </span>
+                                  {user.uid === currentUid && <span className="text-[10px] font-bold text-zinc-500">내 계정</span>}
+                                </div>
+                                <p className="mt-1 truncate text-xs text-zinc-500">{user.email || '이메일 없음'}</p>
+                              </div>
+                              {isMaster && <Crown className="h-4 w-4 text-zinc-300" />}
+                            </div>
+
+                            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                              {ADMIN_PERMISSION_DEFINITIONS.map((permission) => {
+                                const enabled = isMaster || draft[permission.key];
+                                return (
+                                  <button
+                                    key={permission.key}
+                                    type="button"
+                                    disabled={isMaster || savingUid === user.uid}
+                                    onClick={() => updatePermission(user.uid, permission.key)}
+                                    className={cn(
+                                      'flex items-start gap-3 rounded-2xl p-3 text-left transition disabled:cursor-default',
+                                      enabled ? 'bg-white/[0.10]' : 'bg-black/20 hover:bg-white/[0.055]'
+                                    )}
+                                  >
+                                    <span className={cn(
+                                      'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md',
+                                      enabled ? 'bg-white/[0.14] text-zinc-100' : 'bg-white/[0.035] text-zinc-700'
+                                    )}>
+                                      <CheckCircle2 className="h-3.5 w-3.5" />
+                                    </span>
+                                    <span>
+                                      <span className="block text-xs font-black text-zinc-100">{permission.label}</span>
+                                      <span className="mt-1 block text-[10px] leading-relaxed text-zinc-500">{permission.description}</span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {!isMaster && (
+                              <div className="mt-4 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => void saveAdmin(user)}
+                                  disabled={!changed || savingUid === user.uid}
+                                  className="inline-flex min-w-[126px] items-center justify-center gap-2 rounded-2xl bg-zinc-100 px-4 py-2.5 text-xs font-black text-zinc-950 hover:bg-white disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+                                >
+                                  {savingUid === user.uid ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                                  권한 저장
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {!filteredAdmins.length && (
+                        <div className="rounded-3xl bg-white/[0.025] py-16 text-center">
+                          <p className="text-sm font-black text-zinc-400">표시할 관리자가 없습니다.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </AdminPageLayout>
+            );
+          }
+          TSX
+
+      - name: Update member admin assignment and neutral UI
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/pages/AdminUserManagementPage.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label}: expected 1 match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "import { normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';",
+              "import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';",
+              'permission import',
+          )
+
+          old_execute = """  const executeUpdate = async () => {
+    if (!selectedUser || selectedUser.authDeleted) return;
+    setIsSaving(true);
+    setSaveStatus('idle');
+    closeConfirm();
+    try {
+      await updateDoc(doc(db, 'users', selectedUser.uid), {
+        role: editRole,
+        accountStatus: editStatus,
+        paymentStatus: editPaymentStatus,
+        planName: editPlanName,
+        adminMemo: editMemo,
+      });
+      setSaveStatus('success');
+      await refreshAfterAction(selectedUser.uid);
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };"""
+
+          new_execute = """  const executeUpdate = async () => {
+    if (!selectedUser || selectedUser.authDeleted) return;
+    setIsSaving(true);
+    setSaveStatus('idle');
+    closeConfirm();
+    try {
+      const selectedStaffRole = normalizeStaffRole(selectedUser);
+      const promotedToAdmin = currentAdminIsMaster && selectedStaffRole !== 'master' && editRole === 'admin' && selectedStaffRole !== 'admin';
+      const demotedFromAdmin = currentAdminIsMaster && selectedStaffRole === 'admin' && editRole !== 'admin';
+
+      if (promotedToAdmin || demotedFromAdmin) {
+        const callable = httpsCallable(functions, 'masterSetAdminAccess');
+        await callable({
+          targetUid: selectedUser.uid,
+          staffRole: promotedToAdmin ? 'admin' : null,
+          adminPermissions: promotedToAdmin ? { ...FULL_ADMIN_PERMISSIONS } : {},
+        });
+      }
+
+      const updates: Record<string, unknown> = {
+        accountStatus: editStatus,
+        paymentStatus: editPaymentStatus,
+        planName: editPlanName,
+        adminMemo: editMemo,
+      };
+      if (!promotedToAdmin) updates.role = editRole;
+
+      await updateDoc(doc(db, 'users', selectedUser.uid), updates);
+      setSaveStatus('success');
+      await refreshAfterAction(selectedUser.uid);
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
+    }
+  };"""
+          replace_once(old_execute, new_execute, 'master assignment update flow')
+
+          replace_once(
+              """    if (selectedStaffRole && (editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus)) {
+      alert('마스터·관리자 권한과 계정 상태는 마스터 권한 페이지에서 관리해주세요.');
+      return;
+    }""",
+              """    if (selectedStaffRole === 'master' && (editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus)) {
+      alert('마스터 계정의 등급과 계정 상태는 변경할 수 없습니다.');
+      return;
+    }""",
+              'allow master to manage admin assignment in member detail',
+          )
+
+          old_settings = """                <section className={cn('rounded-3xl border border-white/10 bg-white/[0.03] p-5', (selectedUser.authDeleted || selectedUser.authDeletedAt) && 'opacity-60 pointer-events-none')}>
+                  <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Save className="w-4 h-4 text-brand-orange" />회원 설정</h3>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">회원 등급</label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(Object.keys(ROLE_LABELS) as UserRole[]).map((role) => <button key={role} onClick={() => setEditRole(role)} className={cn('rounded-xl border py-2 text-[10px] font-black transition', editRole === role ? 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/[0.05]')}>{ROLE_LABELS[role]}</button>)}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">계정 상태</label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(Object.keys(STATUS_LABELS) as AccountStatus[]).map((status) => <button key={status} onClick={() => setEditStatus(status)} className={cn('rounded-xl border py-2 text-[10px] font-black transition', editStatus === status ? status === 'banned' ? 'border-red-400 bg-red-400/15 text-red-300' : 'border-brand-orange bg-brand-orange/15 text-brand-orange' : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/[0.05]')}>{STATUS_LABELS[status]}</button>)}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">플랜명</label>
+                      <input value={editPlanName} onChange={(event) => setEditPlanName(event.target.value)} placeholder="예: Pro Plan" className="h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-xs text-white outline-none focus:border-brand-orange/60" />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">결제 상태</label>
+                      <select value={editPaymentStatus} onChange={(event) => setEditPaymentStatus(event.target.value as PaymentStatus)} className="h-11 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-xs font-bold text-white outline-none">
+                        {Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <label className="mb-2 flex items-center gap-1.5 text-[10px] font-black text-zinc-500"><FileText className="w-3 h-3" />관리자 메모</label>
+                    <textarea value={editMemo} onChange={(event) => setEditMemo(event.target.value)} placeholder="회원 관련 메모를 남겨주세요." className="h-24 w-full resize-none rounded-2xl border border-white/10 bg-black/20 p-4 text-xs text-white outline-none focus:border-brand-orange/60" />
+                  </div>
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    {saveStatus === 'success' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-300"><CheckCircle2 className="w-3.5 h-3.5" />저장 완료</span>}
+                    {saveStatus === 'error' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-red-300"><AlertCircle className="w-3.5 h-3.5" />저장 실패</span>}
+                    <button onClick={handleUpdateUser} disabled={isSaving} className="inline-flex items-center gap-2 rounded-2xl bg-brand-orange px-5 py-2.5 text-xs font-black text-white shadow-[0_10px_24px_rgba(255,130,0,0.2)] hover:brightness-110 disabled:opacity-50">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}설정 저장</button>
+                  </div>
+                </section>"""
+
+          new_settings = """                <section className={cn('rounded-3xl bg-white/[0.03] p-5', (selectedUser.authDeleted || selectedUser.authDeletedAt) && 'opacity-60 pointer-events-none')}>
+                  <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-zinc-400"><Save className="w-4 h-4 text-zinc-500" />회원 설정</h3>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">회원 등급</label>
+                      <div className={cn('grid gap-1.5', currentAdminIsMaster ? 'grid-cols-4' : 'grid-cols-3')}>
+                        {(Object.keys(ROLE_LABELS) as UserRole[])
+                          .filter((role) => currentAdminIsMaster || role !== 'admin')
+                          .map((role) => (
+                            <button
+                              key={role}
+                              onClick={() => setEditRole(role)}
+                              disabled={normalizeStaffRole(selectedUser) === 'master'}
+                              className={cn(
+                                'rounded-xl py-2 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-45',
+                                editRole === role
+                                  ? 'bg-white/[0.13] text-white ring-1 ring-white/25'
+                                  : 'bg-black/20 text-zinc-500 hover:bg-white/[0.055] hover:text-zinc-300'
+                              )}
+                            >
+                              {ROLE_LABELS[role]}
+                            </button>
+                          ))}
+                      </div>
+                      {!currentAdminIsMaster && <p className="mt-2 text-[10px] font-bold text-zinc-600">Admin 지정은 마스터만 가능합니다.</p>}
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">계정 상태</label>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(Object.keys(STATUS_LABELS) as AccountStatus[]).map((status) => (
+                          <button
+                            key={status}
+                            onClick={() => setEditStatus(status)}
+                            disabled={normalizeStaffRole(selectedUser) === 'master'}
+                            className={cn(
+                              'rounded-xl py-2 text-[10px] font-black transition disabled:cursor-not-allowed disabled:opacity-45',
+                              editStatus === status
+                                ? 'bg-white/[0.13] text-white ring-1 ring-white/25'
+                                : 'bg-black/20 text-zinc-500 hover:bg-white/[0.055] hover:text-zinc-300'
+                            )}
+                          >
+                            {STATUS_LABELS[status]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">플랜명</label>
+                      <input value={editPlanName} onChange={(event) => setEditPlanName(event.target.value)} placeholder="예: Pro Plan" className="h-11 w-full rounded-2xl bg-black/20 px-4 text-xs text-white outline-none transition focus:bg-white/[0.06]" />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-[10px] font-black text-zinc-500">결제 상태</label>
+                      <select value={editPaymentStatus} onChange={(event) => setEditPaymentStatus(event.target.value as PaymentStatus)} className="h-11 w-full rounded-2xl bg-black/20 px-4 text-xs font-bold text-white outline-none">
+                        {Object.entries(PAYMENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <label className="mb-2 flex items-center gap-1.5 text-[10px] font-black text-zinc-500"><FileText className="w-3 h-3" />관리자 메모</label>
+                    <textarea value={editMemo} onChange={(event) => setEditMemo(event.target.value)} placeholder="회원 관련 메모를 남겨주세요." className="h-24 w-full resize-none rounded-2xl bg-black/20 p-4 text-xs text-white outline-none transition focus:bg-white/[0.06]" />
+                  </div>
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    {saveStatus === 'success' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-zinc-300"><CheckCircle2 className="w-3.5 h-3.5" />저장 완료</span>}
+                    {saveStatus === 'error' && <span className="mr-auto inline-flex items-center gap-1.5 text-[11px] font-bold text-red-300"><AlertCircle className="w-3.5 h-3.5" />저장 실패</span>}
+                    <button onClick={handleUpdateUser} disabled={isSaving} className="inline-flex items-center gap-2 rounded-2xl bg-zinc-100 px-5 py-2.5 text-xs font-black text-zinc-950 hover:bg-white disabled:opacity-40">{isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}설정 저장</button>
+                  </div>
+                </section>"""
+          replace_once(old_settings, new_settings, 'neutral member setting UI')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install and verify web app
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run build
+
+      - name: Commit source and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/MasterPermissionsPage.tsx src/pages/AdminUserManagementPage.tsx
+          git rm .github/workflows/apply-master-admin-list-ui-fix-36.yml
+          git rm .deploy/apply-master-admin-list-ui-fix-36-trigger.txt
+          git commit -m "fix: show only admins in master permissions"
+          git push origin HEAD:main

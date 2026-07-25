@@ -1,3 +1,0 @@
-Retry Vercel test deployment for SORIDRAW 35 after the prior build-rate-limit response.
-Source baseline: b11ef1198cf52fd3341b16adef9f29b56ecb728f
-Official Firebase Hosting: do not deploy.

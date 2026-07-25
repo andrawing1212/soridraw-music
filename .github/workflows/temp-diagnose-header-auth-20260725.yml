@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   diagnose:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641B'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641C'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,13 +22,11 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           lines = Path('src/App.tsx').read_text(encoding='utf-8').splitlines()
-          ranges = [(3080,3445),(5250,5450),(5450,5630)]
-          out=[]
-          for start,end in ranges:
-              out.append(f'=== lines {start}-{end} ===')
+          for idx,(start,end) in enumerate([(3350,3445),(5250,5630)],1):
+              out=[f'=== lines {start}-{end} ===']
               for n in range(start,min(end,len(lines))+1):
                   out.append(f'{n}: {lines[n-1]}')
-          Path('header-diagnostic.txt').write_text('\n'.join(out),encoding='utf-8')
+              Path(f'header-diagnostic-{idx}.txt').write_text('\n'.join(out),encoding='utf-8')
           PY
       - name: Report excerpts
         env:
@@ -36,8 +34,7 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
         shell: bash
         run: |
-          split -b 55000 -d header-diagnostic.txt chunk-
-          for f in chunk-*; do
+          for f in header-diagnostic-*.txt; do
             {
               echo '```text'
               cat "$f"

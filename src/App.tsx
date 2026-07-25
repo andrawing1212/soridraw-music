@@ -547,6 +547,71 @@ import { signInWithPopup, getRedirectResult, signOut, onAuthStateChanged, setPer
 type AuthMode = 'login' | 'signup' | 'reset';
 type EmailVerificationGate = 'idle' | 'checking' | 'required';
 
+type CachedHeaderIdentity = {
+  uid: string;
+  displayName: string;
+  photoURL: string;
+};
+
+const HEADER_IDENTITY_CACHE_KEY = 'soridraw_header_identity_v1';
+
+const getHeaderIdentityStorage = (): Storage | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem('rememberLogin') === 'true'
+      ? window.localStorage
+      : window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readCachedHeaderIdentity = (): CachedHeaderIdentity | null => {
+  const storage = getHeaderIdentityStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(HEADER_IDENTITY_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const uid = String(parsed?.uid || '').trim();
+    if (!uid) return null;
+    return {
+      uid,
+      displayName: String(parsed?.displayName || 'My'),
+      photoURL: String(parsed?.photoURL || ''),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getHeaderIdentityFromUser = (
+  authUser: Pick<User, 'uid' | 'displayName' | 'photoURL'>,
+): CachedHeaderIdentity => ({
+  uid: authUser.uid,
+  displayName: authUser.displayName || 'My',
+  photoURL: authUser.photoURL || '',
+});
+
+const writeCachedHeaderIdentity = (identity: CachedHeaderIdentity) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const storage = getHeaderIdentityStorage();
+    if (!storage) return;
+    storage.setItem(HEADER_IDENTITY_CACHE_KEY, JSON.stringify(identity));
+    const otherStorage = storage === window.localStorage
+      ? window.sessionStorage
+      : window.localStorage;
+    otherStorage.removeItem(HEADER_IDENTITY_CACHE_KEY);
+  } catch {}
+};
+
+const clearCachedHeaderIdentity = () => {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}
+  try { window.sessionStorage.removeItem(HEADER_IDENTITY_CACHE_KEY); } catch {}
+};
+
 const getEmailVerificationCycleKey = (authUser: User, userData?: Record<string, any> | null) => {
   const resetAt = Number(userData?.emailVerificationResetAtMs || 0);
   const isResetCycle =
@@ -3104,7 +3169,33 @@ export default function AppWrapper() {
   );
 }
 
-function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser, menuVisibility, menuAdminOnly, sunoLibrarySignal, sunoLibrarySignalDotClass, clearSunoLibrarySignal }: { user: User | null; handleLogin: () => void; isLoggingIn: boolean; handleLogout: () => void; isAdminUser: boolean; menuVisibility: NavigationMenuVisibility; menuAdminOnly: NavigationMenuAdminOnly; sunoLibrarySignal: 'generating' | 'completed' | null; sunoLibrarySignalDotClass: string; clearSunoLibrarySignal: () => void }) {
+function Navigation({
+  user,
+  cachedHeaderIdentity,
+  isAuthReady,
+  handleLogin,
+  isLoggingIn,
+  handleLogout,
+  isAdminUser,
+  menuVisibility,
+  menuAdminOnly,
+  sunoLibrarySignal,
+  sunoLibrarySignalDotClass,
+  clearSunoLibrarySignal,
+}: {
+  user: User | null;
+  cachedHeaderIdentity: CachedHeaderIdentity | null;
+  isAuthReady: boolean;
+  handleLogin: () => void;
+  isLoggingIn: boolean;
+  handleLogout: () => void;
+  isAdminUser: boolean;
+  menuVisibility: NavigationMenuVisibility;
+  menuAdminOnly: NavigationMenuAdminOnly;
+  sunoLibrarySignal: 'generating' | 'completed' | null;
+  sunoLibrarySignalDotClass: string;
+  clearSunoLibrarySignal: () => void;
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const navigate = useNavigate();
@@ -3112,6 +3203,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
   const menuRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const headerIdentity = user
+    ? getHeaderIdentityFromUser(user)
+    : !isAuthReady
+      ? cachedHeaderIdentity
+      : null;
+  const isHeaderAuthPending = !isAuthReady && !user && Boolean(cachedHeaderIdentity);
   const isActivePath = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -3124,6 +3221,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
   };
 
   const goToTopNav = (path: string, options?: { clearSuno?: boolean }) => {
+    if (!isAuthReady) return;
     if (!user) {
       handleLogin();
       return;
@@ -3269,8 +3367,7 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
         </div>
 
         <div className="flex min-w-[176px] shrink-0 items-center justify-end gap-2.5">
-          {user && (
-            <>
+          <>
               <a
                 href="https://www.flowmusic.app/"
                 target="_blank"
@@ -3283,7 +3380,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   src="/flowmusic-icon.png"
                   alt="Flow Music"
                   className="h-full w-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </a>
               <a
@@ -3298,7 +3396,8 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   src="/elevenlabs-icon.png"
                   alt="ElevenLabs"
                   className="h-full w-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </a>
               <a
@@ -3313,12 +3412,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   src="/suno-icon.webp"
                   alt="Suno"
                   className="h-full w-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  fetchPriority="high"
                 />
               </a>
             </>
-          )}
-          {user ? (
+          {headerIdentity ? (
             <>
               <button
                 type="button"
@@ -3326,12 +3425,12 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                 className="flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
               >
                 <img
-                  src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                  src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
                   alt="Profile"
                   className="h-[30px] w-[30px] shrink-0 rounded-xl object-cover"
                   referrerPolicy="no-referrer"
                 />
-                <span className="hidden truncate sm:inline">{user.displayName || 'My'}</span>
+                <span className="hidden truncate sm:inline">{headerIdentity.displayName || 'My'}</span>
               </button>
             </>
           ) : (
@@ -3380,10 +3479,11 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <div className="relative shrink-0">
-              {user ? (
+              {headerIdentity ? (
                 <button
                   type="button"
                   onClick={() => {
+                    if (!user || !isAuthReady) return;
                     setIsProfileOpen((prev) => !prev);
                     setIsExpanded(false);
                   }}
@@ -3393,9 +3493,10 @@ function Navigation({ user, handleLogin, isLoggingIn, handleLogout, isAdminUser,
                   )}
                   aria-label="계정 메뉴"
                   title="계정 메뉴"
+                  aria-busy={isHeaderAuthPending}
                 >
                   <img
-                    src={user.photoURL || 'https://picsum.photos/seed/user/100/100'}
+                    src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
                     alt="Profile"
                     className="h-8 w-8 rounded-xl object-cover"
                     referrerPolicy="no-referrer"
@@ -3882,7 +3983,10 @@ function App() {
   }, [location.pathname]);
 
   // 1. ALL STATES & REFS FIRST
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => auth.currentUser);
+  const [cachedHeaderIdentity, setCachedHeaderIdentity] = useState<CachedHeaderIdentity | null>(
+    readCachedHeaderIdentity,
+  );
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -6943,6 +7047,14 @@ const toggleCycleVariantSelection = (
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        const nextHeaderIdentity = getHeaderIdentityFromUser(currentUser);
+        setCachedHeaderIdentity(nextHeaderIdentity);
+        writeCachedHeaderIdentity(nextHeaderIdentity);
+      } else {
+        setCachedHeaderIdentity(null);
+        clearCachedHeaderIdentity();
+      }
       setIsAuthReady(true);
       setIsUserRoleReady(!currentUser);
       setEmailVerificationCycleKey(null);
@@ -13182,7 +13294,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <Navigation user={user} handleLogin={handleLogin} isLoggingIn={isLoggingIn} handleLogout={handleLogout} isAdminUser={isAdminMenuUser} menuVisibility={menuVisibility} menuAdminOnly={menuAdminOnly} sunoLibrarySignal={sunoLibrarySignal} sunoLibrarySignalDotClass={sunoLibrarySignalDotClass} clearSunoLibrarySignal={clearSunoLibrarySignal} />
+      <Navigation
+        user={user}
+        cachedHeaderIdentity={cachedHeaderIdentity}
+        isAuthReady={isAuthReady}
+        handleLogin={handleLogin}
+        isLoggingIn={isLoggingIn}
+        handleLogout={handleLogout}
+        isAdminUser={isAdminMenuUser}
+        menuVisibility={menuVisibility}
+        menuAdminOnly={menuAdminOnly}
+        sunoLibrarySignal={sunoLibrarySignal}
+        sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
+        clearSunoLibrarySignal={clearSunoLibrarySignal}
+      />
 
       <Routes>
         <Route path="/" element={

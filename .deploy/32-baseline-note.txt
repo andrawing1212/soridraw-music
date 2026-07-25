@@ -1,3 +1,0 @@
-User-defined baseline: 32nd state.
-Includes the previously applied five code files and three deployment-support files.
-Subsequent changes are applied sequentially from this baseline.

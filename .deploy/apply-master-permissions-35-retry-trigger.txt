@@ -4,3 +4,4 @@ Deploy: selected Firebase Functions, Firestore Rules, then main for Vercel test 
 Official Firebase Hosting: do not deploy.
 Requested: 2026-07-25T11:42:39Z
 Corrected workflow rerun: 2026-07-25T12:05:00Z
+Permission-added rerun: 2026-07-25T12:23:46Z

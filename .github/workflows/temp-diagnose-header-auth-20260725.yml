@@ -10,39 +10,23 @@ permissions:
 
 jobs:
   diagnose:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'DIAGNOSE HEADER AUTH 20260725 0641B'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Collect relevant App.tsx excerpts
+      - name: Collect exact App.tsx ranges
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
-          p = Path('src/App.tsx')
-          lines = p.read_text(encoding='utf-8').splitlines()
-          patterns = [
-              r'photoURL', r'onAuthStateChanged', r'authReady', r'authLoading', r'isAuth',
-              r'UserIcon', r'user\s*\?', r'profile', r'avatar', r'Moon', r'moon',
-              r'setUser\(', r'useState<.*User', r'handleLogin', r'open.*Login',
-          ]
-          rx = re.compile('|'.join(patterns), re.I)
-          hits = []
-          seen = set()
-          for i, line in enumerate(lines, 1):
-              if rx.search(line):
-                  start=max(1,i-3); end=min(len(lines),i+5)
-                  key=(start,end)
-                  if key in seen: continue
-                  seen.add(key)
-                  hits.append((start,end))
+          lines = Path('src/App.tsx').read_text(encoding='utf-8').splitlines()
+          ranges = [(3080,3445),(5250,5450),(5450,5630)]
           out=[]
-          for start,end in hits[:80]:
-              out.append(f'--- lines {start}-{end} ---')
-              for n in range(start,end+1):
+          for start,end in ranges:
+              out.append(f'=== lines {start}-{end} ===')
+              for n in range(start,min(end,len(lines))+1):
                   out.append(f'{n}: {lines[n-1]}')
           Path('header-diagnostic.txt').write_text('\n'.join(out),encoding='utf-8')
           PY
@@ -52,10 +36,13 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
         shell: bash
         run: |
-          {
-            echo '```text'
-            head -c 60000 header-diagnostic.txt
-            echo
-            echo '```'
-          } > body.md
-          gh issue comment "$ISSUE_URL" --body-file body.md
+          split -b 55000 -d header-diagnostic.txt chunk-
+          for f in chunk-*; do
+            {
+              echo '```text'
+              cat "$f"
+              echo
+              echo '```'
+            } > body.md
+            gh issue comment "$ISSUE_URL" --body-file body.md
+          done

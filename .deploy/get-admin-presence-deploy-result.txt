@@ -1,9 +1,9 @@
 status=failure
-run_id=30135116591
-commit=5e4095b358e25c1bc29b45e53bb74189ec29c142
+run_id=30135232377
+commit=8eda0bff4d7332061df9dbbe896e19aa37065e4d
 target_project=soridraw-app-866a5
 function=getAdminPresence
-finished_at=2026-07-24T23:58:15Z
+finished_at=2026-07-25T00:01:04Z
 
 --- deploy log tail ---
 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
@@ -31,4 +31,12 @@ Generated src/securedIndex.ts with Music API App Check monitoring.
 [36m[1mi  functions:[22m[39m ensuring required API [1mcloudbuild.googleapis.com[22m is enabled...
 [36m[1mi  artifactregistry:[22m[39m ensuring required API [1martifactregistry.googleapis.com[22m is enabled...
 
-[1m[31mError:[39m[22m Request to https://serviceusage.googleapis.com/v1/projects/soridraw-app-866a5/services/artifactregistry.googleapis.com had HTTP Error: 403, Caller does not have required permission to use project soridraw-app-866a5. Grant the caller the roles/serviceusage.serviceUsageConsumer role, or a custom role with the serviceusage.services.use permission, by visiting https://console.developers.google.com/iam-admin/iam?project=soridraw-app-866a5 and then retry. Propagation of the new permission may take a few minutes.
+[1m[31mError:[39m[22m Cloud Functions deployment requires the Cloud Build API to be enabled. The current credentials do not have permission to enable APIs for project [1msoridraw-app-866a5[22m.
+
+Please ask a project owner to visit the following URL to enable Cloud Build:
+
+https://console.cloud.google.com/apis/library/cloudbuild.googleapis.com?project=soridraw-app-866a5
+
+For additional information about this requirement, see Firebase FAQs:
+https://firebase.google.com/support/faq#functions-runtime
+

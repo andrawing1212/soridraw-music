@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
-import { getAuth, initializeAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -86,20 +86,13 @@ const initialAuthPersistence = readRememberLoginPreference()
   ? browserLocalPersistence
   : browserSessionPersistence;
 
-export const auth = (() => {
-  try {
-    return initializeAuth(app, { persistence: initialAuthPersistence });
-  } catch (error) {
-    // Vite hot reload can reuse an already initialized Auth instance.
-    // Keep the saved login preference aligned without forcing every browser
-    // into local persistence.
-    const existingAuth = getAuth(app);
-    void setPersistence(existingAuth, initialAuthPersistence).catch((persistenceError) => {
-      console.warn("[Firebase Auth] persistence setup failed:", persistenceError);
-    });
-    return existingAuth;
-  }
-})();
+// Use Firebase's standard Auth initializer so popup/redirect sign-in keeps the
+// default browser resolver on mobile. Login persistence still follows the
+// saved "remember login" preference instead of being forced to local storage.
+export const auth = getAuth(app);
+void setPersistence(auth, initialAuthPersistence).catch((error) => {
+  console.warn("[Firebase Auth] persistence setup failed:", error);
+});
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({

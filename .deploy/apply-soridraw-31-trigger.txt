@@ -1,0 +1,3 @@
+Apply SORIDRAW 31 login persistence and presence cleanup to main.
+Requested: 2026-07-25T00:53:10Z
+Target: Vercel test app

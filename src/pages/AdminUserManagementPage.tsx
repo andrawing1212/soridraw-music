@@ -1228,14 +1228,14 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={user} /><VerificationBadge user={user} /></div>
                   <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 md:hidden">
-                    <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-sky-300">{live.deviceCount}개 기기</p>}</div>
+                    <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-amber-300">{live.deviceCount}개 기기</p>}</div>
                     <span className={cn('inline-flex items-center gap-1 text-xs font-black', recentTimeClassName)}><Clock className="w-3.5 h-3.5" />{formatLastSeen(recentTime, presenceClock)}</span>
                   </div>
                 </div>
                 <div className="hidden md:flex w-44 flex-col items-end gap-1.5 shrink-0">
                   <PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />
                   <span className={cn('text-xs font-black', recentTimeClassName)}>{formatLastSeen(recentTime, presenceClock)}</span>
-                  {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{live.deviceCount}개 기기</span>}
+                  {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-amber-300">{live.deviceCount}개 기기</span>}
                 </div>
                 <ChevronRight className="w-5 h-5 text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-brand-orange" />
               </div>

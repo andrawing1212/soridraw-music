@@ -1,0 +1,50 @@
+name: Report master35 retry status
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .deploy/report-master35-retry-status-trigger.txt
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Collect workflow status and failed logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p .deploy
+          gh run list --workflow apply-master-permissions-35-retry.yml --limit 3 --json databaseId,status,conclusion,headSha,url,createdAt,updatedAt > /tmp/runs.json
+          RUN_ID=$(node -e "const x=require('/tmp/runs.json'); console.log(x[0]?.databaseId||'')")
+          {
+            echo '=== recent runs ==='
+            cat /tmp/runs.json
+            echo
+            echo '=== latest failed log ==='
+            if [ -n "$RUN_ID" ]; then
+              gh run view "$RUN_ID" --log-failed || true
+            else
+              echo 'No workflow run found.'
+            fi
+          } > .deploy/master35-retry-status.txt
+      - name: Commit report and remove reporter
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/master35-retry-status.txt
+          git rm .github/workflows/report-master35-retry-status.yml
+          git rm .deploy/report-master35-retry-status-trigger.txt
+          git commit -m "chore: report master35 retry workflow status"
+          git push origin HEAD:main

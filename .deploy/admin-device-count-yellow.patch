@@ -1,0 +1,10 @@
+diff --git a/src/pages/AdminUserManagementPage.tsx b/src/pages/AdminUserManagementPage.tsx
+index 9b741dc..f3d9731 100644
+--- a/src/pages/AdminUserManagementPage.tsx
++++ b/src/pages/AdminUserManagementPage.tsx
+@@ -1230,12 +1230,12 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
+-                    <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-sky-300">{live.deviceCount}개 기기</p>}</div>
++                    <div className="min-w-0"><PresenceBadge user={user} livePresence={live} displayMode={presenceDisplayMode} />{Boolean(live?.deviceCount) && <p className="mt-0.5 text-[9px] font-bold text-amber-300">{live.deviceCount}개 기기</p>}</div>
+@@ -1238,7 +1238,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
+-                  {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{live.deviceCount}개 기기</span>}
++                  {Boolean(live?.deviceCount) && <span className="text-[10px] font-bold text-amber-300">{live.deviceCount}개 기기</span>}

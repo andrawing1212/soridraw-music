@@ -262,7 +262,9 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
     const sharedActivityAt = safeNumber(safeStorageGet(activityKey));
     if (sharedActivityAt > lastActivityAt) lastActivityAt = sharedActivityAt;
 
-    if (now - lastActivityAt >= LOGOUT_AFTER_MS) {
+    const rememberLoginEnabled = safeStorageGet('rememberLogin') === 'true';
+
+    if (!rememberLoginEnabled && now - lastActivityAt >= LOGOUT_AFTER_MS) {
       if (!idleLogoutTriggered && acquireIdleLogoutLock()) {
         idleLogoutTriggered = true;
         void Promise.resolve(options.onIdleTimeout?.()).catch((error) => {
@@ -271,6 +273,11 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
         });
       }
       return;
+    }
+
+    if (rememberLoginEnabled) {
+      idleLogoutTriggered = false;
+      safeStorageRemove(logoutLockKey);
     }
 
     void writeSession(false).catch((error) => console.warn('[Presence] state sync failed:', error));

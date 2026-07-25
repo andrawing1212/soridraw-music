@@ -1,0 +1,38 @@
+name: Diagnose admin callables once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .deploy/diagnose-admin-callables-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Collect grep report
+        shell: bash
+        run: |
+          {
+            echo '=== functions admin guards ==='
+            grep -nE 'requireAdminCaller|role[^\n]*(admin)|assertManageableTarget|export const [A-Za-z0-9_]+' functions/src/index.ts || true
+            echo
+            echo '=== app admin references ==='
+            grep -nE 'isAdminUser|isAdminMenuUser|cachedUserRoleHint|userRole|Admin.*PageLazy|/admin/' src/App.tsx || true
+            echo
+            echo '=== admin page role references ==='
+            grep -nE 'editRole|roleFilter|ROLE_LABELS|selectedIsProtected|currentAdmin|executeUpdate|handleUpdateUser' src/pages/AdminUserManagementPage.tsx || true
+          } > .deploy/admin-callables-grep.txt
+      - name: Commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/admin-callables-grep.txt
+          git commit -m "chore: report admin callable guard references"
+          git push origin HEAD:main

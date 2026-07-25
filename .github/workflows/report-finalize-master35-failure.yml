@@ -20,7 +20,7 @@ jobs:
           ISSUE_URL: ${{ github.event.issue.html_url }}
         shell: bash
         run: |
-          gh run view 30158936043 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failure.log || true
+          gh run view 30159245393 --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failure.log || true
           tail -n 120 /tmp/failure.log > /tmp/failure-tail.log
           gh issue comment "$ISSUE_URL" --body '```text'
           gh issue comment "$ISSUE_URL" --body "$(cat /tmp/failure-tail.log)"

@@ -1,0 +1,66 @@
+name: Apply remember-login idle bypass once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .deploy/apply-remember-login-idle-bypass-trigger.txt
+
+concurrency:
+  group: apply-remember-login-idle-bypass-main-once
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Disable idle auto logout when remember login is enabled
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/services/presenceService.ts')
+          text = path.read_text(encoding='utf-8')
+          old = """    if (now - lastActivityAt >= LOGOUT_AFTER_MS) {\n      if (!idleLogoutTriggered && acquireIdleLogoutLock()) {\n        idleLogoutTriggered = true;\n        void Promise.resolve(options.onIdleTimeout?.()).catch((error) => {\n          console.warn('[Presence] idle logout failed:', error);\n          idleLogoutTriggered = false;\n        });\n      }\n      return;\n    }\n\n    void writeSession(false).catch((error) => console.warn('[Presence] state sync failed:', error));\n"""
+          new = """    const rememberLoginEnabled = safeStorageGet('rememberLogin') === 'true';\n\n    if (!rememberLoginEnabled && now - lastActivityAt >= LOGOUT_AFTER_MS) {\n      if (!idleLogoutTriggered && acquireIdleLogoutLock()) {\n        idleLogoutTriggered = true;\n        void Promise.resolve(options.onIdleTimeout?.()).catch((error) => {\n          console.warn('[Presence] idle logout failed:', error);\n          idleLogoutTriggered = false;\n        });\n      }\n      return;\n    }\n\n    if (rememberLoginEnabled) {\n      idleLogoutTriggered = false;\n      safeStorageRemove(logoutLockKey);\n    }\n\n    void writeSession(false).catch((error) => console.warn('[Presence] state sync failed:', error));\n"""
+
+          if old not in text:
+              raise SystemExit('idle logout target block not found')
+
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Commit login persistence fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/services/presenceService.ts
+          git commit -m "fix: honor remember login during idle timeout"
+          git push origin HEAD:main

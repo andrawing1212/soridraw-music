@@ -1,0 +1,129 @@
+name: Finalize master permissions 35
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .deploy/finalize-master-permissions-35-trigger.txt
+
+concurrency:
+  group: finalize-master-permissions-35
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Apply approved 35th source patch
+        shell: bash
+        run: |
+          base64 -d .deploy/master35-core.patch.gz.b64 | gzip -d > /tmp/master35.patch
+          git apply --check /tmp/master35.patch
+          git apply /tmp/master35.patch
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+
+      - name: Verify web and Functions builds
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run build
+          npm ci --prefix functions --no-audit --no-fund
+          npm --prefix functions run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Bootstrap and verify representative master
+        shell: bash
+        run: |
+          node <<'NODE'
+          const admin = require('./functions/node_modules/firebase-admin');
+          admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId: 'soridraw-app-866a5',
+          });
+
+          const permissions = {
+            userManagement: true,
+            vocalManagement: true,
+            sectionTagManagement: true,
+            sunoApiManagement: true,
+            appSettings: true,
+            geminiAudit: true,
+          };
+
+          (async () => {
+            const authUser = await admin.auth().getUserByEmail('andrawing1212@gmail.com');
+            const ref = admin.firestore().collection('users').doc(authUser.uid);
+            await ref.set({
+              role: 'admin',
+              staffRole: 'master',
+              adminPermissions: permissions,
+              staffRoleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              staffRoleUpdatedBy: authUser.uid,
+              masterBootstrapSource: 'github-actions-finalize-master35',
+            }, { merge: true });
+
+            const snap = await ref.get();
+            const data = snap.data() || {};
+            const verified = data.role === 'admin'
+              && data.staffRole === 'master'
+              && Object.entries(permissions).every(([key, value]) => data.adminPermissions?.[key] === value);
+
+            if (!verified) {
+              throw new Error('MASTER_BOOTSTRAP_VERIFY_FAILED');
+            }
+            console.log(`MASTER_BOOTSTRAP_SUCCESS uid=${authUser.uid}`);
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Commit approved source and clean temporary files
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            firestore.rules \
+            functions/src/index.ts \
+            src/App.tsx \
+            src/components/AdminPageLayout.tsx \
+            src/constants/adminPermissions.ts \
+            src/pages/AdminSectionTagsPage.tsx \
+            src/pages/AdminUserManagementPage.tsx \
+            src/pages/AdminVocalTonesPage.tsx \
+            src/pages/MasterPermissionsPage.tsx \
+            src/types.ts
+
+          rm -f .github/workflows/*master35*.yml
+          rm -f .github/workflows/finalize-master-permissions-35.yml
+          rm -f .deploy/*master35*
+          rm -f .deploy/finalize-master-permissions-35-trigger.txt
+          git add -A .github/workflows .deploy
+
+          git commit -m "feat: add master and page-level admin permissions"
+          git push origin HEAD:main

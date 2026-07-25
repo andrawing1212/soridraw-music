@@ -1,0 +1,288 @@
+diff --git a/src/firebase.js b/src/firebase.js
+index e23609f..cdd17f7 100644
+--- a/src/firebase.js
++++ b/src/firebase.js
+@@ -1,6 +1,6 @@
+ import { initializeApp } from "firebase/app";
+ import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
+-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
++import { getAuth, initializeAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
+ import { getFirestore } from "firebase/firestore";
+ import { getDatabase } from "firebase/database";
+ import { getFunctions, httpsCallable } from "firebase/functions";
+@@ -73,9 +73,33 @@ export const getFirebaseAppCheckToken = async () => {
+ // Do not replace window.fetch globally: Firebase Auth popup sign-in and other
+ // browser integrations must keep the native fetch implementation.
+ 
+-export const auth = getAuth(app);
++const readRememberLoginPreference = () => {
++  if (typeof window === "undefined") return false;
++  try {
++    return window.localStorage.getItem("rememberLogin") === "true";
++  } catch {
++    return false;
++  }
++};
++
++const initialAuthPersistence = readRememberLoginPreference()
++  ? browserLocalPersistence
++  : browserSessionPersistence;
+ 
+-setPersistence(auth, browserLocalPersistence).catch(console.error);
++export const auth = (() => {
++  try {
++    return initializeAuth(app, { persistence: initialAuthPersistence });
++  } catch (error) {
++    // Vite hot reload can reuse an already initialized Auth instance.
++    // Keep the saved login preference aligned without forcing every browser
++    // into local persistence.
++    const existingAuth = getAuth(app);
++    void setPersistence(existingAuth, initialAuthPersistence).catch((persistenceError) => {
++      console.warn("[Firebase Auth] persistence setup failed:", persistenceError);
++    });
++    return existingAuth;
++  }
++})();
+ 
+ export const googleProvider = new GoogleAuthProvider();
+ googleProvider.setCustomParameters({
+diff --git a/src/services/presenceService.ts b/src/services/presenceService.ts
+index a037720..225f9d1 100644
+--- a/src/services/presenceService.ts
++++ b/src/services/presenceService.ts
+@@ -1,4 +1,6 @@
+ import {
++  goOffline,
++  goOnline,
+   onDisconnect,
+   onValue,
+   ref,
+@@ -169,6 +171,10 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
+     return { stop: async () => undefined, markActivity: () => undefined };
+   }
+ 
++  // A previous sign-out may have intentionally closed the RTDB socket so its
++  // onDisconnect cleanup can run. Reopen it before creating the next session.
++  goOnline(realtimeDb);
++
+   const sessionId = buildSessionId();
+   const deviceId = getOrCreateDeviceId();
+   const deviceInfo = getDeviceInfo();
+@@ -381,16 +387,31 @@ export const startUserPresence = (uid: string, options: PresenceOptions = {}): P
+     window.removeEventListener('storage', handleStorage);
+     document.removeEventListener('visibilitychange', handleVisibilityChange);
+ 
++    let explicitCleanupSucceeded = false;
+     try {
+-      await onDisconnect(sessionRef).cancel();
+-      await onDisconnect(deviceLastSeenRef).cancel();
+-      await onDisconnect(lastSeenRef).cancel();
++      // Remove the live session while the user credential is still usable.
++      // Do not cancel onDisconnect first: if Auth changes during cleanup, the
++      // server-side disconnect hook must remain available as the fallback.
+       await remove(sessionRef);
+       await update(deviceRef, { lastSeenAt: serverTimestamp(), updatedAt: serverTimestamp() });
+       await set(lastSeenRef, serverTimestamp());
++      explicitCleanupSucceeded = true;
+     } catch (error) {
+-      console.warn('[Presence] cleanup deferred to onDisconnect:', error);
++      console.warn('[Presence] explicit cleanup failed; using onDisconnect fallback:', error);
++    }
++
++    if (explicitCleanupSucceeded) {
++      await Promise.allSettled([
++        onDisconnect(sessionRef).cancel(),
++        onDisconnect(deviceLastSeenRef).cancel(),
++        onDisconnect(lastSeenRef).cancel(),
++      ]);
+     }
++
++    // Closing this tab's RTDB socket immediately executes any remaining
++    // onDisconnect cleanup. Presence is the only RTDB feature in this app, and
++    // the next login calls goOnline() before starting a new session.
++    goOffline(realtimeDb);
+     emitPresenceDiagnostic({ uid, status: 'stopped', message: '접속 상태 기록이 종료되었습니다.', updatedAt: Date.now() });
+   };
+ 
+diff --git a/src/pages/MyPage.tsx b/src/pages/MyPage.tsx
+index 696293e..cef31b4 100644
+--- a/src/pages/MyPage.tsx
++++ b/src/pages/MyPage.tsx
+@@ -1,7 +1,7 @@
+ import React, { useCallback, useEffect, useMemo, useState } from 'react';
+ import { motion } from 'motion/react';
+ import { useLocation, useNavigate } from 'react-router-dom';
+-import { onAuthStateChanged, signOut, updateProfile, User } from 'firebase/auth';
++import { onAuthStateChanged, updateProfile, User } from 'firebase/auth';
+ import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+ import {
+  ArrowLeft,
+@@ -242,7 +242,11 @@ function FeatureBadge({ state }: { state: FeatureState }) {
+  return <span className="rounded-full bg-white/[0.04] px-2.5 py-1 text-[11px] font-black text-white/56">잠김</span>;
+ }
+ 
+-export default function MyPage() {
++type MyPageProps = {
++ onLogout: () => Promise<void> | void;
++};
++
++export default function MyPage({ onLogout }: MyPageProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [user, setUser] = useState<User | null>(auth.currentUser);
+@@ -406,9 +410,8 @@ export default function MyPage() {
+  }, [isSavingPersonalCliche, personalClicheDraft.hardBanText, personalClicheDraft.softBanText, user?.uid]);
+ 
+  const handleLogout = useCallback(async () => {
+- await signOut(auth);
+- navigate('/');
+- }, [navigate]);
++ await onLogout();
++ }, [onLogout]);
+ 
+  if (!user) {
+  return (
+diff --git a/src/App.tsx b/src/App.tsx
+index 746646b..787df41 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -15602,7 +15602,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
+             <FeatureUnavailablePage label="마이페이지" fallbackPath={navigationFallbackPath} />
+           ) : user ? (
+             <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-sky-300 animate-spin" /></div>}>
+-              <MyPageLazy />
++              <MyPageLazy onLogout={handleLogout} />
+             </Suspense>
+           ) : (
+             <Navigate to="/" replace />
+diff --git a/src/pages/AdminUserManagementPage.tsx b/src/pages/AdminUserManagementPage.tsx
+index 5e11db0..9b741dc 100644
+--- a/src/pages/AdminUserManagementPage.tsx
++++ b/src/pages/AdminUserManagementPage.tsx
+@@ -161,27 +161,59 @@ const isForceLoggedOut = (user: Pick<AppUserInfo, 'lastLoginAt' | 'lastLogoutAt'
+   return forceTime > 0 && forceTime > loginTime && (logoutTime === 0 || logoutTime <= forceTime);
+ };
+ 
++const getLatestLivePresenceSignalAt = (livePresence?: LivePresenceSummary) => {
++  if (!livePresence) return 0;
++  return Math.max(
++    livePresence.lastActivityAt || 0,
++    ...livePresence.devices.flatMap((device) => [
++      device.updatedAt || 0,
++      device.lastActivityAt || 0,
++    ])
++  );
++};
++
++const getEffectiveAdminPresenceOverride = (
++  user: Pick<AppUserInfo, 'lastLoginAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
++  livePresence?: LivePresenceSummary
++): 'offline' | 'loggedOut' | null => {
++  const adminOverrideAt = user.adminPresenceStateAt || 0;
++  if (!adminOverrideAt || !user.adminPresenceState) return null;
++
++  const loginTime = user.lastLoginAt || 0;
++  const forceLogoutTime = user.forceLogoutAt || 0;
++  const latestLiveSignalAt = getLatestLivePresenceSignalAt(livePresence);
++
++  // A manual correction wins over stale/ghost sessions that were recorded
++  // before the correction. A genuinely new login or a later live write
++  // automatically restores real-time presence.
++  if (adminOverrideAt <= loginTime || adminOverrideAt < forceLogoutTime || adminOverrideAt < latestLiveSignalAt) {
++    return null;
++  }
++  return user.adminPresenceState;
++};
++
++const getEffectiveConnectionCount = (
++  user: Pick<AppUserInfo, 'lastLoginAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
++  livePresence?: LivePresenceSummary
++) => getEffectiveAdminPresenceOverride(user, livePresence) ? 0 : (livePresence?.connectionCount || 0);
++
+ const getPresenceState = (
+   user: Pick<AppUserInfo, 'lastSeenAt' | 'lastLoginAt' | 'lastLogoutAt' | 'forceLogoutAt' | 'adminPresenceState' | 'adminPresenceStateAt'>,
+   livePresence?: LivePresenceSummary,
+   now = Date.now()
+ ): PresenceState => {
+-  // A currently detected session is always the strongest signal. This also
+-  // prevents an old force-logout audit timestamp from hiding a later login.
++  const effectiveOverride = getEffectiveAdminPresenceOverride(user, livePresence);
++  if (effectiveOverride === 'loggedOut') return 'loggedOut';
++  if (effectiveOverride === 'offline') return 'offline';
++
++  // Real-time presence wins only when it is newer than an administrator's
++  // manual correction. This prevents a stale ghost tab from blocking the
++  // requested offline/logged-out display forever.
+   if (livePresence?.state === 'active') return 'active';
+   if (livePresence?.state === 'away') return 'away';
+   if (livePresence?.state === 'background') return 'background';
+ 
+   const loginTime = user.lastLoginAt || 0;
+-  const forceLogoutTime = user.forceLogoutAt || 0;
+-  const adminOverrideAt = user.adminPresenceStateAt || 0;
+-  // A manual correction made after the latest login/force-logout must win.
+-  // This lets an administrator change an old "강제 로그아웃" badge to
+-  // "오프라인" without deleting the security audit timestamp itself.
+-  if (adminOverrideAt > loginTime && adminOverrideAt >= forceLogoutTime) {
+-    if (user.adminPresenceState === 'loggedOut') return 'loggedOut';
+-    if (user.adminPresenceState === 'offline') return 'offline';
+-  }
+ 
+   if (isForceLoggedOut(user)) return 'forced';
+ 
+@@ -233,9 +265,9 @@ const getRecentActivityAt = (
+   } else if (presence === 'forced') {
+     latest = Math.max(user.forceLogoutAt || 0, user.lastLogoutAt || 0, user.lastSeenAt || 0);
+   } else if (presence === 'loggedOut') {
+-    latest = Math.max(user.lastLogoutAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, user.lastLoginAt || 0);
++    latest = Math.max(user.adminPresenceStateAt || 0, user.lastLogoutAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, user.lastLoginAt || 0);
+   } else {
+-    latest = Math.max(livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, livePresence?.lastActivityAt || 0, user.lastLoginAt || 0);
++    latest = Math.max(user.adminPresenceStateAt || 0, livePresence?.lastSeenAt || 0, user.lastSeenAt || 0, livePresence?.lastActivityAt || 0, user.lastLoginAt || 0);
+   }
+ 
+   return latest > 0 ? latest : undefined;
+@@ -400,9 +432,13 @@ const DevicePresenceList = ({ user, livePresence, now, backendSchemaReady }: { u
+   return (
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+       {devices.map((device) => {
+-        const effectiveState: PresenceState = (overallPresence === 'forced' || overallPresence === 'loggedOut') && device.state === 'offline'
+-          ? overallPresence
+-          : device.state;
++        const manualOverride = getEffectiveAdminPresenceOverride(user, livePresence);
++        const effectiveState: PresenceState = manualOverride
++          ? manualOverride
++          : (overallPresence === 'forced' || overallPresence === 'loggedOut') && device.state === 'offline'
++            ? overallPresence
++            : device.state;
++        const effectiveConnectionCount = manualOverride ? 0 : device.connectionCount;
+         const config: Record<PresenceState, { label: string; className: string; dot: string }> = {
+           active: { label: '활동중', className: 'text-emerald-300', dot: 'bg-emerald-400' },
+           away: { label: '자리비움', className: 'text-amber-300', dot: 'bg-amber-300' },
+@@ -426,7 +462,7 @@ const DevicePresenceList = ({ user, livePresence, now, backendSchemaReady }: { u
+                 </div>
+                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-zinc-500">
+                   <span>{formatLastSeen(recentAt, now)}</span>
+-                  {device.connectionCount > 0 && <span className="text-sky-300">열린 탭 {device.connectionCount}개</span>}
++                  {effectiveConnectionCount > 0 && <span className="text-sky-300">열린 탭 {effectiveConnectionCount}개</span>}
+                 </div>
+               </div>
+             </div>
+@@ -889,7 +925,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
+       isOpen: true,
+       title: `접속 상태 · ${label}`,
+       message: state
+-        ? `${label}으로 표시를 보정합니다. 실제 접속 중인 세션은 활동중 상태가 우선하며, 회원이 다시 로그인하면 이 보정은 자동으로 무효화됩니다.`
++        ? `${label}으로 표시를 보정합니다. 현재 남아 있는 오래된 접속 기록보다 이 보정이 우선하며, 이후 새 로그인이나 새 활동이 감지되면 자동으로 실제 상태로 돌아갑니다.`
+         : '수동 보정을 해제하고 실시간 접속 기록과 2일 자동 판정 기준으로 되돌립니다.',
+       confirmLabel: '상태 적용',
+       tone: 'brand',
+@@ -1268,7 +1304,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
+                         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                           <PresenceBadge user={selectedUser} livePresence={livePresence[selectedUser.uid]} displayMode={presenceDisplayMode} />
+                           <span className={cn('text-sm font-black', getPresenceState(selectedUser, livePresence[selectedUser.uid], presenceClock) === 'loggedOut' ? 'text-zinc-500' : 'text-zinc-100')}>{formatLastSeen(getRecentActivityAt(selectedUser, livePresence[selectedUser.uid]), presenceClock)}</span>
+-                          {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {livePresence[selectedUser.uid].connectionCount}개</span>}
++                          {Boolean(livePresence[selectedUser.uid]?.deviceCount) && <span className="text-[10px] font-bold text-sky-300">{livePresence[selectedUser.uid].deviceCount}개 기기 · 열린 탭 {getEffectiveConnectionCount(selectedUser, livePresence[selectedUser.uid])}개</span>}
+                         </div>
+                       </div>
+                       <div className="rounded-2xl bg-black/25 p-3"><span className="inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500"><Music className="w-3 h-3" />생성곡</span><p className="mt-1 text-lg font-black text-white">{selectedUser.songGeneratedCount}</p></div>

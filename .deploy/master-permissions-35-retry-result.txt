@@ -10,7 +10,7 @@ rules_deploy=failure
 master_bootstrap=skipped
 run_id=30158268415
 commit=6d2a431a6d3a4730ed7116e871936a69d83f6ae1
-finished_at=2026-07-25T12:43:54Z
+finished_at=2026-07-25T12:55:23Z
 
 --- functions deploy log tail ---
 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
@@ -37,15 +37,15 @@ Generated src/securedIndex.ts with Music API App Check monitoring.
 [36m[1mi  functions:[22m[39m ensuring required API [1mcloudfunctions.googleapis.com[22m is enabled...
 [36m[1mi  functions:[22m[39m ensuring required API [1mcloudbuild.googleapis.com[22m is enabled...
 [36m[1mi  artifactregistry:[22m[39m ensuring required API [1martifactregistry.googleapis.com[22m is enabled...
-[32m[1m✔  functions:[22m[39m required API [1mcloudfunctions.googleapis.com[22m is enabled
-[32m[1m✔  functions:[22m[39m required API [1mcloudbuild.googleapis.com[22m is enabled
 [32m[1m✔  artifactregistry:[22m[39m required API [1martifactregistry.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mcloudbuild.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mcloudfunctions.googleapis.com[22m is enabled
 [33m[1m⚠  functions:[22m[39m Runtime Node.js 20 was deprecated on 2026-04-30 and will be decommissioned on 2026-10-30, after which you will not be able to deploy without upgrading. Consider upgrading now to avoid disruption. See https://cloud.google.com/functions/docs/runtime-support for full details on the lifecycle policy
 [33m[1m⚠ [22m[39m [1m[33mfunctions: [39m[22mpackage.json indicates an outdated version of firebase-functions. Please upgrade using [1mnpm install --save firebase-functions@latest[22m in your functions directory.
 [33m[1m⚠ [22m[39m [1m[33mfunctions: [39m[22mPlease note that there will be breaking changes when you upgrade.
 [36m[1mi  functions:[22m[39m Loading and analyzing source code for codebase default to determine what to deploy
 [36m[1mi  functions:[22m[39m You are using a version of firebase-functions SDK (4.9.0) that does not have support for the newest Firebase Extensions features. Please update firebase-functions SDK to >=5.1.0 to use them correctly
-Serving at port 8937
+Serving at port 8411
 
 [36m[1mi  functions:[22m[39m preparing [1mfunctions[22m directory for uploading...
 [36m[1mi [22m[39m [36m[1mfunctions:[22m[39m packaged [1m/home/runner/work/soridraw-music/soridraw-music/functions[22m (171.33 KB) for uploading
@@ -61,21 +61,21 @@ Serving at port 8937
 [36m[1mi  functions:[22m[39m generating the service identity for [1mpubsub.googleapis.com[22m...
 [36m[1mi  functions:[22m[39m generating the service identity for [1meventarc.googleapis.com[22m...
 [32m[1m✔  functions:[22m[39m [1mfunctions[22m source uploaded successfully
-[36m[1mi  functions:[22m[39m creating Node.js 20 (2nd Gen) function [1mensureMasterAccess(us-central1)[22m...
-[36m[1mi  functions:[22m[39m creating Node.js 20 (2nd Gen) function [1mmasterSetAdminAccess(us-central1)[22m...
 [36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1mbackfillMissingAuthUsers(us-central1)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1mensureMasterAccess(us-central1)[22m...
+[36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1mmasterSetAdminAccess(us-central1)[22m...
 [36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1mgetAdminAuthDirectory(us-central1)[22m...
 [36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1mgetAdminPresence(us-central1)[22m...
 [36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1madminForceLogoutUser(us-central1)[22m...
 [36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1madminResetEmailVerification(us-central1)[22m...
 [36m[1mi  functions:[22m[39m updating Node.js 20 (2nd Gen) function [1madminDeleteUserAccount(us-central1)[22m...
-[32m[1m✔ [22m[39m [1m[32mfunctions[adminForceLogoutUser(us-central1)][39m[22m Successful update operation.
-[32m[1m✔ [22m[39m [1m[32mfunctions[adminDeleteUserAccount(us-central1)][39m[22m Successful update operation.
-[32m[1m✔ [22m[39m [1m[32mfunctions[masterSetAdminAccess(us-central1)][39m[22m Successful create operation.
-[32m[1m✔ [22m[39m [1m[32mfunctions[getAdminPresence(us-central1)][39m[22m Successful update operation.
-[32m[1m✔ [22m[39m [1m[32mfunctions[adminResetEmailVerification(us-central1)][39m[22m Successful update operation.
 [32m[1m✔ [22m[39m [1m[32mfunctions[backfillMissingAuthUsers(us-central1)][39m[22m Successful update operation.
-[32m[1m✔ [22m[39m [1m[32mfunctions[ensureMasterAccess(us-central1)][39m[22m Successful create operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[ensureMasterAccess(us-central1)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[adminForceLogoutUser(us-central1)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[getAdminPresence(us-central1)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[masterSetAdminAccess(us-central1)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[adminDeleteUserAccount(us-central1)][39m[22m Successful update operation.
+[32m[1m✔ [22m[39m [1m[32mfunctions[adminResetEmailVerification(us-central1)][39m[22m Successful update operation.
 [32m[1m✔ [22m[39m [1m[32mfunctions[getAdminAuthDirectory(us-central1)][39m[22m Successful update operation.
 
 [32m[1m✔ [22m[39m [1m[4mDeploy complete![24m[22m

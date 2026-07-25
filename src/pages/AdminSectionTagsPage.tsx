@@ -33,6 +33,7 @@ import {
 import { cn } from '../lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminPageLayout from '../components/AdminPageLayout';
+import { normalizeStaffRole } from '../constants/adminPermissions';
 import { 
   TAG_META, 
   ALLOWED_TAGS_BY_SECTION, 
@@ -146,7 +147,7 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
     const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.role === 'admin') {
+        if (normalizeStaffRole(data) !== null) {
           setIsAdmin(true);
         } else {
           setIsAdmin(false);

@@ -1,8 +1,0 @@
-Finalize 35th master/admin page permissions after IAM roles were corrected.
-Functions and Firestore Rules are already deployed.
-Bootstrap and verify andrawing1212@gmail.com with a temporary one-time runtime Function.
-Delete the temporary Function immediately after success.
-Publish approved 35th source to main for Vercel test app.
-Official Firebase Hosting: do not deploy.
-Requested: 2026-07-25T12:51:32Z
-One-time runtime bootstrap retry: 2026-07-25T13:16:00Z

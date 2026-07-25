@@ -11,19 +11,61 @@ const getAuthProviderIds = (user: admin.auth.UserRecord): string[] =>
     .map((provider) => provider.providerId)
     .filter((providerId): providerId is string => Boolean(providerId));
 
-const requireAdminCaller = async (request: { auth?: { uid: string } | null }) => {
-  const requesterUid = request.auth?.uid;
-  if (!requesterUid) {
-    throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
-  }
+type AdminPermissionKey =
+  | "userManagement"
+  | "vocalManagement"
+  | "sectionTagManagement"
+  | "sunoApiManagement"
+  | "appSettings"
+  | "geminiAudit";
 
+type CallableRequestLike = {
+  auth?: { uid: string; token?: Record<string, unknown> } | null;
+  data?: any;
+};
+
+const FULL_ADMIN_PERMISSIONS: Record<AdminPermissionKey, boolean> = {
+  userManagement: true,
+  vocalManagement: true,
+  sectionTagManagement: true,
+  sunoApiManagement: true,
+  appSettings: true,
+  geminiAudit: true,
+};
+
+const getStaffRole = (data: Record<string, any> | undefined | null): "master" | "admin" | null => {
+  if (data?.staffRole === "master") return "master";
+  if (data?.staffRole === "admin") return "admin";
+  if (data?.role === "admin" && !data?.staffRole) return "admin";
+  return null;
+};
+
+const getAdminPermissions = (data: Record<string, any> | undefined | null) => {
+  const staffRole = getStaffRole(data);
+  if (staffRole === "master") return { ...FULL_ADMIN_PERMISSIONS };
+  if (data?.role === "admin" && !data?.staffRole) return { ...FULL_ADMIN_PERMISSIONS };
+  const raw = data?.adminPermissions || {};
+  return Object.fromEntries(Object.keys(FULL_ADMIN_PERMISSIONS).map((key) => [key, raw[key] === true])) as Record<AdminPermissionKey, boolean>;
+};
+
+const requireAdminCaller = async (request: CallableRequestLike, requiredPermission?: AdminPermissionKey) => {
+  const requesterUid = request.auth?.uid;
+  if (!requesterUid) throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
   const db = admin.firestore();
   const requesterSnap = await db.collection("users").doc(requesterUid).get();
-  if (requesterSnap.data()?.role !== "admin") {
-    throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+  const requesterData = requesterSnap.data() || {};
+  const staffRole = getStaffRole(requesterData);
+  if (!staffRole) throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
+  if (requiredPermission && staffRole !== "master" && !getAdminPermissions(requesterData)[requiredPermission]) {
+    throw new HttpsError("permission-denied", "이 관리자 페이지 권한이 없습니다.");
   }
+  return { db, requesterUid, requesterData, staffRole };
+};
 
-  return { db, requesterUid };
+const requireMasterCaller = async (request: CallableRequestLike) => {
+  const caller = await requireAdminCaller(request);
+  if (caller.staffRole !== "master") throw new HttpsError("permission-denied", "마스터 권한이 필요합니다.");
+  return caller;
 };
 
 
@@ -189,8 +231,8 @@ const assertManageableTarget = async (
 
   const targetRef = db.collection("users").doc(targetUid);
   const targetSnap = await targetRef.get();
-  if (targetSnap.data()?.role === "admin") {
-    throw new HttpsError("failed-precondition", "관리자 계정은 보호 대상이라 이 작업을 실행할 수 없습니다.");
+  if (getStaffRole(targetSnap.data())) {
+    throw new HttpsError("failed-precondition", "마스터·관리자 계정은 보호 대상이라 이 작업을 실행할 수 없습니다.");
   }
 
   return { targetRef, targetData: targetSnap.data() || {} };
@@ -242,16 +284,7 @@ export const syncAuthUserToFirestore = functions.region("us-east1").auth.user().
 export const backfillMissingAuthUsers = onCall(
   { region: "us-central1" },
   async (request) => {
-    const requesterUid = request.auth?.uid;
-    if (!requesterUid) {
-      throw new HttpsError("unauthenticated", "관리자 로그인이 필요합니다.");
-    }
-
-    const db = admin.firestore();
-    const requesterSnap = await db.collection("users").doc(requesterUid).get();
-    if (requesterSnap.data()?.role !== "admin") {
-      throw new HttpsError("permission-denied", "관리자 권한이 필요합니다.");
-    }
+    const { db } = await requireAdminCaller(request, "userManagement");
 
     const dryRun = request.data?.dryRun === true;
     let pageToken: string | undefined;
@@ -329,10 +362,68 @@ export const backfillMissingAuthUsers = onCall(
 );
 
 
+const sanitizeAdminPermissions = (value: unknown): Record<AdminPermissionKey, boolean> => {
+  const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return Object.fromEntries(Object.keys(FULL_ADMIN_PERMISSIONS).map((key) => [key, raw[key] === true])) as Record<AdminPermissionKey, boolean>;
+};
+
+export const ensureMasterAccess = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const requesterUid = request.auth?.uid;
+    const requesterEmail = String(request.auth?.token?.email || "").trim().toLowerCase();
+    const emailVerified = request.auth?.token?.email_verified === true;
+    if (!requesterUid || requesterEmail !== "andrawing1212@gmail.com" || !emailVerified) {
+      throw new HttpsError("permission-denied", "대표자 인증 계정만 마스터 권한을 복구할 수 있습니다.");
+    }
+    const db = admin.firestore();
+    await db.collection("users").doc(requesterUid).set({
+      role: "admin",
+      staffRole: "master",
+      adminPermissions: { ...FULL_ADMIN_PERMISSIONS },
+      staffRoleUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      staffRoleUpdatedBy: requesterUid,
+      masterBootstrapSource: "verified-owner-email",
+    }, { merge: true });
+    return { ok: true, uid: requesterUid, staffRole: "master" };
+  }
+);
+
+export const masterSetAdminAccess = onCall(
+  { region: "us-central1" },
+  async (request) => {
+    const { db, requesterUid } = await requireMasterCaller(request);
+    const targetUid = String(request.data?.targetUid || "").trim();
+    if (!targetUid) throw new HttpsError("invalid-argument", "대상 회원 UID가 필요합니다.");
+    if (targetUid === requesterUid) throw new HttpsError("failed-precondition", "마스터 본인 권한은 변경할 수 없습니다.");
+    const targetRef = db.collection("users").doc(targetUid);
+    const targetSnap = await targetRef.get();
+    if (!targetSnap.exists) throw new HttpsError("not-found", "대상 회원을 찾을 수 없습니다.");
+    const targetData = targetSnap.data() || {};
+    if (getStaffRole(targetData) === "master") throw new HttpsError("failed-precondition", "다른 마스터 계정은 변경할 수 없습니다.");
+
+    const nextStaffRole = request.data?.staffRole === "admin" ? "admin" : null;
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    if (nextStaffRole === "admin") {
+      const currentRole = String(targetData.role || "free");
+      const base = currentRole === "admin" ? String(targetData.staffBaseRole || targetData.planTier || "free") : currentRole;
+      const safeBaseRole = ["free", "basic", "pro"].includes(base) ? base : "free";
+      await targetRef.set({ role: "admin", staffRole: "admin", staffBaseRole: safeBaseRole, adminPermissions: sanitizeAdminPermissions(request.data?.adminPermissions), staffRoleUpdatedAt: now, staffRoleUpdatedBy: requesterUid }, { merge: true });
+    } else {
+      const base = String(targetData.staffBaseRole || targetData.planTier || "free");
+      const safeBaseRole = ["free", "basic", "pro"].includes(base) ? base : "free";
+      await targetRef.set({ role: safeBaseRole, staffRole: admin.firestore.FieldValue.delete(), staffBaseRole: admin.firestore.FieldValue.delete(), adminPermissions: admin.firestore.FieldValue.delete(), staffRoleUpdatedAt: now, staffRoleUpdatedBy: requesterUid }, { merge: true });
+    }
+    await db.collection("admin_permission_audit").add({ targetUid, staffRole: nextStaffRole, adminPermissions: nextStaffRole === "admin" ? sanitizeAdminPermissions(request.data?.adminPermissions) : {}, changedBy: requesterUid, changedAt: now });
+    return { ok: true, targetUid, staffRole: nextStaffRole };
+  }
+);
+
+
 export const getAdminAuthDirectory = onCall(
   { region: "us-central1" },
   async (request) => {
-    await requireAdminCaller(request);
+    await requireAdminCaller(request, "userManagement");
 
     const requestedMax = Number(request.data?.maxResults || 1000);
     const maxResults = Math.min(1000, Math.max(1, Number.isFinite(requestedMax) ? Math.floor(requestedMax) : 1000));
@@ -360,7 +451,7 @@ export const getAdminAuthDirectory = onCall(
 export const getAdminPresence = onCall(
   { region: "us-central1" },
   async (request) => {
-    await requireAdminCaller(request);
+    await requireAdminCaller(request, "userManagement");
     const requestedUids = Array.isArray(request.data?.uids) ? request.data.uids : [];
     const uids = Array.from(new Set(
       requestedUids
@@ -404,7 +495,7 @@ export const getAdminPresence = onCall(
 export const adminForceLogoutUser = onCall(
   { region: "us-central1" },
   async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request);
+    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
     const targetUid = String(request.data?.targetUid || "").trim();
     const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
     const now = Date.now();
@@ -432,7 +523,7 @@ export const adminForceLogoutUser = onCall(
 export const adminResetEmailVerification = onCall(
   { region: "us-central1" },
   async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request);
+    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
     const targetUid = String(request.data?.targetUid || "").trim();
     const { targetRef } = await assertManageableTarget(db, requesterUid, targetUid);
     const authUser = await admin.auth().getUser(targetUid);
@@ -474,7 +565,7 @@ export const adminResetEmailVerification = onCall(
 export const adminDeleteUserAccount = onCall(
   { region: "us-central1", timeoutSeconds: 60 },
   async (request) => {
-    const { db, requesterUid } = await requireAdminCaller(request);
+    const { db, requesterUid } = await requireAdminCaller(request, "userManagement");
     const targetUid = String(request.data?.targetUid || "").trim();
     const confirmEmail = String(request.data?.confirmEmail || "").trim().toLowerCase();
     const { targetRef, targetData } = await assertManageableTarget(db, requesterUid, targetUid);

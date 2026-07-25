@@ -47,6 +47,7 @@ import { useNavigate } from 'react-router-dom';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { cn } from '../lib/utils';
 import { getTimestampMs } from '../App';
+import { normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import { PRESENCE_DIAGNOSTIC_EVENT, readPresenceDiagnostic, type PresenceDiagnostic } from '../services/presenceService';
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -329,6 +330,11 @@ const parseUserDocument = (uid: string, data: Record<string, any>): AppUserInfo 
   displayName: data.displayName || null,
   nickname: data.nickname || null,
   role: (data.role as UserRole) || 'free',
+  staffRole: normalizeStaffRole(data),
+  adminPermissions: normalizeAdminPermissions(data),
+  staffBaseRole: data.staffBaseRole || null,
+  staffRoleUpdatedAt: data.staffRoleUpdatedAt ? getTimestampMs(data.staffRoleUpdatedAt) : undefined,
+  staffRoleUpdatedBy: data.staffRoleUpdatedBy || null,
   accountStatus: (data.accountStatus as AccountStatus) || 'active',
   paymentStatus: (data.paymentStatus as PaymentStatus) || 'none',
   createdAt: getTimestampMs(data.createdAt || Date.now()),
@@ -366,6 +372,13 @@ const parseUserDocument = (uid: string, data: Record<string, any>): AppUserInfo 
   favoriteCount: Number(data.favoriteCount || 0),
   adminMemo: data.adminMemo || '',
 });
+
+const StaffBadge = ({ user }: { user: AppUserInfo }) => {
+  const staffRole = normalizeStaffRole(user);
+  if (staffRole === 'master') return <span className="rounded-md bg-amber-400/15 px-1.5 py-0.5 text-[9px] font-black text-amber-300">MASTER</span>;
+  if (staffRole === 'admin') return <span className="rounded-md bg-red-500/15 px-1.5 py-0.5 text-[9px] font-black text-red-300">ADMIN</span>;
+  return null;
+};
 
 const ProviderBadge = ({ user }: { user: AppUserInfo }) => {
   const kind = getProviderKind(user);
@@ -589,7 +602,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   useEffect(() => {
     if (!auth.currentUser || isAdminProp !== undefined) return;
     getDoc(doc(db, 'users', auth.currentUser.uid))
-      .then((snapshot) => setIsAdmin(snapshot.data()?.role === 'admin'))
+      .then((snapshot) => setIsAdmin(normalizeStaffRole(snapshot.data()) !== null))
       .catch((error) => console.error('Admin check failed:', error));
   }, [isAdminProp]);
 
@@ -837,6 +850,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
 
   const currentAdminUid = auth.currentUser?.uid || '';
   const currentAdminUser = usersWithAuth.find((item) => item.uid === currentAdminUid);
+  const currentAdminIsMaster = normalizeStaffRole(currentAdminUser) === 'master';
   const currentAdminLive = currentAdminUid ? livePresence[currentAdminUid] : undefined;
 
   const getBadgeInfo = (user: AppUserInfo) => {
@@ -908,6 +922,15 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   const handleUpdateUser = () => {
     if (!selectedUser || selectedUser.authDeleted) return;
     const isSelf = auth.currentUser?.uid === selectedUser.uid;
+    const selectedStaffRole = normalizeStaffRole(selectedUser);
+    if (selectedStaffRole && !currentAdminIsMaster) {
+      alert('마스터·관리자 계정은 마스터만 수정할 수 있습니다.');
+      return;
+    }
+    if (selectedStaffRole && (editRole !== selectedUser.role || editStatus !== selectedUser.accountStatus)) {
+      alert('마스터·관리자 권한과 계정 상태는 마스터 권한 페이지에서 관리해주세요.');
+      return;
+    }
     if (isSelf && selectedUser.role === 'admin' && editRole !== 'admin') {
       alert('자기 자신의 관리자 권한은 해제할 수 없습니다.');
       return;
@@ -916,7 +939,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
       alert('자기 자신의 계정 상태는 제한할 수 없습니다.');
       return;
     }
-    const adminCount = usersWithAuth.filter((user) => user.role === 'admin' && !user.authDeleted).length;
+    const adminCount = usersWithAuth.filter((user) => normalizeStaffRole(user) !== null && !user.authDeleted).length;
     if (adminCount <= 1 && selectedUser.role === 'admin' && editRole !== 'admin') {
       alert('마지막 관리자 권한은 해제할 수 없습니다.');
       return;
@@ -1075,7 +1098,7 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
   }
 
   const selectedProvider = selectedUser ? getProviderKind(selectedUser) : 'unknown';
-  const selectedIsProtected = Boolean(selectedUser && (selectedUser.role === 'admin' || auth.currentUser?.uid === selectedUser.uid));
+  const selectedIsProtected = Boolean(selectedUser && (normalizeStaffRole(selectedUser) !== null || auth.currentUser?.uid === selectedUser.uid));
   const canResetEmailVerification = Boolean(
     selectedUser
       && selectedProvider === 'email'
@@ -1256,7 +1279,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cn('truncate text-sm md:text-base font-black', user.authDeleted ? 'text-zinc-500 line-through' : 'text-[var(--text-primary)]')}>{user.displayName || user.nickname || '이름 없음'}</span>
-                    <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase', user.role === 'admin' ? 'bg-red-500/15 text-red-300' : user.role === 'pro' ? 'bg-orange-500/15 text-orange-300' : user.role === 'basic' ? 'bg-blue-500/15 text-blue-300' : 'bg-zinc-500/15 text-zinc-400')}>{ROLE_LABELS[user.role]}</span>
+                    <StaffBadge user={user} />
+                    {normalizeStaffRole(user) === null && <span className={cn('rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase', user.role === 'pro' ? 'bg-orange-500/15 text-orange-300' : user.role === 'basic' ? 'bg-blue-500/15 text-blue-300' : 'bg-zinc-500/15 text-zinc-400')}>{ROLE_LABELS[user.role]}</span>}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-secondary)]">
                     <span className="inline-flex items-center gap-1 truncate"><Mail className="w-3 h-3" />{user.email || user.authDeletedEmail || '이메일 없음'}</span>
@@ -1307,7 +1331,8 @@ export default function AdminUserManagementPage({ isAdmin: isAdminProp }: { isAd
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate text-xl font-black text-white">{selectedUser.displayName || selectedUser.nickname || '이름 없음'}</h2>
-                      <span className="rounded-lg bg-brand-orange/15 px-2 py-1 text-[10px] font-black uppercase text-brand-orange">{ROLE_LABELS[selectedUser.role]}</span>
+                      <StaffBadge user={selectedUser} />
+                      {normalizeStaffRole(selectedUser) === null && <span className="rounded-lg bg-brand-orange/15 px-2 py-1 text-[10px] font-black uppercase text-brand-orange">{ROLE_LABELS[selectedUser.role]}</span>}
                     </div>
                     <p className="mt-1 truncate text-xs font-medium text-zinc-400">{selectedUser.email || selectedUser.authDeletedEmail || '이메일 없음'}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5"><ProviderBadge user={selectedUser} /><VerificationBadge user={selectedUser} /></div>

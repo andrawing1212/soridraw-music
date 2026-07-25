@@ -1,4 +1,0 @@
-=== recent runs ===
-[{"conclusion":"failure","createdAt":"2026-07-25T11:57:44Z","databaseId":30157138889,"headSha":"c41535a1d2d4848a16c32459e0a9525af032fc9d","status":"completed","updatedAt":"2026-07-25T11:57:44Z","url":"https://github.com/andrawing1212/soridraw-music/actions/runs/30157138889"},{"conclusion":"failure","createdAt":"2026-07-25T11:57:31Z","databaseId":30157132238,"headSha":"ab649c6dbcc13c347ea77f47d6127ed970fb4a83","status":"completed","updatedAt":"2026-07-25T11:57:31Z","url":"https://github.com/andrawing1212/soridraw-music/actions/runs/30157132238"},{"conclusion":"failure","createdAt":"2026-07-25T11:50:14Z","databaseId":30156915021,"headSha":"e7e5501f63c752399da293547a85d6222d3a7e4d","status":"completed","updatedAt":"2026-07-25T11:50:14Z","url":"https://github.com/andrawing1212/soridraw-music/actions/runs/30156915021"}]
-
-=== latest failed log ===

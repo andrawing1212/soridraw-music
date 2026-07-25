@@ -29,6 +29,7 @@ import { cn } from '../lib/utils';
 
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminPageLayout from '../components/AdminPageLayout';
+import { normalizeStaffRole } from '../constants/adminPermissions';
 
 export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
@@ -105,7 +106,7 @@ export default function AdminVocalTonesPage({ isAdmin: isAdminProp }: { isAdmin?
     const unsub = onSnapshot(doc(db, 'users', auth.currentUser.uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.role === 'admin') {
+        if (normalizeStaffRole(data) !== null) {
           setIsAdmin(true);
         } else {
           setIsAdmin(false);

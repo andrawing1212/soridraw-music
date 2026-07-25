@@ -281,7 +281,7 @@ import {
   VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
-import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
+import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, StaffRole, AdminPermissions, AdminPermissionKey, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import {
   getFirstEnabledNavigationPath,
@@ -293,6 +293,7 @@ import {
   type NavigationVisibilitySettings,
   writeStoredNavigationVisibilitySettings,
 } from './constants/navigationVisibility';
+import { EMPTY_ADMIN_PERMISSIONS, getFirstAccessibleAdminPath, normalizeAdminPermissions, normalizeStaffRole } from './constants/adminPermissions';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 
 
@@ -2432,6 +2433,7 @@ const HomePageLazy = lazy(() => import('./pages/HomePage'));
 const AdminSunoApiPageLazy = lazy(() => import('./pages/AdminSunoApiPage'));
 const AdminAppSettingsPageLazy = lazy(() => import('./pages/AdminAppSettingsPage'));
 const AdminGeminiAuditPageLazy = lazy(() => import('./pages/AdminGeminiAuditPage'));
+const MasterPermissionsPageLazy = lazy(() => import('./pages/MasterPermissionsPage'));
 
 const TROT_GENRES = ['traditional-trot', 'semi-trot'];
 
@@ -4002,6 +4004,8 @@ function App() {
     }
   });
   const [userRole, setUserRole] = useState<UserRole>('free');
+  const [staffRole, setStaffRole] = useState<StaffRole>(null);
+  const [adminPermissions, setAdminPermissions] = useState<AdminPermissions>({ ...EMPTY_ADMIN_PERMISSIONS });
   const [cachedUserRoleHint, setCachedUserRoleHint] = useState<CachedUserRole | null>(readCachedUserRole);
   const [userStatus, setUserStatus] = useState<AccountStatus>('active');
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -6764,7 +6768,13 @@ const toggleCycleVariantSelection = (
     };
   }, [unlockGlobalSearchScrollLock]);
   
-  const isAdminUser = useMemo(() => userRole === 'admin', [userRole]);
+  const isAdminUser = useMemo(() => staffRole !== null || userRole === 'admin', [staffRole, userRole]);
+  const isMasterUser = staffRole === 'master';
+  const canAccessAdminPage = useCallback((permission: AdminPermissionKey) => {
+    if (isMasterUser) return true;
+    return isAdminUser && adminPermissions[permission] === true;
+  }, [adminPermissions, isAdminUser, isMasterUser]);
+  const firstAccessibleAdminPath = useMemo(() => getFirstAccessibleAdminPath(staffRole, adminPermissions), [adminPermissions, staffRole]);
   useEffect(() => {
     if (!user) {
       setEmailVerificationGate('idle');
@@ -6784,7 +6794,7 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    if (userRole === 'admin') {
+    if (isAdminUser) {
       setEmailVerificationGate('idle');
       setEmailVerificationMessage(null);
       return;
@@ -6792,7 +6802,7 @@ const toggleCycleVariantSelection = (
 
     setEmailVerificationGate('required');
     setEmailVerificationMessage((current) => current || '이메일 인증이 필요합니다. 인증메일을 받은 뒤 완료 여부를 확인해주세요.');
-  }, [emailVerificationRevision, isUserRoleReady, user, userRole]);
+  }, [emailVerificationRevision, isAdminUser, isUserRoleReady, user]);
 
   useEffect(() => {
     if (
@@ -6909,10 +6919,10 @@ const toggleCycleVariantSelection = (
     return getFirstEnabledNavigationPath(accessibleVisibility);
   }, [menuAdminOnly, menuVisibility]);
   const effectiveUserTier: TagTier = useMemo(() => {
-    if (userRole === 'admin' || userRole === 'pro') return 'pro';
+    if (isAdminUser || userRole === 'pro') return 'pro';
     if (userRole === 'basic') return 'basic';
     return 'free';
-  }, [userRole]);
+  }, [isAdminUser, userRole]);
 
   // Refs for stable access in callbacks
   const pinnedGenresRef = useRef(pinnedGenres);
@@ -7062,6 +7072,8 @@ const toggleCycleVariantSelection = (
       setEmailVerificationResendSeconds(0);
       emailVerificationAutoSendRef.current = '';
       if (!currentUser) {
+        setStaffRole(null);
+        setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
         setUserLyricClicheGuard(null);
         setIsUserLyricClicheGuardReady(true);
       } else {
@@ -7118,6 +7130,8 @@ const toggleCycleVariantSelection = (
             {
               const verifiedRole = (data.role || 'free') as UserRole;
               setUserRole(verifiedRole);
+              setStaffRole(normalizeStaffRole(data));
+              setAdminPermissions(normalizeAdminPermissions(data));
               setIsUserRoleReady(true);
               const roleCache = { uid: currentUser.uid, role: verifiedRole };
               setCachedUserRoleHint(roleCache);
@@ -7154,6 +7168,8 @@ const toggleCycleVariantSelection = (
             {
               const verifiedRole = (data.role || 'free') as UserRole;
               setUserRole(verifiedRole);
+              setStaffRole(normalizeStaffRole(data));
+              setAdminPermissions(normalizeAdminPermissions(data));
               setIsUserRoleReady(true);
               const roleCache = { uid: currentUser.uid, role: verifiedRole };
               setCachedUserRoleHint(roleCache);
@@ -7187,6 +7203,8 @@ const toggleCycleVariantSelection = (
             setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
             setIsEmailVerificationCycleReady(true);
             setUserRole('free');
+            setStaffRole(null);
+            setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
             setIsUserRoleReady(true);
             const roleCache = { uid: currentUser.uid, role: 'free' as UserRole };
             setCachedUserRoleHint(roleCache);
@@ -15748,41 +15766,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         {/* Admin Routes */}
         {isAdminUser ? (
           <>
-            <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-            <Route path="/admin/users" element={
-              <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}>
-                <AdminUserManagementPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/vocals" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminVocalTonesPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/tags" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminSectionTagsPageLazy isAdmin={isAdminUser} />
-              </Suspense>
-            } />
-            <Route path="/admin/suno-api" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminSunoApiPageLazy />
-              </Suspense>
-            } />
-            <Route path="/admin/app-settings" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminAppSettingsPageLazy />
-              </Suspense>
-            } />
-            <Route path="/admin/gemini-audit" element={
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <AdminGeminiAuditPageLazy />
-              </Suspense>
-            } />
+            <Route path="/admin" element={<Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/master" element={isMasterUser ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-amber-300 animate-spin" /></div>}><MasterPermissionsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/users" element={canAccessAdminPage('userManagement') ? <Suspense fallback={<div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center"><Loader2 className="w-8 h-8 text-brand-orange animate-spin" /></div>}><AdminUserManagementPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/vocals" element={canAccessAdminPage('vocalManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminVocalTonesPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/tags" element={canAccessAdminPage('sectionTagManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSectionTagsPageLazy isAdmin /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/suno-api" element={canAccessAdminPage('sunoApiManagement') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminSunoApiPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/app-settings" element={canAccessAdminPage('appSettings') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminAppSettingsPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
+            <Route path="/admin/gemini-audit" element={canAccessAdminPage('geminiAudit') ? <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}><AdminGeminiAuditPageLazy /></Suspense> : <Navigate to={firstAccessibleAdminPath} replace />} />
           </>
         ) : (
           <>
             <Route path="/admin" element={<Navigate to="/" replace />} />
+            <Route path="/admin/master" element={<Navigate to="/" replace />} />
             <Route path="/admin/users" element={<Navigate to="/" replace />} />
             <Route path="/admin/vocals" element={<Navigate to="/" replace />} />
             <Route path="/admin/tags" element={<Navigate to="/" replace />} />
@@ -15790,8 +15786,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             <Route path="/admin/app-settings" element={<Navigate to="/" replace />} />
             <Route path="/admin/gemini-audit" element={<Navigate to="/" replace />} />
           </>
-        )}
-      </Routes>
+        )}      </Routes>
       <GlobalPlayer />
 
       {/* Tooltip / Description Overlay */}

@@ -573,6 +573,15 @@ export interface SongResult {
 }
 
 export type UserRole = 'free' | 'basic' | 'pro' | 'admin';
+export type StaffRole = 'master' | 'admin' | null;
+export type AdminPermissionKey =
+  | 'userManagement'
+  | 'vocalManagement'
+  | 'sectionTagManagement'
+  | 'sunoApiManagement'
+  | 'appSettings'
+  | 'geminiAudit';
+export type AdminPermissions = Record<AdminPermissionKey, boolean>;
 export type AccountStatus = 'active' | 'paused' | 'expired' | 'banned';
 export type PaymentStatus = 'none' | 'active' | 'canceled' | 'expired' | 'refunded' | 'trial';
 
@@ -582,6 +591,11 @@ export interface AppUserInfo {
   displayName: string | null;
   nickname?: string | null;
   role: UserRole;
+  staffRole?: StaffRole;
+  adminPermissions?: AdminPermissions;
+  staffBaseRole?: Exclude<UserRole, 'admin'> | null;
+  staffRoleUpdatedAt?: number;
+  staffRoleUpdatedBy?: string | null;
   accountStatus: AccountStatus;
   paymentStatus: PaymentStatus;
   createdAt: number;

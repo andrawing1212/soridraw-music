@@ -254,14 +254,14 @@ const AuthAccountMark = ({ user }: { user: AppUserInfo }) => {
   }
 
   if (provider === 'google') {
-    return <span className="text-[15px] font-black tracking-[-0.04em] text-sky-300" title="Google 인증 회원" aria-label="Google 인증 회원">G</span>;
+    return <span className="text-[18px] font-black tracking-[-0.04em] text-sky-300" title="Google 인증 회원" aria-label="Google 인증 회원">G</span>;
   }
 
   if (provider === 'email') {
     const isVerified = user.emailVerified === true;
     return (
       <span
-        className={cn('text-[15px] font-black tracking-[-0.04em]', isVerified ? 'text-violet-300' : 'text-white')}
+        className={cn('text-[18px] font-black tracking-[-0.04em]', isVerified ? 'text-pink-400' : 'text-white')}
         title={isVerified ? '이메일 인증 회원' : '이메일 미인증 회원'}
         aria-label={isVerified ? '이메일 인증 회원' : '이메일 미인증 회원'}
       >
@@ -273,14 +273,14 @@ const AuthAccountMark = ({ user }: { user: AppUserInfo }) => {
   if (provider === 'linked') {
     const isEmailVerified = user.emailVerified === true;
     return (
-      <span className="inline-flex items-center gap-0.5 text-[13px] font-black tracking-[-0.06em]" title="Google·이메일 연결 회원" aria-label="Google·이메일 연결 회원">
+      <span className="inline-flex items-center gap-0.5 text-[16px] font-black tracking-[-0.06em]" title="Google·이메일 연결 회원" aria-label="Google·이메일 연결 회원">
         <span className="text-sky-300">G</span>
-        <span className={isEmailVerified ? 'text-violet-300' : 'text-white'}>E</span>
+        <span className={isEmailVerified ? 'text-pink-400' : 'text-white'}>E</span>
       </span>
     );
   }
 
-  return <span className="text-[15px] font-black text-white" title="가입 방식 확인 필요" aria-label="가입 방식 확인 필요">?</span>;
+  return <span className="text-[18px] font-black text-white" title="가입 방식 확인 필요" aria-label="가입 방식 확인 필요">?</span>;
 };
 
 const getRecentActivityAt = (

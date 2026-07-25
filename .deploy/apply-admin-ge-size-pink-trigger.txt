@@ -1,4 +1,0 @@
-Apply 34th G/E marker size and email pink color update.
-Baseline: latest main after 33rd G/E auth mark UI.
-Target: Vercel test app only.
-Requested: 2026-07-25T10:29:25Z

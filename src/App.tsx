@@ -75,6 +75,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
+import StudioBlackSplitLayout from './components/studioBlack/StudioBlackSplitLayout';
 
 // Portal component for top-level rendering
 function Portal({ children }: { children: React.ReactNode }) {
@@ -743,22 +744,22 @@ type StudioSectionAccent = {
 };
 
 const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
-  bar: 'bg-[#F1B425]/95',
-  text: 'text-[#EFCB75]',
-  softText: 'text-[#EFCB75]/52',
-  selected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
-  selectedSoft: 'bg-[#13110D] border-[#3F331B] text-[#D8BB73] hover:bg-[#191611]',
-  summaryActive: 'bg-[#14120E] border-[#4A3A18] text-[#E5C46E]',
-  summaryRest: 'border-[#2F2618] bg-[#0F0F11]',
-  summaryHover: 'hover:border-[#5B4720] hover:bg-[#15120E]',
-  summaryBorder: 'rgba(241, 180, 37, 0.16)',
-  summaryBorderHover: 'rgba(241, 180, 37, 0.28)',
-  summaryActiveBg: 'rgba(241, 180, 37, 0.05)',
-  selectedBorder: 'border-[#5B4720]',
-  badge: 'bg-[#09090B]/96 border-[#2B2418]',
-  pointSelected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
-  pointBadge: 'bg-[#1A160F] text-[#F2CC72] border-[#5B4720]',
-  badgeAccent: '#F1B425',
+  bar: 'bg-[#FFB400]/95',
+  text: 'text-[#FFD36A]',
+  softText: 'text-[#FFD36A]/58',
+  selected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20',
+  summaryActive: 'bg-[#FFB400]/[0.035] border-[#FFB400]/15 text-[#FFD36A]',
+  summaryRest: 'border-[#FFB400]/10 bg-black/5',
+  summaryHover: 'hover:border-[#FFB400]/20 hover:bg-[#FFB400]/[0.035]',
+  summaryBorder: 'rgba(246, 200, 95, 0.14)',
+  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
+  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
+  selectedBorder: 'border-black/20',
+  badge: 'bg-[#050505]/92 border-black/55',
+  pointSelected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#FFB400] text-[#171717] border-black/20',
+  badgeAccent: '#FFB400',
 };
 
 const STUDIO_ACCENT_RED: StudioSectionAccent = {
@@ -781,22 +782,22 @@ const STUDIO_ACCENT_RED: StudioSectionAccent = {
 };
 
 const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
-  bar: 'bg-[#F1B425]/95',
-  text: 'text-[#EFCB75]',
-  softText: 'text-[#EFCB75]/52',
-  selected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
-  selectedSoft: 'bg-[#13110D] border-[#3F331B] text-[#D8BB73] hover:bg-[#191611]',
-  summaryActive: 'bg-[#14120E] border-[#4A3A18] text-[#E5C46E]',
-  summaryRest: 'border-[#2F2618] bg-[#0F0F11]',
-  summaryHover: 'hover:border-[#5B4720] hover:bg-[#15120E]',
-  summaryBorder: 'rgba(241, 180, 37, 0.16)',
-  summaryBorderHover: 'rgba(241, 180, 37, 0.28)',
-  summaryActiveBg: 'rgba(241, 180, 37, 0.05)',
-  selectedBorder: 'border-[#5B4720]',
-  badge: 'bg-[#09090B]/96 border-[#2B2418]',
-  pointSelected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
-  pointBadge: 'bg-[#1A160F] text-[#F2CC72] font-bold border-[#5B4720]',
-  badgeAccent: '#F1B425',
+  bar: 'bg-[#FFB400]/95',
+  text: 'text-[#FFD36A]',
+  softText: 'text-[#FFD36A]/58',
+  selected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  selectedSoft: 'bg-[#FFB400]/15 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/22',
+  summaryActive: 'bg-[#FFB400]/[0.035] border-[#FFB400]/15 text-[#FFD36A]',
+  summaryRest: 'border-[#FFB400]/10 bg-black/5',
+  summaryHover: 'hover:border-[#FFB400]/20 hover:bg-[#FFB400]/[0.035]',
+  summaryBorder: 'rgba(246, 200, 95, 0.14)',
+  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
+  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
+  selectedBorder: 'border-black/20',
+  badge: 'bg-[#050505]/92 border-black/55',
+  pointSelected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
+  pointBadge: 'bg-[#FFB400] text-[#171717] font-black border-black/20',
+  badgeAccent: '#FFB400',
 };
 
 type StudioMenuThemeKey = 'amber' | 'red' | 'green';
@@ -13657,6 +13658,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </header>
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
+              <StudioBlackSplitLayout>
+                <section className="soridraw-studio-builder-pane">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}
@@ -14710,7 +14713,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </div>
           </div>
         </div>
+                </>
+              )}
+                </section>
 
+                <section className="soridraw-studio-result-pane" aria-label="생성곡 결과">
+              {isStudioLoaded && (
+                <>
         {/* Result Area */}
         <AnimatePresence>
           {user && result && (
@@ -14719,7 +14728,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               className={cn(
-                "space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] transition-all duration-300 relative"
+                "soridraw-studio-result-content space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] transition-all duration-300 relative"
               )}
             >
 
@@ -16064,8 +16073,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </motion.div>
           )}
         </AnimatePresence>
+
+        {(!user || !result) && (
+          <div className="soridraw-studio-result-empty">
+            <div className="soridraw-studio-result-empty-icon">
+              <Music className="h-5 w-5" />
+            </div>
+            <div>
+              <h2>생성곡 결과</h2>
+              <p>곡을 생성하면 제목, 프롬프트와 가사가 이 영역에 표시됩니다.</p>
+            </div>
+          </div>
+        )}
                 </>
               )}
+                </section>
+              </StudioBlackSplitLayout>
             </main>
           </>
           ) : (
@@ -16222,7 +16245,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 initial={{ opacity: 0, y: 24, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                className="w-full max-w-3xl max-h-[88vh] overflow-hidden rounded-3xl border border-[#cd8c31]/25 bg-[var(--card-bg)] shadow-[0_28px_90px_rgba(0,0,0,0.58)] flex flex-col"
+                className="soridraw-studio-result-edit-modal w-full max-w-3xl max-h-[88vh] overflow-hidden rounded-3xl border border-[#cd8c31]/25 bg-[var(--card-bg)] shadow-[0_28px_90px_rgba(0,0,0,0.58)] flex flex-col"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-[#cd8c31]/15 bg-[#cd8c31]/[0.055] px-5 py-4">
                   <div className="min-w-0">

@@ -66,6 +66,7 @@ import {
   Sunset,
   Activity,
   PenTool,
+  Palette,
   FlaskConical,
   AlertTriangle
 } from 'lucide-react';
@@ -296,6 +297,7 @@ import {
 } from './constants/navigationVisibility';
 import { EMPTY_ADMIN_PERMISSIONS, getFirstAccessibleAdminPath, normalizeAdminPermissions, normalizeStaffRole } from './constants/adminPermissions';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
+import { applySoridrawTheme, readSoridrawTheme } from './services/themePreferences';
 
 
 
@@ -3310,7 +3312,7 @@ function Navigation({
     <>
       {/* Top Navigation */}
       <div
-        className="absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
+        className="soridraw-top-navigation absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
       >
         <button
           type="button"
@@ -3425,7 +3427,7 @@ function Navigation({
             <>
               <button
                 type="button"
-                onClick={() => goToTopNav('/my-page')}
+                onClick={() => setIsProfileOpen((prev) => !prev)}
                 className="flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
               >
                 <img
@@ -3436,6 +3438,32 @@ function Navigation({
                 />
                 <span className="hidden truncate sm:inline">{headerIdentity.displayName || 'My'}</span>
               </button>
+              <AnimatePresence>
+                {isProfileOpen && user && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                    className="absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                  >
+                    <div className="border-b border-white/10 px-3 py-2.5">
+                      <p className="truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
+                      <p className="truncate text-xs text-white/45">{user.email || ''}</p>
+                    </div>
+                    {[
+                      { label: '내 프로필', path: '/my-page' },
+                      { label: '설정', path: '/my-page?tab=settings' },
+                      { label: '요금제', path: '/my-page?tab=plan' },
+                      { label: '결제 관리', path: '/my-page?tab=billing' },
+                    ].map((item) => (
+                      <button key={item.label} type="button" onClick={() => { navigate(item.path); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/72 transition-all hover:bg-[#ffb400]/10 hover:text-[#ffb400]">{item.label}</button>
+                    ))}
+                    <div className="my-1 border-t border-white/10" />
+                    <button type="button" disabled className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/30">고객지원 · 준비중</button>
+                    <button type="button" onClick={() => { handleLogout(); setIsProfileOpen(false); }} className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-black text-[#ffb400] transition-all hover:bg-[#ffb400]/10">로그아웃</button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </>
           ) : (
             <button
@@ -3794,6 +3822,9 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
 };
 
 function App() {
+  useEffect(() => {
+    applySoridrawTheme(readSoridrawTheme());
+  }, []);
   // Screen size detection for FHD / QHD Desktop monitors to preserve styles during browser zoom
   useEffect(() => {
     const updateScreenType = () => {
@@ -12890,7 +12921,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
   return (
-    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+    <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
       {user && emailVerificationGate !== 'idle' && (
         <Portal>
           <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/78 px-4 py-8 backdrop-blur-md">
@@ -13385,6 +13416,32 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
           <>
+              <aside className="soridraw-studio-side-panel" aria-label="소리스튜디오 바로가기">
+                <div className="soridraw-studio-side-panel-inner">
+                  <p className="soridraw-studio-side-eyebrow">SORI STUDIO</p>
+                  <button type="button" className="soridraw-studio-side-item is-active" onClick={() => scrollToTop()}>
+                    <PenTool className="h-5 w-5" />
+                    <span>곡 만들기</span>
+                  </button>
+                  <button type="button" className="soridraw-studio-side-item" onClick={() => navigate('/suno-library')}>
+                    <History className="h-5 w-5" />
+                    <span>최근 생성곡</span>
+                  </button>
+                  <button type="button" className="soridraw-studio-side-item" onClick={() => navigate('/history')}>
+                    <Music className="h-5 w-5" />
+                    <span>뮤직노트</span>
+                  </button>
+                  <button type="button" className="soridraw-studio-side-item" onClick={() => navigate('/suno-library')}>
+                    <Library className="h-5 w-5" />
+                    <span>라이브러리</span>
+                  </button>
+                  <div className="soridraw-studio-side-divider" />
+                  <button type="button" className="soridraw-studio-side-item is-subtle" onClick={() => navigate('/my-page?tab=app')}>
+                    <Palette className="h-5 w-5" />
+                    <span>테마 설정</span>
+                  </button>
+                </div>
+              </aside>
 
               {/* Header */}
               <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">

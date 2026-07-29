@@ -1195,7 +1195,7 @@ export default function MusicApiGenerateModal({
                       type="button"
                       onClick={handleNext}
                       disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                      className="basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[18px] sm:text-[22px] font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center outline-none select-none"
+                      className="music-api-generate-primary basis-[67%] w-[67%] h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[18px] sm:text-[22px] font-black transition-all shadow-lg bg-[#E7AD68] hover:bg-[#ECB976] !text-[#111111] shadow-[0_12px_28px_rgba(231,173,104,0.22)] shrink-0 flex items-center justify-center outline-none select-none"
                       style={{ WebkitTapHighlightColor: 'transparent' }}
                     >
                       다음
@@ -1206,7 +1206,7 @@ export default function MusicApiGenerateModal({
                     type="button"
                     onClick={handleNext}
                     disabled={!hasApiKey || (includeLyrics && lyricLanguages.length === 0)}
-                    className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[22px] sm:text-[24px] font-black transition-all shadow-lg ${accentBg} outline-none select-none`}
+                    className={`music-api-generate-primary w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[22px] sm:text-[24px] font-black transition-all shadow-lg ${accentBg} outline-none select-none`}
                     style={{ WebkitTapHighlightColor: 'transparent' }}
                   >
                     다음
@@ -1267,7 +1267,7 @@ export default function MusicApiGenerateModal({
                   type="button"
                   onClick={handleConfirm}
                   disabled={!hasApiKey}
-                  className={`w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[22px] sm:text-[24px] font-black transition-all shadow-lg ${accentBg}`}
+                  className={`music-api-generate-primary w-full h-14 sm:h-16 rounded-2xl disabled:opacity-40 disabled:cursor-not-allowed text-[22px] sm:text-[24px] font-black transition-all shadow-lg ${accentBg}`}
                 >
                   {isMain ? `${generationCount}곡 생성하기` : (targetMode === 'batch' ? `${musicApiTargets.length}곡 API 생성하기` : '1곡 API 생성하기')}
                 </button>

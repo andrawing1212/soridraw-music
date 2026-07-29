@@ -21,6 +21,7 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Pin,
   PinOff,
   Trash2,
@@ -742,22 +743,22 @@ type StudioSectionAccent = {
 };
 
 const STUDIO_ACCENT_AMBER: StudioSectionAccent = {
-  bar: 'bg-[#FFB400]/95',
-  text: 'text-[#FFD36A]',
-  softText: 'text-[#FFD36A]/58',
-  selected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20',
-  summaryActive: 'bg-[#FFB400]/[0.035] border-[#FFB400]/15 text-[#FFD36A]',
-  summaryRest: 'border-[#FFB400]/10 bg-black/5',
-  summaryHover: 'hover:border-[#FFB400]/20 hover:bg-[#FFB400]/[0.035]',
-  summaryBorder: 'rgba(246, 200, 95, 0.14)',
-  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
-  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
-  selectedBorder: 'border-black/20',
-  badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#FFB400] text-[#171717] border-black/20',
-  badgeAccent: '#FFB400',
+  bar: 'bg-[#F1B425]/95',
+  text: 'text-[#EFCB75]',
+  softText: 'text-[#EFCB75]/52',
+  selected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
+  selectedSoft: 'bg-[#13110D] border-[#3F331B] text-[#D8BB73] hover:bg-[#191611]',
+  summaryActive: 'bg-[#14120E] border-[#4A3A18] text-[#E5C46E]',
+  summaryRest: 'border-[#2F2618] bg-[#0F0F11]',
+  summaryHover: 'hover:border-[#5B4720] hover:bg-[#15120E]',
+  summaryBorder: 'rgba(241, 180, 37, 0.16)',
+  summaryBorderHover: 'rgba(241, 180, 37, 0.28)',
+  summaryActiveBg: 'rgba(241, 180, 37, 0.05)',
+  selectedBorder: 'border-[#5B4720]',
+  badge: 'bg-[#09090B]/96 border-[#2B2418]',
+  pointSelected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
+  pointBadge: 'bg-[#1A160F] text-[#F2CC72] border-[#5B4720]',
+  badgeAccent: '#F1B425',
 };
 
 const STUDIO_ACCENT_RED: StudioSectionAccent = {
@@ -780,22 +781,22 @@ const STUDIO_ACCENT_RED: StudioSectionAccent = {
 };
 
 const STUDIO_ACCENT_GREEN: StudioSectionAccent = {
-  bar: 'bg-[#FFB400]/95',
-  text: 'text-[#FFD36A]',
-  softText: 'text-[#FFD36A]/58',
-  selected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  selectedSoft: 'bg-[#FFB400]/15 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/22',
-  summaryActive: 'bg-[#FFB400]/[0.035] border-[#FFB400]/15 text-[#FFD36A]',
-  summaryRest: 'border-[#FFB400]/10 bg-black/5',
-  summaryHover: 'hover:border-[#FFB400]/20 hover:bg-[#FFB400]/[0.035]',
-  summaryBorder: 'rgba(246, 200, 95, 0.14)',
-  summaryBorderHover: 'rgba(246, 200, 95, 0.24)',
-  summaryActiveBg: 'rgba(246, 200, 95, 0.035)',
-  selectedBorder: 'border-black/20',
-  badge: 'bg-[#050505]/92 border-black/55',
-  pointSelected: 'bg-[#FFB400] border-black/20 text-[#171717] font-black soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]',
-  pointBadge: 'bg-[#FFB400] text-[#171717] font-black border-black/20',
-  badgeAccent: '#FFB400',
+  bar: 'bg-[#F1B425]/95',
+  text: 'text-[#EFCB75]',
+  softText: 'text-[#EFCB75]/52',
+  selected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
+  selectedSoft: 'bg-[#13110D] border-[#3F331B] text-[#D8BB73] hover:bg-[#191611]',
+  summaryActive: 'bg-[#14120E] border-[#4A3A18] text-[#E5C46E]',
+  summaryRest: 'border-[#2F2618] bg-[#0F0F11]',
+  summaryHover: 'hover:border-[#5B4720] hover:bg-[#15120E]',
+  summaryBorder: 'rgba(241, 180, 37, 0.16)',
+  summaryBorderHover: 'rgba(241, 180, 37, 0.28)',
+  summaryActiveBg: 'rgba(241, 180, 37, 0.05)',
+  selectedBorder: 'border-[#5B4720]',
+  badge: 'bg-[#09090B]/96 border-[#2B2418]',
+  pointSelected: 'bg-[#17130D] border-[#5B4720] text-[#F2CC72] font-bold soridraw-selected-strong shadow-none',
+  pointBadge: 'bg-[#1A160F] text-[#F2CC72] font-bold border-[#5B4720]',
+  badgeAccent: '#F1B425',
 };
 
 type StudioMenuThemeKey = 'amber' | 'red' | 'green';
@@ -3444,7 +3445,7 @@ function Navigation({
                     initial={{ opacity: 0, y: -6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                    className="absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                    className="soridraw-studio-profile-menu absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                   >
                     <div className="border-b border-white/10 px-3 py-2.5">
                       <p className="truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
@@ -12919,6 +12920,62 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     [],
   );
 
+  const formatStudioDashboardTime = (timestamp?: number | null) => {
+    if (!timestamp) return '기록 없음';
+    const elapsed = Math.max(0, Date.now() - timestamp);
+    if (elapsed < 60_000) return '방금 전';
+    if (elapsed < 3_600_000) return `${Math.max(1, Math.floor(elapsed / 60_000))}분 전`;
+    if (elapsed < 86_400_000) return `${Math.max(1, Math.floor(elapsed / 3_600_000))}시간 전`;
+    return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(timestamp);
+  };
+
+  const studioDashboardActivities = useMemo(() => {
+    const activities: Array<{ id: string; label: string; detail: string; timestamp: number; status: 'active' | 'done' | 'info' | 'error' }> = [];
+
+    generationQueueItems.forEach((item) => {
+      const timestamp = item.completedAt || item.startedAt || item.queuedAt;
+      activities.push({
+        id: `queue-${item.id}`,
+        label: item.status === 'running' ? '곡 생성 진행 중' : item.status === 'queued' ? '생성 대기 등록' : item.status === 'completed' ? '곡 생성 완료' : '곡 생성 오류',
+        detail: item.summary || `${item.generationCount}곡 작업`,
+        timestamp,
+        status: item.status === 'running' || item.status === 'queued' ? 'active' : item.status === 'completed' ? 'done' : 'error',
+      });
+    });
+
+    history.slice(0, 3).forEach((song, index) => {
+      activities.push({
+        id: `history-${song.createdAt || index}-${song.title}`,
+        label: '최근 생성곡 저장',
+        detail: song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`,
+        timestamp: song.updatedAt || song.createdAt || Date.now() - index,
+        status: 'done',
+      });
+    });
+
+    if (sunoRemainingCreditsUpdatedAt) {
+      activities.push({
+        id: `credits-${sunoRemainingCreditsUpdatedAt}`,
+        label: 'Music API 크레딧 확인',
+        detail: sunoRemainingCredits === null ? '크레딧 정보 없음' : `${sunoRemainingCredits.toLocaleString()} 남음`,
+        timestamp: sunoRemainingCreditsUpdatedAt,
+        status: 'info',
+      });
+    }
+
+    return activities
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 4);
+  }, [generationQueueItems, history, sunoRemainingCredits, sunoRemainingCreditsUpdatedAt]);
+
+  const openStudioDashboardSong = (song: SongResult, index: number) => {
+    setHistoryIndex(index);
+    setResult(song);
+    setLatestGenerationBatchId((song.appliedKeywords as any)?.generationBatchId || null);
+    window.requestAnimationFrame(() => {
+      resultAreaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   return (
     <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
@@ -13416,30 +13473,155 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
           <>
-              <aside className="soridraw-studio-side-panel" aria-label="소리스튜디오 바로가기">
-                <div className="soridraw-studio-side-panel-inner">
-                  <p className="soridraw-studio-side-eyebrow">SORI STUDIO</p>
-                  <button type="button" className="soridraw-studio-side-item is-active" onClick={() => scrollToTop()}>
-                    <PenTool className="h-5 w-5" />
-                    <span>곡 만들기</span>
-                  </button>
-                  <button type="button" className="soridraw-studio-side-item" onClick={() => navigate('/suno-library')}>
-                    <History className="h-5 w-5" />
-                    <span>최근 생성곡</span>
-                  </button>
-                  <button type="button" className="soridraw-studio-side-item" onClick={() => navigate('/history')}>
-                    <Music className="h-5 w-5" />
-                    <span>뮤직노트</span>
-                  </button>
-                  <button type="button" className="soridraw-studio-side-item" onClick={() => navigate('/suno-library')}>
-                    <Library className="h-5 w-5" />
-                    <span>라이브러리</span>
-                  </button>
-                  <div className="soridraw-studio-side-divider" />
-                  <button type="button" className="soridraw-studio-side-item is-subtle" onClick={() => navigate('/my-page?tab=app')}>
+              <aside className="soridraw-studio-left-panel" aria-label="소리스튜디오 작업 메뉴">
+                <div className="soridraw-studio-left-panel-inner">
+                  <div className="soridraw-studio-rail-brand">
+                    <span className="soridraw-studio-rail-brand-mark">SD</span>
+                    <span><strong>Sori Studio</strong><small>Studio Black</small></span>
+                  </div>
+
+                  <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">
+                    <p className="soridraw-studio-rail-label">WORKSPACE</p>
+                    <button type="button" className="soridraw-studio-rail-item is-active" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                      <PenTool className="h-5 w-5" />
+                      <span>곡 만들기</span>
+                    </button>
+                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/suno-library')}>
+                      <History className="h-5 w-5" />
+                      <span>최근 생성곡</span>
+                      <ChevronRight className="ml-auto h-4 w-4" />
+                    </button>
+                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/history')}>
+                      <Music className="h-5 w-5" />
+                      <span>뮤직노트</span>
+                      <ChevronRight className="ml-auto h-4 w-4" />
+                    </button>
+                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/suno-library')}>
+                      <Library className="h-5 w-5" />
+                      <span>라이브러리</span>
+                      <ChevronRight className="ml-auto h-4 w-4" />
+                    </button>
+
+                    <div className="soridraw-studio-rail-divider" />
+                    <p className="soridraw-studio-rail-label">TOOLS</p>
+                    <button type="button" className="soridraw-studio-rail-item" onClick={openGlobalSearchModal}>
+                      <Search className="h-5 w-5" />
+                      <span>통합 검색</span>
+                    </button>
+                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/suno-api-settings')}>
+                      <Settings className="h-5 w-5" />
+                      <span>API 설정</span>
+                    </button>
+                  </nav>
+
+                  <button type="button" className="soridraw-studio-rail-theme" onClick={() => navigate('/my-page?tab=app')}>
                     <Palette className="h-5 w-5" />
-                    <span>테마 설정</span>
+                    <span><strong>디자인 테마</strong><small>Classic / Studio Black</small></span>
+                    <ChevronRight className="ml-auto h-4 w-4" />
                   </button>
+                </div>
+              </aside>
+
+              <aside className="soridraw-studio-dashboard-panel" aria-label="소리스튜디오 보조 대시보드">
+                <div className="soridraw-studio-dashboard-inner">
+                  <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-status">
+                    <div className="soridraw-studio-dashboard-heading">
+                      <div>
+                        <p>GENERATION</p>
+                        <h2>생성 상태</h2>
+                      </div>
+                      <span className={cn('soridraw-studio-dashboard-live-dot', (isGenerating || runningGenerationCount > 0) && 'is-running')} />
+                    </div>
+                    <div className="soridraw-studio-dashboard-state">
+                      <strong>{runningGenerationCount > 0 ? `${runningGenerationCount}곡 생성 중` : queuedGenerationCount > 0 ? '대기 작업 있음' : '생성 준비 완료'}</strong>
+                      <small>{runningGenerationCount > 0 ? '완료되면 최근 생성곡에 자동 반영됩니다.' : queuedGenerationCount > 0 ? `${queuedGenerationCount}건이 순서대로 시작됩니다.` : '설정을 고른 뒤 생성하기를 눌러주세요.'}</small>
+                    </div>
+                    <div className="soridraw-studio-dashboard-metrics">
+                      <span><small>진행</small><strong>{runningGenerationCount}</strong></span>
+                      <span><small>대기</small><strong>{queuedGenerationCount}</strong></span>
+                      <span><small>최근곡</small><strong>{history.length}</strong></span>
+                    </div>
+                    <button type="button" className="soridraw-studio-dashboard-primary" onClick={() => setShowMainGenerationModal(true)}>
+                      <Sparkles className="h-4 w-4" />
+                      생성 옵션 열기
+                    </button>
+                  </section>
+
+                  <section className="soridraw-studio-dashboard-card">
+                    <div className="soridraw-studio-dashboard-heading">
+                      <div>
+                        <p>RECENT SONGS</p>
+                        <h2>최근 생성곡</h2>
+                      </div>
+                      <button type="button" className="soridraw-studio-dashboard-text-button" onClick={() => navigate('/suno-library')}>전체</button>
+                    </div>
+                    <div className="soridraw-studio-dashboard-song-list">
+                      {history.length > 0 ? history.slice(0, 3).map((song, index) => (
+                        <button
+                          key={`studio-dashboard-song-${song.createdAt || index}-${song.title}`}
+                          type="button"
+                          className={cn('soridraw-studio-dashboard-song', historyIndex === index && 'is-selected')}
+                          onClick={() => openStudioDashboardSong(song, index)}
+                        >
+                          <span className="soridraw-studio-dashboard-song-icon"><Music className="h-4 w-4" /></span>
+                          <span className="soridraw-studio-dashboard-song-copy">
+                            <strong>{song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`}</strong>
+                            <small>{formatStudioDashboardTime(song.updatedAt || song.createdAt)}</small>
+                          </span>
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      )) : (
+                        <div className="soridraw-studio-dashboard-empty">
+                          <Music className="h-5 w-5" />
+                          <span>아직 생성된 곡이 없습니다.</span>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-credit">
+                    <div className="soridraw-studio-dashboard-heading compact">
+                      <div>
+                        <p>MUSIC API</p>
+                        <h2>남은 크레딧</h2>
+                      </div>
+                      <Activity className="h-5 w-5" />
+                    </div>
+                    <div className="soridraw-studio-dashboard-credit-value">
+                      <strong>{sunoRemainingCredits === null ? '—' : sunoRemainingCredits.toLocaleString()}</strong>
+                      <span>credits</span>
+                    </div>
+                    <div className="soridraw-studio-dashboard-credit-footer">
+                      <small>{formatStudioDashboardTime(sunoRemainingCreditsUpdatedAt)}</small>
+                      <button type="button" onClick={() => navigate('/suno-api-settings')}>설정</button>
+                    </div>
+                  </section>
+
+                  <section className="soridraw-studio-dashboard-card">
+                    <div className="soridraw-studio-dashboard-heading compact">
+                      <div>
+                        <p>ACTIVITY</p>
+                        <h2>최근 활동</h2>
+                      </div>
+                    </div>
+                    <div className="soridraw-studio-dashboard-activity-list">
+                      {studioDashboardActivities.length > 0 ? studioDashboardActivities.map((activity) => (
+                        <div key={activity.id} className="soridraw-studio-dashboard-activity">
+                          <span className={cn('soridraw-studio-dashboard-activity-dot', `is-${activity.status}`)} />
+                          <span>
+                            <strong>{activity.label}</strong>
+                            <small>{activity.detail}</small>
+                          </span>
+                          <time>{formatStudioDashboardTime(activity.timestamp)}</time>
+                        </div>
+                      )) : (
+                        <div className="soridraw-studio-dashboard-empty compact">
+                          <Activity className="h-5 w-5" />
+                          <span>활동 기록이 아직 없습니다.</span>
+                        </div>
+                      )}
+                    </div>
+                  </section>
                 </div>
               </aside>
 

@@ -353,7 +353,12 @@ export interface AppliedKeywords {
   customStructure?: CustomSectionItem[];
   sectionCueOptions?: SectionCueOptions;
   kpopMode?: 0 | 1 | 2;
+  lyricLanguages?: string[];
+  titleLanguages?: string[];
   isKoreanEnglishMix?: boolean;
+  englishMixRatio?: number;
+  languageMixRatio?: number;
+  languageMixTargetLanguages?: string[];
   citypopMode?: 0 | 1 | 2;
   vocal?: VocalConfig;
   maleCount?: number;
@@ -374,6 +379,27 @@ export interface AppliedKeywords {
   geminiFallbackFrom?: string | null;
   geminiFallbackReason?: string | null;
   geminiAttemptedModels?: string[];
+  lyricArchitectureAudit?: {
+    version?: string;
+    mode?: 'shadow';
+    primaryProfile?: string;
+    secondaryProfiles?: string[];
+    genreProsody?: Record<string, number>;
+    densityCurve?: Array<{ section?: string; density?: number }>;
+    sections?: Array<{
+      section?: string;
+      roleFamily?: string;
+      narrativeJob?: string;
+      density?: number;
+      phraseLength?: string;
+      breathSpace?: string;
+      repetition?: string;
+      melodicSustain?: string;
+      rhymePriority?: string;
+      languageMixShape?: string;
+    }>;
+    safeguards?: string[];
+  };
   languageMixAudit?: {
     active?: boolean;
     requestedRatio?: number;
@@ -630,6 +656,9 @@ export interface AppUserInfo {
   // Admin only
   adminMemo?: string;
   lyricClicheGuard?: LyricClicheGuardSettings | null;
+  generationPreferences?: {
+    autoModelFallback?: boolean;
+  };
 }
 
 // ==========================================

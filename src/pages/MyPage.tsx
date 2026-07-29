@@ -28,6 +28,7 @@ import { auth, db } from '../firebase';
 import { AppUserInfo, UserRole } from '../types';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
+import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -260,6 +261,9 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const [personalClicheDraft, setPersonalClicheDraft] = useState<PersonalClicheDraft>(EMPTY_PERSONAL_CLICHE_DRAFT);
  const [isSavingPersonalCliche, setIsSavingPersonalCliche] = useState(false);
  const [personalClicheMessage, setPersonalClicheMessage] = useState<string | null>(null);
+ const [autoModelFallback, setAutoModelFallback] = useState(() => readGeminiAutoModelFallback(auth.currentUser?.uid));
+ const [isSavingAutoModelFallback, setIsSavingAutoModelFallback] = useState(false);
+ const [autoModelFallbackMessage, setAutoModelFallbackMessage] = useState<string | null>(null);
 
  useEffect(() => {
  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -281,6 +285,13 @@ export default function MyPage({ onLogout }: MyPageProps) {
  });
  return () => unsubscribe();
  }, [user]);
+
+ useEffect(() => {
+ if (!user?.uid || !profile) return;
+ const nextValue = profile.generationPreferences?.autoModelFallback !== false;
+ setAutoModelFallback(nextValue);
+ writeGeminiAutoModelFallback(nextValue, user.uid);
+ }, [profile, user?.uid]);
 
  useEffect(() => {
  const refreshStatus = () => {
@@ -408,6 +419,32 @@ export default function MyPage({ onLogout }: MyPageProps) {
  setIsSavingPersonalCliche(false);
  }
  }, [isSavingPersonalCliche, personalClicheDraft.hardBanText, personalClicheDraft.softBanText, user?.uid]);
+
+ const handleToggleAutoModelFallback = useCallback(async () => {
+ if (!user?.uid || isSavingAutoModelFallback) return;
+ const previousValue = autoModelFallback;
+ const nextValue = !previousValue;
+ setAutoModelFallback(nextValue);
+ setIsSavingAutoModelFallback(true);
+ setAutoModelFallbackMessage(null);
+ writeGeminiAutoModelFallback(nextValue, user.uid);
+ try {
+ await updateDoc(doc(db, 'users', user.uid), {
+ 'generationPreferences.autoModelFallback': nextValue,
+ updatedAt: Date.now(),
+ });
+ setAutoModelFallbackMessage(nextValue
+ ? '한도 초과 시 대체 Gemini 모델로 자동 전환합니다.'
+ : '기본 Gemini 모델만 사용합니다.');
+ } catch (error) {
+ console.error('Gemini auto model fallback preference update failed:', error);
+ setAutoModelFallback(previousValue);
+ writeGeminiAutoModelFallback(previousValue, user.uid);
+ setAutoModelFallbackMessage('자동 전환 설정 저장에 실패했습니다.');
+ } finally {
+ setIsSavingAutoModelFallback(false);
+ }
+ }, [autoModelFallback, isSavingAutoModelFallback, user?.uid]);
 
  const handleLogout = useCallback(async () => {
  await onLogout();
@@ -567,6 +604,43 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </div>
  </motion.section>
  </div>
+
+ <motion.section
+ initial={{ opacity: 0, y: 10 }}
+ animate={{ opacity: 1, y: 0 }}
+ transition={{ delay: 0.16 }}
+ className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
+ >
+ <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+ <div className="max-w-3xl">
+ <div className="flex items-center gap-2">
+ <WandSparkles className="h-5 w-5 text-zinc-300" />
+ <h2 className="text-lg font-black text-white">개인 설정</h2>
+ </div>
+ <h3 className="mt-4 text-sm font-black text-zinc-100">생성 모델 자동 전환</h3>
+ <p className="mt-1 text-sm leading-relaxed text-white/56">
+ 기본 Gemini 모델이 명확한 요청 한도 초과 또는 일시 사용 불가 상태일 때만 대체 Gemini 모델로 전환합니다.
+ 정상 생성, 느린 응답, 가사 품질이나 형식 문제로는 전환하지 않습니다.
+ </p>
+ {autoModelFallbackMessage && (
+ <p className="mt-2 text-xs font-bold text-zinc-400">{autoModelFallbackMessage}</p>
+ )}
+ </div>
+ <button
+ type="button"
+ role="switch"
+ aria-checked={autoModelFallback}
+ aria-label="생성 모델 자동 전환"
+ onClick={handleToggleAutoModelFallback}
+ disabled={isSavingAutoModelFallback}
+ className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full p-1 transition-colors disabled:cursor-wait disabled:opacity-60 ${autoModelFallback ? 'bg-zinc-100' : 'bg-white/[0.10]'}`}
+ >
+ <span
+ className={`h-6 w-6 rounded-full shadow-sm transition-transform ${autoModelFallback ? 'translate-x-6 bg-zinc-950' : 'translate-x-0 bg-zinc-300'}`}
+ />
+ </button>
+ </div>
+ </motion.section>
 
  <div className="grid gap-5 lg:grid-cols-2 items-start">
  <div id="music-api-credit-section" className="scroll-mt-24">

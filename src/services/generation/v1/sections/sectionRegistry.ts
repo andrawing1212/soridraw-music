@@ -184,9 +184,9 @@ const DEFINITIONS: V1SectionDefinition[] = [
     canonical: 'Outro',
     aliases: [/^outro(?:\s*\d+)?$/i, /^ending$/i],
     kind: 'closing',
-    requiresLyrics: true,
+    requiresLyrics: false,
     allowsLyrics: true,
-    lyricRole: 'Close or leave a deliberate final afterimage with a short lyric, ad-lib, or resolved vocal return. Do not restart the whole story.',
+    lyricRole: 'Close or leave a deliberate final afterimage with a short lexical line, a clearly justified vocal gesture, or a lyric-free musical tail. Do not restart the whole story and do not add generic humming as a placeholder.',
   },
 ];
 
@@ -301,6 +301,11 @@ export function isV1SoundOrProductionCue(value: string): boolean {
 export function cleanV1SectionCue(value: string): string {
   return String(value || '')
     .replace(/[\[\]\n\r]/g, ' ')
+    // Final-output spelling repair for recurrent model truncations observed in real songs.
+    // These are format-safety corrections only; they do not replace the model's creative cue.
+    .replace(/\belivery\b/gi, 'delivery')
+    .replace(/\beflection\b/gi, 'reflection')
+    .replace(/\bleads\s+voice\b/gi, 'lead voice')
     .replace(/\s+/g, ' ')
     .replace(/^\s*[,;:]+|[,;:]+\s*$/g, '')
     .trim();

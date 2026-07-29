@@ -1,2 +1,0 @@
-Collect focused master permission implementation details.
-Requested: 2026-07-25T11:08:00Z

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, ChevronLeft, Key, Languages, Music, X, ListMusic } from 'lucide-react';
+import { getLanguageMixRatioBand, LANGUAGE_MIX_RATIO_OPTIONS, normalizeLanguageMixRatioOption } from '../constants/languageMixRatios';
 
 declare global {
   interface Window {
@@ -32,6 +33,7 @@ type MusicApiGenerateModalProps = {
   variant?: ModalVariant;
   availableLyricLanguages?: LanguageCode[];
   maxLyricLanguages?: number;
+  initialLyricLanguages?: LanguageCode[];
   musicApiTargets?: MusicApiTargetOption[];
   remainingCredits?: number | null;
   onClose: () => void;
@@ -254,6 +256,7 @@ export default function MusicApiGenerateModal({
   variant = 'musicApi',
   availableLyricLanguages,
   maxLyricLanguages,
+  initialLyricLanguages,
   musicApiTargets = [],
   remainingCredits = null,
   onClose,
@@ -309,9 +312,16 @@ export default function MusicApiGenerateModal({
 
   const initialLangs = useMemo(() => {
     if (isNoLyrics) return [] as LanguageCode[];
+
+    const availableIds = new Set(filteredLanguages.map((item) => item.id));
+    const restored = Array.from(new Set((initialLyricLanguages || [])
+      .filter((language): language is LanguageCode => availableIds.has(language))))
+      .slice(0, maxCount);
+    if (restored.length > 0) return restored;
+
     if (filteredLanguages.some((item) => item.id === 'ko')) return ['ko'] as LanguageCode[];
     return filteredLanguages[0] ? [filteredLanguages[0].id] : ([] as LanguageCode[]);
-  }, [filteredLanguages, isNoLyrics]);
+  }, [filteredLanguages, initialLyricLanguages, isNoLyrics, maxCount]);
 
   const [step, setStep] = useState<1 | 2>(1);
   const stepRef = useRef<1 | 2>(1);
@@ -360,7 +370,7 @@ export default function MusicApiGenerateModal({
   const [lyricLanguages, setLyricLanguages] = useState<LanguageCode[]>(initialLangs);
   const [generationCount, setGenerationCount] = useState<number>(1);
   const [localKoreanEnglishMix, setLocalKoreanEnglishMix] = useState<boolean>(() => Boolean(isKoreanEnglishMix));
-  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => Math.max(10, Math.min(70, Math.round((Number(englishMixRatio) || 10) / 10) * 10)));
+  const [localEnglishMixRatio, setLocalEnglishMixRatio] = useState<number>(() => normalizeLanguageMixRatioOption(englishMixRatio));
   const [localLanguageMixTargets, setLocalLanguageMixTargets] = useState<LanguageCode[]>(() =>
     normalizeLanguageMixTargets(initialLangs[0], initialLangs, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)),
   );
@@ -524,7 +534,7 @@ export default function MusicApiGenerateModal({
   useEffect(() => {
     if (!isMain) return;
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
-    setLocalEnglishMixRatio(Math.max(10, Math.min(70, Math.round((Number(englishMixRatio) || 10) / 10) * 10)));
+    setLocalEnglishMixRatio(normalizeLanguageMixRatioOption(englishMixRatio));
     setLocalLanguageMixTargets(normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)));
     setLocalRapMode(rapMode || (rapEnabled ? 'on' : 'off'));
   }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled, rapMode]);
@@ -583,13 +593,25 @@ export default function MusicApiGenerateModal({
   const selectedLyricMixBaseLabel = lyricLanguages.map((lang) => getLanguageMeta(lang).short).join('/');
   const mixRatioDescriptionLines = useMemo(() => {
     const baseLanguages = (lyricLanguages.length > 0 ? lyricLanguages : [mixBaseLanguage]);
-    const targetText = mixPlainTargetLabel || '혼합 언어';
+    const { lowerBound, upperBound } = getLanguageMixRatioBand(localEnglishMixRatio);
+    const baseMinimum = 100 - upperBound;
+    const baseMaximum = 100 - lowerBound;
     return baseLanguages.map((lang, index) => {
       const baseLabel = getLanguageMeta(lang).short;
-      const suffix = index === baseLanguages.length - 1 ? '기준으로 생성합니다.' : '기준으로,';
-      return `${baseLabel} ${100 - localEnglishMixRatio}% + (${targetText} ${localEnglishMixRatio}%) ${suffix}`;
+      // 카드별 기준 언어를 제외한 가사 카드 언어 + 추가 선택 언어가 실제 섞을 언어다.
+      // 예: 한국어/영어 카드 + 일본어 선택 시
+      // 한국어 카드 → 영어+일본어, 영어 카드 → 한국어+일본어.
+      const cardTargets = Array.from(new Set([
+        ...baseLanguages.filter((candidate) => candidate !== lang),
+        ...resolvedLanguageMixTargets.filter((candidate) => candidate !== lang),
+      ])).slice(0, 2);
+      const targetText = cardTargets.length
+        ? cardTargets.map((candidate) => getLanguageMeta(candidate).short).join('+')
+        : (mixPlainTargetLabel || '혼합 언어');
+      const suffix = index === baseLanguages.length - 1 ? '전체 가창 분량 기준으로 생성합니다.' : '기준으로,';
+      return `${baseLabel} ${baseMinimum}~${baseMaximum}% + (${targetText} ${lowerBound}~${upperBound}%) ${suffix}`;
     });
-  }, [localEnglishMixRatio, lyricLanguages, mixBaseLanguage, mixPlainTargetLabel]);
+  }, [localEnglishMixRatio, lyricLanguages, mixBaseLanguage, mixPlainTargetLabel, resolvedLanguageMixTargets]);
 
   const toggleLanguageMixTarget = (lang: LanguageCode) => {
     if (lang === mixBaseLanguage) return;
@@ -657,7 +679,7 @@ export default function MusicApiGenerateModal({
   const subtitle = isMain
     ? (step === 1 ? '가사 포함 여부와 생성할 가사 언어를 선택합니다.' : '선택한 설정으로 곡 생성을 시작합니다.')
     : (step === 1 ? 'Music API로 보낼 대상과 가사를 선택합니다.' : '선택한 설정으로 생성을 요청합니다.');
-  const mixRatioOptions = [10, 20, 30, 40, 50, 60, 70];
+  const mixRatioOptions = LANGUAGE_MIX_RATIO_OPTIONS;
 
   return (
     <div

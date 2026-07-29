@@ -1,2 +1,7 @@
-/** V1 lyric-owned modules are kept in this folder. */
-export {};
+export {
+  buildV1LyricArchitecturePlan,
+  buildV1LyricArchitecturePublicSummary,
+  buildV1LyricArchitectureInstruction,
+  type V1LyricArchitectureInput,
+  type V1LyricArchitecturePlan,
+} from './lyricArchitecturePlan';

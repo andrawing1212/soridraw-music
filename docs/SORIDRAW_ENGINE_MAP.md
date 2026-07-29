@@ -1061,3 +1061,498 @@
 - Server guard enforces 2 concurrent requests, 12 requests/minute, and 3 requests/session per user.
 - 429 quota errors stop immediately; only temporary 5xx/unavailable errors may use one fallback model.
 - App Check code is prepared and becomes mandatory only after Firebase Console registration and `ENFORCE_APP_CHECK=true`.
+
+## 111차 — Lyric Architecture Shadow Plan / 실제 가사 글자 비율 진단
+
+- 신규 모듈:
+  - `src/services/generation/v1/lyrics/lyricArchitecturePlan.ts`
+  - `src/services/generation/v1/language/languageMixAudit.ts`
+- 현재 가사 결과를 즉시 바꾸지 않는 `shadow` 단계다.
+- 장르·퓨전 신호, 템포, 보컬 랩 역할, 전체 가사 길이와 활성 Section Blueprint를 이용해 다음 내부 진단을 만든다.
+  - 장르적 언어 움직임: 서사량, 리듬 밀도, 멜로디 유지음, 훅 반복, 구절 압축, 호흡 여백, 라임, 대화성
+  - 섹션별 서사 역할, 상대 밀도 0~4, 구절 길이, 호흡, 반복, 유지음, 라임, 언어혼합 형태
+  - 전체 Density Curve
+- 고정 음절표나 소재·장면·문장 예시는 사용하지 않는다. 숫자는 정확한 음절 수가 아니라 섹션 간 상대적 언어 압력을 뜻한다.
+- 진단 결과는 `appliedKeywords.lyricArchitectureAudit`에 저장한다. 아직 생성 프롬프트에는 연결하지 않아 기존 가사 결과의 기준점을 보호한다.
+- 언어혼합 검사는 최종 공개 가사의 실제 가창 내용만 측정한다.
+  - 제외: 섹션 태그, 보컬·퍼포먼스 큐, 악기·프로덕션 큐, 공백, 문장부호
+  - 계산: 목표 언어 문자 수 ÷ (기본 언어 문자 수 + 목표 언어 문자 수)
+  - 결과: `appliedKeywords.languageMixAudit`
+- 이번 단계에서는 비율 진단이 생성 결과를 자동 재작성하지 않는다. 다음 단계에서 동일 입력 비교 후 구절 배치 계획에 연결한다.
+
+## 112차 — Lyric Architecture Active Rollout / 장르·퓨전·섹션 밀도 연결
+
+- 기준: `SORIDRAW_111차_lyric_architecture_shadow_audit.zip`
+- 변경 핵심:
+  - 111차에서 기록만 하던 `LyricArchitecturePlan`을 실제 V1 가사 생성 지시에 연결했다.
+  - 메인 장르는 전체 곡의 언어 움직임과 통일감을 담당한다.
+  - 보조 장르는 Verse, Hook, Bridge, Opening 등 자신의 프레이징이 자연스러운 섹션에만 국소 적용한다.
+  - 각 섹션은 서사 역할, 상대 밀도 0~4, 구절 길이, 호흡, 반복, 멜로디 유지음, 라임 우선도, 장르 영향 정보를 가진다.
+  - Verse 2는 이전 Verse의 반복이 아니라 새로운 행동·결과·관점을 추가하도록 하고, Bridge는 실제 전환, Final Chorus/Hook은 기존 훅의 해소·재해석을 요구한다.
+  - Chorus/Hook은 Verse보다 짧을 수 있으며, 분량을 늘리기 위해 설명문으로 만들지 않는다.
+  - 정확한 음절표나 고정 줄 수는 사용하지 않는다. 현재 장르, 템포, 구조, 보컬, 사용자 직접 지시를 함께 사용한다.
+- 일관성:
+  - 최초 가사 생성과 누락/저밀도 섹션 국소 보완이 같은 Architecture Plan을 사용한다.
+  - `appliedKeywords.lyricArchitectureAudit`에는 `version: v1-active-2`, `mode: active`, 섹션별 `genreInfluence`와 `fusionRole`이 저장된다.
+- 미변경:
+  - 언어혼합 passage 배치 로직과 자동 비율 보정은 이번 차수에서 수정하지 않았다.
+  - Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않았다.
+
+## 113차 — Recommended 누락 섹션 소유권 복구
+
+- 112차 추천 구조 테스트에서 빈 `Chorus 2` 슬롯의 가사가 앞선 `Pre-Chorus 2` 뒤쪽 문단에 붙고, 빈 Chorus 태그만 제거되는 실제 실패를 확인했다.
+- `sectionGuard.ts`는 Recommended/Stable의 명확한 전환 경계에서만 문단 소유권을 복구한다.
+  - 허용: `Pre-Chorus/Build-Up → Chorus/Hook/Drop`, `Bridge → Final Chorus/Final Hook/Climax`
+  - 조건: 다음 필수 슬롯이 비어 있음, 이전 슬롯에 2개 이상 실제 문단이 있음, 분리 후 양쪽에 각각 2줄 이상의 가창 내용이 남음
+  - 금지: Verse 임의 분할, Custom/Experimental 추정, 일반 줄 길이만으로 섹션 추론
+- 복구된 슬롯에는 기존 Section Performance Plan이 해당 곡의 큐를 다시 연결하므로 고정된 보컬 큐를 삽입하지 않는다.
+- 영어 큐 단어 손상은 특정 단어 목록으로 교정하지 않고, 현재 응답 안의 정상형과 비교해 손상 후보를 제외한다.
+- 언어혼합, 서사 내용, Firebase/Auth/Firestore/Functions 및 사용자 저장 데이터는 변경하지 않는다.
+
+
+## 114차: 애드리브 자동 관성 차단
+
+- 기본 생성에서 Intro/Outro를 채우기 위해 `(음...)`을 자동으로 쓰지 않는다.
+- 명시적 허밍/구음/애드리브 의도는 보존한다.
+- 자동 상태에서는 사용자 선택과 직접 입력을 근거로 written ad-lib 필요성을 판단한다.
+- 괄호 안의 의미 있는 훅·응답 문장은 삭제하지 않는다.
+- Outro 가사 본문은 선택 사항이며, 무가사 종료를 정상 구조로 인정한다.
+
+
+## 115차 섹션 큐 최종 경계
+
+- `sectionRegistry.cleanV1SectionCue`: 반복 철자 손상 최소 복구
+- `sectionRenderer.renderSectionTag`: 실제 가사 본문이 있는 bare sung tag에 역할 기반 최후 안전 큐 제공
+- `geminiService.finalizeV1PublicLyricOutputIntegrity`: UI 반환 직전 구조 태그 내부 큐 철자 재확인
+- 이 단계는 가사 내용·서사·섹션 순서를 다시 쓰지 않는다.
+
+## V1 Language Mix — Locked Whole-Lyric Rewrite (130차)
+
+`generateSong` 최종 반환 경계에서 `languageMixWholeRewrite.ts`가 작동한다.
+
+1. 롤백2차 기본 엔진이 가사, 섹션 태그, 보컬/퍼포먼스 태그, 악기큐를 먼저 완성한다.
+2. 언어혼합 활성 시 가창 줄만 `L1...Ln` ID로 추출한다.
+3. 별도 Gemini 필수 단계가 전체 문맥을 보고 각 ID의 완성형 최종 줄 후보를 작성한다.
+4. 로컬 선택기가 실제 가창 줄 점유율과 전·중·후 분산에 가까운 완성형 줄 묶음을 선택한다.
+5. 대괄호 줄과 줄 위치는 원문 그대로 재조립한다.
+6. `languageMixRewritePlan`, `languageMixAudit`, `sectionIntegrityAudit`를 공개 진단에 기록한다.
+
+금지 구조: 단어/토큰 부분 치환, 초기 생성 응답에 후보 수십 개 동시 생성, 한글/영어 원시 글자 길이 동등성 강제.
+
+## 132차 — Cue Immutable Boundary / Sung-Line Occupancy Mix
+
+- `geminiService.ts`의 큐 후처리는 모델이 만든 단어의 철자를 직접 변경하지 않는다. 현재 곡 안의 정상형과 구조적으로 충돌하는 손상 후보만 제외한다.
+- `languageMixMeasurement.ts`가 가창 줄 단위 점유율을 단일 기준으로 제공한다.
+- `languageMixWholeRewrite.ts`와 `languageMixAudit.ts`가 같은 점유율 기준을 사용하므로 선택기와 최종 진단의 수치가 일치한다.
+- 중간·고비율 선택기는 인접한 줄 묶음을 먼저 만들고, 전·중·후 구간을 채운 뒤 목표 비율에 접근한다.
+- Firebase/Auth/Firestore/Functions 및 사용자 저장 구조 변경 없음.
+
+
+## 133차 — 선계획 언어 블록 재작성
+
+- 언어혼합 줄 후보를 먼저 흩어서 만든 뒤 인접 묶음을 찾던 순서를 폐기했다.
+- 앱이 섹션 구조와 전·중·후 위치를 기준으로 목표 비율에 필요한 연속 가창 블록을 먼저 정한다. 가사 단어나 특정 소재는 계획 기준에 사용하지 않는다.
+- Gemini에는 계획된 블록 ID와 줄만 재작성 대상으로 전달하며, 블록 밖의 줄은 원문 그대로 반환하도록 잠근다.
+- 계획 블록의 일부 줄만 빠지거나 보조 언어가 없는 경우 해당 블록 전체를 적용하지 않는다. 완성된 블록만 원자적으로 재조립한다.
+- 가창 비율 선택기와 공개 검사는 섹션 경계를 실제 휴지점으로 취급한다. 서로 다른 섹션의 연속 줄을 하나의 과도한 언어 구간으로 오판하지 않는다.
+- 20%는 전·중·후의 여러 섹션에 자연스러운 연속 블록을 배치하고, 선택기와 최종 검사가 같은 가창 줄 점유율을 사용한다.
+- 특정 영어 단어, 가사 문장, 장면, 소재 하드코딩은 추가하지 않았다. Firebase/Auth/Firestore/Functions 및 저장 구조 변경 없음.
+
+## 134차 — Low-ratio within-line rhyme mix
+
+- 적용 범위: V1 언어혼합 10~20%.
+- `languageMixWholeRewrite.ts`는 저비율에서 연속 영어 블록 대신 분산된 혼합 후보 줄을 계획한다. 각 후보는 한 줄 안에 기본 언어와 목표 언어를 모두 포함해야 한다.
+- 저비율 후보 검증 조건: 두 언어 존재, 완전 외국어 줄 금지, 최소 가창 분량 확보, 실제 언어 경계 존재, 의미 연결 설명, 발음·모음·강세·리듬 연결 설명, 외국어 토큰과 한국어 조사 직접 결합 금지.
+- `languageMixMeasurement.ts`는 한국어 음절과 라틴계 언어 추정 발음 음절을 같은 공연 단위로 계산한다. 원시 알파벳 길이와 단순 줄 개수는 비율 근거로 사용하지 않는다.
+- `languageMixAudit.ts`는 10~20%에서 완전 외국어 줄이 하나라도 있거나 실제 혼합 줄이 부족하면 통과시키지 않는다.
+- 프롬프트와 코드에는 특정 영어 단어, 라임 예시, 가사 문장, 장면, 소재를 고정하지 않는다.
+- 기본 가사 생성, 섹션 렌더러, 큐 파이프라인과 Firebase/Auth/Firestore/Functions는 변경하지 않는다.
+
+
+## 135차 — K-pop Sound-First Code Switch 10/20
+
+- 적용 범위: V1 언어혼합 10%와 20% 통합 경로.
+- 생성 기준은 문법적 자연스러움이 아니라 K-pop 가창음이다. 모음 착지, 자음 시작, 영어 강세, 음절·호흡 밀도, 내부·끝 라임, 훅 타격감을 우선한다.
+- 비문, 문장 파편, 압축 구문, 의미 반복은 음악적 역할이 있으면 허용하며, 직역·회화 문법은 로컬 거부 조건에서 제거했다.
+- 모델이 작성한 의미/발음 설명을 신뢰해 통과시키지 않는다. `languageMixMeasurement.ts`가 결과 줄에서 실제 언어 경계, 목표 언어 구절 수, 가창 점유량을 계산하고 `languageMixWholeRewrite.ts`가 원문 대비 호흡 밀도와 과도한 전환을 검사한다.
+- 10%는 한 줄당 중간 강도의 목표 언어 구절과 적은 혼합 줄 수, 20%는 더 높은 구절 점유율과 제한된 추가 혼합 줄 수를 사용한다. 두 비율 모두 완전 외국어 줄을 만들지 않는다.
+- `languageMixAudit.ts`는 목표 비율 외에도 혼합 줄 총수와 섹션 내 연속 혼합 줄 길이를 공개 진단한다.
+- 특정 영어 단어, 상투 문구, 라임 샘플, 장면·소재 하드코딩 없음. 기본 가사/섹션/큐 파이프라인 및 Firebase 저장 구조 변경 없음.
+
+## 136차 — K-pop Repeated Hook Anchor Pattern 10/20
+
+- 적용 경로: `languageMixWholeRewrite.ts`의 V1 10%·20% K-pop 코드 스위칭.
+- `buildV1LanguageMixBlockPlan`은 반복 Chorus/Hook/Refrain/Drop의 같은 로컬 줄 위치를 하나의 원자적 미러 블록으로 묶는다. 10%는 핵심 미러 슬롯 1개, 20%는 2개를 우선 계획한다.
+- 미러 블록은 모든 반복 구간에서 동일한 목표 언어 토큰 앵커를 가져야 한다. 동일 원문 훅은 최종 혼합문도 완전히 같아야 하며, 한 구간만 한국어로 되돌아가거나 다른 영어 구절로 바뀌면 전체 블록을 거부한다.
+- 저비율 혼합 형식은 `keyword-anchor`와 `short-phrase`를 함께 사용한다. 단어형은 1개 또는 분리 불가능한 2단어 이하, 짧은 구절형은 2~6단어로 제한한다. 10%·20% 계획에서 긴 영어 문장형은 기본 선택하지 않는다.
+- `languageMixMeasurement.ts`는 실제 목표 언어 토큰을 추출하고, `languageMixAudit.ts`는 단어형/짧은 구절형 개수, 반복 후렴 위치 일치, 앵커 일치, Final Chorus 회수를 공개 진단한다.
+- Pre-Chorus는 Chorus 반복 가족에서 제외한다. 반복 후렴들은 물리적으로 여러 섹션이어도 배치 밀도 검사에서는 하나의 논리적 훅 패턴으로 취급한다.
+- 모델의 `meaningConnection`·`phoneticConnection` 설명은 합격 근거가 아니다. 실제 최종 가사의 토큰과 구조만 판정한다.
+- 특정 영어 단어, 라임 샘플, 가사 소재는 하드코딩하지 않는다. 기본 가사·섹션·큐 엔진과 Firebase 저장 구조는 변경하지 않는다.
+
+
+### 137차 K-pop 공통 후렴 앵커 재사용
+- 10%·20% 후렴은 각 Chorus를 독립 생성한 뒤 우연히 일치시키지 않는다.
+- 연결된 후렴 후보에서 핵심 외국어 단어/짧은 구절을 한 번 선택하고, 같은 후렴 슬롯에 그대로 재사용한다.
+- 핵심 단어형은 후보 문구에서 의미어를 선택하므로 특정 단어를 하드코딩하지 않는다.
+- 후렴 후보 하나의 길이 편차로 전체 언어혼합을 0% 원문 복구하지 않도록 공통 앵커를 로컬에서 안정적으로 조립한다.
+- 10%·20% 계획 줄 수를 축소해 지나치게 많은 가사 줄을 건드리지 않는다.
+
+
+### 138차 1단계 — 비율 판정과 적용 판정 분리
+- `languageMixWholeRewrite.ts`에서 목표 비율 범위는 계속 계산하지만, 범위 밖이라는 이유만으로 유효 후보 전체를 폐기하지 않는다.
+- 적용 여부는 기존 후보 유효성, 섹션·큐 잠금, 현재 배치 안전 조건으로 결정한다.
+- 실제 비율은 `languageMixAudit`에서 그대로 보고되어 다음 단계의 조정 근거로 사용한다.
+- 후렴 패턴, 단어/구절 형태, 라임, 후보 계획 로직은 변경하지 않는다.
+
+
+## 139차 언어혼합 비율 선택지 정리
+- 활성 선택지를 `5 / 10 / 20 / 30 / 40 / 50 / 60%`로 변경했다.
+- 5%를 다시 활성화하고 70%는 UI와 활성 생성 계약에서 제거했다.
+- 과거 저장본의 70% 값은 60%로 정규화해 기존 곡 설정을 불러올 때 오류가 나지 않게 한다.
+- 이번 차수는 비율 선택지와 전달 경계만 변경한다. 문장 생성 품질, 후렴 패턴, 라임, 배치, 실제 비율 보정은 변경하지 않는다.
+
+
+## 140차 — 5% 전용 언어혼합 배치 단계
+- 활성 5% 선택값은 10% 계획을 재사용하지 않고 별도 저밀도 계획을 사용한다.
+- 반복 Chorus/Hook의 같은 슬롯에 공통 단어 앵커 1개를 유지하고, 비후렴 추가 후보는 1~2곳으로 제한한다.
+- 최종 혼합 줄 목표는 반복 후렴을 포함해 대체로 3~5줄이며, 5%가 여러 역할 구간에 한 단어씩 흩어지는 현상을 줄인다.
+- 공개 검사의 형태 분류는 목표 언어 1토큰을 단어형, 2~6토큰의 한 덩어리를 짧은 구절형으로 계산한다.
+- 10%·20% 선택기, 실제 비율 예산 보정, 의미·상징·라임 품질 단계는 이번 차수에서 변경하지 않았다.
+
+## 141차 — 5% 비율 예산 단독 보정
+- 5%는 140차의 고정 배치(반복 후렴 3회 + 비후렴 2줄)를 유지한다.
+- 반복 후렴 앵커는 최소 3 가창 단위, 비후렴 짧은 구절은 각 최소 4 가창 단위를 요구해 전체 4~7%를 목표로 한다.
+- 5% 검사 권장 범위를 4~7%로 분리했다. 비율 미달만으로 결과 전체를 원문 복구하지 않는 138차 원칙은 유지한다.
+- 10%·20% 이상의 배치·선택·비율 규칙은 변경하지 않는다.
+
+## 142차 — 5% 후렴 앵커 길이 충돌 제거
+- `languageMixWholeRewrite.ts`의 5% `keyword-anchor` 최소 가창 단위를 3에서 1로 되돌렸다.
+- 한 단어 후렴 앵커도 유효 후보로 인정되어 `hook-anchor-reuse-invalid:target-sung-units-outside-mix-form`로 반복 후렴 블록 전체가 폐기되지 않는다.
+- 반복 후렴 동일 앵커, 비후렴 짧은 구절 2곳, 5줄 배치와 4~7% 진단은 그대로 유지한다.
+- 이번 차수는 실패 복구만 수행하며 다른 비율·품질·저장 구조는 변경하지 않는다.
+
+## 143차 — 5% 실제 비율 완성 단계
+- `languageMixWholeRewrite.ts`의 5% 경로는 반복 후렴 공통 앵커 3회와 비후렴 짧은 구절 2회를 최종 5개 가창 위치로 확정한다.
+- 전체 가사의 추정 가창 단위에서 4~7%에 필요한 목표 언어 단위를 계산하고, 비후렴 두 줄의 `targetUnitGuide`를 곡 길이에 맞춰 동적으로 만든다.
+- 기본 비후렴 후보 2개 외에 대체 후보 2개를 같은 Gemini 요청에 포함한다. 후보가 하나 탈락해도 추가 호출 없이 유효한 조합 중 5%에 가장 가까운 두 줄을 선택한다.
+- 계획 밖에 이미 존재하는 목표 언어 가사는 `restore-base-language` 대상으로 보내 기본 언어로 정리한 뒤 최종 비율을 계산한다.
+- 공개 검사기의 5% `short-phrase` 분류도 생성 검사와 동일한 3~8 토큰·6~16 가창 단위 범위로 맞췄다.
+- 5%는 `5개 위치 완성 + 실제 4~7% + 반복 후렴 앵커 일치 + 잠금 경계 보존`을 모두 통과해야 적용된다. 10%·20% 이상과 Firebase 저장 구조는 변경하지 않았다.
+
+## 144차 — 5% short-phrase 가창 단위 계약 보정
+- 실패 보고서에서 5% 비후렴 기본·백업 후보가 모두 1~2개의 지나치게 짧은 영어 조각으로 생성되어, 동적 `targetUnitGuide` 최소 7 가창 단위와 충돌한 원인을 수정했다.
+- Gemini 요청에는 각 5% 비후렴 줄의 `targetTokenGuide`와 `targetUnitGuide`를 함께 전달하고, 가창 단위를 실제 발음 음절로 세어 최소값 미달이면 같은 구절을 자연스럽게 확장한 뒤 반환하도록 강제한다.
+- 검사기는 2개의 다중 음절 단어도 충분한 가창 단위를 만들 수 있다는 점을 반영해 5% short-phrase의 토큰 하한을 3에서 2로 조정했다. 단, 동적 가창 단위 하한과 전체 4~7% 조건은 완화하지 않는다.
+- 143차의 5줄 패턴, 후렴 동일 앵커, 후보 조합 선택, 계획 밖 목표 언어 정리, 10%·20% 이상 경로는 그대로 유지한다.
+
+
+## 145차 — Whole-song language ratio bands
+- 공통 비율 단일 원본: `src/constants/languageMixRatios.ts`
+  - 5% 선택: 실제 5~10%
+  - 10% 선택: 실제 10~20%
+  - 20% 선택: 실제 20~30%
+  - 30% 선택: 실제 30~40%
+  - 40% 선택: 실제 40~50%
+  - 50% 선택: 실제 50~60%
+  - 60% 선택: 실제 60~70%
+- `languageMixWholeRewrite.ts`는 모든 비율에서 최종 추정 가창 점유율이 해당 범위에 들어오는 후보/블록 조합을 우선 선택한다.
+- 5%는 고정 5줄 패턴과 계획 밖 기존 외국어 선삭제를 적용 조건에서 제거한다. 현재 전체 가창 비율에서 부족한 분량만 추가한다.
+- 30~60%는 완전 외국어 블록을 5~8개 후보 단위로 세분화하고 부분 조합을 평가해 큰 블록 단위 점프를 줄인다.
+- `languageMixAudit.ts`의 상태는 이번 단계에서 전체 분량 통과 여부로 결정한다. 배치·후렴·형태 관련 값과 경고는 삭제하지 않고 진단으로 보존한다.
+- UI는 단일 숫자를 정확값처럼 표시하지 않고 실제 생성 범위와 기본 언어 역범위를 표시한다.
+- 엔진 버전: `v1-whole-song-ratio-bands-step7-active-22`.
+
+## 146차 — Language mix visible result / warning-only diagnostics
+
+- `languageMixWholeRewrite.ts`의 적용 판정에서 전체 비율 범위를 하드 실패 조건에서 제거했다.
+- 유효 후보가 한 줄 이상 선택되고 섹션·큐 잠금 및 재조립 경계가 보존되면 결과를 `applied`로 반환한다.
+- 비율, 타임라인 분산, 섹션 토폴로지, 저비율 라임 형식, 후렴 미러, 5% 패턴은 `warningReasons`에 기록하고 공개 결과를 숨기지 않는다.
+- `chooseCandidate`와 5%/30~60% 후보 조합 선택기는 상한 초과 후보를 사전에 삭제하지 않고, 비율 거리와 초과 페널티로 순위를 매긴다.
+- 기술적 원문 보존 사유는 `no-valid-*`, `no-applicable-language-mix-placement`, `preexisting-target-cleanup-incomplete`, `locked-section-or-cue-lines-changed`로 제한한다.
+- 공개 필드: `ratioBandPassed`, `warningReasons`, `applicationPolicy`.
+- 엔진 버전: `v1-language-mix-visible-warning-step8-active-23`.
+
+## 147차 — Ratio-fit candidate selection
+
+- 기준: 146차 언어혼합 생성·배치 구조를 유지하고 비율 맞춤 경로만 수정했다.
+- `buildV1LanguageMixBlockPlan`
+  - 10%·20%는 원곡의 전체 추정 가창 단위와 평균 줄 길이로 필요한 후보 발생량을 계산한다.
+  - 10% short phrase는 4~10 목표 가창 단위, 20% short phrase는 5~12 목표 가창 단위를 후보 생성 가이드로 전달한다.
+  - 실제 적용 수보다 여유 후보를 함께 받아 모델 편차가 있어도 목표 비율 조합을 선택할 수 있게 한다.
+- `applyV1WholeRewriteResponse`
+  - 10%·20% 후보 전체를 대상으로 실제 가창 점유율 기반 조합 탐색을 실행한다.
+  - 최우선 순위는 선택 범위 진입, 다음은 범위 중앙과의 거리다. 섹션·후렴·배치 진단은 삭제하지 않고 기존 공개 진단으로 유지한다.
+  - `excludedLineIds`를 지원해 금지어 후보만 제외한 재조합이 가능하다.
+- `applyV1LockedWholeLyricLanguageMix`
+  - 금지어가 있는 혼합 후보 줄만 최대 3회 제외하고 동일 응답 후보로 비율을 다시 맞춘다.
+  - 금지어가 남는 경우에만 원문 보존 처리한다. 금지어 검사 자체는 제거하지 않는다.
+- 엔진 버전: `v1-language-mix-ratio-fit-step9-active-24`.
+
+## 148차 — Language Arrangement Arc
+
+### 변경 파일
+- 신규: `src/services/generation/v1/language/languageArrangementDirector.ts`
+- 수정: `src/services/generation/v1/language/languageMixWholeRewrite.ts`
+- 수정: `src/services/geminiService.ts`
+- 수정: `src/services/generation/v1/language/index.ts`
+- 문서: `src/services/generation/README.md`, `docs/SORIDRAW_ENGINE_MAP.md`
+
+### 현재 언어혼합 흐름
+
+```text
+사용자 전체 비율 선택
+→ 장르/퓨전 장르/스타일/분위기/Story Context/직접입력/템포/보컬 해석
+→ Language Arrangement Brief 생성
+→ 변화·균형·통일을 기준으로 넓은 후보 기회 제공
+→ Gemini가 후보별 적용/원문 보존 + 혼합 형식/전환 방향/모티프 관계 제안
+→ 실제 가창 점유율을 측정하며 가장 자연스러운 후보 부분집합 선택
+→ 섹션·큐·줄 ID·파싱 안전 확인
+→ 결과와 실제 비율 공개
+```
+
+### 비율별 경로
+- 5%: 기존 저밀도 `within-line-rhyme` 유지.
+- 10~50%: 새 `adaptive-arrangement` 사용.
+- 60%: 기존 `complete-line-blocks` 유지.
+
+### 핵심 계약
+- 전체 비율은 섹션별 균등 할당값이 아니다.
+- 직접입력 장르/메인 장르가 primary profile을 담당하고, 보조 장르/스타일은 secondary grammar로 섹션별 변화를 보강한다.
+- 섹션별 언어 강도는 이야기 기승전결과 장르 문법을 해석한 결과다.
+- 후보 줄 수와 실제 적용 줄 수는 분리된다.
+- 한 곡에서 단어·짧은 구절·긴 구절·완전 외국어 줄과 여러 전환 방향을 함께 사용할 수 있다.
+- 반복 섹션은 동일 문장을 강제하지 않고, 인식 가능한 언어 모티프를 반복·확장·축소·반전·재해석할 수 있다.
+- 비율 미세 조정은 강한 배치 결정을 보존한 채 최소 변경으로 수행한다.
+- 창작 진단은 후보 선택을 기계적으로 지배하지 않으며, 기술적 안전 검사는 유지한다.
+
+### 유지 영역
+- `languageMixRatios.ts` 비율 범위
+- 전체 가창 점유율 측정
+- 5% 및 60%의 검증된 생성 경로
+- 섹션/퍼포먼스 큐/프로덕션 큐 잠금
+- 줄 누락·중복 ID·파싱/재조립 검사
+- 금지어 후보 단독 제외 후 재선택
+- Firebase/Auth/Firestore/Functions 및 사용자 저장 구조
+
+엔진 버전: `v1-language-mix-arrangement-arc-step10-active-25`
+
+## 150차 — Two-language card reliability
+
+### 적용 조건
+```text
+V1 + 가사 언어 정확히 2개 선택 + 언어혼합 ON
+```
+
+### 수정 흐름
+```text
+각 카드의 반대편 언어를 target으로 확정
+→ 잠금형 재작성 응답을 JSON schema로 제한
+→ 파싱 실패 시 같은 schema로 1회 재요청
+→ source에 상대 언어가 미리 있으면 baseText로 기본 언어 바탕 복구
+→ Language Arrangement 후보 finalText를 부분집합 선택
+→ 최종 비율·태그·큐·줄 잠금 검사
+```
+
+### 영향 차단
+- 1개 언어 선택 경로 변경 없음
+- V2 변경 없음
+- 기본 작사·작곡 프롬프트 변경 없음
+- UI 변경 없음
+- Firebase/Auth/Firestore/Functions·저장 구조 변경 없음
+
+엔진 버전: `v1-language-mix-two-card-reliability-step11-active-26`
+
+## 151차 — Two-language compact schema dispatch
+
+- 두 가사 언어 카드의 구조화 응답을 필수 필드 중심 compact schema로 축소한다.
+- schema 거절 시 두 언어 경로에서만 JSON MIME fallback 1회를 사용한다.
+- 엔진 버전: `v1-language-mix-two-card-compact-schema-step12-active-27`.
+
+## 152차 — Two-card parallel language rewrite
+
+### 적용 조건
+```text
+V1 + 가사 언어 정확히 2개 + 한국어/보조언어 카드 모두 존재 + 언어혼합 ON
+```
+
+### 실행 흐름
+```text
+이전: 한국어 카드 Gemini 완료 → 보조 언어 카드 Gemini 시작
+현재: 한국어 카드 Gemini 시작 ┐
+      보조 언어 카드 Gemini 시작 ┘ → 두 결과 결합 → 공통 검사
+```
+
+### 유지 계약
+- 카드별 target 언어, compact schema, retry, HardBan, 비율·배치 선택 로직은 변경하지 않는다.
+- `Promise.all`은 두 카드가 모두 존재하는 정확히 두 가사 언어 경로에만 사용한다.
+- 카드 내부 오류는 카드별 preserved 결과로 변환하므로 다른 카드의 성공 결과를 취소하지 않는다.
+- 한 언어 및 3개국어 혼합 경로는 이번 작업에서 변경하지 않는다.
+
+엔진 버전: `v1-language-mix-two-card-parallel-step13-active-28`
+
+
+## 153차 — Two-language arc and ratio repair
+
+### 적용 경계
+
+- V1
+- 가사 카드 정확히 2개
+- 카드별 목표 언어 정확히 1개
+- 언어혼합 10~50%
+- 3개국어·다중 목표 언어 경로는 기존 동작 유지
+
+### 처리 흐름
+
+1. 한국어 카드와 보조 언어 카드를 실제 병렬로 호출한다.
+2. 각 호출은 전체 가사 후보를 넓게 생성하되, 반복 후렴은 대표 앵커 슬롯 1개만 고정 연결한다.
+3. 로컬 선택기가 비율·섹션/타임라인·형식/방향 다양성·후렴 집중도를 함께 평가해 최종 후보 집합을 고른다.
+4. 카드가 목표 하한에 미달하면 그 카드만 후보 확장 호출을 1회 실행한다.
+5. 첫 호출의 유효 후보는 고정하고, 미사용 줄에서 받은 새 후보만 병합해 다시 선택한다.
+6. 두 번째 선택도 목표 범위에 실패하면 미달 결과를 공개하지 않고 해당 카드 원본을 보존한다.
+7. HardBan 후보 제외 뒤 비율이 다시 무너지면 역시 원본을 보존한다.
+
+### 진단 필드
+
+- `actualParallelDispatch`
+- `requestSessionMode: parallel-two-card-direct-stage`
+- `candidateExpansionUsed`
+- `candidateExpansionUsedModel`
+- `candidateExpansionResponseMode`
+- 실패 시 `two-language-ratio-band-not-met-after-candidate-expansion`
+
+엔진 버전: `v1-language-mix-two-card-arc-repair-step14-active-29`
+
+## 154차 — Two-language target occupancy deficit completion
+
+### 범위
+
+정확히 두 언어를 선택한 V1 언어혼합의 10~50% 카드만 보완한다. 3개국어, 5%, 60%, V2, UI, Firebase 저장 구조는 변경하지 않는다.
+
+### 문제
+
+153차는 첫 후보가 목표 비율에 미달하면 후보 확장을 한 번 실행했지만, 첫 호출의 `suitable=true` 후보를 모두 고정했다. 따라서 짧은 영어 꼬리 후보가 많을 때 후보 수는 충분해도 실제 목표 언어 가창 점유율은 부족했고, 한글 카드가 최종적으로 원본 보존 0%로 끝날 수 있었다.
+
+### 처리
+
+1. 첫 결과의 목표 하한 미달 포인트를 계산한다.
+2. 부족한 카드만 목표 점유율 보충 호출을 실행한다.
+3. 비후렴 구간에 65~100% 목표언어 점유율의 완전 문장·긴 구절 후보를 우선 요청한다.
+4. 기존 짧은 후보보다 목표언어 점유율이 18%p 이상 높고 가창 단위도 증가한 후보는 교체 허용한다.
+5. 연결 후렴 훅은 보호하여 반복 모티프를 유지한다.
+6. 합친 후보 풀로 전체 비율과 언어 아크를 다시 계산한다.
+7. 한 카드만 성공하면 전체 상태를 `partial`로 기록한다.
+
+엔진 버전: `v1-language-mix-two-card-deficit-occupancy-step15-active-30`
+
+## 155차 — Three-language target distribution for two lyric cards
+
+### 카드별 목표 매핑
+
+```text
+가사 카드: 한국어 + 영어
+추가 섞을 언어: 일본어
+
+한국어 카드 → 영어 + 일본어
+영어 카드   → 한국어 + 일본어
+```
+
+- 선택 혼합 비율은 카드마다 두 목표 언어의 합계다.
+- 목표 언어별 균등 방향을 제공하되 섹션·장르·서사에 따라 실제 분배는 유동적이다.
+- 각 목표 언어는 균등 목표의 최소 40% 이상을 가져야 하며, 한 언어가 0%면 합계 비율이 맞아도 실패다.
+- 후보 선택 beam score에 목표 언어별 최소 점유율과 언어 간 과도한 불균형 감점을 추가한다.
+- 부족한 언어가 있으면 candidate expansion에 해당 언어와 실제/최소/이상 비율을 전달한다.
+- expansion merge는 합계 점유율 증가뿐 아니라 부족 언어의 가창 단위가 증가하는 후보 교체도 허용한다.
+- 공개 audit는 secondary 카드 목표를 `반대편 카드 언어 + 추가 선택 언어`로 계산하고, `targetLanguageCoveragePassed`, `missingTargetLanguages`, `targetLanguageMinimums`를 기록한다.
+- 언어혼합 전 source structure repair는 섹션 태그의 첫 글자 유실과 비어 있는 Outro를 곡 내부 문맥으로만 복구한다.
+
+엔진 버전: `v1-language-mix-three-language-card-targets-step16-active-31`
+
+## 다음 곡 적용 언어 설정 복원 (step17)
+- `App.tsx`의 `applyKeywordsToNext`가 저장곡의 가사/제목 언어, 언어혼합 여부, 혼합 비율, 혼합 대상 언어를 메인 생성 상태로 복원한다.
+- `MusicApiGenerateModal.tsx`는 `initialLyricLanguages`를 받아 선택 순서를 보존해 초기화한다.
+- Firebase/Auth/저장 구조는 변경하지 않고 기존 `appliedKeywords` 필드만 읽는다.
+
+
+## 157차 — Final section and production-cue integrity repair
+
+### 확인된 실패 경로
+
+```text
+정확한 섹션 슬롯 생성
+→ 후처리에서 빈 필수 섹션 태그 제거
+→ HardBan/훅/퍼포먼스 플랜 종료
+→ 최종 로컬 보정이 사라진 슬롯을 삽입하지 못함
+→ Bridge 누락 상태로 언어혼합이 태그를 잠금
+```
+
+프로덕션 cue도 초기 배열이 마지막 cue 정규화에서 탈락하면 이를 다시 채우는 단계가 없어 audit에만 누락으로 남았다.
+
+### 복구 순서
+
+1. `Chorus/Hook/Refrain → Bridge` 경계에서 빈 줄로 분리된 독립 문단을 안전하게 Bridge로 소유권 복구한다.
+2. HardBan 이후 최종 필수 섹션 계약을 다시 검사한다.
+3. 실제 missing/empty 필수 섹션만 targeted Gemini body repair로 복구한다.
+4. canonical Section Performance Plan을 다시 적용한다.
+5. 섹션별 프로덕션 cue 누락을 검사한다.
+6. 같은 섹션의 다른 언어 카드 cue → canonical plan cue → 누락 섹션 전용 Gemini cue 순서로 채운다.
+7. 구조와 cue가 완성된 뒤 언어혼합을 실행해 모든 잠금 줄을 보존한다.
+
+### 공개 진단
+
+- `sectionIntegrityRepair.missingSectionCards`
+- `sectionIntegrityRepair.repairedSectionCards`
+- `sectionIntegrityRepair.productionCueSections`
+- `sectionIntegrityRepair.unresolvedSections`
+- `sectionIntegrityRepair.extraGeminiCallsUsed`
+
+섹션 무결성 버전: `v1-final-section-cue-integrity-step18-active-32`
+
+## 158차 — 생성 옵션 초기화 경계
+- `App.tsx`의 `applyKeywordsToNext`만 이전 곡의 언어 선택 및 언어혼합 설정을 복원한다.
+- `clearAll`과 전역 `applyRandom`은 `mainGenerationLyricLanguages=['ko']`, 언어혼합 OFF, 혼합 비율 10%, 혼합 대상 언어 빈 배열로 복구한다.
+- 목적: 다음곡 적용 정보가 일반 무작위/전체초기화 이후까지 누출되지 않도록 한다.
+
+## 159차 — Post-language-mix final section/cue gate
+
+### 확인된 실제 원인
+
+```text
+157차 섹션·cue 복구
+→ 공개 cue 출력 정책
+→ 잠금형 언어혼합
+→ 언어혼합 결과로 audit 작성
+→ 이후 복구 없음
+```
+
+복구 로직 자체보다 실행 위치가 최종 반환 경계보다 앞에 있었다. 이 때문에 한 카드의 `Pre-Chorus 2` cue, 양 카드의 `Intro/Chorus 1` cue, 보조 카드의 `Bridge`가 최종 출력에서 누락돼도 다시 채워지지 않았다. 보고서 역시 최종 복구 단계가 없어 누락 상태를 그대로 기록했다.
+
+### 변경된 최종 흐름
+
+```text
+HardBan·구조 확정
+→ public cue policy
+→ pre-language-mix integrity gate
+→ 완성 구조 스냅샷
+→ locked whole-lyric language mix
+→ post-language-mix final integrity gate
+→ final language/section audit refresh
+→ 반환
+```
+
+### 품질 보호
+
+- 정상 섹션과 기존 혼합 가사 줄은 재작성하지 않는다.
+- 누락 섹션은 먼저 동일 카드의 언어혼합 직전 스냅샷에서 해당 블록만 복원한다.
+- 스냅샷에도 없는 필수 본문만 targeted section-body Gemini를 사용한다.
+- cue는 sibling card → canonical plan → cue-only Gemini 순서로 채운다.
+- cue 추가는 가창 비율 계산에서 제외되며, 섹션 본문이 긴급 복구된 경우 최종 혼합 비율과 언어별 coverage를 다시 측정해 보고서에 반영한다.
+
+### 공개 진단
+
+- `sectionIntegrityRepair.phaseRuns`
+- `sectionIntegrityRepair.snapshotRestoredSections`
+- `sectionIntegrityRepair.finalAuditStatus`
+- 기존 누락/복구/cue/미해결/추가 호출 필드 유지
+
+섹션 무결성 버전: `v1-post-language-mix-section-cue-integrity-step19-active-33`

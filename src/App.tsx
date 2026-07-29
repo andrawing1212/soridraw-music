@@ -281,6 +281,7 @@ import {
   VOCAL_PERSONALITIES
 } from './constants';
 import { VOCAL_TONES } from './constants/vocalTones';
+import { normalizeLanguageMixRatioOption } from './constants/languageMixRatios';
 import { CategoryItem, SongResult, LyricsLength, SongStructure, CustomSectionItem, VocalMode, VocalTone, VocalMember, VocalRole, SectionTag, UserRole, StaffRole, AdminPermissions, AdminPermissionKey, AccountStatus, SituationConfig, VocalSectionTagOption, UserCustomSectionDefinition, UserCustomSectionTagDefinition, CustomSectionKind, VocalCharacterSelection, LyricClicheGuardSettings, SectionCueOptions } from './types';
 import { PROMPT_TEMPLATES, PromptTemplate } from './constants/templates';
 import {
@@ -506,6 +507,7 @@ import {
 } from 'firebase/firestore';
 import { auth, googleProvider, db, getFirebaseAppCheckToken } from './firebase';
 import { startUserPresence } from './services/presenceService';
+import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
@@ -6663,6 +6665,7 @@ const toggleCycleVariantSelection = (
   const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [englishMixRatio, setEnglishMixRatio] = useState(10);
   const [languageMixTargetLanguages, setLanguageMixTargetLanguages] = useState<LanguageCode[]>([]);
+  const [mainGenerationLyricLanguages, setMainGenerationLyricLanguages] = useState<LanguageCode[]>(['ko']);
   const [customStructure, setCustomStructure] = useState<CustomSectionItem[]>([]);
   const [citypopMode, setCitypopMode] = useState<0 | 1 | 2>(0); // 0: unselected, 1: old, 2: modern
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
@@ -7114,6 +7117,7 @@ const toggleCycleVariantSelection = (
               setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
               setIsEmailVerificationCycleReady(true);
               setUserLyricClicheGuard(null);
+              writeGeminiAutoModelFallback(true, currentUser.uid);
               setIsUserLyricClicheGuardReady(true);
               hasCompletedForceLogoutReentryCheckRef.current = true;
               return;
@@ -7126,6 +7130,7 @@ const toggleCycleVariantSelection = (
               hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
               softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
             });
+            writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
             {
               const verifiedRole = (data.role || 'free') as UserRole;
@@ -7179,6 +7184,7 @@ const toggleCycleVariantSelection = (
               hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
               softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
             });
+            writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
             
@@ -7211,6 +7217,7 @@ const toggleCycleVariantSelection = (
             writeCachedUserRole(currentUser.uid, 'free');
             setUserStatus('active');
             setUserLyricClicheGuard(null);
+            writeGeminiAutoModelFallback(true, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
           }
         }, (error) => {
@@ -8405,6 +8412,25 @@ const toggleCycleVariantSelection = (
     const resolvedKpopMode = appliedKeywords.kpopMode ?? (restoredGenreIds.includes('kpop') ? 1 : 0);
     const resolvedMixedLyrics = appliedKeywords.isKoreanEnglishMix ?? (appliedKeywords.kpopMode === 2);
 
+    const supportedLyricLanguages = new Set<LanguageCode>(['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'ru', 'th']);
+    const storedLyricLanguageSource = Array.isArray((appliedKeywords as any).lyricLanguages)
+      ? (appliedKeywords as any).lyricLanguages
+      : Array.isArray((appliedKeywords as any).titleLanguages)
+        ? (appliedKeywords as any).titleLanguages
+        : [];
+    const restoredLyricLanguages = Array.from(new Set(
+      storedLyricLanguageSource
+        .map((language: unknown) => String(language || '').trim())
+        .filter((language: string): language is LanguageCode => supportedLyricLanguages.has(language as LanguageCode)),
+    )).slice(0, 2) as LanguageCode[];
+    const storedMixTargets = Array.from(new Set(
+      (Array.isArray((appliedKeywords as any).languageMixTargetLanguages)
+        ? (appliedKeywords as any).languageMixTargetLanguages
+        : [])
+        .map((language: unknown) => String(language || '').trim())
+        .filter((language: string): language is LanguageCode => supportedLyricLanguages.has(language as LanguageCode)),
+    )).slice(0, 2) as LanguageCode[];
+
     // Overwrite pinned keywords when applying from Favorites or Results
     setPinnedGenres([]);
     setPinnedThemes([]);
@@ -8416,8 +8442,14 @@ const toggleCycleVariantSelection = (
     setSelectedPointSounds(pointSoundIds);
     setIsPointSoundMode(pointSoundIds.length > 0);
     setKpopMode(restoredGenreIds.includes('kpop') ? resolvedKpopMode : 0);
-    setIsKoreanEnglishMix(resolvedMixedLyrics);
-    setEnglishMixRatio(Math.max(10, Math.min(70, Math.round((Number((appliedKeywords as any).englishMixRatio ?? 10) || 10) / 10) * 10)));
+    if (restoredLyricLanguages.length > 0) {
+      setMainGenerationLyricLanguages(restoredLyricLanguages);
+    }
+    setIsKoreanEnglishMix(Boolean(resolvedMixedLyrics));
+    setEnglishMixRatio(normalizeLanguageMixRatioOption(
+      (appliedKeywords as any).englishMixRatio ?? (appliedKeywords as any).languageMixRatio ?? 10,
+    ));
+    setLanguageMixTargetLanguages(Boolean(resolvedMixedLyrics) ? storedMixTargets : []);
     setCitypopMode(restoredGenreIds.includes('citypop') ? ((appliedKeywords.citypopMode ?? 1) as 0 | 1 | 2) : 0);
 
     // Expand to include other generation settings
@@ -9229,8 +9261,12 @@ const toggleCycleVariantSelection = (
     setSituation(createEmptySituation());
 
     setKpopMode(0);
+    // 전체초기화는 생성 옵션도 앱 기본값으로 되돌린다.
+    // '다음곡에 적용'으로 복원된 언어 설정은 해당 동작에서만 유지된다.
+    setMainGenerationLyricLanguages(['ko']);
     setIsKoreanEnglishMix(false);
     setEnglishMixRatio(10);
+    setLanguageMixTargetLanguages([]);
     setCitypopMode(0);
 
     setIsGenreRandomized(false);
@@ -9495,8 +9531,10 @@ const toggleCycleVariantSelection = (
 
     // These menus should not keep stale values during random selection unless explicitly locked.
     // Generation modal options are always reset on global random so old popup choices do not leak into the next song.
+    setMainGenerationLyricLanguages(['ko']);
     setIsKoreanEnglishMix(false);
     setEnglishMixRatio(10);
+    setLanguageMixTargetLanguages([]);
     setRapEnabled(false);
 
     if (!isMenuLocked('situation')) {
@@ -9631,7 +9669,7 @@ const saveRecentSong = async (newSong: any) => {
     const requestedKoreanEnglishMix = requestedIncludeLyrics
       ? Boolean(generationOptions?.isKoreanEnglishMix ?? isKoreanEnglishMix)
       : false;
-    const requestedEnglishMixRatio = Math.max(10, Math.min(70, Math.round((Number(generationOptions?.englishMixRatio ?? englishMixRatio) || 10) / 10) * 10));
+    const requestedEnglishMixRatio = normalizeLanguageMixRatioOption(generationOptions?.englishMixRatio ?? englishMixRatio);
     const requestedLanguageMixTargetLanguages = requestedIncludeLyrics && requestedKoreanEnglishMix
       ? Array.from(new Set(((generationOptions?.languageMixTargetLanguages?.length ? generationOptions.languageMixTargetLanguages : languageMixTargetLanguages) || [])
           .filter((lang): lang is LanguageCode => Boolean(lang) && lang !== requestedLyricLanguages[0])))
@@ -10358,7 +10396,14 @@ const saveRecentSong = async (newSong: any) => {
 
       const usedModelLabel = getGeminiUsedModelLabel(firstResult);
       if (usedModelLabel) {
-        setGenerationModelNotice(`생성 모델 ${usedModelLabel}`);
+        const modelApplied = (firstResult.appliedKeywords || {}) as any;
+        const fallbackReason = String(modelApplied.geminiFallbackReason || '').trim();
+        const fallbackNotice = modelApplied.geminiFallbackUsed
+          ? fallbackReason === 'quota_or_rate_limit'
+            ? ' · 기본 모델 한도 초과로 자동 전환'
+            : ' · 기본 모델 일시 사용 불가로 자동 전환'
+          : '';
+        setGenerationModelNotice(`생성 모델 ${usedModelLabel}${fallbackNotice}`);
       }
 
       setResult(firstResult);
@@ -15048,7 +15093,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const placementLabels: Record<string, string> = {
                       accent: '짧은 포인트',
                       'hook-led': '훅 중심 포인트',
+                      'hook-led-clusters': '훅 중심 짧은 묶음',
                       'distributed-blocks': '구간별 언어 블록',
+                      'distributed-clusters': '전·중·후 언어 묶음',
+                      'within-line-rhyme-distribution': '한 줄 내부 라임 혼합',
+                      'kpop-within-line-sound-switch': 'K-pop 사운드 코드 스위칭',
                       'balanced-blocks': '균형형 섹션·블록',
                       'target-dominant': '혼합 언어 중심',
                       'arc-balanced': '전·중·후 언어 아크',
@@ -15064,6 +15113,30 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       'global-pop': '글로벌 팝',
                     };
                     const cards = Object.entries(mixAudit.cards || {}).filter(([, card]) => card && (card as any).active) as Array<[string, any]>;
+                    const rewritePlan = (result.appliedKeywords as any)?.languageMixRewritePlan;
+                    const sectionIntegrityAudit = (result.appliedKeywords as any)?.sectionIntegrityAudit;
+                    const diagnosticText = [
+                      'SORIDRAW 언어 혼합 검사 보고서',
+                      `곡: ${String(result.title || '')}`,
+                      `언어 혼합 엔진: ${String(rewritePlan?.version || 'unknown')}`,
+                      `재작성 상태: ${String(rewritePlan?.status || 'unknown')}`,
+                      `추가 Gemini 호출: ${rewritePlan?.additionalGeminiCallUsed ? '사용' : '없음'}`,
+                      '',
+                      '[언어 혼합 검사]',
+                      JSON.stringify(mixAudit, null, 2),
+                      '',
+                      '[잠금형 전체 가사 재작성]',
+                      JSON.stringify(rewritePlan || {}, null, 2),
+                      '',
+                      '[섹션·섹션 태그·악기큐 검사]',
+                      JSON.stringify(sectionIntegrityAudit || {}, null, 2),
+                      '',
+                      '[한글 가사]',
+                      String(result.lyrics?.korean || '(없음)'),
+                      '',
+                      '[보조 언어 가사]',
+                      String(result.lyrics?.english || '(없음)'),
+                    ].join('\n');
                     const statusLabel = mixAudit.status === 'passed'
                       ? '언어 비율·배치 확인'
                       : mixAudit.status === 'preserved'
@@ -15079,15 +15152,91 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <h4 className="text-xs font-black text-[var(--text-primary)]">언어 혼합 검사</h4>
-                            <p className="mt-1 text-[10px] text-[var(--text-secondary)]">섹션 태그·사운드 큐·허밍을 제외하고 실제 가창 언어 분량과 섹션·블록 배치를 함께 검사합니다.</p>
+                            <p className="mt-1 text-[10px] text-[var(--text-secondary)]">섹션 태그·보컬·사운드 큐를 제외하고, 한국어 음절과 외국어 발음 음절을 같은 가창 단위로 계산해 한 줄 내부 혼합·라임·분산을 함께 검사합니다.</p>
                             {mixAudit.exactRepairAttempted && (
                               <p className={cn('mt-1 text-[9px] font-semibold', mixAudit.exactRepairUsed ? 'text-emerald-300' : 'text-amber-300')}>
                                 {mixAudit.exactRepairUsed ? '최종 가사 기준 정밀 보정을 적용했습니다.' : '정밀 보정을 시도했지만 사용할 수 있는 교체 후보가 부족했습니다.'}
                               </p>
                             )}
                           </div>
-                          <span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-black', statusClass)}>{statusLabel}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(diagnosticText, 'language-mix-audit')}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-[#e3a13a]/25 bg-[#e3a13a]/10 px-2.5 py-1 text-[10px] font-black text-[#e3a13a] transition hover:bg-[#e3a13a]/15"
+                            >
+                              {copiedType === 'language-mix-audit' ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                              검사 전체 복사
+                            </button>
+                            <span className={cn('rounded-full border px-2.5 py-1 text-[10px] font-black', statusClass)}>{statusLabel}</span>
+                          </div>
                         </div>
+                        {rewritePlan?.active && (
+                          <div className="rounded-2xl border border-white/8 bg-white/[0.025] px-3 py-2.5">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[10px] font-black text-[var(--text-primary)]">잠금형 전체 가사 재작성</p>
+                              <span className={cn(
+                                'rounded-full border px-2 py-0.5 text-[9px] font-black',
+                                rewritePlan.status === 'applied'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                                  : 'border-amber-400/20 bg-amber-400/10 text-amber-200',
+                              )}>
+                                {rewritePlan.status === 'applied' ? '적용' : '원문 보호'}
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {Object.entries(rewritePlan.cards || {}).map(([cardKey, rawCard]) => {
+                                const card = rawCard as any;
+                                return (
+                                  <div key={cardKey} className="rounded-xl border border-white/8 bg-black/10 px-3 py-2">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">{cardKey === 'korean' ? '한글 가사' : '보조 언어 가사'}</p>
+                                    <p className="mt-1 text-[10px] font-semibold text-[var(--text-primary)]">
+                                      {card.status === 'applied' ? `${Number(card.actualRatio || 0)}% · ${Number(card.appliedPlacementCount || 0)}개 ${card.blockPlan?.mode === 'within-line-rhyme' ? '혼합 라임 줄' : '완성형 줄'} 적용` : `보존 · ${String(card.preservedReason || '원인 확인 필요')}`}
+                                    </p>
+                                    {card.error && <p className="mt-1 text-[9px] leading-relaxed text-red-200/80">{String(card.error)}</p>}
+                                    {(card.retryUsed || Number(card.waitedMs || 0) > 0) && (
+                                      <p className="mt-1 text-[9px] text-amber-200/80">429 재시도 {card.retryUsed ? '사용' : '없음'} · {Math.round(Number(card.waitedMs || 0) / 1000)}초 대기</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {sectionIntegrityAudit?.active && (
+                          <div className="rounded-2xl border border-white/8 bg-white/[0.025] p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-[10px] font-black text-[var(--text-primary)]">섹션·섹션 태그·악기큐 검사</p>
+                              <span className={cn(
+                                'rounded-full border px-2 py-0.5 text-[9px] font-black',
+                                sectionIntegrityAudit.status === 'passed'
+                                  ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                                  : 'border-red-400/20 bg-red-400/10 text-red-300',
+                              )}>
+                                {sectionIntegrityAudit.status === 'passed' ? '통과' : '확인 필요'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {Object.entries(sectionIntegrityAudit.cards || {}).filter(([, card]) => Boolean(card)).map(([cardKey, rawCard]) => {
+                                const card = rawCard as any;
+                                return (
+                                  <div key={cardKey} className="rounded-xl border border-white/8 bg-black/10 px-3 py-2.5">
+                                    <p className="text-[9px] font-bold text-[var(--text-secondary)]">{cardKey === 'korean' ? '한글 가사' : '보조 언어 가사'}</p>
+                                    <p className={cn('mt-1 text-[10px] font-semibold', card.status === 'passed' ? 'text-emerald-300' : 'text-red-300')}>
+                                      순서 {card.orderMatches ? '정상' : '오류'} · 태그 손상 {Number(card.malformedSectionTags?.length || 0)}개 · 악기큐 누락 {Number(card.missingProductionCueSections?.length || 0)}개
+                                    </p>
+                                    {Array.isArray(card.malformedSectionTags) && card.malformedSectionTags.length > 0 && (
+                                      <p className="mt-1 text-[9px] leading-relaxed text-red-200/80">손상 태그: {card.malformedSectionTags.join(' / ')}</p>
+                                    )}
+                                    {Array.isArray(card.missingProductionCueSections) && card.missingProductionCueSections.length > 0 && (
+                                      <p className="mt-1 text-[9px] leading-relaxed text-amber-200/80">악기큐 누락: {card.missingProductionCueSections.join(', ')}</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                           {cards.map(([key, card]) => {
                             const passed = card.status === 'passed';
@@ -15991,6 +16140,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               hasApiKey={true}
               isNoLyrics={hasSelectedInstrumentalBgm}
               maxLyricLanguages={hasSelectedInstrumentalBgm ? 0 : 2}
+              initialLyricLanguages={mainGenerationLyricLanguages}
               isKoreanEnglishMix={isKoreanEnglishMix}
               englishMixRatio={englishMixRatio}
               languageMixTargetLanguages={languageMixTargetLanguages}
@@ -16005,10 +16155,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               }}
               onConfirm={(_titleLang, includeLyrics, lyricLanguages, generationCount, options) => {
                 const nextMix = includeLyrics ? Boolean(options?.isKoreanEnglishMix ?? isKoreanEnglishMix) : false;
-                const nextRatio = Math.max(10, Math.min(70, Math.round((Number(options?.englishMixRatio ?? englishMixRatio) || 10) / 10) * 10));
+                const nextRatio = normalizeLanguageMixRatioOption(options?.englishMixRatio ?? englishMixRatio);
                 const nextRapMode: RapMode = includeLyrics ? (options?.rapMode || (options?.rapEnabled ? 'on' : rapMode)) : rapMode;
                 const nextRap = includeLyrics ? nextRapMode === 'on' : rapEnabled;
                 const nextMixTargets = includeLyrics && nextMix ? Array.from(new Set((options?.languageMixTargetLanguages || languageMixTargetLanguages).filter(Boolean))).slice(0, 2) as LanguageCode[] : [];
+                const nextLyricLanguages = includeLyrics
+                  ? Array.from(new Set(lyricLanguages.filter(Boolean))).slice(0, 2) as LanguageCode[]
+                  : [];
+                if (nextLyricLanguages.length > 0) setMainGenerationLyricLanguages(nextLyricLanguages);
                 setIsKoreanEnglishMix(nextMix);
                 setEnglishMixRatio(nextRatio);
                 setLanguageMixTargetLanguages(nextMixTargets);
@@ -16017,7 +16171,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 closeMainGenerationModal();
                 enqueueGeneration({
                   includeLyrics: hasSelectedInstrumentalBgm ? false : includeLyrics,
-                  lyricLanguages: hasSelectedInstrumentalBgm ? [] : lyricLanguages,
+                  lyricLanguages: hasSelectedInstrumentalBgm ? [] : nextLyricLanguages,
                   generationCount,
                   isKoreanEnglishMix: nextMix,
                   englishMixRatio: nextRatio,

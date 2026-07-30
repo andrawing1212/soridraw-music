@@ -13659,7 +13659,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
               <StudioBlackSplitLayout>
-                <section className="soridraw-studio-builder-pane">
+                <section className="soridraw-studio-builder-pane space-y-5 md:space-y-5">
               {isStudioLoaded && (
                 <>
                   {/* Selection Sections */}
@@ -13879,7 +13879,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
+          <div className="soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -14720,6 +14720,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <section className="soridraw-studio-result-pane" aria-label="생성곡 결과">
               {isStudioLoaded && (
                 <>
+
         {/* Result Area */}
         <AnimatePresence>
           {user && result && (
@@ -14734,7 +14735,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
               {/* Title Card */}
-              <div className="bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
+              <div className="soridraw-result-title-card bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
           <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
@@ -15212,7 +15213,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div data-expand-section className="bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+              <div data-expand-section className="soridraw-result-keywords-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-all duration-500">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-[#e3a13a]" />
@@ -15241,7 +15242,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   className="overflow-hidden"
                 >
                   <div ref={appliedKeywordsRef} className="pt-2">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                    <div className="soridraw-result-keywords-grid grid grid-cols-1 md:grid-cols-4 gap-2">
                     {resolveKeywordsForDisplay(result).map((section) => (
                       <div key={section.key} className="space-y-0.5 group/cat">
                         <div className="flex items-center justify-between">
@@ -15859,7 +15860,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Prompt Section */}
-              <div className="bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+              <div className="soridraw-result-prompt-card bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
                 <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <Sparkles className="w-4 h-4 text-[#e3a13a]" />
@@ -15897,13 +15898,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
               <div className="flex flex-col gap-3">
                 {!result.appliedKeywords.isNoLyrics && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="soridraw-result-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-6">
                     {(() => {
                       const displayLyricLanguages = getDisplayLyricLanguages(result);
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
+                        <div className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
@@ -15943,7 +15944,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const copyType = `lyrics-${lang}`;
 
                         return (
-                          <div key={lang} className="aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+                          <div key={lang} className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
                             <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
@@ -17438,6 +17439,8 @@ function GenreCategorySectionComponent({
             return (
               <button
                 key={group.id}
+                data-soridraw-selected={isSelectedGroup ? 'true' : undefined}
+                aria-pressed={isSelectedGroup}
                 onClick={() => onOpenGroup(group.id)}
                 onMouseEnter={() => onHover({ 
                   id: group.id, 
@@ -18405,6 +18408,8 @@ function CycleKeywordPopup({
                 >
                   <button
                     type="button"
+                    data-soridraw-selected={isSelected ? 'true' : undefined}
+                    aria-pressed={isSelected}
                     disabled={disabled}
                     onClick={() => {
                       if (disabled) return;
@@ -18750,6 +18755,8 @@ function CategorySectionComponent({
             return (
               <div key={item.id} className={cn("relative group/btn", uniformKeywordGrid && "min-w-0")}>
                 <button
+                  data-soridraw-selected={isSelected ? 'true' : undefined}
+                  aria-pressed={isSelected}
                   onMouseEnter={(event) => {
                     const tooltipItem = { 
                       ...item, 

@@ -282,7 +282,7 @@
   box-shadow: none !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :where(button, input, textarea, select):not(.soridraw-selected-strong):not([data-soridraw-selected="true"]),
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :where(button, input, textarea, select):not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]),
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-direct-input-button {
   background-color: var(--sb-control) !important;
@@ -291,18 +291,21 @@
   box-shadow: none !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :where(button):not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):hover,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :where(button):not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):hover,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary:hover,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-direct-input-button:hover {
   background-color: var(--sb-control-hover) !important;
   border-color: transparent !important;
 }
 
-/* React owns selection; this file owns the visual state. */
+/* React owns selection; this file owns the visual state.
+ * Never infer Studio Black state from Tailwind bg-* utility names. */
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main button.soridraw-selected-strong,
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main [data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main button[data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main button[aria-pressed="true"],
 :root[data-soridraw-theme="studio-black"] .soridraw-theme-surface button.soridraw-selected-strong,
-:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface [data-soridraw-selected="true"] {
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface button[data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface button[aria-pressed="true"] {
   background: var(--sb-accent) !important;
   background-color: var(--sb-accent) !important;
   background-image: none !important;
@@ -315,9 +318,11 @@
 
 :root[data-soridraw-theme="studio-black"] :is(
   .soridraw-studio-main button.soridraw-selected-strong,
-  .soridraw-studio-main [data-soridraw-selected="true"],
+  .soridraw-studio-main button[data-soridraw-selected="true"],
+  .soridraw-studio-main button[aria-pressed="true"],
   .soridraw-theme-surface button.soridraw-selected-strong,
-  .soridraw-theme-surface [data-soridraw-selected="true"]
+  .soridraw-theme-surface button[data-soridraw-selected="true"],
+  .soridraw-theme-surface button[aria-pressed="true"]
 ) :where(span,strong,small,p,div,label,svg) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
@@ -726,7 +731,10 @@
 }
 
 /* These are primary result actions, so they keep the same filled accent treatment. */
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
+  button[data-soridraw-button-variant="primary"],
+  .soridraw-result-action-button
+) {
   background: var(--sb-accent) !important;
   background-color: var(--sb-accent) !important;
   background-image: none !important;
@@ -737,19 +745,28 @@
   opacity: 1 !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button :where(svg, span) {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
+  button[data-soridraw-button-variant="primary"],
+  .soridraw-result-action-button
+) :where(svg, span) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
   opacity: 1 !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button:hover {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
+  button[data-soridraw-button-variant="primary"],
+  .soridraw-result-action-button
+):hover {
   background: #ffc126 !important;
   background-color: #ffc126 !important;
   border-color: #ffc126 !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button:active {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
+  button[data-soridraw-button-variant="primary"],
+  .soridraw-result-action-button
+):active {
   background: #d99500 !important;
   background-color: #d99500 !important;
   border-color: #d99500 !important;

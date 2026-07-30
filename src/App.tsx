@@ -14624,6 +14624,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
+                      data-soridraw-button-variant="primary"
                       className="soridraw-result-action-button soridraw-result-music-note-button flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all shrink-0 active:scale-95 shadow-sm"
                     >
                       <HeartIcon className="w-5 h-5 fill-current text-[#cd8c31]" />
@@ -14647,6 +14648,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
+                          data-soridraw-button-variant="primary"
                           className="soridraw-result-action-button soridraw-result-copy-all-button flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 shadow-sm"
                         >
                           {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-85" />}
@@ -14668,6 +14670,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
+                      data-soridraw-button-variant="primary"
                       className="soridraw-result-action-button soridraw-result-music-note-button flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       <HeartIcon className="w-[16px] h-[16px] fill-current text-[#cd8c31]" />
@@ -14694,6 +14697,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
+                      data-soridraw-button-variant="primary"
                       className="soridraw-result-action-button soridraw-result-copy-all-button flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       {copiedType === 'title' ? <Check className="w-[16px] h-[16px] text-green-500" /> : <Copy className="w-[16px] h-[16px] opacity-85" />}
@@ -15101,6 +15105,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
+                      data-soridraw-button-variant="primary"
                       className="soridraw-result-action-button soridraw-result-apply-next-button flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#F4A900] text-[#18110A] hover:bg-[#F7B31A] transition-all shadow-[0_12px_28px_rgba(244,169,0,0.18)] text-[13px] sm:text-[14px] font-black border border-[#F4A900] active:scale-95"
                     >
                       <RefreshCw className="w-[17px] h-[17px] sm:w-[18px] sm:h-[18px]" />

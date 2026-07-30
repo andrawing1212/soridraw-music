@@ -2869,14 +2869,14 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item:hover,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme:hover {
-    border-color: #333333;
-    background: #2a2a2a;
+    border-color: transparent;
+    background: transparent;
     color: #ececef;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item.is-active {
-    border-color: rgba(255, 180, 0, 0.3);
-    background: linear-gradient(90deg, rgba(255, 180, 0, 0.13), rgba(255, 180, 0, 0.025));
+    border-color: transparent;
+    background: transparent;
     color: #ffbd23;
     box-shadow: inset 3px 0 0 #ffb400;
   }
@@ -2895,8 +2895,8 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme {
     min-height: 58px;
     margin-top: 14px;
-    border-color: #2a2a2a;
-    background: #222222;
+    border-color: transparent;
+    background: transparent;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
@@ -3067,13 +3067,13 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song:hover {
-    border-color: #333333;
-    background: #2a2a2a;
+    border-color: transparent;
+    background: transparent;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song.is-selected {
-    border-color: rgba(255, 180, 0, 0.25);
-    background: rgba(255, 180, 0, 0.065);
+    border-color: transparent;
+    background: transparent;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-icon {
@@ -3512,14 +3512,14 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item:hover,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme:hover {
-    background: #101010;
-    border-color: #1f1f24;
+    background: transparent;
+    border-color: transparent;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item.is-active {
-    background: #101010;
+    background: transparent;
     color: #ffb400;
-    border-color: #3e320f;
+    border-color: transparent;
     box-shadow: inset 2px 0 0 #ffb400;
   }
 
@@ -3530,8 +3530,8 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme {
     min-height: 52px;
     margin: 12px 10px 10px;
-    background: #101010;
-    border-color: #1f1f24;
+    background: transparent;
+    border-color: transparent;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
@@ -3571,12 +3571,17 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-empty {
     border-radius: 8px;
     background: #101010;
     border-color: #222222;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song {
+    border-radius: 8px;
+    background: transparent;
+    border-color: transparent;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song {

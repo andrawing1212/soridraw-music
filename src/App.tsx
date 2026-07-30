@@ -15778,7 +15778,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
 
-              <div className="flex flex-col gap-3">
+              <div className="soridraw-result-lyrics-section flex flex-col gap-3">
                 {!result.appliedKeywords.isNoLyrics && (
                   <div className="soridraw-result-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-6">
                     {(() => {
@@ -15894,7 +15894,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
                 )}
-                  <div className="mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
+                  <div className="soridraw-result-music-api-card mt-2 overflow-hidden rounded-2xl border border-[#e3a13a]/[0.16] bg-[#e3a13a]/[0.035]">
                     <button
                       type="button"
                       onClick={() => setIsHomeMusicApiMenuCollapsed((prev) => !prev)}

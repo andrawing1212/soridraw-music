@@ -65,6 +65,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       root.style.removeProperty('--soridraw-studio-builder-left');
       root.style.removeProperty('--soridraw-studio-builder-right');
       root.style.removeProperty('--soridraw-studio-builder-width');
+      root.style.removeProperty('--soridraw-studio-splitter-left');
       return;
     }
 
@@ -77,6 +78,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, builderRect.left)}px`);
     root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - builderRect.right)}px`);
     root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderRect.width)}px`);
+    root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, builderRect.right)}px`);
   }, [isStudioBlack]);
 
   useLayoutEffect(() => {
@@ -105,6 +107,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       document.documentElement.style.removeProperty('--soridraw-studio-builder-left');
       document.documentElement.style.removeProperty('--soridraw-studio-builder-right');
       document.documentElement.style.removeProperty('--soridraw-studio-builder-width');
+      document.documentElement.style.removeProperty('--soridraw-studio-splitter-left');
     };
   }, [updateMeasurements]);
 

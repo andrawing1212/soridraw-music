@@ -3616,47 +3616,6 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     padding-right: 14px !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar {
-    left: 236px;
-    right: 308px;
-    width: auto;
-    justify-content: flex-end;
-    padding-left: 14px;
-    padding-right: 14px;
-    bottom: 18px !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel {
-    width: min(100%, 720px);
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar > .soridraw-studio-action-panel > div:last-child,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel > .flex {
-    border-radius: 12px !important;
-    background: rgba(12, 12, 14, 0.98) !important;
-    border-color: #24242a !important;
-    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.36) !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel button {
-    border-radius: 9px !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel .soridraw-generate-heartbeat {
-    min-height: 58px !important;
-    padding-top: 0.95rem !important;
-    padding-bottom: 0.95rem !important;
-    font-size: 22px !important;
-    box-shadow: none !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-collapsed {
-    left: 12px !important;
-    bottom: 18px !important;
-    border-radius: 10px !important;
-    width: 52px !important;
-    height: 72px !important;
-  }
 }
 
 @media (min-width: 1540px) {
@@ -3677,10 +3636,6 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     margin-right: 326px !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar {
-    left: 248px;
-    right: 326px;
-  }
 }
 
 @media (max-width: 1279px) {
@@ -3688,16 +3643,6 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     padding: 20px !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel > .flex {
-    border-radius: 12px !important;
-    background: rgba(12, 12, 14, 0.98) !important;
-    border-color: #24242a !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel .soridraw-generate-heartbeat {
-    font-size: 21px !important;
-    box-shadow: none !important;
-  }
 }
 
 @media (max-width: 767px) {
@@ -3715,7 +3660,4 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     font-weight: 600 !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel .soridraw-generate-heartbeat {
-    font-size: 18px !important;
-  }
 }

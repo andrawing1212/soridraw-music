@@ -175,14 +175,20 @@
     min-width: 0;
   }
 
+  /*
+   * The split boundary belongs to the whole Studio workspace, not only to the
+   * cards inside <main>.  Keep it aligned with the rail separators from the
+   * bottom edge of the top navigation to the viewport bottom.
+   */
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
     display: flex !important;
-    position: absolute;
+    position: fixed;
     z-index: 70;
-    top: 0;
+    top: 58px;
     bottom: 0;
-    left: calc(var(--soridraw-studio-builder-percent, 50%) - 8px);
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px);
     width: 16px;
+    height: auto;
     padding: 0;
     align-items: stretch;
     justify-content: center;
@@ -194,19 +200,39 @@
     outline: none;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter > span {
-    display: block;
-    width: 1px;
-    min-height: 100%;
-    background: var(--sb-divider);
-    transition: width .12s ease, background-color .12s ease;
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:active,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    filter: none !important;
+    transform: none !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:hover > span,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus-visible > span,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-splitter > span {
-    width: 2px;
-    background: var(--sb-divider-strong);
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter > span {
+    display: block;
+    width: 1px !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    background: var(--sb-divider) !important;
+    transition: background-color .12s ease;
+    pointer-events: none;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:hover > span {
+    width: 1px !important;
+    height: 100% !important;
+    background: rgba(255,255,255,.145) !important;
+  }
+
+  /* Keep the Studio search control inside the left builder territory. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
+    left: auto !important;
+    right: calc(100% - var(--soridraw-studio-builder-width, 50%) + 18px) !important;
+    bottom: 14px !important;
+    translate: 0 0 !important;
   }
 }
 
@@ -271,6 +297,17 @@
   background: rgba(255,180,0,.09) !important;
   color: var(--sb-accent) !important;
   box-shadow: inset 2px 0 0 var(--sb-accent) !important;
+}
+
+/* Studio center header/result dividers are intentionally removed. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-shell {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content {
+  border-top: 0 !important;
+  box-shadow: none !important;
 }
 
 /* One neutral surface system, close to Suno's charcoal hierarchy. */
@@ -934,4 +971,148 @@
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button > span {
   font-size: 10px !important;
   line-height: 1 !important;
+}
+
+/* 190: action bar has exactly two pane-owned layouts, matching Classic behavior. */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar {
+    left: var(--soridraw-studio-builder-left, 214px) !important;
+    right: auto !important;
+    width: var(--soridraw-studio-builder-width, 50vw) !important;
+    padding-inline: 16px !important;
+    justify-content: center !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-panel,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-row,
+  :root[data-soridraw-theme="studio-black"] .soridraw-action-item,
+  :root[data-soridraw-theme="studio-black"] .soridraw-action-item > button {
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-row,
+  :root[data-soridraw-theme="studio-black"] .soridraw-action-item > button {
+    transition-property: background-color, color, border-color, filter, opacity !important;
+  }
+
+  /* Desktop pane: the full Classic-style control row. */
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-studio-action-panel {
+    width: min(100%, 760px) !important;
+    max-width: 760px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-studio-action-row {
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 8px !important;
+    border-radius: 18px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-collapse {
+    display: flex !important;
+    width: 44px !important;
+    min-width: 44px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-random,
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-reset {
+    flex: 0 0 auto !important;
+    width: auto !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-generate {
+    flex: 1 1 auto !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-side-label {
+    display: block !important;
+    white-space: nowrap !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-random > button,
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-reset > button {
+    width: auto !important;
+    min-width: 104px !important;
+    height: 56px !important;
+    padding: 0 16px !important;
+    border-radius: 12px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="desktop"] .soridraw-action-generate-button {
+    height: 56px !important;
+    min-height: 56px !important;
+    padding: 0 18px !important;
+    border-radius: 12px !important;
+    font-size: 22px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Mobile pane: switch as one unit to three compact controls, never a squeezed desktop row. */
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-bar {
+    padding-inline: 10px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-panel {
+    width: min(100%, 430px) !important;
+    max-width: 430px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-row {
+    display: grid !important;
+    grid-template-columns: 46px minmax(0, 1fr) 46px !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    width: 100% !important;
+    padding: 6px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-collapse {
+    display: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-item {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-item > button {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 50px !important;
+    min-height: 50px !important;
+    max-height: 50px !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    transform: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-side-label {
+    display: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-generate-button {
+    padding-inline: 12px !important;
+    gap: 7px !important;
+    font-size: 18px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    writing-mode: horizontal-tb !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-generate-button > svg,
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-random > button > svg,
+  :root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-reset > button > svg {
+    width: 18px !important;
+    height: 18px !important;
+    flex: 0 0 auto !important;
+  }
 }

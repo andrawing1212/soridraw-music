@@ -16244,7 +16244,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         )}
       </AnimatePresence>
 
-      <footer className="py-12 px-6 text-center border-t border-[var(--border-color)] text-[var(--text-secondary)]/50 text-sm">
+      <footer className="soridraw-app-footer py-12 px-6 text-center border-t border-[var(--border-color)] text-[var(--text-secondary)]/50 text-sm">
         <p>© 2026 SORIDRAW's Studio. All rights reserved.</p>
       </footer>
 

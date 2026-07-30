@@ -60,6 +60,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
+  const footerFrameRef = useRef<number | null>(null);
 
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
@@ -73,7 +74,39 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.removeProperty('--soridraw-studio-builder-right');
     root.style.removeProperty('--soridraw-studio-builder-width');
     root.style.removeProperty('--soridraw-studio-splitter-left');
+    root.style.removeProperty('--soridraw-studio-splitter-bottom');
   }, []);
+
+  const refreshSplitterFooterBoundary = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    if (!isStudioBlack() || window.innerWidth < 1100) {
+      document.documentElement.style.removeProperty('--soridraw-studio-splitter-bottom');
+      return;
+    }
+
+    const root = document.documentElement;
+    const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
+    if (!footer) {
+      root.style.setProperty('--soridraw-studio-splitter-bottom', '0px');
+      return;
+    }
+
+    const footerTop = footer.getBoundingClientRect().top;
+    const maximumBottom = Math.max(0, window.innerHeight - 58);
+    const footerOverlap = Math.max(0, window.innerHeight - footerTop);
+    root.style.setProperty(
+      '--soridraw-studio-splitter-bottom',
+      `${Math.min(maximumBottom, footerOverlap)}px`,
+    );
+  }, [isStudioBlack]);
+
+  const scheduleFooterBoundaryRefresh = useCallback(() => {
+    if (footerFrameRef.current !== null) return;
+    footerFrameRef.current = window.requestAnimationFrame(() => {
+      footerFrameRef.current = null;
+      refreshSplitterFooterBoundary();
+    });
+  }, [refreshSplitterFooterBoundary]);
 
   /**
    * Apply the split directly to DOM/CSS variables.
@@ -146,7 +179,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: Math.max(rect.width, 1),
     };
     applyPercentToLayout(percentRef.current);
-  }, [applyPercentToLayout, clearRootMeasurements, isStudioBlack]);
+    refreshSplitterFooterBoundary();
+  }, [applyPercentToLayout, clearRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary]);
 
   useLayoutEffect(() => {
     percentRef.current = percent;
@@ -164,27 +198,37 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       // During an active drag the pointer-frame path already owns measurements,
       // so avoid a second competing update loop.
       if (!draggingRef.current) refreshLayoutMetrics();
+      else scheduleFooterBoundaryRefresh();
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
+    const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
+    if (footer) observer.observe(footer);
 
     const themeObserver = new MutationObserver(refreshLayoutMetrics);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
     window.addEventListener('resize', refreshLayoutMetrics);
+    window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
+    scheduleFooterBoundaryRefresh();
 
     return () => {
       observer.disconnect();
       themeObserver.disconnect();
       window.removeEventListener('resize', refreshLayoutMetrics);
+      window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       if (dragFrameRef.current !== null) {
         window.cancelAnimationFrame(dragFrameRef.current);
         dragFrameRef.current = null;
+      }
+      if (footerFrameRef.current !== null) {
+        window.cancelAnimationFrame(footerFrameRef.current);
+        footerFrameRef.current = null;
       }
       draggingRef.current = false;
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       clearRootMeasurements();
     };
-  }, [clearRootMeasurements, refreshLayoutMetrics]);
+  }, [clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;

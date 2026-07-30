@@ -185,7 +185,7 @@
     position: fixed;
     z-index: 70;
     top: 58px;
-    bottom: 0;
+    bottom: var(--soridraw-studio-splitter-bottom, 0px);
     left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px);
     width: 16px;
     height: auto;
@@ -202,13 +202,19 @@
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:active,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus-visible {
     background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    color: inherit !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     filter: none !important;
     transform: none !important;
+    scale: 1 !important;
+    translate: 0 0 !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter > span {
@@ -225,6 +231,19 @@
     width: 1px !important;
     height: 100% !important;
     background: rgba(255,255,255,.145) !important;
+  }
+
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:active > span,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus > span,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter:focus-visible > span {
+    width: 1px !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    background: var(--sb-divider) !important;
+    color: inherit !important;
+    transform: none !important;
+    scale: 1 !important;
   }
 
   /* Keep the Studio search control inside the left builder territory. */
@@ -753,7 +772,7 @@
 }
 
 /* 185: explicit click feedback, tempo mobile fit, and result action colors. */
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):active {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active {
   background-color: var(--sb-accent) !important;
   background-image: none !important;
   color: var(--sb-selected-text) !important;
@@ -762,7 +781,7 @@
   transform: scale(.97);
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):active :where(svg, span) {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active :where(svg, span) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
 }
@@ -1141,4 +1160,12 @@
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
     will-change: left, width, right;
   }
+}
+
+/* 192: the fixed Studio divider belongs only to the working area.
+ * The footer is a hard visual boundary and always covers the divider. */
+:root[data-soridraw-theme="studio-black"] .soridraw-app-footer {
+  position: relative;
+  z-index: 80;
+  background: var(--sb-bg) !important;
 }

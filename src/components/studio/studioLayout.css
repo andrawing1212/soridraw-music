@@ -1116,3 +1116,29 @@
     flex: 0 0 auto !important;
   }
 }
+
+/* 191: keep split dragging on one animation-frame owner.
+ * Pane content stops receiving hover/pointer work while the divider is held,
+ * and all split-dependent fixed controls follow the same CSS variables. */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
+    pointer-events: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
+    will-change: left;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
+    will-change: left, width, right;
+  }
+}

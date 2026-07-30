@@ -5,6 +5,7 @@ import App from './App.tsx';
 import './index.css';
 import './components/studio/studioLayout.css';
 import './components/studio/studioBlackOverrides197.css';
+import './components/studio/studioBlackOverrides198.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

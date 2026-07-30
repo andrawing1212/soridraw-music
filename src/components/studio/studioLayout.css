@@ -25,12 +25,23 @@
 }
 
 :root[data-soridraw-theme="studio-black"] {
-  --sb-page: #101011;
-  --sb-rail: #121214;
-  --sb-card: #1b1b1e;
-  --sb-card-2: #202023;
-  --sb-control: #26262a;
-  --sb-control-hover: #303034;
+  --sb-page: #101010;
+  --sb-rail: #101010;
+  --sb-card: #2e2e2e;
+  --sb-card-2: #222222;
+  --sb-control: #2a2a2a;
+  --sb-control-hover: #333333;
+
+  /* Legacy variables are deliberately redirected to this one canonical palette. */
+  --bg-primary: var(--sb-page);
+  --bg-secondary: var(--sb-page);
+  --card-bg: var(--sb-card);
+  --input-bg: var(--sb-card-2);
+  --hover-bg-solid: var(--sb-control-hover);
+  --button-bg: var(--sb-control);
+  --button-hover-bg: var(--sb-control-hover);
+  --soridraw-panel-bg: var(--sb-page);
+  --soridraw-card-bg: var(--sb-card);
   --sb-divider: rgba(255,255,255,.105);
   --sb-divider-strong: rgba(255,180,0,.7);
   --sb-text: #f4f4f5;
@@ -48,7 +59,7 @@
 
 :root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
   border-bottom: 1px solid var(--sb-divider) !important;
-  background: rgba(16,16,17,.96) !important;
+  background: var(--sb-page) !important;
   box-shadow: none !important;
 }
 
@@ -1168,4 +1179,105 @@
   position: relative;
   z-index: 80;
   background: var(--sb-bg) !important;
+}
+
+
+/* 193 — Canonical Studio Black neutral palette.
+ * This is the only surface-color owner. It intentionally overrides every
+ * legacy Phase 2/3/164/165 Studio Black background without touching Classic.
+ */
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root,
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-page-center,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-shell,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-footer {
+  background-color: var(--sb-page) !important;
+  background-image: none !important;
+}
+
+/* Rails inherit the same page black; there is no separate blue/navy rail tint. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-card {
+  background-color: var(--sb-page) !important;
+  background-image: none !important;
+}
+
+/* Main cards and result cards share one neutral card surface. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content > div,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content > section,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-genre-modal-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-cycle-modal-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-storyboard-modal-panel,
+:root[data-soridraw-theme="studio-black"] .studio-section-custom-modal-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[#1"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[var(--card-bg)]"] {
+  background-color: var(--sb-card) !important;
+  background-image: none !important;
+}
+
+/* Inner auxiliary surfaces are deliberately darker than their parent card. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-direct-input-button,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-lyrics-slot .soridraw-structure-guide,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :where(pre, textarea, input, select) {
+  background-color: var(--sb-card-2) !important;
+  background-image: none !important;
+}
+
+/* One normal button color and one hover color. Selected/primary buttons are excluded. */
+:root[data-soridraw-theme="studio-black"] :is(
+  .soridraw-studio-main,
+  .soridraw-studio-left-panel,
+  .soridraw-studio-dashboard-panel,
+  .soridraw-studio-result-content,
+  .soridraw-theme-surface
+) button:not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):not(.soridraw-studio-splitter) {
+  background-color: var(--sb-control) !important;
+  background-image: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :is(
+  .soridraw-studio-main,
+  .soridraw-studio-left-panel,
+  .soridraw-studio-dashboard-panel,
+  .soridraw-studio-result-content,
+  .soridraw-theme-surface
+) button:not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):not(.soridraw-studio-splitter):hover {
+  background-color: var(--sb-control-hover) !important;
+  background-image: none !important;
+}
+
+/* Keep icon-only transparent controls transparent until hover. */
+:root[data-soridraw-theme="studio-black"] :is(
+  .soridraw-studio-main,
+  .soridraw-studio-left-panel,
+  .soridraw-studio-dashboard-panel
+) button:has(> svg:only-child):not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):not(.soridraw-studio-splitter) {
+  background-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :is(
+  .soridraw-studio-main,
+  .soridraw-studio-left-panel,
+  .soridraw-studio-dashboard-panel
+) button:has(> svg:only-child):not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):not(.soridraw-studio-splitter):hover {
+  background-color: var(--sb-control-hover) !important;
 }

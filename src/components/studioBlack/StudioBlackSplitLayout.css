@@ -15,7 +15,7 @@
 }
 
 :root[data-soridraw-theme="studio-black"] {
-  --soridraw-sb-divider: #27272c;
+  --soridraw-sb-divider: #3a3a40;
   --soridraw-sb-divider-hover: #ffb400;
   --soridraw-sb-accent: #ffb400;
   --soridraw-sb-left-rail: 206px;
@@ -36,7 +36,7 @@
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
     top: 58px !important;
     bottom: 0 !important;
-    background: #09090b !important;
+    background: #151517 !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel {
@@ -54,7 +54,7 @@
     height: 100% !important;
     border: 0 !important;
     border-radius: 0 !important;
-    background: #09090b !important;
+    background: #151517 !important;
     box-shadow: none !important;
   }
 
@@ -74,11 +74,12 @@
   /* Fill the complete area between both rails. */
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
-    width: calc(100vw - var(--soridraw-sb-left-rail) - var(--soridraw-sb-right-rail)) !important;
+    width: auto !important;
     max-width: none !important;
     margin-left: var(--soridraw-sb-left-rail) !important;
     margin-right: var(--soridraw-sb-right-rail) !important;
     box-sizing: border-box !important;
+    overflow-x: clip !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-shell,
@@ -94,14 +95,16 @@
     align-items: start;
     width: 100%;
     min-width: 0;
-    overflow: visible;
+    overflow: hidden;
+    max-width: 100%;
+    position: relative;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-pane-shell {
     display: block;
     min-width: 0;
     max-width: 100%;
-    overflow-x: clip;
+    overflow: hidden;
     container-type: inline-size;
   }
 
@@ -545,4 +548,255 @@ html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridr
   .soridraw-studio-result-pane .soridraw-result-lyrics-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
+}
+
+
+/* SORIDRAW 177 — real pane-local responsive ownership and brighter neutral black. */
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #141416 !important;
+  --bg-secondary: #18181b !important;
+  --card-bg: #202023 !important;
+  --text-primary: #f5f5f6 !important;
+  --text-secondary: #a4a4ac !important;
+  --border-color: #38383e !important;
+  --input-bg: #242428 !important;
+  --hover-bg: rgba(255, 255, 255, 0.075) !important;
+  --hover-bg-solid: #303034 !important;
+  --glass-bg: rgba(26, 26, 29, 0.985) !important;
+  --glass-border: #3a3a40 !important;
+  --button-bg: #27272b !important;
+  --button-border: #3b3b41 !important;
+  --button-hover-bg: #323237 !important;
+  --soridraw-panel-bg: #171719 !important;
+  --soridraw-card-bg: #202023 !important;
+  --soridraw-border: #38383e !important;
+  --soridraw-text-main: #f5f5f6 !important;
+  --soridraw-text-muted: #a4a4ac !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root {
+  background: #141416 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
+  background: #171719 !important;
+}
+
+@media (min-width: 1280px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
+    background: #18181a !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    position: relative !important;
+    isolation: isolate;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-layout {
+    grid-template-columns:
+      minmax(0, var(--soridraw-studio-builder-percent, 56%))
+      minmax(0, calc(100% - var(--soridraw-studio-builder-percent, 56%)));
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell {
+    padding-right: 14px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell {
+    padding-left: 14px !important;
+    contain: inline-size layout paint;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell * {
+    max-width: 100%;
+  }
+
+  /* Left workspace: its own width controls the actual phone/tablet/PC composition. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-studio-builder-pane {
+    font-size: 14px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] :is(
+    .soridraw-studio-selection-grid,
+    .soridraw-studio-vocal-lyrics-grid
+  ) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="tablet"] .soridraw-studio-selection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-studio-menu-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 16px !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-studio-menu-card > div:first-child {
+    flex-wrap: wrap !important;
+    row-gap: 10px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-expand-content,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-expand-summary,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-direct-input-button {
+    max-width: 100% !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] :is(
+    [class*="lg:grid-cols-7"],
+    [class*="md:grid-cols-4"],
+    [class*="sm:grid-cols-4"]
+  ) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] :is(button, input, textarea, select) {
+    min-width: 0 !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-shell[data-pane-mode="mobile"] .soridraw-studio-action-panel {
+    width: 100% !important;
+  }
+
+  /* Right result: true phone composition inside the pane, never behind the dashboard. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-studio-result-content {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    padding: 8px 0 0 !important;
+    border-top-width: 0 !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-studio-result-content > * {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] :is(
+    .soridraw-result-title-card,
+    .soridraw-result-keywords-card,
+    .soridraw-result-prompt-card,
+    .soridraw-result-lyrics-card
+  ) {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 18px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-result-title-card > [class~="sm:hidden"] {
+    display: block !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-result-title-card > [class~="hidden"][class~="sm:flex"],
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-result-title-card > [class~="hidden"][class~="sm:block"] {
+    display: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] :is(
+    .soridraw-result-keywords-grid,
+    .soridraw-result-lyrics-grid,
+    [class*="md:grid-cols-2"],
+    [class*="md:grid-cols-4"]
+  ) {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] [class*="sm:flex-row"] {
+    flex-direction: column !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] :is(pre, textarea, input, p, span, h1, h2, h3) {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    white-space: normal;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] pre {
+    white-space: pre-wrap !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-result-prompt-card {
+    height: auto !important;
+    min-height: 360px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-shell[data-pane-mode="mobile"] .soridraw-result-lyrics-card {
+    aspect-ratio: auto !important;
+    min-height: 480px !important;
+  }
+}
+
+/* Brighter neutral surfaces: no navy cast. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card {
+  background: #202023 !important;
+  border-color: #36363b !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-content button:not([data-soridraw-selected="true"]):not(.soridraw-selected-strong) {
+  background: #29292d !important;
+  border-color: transparent !important;
+  color: #ededf0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-content button:not([data-soridraw-selected="true"]):not(.soridraw-selected-strong):hover {
+  background: #343439 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :is(
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-studio-storyboard-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .music-api-generate-modal
+) {
+  background: #202023 !important;
+  border-color: #3a3a40 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-empty {
+  background: #242427 !important;
+  border-color: #39393f !important;
 }

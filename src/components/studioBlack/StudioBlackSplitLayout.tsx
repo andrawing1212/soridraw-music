@@ -9,9 +9,9 @@ import React, {
   useState,
 } from 'react';
 
-const STORAGE_KEY = 'soridraw_studio_black_builder_pane_percent_v4';
-const MIN_BUILDER_PERCENT = 24;
-const MAX_BUILDER_PERCENT = 76;
+const STORAGE_KEY = 'soridraw_studio_black_builder_pane_percent_v5';
+const MIN_BUILDER_PERCENT = 22;
+const MAX_BUILDER_PERCENT = 78;
 const DEFAULT_BUILDER_PERCENT = 56;
 const DESKTOP_BREAKPOINT = 1280;
 
@@ -41,14 +41,14 @@ const readStoredBuilderPercent = () => {
 
 const getPaneMode = (width: number, kind: 'builder' | 'result'): PaneMode => {
   if (kind === 'builder') {
-    if (width < 560) return 'mobile';
-    if (width < 920) return 'tablet';
+    if (width < 620) return 'mobile';
+    if (width < 880) return 'tablet';
     return 'desktop';
   }
 
-  // The generated-song pane intentionally has only two visual states.
-  // Below 660px it must render the same compact/mobile composition used on phones.
-  return width < 660 ? 'mobile' : 'desktop';
+  // The result pane deliberately swaps between the real phone composition
+  // and the desktop composition according to the pane itself, not viewport width.
+  return width < 760 ? 'mobile' : 'desktop';
 };
 
 export default function StudioBlackSplitLayout({ children }: StudioBlackSplitLayoutProps) {
@@ -78,24 +78,23 @@ export default function StudioBlackSplitLayout({ children }: StudioBlackSplitLay
   }, []);
 
   const updatePaneModes = useCallback(() => {
-    const layoutWidth = layoutRef.current?.getBoundingClientRect().width || 0;
+    // ResizeObserver reports the real visible grid-track widths. Using these
+    // values prevents long prompt/lyrics content from pretending the pane is
+    // wider and sliding underneath the fixed right dashboard.
+    const builderWidth = builderShellRef.current?.getBoundingClientRect().width || 0;
+    const resultWidth = resultShellRef.current?.getBoundingClientRect().width || 0;
 
-    // Calculate from the actual grid ratio instead of child intrinsic widths.
-    // Long result content must never trick the mode detector into thinking
-    // the right pane is wider than the visible grid track.
-    if (layoutWidth > 0) {
-      const gutter = 18;
-      const builderWidth = Math.max(0, (layoutWidth * builderPercent) / 100 - gutter);
-      const resultWidth = Math.max(0, (layoutWidth * (100 - builderPercent)) / 100 - gutter);
-      setBuilderMode(getPaneMode(builderWidth, 'builder'));
-      setResultMode(getPaneMode(resultWidth, 'result'));
-      return;
-    }
-
-    const builderWidth = builderShellRef.current?.clientWidth || 0;
-    const resultWidth = resultShellRef.current?.clientWidth || 0;
     if (builderWidth > 0) setBuilderMode(getPaneMode(builderWidth, 'builder'));
     if (resultWidth > 0) setResultMode(getPaneMode(resultWidth, 'result'));
+
+    if (builderWidth > 0 || resultWidth > 0) return;
+
+    const layoutWidth = layoutRef.current?.getBoundingClientRect().width || 0;
+    if (layoutWidth <= 0) return;
+    const paneGap = 36;
+    const usableWidth = Math.max(0, layoutWidth - paneGap);
+    setBuilderMode(getPaneMode((usableWidth * builderPercent) / 100, 'builder'));
+    setResultMode(getPaneMode((usableWidth * (100 - builderPercent)) / 100, 'result'));
   }, [builderPercent]);
 
   const updateLayoutMeasurements = useCallback(() => {
@@ -175,6 +174,79 @@ export default function StudioBlackSplitLayout({ children }: StudioBlackSplitLay
       document.body.style.userSelect = previousUserSelect;
     };
   }, [isDragging]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const paintedButtons = new Set<HTMLButtonElement>();
+    const paintSelection = () => {
+      const studioBlackActive = document.documentElement.dataset.soridrawTheme === 'studio-black';
+      const selectedButtons = studioBlackActive
+        ? Array.from(document.querySelectorAll<HTMLButtonElement>(
+            '.soridraw-studio-builder-pane button[data-soridraw-selected="true"], ' +
+            '.soridraw-studio-builder-pane button.soridraw-selected-strong, ' +
+            '.soridraw-studio-genre-modal-panel button[data-soridraw-selected="true"], ' +
+            '.soridraw-studio-cycle-modal-panel button[data-soridraw-selected="true"]',
+          ))
+        : [];
+
+      const next = new Set(selectedButtons);
+      paintedButtons.forEach((button) => {
+        if (next.has(button)) return;
+        ['background', 'background-color', 'background-image', 'color', '-webkit-text-fill-color', 'border-color', 'box-shadow', 'opacity', 'filter'].forEach((name) =>
+          button.style.removeProperty(name),
+        );
+        button.querySelectorAll<HTMLElement>('span,strong,small,p,div,label,svg').forEach((node) => {
+          node.style.removeProperty('color');
+          node.style.removeProperty('-webkit-text-fill-color');
+          node.style.removeProperty('opacity');
+          node.style.removeProperty('text-shadow');
+        });
+        paintedButtons.delete(button);
+      });
+
+      selectedButtons.forEach((button) => {
+        button.style.setProperty('background', '#ffb400', 'important');
+        button.style.setProperty('background-color', '#ffb400', 'important');
+        button.style.setProperty('background-image', 'none', 'important');
+        button.style.setProperty('color', '#0b0b0b', 'important');
+        button.style.setProperty('-webkit-text-fill-color', '#0b0b0b', 'important');
+        button.style.setProperty('border-color', 'transparent', 'important');
+        button.style.setProperty('box-shadow', 'none', 'important');
+        button.style.setProperty('opacity', '1', 'important');
+        button.style.setProperty('filter', 'none', 'important');
+        button.querySelectorAll<HTMLElement>('span,strong,small,p,div,label,svg').forEach((node) => {
+          node.style.setProperty('color', '#0b0b0b', 'important');
+          node.style.setProperty('-webkit-text-fill-color', '#0b0b0b', 'important');
+          node.style.setProperty('opacity', '1', 'important');
+          node.style.setProperty('text-shadow', 'none', 'important');
+        });
+        paintedButtons.add(button);
+      });
+    };
+
+    const frame = window.requestAnimationFrame(paintSelection);
+    const observer = new MutationObserver(() => window.requestAnimationFrame(paintSelection));
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class', 'data-soridraw-selected'],
+    });
+    window.addEventListener('soridraw-theme-change', paintSelection);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('soridraw-theme-change', paintSelection);
+      paintedButtons.forEach((button) => {
+        ['background', 'background-color', 'background-image', 'color', '-webkit-text-fill-color', 'border-color', 'box-shadow', 'opacity', 'filter'].forEach((name) =>
+          button.style.removeProperty(name),
+        );
+      });
+      paintedButtons.clear();
+    };
+  }, []);
 
   useEffect(
     () => () => {

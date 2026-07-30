@@ -14624,7 +14624,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all shrink-0 active:scale-95 shadow-sm"
+                      className="soridraw-result-action-button soridraw-result-music-note-button flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 transition-all shrink-0 active:scale-95 shadow-sm"
                     >
                       <HeartIcon className="w-5 h-5 fill-current text-[#cd8c31]" />
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">뮤직노트</span>
@@ -14647,7 +14647,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                             })
                           }
                           onMouseLeave={() => setHoveredItem(null)}
-                          className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 shadow-sm"
+                          className="soridraw-result-action-button soridraw-result-copy-all-button flex items-center justify-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl bg-[#cd8c31]/10 hover:bg-[#cd8c31]/[0.18] text-[#cd8c31] transition-all shrink-0 active:scale-95 border border-[#cd8c31]/25 hover:border-[#cd8c31]/35 shadow-sm"
                         >
                           {copiedType === 'title' ? <Check className="w-5 h-5 text-green-500" /> : <Copy className="w-5 h-5 opacity-85" />}
                           <span className="text-xs md:text-sm font-bold uppercase tracking-tight">전체복사</span>
@@ -14668,7 +14668,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      className="soridraw-result-action-button soridraw-result-music-note-button flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       <HeartIcon className="w-[16px] h-[16px] fill-current text-[#cd8c31]" />
                       <span className="text-[11px] font-extrabold whitespace-nowrap">뮤직노트</span>
@@ -14694,7 +14694,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         })
                       }
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
+                      className="soridraw-result-action-button soridraw-result-copy-all-button flex h-[38px] w-full items-center justify-center gap-1 rounded-xl bg-[#cd8c31]/10 px-1.5 text-[#cd8c31] transition-all active:scale-95 border border-[#cd8c31]/20 shadow-sm"
                     >
                       {copiedType === 'title' ? <Check className="w-[16px] h-[16px] text-green-500" /> : <Copy className="w-[16px] h-[16px] opacity-85" />}
                       <span className="text-[11px] font-extrabold uppercase tracking-tight whitespace-nowrap">전체복사</span>
@@ -15101,7 +15101,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       onClick={() => applyKeywordsToNext(result.appliedKeywords)}
                       onMouseEnter={() => setHoveredItem({ id: 'apply-keywords-all', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
-                      className="flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#F4A900] text-[#18110A] hover:bg-[#F7B31A] transition-all shadow-[0_12px_28px_rgba(244,169,0,0.18)] text-[13px] sm:text-[14px] font-black border border-[#F4A900] active:scale-95"
+                      className="soridraw-result-action-button soridraw-result-apply-next-button flex items-center justify-center gap-2 px-4 sm:px-[18px] h-[42px] sm:h-11 min-w-[112px] sm:min-w-[124px] rounded-xl bg-[#F4A900] text-[#18110A] hover:bg-[#F7B31A] transition-all shadow-[0_12px_28px_rgba(244,169,0,0.18)] text-[13px] sm:text-[14px] font-black border border-[#F4A900] active:scale-95"
                     >
                       <RefreshCw className="w-[17px] h-[17px] sm:w-[18px] sm:h-[18px]" />
                       <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>
@@ -23759,7 +23759,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
     <div className={cn(
       "soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all"
     )}>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+      <div className="soridraw-tempo-card-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
           <div className="flex items-center gap-3">
             <h3 
@@ -23773,7 +23773,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
             <div 
               className={cn(
-                "hidden md:flex items-center gap-1 px-2.5 py-2 bg-btn-bg rounded-xl border border-btn-border shadow-btn transition-opacity",
+                "soridraw-tempo-desktop-input hidden md:flex items-center gap-1 px-2.5 py-2 bg-btn-bg rounded-xl border border-btn-border shadow-btn transition-opacity",
                 enabled && "opacity-30 pointer-events-none"
               )}
               onMouseEnter={() => onHover({ id: 'bpm-input-pc', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}
@@ -23815,7 +23815,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="md:hidden flex items-center gap-2">
+            <div className="soridraw-tempo-mobile-actions md:hidden flex items-center gap-2">
               <button
                 data-soridraw-selected={enabled ? 'true' : 'false'}
                 aria-pressed={enabled}
@@ -23826,7 +23826,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 onMouseEnter={() => onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
                 onMouseLeave={() => onHover(null)}
                 className={cn(
-                  "px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                  "soridraw-tempo-random-button soridraw-tempo-random-mobile px-4 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
                   enabled 
                     ? "bg-[#FFB400] text-[#171717] font-black" 
                     : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
@@ -23853,7 +23853,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden md:flex items-center gap-2">
+          <div className="soridraw-tempo-desktop-actions hidden md:flex items-center gap-2">
             <button
               data-soridraw-selected={enabled ? 'true' : 'false'}
               aria-pressed={enabled}
@@ -23864,7 +23864,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               onMouseEnter={() => onHover({ id: 'tempo-random-pc', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
+                "soridraw-tempo-random-button soridraw-tempo-random-desktop px-6 py-3 rounded-xl text-base font-bold transition-all flex items-center gap-2",
                 enabled 
                   ? "bg-[#FFB400] text-[#171717] font-black" 
                   : "bg-white/10 text-[var(--text-primary)] hover:bg-white/20"
@@ -23891,7 +23891,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
         <div 
           className={cn(
-            "md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
+            "soridraw-tempo-mobile-input md:hidden flex items-center justify-center gap-1 px-3 py-2 bg-white/5 rounded-xl border border-white/10 shadow-[var(--shadow-md)] transition-opacity w-fit mx-auto",
             enabled && "opacity-30 pointer-events-none"
           )}
           onMouseEnter={() => onHover({ id: 'bpm-input-mobile', label: 'BPM Input', labelKo: 'BPM 입력', description: '원하는 BPM 범위를 직접 입력합니다.' })}

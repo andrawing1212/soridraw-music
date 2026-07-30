@@ -709,3 +709,109 @@
     margin-left: 4px !important;
   }
 }
+
+/* 185: explicit click feedback, tempo mobile fit, and result action colors. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):active {
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  border-color: var(--sb-accent) !important;
+  transform: scale(.97);
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):active :where(svg, span) {
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+}
+
+/* These are primary result actions, so they keep the same filled accent treatment. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button {
+  background: var(--sb-accent) !important;
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  border-color: var(--sb-accent) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button :where(svg, span) {
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  opacity: 1 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button:hover {
+  background: #ffc126 !important;
+  background-color: #ffc126 !important;
+  border-color: #ffc126 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-action-button:active {
+  background: #d99500 !important;
+  background-color: #d99500 !important;
+  border-color: #d99500 !important;
+}
+
+/* The split pane owns tempo responsive state; viewport md classes must not mix modes. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-card-header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-mobile-actions,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-mobile-input {
+  display: flex !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-desktop-actions,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-desktop-input {
+  display: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-tempo-mobile-actions,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-tempo-mobile-input {
+  display: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-tempo-desktop-actions,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-tempo-desktop-input {
+  display: flex !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-mobile-actions {
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+  gap: 6px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: max-content !important;
+  max-width: none !important;
+  padding: 9px 10px !important;
+  gap: 5px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  writing-mode: horizontal-tb !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button > svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 auto !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button > span {
+  display: inline-block !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  line-height: 1 !important;
+}

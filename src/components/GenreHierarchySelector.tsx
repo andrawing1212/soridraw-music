@@ -1127,7 +1127,6 @@ function GenreHierarchySelectorComponent({
               return (
                 <button
                   key={group.id}
-                  data-soridraw-selected={hasSelectedMain ? 'true' : undefined}
                   onClick={() => openMainModal(group)}
                   onMouseEnter={() =>
                     onHover({
@@ -1402,7 +1401,6 @@ function GenreHierarchySelectorComponent({
                           onMouseLeave={() => setHoveredModalItem(null)}
                         >
                           <button
-                            data-soridraw-selected={isActiveVisual ? 'true' : undefined}
                             onClick={() => handleMainClick(main)}
                             className={cn(
                               "relative w-full min-h-[82px] rounded-2xl border p-4 md:p-5 transition-all duration-200 flex items-center justify-center text-center hover:scale-[1.01] active:scale-[0.99]",
@@ -1447,7 +1445,6 @@ function GenreHierarchySelectorComponent({
                       return (
                         <button
                           key={item.id}
-                          data-soridraw-selected={isActiveVisual ? 'true' : undefined}
                           onClick={() => handleSubClick(item.id)}
                           onMouseEnter={() =>
                             setHoveredModalItem({

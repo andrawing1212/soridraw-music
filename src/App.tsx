@@ -75,7 +75,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
-import StudioBlackSplitLayout from './components/studioBlack/StudioBlackSplitLayout';
+import StudioPageFrame from './components/studio/StudioPageFrame';
+import StudioLeftRail from './components/studio/StudioLeftRail';
+import StudioRightRail from './components/studio/StudioRightRail';
+import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 
 // Portal component for top-level rendering
 function Portal({ children }: { children: React.ReactNode }) {
@@ -3446,7 +3449,7 @@ function Navigation({
                     initial={{ opacity: 0, y: -6, scale: 0.98 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                    className="soridraw-studio-profile-menu absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                    className="absolute right-5 top-[68px] z-[90] w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#15181e]/98 p-2 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl"
                   >
                     <div className="border-b border-white/10 px-3 py-2.5">
                       <p className="truncate text-sm font-black text-white">{headerIdentity.displayName || 'SORIDRAW User'}</p>
@@ -12829,7 +12832,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
   const actionButtonsContent = (
     <>
-      <div className="soridraw-action-random-wrap relative flex-shrink-0">
+      <div className="relative flex-shrink-0">
         <button
           onClick={() => {
             applyRandom();
@@ -12842,14 +12845,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="soridraw-action-random h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFB400] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFB400] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           <Dices className="w-5 h-5 text-[#FFB400] group-hover:rotate-180 transition-transform duration-500" />
           <span className="hidden md:block font-bold text-[#FFB400]">무작위</span>
         </button>
       </div>
 
-      <div className="soridraw-action-generate-wrap relative flex-1">
+      <div className="relative flex-1">
         <button
           onClick={() => {
             setShowMainGenerationModal(true);
@@ -12880,7 +12883,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
           })}
           onTouchEnd={handleLongPressEnd}
-          className="soridraw-action-generate soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           {isGenerating && (
             <span
@@ -12896,13 +12899,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </button>
       </div>
 
-      <div className="soridraw-action-clear-wrap relative flex-shrink-0">
+      <div className="relative flex-shrink-0">
         <button
           onClick={() => clearAll({ preserveHistory: true })}
           onMouseEnter={() => setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
           onMouseLeave={() => clearActionButtonHint()}
           className={cn(
-            "soridraw-action-clear h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
+            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGlobalClearable
               ? "bg-[var(--card-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               : "bg-[var(--bg-primary)] border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
@@ -13473,159 +13476,36 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         } />
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
-          <>
-              <aside className="soridraw-studio-left-panel" aria-label="소리스튜디오 작업 메뉴">
-                <div className="soridraw-studio-left-panel-inner">
-                  <div className="soridraw-studio-rail-brand">
-                    <span className="soridraw-studio-rail-brand-mark">SD</span>
-                    <span><strong>Sori Studio</strong><small>Studio Black</small></span>
-                  </div>
-
-                  <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">
-                    <p className="soridraw-studio-rail-label">WORKSPACE</p>
-                    <button type="button" className="soridraw-studio-rail-item is-active" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-                      <PenTool className="h-5 w-5" />
-                      <span>곡 만들기</span>
-                    </button>
-                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/suno-library')}>
-                      <History className="h-5 w-5" />
-                      <span>최근 생성곡</span>
-                      <ChevronRight className="ml-auto h-4 w-4" />
-                    </button>
-                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/history')}>
-                      <Music className="h-5 w-5" />
-                      <span>뮤직노트</span>
-                      <ChevronRight className="ml-auto h-4 w-4" />
-                    </button>
-                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/suno-library')}>
-                      <Library className="h-5 w-5" />
-                      <span>라이브러리</span>
-                      <ChevronRight className="ml-auto h-4 w-4" />
-                    </button>
-
-                    <div className="soridraw-studio-rail-divider" />
-                    <p className="soridraw-studio-rail-label">TOOLS</p>
-                    <button type="button" className="soridraw-studio-rail-item" onClick={openGlobalSearchModal}>
-                      <Search className="h-5 w-5" />
-                      <span>통합 검색</span>
-                    </button>
-                    <button type="button" className="soridraw-studio-rail-item" onClick={() => navigate('/suno-api-settings')}>
-                      <Settings className="h-5 w-5" />
-                      <span>API 설정</span>
-                    </button>
-                  </nav>
-
-                  <button type="button" className="soridraw-studio-rail-theme" onClick={() => navigate('/my-page?tab=app')}>
-                    <Palette className="h-5 w-5" />
-                    <span><strong>디자인 테마</strong><small>Classic / Studio Black</small></span>
-                    <ChevronRight className="ml-auto h-4 w-4" />
-                  </button>
-                </div>
-              </aside>
-
-              <aside className="soridraw-studio-dashboard-panel" aria-label="소리스튜디오 보조 대시보드">
-                <div className="soridraw-studio-dashboard-inner">
-                  <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-status">
-                    <div className="soridraw-studio-dashboard-heading">
-                      <div>
-                        <p>GENERATION</p>
-                        <h2>생성 상태</h2>
-                      </div>
-                      <span className={cn('soridraw-studio-dashboard-live-dot', (isGenerating || runningGenerationCount > 0) && 'is-running')} />
-                    </div>
-                    <div className="soridraw-studio-dashboard-state">
-                      <strong>{runningGenerationCount > 0 ? `${runningGenerationCount}곡 생성 중` : queuedGenerationCount > 0 ? '대기 작업 있음' : '생성 준비 완료'}</strong>
-                      <small>{runningGenerationCount > 0 ? '완료되면 최근 생성곡에 자동 반영됩니다.' : queuedGenerationCount > 0 ? `${queuedGenerationCount}건이 순서대로 시작됩니다.` : '설정을 고른 뒤 생성하기를 눌러주세요.'}</small>
-                    </div>
-                    <div className="soridraw-studio-dashboard-metrics">
-                      <span><small>진행</small><strong>{runningGenerationCount}</strong></span>
-                      <span><small>대기</small><strong>{queuedGenerationCount}</strong></span>
-                      <span><small>최근곡</small><strong>{history.length}</strong></span>
-                    </div>
-                    <button type="button" className="soridraw-studio-dashboard-primary" onClick={() => setShowMainGenerationModal(true)}>
-                      <Sparkles className="h-4 w-4" />
-                      생성 옵션 열기
-                    </button>
-                  </section>
-
-                  <section className="soridraw-studio-dashboard-card">
-                    <div className="soridraw-studio-dashboard-heading">
-                      <div>
-                        <p>RECENT SONGS</p>
-                        <h2>최근 생성곡</h2>
-                      </div>
-                      <button type="button" className="soridraw-studio-dashboard-text-button" onClick={() => navigate('/suno-library')}>전체</button>
-                    </div>
-                    <div className="soridraw-studio-dashboard-song-list">
-                      {history.length > 0 ? history.slice(0, 3).map((song, index) => (
-                        <button
-                          key={`studio-dashboard-song-${song.createdAt || index}-${song.title}`}
-                          type="button"
-                          className={cn('soridraw-studio-dashboard-song', historyIndex === index && 'is-selected')}
-                          onClick={() => openStudioDashboardSong(song, index)}
-                        >
-                          <span className="soridraw-studio-dashboard-song-icon"><Music className="h-4 w-4" /></span>
-                          <span className="soridraw-studio-dashboard-song-copy">
-                            <strong>{song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`}</strong>
-                            <small>{formatStudioDashboardTime(song.updatedAt || song.createdAt)}</small>
-                          </span>
-                          <ChevronRight className="h-4 w-4" />
-                        </button>
-                      )) : (
-                        <div className="soridraw-studio-dashboard-empty">
-                          <Music className="h-5 w-5" />
-                          <span>아직 생성된 곡이 없습니다.</span>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-
-                  <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-credit">
-                    <div className="soridraw-studio-dashboard-heading compact">
-                      <div>
-                        <p>MUSIC API</p>
-                        <h2>남은 크레딧</h2>
-                      </div>
-                      <Activity className="h-5 w-5" />
-                    </div>
-                    <div className="soridraw-studio-dashboard-credit-value">
-                      <strong>{sunoRemainingCredits === null ? '—' : sunoRemainingCredits.toLocaleString()}</strong>
-                      <span>credits</span>
-                    </div>
-                    <div className="soridraw-studio-dashboard-credit-footer">
-                      <small>{formatStudioDashboardTime(sunoRemainingCreditsUpdatedAt)}</small>
-                      <button type="button" onClick={() => navigate('/suno-api-settings')}>설정</button>
-                    </div>
-                  </section>
-
-                  <section className="soridraw-studio-dashboard-card">
-                    <div className="soridraw-studio-dashboard-heading compact">
-                      <div>
-                        <p>ACTIVITY</p>
-                        <h2>최근 활동</h2>
-                      </div>
-                    </div>
-                    <div className="soridraw-studio-dashboard-activity-list">
-                      {studioDashboardActivities.length > 0 ? studioDashboardActivities.map((activity) => (
-                        <div key={activity.id} className="soridraw-studio-dashboard-activity">
-                          <span className={cn('soridraw-studio-dashboard-activity-dot', `is-${activity.status}`)} />
-                          <span>
-                            <strong>{activity.label}</strong>
-                            <small>{activity.detail}</small>
-                          </span>
-                          <time>{formatStudioDashboardTime(activity.timestamp)}</time>
-                        </div>
-                      )) : (
-                        <div className="soridraw-studio-dashboard-empty compact">
-                          <Activity className="h-5 w-5" />
-                          <span>활동 기록이 아직 없습니다.</span>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                </div>
-              </aside>
-
+          <StudioPageFrame
+            leftRail={
+              <StudioLeftRail
+                onCreate={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                onRecentSongs={() => navigate('/suno-library')}
+                onMusicNote={() => navigate('/history')}
+                onLibrary={() => navigate('/suno-library')}
+                onSearch={openGlobalSearchModal}
+                onApiSettings={() => navigate('/suno-api-settings')}
+                onThemeSettings={() => navigate('/my-page?tab=app')}
+              />
+            }
+            rightRail={
+              <StudioRightRail
+                isGenerating={isGenerating}
+                runningCount={runningGenerationCount}
+                queuedCount={queuedGenerationCount}
+                history={history}
+                selectedIndex={historyIndex}
+                remainingCredits={sunoRemainingCredits}
+                creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                activities={studioDashboardActivities}
+                formatTime={formatStudioDashboardTime}
+                onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
+                onOpenAllSongs={() => navigate('/suno-library')}
+                onOpenSong={openStudioDashboardSong}
+                onOpenApiSettings={() => navigate('/suno-api-settings')}
+              />
+            }
+          >
               {/* Header */}
               <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
@@ -13658,11 +13538,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </header>
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
-              <StudioBlackSplitLayout>
-                <section className="soridraw-studio-builder-pane space-y-5 md:space-y-5">
               {isStudioLoaded && (
-                <>
-                  {/* Selection Sections */}
+                <StudioSplitWorkspace>
+                  <StudioBuilderPane>
+                    {/* Selection Sections */}
                   <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
@@ -13879,7 +13758,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="space-y-5">
-          <div className="soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
+          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -14183,6 +14062,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
             </AnimatePresence>
 
+            <div className="soridraw-studio-vocal-slot min-w-0">
             <VocalControl 
               maleCount={maleCount}
               femaleCount={femaleCount}
@@ -14231,6 +14111,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
               randomActivationKey={vocalRandomActivationKey}
             />
+            </div>
+            <div className="soridraw-studio-lyrics-slot min-w-0">
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
               onLyricsLengthChange={setLyricsLength}
@@ -14271,11 +14153,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               vocalSectionTags={vocalSectionTagOptions}
               selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
             />
+            </div>
           </div>
         </div>
 
         {/* Tempo Control Bar */}
-        <div className="mb-4">
+        <div className="soridraw-studio-tempo-wrap mb-4">
           <TempoControl 
             enabled={tempoEnabled}
             onEnabledChange={setTempoEnabled}
@@ -14641,14 +14524,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           }
                         }}
                         style={{ transformOrigin: 'center bottom' }}
-                        className="soridraw-action-controls flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
+                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
                       >
                         <motion.button
                                 type="button"
                           onClick={() => setIsActionButtonsCollapsed(true)}
                           onMouseEnter={() => {}}
                           onMouseLeave={() => {}}
-                          className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
+                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />
@@ -14713,15 +14596,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </div>
           </div>
         </div>
-                </>
-              )}
-                </section>
-
-                <section className="soridraw-studio-result-pane" aria-label="생성곡 결과">
-              {isStudioLoaded && (
-                <>
-
-        {/* Result Area */}
+                  </StudioBuilderPane>
+                  <StudioResultPane>
+                    {/* Result Area */}
         <AnimatePresence>
           {user && result && (
             <motion.div
@@ -14736,7 +14613,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
               {/* Title Card */}
               <div className="soridraw-result-title-card bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
-          <div className="absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
+          <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -14753,7 +14630,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <span className="text-xs md:text-sm font-bold whitespace-nowrap">뮤직노트</span>
                     </button>
                   </div>
-                  <div className="absolute top-4 right-4 z-10 hidden items-center gap-2 origin-top-right sm:flex">
+                  <div className="soridraw-result-desktop-header absolute top-4 right-4 z-10 hidden items-center gap-2 origin-top-right sm:flex">
                     {(() => {
                       return (
                         <button 
@@ -14779,7 +14656,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     })()}
                   </div>
 
-                <div className="sm:hidden space-y-1.5 pt-0">
+                <div className="soridraw-result-mobile-header sm:hidden space-y-1.5 pt-0">
                   <div className="relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
                     <button
                       onClick={() => navigate('/history')}
@@ -15015,7 +14892,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
                 </div>
 
-                <div className="hidden sm:block space-y-4 pt-0">
+                <div className="soridraw-result-desktop-header hidden sm:block space-y-4 pt-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-[var(--text-primary)] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-[18px] h-[18px] text-[#e3a13a]" />
@@ -16074,24 +15951,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </motion.div>
           )}
         </AnimatePresence>
-
-        {(!user || !result) && (
-          <div className="soridraw-studio-result-empty">
-            <div className="soridraw-studio-result-empty-icon">
-              <Music className="h-5 w-5" />
-            </div>
-            <div>
-              <h2>생성곡 결과</h2>
-              <p>곡을 생성하면 제목, 프롬프트와 가사가 이 영역에 표시됩니다.</p>
-            </div>
-          </div>
-        )}
-                </>
+                  </StudioResultPane>
+                </StudioSplitWorkspace>
               )}
-                </section>
-              </StudioBlackSplitLayout>
             </main>
-          </>
+          </StudioPageFrame>
           ) : (
             <FeatureUnavailablePage label="스튜디오" fallbackPath={navigationFallbackPath} />
           )
@@ -16246,7 +16110,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 initial={{ opacity: 0, y: 24, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                className="soridraw-studio-result-edit-modal w-full max-w-3xl max-h-[88vh] overflow-hidden rounded-3xl border border-[#cd8c31]/25 bg-[var(--card-bg)] shadow-[0_28px_90px_rgba(0,0,0,0.58)] flex flex-col"
+                className="w-full max-w-3xl max-h-[88vh] overflow-hidden rounded-3xl border border-[#cd8c31]/25 bg-[var(--card-bg)] shadow-[0_28px_90px_rgba(0,0,0,0.58)] flex flex-col"
               >
                 <div className="flex items-center justify-between gap-3 border-b border-[#cd8c31]/15 bg-[#cd8c31]/[0.055] px-5 py-4">
                   <div className="min-w-0">
@@ -17439,8 +17303,6 @@ function GenreCategorySectionComponent({
             return (
               <button
                 key={group.id}
-                data-soridraw-selected={isSelectedGroup ? 'true' : undefined}
-                aria-pressed={isSelectedGroup}
                 onClick={() => onOpenGroup(group.id)}
                 onMouseEnter={() => onHover({ 
                   id: group.id, 
@@ -18408,8 +18270,6 @@ function CycleKeywordPopup({
                 >
                   <button
                     type="button"
-                    data-soridraw-selected={isSelected ? 'true' : undefined}
-                    aria-pressed={isSelected}
                     disabled={disabled}
                     onClick={() => {
                       if (disabled) return;
@@ -18755,8 +18615,6 @@ function CategorySectionComponent({
             return (
               <div key={item.id} className={cn("relative group/btn", uniformKeywordGrid && "min-w-0")}>
                 <button
-                  data-soridraw-selected={isSelected ? 'true' : undefined}
-                  aria-pressed={isSelected}
                   onMouseEnter={(event) => {
                     const tooltipItem = { 
                       ...item, 
@@ -20299,6 +20157,8 @@ function SongStructureIntegratedControlComponent({
                     <button
                       key={item.id}
                       type="button"
+                      data-soridraw-selected={lyricWritingStyle === item.id ? 'true' : 'false'}
+                      aria-pressed={lyricWritingStyle === item.id}
                       onClick={() => {
                         onLyricWritingStyleChange(item.id);
                         writeStoredV1LyricWritingStyle(item.id);
@@ -20329,6 +20189,8 @@ function SongStructureIntegratedControlComponent({
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
                       <button
+                        data-soridraw-selected={lyricsLength === opt.id ? 'true' : 'false'}
+                        aria-pressed={lyricsLength === opt.id}
                         onClick={() => {
                           onLyricsLengthChange(opt.id as LyricsLength);
                           onHover({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description, _ts: Date.now() });
@@ -20367,6 +20229,8 @@ function SongStructureIntegratedControlComponent({
                     return (
                       <button
                         key={opt.id}
+                        data-soridraw-selected={songStructure === opt.id ? 'true' : 'false'}
+                        aria-pressed={songStructure === opt.id}
                         onClick={() => handleSelectStructure(opt.id as SongStructure)}
                         onMouseEnter={() => onHover({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onMouseLeave={() => {
@@ -20392,7 +20256,7 @@ function SongStructureIntegratedControlComponent({
                 </div>
                 
                 {/* Structure Guide - Always Visible */}
-                <div className="mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
+                <div className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
                   <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
@@ -20410,6 +20274,7 @@ function SongStructureIntegratedControlComponent({
                     <button
                       type="button"
                       role="switch"
+                      data-soridraw-selected={sectionVocalCueEnabled ? 'true' : 'false'}
                       aria-checked={sectionVocalCueEnabled}
                       aria-label={`보컬 큐 ${sectionVocalCueEnabled ? '켜짐' : '꺼짐'}`}
                       onClick={() => {
@@ -20465,6 +20330,7 @@ function SongStructureIntegratedControlComponent({
                     <button
                       type="button"
                       role="switch"
+                      data-soridraw-selected={sectionInstrumentCueEnabled ? 'true' : 'false'}
                       aria-checked={sectionInstrumentCueEnabled}
                       aria-label={`악기 큐 ${sectionInstrumentCueEnabled ? '켜짐' : '꺼짐'}`}
                       onClick={() => {
@@ -23203,6 +23069,8 @@ function VocalControlComponent({
             {(['solo', 'group'] as VocalMode[]).map((mode) => (
               <button
                 key={mode}
+                data-soridraw-selected={vocalMode === mode ? 'true' : 'false'}
+                aria-pressed={vocalMode === mode}
                 onClick={() => handleModeClick(mode)}
                 onMouseEnter={() => onHover(getVocalModeTooltip(mode))}
                 onMouseLeave={() => onHover(null)}
@@ -23264,6 +23132,8 @@ function VocalControlComponent({
           ) : (
             <div className="grid grid-cols-2 gap-2">
               <button
+                data-soridraw-selected={maleCount > 0 ? 'true' : 'false'}
+                aria-pressed={maleCount > 0}
                 onClick={() => handleGenderToggle('male')}
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
@@ -23281,6 +23151,8 @@ function VocalControlComponent({
                 남성
               </button>
               <button
+                data-soridraw-selected={femaleCount > 0 ? 'true' : 'false'}
+                aria-pressed={femaleCount > 0}
                 onClick={() => handleGenderToggle('female')}
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
                 onMouseLeave={() => onHover(null)}
@@ -23352,6 +23224,8 @@ function VocalControlComponent({
                             return (
                               <button
                                 key={role}
+                                data-soridraw-selected={isActive ? 'true' : 'false'}
+                                aria-pressed={isActive}
                                 onClick={() => {
                                   if (isActive) {
                                     handleUpdateMember(idx, { roles: member.roles.filter(r => r !== role) });
@@ -23943,6 +23817,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           <div className="flex items-center gap-2">
             <div className="md:hidden flex items-center gap-2">
               <button
+                data-soridraw-selected={enabled ? 'true' : 'false'}
+                aria-pressed={enabled}
                 onClick={() => {
                   onEnabledChange(!enabled);
                   onHover({ id: 'tempo-random-mobile', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });
@@ -23979,6 +23855,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
         <div className="flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2">
             <button
+              data-soridraw-selected={enabled ? 'true' : 'false'}
+              aria-pressed={enabled}
               onClick={() => {
                 onEnabledChange(!enabled);
                 onHover({ id: 'tempo-random-pc', label: 'Random Tempo', labelKo: '랜덤 템포', description: '장르와 분위기에 맞는 최적의 템포로 적용됩니다.' });

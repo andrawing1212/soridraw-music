@@ -13757,7 +13757,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </AnimatePresence>
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
-        <div className="space-y-5">
+        <div className="soridraw-studio-secondary-section space-y-5">
           <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
             <CategorySection 
               title="Mood" 
@@ -13819,8 +13819,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onCancelSelected: clearDirectThemeInput,
               }}
             />
-            <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
-              <div className="p-5 md:p-6 flex items-center justify-between gap-4">
+            <div className="soridraw-storyboard-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
+              <div className="soridraw-storyboard-card-inner p-5 md:p-6 flex items-center justify-between gap-4">
                 <button
                   type="button"
                   onClick={openStoryboardModal}
@@ -13841,7 +13841,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
                 </button>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="soridraw-card-header-actions flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => toggleMenuLock('situation')}
@@ -17663,9 +17663,9 @@ function CycleSectionComponent({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-4 gap-3">
+        <div className="soridraw-card-header flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
@@ -17694,7 +17694,7 @@ function CycleSectionComponent({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="soridraw-card-header-actions flex items-center gap-2 shrink-0">
             {extraHeaderControls}
             {onToggleLock && (
               <button
@@ -18439,9 +18439,9 @@ function CategorySectionComponent({
   };
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-4">
+        <div className="soridraw-card-header flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3 
@@ -18467,7 +18467,7 @@ function CategorySectionComponent({
               </AnimatePresence>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="soridraw-card-header-actions flex items-center gap-2">
             {onToggleLock && (
               <button
                 type="button"
@@ -18554,7 +18554,7 @@ function CategorySectionComponent({
         >
           <div
             ref={contentRef}
-            className={cn(
+            className={cn("soridraw-category-keyword-grid",
               uniformKeywordGrid
                 ? "grid grid-cols-4 lg:grid-cols-7 gap-2"
                 : "flex flex-wrap gap-2"
@@ -20082,8 +20082,8 @@ function SongStructureIntegratedControlComponent({
 
   return (
     <>
-      <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
-        <div className="relative mb-4 flex items-center justify-between">
+      <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
+        <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
@@ -20092,7 +20092,7 @@ function SongStructureIntegratedControlComponent({
             <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
             가사
           </h3>
-          <div className="flex items-center gap-2">
+          <div className="soridraw-card-header-actions flex items-center gap-2">
             {onToggleLock && (
               <button
                 type="button"
@@ -22936,9 +22936,9 @@ function VocalControlComponent({
   };
 
   return (
-    <div className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full relative overflow-visible">
-      <div className="relative mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div data-studio-menu="vocal" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 pb-10 border border-[var(--home-card-border)] flex flex-col h-full relative overflow-visible">
+      <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
+        <div className="soridraw-card-header-title flex items-center gap-2">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
@@ -22949,7 +22949,7 @@ function VocalControlComponent({
           </h3>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="soridraw-card-header-actions flex items-center gap-2">
           <button
             type="button"
             onClick={cycleRapMode}
@@ -23183,7 +23183,7 @@ function VocalControlComponent({
                 <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">멤버 ({vocalMembers.length}/{vocalMode === 'solo' ? 1 : MAX_GROUP_VOCAL_MEMBERS})</p>
                 <span className="text-[9px] text-[var(--text-secondary)] opacity-50">연령 · 음역 · 창법 · 기교</span>
               </div>
-              <div className={cn("grid gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar items-start", vocalMode === 'solo' ? "grid-cols-1" : "grid-cols-2")}>
+              <div className={cn("soridraw-vocal-member-grid grid gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar items-start", vocalMode === 'solo' ? "grid-cols-1" : "grid-cols-2")}>
                 {vocalMembers.map((member, idx) => {
                   const memberLetter = String.fromCharCode(65 + idx);
                   const memberDisplayName = member.gender === 'male'

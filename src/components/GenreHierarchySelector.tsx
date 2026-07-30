@@ -977,7 +977,7 @@ function GenreHierarchySelectorComponent({
   }, [activeGroup]);
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu="genre" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <style>{`
         .soridraw-genre-desc-track {
           display: inline-flex;
@@ -1001,7 +1001,7 @@ function GenreHierarchySelectorComponent({
         }
       `}</style>
       <div className="flex-1">
-        <div className="flex items-center justify-between mb-4">
+        <div className="soridraw-card-header flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
@@ -1034,7 +1034,7 @@ function GenreHierarchySelectorComponent({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="soridraw-card-header-actions flex items-center gap-2">
             {onToggleLock && (
               <button
                 type="button"

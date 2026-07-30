@@ -1,0 +1,62 @@
+/* SORIDRAW 198 — Left Studio rail buttons use the rail background itself. */
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+.soridraw-studio-rail-nav
+> .soridraw-studio-rail-item,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+> .soridraw-studio-rail-theme {
+  background: var(--sb-page) !important;
+  background-color: var(--sb-page) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+.soridraw-studio-rail-nav
+> .soridraw-studio-rail-item:hover,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+.soridraw-studio-rail-nav
+> .soridraw-studio-rail-item:active,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+.soridraw-studio-rail-nav
+> .soridraw-studio-rail-item:focus,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+> .soridraw-studio-rail-theme:hover,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+> .soridraw-studio-rail-theme:active,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+> .soridraw-studio-rail-theme:focus {
+  background: var(--sb-page) !important;
+  background-color: var(--sb-page) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* The active item keeps only its yellow text/icon and slim left marker. */
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-left-panel
+.soridraw-studio-left-panel-inner
+.soridraw-studio-rail-nav
+> .soridraw-studio-rail-item.is-active {
+  background: var(--sb-page) !important;
+  background-color: var(--sb-page) !important;
+}

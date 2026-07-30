@@ -4,8 +4,7 @@ import { BrowserRouter as Router } from 'react-router-dom';
 import App from './App.tsx';
 import './index.css';
 import './components/studio/studioLayout.css';
-import './components/studio/studioBlackOverrides197.css';
-import './components/studio/studioBlackOverrides198.css';
+import './components/studio/studioBlackOverrides199.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

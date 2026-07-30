@@ -15116,7 +15116,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     opacity: isAppliedKeywordsExpanded ? 1 : 0
                   }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="overflow-hidden"
+                  className="soridraw-result-keywords-body overflow-hidden"
                 >
                   <div ref={appliedKeywordsRef} className="pt-2">
                     <div className="soridraw-result-keywords-grid grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -15726,7 +15726,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
                   }}
                   className={cn(
-                    "section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
+                    "soridraw-result-keywords-expand section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
                     isAppliedKeywordsExpanded 
                       ? "bg-[#e3a13a] text-white border-[#e3a13a]" 
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
@@ -15855,7 +15855,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 </button>
                               </div>
                             </div>
-                            <div className="flex-1 p-5 sm:p-8 overflow-y-auto custom-scrollbar flex flex-col items-center h-full">
+                            <div className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
                                 <textarea
                                   value={getRecentSongLyricsDraftValue(lang)}

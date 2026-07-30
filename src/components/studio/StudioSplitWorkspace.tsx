@@ -64,6 +64,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       delete root.dataset.soridrawResultMode;
       root.style.removeProperty('--soridraw-studio-builder-left');
       root.style.removeProperty('--soridraw-studio-builder-right');
+      root.style.removeProperty('--soridraw-studio-builder-width');
       return;
     }
 
@@ -75,6 +76,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.dataset.soridrawResultMode = nextResultMode;
     root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, builderRect.left)}px`);
     root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - builderRect.right)}px`);
+    root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderRect.width)}px`);
   }, [isStudioBlack]);
 
   useLayoutEffect(() => {
@@ -102,6 +104,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       delete document.documentElement.dataset.soridrawResultMode;
       document.documentElement.style.removeProperty('--soridraw-studio-builder-left');
       document.documentElement.style.removeProperty('--soridraw-studio-builder-right');
+      document.documentElement.style.removeProperty('--soridraw-studio-builder-width');
     };
   }, [updateMeasurements]);
 

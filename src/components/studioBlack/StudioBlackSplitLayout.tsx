@@ -164,6 +164,28 @@ export default function StudioBlackSplitLayout({ children }: StudioBlackSplitLay
   }, [updateLayoutMeasurements]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const applyPaneModeAttributes = () => {
+      if (root.dataset.soridrawTheme === 'studio-black') {
+        root.dataset.soridrawBuilderMode = builderMode;
+        root.dataset.soridrawResultMode = resultMode;
+      } else {
+        delete root.dataset.soridrawBuilderMode;
+        delete root.dataset.soridrawResultMode;
+      }
+    };
+
+    applyPaneModeAttributes();
+    window.addEventListener('soridraw-theme-change', applyPaneModeAttributes);
+    return () => {
+      window.removeEventListener('soridraw-theme-change', applyPaneModeAttributes);
+      delete root.dataset.soridrawBuilderMode;
+      delete root.dataset.soridrawResultMode;
+    };
+  }, [builderMode, resultMode]);
+
+  useEffect(() => {
     if (!isDragging) return;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;

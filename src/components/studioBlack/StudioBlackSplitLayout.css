@@ -800,3 +800,313 @@ html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridr
   background: #242427 !important;
   border-color: #39393f !important;
 }
+
+/* SORIDRAW 178 — Suno-reference neutral palette and one consistent card-menu surface.
+   Studio Black only. Classic is intentionally untouched. */
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #101012 !important;
+  --bg-secondary: #151517 !important;
+  --card-bg: #1b1b1e !important;
+  --input-bg: #222225 !important;
+  --hover-bg: rgba(255, 255, 255, 0.065) !important;
+  --hover-bg-solid: #2c2c30 !important;
+  --border-color: #2c2c31 !important;
+  --glass-bg: rgba(24, 24, 27, 0.985) !important;
+  --glass-border: #303035 !important;
+  --button-bg: #242427 !important;
+  --button-border: transparent !important;
+  --button-hover-bg: #2d2d31 !important;
+  --soridraw-panel-bg: #151517 !important;
+  --soridraw-card-bg: #1b1b1e !important;
+  --soridraw-border: #2c2c31 !important;
+  --soridraw-text-main: #f4f4f5 !important;
+  --soridraw-text-muted: #9d9da5 !important;
+  --soridraw-sb-divider: #2c2c31 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero {
+  background: #101012 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
+  background: #151517 !important;
+}
+
+/* Keep every create-card on the same Suno-like neutral surface. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card {
+  background: #1b1b1e !important;
+  border-color: #2c2c31 !important;
+  box-shadow: none !important;
+}
+
+/* One exact color for all unselected menu rows inside Genre / Style / Sound / Mood / Theme cards. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :is(
+  .soridraw-expand-content button,
+  .soridraw-expand-summary,
+  .soridraw-direct-input-button,
+  button[class*="bg-btn-bg"]
+):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not(.soridraw-selected-strong) {
+  background: #242427 !important;
+  background-color: #242427 !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  color: #ededf0 !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :is(
+  .soridraw-expand-content button,
+  .soridraw-expand-summary,
+  .soridraw-direct-input-button,
+  button[class*="bg-btn-bg"]
+):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not(.soridraw-selected-strong):hover {
+  background: #2d2d31 !important;
+  background-color: #2d2d31 !important;
+  border-color: transparent !important;
+}
+
+/* The bottom summary/direct-input strip was much darker than the menu buttons.
+   Force it to the same surface so each card reads as one consistent component. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card :is(
+  .soridraw-expand-summary,
+  .soridraw-selected-summary,
+  .soridraw-direct-input-button
+) {
+  background: #242427 !important;
+  background-color: #242427 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Header icon actions follow the same neutral surface, without blue/navy cast. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card > div:first-child button:not([data-soridraw-selected="true"]):not([aria-pressed="true"]) {
+  background: #202023 !important;
+  background-color: #202023 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card > div:first-child button:not([data-soridraw-selected="true"]):not([aria-pressed="true"]):hover {
+  background: #2a2a2e !important;
+}
+
+/* Results and right dashboard use the same neutral family instead of brown/navy variants. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane :is(
+  .soridraw-result-title-card,
+  .soridraw-result-keywords-card,
+  .soridraw-result-prompt-card,
+  .soridraw-result-lyrics-card
+),
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-card {
+  background: #18181b !important;
+  border-color: #2c2c31 !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-empty {
+  background: #202023 !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :is(
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-studio-storyboard-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .music-api-generate-modal
+) {
+  background: #1b1b1e !important;
+  border-color: #303035 !important;
+}
+
+/* SORIDRAW 179 — final card-surface owner + pane-mobile action controls.
+   Studio Black only. Classic remains untouched. */
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane .soridraw-studio-menu-card {
+  background: #1a1a1c !important;
+  background-color: #1a1a1c !important;
+  background-image: none !important;
+  border-color: #303034 !important;
+  box-shadow: none !important;
+}
+
+/* Every unselected control inside all create cards uses one exact neutral surface. */
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane .soridraw-studio-menu-card :is(
+  button,
+  [role="button"],
+  input,
+  textarea,
+  select,
+  .soridraw-expand-summary,
+  .soridraw-selected-summary,
+  .soridraw-direct-input-button,
+  [class*="bg-btn-bg"]
+):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not(.soridraw-selected-strong):not([class*="bg-[#FFB400]"]):not([class*="bg-[#FFC15A]"]) {
+  background: #242426 !important;
+  background-color: #242426 !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane .soridraw-studio-menu-card :is(
+  button,
+  [role="button"],
+  .soridraw-expand-summary,
+  .soridraw-direct-input-button
+):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not(.soridraw-selected-strong):not([class*="bg-[#FFB400]"]):not([class*="bg-[#FFC15A]"]):hover {
+  background: #2d2d30 !important;
+  background-color: #2d2d30 !important;
+}
+
+/* Remove the lone brown guide/control surfaces from Lyrics and Tempo cards. */
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane .soridraw-studio-menu-card :is(
+  [class*="bg-[#FFB400]/5"],
+  [class*="bg-[#FFB400]/10"],
+  [class*="bg-[#FFB400]/15"],
+  [class*="bg-[#FFB400]/20"]
+) {
+  background: #242426 !important;
+  background-color: #242426 !important;
+  border-color: transparent !important;
+}
+
+/* Selected state for Genre/Style/Sound/Mood/Theme/Vocal/Lyrics/Tempo. */
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane button:is(
+  [data-soridraw-selected="true"],
+  [aria-pressed="true"].soridraw-selected-strong,
+  .soridraw-selected-strong,
+  [class*="bg-[#FFB400]"],
+  [class*="bg-[#FFC15A]"]
+),
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane button[role="switch"][aria-checked="true"] {
+  background: #ffb400 !important;
+  background-color: #ffb400 !important;
+  background-image: none !important;
+  color: #0b0b0b !important;
+  -webkit-text-fill-color: #0b0b0b !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane button:is(
+  [data-soridraw-selected="true"],
+  [aria-pressed="true"].soridraw-selected-strong,
+  .soridraw-selected-strong,
+  [class*="bg-[#FFB400]"],
+  [class*="bg-[#FFC15A]"]
+) :is(span,strong,small,p,div,label,svg),
+html:root[data-soridraw-theme="studio-black"] body .soridraw-studio-main .soridraw-studio-builder-pane button[role="switch"][aria-checked="true"] :is(span,strong,small,p,div,label,svg) {
+  color: #0b0b0b !important;
+  -webkit-text-fill-color: #0b0b0b !important;
+  opacity: 1 !important;
+}
+
+/* True one-column phone layout when the builder pane itself is narrow. */
+@container soridraw-builder (max-width: 699px) {
+  .soridraw-studio-builder-pane .soridraw-studio-selection-grid,
+  .soridraw-studio-builder-pane .soridraw-studio-vocal-lyrics-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px !important;
+  }
+
+  .soridraw-studio-builder-pane .soridraw-studio-menu-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* The action bar is portalled outside the builder pane, so its mode comes from
+   data-soridraw-builder-mode on <html>. Keep labels horizontal and never stack text. */
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-bar {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-controls {
+  display: grid !important;
+  grid-template-columns: 52px minmax(120px, 1fr) 52px !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 8px !important;
+  border-radius: 18px !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-collapse {
+  display: none !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] :is(
+  .soridraw-action-random-wrap,
+  .soridraw-action-generate-wrap,
+  .soridraw-action-clear-wrap
+) {
+  min-width: 0 !important;
+  width: auto !important;
+  flex: none !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] :is(
+  .soridraw-action-random,
+  .soridraw-action-clear
+) {
+  width: 52px !important;
+  min-width: 52px !important;
+  height: 58px !important;
+  padding: 0 !important;
+  border-radius: 13px !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] :is(
+  .soridraw-action-random,
+  .soridraw-action-clear
+) > span {
+  display: none !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-generate {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 58px !important;
+  padding: 0 14px !important;
+  border-radius: 13px !important;
+  font-size: 18px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  overflow: hidden !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-action-generate > span {
+  display: inline-block !important;
+  white-space: nowrap !important;
+  writing-mode: horizontal-tb !important;
+  word-break: keep-all !important;
+}
+
+html:root[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="tablet"] .soridraw-action-generate {
+  white-space: nowrap !important;
+  font-size: 24px !important;
+}

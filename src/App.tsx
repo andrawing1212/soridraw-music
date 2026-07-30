@@ -12829,7 +12829,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
   const actionButtonsContent = (
     <>
-      <div className="relative flex-shrink-0">
+      <div className="soridraw-action-random-wrap relative flex-shrink-0">
         <button
           onClick={() => {
             applyRandom();
@@ -12842,14 +12842,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           }}
           onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
           onTouchEnd={handleLongPressEnd}
-          className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFB400] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="soridraw-action-random h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFB400] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           <Dices className="w-5 h-5 text-[#FFB400] group-hover:rotate-180 transition-transform duration-500" />
           <span className="hidden md:block font-bold text-[#FFB400]">무작위</span>
         </button>
       </div>
 
-      <div className="relative flex-1">
+      <div className="soridraw-action-generate-wrap relative flex-1">
         <button
           onClick={() => {
             setShowMainGenerationModal(true);
@@ -12880,7 +12880,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
           })}
           onTouchEnd={handleLongPressEnd}
-          className="soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
+          className="soridraw-action-generate soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           {isGenerating && (
             <span
@@ -12896,13 +12896,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </button>
       </div>
 
-      <div className="relative flex-shrink-0">
+      <div className="soridraw-action-clear-wrap relative flex-shrink-0">
         <button
           onClick={() => clearAll({ preserveHistory: true })}
           onMouseEnter={() => setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
           onMouseLeave={() => clearActionButtonHint()}
           className={cn(
-            "h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
+            "soridraw-action-clear h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
             isGlobalClearable
               ? "bg-[var(--card-bg)] border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
               : "bg-[var(--bg-primary)] border-btn-border text-[var(--text-secondary)]/50 cursor-not-allowed opacity-60"
@@ -14641,14 +14641,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           }
                         }}
                         style={{ transformOrigin: 'center bottom' }}
-                        className="flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
+                        className="soridraw-action-controls flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
                       >
                         <motion.button
                                 type="button"
                           onClick={() => setIsActionButtonsCollapsed(true)}
                           onMouseEnter={() => {}}
                           onMouseLeave={() => {}}
-                          className="hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
+                          className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
                           aria-label="생성 버튼 접기"
                         >
                           <ArrowLeft className="w-5 h-5" />

@@ -67,7 +67,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       return;
     }
 
-    const nextBuilderMode: PaneMode = builderRect.width < 640 ? 'mobile' : 'desktop';
+    const nextBuilderMode: PaneMode = builderRect.width < 900 ? 'mobile' : 'desktop';
     const nextResultMode: PaneMode = resultRect.width < 720 ? 'mobile' : 'desktop';
     setBuilderMode(nextBuilderMode);
     setResultMode(nextResultMode);

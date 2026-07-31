@@ -14743,6 +14743,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
+                        const titleTone = hasAddedLyricsLanguage ? 'added-language' : (isRecent ? 'recent' : 'default');
                         const primaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#f4bc63]' : 'text-[var(--text-primary)]');
                         const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
@@ -14757,7 +14758,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                     : 'text-[18px] leading-[1.06]';
 
                                   return (
-                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                    <h2
+                                      key={entry.lang}
+                                      data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
+                                      className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
+                                    >
                                       {entry.line}
                                     </h2>
                                   );
@@ -14938,6 +14943,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const genrePrefix = getResolvedGenre(result) || getSubGenre(result) || 'Song';
                         const isRecent = isInLatestGenerationBatch(result);
                         const hasAddedLyricsLanguage = Boolean((result.appliedKeywords as any)?.hasAddedLyricsLanguage);
+                        const titleTone = hasAddedLyricsLanguage ? 'added-language' : (isRecent ? 'recent' : 'default');
                         const primaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#f4bc63]' : 'text-[var(--text-primary)]');
                         const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
@@ -14956,7 +14962,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                     : 'text-lg md:text-xl leading-[1.08]';
 
                                   return (
-                                    <h2 key={entry.lang} className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}>
+                                    <h2
+                                      key={entry.lang}
+                                      data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
+                                      className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
+                                    >
                                       {entry.line}
                                     </h2>
                                   );
@@ -15898,7 +15908,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       onClick={() => setIsHomeMusicApiMenuCollapsed((prev) => !prev)}
-                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#e3a13a]/[0.06]"
+                      className="soridraw-result-music-api-toggle flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-all hover:bg-[#e3a13a]/[0.06]"
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-black text-[#f4bc63]">Music API 생성</p>
@@ -23285,7 +23295,7 @@ function VocalControlComponent({
                           setEditingVocalMemberId(member.id);
                         }}
                         className={cn(
-                          "w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all group/character",
+                          "soridraw-vocal-character-launcher w-full rounded-xl border border-[var(--border-color)] bg-[var(--card-bg)]/45 p-3 text-left transition-all group/character",
                           memberAccent.hoverBorder
                         )}
                       >

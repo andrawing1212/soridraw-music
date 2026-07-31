@@ -1385,10 +1385,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-direct-input-button,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-lyrics-slot .soridraw-structure-guide,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state,
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span,
-:root[data-soridraw-theme="studio-black"] .soridraw-result-prompt-card > div:last-child,
-:root[data-soridraw-theme="studio-black"] .soridraw-result-lyrics-scroll,
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :where(pre, textarea, input, select) {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span {
   background: var(--sb-card-2) !important;
   background-image: none !important;
 }
@@ -1635,12 +1632,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
   .soridraw-direct-input-button,
   .soridraw-structure-guide,
   .soridraw-studio-dashboard-state,
-  .soridraw-studio-dashboard-metrics > span,
-  .soridraw-result-lyrics-scroll,
-  .soridraw-studio-result-content pre,
-  .soridraw-studio-result-content textarea,
-  .soridraw-studio-result-content input,
-  .soridraw-studio-result-content select
+  .soridraw-studio-dashboard-metrics > span
 ) {
   background-color: var(--sb-card-2) !important;
   background-image: none !important;
@@ -1695,4 +1687,140 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   border-radius: 0 !important;
   padding: 0 !important;
   overflow: visible !important;
+}
+
+/* 207 — role-specific Studio Black color ownership.
+ * These selectors live after the consolidated palette so generic button and
+ * neutral-heading rules cannot erase the intended component states.
+ */
+:root[data-soridraw-theme="studio-black"] {
+  --sb-emphasis-well: #19191a;
+}
+
+/* Every Storyboard click target visually merges into the storyboard card. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-storyboard-card .soridraw-storyboard-card-inner > button,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-storyboard-card .soridraw-storyboard-card-inner > button:is(:hover, :active, :focus, :focus-visible),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-storyboard-card .soridraw-card-header-actions > button,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-storyboard-card .soridraw-card-header-actions > button:is(:hover, :active, :focus, :focus-visible) {
+  background: var(--sb-main-card) !important;
+  background-color: var(--sb-main-card) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-storyboard-card .soridraw-card-header-actions > button:is(.soridraw-selected-strong, [aria-pressed="true"], [data-soridraw-selected="true"]) {
+  color: var(--sb-accent) !important;
+  -webkit-text-fill-color: var(--sb-accent) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-storyboard-card .soridraw-card-header-actions > button:is(.soridraw-selected-strong, [aria-pressed="true"], [data-soridraw-selected="true"]) :where(svg, span) {
+  color: inherit !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Vocal-character launcher and the lyric structure guide need a darker well. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-vocal-character-launcher,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-vocal-character-launcher:is(:hover, :active, :focus, :focus-visible),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-lyrics-slot .soridraw-structure-guide {
+  background: var(--sb-emphasis-well) !important;
+  background-color: var(--sb-emphasis-well) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+/* The collapsed Music API row uses the same shell color as the other result cards. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-result-music-api-card > button.soridraw-result-music-api-toggle,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-result-music-api-card > button.soridraw-result-music-api-toggle:is(:hover, :active, :focus, :focus-visible) {
+  background: var(--sb-main-card) !important;
+  background-color: var(--sb-main-card) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+/* Result-card bodies use their card surface; the former gray well has no owner. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-keywords-body,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-prompt-card > div:last-child,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-prompt-card :is(pre, textarea),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-lyrics-card > .soridraw-result-lyrics-scroll,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-lyrics-card :is(pre, textarea),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-music-api-card > div {
+  background: var(--sb-main-card) !important;
+  background-color: var(--sb-main-card) !important;
+  background-image: none !important;
+}
+
+/* Restore the exact Classic result-title conditions after the neutral h2 pass. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content h2[data-soridraw-title-tone="recent-primary"] {
+  color: #f4bc63 !important;
+  -webkit-text-fill-color: #f4bc63 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content h2:is(
+  [data-soridraw-title-tone="recent-secondary"],
+  [data-soridraw-title-tone="added-language-primary"],
+  [data-soridraw-title-tone="added-language-secondary"]
+) {
+  color: #e3a13a !important;
+  -webkit-text-fill-color: #e3a13a !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content h2[data-soridraw-title-tone="default-primary"] {
+  color: var(--text-primary) !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content h2[data-soridraw-title-tone="default-secondary"] {
+  color: rgba(227, 161, 58, 0.9) !important;
+  -webkit-text-fill-color: rgba(227, 161, 58, 0.9) !important;
+}
+
+/* Exact final owner for the two Classic-style filled result actions. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button {
+  background: var(--sb-accent) !important;
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  border-color: var(--sb-accent) !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button :where(svg, span),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button :where(svg, span) {
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  stroke: currentColor !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-copy-all-button svg.text-green-500 {
+  color: #22c55e !important;
+  stroke: #22c55e !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button:hover,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button:hover {
+  background: #ffc126 !important;
+  background-color: #ffc126 !important;
+  border-color: #ffc126 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button:active,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button:active {
+  background: #d99500 !important;
+  background-color: #d99500 !important;
+  border-color: #d99500 !important;
+}
+
+/* 208 — On desktop the search control belongs to the builder pane.
+ * Match the Classic top-right placement against the builder/Sound edge and
+ * outrank the legacy index.css right:0 rule that pushed it over the result. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    left: auto !important;
+    right: calc(100% - var(--soridraw-studio-builder-width, 50%) + 18px) !important;
+    bottom: 14px !important;
+    translate: 0 0 !important;
+  }
 }

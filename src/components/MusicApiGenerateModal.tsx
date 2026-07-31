@@ -693,7 +693,7 @@ export default function MusicApiGenerateModal({
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0 }}
-        className={`music-api-generate-modal w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
+        className={`music-api-generate-modal ${isMain ? 'music-api-generate-modal--main' : ''} w-full max-w-[520px] max-h-[calc(100dvh-32px)] rounded-[28px] overflow-hidden flex flex-col ${modalSurface}`}
         onMouseDown={(event) => {
           event.stopPropagation();
           if (event.button === 3) {

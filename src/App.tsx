@@ -80,10 +80,11 @@ import StudioLeftRail from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 
-// Portal component for top-level rendering
-function Portal({ children }: { children: React.ReactNode }) {
+// Portal component for top-level rendering. Action controls keep one DOM owner
+// so switching between fixed and anchored coordinates never remounts them.
+function Portal({ children, enabled = true }: { children: React.ReactNode; enabled?: boolean }) {
   if (typeof document === 'undefined') return null;
-  return createPortal(children, document.body);
+  return enabled ? createPortal(children, document.body) : <>{children}</>;
 }
 
 const favoritesInMemoryCache = new Map<string, any[]>();
@@ -6418,7 +6419,9 @@ function App() {
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
+  const actionButtonsBarRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(true);
+  const isActionsFloatingRef = useRef(true);
   const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
@@ -6580,45 +6583,66 @@ const toggleCycleVariantSelection = (
     }
   }, [isAppliedKeywordsExpanded, result]);
 
+  const updateActionBarPlacement = useCallback(() => {
+    const anchor = actionButtonsAnchorRef.current;
+    const actionBar = actionButtonsBarRef.current;
+    if (!anchor || !actionBar) return;
+
+    const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
+    if (!isStudioBlack) {
+      actionBar.style.removeProperty('--soridraw-action-tracked-top');
+      anchor.style.removeProperty('--soridraw-action-anchor-height');
+      if (!isActionsFloatingRef.current) {
+        isActionsFloatingRef.current = true;
+        setIsActionsFloating(true);
+      }
+      return;
+    }
+
+    const rect = anchor.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const actionBarHeight = actionBar.getBoundingClientRect().height || 84;
+    const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
+    const dockLine = viewportHeight - actionBarHeight - viewportBottomGap;
+    const anchoredTop = rect.top + 12;
+    const trackedTop = Math.min(anchoredTop, dockLine);
+
+    anchor.style.setProperty('--soridraw-action-anchor-height', `${Math.ceil(actionBarHeight + 12)}px`);
+
+    // Keep one portal-owned Studio row alive for the whole transition. Only its
+    // fixed top coordinate changes: it follows the viewport bottom until the
+    // command/keyword slot reaches it, then follows that slot upward.
+    actionBar.style.setProperty('--soridraw-action-tracked-top', `${trackedTop}px`);
+
+    const nextIsFloating = anchoredTop > dockLine + 0.5;
+    if (isActionsFloatingRef.current !== nextIsFloating) {
+      isActionsFloatingRef.current = nextIsFloating;
+      setIsActionsFloating(nextIsFloating);
+    }
+  }, []);
+
   useEffect(() => {
     let rafId: number | null = null;
-
-    const updateFloatingState = () => {
-      if (!actionButtonsAnchorRef.current) return;
-
-      const rect = actionButtonsAnchorRef.current.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-
-      // Hysteresis prevents the inline/floating bars from rapidly toggling at the boundary,
-      // which caused a short flicker right after docking/undocking.
-      const floatStartLine = viewportHeight - 92;
-      const floatEndLine = viewportHeight - 168;
-
-      setIsActionsFloating((prev) => {
-        const next = prev
-          ? rect.top > floatEndLine
-          : rect.top > floatStartLine;
-        return prev === next ? prev : next;
-      });
-    };
 
     const handleScroll = () => {
       if (rafId !== null) return;
       rafId = window.requestAnimationFrame(() => {
         rafId = null;
-        updateFloatingState();
+        updateActionBarPlacement();
       });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleScroll);
+    window.addEventListener('soridraw-theme-change', handleScroll as EventListener);
     handleScroll();
     return () => {
       if (rafId !== null) window.cancelAnimationFrame(rafId);
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
+      window.removeEventListener('soridraw-theme-change', handleScroll as EventListener);
     };
-  }, []);
+  }, [updateActionBarPlacement]);
 
   useEffect(() => {
     const updateActionDragMode = () => {
@@ -6714,6 +6738,20 @@ const toggleCycleVariantSelection = (
   const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
   const shouldShowActionButtons = !isActionBarBlockedByModal && !isAnyModalOpen;
+
+  useLayoutEffect(() => {
+    if (isActionButtonsCollapsed || !shouldShowActionButtons) return;
+    updateActionBarPlacement();
+    const frame = window.requestAnimationFrame(updateActionBarPlacement);
+    const observer = typeof ResizeObserver !== 'undefined' && actionButtonsBarRef.current
+      ? new ResizeObserver(updateActionBarPlacement)
+      : null;
+    if (observer && actionButtonsBarRef.current) observer.observe(actionButtonsBarRef.current);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+    };
+  }, [isActionButtonsCollapsed, shouldShowActionButtons, updateActionBarPlacement]);
 
   const handleCycleKeywordModalStateChange = useCallback((sectionKey: string, isOpen: boolean) => {
     setCycleKeywordPopupOpenMap((prev) => {
@@ -12856,6 +12894,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
       <div className="soridraw-action-item soridraw-action-generate relative flex-1">
         <button
+          data-soridraw-button-variant="primary"
           onClick={() => {
             setShowMainGenerationModal(true);
             setActionButtonHint({
@@ -14333,13 +14372,22 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           </AnimatePresence>
 
           {/* Action Buttons Anchor */}
-          <div ref={actionButtonsAnchorRef} className="relative h-0" aria-hidden="true" />
+          <div
+            ref={actionButtonsAnchorRef}
+            className={cn(
+              "relative",
+              shouldShowActionButtons && !isActionButtonsCollapsed
+                ? "soridraw-studio-action-anchor-expanded"
+                : "h-0"
+            )}
+            aria-hidden="true"
+          />
 
           {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence initial={false} mode="wait">
             {shouldShowActionButtons && (
-              <Portal>
-                {isActionButtonsCollapsed ? (
+              isActionButtonsCollapsed ? (
+                <Portal>
                   <motion.button
                     key="action-buttons-collapsed-toggle"
                     type="button"
@@ -14377,14 +14425,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </span>
                     <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-[#171717]/70" />
                   </motion.button>
-                ) : (
+                </Portal>
+              ) : (
+                <Portal>
                   <motion.div
+                    ref={actionButtonsBarRef}
                     key="action-buttons-expanded-bar"
-                    initial={floatingActionBarVariants.initial}
+                    initial={false}
                     animate={floatingActionBarVariants.animate}
                     exit={floatingActionBarVariants.exit}
                     transition={smoothActionPanelTransition}
-                    className="soridraw-studio-action-bar fixed bottom-5 md:bottom-7 left-0 w-full z-[120] flex justify-center pointer-events-none px-5 md:px-8 will-change-transform"
+                    data-soridraw-placement={isActionsFloating ? "floating" : "anchored"}
+                    className="soridraw-studio-action-bar soridraw-studio-action-bar--tracking fixed bottom-5 left-0 z-[120] flex w-full justify-center px-5 pointer-events-none will-change-transform md:bottom-7 md:px-8"
                   >
                     <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
                       {generationQueueItems.length > 0 && (
@@ -14542,8 +14594,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </motion.div>
                     </div>
                   </motion.div>
-                )}
-              </Portal>
+                </Portal>
+              )
             )}
           </AnimatePresence>
 
@@ -16095,7 +16147,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             onMouseEnter={() => setIsTooltipHovered(true)}
             onMouseLeave={() => setIsTooltipHovered(false)}
             className={cn(
-              "fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
+              "soridraw-studio-description-overlay fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/studio' 
                 ? (!isActionButtonsCollapsed && shouldShowActionButtons
                     ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 

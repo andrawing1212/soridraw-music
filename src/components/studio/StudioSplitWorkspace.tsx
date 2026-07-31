@@ -22,6 +22,7 @@ type PaneMode = 'mobile' | 'desktop';
 type LayoutMetrics = {
   left: number;
   width: number;
+  leftRailEdge: number;
 };
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
@@ -54,7 +55,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const resultRef = useRef<HTMLDivElement | null>(null);
   const splitterRef = useRef<HTMLButtonElement | null>(null);
   const percentRef = useRef(percent);
-  const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1 });
+  const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({
     builder: 'desktop',
     result: 'desktop',
@@ -75,6 +76,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.removeProperty('--soridraw-studio-builder-left');
     root.style.removeProperty('--soridraw-studio-builder-right');
     root.style.removeProperty('--soridraw-studio-builder-width');
+    root.style.removeProperty('--soridraw-studio-left-rail-edge');
     root.style.removeProperty('--soridraw-studio-splitter-left');
     root.style.removeProperty('--soridraw-studio-splitter-bottom');
     root.style.removeProperty('--soridraw-studio-action-footer-offset');
@@ -82,7 +84,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   const refreshSplitterFooterBoundary = useCallback(() => {
     if (typeof document === 'undefined') return;
-    if (!isStudioBlack() || window.innerWidth < 1100) {
+    if (!isStudioBlack()) {
       document.documentElement.style.removeProperty('--soridraw-studio-splitter-bottom');
       document.documentElement.style.removeProperty('--soridraw-studio-action-footer-offset');
       return;
@@ -99,10 +101,14 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const footerTop = footer.getBoundingClientRect().top;
     const maximumBottom = Math.max(0, window.innerHeight - 58);
     const footerOverlap = Math.max(0, window.innerHeight - footerTop);
-    root.style.setProperty(
-      '--soridraw-studio-splitter-bottom',
-      `${Math.min(maximumBottom, footerOverlap)}px`,
-    );
+    if (window.innerWidth >= 1100) {
+      root.style.setProperty(
+        '--soridraw-studio-splitter-bottom',
+        `${Math.min(maximumBottom, footerOverlap)}px`,
+      );
+    } else {
+      root.style.removeProperty('--soridraw-studio-splitter-bottom');
+    }
     // The action controls share the footer boundary with the splitter. Their
     // own CSS bottom gap is added on top, so the footer divider always remains
     // visible and the controls return smoothly when the page scrolls upward.
@@ -143,7 +149,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     }
 
     const root = document.documentElement;
-    const { left, width } = metricsRef.current;
+    const { left, width, leftRailEdge } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
     const builderWidth = safeWidth * (nextPercent / 100);
     const resultWidth = Math.max(0, safeWidth - builderWidth);
@@ -153,6 +159,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, left)}px`);
     root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - (left + builderWidth))}px`);
     root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
+    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
     root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, splitterLeft)}px`);
 
     const nextBuilderMode: PaneMode = builderWidth < BUILDER_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
@@ -186,9 +193,12 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     }
 
     const rect = layout.getBoundingClientRect();
+    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+    const leftRailRect = leftRail?.getBoundingClientRect();
     metricsRef.current = {
       left: rect.left,
       width: Math.max(rect.width, 1),
+      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
     applyPercentToLayout(percentRef.current);
     refreshSplitterFooterBoundary();
@@ -264,7 +274,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const rect = layoutRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
 
-    metricsRef.current = { left: rect.left, width: rect.width };
+    metricsRef.current = {
+      left: rect.left,
+      width: rect.width,
+      leftRailEdge: metricsRef.current.leftRailEdge,
+    };
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,

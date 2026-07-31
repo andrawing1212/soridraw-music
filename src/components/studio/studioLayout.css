@@ -57,6 +57,11 @@
   background: var(--sb-page) !important;
 }
 
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane {
+  container-type: inline-size;
+}
+
 :root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
   border-bottom: 1px solid var(--sb-divider) !important;
   background: var(--sb-page) !important;
@@ -1774,22 +1779,22 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   -webkit-text-fill-color: rgba(227, 161, 58, 0.9) !important;
 }
 
-/* Exact final owner for the two Classic-style filled result actions. */
+/* Exact final owner for the two result actions: match Classic's brown translucent controls. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button {
-  background: var(--sb-accent) !important;
-  background-color: var(--sb-accent) !important;
+  background: rgba(205, 140, 49, 0.1) !important;
+  background-color: rgba(205, 140, 49, 0.1) !important;
   background-image: none !important;
-  color: var(--sb-selected-text) !important;
-  -webkit-text-fill-color: var(--sb-selected-text) !important;
-  border-color: var(--sb-accent) !important;
+  color: #cd8c31 !important;
+  -webkit-text-fill-color: #cd8c31 !important;
+  border-color: rgba(205, 140, 49, 0.25) !important;
   opacity: 1 !important;
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button :where(svg, span),
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button :where(svg, span) {
-  color: var(--sb-selected-text) !important;
-  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  color: #cd8c31 !important;
+  -webkit-text-fill-color: #cd8c31 !important;
   stroke: currentColor !important;
   opacity: 1 !important;
 }
@@ -1801,16 +1806,119 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button:hover,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button:hover {
-  background: #ffc126 !important;
-  background-color: #ffc126 !important;
-  border-color: #ffc126 !important;
+  background: rgba(205, 140, 49, 0.18) !important;
+  background-color: rgba(205, 140, 49, 0.18) !important;
+  border-color: rgba(205, 140, 49, 0.35) !important;
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-music-note-button:active,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content button.soridraw-result-action-button.soridraw-result-copy-all-button:active {
-  background: #d99500 !important;
-  background-color: #d99500 !important;
-  border-color: #d99500 !important;
+  background: rgba(205, 140, 49, 0.24) !important;
+  background-color: rgba(205, 140, 49, 0.24) !important;
+  border-color: rgba(205, 140, 49, 0.42) !important;
+}
+
+/* 209 — Keep the pane in desktop composition longer, then adapt dense controls independently. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-vocal-role-buttons {
+  justify-content: center !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-vocal-member-heading {
+  display: grid !important;
+  grid-template-columns: max-content minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-vocal-role-buttons {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-vocal-role-button {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: max-content !important;
+  min-width: 34px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  padding: 0 7px !important;
+  text-align: center !important;
+  line-height: 1 !important;
+}
+
+@container (max-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-vocal-member-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@container (max-width: 1074px) {
+  /* 211: one compact-desktop threshold, aligned with the start of the top-nav '마' in the reference video. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+    [data-studio-menu="mood"],
+    [data-studio-menu="theme"]
+  ) .soridraw-category-keyword-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-menu-count {
+    display: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+    [data-studio-menu="mood"],
+    [data-studio-menu="theme"]
+  ) .soridraw-category-keyword-grid button .soridraw-menu-keyword-label {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-inline: 0 !important;
+    font-size: clamp(8px, 1.02cqw, 11px) !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+    [data-studio-menu="genre"],
+    [data-studio-menu="style"],
+    [data-studio-menu="sound"]
+  ) .soridraw-menu-keyword-label {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-inline: 0 !important;
+    font-size: clamp(8px, 1.2cqw, 13px) !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+    [data-studio-menu="genre"],
+    [data-studio-menu="style"],
+    [data-studio-menu="sound"]
+  ) .soridraw-expand-content > .grid > button {
+    min-width: 0 !important;
+    padding-inline: 6px !important;
+    overflow: hidden !important;
+  }
+}
+
+@container (max-width: 760px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-vocal-member-heading {
+    gap: 6px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] button.soridraw-vocal-role-button {
+    min-width: 32px !important;
+    padding-inline: 6px !important;
+  }
 }
 
 /* 208 — On desktop the search control belongs to the builder pane.

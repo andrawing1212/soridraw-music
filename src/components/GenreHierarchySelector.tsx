@@ -1011,7 +1011,7 @@ function GenreHierarchySelectorComponent({
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", genreAccent.bar)} />
                 <span className="truncate">장르</span>
-                <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
+                <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">
                   ({selectedCount}/{totalCount})
                 </span>
               </h3>
@@ -1148,7 +1148,7 @@ function GenreHierarchySelectorComponent({
                   )}
                 >
                   {renderCategoryOrderBadges(groupOrderEntries, (event) => clearCommittedGenreIds(groupSelectedIds, event))}
-                  <span className="text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
+                  <span className="soridraw-menu-keyword-label text-[15px] md:text-[16.5px] font-bold leading-tight text-center whitespace-nowrap tracking-[-0.01em]">
                     {group.labelKo || group.label}
                   </span>
                 </button>

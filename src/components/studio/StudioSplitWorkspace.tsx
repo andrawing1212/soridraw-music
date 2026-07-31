@@ -12,8 +12,8 @@ const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const DEFAULT_PERCENT = 50;
 const MIN_PERCENT = 24;
 const MAX_PERCENT = 76;
-const BUILDER_MOBILE_BREAKPOINT = 900;
-const RESULT_MOBILE_BREAKPOINT = 720;
+const BUILDER_MOBILE_BREAKPOINT = 680;
+const RESULT_MOBILE_BREAKPOINT = 680;
 
 type PaneMode = 'mobile' | 'desktop';
 

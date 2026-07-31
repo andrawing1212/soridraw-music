@@ -17246,7 +17246,7 @@ function GenreCategorySectionComponent({
             >
               <span className={cn("w-1.5 h-6 rounded-full", sectionAccent.bar)} />
               {title}
-              <span className="text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
+              <span className="soridraw-menu-count text-[14px] font-normal text-[var(--text-secondary)] ml-2">({selectedChild ? '1' : '0'}/1)</span>
             </h3>
             <AnimatePresence>
               {showTitleTooltip && (
@@ -17691,7 +17691,7 @@ function CycleSectionComponent({
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
                 {countLabel && (
-                  <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
+                  <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-1.5 shrink-0">({countLabel})</span>
                 )}
               </h3>
               <AnimatePresence>
@@ -17807,7 +17807,7 @@ function CycleSectionComponent({
                   <span
                     className={cn(
                       useGenreKeywordButtonFont ? "text-[15px] md:text-[16.5px]" : "text-[16px] md:text-[17px]",
-                      "font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
+                      "soridraw-menu-keyword-label font-bold leading-tight w-full px-2 text-center whitespace-normal break-keep [text-wrap:balance]"
                     )}
                   >
                     {folderLabel}
@@ -18466,7 +18466,7 @@ function CategorySectionComponent({
               >
                 <span className={cn("w-1.5 h-6 rounded-full shrink-0", sectionAccent.bar)} />
                 <span className="truncate">{titleKo || title}</span>
-                <span className="text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
+                <span className="soridraw-menu-count text-[15px] font-normal text-[var(--text-secondary)] ml-2 shrink-0">({selected.length}/{items.length})</span>
               </h3>
               <AnimatePresence>
                 {showTitleTooltip && (
@@ -18693,7 +18693,7 @@ function CategorySectionComponent({
                   <span
                     className={cn(
                       uniformKeywordGrid
-                        ? ["block w-full whitespace-normal break-keep text-center", uniformLabelTextClass]
+                        ? ["soridraw-menu-keyword-label block w-full whitespace-normal break-keep text-center", uniformLabelTextClass]
                         : ""
                     )}
                   >
@@ -20218,7 +20218,7 @@ function SongStructureIntegratedControlComponent({
                         onTouchStart={() => onLongPressStart({ id: opt.id, label: opt.label, labelKo: opt.labelKo, description: opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "w-full py-1.5 rounded-xl text-[14px] md:text-[15px] font-bold transition-all border shadow-sm",
+                          "soridraw-lyrics-option-button w-full py-1.5 rounded-xl text-[13px] font-bold transition-all border shadow-sm",
                           lyricsLength === opt.id
                             ? "bg-[#FFB400] border-black/20 text-[#171717] font-black shadow-lg shadow-[#FFB400]/20"
                             : "bg-btn-bg border-btn-border text-[var(--text-primary)] hover:bg-btn-hover"
@@ -20255,7 +20255,7 @@ function SongStructureIntegratedControlComponent({
                         onTouchStart={() => onLongPressStart({ id: `song-structure-${opt.id}`, label: `섹션 ${opt.label}`, description: isCustomLocked ? '섹션 커스텀은 Pro부터 사용할 수 있습니다.' : opt.description })}
                         onTouchEnd={onLongPressEnd}
                         className={cn(
-                          "py-1.5 rounded-xl text-[14px] md:text-[15px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
+                          "soridraw-lyrics-option-button py-1.5 rounded-xl text-[13px] font-bold transition-all border flex items-center justify-center gap-1.5 shadow-sm",
                           songStructure === opt.id
                             ? "bg-[#FFB400] border-black/20 text-[#171717] font-black shadow-lg shadow-[#FFB400]/20"
                             : isCustomLocked
@@ -23220,17 +23220,19 @@ function VocalControlComponent({
 
                   return (
                   <div key={member.id} className="bg-btn-bg rounded-xl p-2 border border-btn-border relative group/member shadow-sm">
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className={cn(
-                          "w-2 h-2 rounded-full shrink-0",
-                          memberAccent.dot
-                        )} />
-                        <span className="shrink-0 text-xs font-bold text-[var(--text-primary)]">
-                          {memberDisplayName}
-                        </span>
-                        <span className="h-4 w-px shrink-0 bg-[var(--border-color)]" />
-                        <div className="flex min-w-0 flex-nowrap items-center gap-0.5">
+                    <div className="soridraw-vocal-member-header flex items-center justify-between gap-2 mb-1.5">
+                      <div className="soridraw-vocal-member-heading flex min-w-0 flex-1 items-center gap-2">
+                        <div className="soridraw-vocal-member-identity flex min-w-0 items-center gap-2">
+                          <span className={cn(
+                            "w-2 h-2 rounded-full shrink-0",
+                            memberAccent.dot
+                          )} />
+                          <span className="shrink-0 text-xs font-bold text-[var(--text-primary)]">
+                            {memberDisplayName}
+                          </span>
+                          <span className="h-4 w-px shrink-0 bg-[var(--border-color)]" />
+                        </div>
+                        <div className="soridraw-vocal-role-buttons flex min-w-0 flex-nowrap items-center justify-center gap-1">
                           {(['main', 'lead', 'sub', 'rapper'] as VocalRole[]).map(role => {
                             const isActive = member.roles.includes(role);
                             const isRoleLimitReached = member.roles.length >= 2;
@@ -23255,7 +23257,7 @@ function VocalControlComponent({
                                 onTouchEnd={onLongPressEnd}
                                 onTouchCancel={onLongPressEnd}
                                 className={cn(
-                                  "px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
+                                  "soridraw-vocal-role-button px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
                                   isActive
                                     ? "bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
                                     : isRoleLimitReached
@@ -23280,7 +23282,7 @@ function VocalControlComponent({
                           onTouchStart={() => onLongPressStart({ id: `remove-member-${idx}`, label: 'Remove Member', labelKo: '멤버 삭제', description: vocalMode === 'solo' ? '선택한 솔로 보컬을 해제합니다.' : '이 멤버를 삭제합니다. 마지막 멤버까지 삭제하면 랜덤 그룹 보컬로 적용됩니다.' })}
                           onTouchEnd={onLongPressEnd}
                           onTouchCancel={onLongPressEnd}
-                          className="p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100"
+                          className="soridraw-vocal-member-remove p-1.5 rounded-md text-[var(--text-secondary)] hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100"
                         >
                           <X className="w-[18px] h-[18px]" />
                         </button>
@@ -23861,7 +23863,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                     : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
                 )}
               >
-                <RotateCcw className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -23899,7 +23901,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
               )}
             >
-              <RotateCcw className="w-4 h-4" />
+              <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>

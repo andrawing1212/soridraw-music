@@ -1874,10 +1874,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
   ) .soridraw-category-keyword-grid button .soridraw-menu-keyword-label {
     display: block !important;
     width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
+    flex: 1 1 auto !important;
     padding-inline: 0 !important;
-    font-size: clamp(8px, 1.02cqw, 11px) !important;
-    line-height: 1.05 !important;
+    font-size: 12px !important;
+    line-height: 1.15 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -1890,10 +1892,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
   ) .soridraw-menu-keyword-label {
     display: block !important;
     width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
+    flex: 1 1 auto !important;
     padding-inline: 0 !important;
-    font-size: clamp(8px, 1.2cqw, 13px) !important;
-    line-height: 1.05 !important;
+    font-size: 12px !important;
+    line-height: 1.15 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -1903,10 +1907,16 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
     [data-studio-menu="genre"],
     [data-studio-menu="style"],
     [data-studio-menu="sound"]
-  ) .soridraw-expand-content > .grid > button {
+  ) .soridraw-expand-content > .grid > button,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+    [data-studio-menu="genre"],
+    [data-studio-menu="style"],
+    [data-studio-menu="sound"]
+  ) .soridraw-category-keyword-grid button {
+    width: 100% !important;
+    max-width: 100% !important;
     min-width: 0 !important;
     padding-inline: 6px !important;
-    overflow: hidden !important;
   }
 }
 

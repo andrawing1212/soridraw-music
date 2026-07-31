@@ -797,10 +797,10 @@
   -webkit-text-fill-color: var(--sb-selected-text) !important;
 }
 
-/* These are primary result actions, so they keep the same filled accent treatment. */
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
-  button[data-soridraw-button-variant="primary"],
-  .soridraw-result-action-button
+/* Music note and copy-all match the filled Classic action treatment. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
 ) {
   background: var(--sb-accent) !important;
   background-color: var(--sb-accent) !important;
@@ -812,27 +812,27 @@
   opacity: 1 !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
-  button[data-soridraw-button-variant="primary"],
-  .soridraw-result-action-button
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
 ) :where(svg, span) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
   opacity: 1 !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
-  button[data-soridraw-button-variant="primary"],
-  .soridraw-result-action-button
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
 ):hover {
   background: #ffc126 !important;
   background-color: #ffc126 !important;
   border-color: #ffc126 !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content :is(
-  button[data-soridraw-button-variant="primary"],
-  .soridraw-result-action-button
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
 ):active {
   background: #d99500 !important;
   background-color: #d99500 !important;
@@ -978,29 +978,59 @@
   }
 }
 
-/* Mobile tempo random is a compact utility button, not a full desktop action. */
+/* Mobile tempo header keeps the actions on the far right of the pane. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-card-header > div:first-child {
+  width: 100% !important;
+  max-width: none !important;
+  justify-content: space-between !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-card-header > div:first-child > div:last-child,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-mobile-actions {
+  margin-left: auto !important;
+  justify-content: flex-end !important;
+}
+
+/* Mobile controls are only slightly smaller than the desktop controls. */
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button {
   width: auto !important;
   min-width: 0 !important;
   max-width: max-content !important;
-  height: 30px !important;
-  min-height: 30px !important;
-  max-height: 30px !important;
-  padding: 0 8px !important;
-  gap: 4px !important;
-  border-radius: 9px !important;
-  font-size: 10px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  padding: 0 14px !important;
+  gap: 6px !important;
+  border-radius: 11px !important;
+  font-size: 13px !important;
   line-height: 1 !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button > svg {
-  width: 12px !important;
-  height: 12px !important;
+  width: 16px !important;
+  height: 16px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-random-button > span {
-  font-size: 10px !important;
+  font-size: 13px !important;
   line-height: 1 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-mobile-actions > button:last-child {
+  display: flex !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  padding: 0 !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 11px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-tempo-mobile-actions > button:last-child > svg {
+  width: 16px !important;
+  height: 16px !important;
 }
 
 /* 190: action bar has exactly two pane-owned layouts, matching Classic behavior. */
@@ -1497,15 +1527,17 @@
   gap: 14px !important;
 }
 
-/* 204 — Studio Black final visual ownership.
+/* 204–206 — Studio Black final visual ownership.
  * Consolidates the former 200/201/202/203 visual overrides into one block.
  * The older layout rules remain intact, but surfaces and shadows are owned here
  * with enough specificity to beat legacy Studio Black phases in index.css.
+ * 205/206 keep controls on --sb-card/--sb-control and darken only main card shells.
  */
 :root[data-soridraw-theme="studio-black"] {
   --sb-page: #0f0f10;
   --sb-rail: #0f0f10;
   --sb-card: #29292a;
+  --sb-main-card: #222223;
   --sb-card-2: #242426;
   --sb-control: #2c2c2e;
   --sb-control-hover: #333336;
@@ -1574,7 +1606,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root *::after 
   -webkit-backdrop-filter: none !important;
 }
 
-/* Main and result cards have one flat color, no outline, border, gradient or overlay. */
+/* Main and result card shells have one flat color, independent from buttons. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-title-card,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-keywords-card,
@@ -1582,8 +1614,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-lyrics-card,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content .soridraw-result-music-api-card,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-theme-surface {
-  background: var(--sb-card) !important;
-  background-color: var(--sb-card) !important;
+  background: var(--sb-main-card) !important;
+  background-color: var(--sb-main-card) !important;
   background-image: none !important;
   border: 0 !important;
   outline: 0 !important;

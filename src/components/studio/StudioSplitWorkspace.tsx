@@ -12,7 +12,9 @@ const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const DEFAULT_PERCENT = 50;
 const MIN_PERCENT = 24;
 const MAX_PERCENT = 76;
-const BUILDER_MOBILE_BREAKPOINT = 720;
+// Align the builder's mobile composition with the top-nav "라이브러리" label:
+// the split line reaches the first "라" at roughly an 820px builder width.
+const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 
 type PaneMode = 'mobile' | 'desktop';
@@ -75,12 +77,14 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.removeProperty('--soridraw-studio-builder-width');
     root.style.removeProperty('--soridraw-studio-splitter-left');
     root.style.removeProperty('--soridraw-studio-splitter-bottom');
+    root.style.removeProperty('--soridraw-studio-action-footer-offset');
   }, []);
 
   const refreshSplitterFooterBoundary = useCallback(() => {
     if (typeof document === 'undefined') return;
     if (!isStudioBlack() || window.innerWidth < 1100) {
       document.documentElement.style.removeProperty('--soridraw-studio-splitter-bottom');
+      document.documentElement.style.removeProperty('--soridraw-studio-action-footer-offset');
       return;
     }
 
@@ -88,6 +92,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
     if (!footer) {
       root.style.setProperty('--soridraw-studio-splitter-bottom', '0px');
+      root.style.setProperty('--soridraw-studio-action-footer-offset', '0px');
       return;
     }
 
@@ -96,6 +101,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const footerOverlap = Math.max(0, window.innerHeight - footerTop);
     root.style.setProperty(
       '--soridraw-studio-splitter-bottom',
+      `${Math.min(maximumBottom, footerOverlap)}px`,
+    );
+    // The action controls share the footer boundary with the splitter. Their
+    // own CSS bottom gap is added on top, so the footer divider always remains
+    // visible and the controls return smoothly when the page scrolls upward.
+    root.style.setProperty(
+      '--soridraw-studio-action-footer-offset',
       `${Math.min(maximumBottom, footerOverlap)}px`,
     );
   }, [isStudioBlack]);

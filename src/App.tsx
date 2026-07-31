@@ -3339,10 +3339,11 @@ function Navigation({
                 key={item.path}
                 type="button"
                 onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  "relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
+                  "soridraw-top-nav-item relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
                   active
-                    ? "bg-transparent text-white"
+                    ? "is-active bg-transparent text-white"
                     : "bg-transparent text-white/60 hover:text-white"
                 )}
               >
@@ -3352,7 +3353,7 @@ function Navigation({
                 <Icon className="h-6 w-6" />
                 <span className="relative inline-flex items-center pb-1">
                   {item.label}
-                  {active && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
+                  {active && <span className="soridraw-top-nav-active-line absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
                 </span>
               </button>
             );
@@ -3361,17 +3362,18 @@ function Navigation({
             <button
               type="button"
               onClick={() => goToTopNav('/admin/users')}
+              aria-current={isActivePath('/admin') ? 'page' : undefined}
               className={cn(
-                "relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
+                "soridraw-top-nav-item relative flex h-11 items-center gap-2.5 rounded-2xl px-3 text-[14px] font-black transition-all whitespace-nowrap sm:px-4",
                 isActivePath('/admin')
-                  ? "bg-transparent text-white"
+                  ? "is-active bg-transparent text-white"
                   : "bg-transparent text-white/60 hover:text-white"
               )}
             >
               <Shield className="h-6 w-6" />
               <span className="relative inline-flex items-center pb-1">
                 관리자
-                {isActivePath('/admin') && <span className="absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
+                {isActivePath('/admin') && <span className="soridraw-top-nav-active-line absolute -bottom-0.5 left-0 h-[2px] w-full rounded-full bg-[#783159]" />}
               </span>
             </button>
           )}

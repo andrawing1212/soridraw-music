@@ -470,9 +470,6 @@ function GenreHierarchySelectorComponent({
 
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
-  // The collapsed genre card exposes one two-column row. Hidden groups are
-  // mounted only after expansion so divider dragging does not reflow them.
-  const renderedGroups = isExpanded ? groups : groups.slice(0, 2);
 
   useLayoutEffect(() => {
     if (contentRef.current) {
@@ -482,7 +479,7 @@ function GenreHierarchySelectorComponent({
         onHeightChange(height);
       }
     }
-  }, [groups, isExpanded, onHeightChange]);
+  }, [groups, onHeightChange]);
 
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
@@ -1119,7 +1116,7 @@ function GenreHierarchySelectorComponent({
           }}
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
-            {renderedGroups.map((group) => {
+            {groups.map((group) => {
               const hasSelectedMain = group.children.some((main) =>
                 committedGenre.includes(main.id) ||
                 committedSubGenre.includes(main.id) ||

@@ -17,6 +17,7 @@ const MAX_PERCENT = 76;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
+const ACTION_CONTROL_PIXEL_STEP = 8;
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -66,17 +67,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     builder: 'desktop',
     result: 'desktop',
   });
-  const dragRef = useRef({
-    pointerId: -1,
-    left: 0,
-    width: 1,
-    startBuilderPixel: 0,
-  });
+  const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
+  const lastActionControlPixelRef = useRef<number | null>(null);
   const externalControlsReadyRef = useRef(false);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
@@ -119,8 +116,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
     searchButton?.style.removeProperty('right');
-    searchButton?.style.removeProperty('transform');
-    searchButton?.style.removeProperty('will-change');
     if (floatingActionBar) {
       floatingActionBar.style.removeProperty('left');
       floatingActionBar.style.removeProperty('width');
@@ -131,33 +126,42 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
     splitterRef.current?.style.removeProperty('left');
-    splitterRef.current?.style.removeProperty('--soridraw-splitter-live-x');
+    lastActionControlPixelRef.current = null;
     externalControlsReadyRef.current = false;
   }, []);
 
-  const syncDragVisuals = useCallback((builderWidth: number, splitterLeft: number) => {
+  const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
+    const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
-    const startBuilderPixel = dragRef.current.startBuilderPixel;
+    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
 
-    // The pane boundary and the visible divider share one absolute coordinate.
-    // The divider is composited, but it is never allowed to run ahead of the
-    // real pane width as happened in 242.
-    splitterRef.current?.style.setProperty(
-      '--soridraw-splitter-live-x',
-      `${splitterLeft}px`,
+    // The divider and search control remain pixel-accurate on every layout frame.
+    // Search is positioned inside the center/hero width, not against the full
+    // viewport. Using window.innerWidth included the right dashboard rail and
+    // made the icon jump far left while the divider was moving.
+    splitterRef.current?.style.setProperty('left', `${Math.max(0, Math.round(splitterLeft) - 8)}px`);
+    controls.searchButton?.style.setProperty(
+      'right',
+      `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
+      'important',
     );
 
-    // Changing the hero search button's `right` value on every pointer frame
-    // forced a second layout outside the split workspace. Follow the same width
-    // delta with a compositor transform and restore the canonical position when
-    // the pointer is released.
-    if (controls.searchButton) {
-      controls.searchButton.style.setProperty(
-        'transform',
-        `translate3d(${builderWidth - startBuilderPixel}px, 0, 0)`,
-        'important',
-      );
-      controls.searchButton.style.setProperty('will-change', 'transform');
+    // The portal action controls contain their own responsive layout and were
+    // causing a second full reflow for every single divider pixel. Their visual
+    // width now follows in tiny 8px steps while the real panes remain live.
+    const actionControlPixel = Math.round(roundedBuilderWidth / ACTION_CONTROL_PIXEL_STEP)
+      * ACTION_CONTROL_PIXEL_STEP;
+    if (lastActionControlPixelRef.current === actionControlPixel) return;
+    lastActionControlPixelRef.current = actionControlPixel;
+
+    if (controls.floatingActionBar) {
+      controls.floatingActionBar.style.setProperty('left', `${Math.max(0, Math.round(left))}px`, 'important');
+      controls.floatingActionBar.style.setProperty('width', `${actionControlPixel}px`, 'important');
+      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+    }
+    if (controls.collapsedActionButton) {
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
     }
   }, [readExternalControls]);
 
@@ -265,7 +269,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     // both CSS Grid tracks and every dependent container on every drag frame.
     layout.style.removeProperty('grid-template-columns');
     builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
-    if (draggingRef.current) syncDragVisuals(builderWidth, splitterLeft);
+    if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
     const nextBuilderMode = resolvePaneMode(
       builder,
@@ -298,7 +302,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, resolvePaneMode, syncDragVisuals]);
+  }, [clearRootMeasurements, isStudioBlack, resolvePaneMode, syncExternalMeasurements]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -383,19 +387,15 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     pendingClientXRef.current = null;
     if (clientX === null) return;
 
-    const { left, width } = dragRef.current;
+    const { startX, startPercent, width } = dragRef.current;
     const safeWidth = Math.max(width, 1);
-    const minPixel = safeWidth * (MIN_PERCENT / 100);
-    const maxPixel = safeWidth * (MAX_PERCENT / 100);
-    const rawBuilderPixel = Math.min(maxPixel, Math.max(minPixel, clientX - left));
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const nextBuilderPixel = Math.round(rawBuilderPixel * dpr) / dpr;
-
-    if (
-      lastDragBuilderPixelRef.current !== null
-      && Math.abs(lastDragBuilderPixelRef.current - nextBuilderPixel) < (0.5 / dpr)
-    ) return;
-
+    const deltaPercent = ((clientX - startX) / safeWidth) * 100;
+    const rawPercent = clamp(startPercent + deltaPercent);
+    const rawBuilderPixel = safeWidth * (rawPercent / 100);
+    // Preserve one-pixel pointer fidelity. The former 2px quantization made a
+    // healthy frame rate still look like stepping on wide desktop screens.
+    const nextBuilderPixel = Math.round(rawBuilderPixel);
+    if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
     lastDragBuilderPixelRef.current = nextBuilderPixel;
     applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
   }, [applyPercentToLayout]);
@@ -416,12 +416,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: rect.width,
       leftRailEdge: metricsRef.current.leftRailEdge,
     };
-    const startBuilderPixel = rect.width * (percentRef.current / 100);
     dragRef.current = {
       pointerId: event.pointerId,
-      left: rect.left,
+      startX: event.clientX,
+      startPercent: percentRef.current,
       width: rect.width,
-      startBuilderPixel,
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
@@ -433,11 +432,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     layoutRef.current?.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
-
-    // The 16px hit target is wider than the visible 1px line. Resolve the split
-    // from the pointer's absolute workspace coordinate so the line is centered
-    // on the mouse instead of preserving an arbitrary grab offset.
-    schedulePointerUpdate(event.clientX);
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {

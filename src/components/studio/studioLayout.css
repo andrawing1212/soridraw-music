@@ -206,7 +206,7 @@
     z-index: 70;
     top: 58px;
     bottom: var(--soridraw-studio-splitter-bottom, 0px);
-    left: -8px;
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px);
     width: 16px;
     height: auto;
     padding: 0;
@@ -232,8 +232,7 @@
     border-radius: 0 !important;
     box-shadow: none !important;
     filter: none !important;
-    transform: translate3d(var(--soridraw-splitter-live-x, var(--soridraw-studio-splitter-left, 50vw)), 0, 0) !important;
-    will-change: transform;
+    transform: none !important;
     scale: 1 !important;
     translate: 0 0 !important;
   }
@@ -1056,7 +1055,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
-    will-change: transform;
+    will-change: left;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar,
@@ -2508,18 +2507,6 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
   ) {
     transition: none !important;
   }
-
-  /* Width changes must never inherit old page/card easing. These selectors are
-   * deliberately targeted instead of the expensive universal rule that made
-   * 236 slower. */
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] :is(
-    .soridraw-studio-hero,
-    .soridraw-studio-main,
-    .soridraw-studio-builder-pane button,
-    .soridraw-studio-result-pane button
-  ) {
-    transition: none !important;
-  }
 }
 
 /* 239: compact desktop/tablet bridge.
@@ -2541,18 +2528,5 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
     display: none !important;
-  }
-}
-
-
-/* 242: measured live-resize path.
- * The result pane has no result-targeted container queries anywhere in the
- * stylesheet; its responsive composition is owned by data-pane-mode instead.
- * Removing it as an inline-size query container avoids invalidating the entire
- * generated-result subtree whenever the divider changes by one pixel, without
- * changing any visual breakpoint or content flow. */
-@media (min-width: 1100px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane {
-    container-type: normal !important;
   }
 }

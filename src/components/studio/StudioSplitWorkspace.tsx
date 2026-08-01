@@ -18,6 +18,11 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
 const ACTION_CONTROL_PIXEL_STEP = 8;
+const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
+const MIN_ISOLATED_WORKSPACE_HEIGHT = 560;
+const ISOLATED_WORKSPACE_BOTTOM_GAP = 16;
+const DESKTOP_SEARCH_BUTTON_WIDTH = 40;
+const DESKTOP_SEARCH_RIGHT_GAP = 18;
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -75,6 +80,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastActionControlPixelRef = useRef<number | null>(null);
   const externalControlsReadyRef = useRef(false);
+  const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
     floatingActionBar: null,
@@ -116,6 +122,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
     searchButton?.style.removeProperty('right');
+    searchButton?.style.removeProperty('--soridraw-studio-search-x');
     if (floatingActionBar) {
       floatingActionBar.style.removeProperty('left');
       floatingActionBar.style.removeProperty('width');
@@ -134,17 +141,40 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
+    const isIsolatedWorkspace = layoutRef.current?.dataset.scrollIsolated === 'true';
 
-    // The divider and search control remain pixel-accurate on every layout frame.
-    // Search is positioned inside the center/hero width, not against the full
-    // viewport. Using window.innerWidth included the right dashboard rail and
-    // made the icon jump far left while the divider was moving.
-    splitterRef.current?.style.setProperty('left', `${Math.max(0, Math.round(splitterLeft) - 8)}px`);
-    controls.searchButton?.style.setProperty(
-      'right',
-      `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
-      'important',
+    // On wide desktop the divider is owned by the isolated workspace itself,
+    // so its left coordinate must be local. The search control is a sibling in
+    // the hero, therefore it follows the same builder width through a transform
+    // custom property instead of a layout-triggering right offset.
+    splitterRef.current?.style.setProperty(
+      'left',
+      `${Math.max(0, Math.round(isIsolatedWorkspace ? builderWidth : splitterLeft) - 8)}px`,
     );
+    if (controls.searchButton) {
+      if (isIsolatedWorkspace) {
+        const searchX = Math.max(
+          18,
+          roundedBuilderWidth + DESKTOP_SEARCH_RIGHT_GAP - DESKTOP_SEARCH_BUTTON_WIDTH,
+        );
+        controls.searchButton.style.removeProperty('right');
+        controls.searchButton.style.setProperty('--soridraw-studio-search-x', `${searchX}px`);
+      } else {
+        controls.searchButton.style.removeProperty('--soridraw-studio-search-x');
+        controls.searchButton.style.setProperty(
+          'right',
+          `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
+          'important',
+        );
+      }
+    }
+
+    // The floating action bar is a body portal with its own responsive layout.
+    // In the isolated wide-desktop workspace, resizing that portal on every
+    // pointer frame would escape the containment boundary and invalidate the
+    // whole document again. Keep it stable during the drag and synchronize it
+    // exactly once on pointer-up through the existing drag-end event.
+    if (isIsolatedWorkspace) return;
 
     // The portal action controls contain their own responsive layout and were
     // causing a second full reflow for every single divider pixel. Their visual
@@ -218,6 +248,39 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       refreshSplitterFooterBoundary();
     });
   }, [refreshSplitterFooterBoundary]);
+
+  const refreshWorkspaceIsolation = useCallback(() => {
+    const layout = layoutRef.current;
+    if (!layout) return;
+
+    const shouldIsolate = isStudioBlack()
+      && window.innerWidth >= WIDE_DESKTOP_ISOLATION_BREAKPOINT;
+    if (!shouldIsolate) {
+      delete layout.dataset.scrollIsolated;
+      layout.style.removeProperty('--soridraw-studio-isolated-height');
+      layout.style.removeProperty('height');
+      lastIsolatedWorkspaceHeightRef.current = null;
+      return;
+    }
+
+    // Measure only during mount/resize/outer layout refresh, never on pointer
+    // frames. An explicit remaining-viewport height gives CSS containment a
+    // stable size boundary, so changing pane widths cannot bubble a layout root
+    // all the way to #document.
+    const rect = layout.getBoundingClientRect();
+    const visibleTop = Math.max(58, Math.min(window.innerHeight - 1, rect.top));
+    const nextHeight = Math.max(
+      MIN_ISOLATED_WORKSPACE_HEIGHT,
+      Math.floor(window.innerHeight - visibleTop - ISOLATED_WORKSPACE_BOTTOM_GAP),
+    );
+
+    layout.dataset.scrollIsolated = 'true';
+    if (lastIsolatedWorkspaceHeightRef.current !== nextHeight) {
+      lastIsolatedWorkspaceHeightRef.current = nextHeight;
+      layout.style.setProperty('--soridraw-studio-isolated-height', `${nextHeight}px`);
+      layout.style.height = `${nextHeight}px`;
+    }
+  }, [isStudioBlack]);
 
   const resolvePaneMode = useCallback((
     pane: HTMLElement,
@@ -311,6 +374,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       return;
     }
 
+    refreshWorkspaceIsolation();
     const rect = layout.getBoundingClientRect();
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
@@ -324,7 +388,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     refreshSplitterFooterBoundary();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary]);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary, refreshWorkspaceIsolation]);
 
   useLayoutEffect(() => {
     percentRef.current = percent;
@@ -370,6 +434,12 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
         window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
       }
       layoutRef.current?.classList.remove('is-dragging');
+      if (layoutRef.current) {
+        delete layoutRef.current.dataset.scrollIsolated;
+        layoutRef.current.style.removeProperty('--soridraw-studio-isolated-height');
+        layoutRef.current.style.removeProperty('height');
+      }
+      lastIsolatedWorkspaceHeightRef.current = null;
       document.documentElement.classList.remove('soridraw-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');

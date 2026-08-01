@@ -6817,14 +6817,20 @@ const toggleCycleVariantSelection = (
     const anchor = actionButtonsAnchorRef.current;
     const actionBar = actionButtonsBarRef.current;
     const builderPane = anchor?.closest('.soridraw-studio-builder-pane');
+    const handleBuilderPaneScroll = () => {
+      if (isSplitDraggingRef.current) return;
+      scheduleActionBarPlacement();
+    };
 
     if (observer && anchor) observer.observe(anchor);
     if (observer && actionBar) observer.observe(actionBar);
     if (observer && builderPane) observer.observe(builderPane);
+    builderPane?.addEventListener('scroll', handleBuilderPaneScroll, { passive: true });
 
     return () => {
       window.cancelAnimationFrame(frame);
       observer?.disconnect();
+      builderPane?.removeEventListener('scroll', handleBuilderPaneScroll);
     };
   }, [
     isActionButtonsCollapsed,

@@ -2537,3 +2537,73 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
 html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-generate-heartbeat {
   animation-play-state: paused !important;
 }
+
+/* 247: wide-desktop split workspace isolation.
+ * The performance trace showed every one-pixel split update becoming a full
+ * #document layout across roughly 1,700 nodes. On wide PC screens the Studio
+ * workspace now owns an explicit remaining-viewport height and each pane owns
+ * its own vertical scroll. Width changes stay inside this boundary instead of
+ * changing page/footer height on every pointer frame. The 1100-1599 bridge and
+ * mobile layouts remain unchanged. */
+@media (min-width: 1600px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    height: var(--soridraw-studio-isolated-height, 720px) !important;
+    min-height: 560px !important;
+    max-height: var(--soridraw-studio-isolated-height, 720px) !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+    contain: size layout style !important;
+    isolation: isolate;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable;
+    contain: layout style !important;
+    position: relative;
+  }
+
+  /* No result-side @container rules exist. Removing it avoids invalidating the
+   * whole generated-result subtree whenever the divider width changes. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    container-type: normal !important;
+    container-name: none !important;
+  }
+
+  /* The divider belongs to the isolated workspace, so it no longer participates
+   * in viewport/footer geometry during the drag. Its direct inline left value is
+   * local to this container and shares the exact builderWidth used by flex-basis. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-splitter {
+    position: absolute !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    left: calc(var(--soridraw-studio-builder-width, 50%) - 8px);
+    height: 100% !important;
+    max-height: 100% !important;
+    will-change: left;
+  }
+
+  /* Search follows the split with a compositor transform. It remains a hero
+   * sibling, but no longer changes right/left layout on every pointer frame. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
+    left: 0 !important;
+    right: auto !important;
+    transform: translate3d(var(--soridraw-studio-search-x, calc(var(--soridraw-studio-builder-width, 50%) - 22px)), 0, 0) !important;
+    will-change: transform !important;
+  }
+
+  /* Pane scrollbars are independent. Give the builder enough bottom space for
+   * the fixed action row without altering the outer document height. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
+    padding-bottom: 112px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    padding-bottom: 28px !important;
+  }
+}

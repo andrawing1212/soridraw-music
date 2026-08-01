@@ -177,42 +177,48 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   const refreshSplitterFooterBoundary = useCallback(() => {
     if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const setRootPropertyIfChanged = (name: string, value: string | null) => {
+      const currentValue = root.style.getPropertyValue(name);
+      if (value === null) {
+        if (currentValue) root.style.removeProperty(name);
+        return;
+      }
+      if (currentValue !== value) root.style.setProperty(name, value);
+    };
+
     if (!isStudioBlack()) {
-      document.documentElement.style.removeProperty('--soridraw-studio-splitter-bottom');
-      document.documentElement.style.removeProperty('--soridraw-studio-action-footer-offset');
+      setRootPropertyIfChanged('--soridraw-studio-splitter-bottom', null);
+      setRootPropertyIfChanged('--soridraw-studio-action-footer-offset', null);
       return;
     }
 
-    const root = document.documentElement;
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
     if (!footer) {
-      root.style.setProperty('--soridraw-studio-splitter-bottom', '0px');
-      root.style.setProperty('--soridraw-studio-action-footer-offset', '0px');
+      setRootPropertyIfChanged('--soridraw-studio-splitter-bottom', '0px');
+      setRootPropertyIfChanged('--soridraw-studio-action-footer-offset', '0px');
       return;
     }
 
     const footerTop = footer.getBoundingClientRect().top;
     const maximumBottom = Math.max(0, window.innerHeight - 58);
     const footerOverlap = Math.max(0, window.innerHeight - footerTop);
-    if (window.innerWidth >= 1100) {
-      root.style.setProperty(
-        '--soridraw-studio-splitter-bottom',
-        `${Math.min(maximumBottom, footerOverlap)}px`,
-      );
-    } else {
-      root.style.removeProperty('--soridraw-studio-splitter-bottom');
-    }
+    const overlapValue = `${Math.min(maximumBottom, footerOverlap)}px`;
+    setRootPropertyIfChanged(
+      '--soridraw-studio-splitter-bottom',
+      window.innerWidth >= 1100 ? overlapValue : null,
+    );
     // The action controls share the footer boundary with the splitter. Their
     // own CSS bottom gap is added on top, so the footer divider always remains
     // visible and the controls return smoothly when the page scrolls upward.
-    root.style.setProperty(
-      '--soridraw-studio-action-footer-offset',
-      `${Math.min(maximumBottom, footerOverlap)}px`,
-    );
+    setRootPropertyIfChanged('--soridraw-studio-action-footer-offset', overlapValue);
   }, [isStudioBlack]);
 
   const scheduleFooterBoundaryRefresh = useCallback(() => {
-    if (footerFrameRef.current !== null) return;
+    // Horizontal split dragging does not need a footer measurement. Running
+    // this second rAF loop after every ResizeObserver callback wrote inherited
+    // root variables at display refresh rate and forced extra style/paint work.
+    if (draggingRef.current || footerFrameRef.current !== null) return;
     footerFrameRef.current = window.requestAnimationFrame(() => {
       footerFrameRef.current = null;
       refreshSplitterFooterBoundary();
@@ -257,7 +263,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       return nextPercent;
     }
 
-    const root = document.documentElement;
     const { left, width } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
     const builderWidth = safeWidth * (nextPercent / 100);
@@ -271,30 +276,32 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
     if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
-    const nextBuilderMode = resolvePaneMode(
-      builder,
-      builderWidth,
-      BUILDER_MOBILE_BREAKPOINT,
-      modeRef.current.builder,
-    );
-    const nextResultMode = resolvePaneMode(
-      result,
-      resultWidth,
-      RESULT_MOBILE_BREAKPOINT,
-      modeRef.current.result,
-    );
+    // Pane composition changes are expensive because they show/hide and
+    // rearrange many descendants at once. Keep the currently committed
+    // composition while the pointer is moving, then resolve the final mode once
+    // on pointer-up. Widths and ordinary wrapping still update live.
+    if (!draggingRef.current) {
+      const nextBuilderMode = resolvePaneMode(
+        builder,
+        builderWidth,
+        BUILDER_MOBILE_BREAKPOINT,
+        modeRef.current.builder,
+      );
+      const nextResultMode = resolvePaneMode(
+        result,
+        resultWidth,
+        RESULT_MOBILE_BREAKPOINT,
+        modeRef.current.result,
+      );
 
-    if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
-      modeRef.current.builder = nextBuilderMode;
-      builder.dataset.paneMode = nextBuilderMode;
-    }
-    if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
-      root.dataset.soridrawBuilderMode = nextBuilderMode;
-    }
-
-    if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
-      modeRef.current.result = nextResultMode;
-      result.dataset.paneMode = nextResultMode;
+      if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
+        modeRef.current.builder = nextBuilderMode;
+        builder.dataset.paneMode = nextBuilderMode;
+      }
+      if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
+        modeRef.current.result = nextResultMode;
+        result.dataset.paneMode = nextResultMode;
+      }
     }
     const roundedPercent = Math.round(nextPercent);
     if (lastAriaPercentRef.current !== roundedPercent) {
@@ -338,11 +345,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      // ResizeObserver can fire repeatedly while the grid is being dragged.
-      // During an active drag the pointer-frame path already owns measurements,
-      // so avoid a second competing update loop.
+      // During an active drag the pointer-frame path exclusively owns the
+      // horizontal layout. Footer geometry is finalized once after pointer-up.
       if (!draggingRef.current) refreshLayoutMetrics();
-      else scheduleFooterBoundaryRefresh();
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
@@ -376,6 +381,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       builderRef.current?.style.removeProperty('flex-basis');
+      layoutRef.current?.style.removeProperty('height');
       clearExternalMeasurements();
       clearRootMeasurements();
     };
@@ -416,6 +422,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: rect.width,
       leftRailEdge: metricsRef.current.leftRailEdge,
     };
+    // Keep the outer document flow stable while horizontal wrapping changes.
+    // The panes continue to resize live inside this fixed drag-time block size.
+    layoutRef.current?.style.setProperty('height', `${Math.max(1, Math.ceil(rect.height))}px`);
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -460,10 +469,15 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     draggingRef.current = false;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
+    layoutRef.current?.style.removeProperty('height');
     lastDragBuilderPixelRef.current = null;
+
+    // Resolve any desktop/mobile composition boundary once at the final width.
+    applyPercentToLayout(percentRef.current);
     const builderWidth = metricsRef.current.width * (percentRef.current / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
+    scheduleFooterBoundaryRefresh();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
     setPercent(percentRef.current);
   };

@@ -17,9 +17,17 @@ const MAX_PERCENT = 76;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
-const ACTION_CONTROL_PIXEL_STEP = 8;
+const ACTION_CONTROL_PIXEL_STEP = 16;
 
 type PaneMode = 'mobile' | 'desktop';
+type BuilderWidthTier =
+  | 'wide'
+  | 'header-compact'
+  | 'vocal-compact'
+  | 'dense-desktop'
+  | 'mobile'
+  | 'mobile-narrow';
+type SummaryDragTier = 'wide' | 'compact' | 'narrow';
 
 type LayoutMetrics = {
   left: number;
@@ -29,11 +37,29 @@ type LayoutMetrics = {
 
 type ExternalSplitControls = {
   searchButton: HTMLElement | null;
+  searchHost: HTMLElement | null;
+  searchHostLeft: number;
+  searchButtonWidth: number;
   floatingActionBar: HTMLElement | null;
   collapsedActionButton: HTMLElement | null;
 };
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
+
+const resolveBuilderWidthTier = (width: number): BuilderWidthTier => {
+  if (width > 1120) return 'wide';
+  if (width > 1100) return 'header-compact';
+  if (width > 1074) return 'vocal-compact';
+  if (width > BUILDER_MOBILE_BREAKPOINT) return 'dense-desktop';
+  if (width > 700) return 'mobile';
+  return 'mobile-narrow';
+};
+
+const resolveSummaryDragTier = (width: number): SummaryDragTier => {
+  if (width > 430) return 'wide';
+  if (width > 320) return 'compact';
+  return 'narrow';
+};
 
 const readStored = () => {
   if (typeof window === 'undefined') return DEFAULT_PERCENT;
@@ -67,6 +93,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     builder: 'desktop',
     result: 'desktop',
   });
+  const builderWidthTierRef = useRef<BuilderWidthTier>('wide');
+  const frozenSummaryBoxesRef = useRef<HTMLElement[]>([]);
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
@@ -77,6 +105,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const externalControlsReadyRef = useRef(false);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
+    searchHost: null,
+    searchHostLeft: 0,
+    searchButtonWidth: 40,
     floatingActionBar: null,
     collapsedActionButton: null,
   });
@@ -102,6 +133,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const current = externalControlsRef.current;
     if (force || !externalControlsReadyRef.current) {
       current.searchButton = document.querySelector<HTMLElement>('.soridraw-studio-hero-search-button');
+      current.searchHost = current.searchButton?.closest<HTMLElement>('.soridraw-studio-hero') ?? null;
+      const searchHostRect = current.searchHost?.getBoundingClientRect();
+      const searchButtonRect = current.searchButton?.getBoundingClientRect();
+      current.searchHostLeft = searchHostRect?.left ?? metricsRef.current.left;
+      current.searchButtonWidth = searchButtonRect?.width || 40;
       current.floatingActionBar = document.querySelector<HTMLElement>(
         'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
       );
@@ -115,7 +151,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
-    searchButton?.style.removeProperty('right');
+    if (searchButton) {
+      searchButton.style.removeProperty('left');
+      searchButton.style.removeProperty('right');
+      searchButton.style.removeProperty('transform');
+    }
     if (floatingActionBar) {
       floatingActionBar.style.removeProperty('left');
       floatingActionBar.style.removeProperty('width');
@@ -125,9 +165,30 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
       collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
-    splitterRef.current?.style.removeProperty('left');
+    if (splitterRef.current) {
+      splitterRef.current.style.removeProperty('left');
+      splitterRef.current.style.removeProperty('transform');
+    }
     lastActionControlPixelRef.current = null;
     externalControlsReadyRef.current = false;
+  }, []);
+
+  const freezeSummaryContainers = useCallback(() => {
+    const builder = builderRef.current;
+    if (!builder) return;
+    const boxes = Array.from(builder.querySelectorAll<HTMLElement>('.soridraw-menu-summary-box'));
+    const measured = boxes.map((box) => ({ box, width: box.getBoundingClientRect().width }));
+    measured.forEach(({ box, width }) => {
+      box.dataset.dragSummaryTier = resolveSummaryDragTier(width);
+    });
+    frozenSummaryBoxesRef.current = boxes;
+  }, []);
+
+  const clearFrozenSummaryContainers = useCallback(() => {
+    frozenSummaryBoxesRef.current.forEach((box) => {
+      delete box.dataset.dragSummaryTier;
+    });
+    frozenSummaryBoxesRef.current = [];
   }, []);
 
   const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
@@ -135,20 +196,27 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const controls = readExternalControls();
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
 
-    // The divider and search control remain pixel-accurate on every layout frame.
-    // Search is positioned inside the center/hero width, not against the full
-    // viewport. Using window.innerWidth included the right dashboard rail and
-    // made the icon jump far left while the divider was moving.
-    splitterRef.current?.style.setProperty('left', `${Math.max(0, Math.round(splitterLeft) - 8)}px`);
-    controls.searchButton?.style.setProperty(
-      'right',
-      `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
-      'important',
-    );
+    // The divider and search icon move on compositor transforms. Updating
+    // left/right forced an additional layout pass even though these controls
+    // are visually independent from both pane contents.
+    if (splitterRef.current) {
+      splitterRef.current.style.setProperty('left', '0px', 'important');
+      splitterRef.current.style.setProperty(
+        'transform',
+        `translate3d(${Math.max(0, Math.round(splitterLeft) - 8)}px, 0, 0)`,
+        'important',
+      );
+    }
+    if (controls.searchButton) {
+      const searchX = Math.max(0, Math.round(splitterLeft - controls.searchHostLeft - controls.searchButtonWidth - 18));
+      controls.searchButton.style.setProperty('left', '0px', 'important');
+      controls.searchButton.style.setProperty('right', 'auto', 'important');
+      controls.searchButton.style.setProperty('transform', `translate3d(${searchX}px, 0, 0)`, 'important');
+    }
 
-    // The portal action controls contain their own responsive layout and were
-    // causing a second full reflow for every single divider pixel. Their visual
-    // width now follows in tiny 8px steps while the real panes remain live.
+    // Portal action controls contain an independent responsive tree. Keep the
+    // outer width close to the pane in 16px steps, then commit the exact value
+    // once on pointer-up. This avoids reflowing that tree for every pointer pixel.
     const actionControlPixel = Math.round(roundedBuilderWidth / ACTION_CONTROL_PIXEL_STEP)
       * ACTION_CONTROL_PIXEL_STEP;
     if (lastActionControlPixelRef.current === actionControlPixel) return;
@@ -263,6 +331,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const builderWidth = safeWidth * (nextPercent / 100);
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
+    const nextBuilderWidthTier = resolveBuilderWidthTier(builderWidth);
+    if (builderWidthTierRef.current !== nextBuilderWidthTier || builder.dataset.widthTier !== nextBuilderWidthTier) {
+      builderWidthTierRef.current = nextBuilderWidthTier;
+      builder.dataset.widthTier = nextBuilderWidthTier;
+    }
 
     // The split workspace uses flex tracks. Updating only the builder's
     // flex-basis gives the browser one simple width owner instead of rebuilding
@@ -376,10 +449,12 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       builderRef.current?.style.removeProperty('flex-basis');
+      if (builderRef.current) delete builderRef.current.dataset.widthTier;
+      clearFrozenSummaryContainers();
       clearExternalMeasurements();
       clearRootMeasurements();
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
+  }, [clearExternalMeasurements, clearFrozenSummaryContainers, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
@@ -428,6 +503,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+    freezeSummaryContainers();
     draggingRef.current = true;
     layoutRef.current?.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');
@@ -460,6 +536,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     draggingRef.current = false;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
+    clearFrozenSummaryContainers();
     lastDragBuilderPixelRef.current = null;
     const builderWidth = metricsRef.current.width * (percentRef.current / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);

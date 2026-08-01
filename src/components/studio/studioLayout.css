@@ -2538,72 +2538,142 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   animation-play-state: paused !important;
 }
 
-/* 247: wide-desktop split workspace isolation.
- * The performance trace showed every one-pixel split update becoming a full
- * #document layout across roughly 1,700 nodes. On wide PC screens the Studio
- * workspace now owns an explicit remaining-viewport height and each pane owns
- * its own vertical scroll. Width changes stay inside this boundary instead of
- * changing page/footer height on every pointer frame. The 1100-1599 bridge and
- * mobile layouts remain unchanged. */
+/* 248: measured wide-desktop split isolation.
+ * The 247 trace still showed 347/351 drag layouts rooted at #document because
+ * flex-basis kept the two large panes in the outer flex formatting context.
+ * The isolated desktop now uses two absolute scroll panes inside one strict,
+ * fixed-size boundary. Width changes can relayout each pane, but cannot change
+ * the page, hero, rails, footer, or the other pane's track sizing. */
 @media (min-width: 1600px) {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
     height: var(--soridraw-studio-isolated-height, 720px) !important;
     min-height: 560px !important;
     max-height: var(--soridraw-studio-isolated-height, 720px) !important;
-    align-items: stretch !important;
     overflow: hidden !important;
-    contain: size layout style !important;
+    contain: strict !important;
     isolation: isolate;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
-    height: 100% !important;
-    min-height: 0 !important;
-    max-height: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    scrollbar-gutter: stable;
-    contain: layout style !important;
-    position: relative;
-  }
-
-  /* No result-side @container rules exist. Removing it avoids invalidating the
-   * whole generated-result subtree whenever the divider width changes. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
-    container-type: normal !important;
-    container-name: none !important;
-  }
-
-  /* The divider belongs to the isolated workspace, so it no longer participates
-   * in viewport/footer geometry during the drag. Its direct inline left value is
-   * local to this container and shares the exact builderWidth used by flex-basis. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-splitter {
     position: absolute !important;
     top: 0 !important;
     bottom: 0 !important;
-    left: calc(var(--soridraw-studio-builder-width, 50%) - 8px);
-    height: 100% !important;
-    max-height: 100% !important;
-    will-change: left;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    flex: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: auto !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: #626266 transparent !important;
+    contain: layout paint style !important;
   }
 
-  /* Search follows the split with a compositor transform. It remains a hero
-   * sibling, but no longer changes right/left layout on every pointer frame. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
     left: 0 !important;
     right: auto !important;
-    transform: translate3d(var(--soridraw-studio-search-x, calc(var(--soridraw-studio-builder-width, 50%) - 22px)), 0, 0) !important;
-    will-change: transform !important;
-  }
-
-  /* Pane scrollbars are independent. Give the builder enough bottom space for
-   * the fixed action row without altering the outer document height. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
+    width: var(--soridraw-studio-builder-width, 50%) !important;
     padding-bottom: 112px !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    left: var(--soridraw-studio-builder-width, 50%) !important;
+    right: 0 !important;
+    width: auto !important;
     padding-bottom: 28px !important;
+    container-type: normal !important;
+    container-name: none !important;
+  }
+
+  /* Thin neutral pane scrollbars. The previous stable yellow gutter visually
+   * dominated the black UI and also reserved unnecessary horizontal space. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane::-webkit-scrollbar,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane::-webkit-scrollbar {
+    width: 4px !important;
+    height: 4px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane::-webkit-scrollbar-track,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane::-webkit-scrollbar-thumb,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane::-webkit-scrollbar-thumb {
+    min-height: 28px;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: #626266 !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane::-webkit-scrollbar-thumb:hover,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane::-webkit-scrollbar-thumb:hover {
+    background: #77777b !important;
+  }
+
+  /* The divider is a body portal, so pane overflow/containment cannot crop its
+   * top or bottom. Position it with one fixed viewport `left` coordinate only.
+   * Do not mix transform and left: an older high-specificity transform reset
+   * was winning and pinning the hit area at the viewport edge. */
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:active,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:focus,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:focus-visible {
+    display: flex !important;
+    position: fixed !important;
+    z-index: 130 !important;
+    top: 58px !important;
+    bottom: 0 !important;
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px) !important;
+    right: auto !important;
+    width: 16px !important;
+    height: auto !important;
+    max-height: none !important;
+    transform: none !important;
+    will-change: left !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter > span,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:hover > span,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:active > span,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:focus > span,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter:focus-visible > span {
+    height: 100% !important;
+    min-height: 100% !important;
+  }
+
+  /* Search belongs to the builder side of the Studio shell. Keep a single
+   * `right` coordinate and disable positional transitions; the icon itself
+   * still owns its small hover animation. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    left: auto !important;
+    right: calc(100% - var(--soridraw-studio-builder-width, 50%) + 18px) !important;
+    transform: none !important;
+    translate: 0 0 !important;
+    transition: none !important;
+    will-change: auto !important;
   }
 }
+/* 249: final splitter/search coordinate ownership correction. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter > span {
+    display: block !important;
+    width: 1px !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    background: #3f3f43 !important;
+    opacity: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter:hover > span {
+    background: #55555a !important;
+  }
+}
+

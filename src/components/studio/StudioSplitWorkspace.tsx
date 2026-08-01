@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const DEFAULT_PERCENT = 50;
@@ -21,8 +22,6 @@ const ACTION_CONTROL_PIXEL_STEP = 8;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
 const MIN_ISOLATED_WORKSPACE_HEIGHT = 560;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 16;
-const DESKTOP_SEARCH_BUTTON_WIDTH = 40;
-const DESKTOP_SEARCH_RIGHT_GAP = 18;
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -121,7 +120,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
+    searchButton?.style.removeProperty('left');
     searchButton?.style.removeProperty('right');
+    searchButton?.style.removeProperty('transform');
     searchButton?.style.removeProperty('--soridraw-studio-search-x');
     if (floatingActionBar) {
       floatingActionBar.style.removeProperty('left');
@@ -133,6 +134,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
     splitterRef.current?.style.removeProperty('left');
+    splitterRef.current?.style.removeProperty('transform');
     lastActionControlPixelRef.current = null;
     externalControlsReadyRef.current = false;
   }, []);
@@ -143,30 +145,31 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const isIsolatedWorkspace = layoutRef.current?.dataset.scrollIsolated === 'true';
 
-    // On wide desktop the divider is owned by the isolated workspace itself,
-    // so its left coordinate must be local. The search control is a sibling in
-    // the hero, therefore it follows the same builder width through a transform
-    // custom property instead of a layout-triggering right offset.
-    splitterRef.current?.style.setProperty(
-      'left',
-      `${Math.max(0, Math.round(isIsolatedWorkspace ? builderWidth : splitterLeft) - 8)}px`,
-    );
+    // The divider is a fixed body portal. Give it one coordinate owner only:
+    // the exact viewport left position. The previous transform preview lost to
+    // an older higher-specificity `transform: none !important` rule, leaving
+    // the divider at x=0 and making it appear to have vanished.
+    if (splitterRef.current) {
+      splitterRef.current.style.removeProperty('transform');
+      splitterRef.current.style.setProperty(
+        'left',
+        `${Math.max(0, Math.round(splitterLeft) - 8)}px`,
+        'important',
+      );
+    }
     if (controls.searchButton) {
-      if (isIsolatedWorkspace) {
-        const searchX = Math.max(
-          18,
-          roundedBuilderWidth + DESKTOP_SEARCH_RIGHT_GAP - DESKTOP_SEARCH_BUTTON_WIDTH,
-        );
-        controls.searchButton.style.removeProperty('right');
-        controls.searchButton.style.setProperty('--soridraw-studio-search-x', `${searchX}px`);
-      } else {
-        controls.searchButton.style.removeProperty('--soridraw-studio-search-x');
-        controls.searchButton.style.setProperty(
-          'right',
-          `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
-          'important',
-        );
-      }
+      // Search is absolutely positioned inside the same 1500px Studio shell as
+      // the split workspace. Track the builder boundary with `right` only.
+      // Never combine layout positioning with transform/transition: that made
+      // the button ease behind the divider and wander during fast drags.
+      controls.searchButton.style.removeProperty('left');
+      controls.searchButton.style.removeProperty('transform');
+      controls.searchButton.style.removeProperty('--soridraw-studio-search-x');
+      controls.searchButton.style.setProperty(
+        'right',
+        `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
+        'important',
+      );
     }
 
     // The floating action bar is a body portal with its own responsive layout.
@@ -316,22 +319,34 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     if (!layout || !builder || !result || !isStudioBlack()) {
       layout?.style.removeProperty('grid-template-columns');
       builder?.style.removeProperty('flex-basis');
+      builder?.style.removeProperty('width');
+      result?.style.removeProperty('left');
       clearRootMeasurements();
       return nextPercent;
     }
 
-    const root = document.documentElement;
     const { left, width } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
     const builderWidth = safeWidth * (nextPercent / 100);
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
-    // The split workspace uses flex tracks. Updating only the builder's
-    // flex-basis gives the browser one simple width owner instead of rebuilding
-    // both CSS Grid tracks and every dependent container on every drag frame.
+    const isIsolatedWorkspace = layout.dataset.scrollIsolated === 'true';
+
+    // Wide desktop uses two absolutely positioned scroll panes inside a fixed
+    // containment boundary. Changing their local width/left values cannot
+    // resize the outer page or footer. The bridge/tablet layout keeps the
+    // previously verified flex behavior.
     layout.style.removeProperty('grid-template-columns');
-    builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
+    if (isIsolatedWorkspace) {
+      builder.style.removeProperty('flex-basis');
+      builder.style.setProperty('width', `${Math.max(0, builderWidth)}px`, 'important');
+      result.style.setProperty('left', `${Math.max(0, builderWidth)}px`, 'important');
+    } else {
+      builder.style.removeProperty('width');
+      result.style.removeProperty('left');
+      builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
+    }
     if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
     const nextBuilderMode = resolvePaneMode(
@@ -351,10 +366,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
     }
-    if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
-      root.dataset.soridrawBuilderMode = nextBuilderMode;
-    }
-
     if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
@@ -444,6 +455,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       builderRef.current?.style.removeProperty('flex-basis');
+      builderRef.current?.style.removeProperty('width');
+      resultRef.current?.style.removeProperty('left');
       clearExternalMeasurements();
       clearRootMeasurements();
     };
@@ -549,24 +562,30 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     setPercent(nextPercent);
   };
 
+  const splitterControl = (
+    <button
+      ref={splitterRef}
+      type="button"
+      className="soridraw-studio-splitter"
+      aria-label="곡 만들기와 생성 결과 영역 너비 조절"
+      aria-valuemin={MIN_PERCENT}
+      aria-valuemax={MAX_PERCENT}
+      aria-valuenow={Math.round(percent)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishDrag}
+      onPointerCancel={finishDrag}
+      onKeyDown={handleKeyDown}
+    ><span /></button>
+  );
+
   return (
-    <div ref={layoutRef} className="soridraw-studio-split-workspace">
-      <div ref={builderRef} className="soridraw-studio-builder-pane">{panes[0] ?? null}</div>
-      <button
-        ref={splitterRef}
-        type="button"
-        className="soridraw-studio-splitter"
-        aria-label="곡 만들기와 생성 결과 영역 너비 조절"
-        aria-valuemin={MIN_PERCENT}
-        aria-valuemax={MAX_PERCENT}
-        aria-valuenow={Math.round(percent)}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={finishDrag}
-        onPointerCancel={finishDrag}
-        onKeyDown={handleKeyDown}
-      ><span /></button>
-      <div ref={resultRef} className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
-    </div>
+    <>
+      <div ref={layoutRef} className="soridraw-studio-split-workspace">
+        <div ref={builderRef} className="soridraw-studio-builder-pane">{panes[0] ?? null}</div>
+        <div ref={resultRef} className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
+      </div>
+      {typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl}
+    </>
   );
 }

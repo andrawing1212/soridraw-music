@@ -6424,8 +6424,6 @@ function App() {
   const isActionsFloatingRef = useRef(true);
   const actionBarHeightRef = useRef(84);
   const actionBarPlacementRafRef = useRef<number | null>(null);
-  const actionBarNeedsAnchoredSyncRef = useRef(false);
-  const anchoredActionBarDocumentTopRef = useRef<number | null>(null);
   const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
@@ -6587,43 +6585,33 @@ const toggleCycleVariantSelection = (
     }
   }, [isAppliedKeywordsExpanded, result]);
 
-  const measureActionBarHeight = useCallback(() => {
-    const actionBar = actionButtonsBarRef.current;
+  const syncActionBarLayoutMetrics = useCallback(() => {
     const anchor = actionButtonsAnchorRef.current;
-    if (!actionBar) return actionBarHeightRef.current;
-    const nextHeight = Math.ceil(actionBar.offsetHeight || 84);
+    const actionBar = actionButtonsBarRef.current;
+    if (!anchor) return;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const root = document.documentElement;
+    root.style.setProperty('--soridraw-action-fixed-left', `${anchorRect.left}px`);
+    root.style.setProperty('--soridraw-action-fixed-width', `${anchorRect.width}px`);
+
+    const nextHeight = Math.ceil(actionBar?.offsetHeight || actionBarHeightRef.current || 84);
     if (nextHeight > 0) actionBarHeightRef.current = nextHeight;
-    if (anchor) {
-      anchor.style.setProperty('--soridraw-action-anchor-height', `${Math.ceil(actionBarHeightRef.current + 12)}px`);
-    }
-    return actionBarHeightRef.current;
+    const inlinePaddingAlreadyIncluded = actionBar?.dataset.soridrawPlacement === 'inline';
+    anchor.style.setProperty(
+      '--soridraw-action-anchor-height',
+      `${Math.ceil(actionBarHeightRef.current + (inlinePaddingAlreadyIncluded ? 0 : 12))}px`,
+    );
   }, []);
 
-  const syncAnchoredActionBarDocumentTop = useCallback((anchorRect?: DOMRect) => {
+  const updateActionBarPlacement = useCallback(() => {
     const anchor = actionButtonsAnchorRef.current;
-    const actionBar = actionButtonsBarRef.current;
-    if (!anchor || !actionBar) return;
-
-    const rect = anchorRect || anchor.getBoundingClientRect();
-    const documentTop = window.scrollY + rect.top + 12;
-    if (
-      anchoredActionBarDocumentTopRef.current === null
-      || Math.abs(anchoredActionBarDocumentTopRef.current - documentTop) > 0.05
-    ) {
-      anchoredActionBarDocumentTopRef.current = documentTop;
-      actionBar.style.setProperty('--soridraw-action-anchored-document-top', `${documentTop}px`);
-    }
-  }, []);
-
-  const updateActionBarPlacement = useCallback((syncAnchoredPosition = false) => {
-    const anchor = actionButtonsAnchorRef.current;
-    const actionBar = actionButtonsBarRef.current;
-    if (!anchor || !actionBar) return;
+    if (!anchor) return;
 
     const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
     if (!isStudioBlack) {
-      actionBar.style.removeProperty('--soridraw-action-anchored-document-top');
-      anchoredActionBarDocumentTopRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
+      document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       anchor.style.removeProperty('--soridraw-action-anchor-height');
       if (!isActionsFloatingRef.current) {
         isActionsFloatingRef.current = true;
@@ -6633,62 +6621,58 @@ const toggleCycleVariantSelection = (
     }
 
     const rect = anchor.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const actionBarHeight = actionBarHeightRef.current;
     const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
-    const dockLine = viewportHeight - actionBarHeight - viewportBottomGap;
-    const anchoredTop = rect.top + 12;
-    const nextIsFloating = anchoredTop > dockLine + 0.5;
+    const dockLine = window.innerHeight - actionBarHeightRef.current - viewportBottomGap;
+    const naturalPanelTop = rect.top + 12;
     const wasFloating = isActionsFloatingRef.current;
 
-    // The floating row only switches modes at the docking boundary. Once it is
-    // anchored, its top is a document coordinate, so the browser scrolls it with
-    // the page and JavaScript no longer chases the anchor every frame.
-    if (!nextIsFloating && (wasFloating || syncAnchoredPosition)) {
-      syncAnchoredActionBarDocumentTop(rect);
-    }
+    // Only switch between the fixed floating copy and the real inline copy.
+    // The inline copy lives inside the builder flow, so card-height changes and
+    // the footer can never leave it at a stale document coordinate.
+    const nextIsFloating = wasFloating
+      ? naturalPanelTop > dockLine
+      : naturalPanelTop > dockLine + 2;
 
     if (wasFloating !== nextIsFloating) {
       isActionsFloatingRef.current = nextIsFloating;
       setIsActionsFloating(nextIsFloating);
     }
-  }, [syncAnchoredActionBarDocumentTop]);
+  }, []);
 
-  const scheduleActionBarPlacement = useCallback((syncAnchoredPosition = false) => {
-    if (syncAnchoredPosition) actionBarNeedsAnchoredSyncRef.current = true;
+  const scheduleActionBarPlacement = useCallback(() => {
     if (actionBarPlacementRafRef.current !== null) return;
     actionBarPlacementRafRef.current = window.requestAnimationFrame(() => {
       actionBarPlacementRafRef.current = null;
-      const shouldSyncAnchoredPosition = actionBarNeedsAnchoredSyncRef.current;
-      actionBarNeedsAnchoredSyncRef.current = false;
-      updateActionBarPlacement(shouldSyncAnchoredPosition);
+      updateActionBarPlacement();
     });
   }, [updateActionBarPlacement]);
 
   useEffect(() => {
     const handleScroll = () => {
-      scheduleActionBarPlacement(false);
+      scheduleActionBarPlacement();
     };
     const handleLayoutChange = () => {
-      measureActionBarHeight();
-      scheduleActionBarPlacement(true);
+      syncActionBarLayoutMetrics();
+      scheduleActionBarPlacement();
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleLayoutChange);
     window.addEventListener('soridraw-theme-change', handleLayoutChange as EventListener);
     handleLayoutChange();
+
     return () => {
       if (actionBarPlacementRafRef.current !== null) {
         window.cancelAnimationFrame(actionBarPlacementRafRef.current);
         actionBarPlacementRafRef.current = null;
       }
-      actionBarNeedsAnchoredSyncRef.current = false;
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleLayoutChange);
       window.removeEventListener('soridraw-theme-change', handleLayoutChange as EventListener);
+      document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
+      document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
     };
-  }, [measureActionBarHeight, scheduleActionBarPlacement]);
+  }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
   useEffect(() => {
     const updateActionDragMode = () => {
@@ -6787,25 +6771,42 @@ const toggleCycleVariantSelection = (
 
   useLayoutEffect(() => {
     if (isActionButtonsCollapsed || !shouldShowActionButtons) return;
-    measureActionBarHeight();
-    updateActionBarPlacement(true);
+
+    syncActionBarLayoutMetrics();
+    updateActionBarPlacement();
+
     const frame = window.requestAnimationFrame(() => {
-      measureActionBarHeight();
-      updateActionBarPlacement(true);
+      syncActionBarLayoutMetrics();
+      updateActionBarPlacement();
     });
+
     const observer = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {
-          measureActionBarHeight();
-          scheduleActionBarPlacement(true);
+          syncActionBarLayoutMetrics();
+          scheduleActionBarPlacement();
         })
       : null;
-    if (observer && actionButtonsBarRef.current) observer.observe(actionButtonsBarRef.current);
-    if (observer && actionButtonsAnchorRef.current) observer.observe(actionButtonsAnchorRef.current);
+
+    const anchor = actionButtonsAnchorRef.current;
+    const actionBar = actionButtonsBarRef.current;
+    const builderPane = anchor?.closest('.soridraw-studio-builder-pane');
+
+    if (observer && anchor) observer.observe(anchor);
+    if (observer && actionBar) observer.observe(actionBar);
+    if (observer && builderPane) observer.observe(builderPane);
+
     return () => {
       window.cancelAnimationFrame(frame);
       observer?.disconnect();
     };
-  }, [isActionButtonsCollapsed, shouldShowActionButtons, measureActionBarHeight, scheduleActionBarPlacement, updateActionBarPlacement]);
+  }, [
+    isActionButtonsCollapsed,
+    isActionsFloating,
+    shouldShowActionButtons,
+    scheduleActionBarPlacement,
+    syncActionBarLayoutMetrics,
+    updateActionBarPlacement,
+  ]);
 
   const handleCycleKeywordModalStateChange = useCallback((sectionKey: string, isOpen: boolean) => {
     setCycleKeywordPopupOpenMap((prev) => {
@@ -13014,6 +13015,175 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     </>
   );
 
+  const renderExpandedActionBar = (placement: 'floating' | 'inline') => (
+<motion.div
+  ref={actionButtonsBarRef}
+  key={`action-buttons-expanded-bar-${placement}`}
+  initial={false}
+  animate={floatingActionBarVariants.animate}
+  exit={floatingActionBarVariants.exit}
+  transition={smoothActionPanelTransition}
+  data-soridraw-placement={placement}
+  className="soridraw-studio-action-bar soridraw-studio-action-bar--tracking z-[120] flex w-full justify-center pointer-events-none"
+>
+  <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
+    {generationQueueItems.length > 0 && (
+      <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
+          {generationQueueItems.map((item, index) => {
+            const isDelayed = item.status === 'running'
+              && Boolean(item.startedAt)
+              && generationQueueClock - Number(item.startedAt) >= STUDIO_GENERATION_DELAY_NOTICE_MS;
+            const statusTitle = item.status === 'running'
+              ? (isDelayed ? '생성 지연 중 · 계속 진행 중' : '생성 중')
+              : item.status === 'queued'
+                ? '대기 중'
+                : item.status === 'completed'
+                  ? '완료 · 누르면 결과로 이동'
+                  : `생성 실패${item.errorMessage ? ` · ${item.errorMessage}` : ''}`;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => handleGenerationQueueItemClick(item)}
+                className={cn(
+                  "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
+                  item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
+                  isDelayed && "border-amber-300/80 shadow-[0_0_0_3px_rgba(251,191,36,0.10)]",
+                  item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
+                  item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
+                  item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
+                )}
+                title={`${index + 1}. ${item.summary} · ${statusTitle}`}
+                aria-label={`${index + 1}번 생성 작업 ${statusTitle}`}
+              >
+                {item.status === 'running' ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : item.status === 'completed' ? (
+                  <Check className="h-4 w-4" strokeWidth={3} />
+                ) : item.status === 'failed' ? (
+                  <AlertCircle className="h-4 w-4" />
+                ) : (
+                  <span>{index + 1}</span>
+                )}
+                {item.status === 'running' && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
+                    {index + 1}
+                  </span>
+                )}
+                {isDelayed && (
+                  <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.75)]" />
+                )}
+                {item.generationCount > 1 && (
+                  <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#111] px-1 text-[8px] text-white/85">
+                    {item.generationCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    )}
+
+    {selectedGenerationQueueItem && selectedGenerationQueueItem.status !== 'completed' && (
+      <div className="absolute bottom-[calc(100%+60px)] left-0 z-[147] w-[min(340px,calc(100vw-40px))] rounded-2xl border border-white/12 bg-[#1D1D1D]/98 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              {selectedGenerationQueueItem.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-[#FFB400]" />}
+              {selectedGenerationQueueItem.status === 'queued' && <span className="h-2 w-2 rounded-full bg-white/35" />}
+              {selectedGenerationQueueItem.status === 'failed' && <AlertCircle className="h-4 w-4 text-red-300" />}
+              <span className="text-xs font-black text-white">
+                {selectedGenerationQueueItem.status === 'running'
+                  ? (selectedGenerationQueueItem.startedAt && generationQueueClock - selectedGenerationQueueItem.startedAt >= STUDIO_GENERATION_DELAY_NOTICE_MS
+                    ? '생성 지연 중 · 계속 진행 중'
+                    : '생성 중')
+                  : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
+              </span>
+            </div>
+            <p className="mt-1 truncate text-[11px] font-bold text-white/65">{selectedGenerationQueueItem.summary}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedGenerationQueueItemId(null)}
+            className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/5 hover:text-white/75"
+            aria-label="작업 정보 닫기"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="max-h-52 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+          {selectedGenerationQueueItem.details.map((detail) => (
+            <div key={`${selectedGenerationQueueItem.id}-${detail.label}`} className="grid grid-cols-[52px_1fr] gap-2 text-[11px] leading-relaxed">
+              <span className="font-bold text-[#FFB400]/85">{detail.label}</span>
+              <span className="break-words text-white/72">{detail.value}</span>
+            </div>
+          ))}
+        </div>
+        {selectedGenerationQueueItem.status === 'failed' && selectedGenerationQueueItem.errorMessage && (
+          <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/8 px-3 py-2.5">
+            <p className="text-[10px] font-black text-red-300/90">실패 사유</p>
+            <p className="mt-1 break-words text-[11px] leading-relaxed text-red-100/75">
+              {selectedGenerationQueueItem.errorMessage}
+            </p>
+          </div>
+        )}
+        {selectedGenerationQueueItem.status === 'queued' && (
+          <button
+            type="button"
+            onClick={() => cancelQueuedGeneration(selectedGenerationQueueItem.id)}
+            className="mt-3 w-full rounded-xl border border-red-400/25 bg-red-500/10 py-2 text-[11px] font-bold text-red-300 transition-colors hover:bg-red-500/15"
+          >
+            대기 작업 취소
+          </button>
+        )}
+        {selectedGenerationQueueItem.status === 'failed' && (
+          <button
+            type="button"
+            onClick={() => removeGenerationQueueItem(selectedGenerationQueueItem.id)}
+            className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 py-2 text-[11px] font-bold text-white/65 transition-colors hover:bg-white/10"
+          >
+            목록에서 지우기
+          </button>
+        )}
+      </div>
+    )}
+
+    {generationModelNotice && (
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
+        {generationModelNotice}
+      </div>
+    )}
+    <motion.div
+      drag={isActionDragMobile ? "x" : false}
+      dragConstraints={isActionDragMobile ? { left: 0, right: 0 } : undefined}
+      dragElastic={0.16}
+      onDragEnd={(_, info) => {
+        if (!isActionDragMobile) return;
+        if (info.offset.x < -70 || info.velocity.x < -520) {
+          setIsActionButtonsCollapsed(true);
+        }
+      }}
+      style={{ transformOrigin: 'center bottom' }}
+      className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
+    >
+      <motion.button
+              type="button"
+        onClick={() => setIsActionButtonsCollapsed(true)}
+        onMouseEnter={() => {}}
+        onMouseLeave={() => {}}
+        className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
+        aria-label="생성 버튼 접기"
+      >
+        <ArrowLeft className="w-5 h-5" />
+      </motion.button>
+      {actionButtonsContent}
+    </motion.div>
+  </div>
+</motion.div>
+  );
+
   const filteredSoundTextureCycles = useMemo(
     () => SOUND_TEXTURE_CYCLES,
     [],
@@ -13637,7 +13807,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <StudioSplitWorkspace>
                   <StudioBuilderPane>
                     {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-stretch">
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -13853,7 +14023,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="soridraw-studio-secondary-section space-y-5">
-          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-stretch">
+          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -14434,8 +14604,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 ? "soridraw-studio-action-anchor-expanded"
                 : "h-0"
             )}
-            aria-hidden="true"
-          />
+            data-soridraw-docked={!isActionsFloating ? "true" : "false"}
+          >
+            {shouldShowActionButtons
+              && !isActionButtonsCollapsed
+              && !isActionsFloating
+              && renderExpandedActionBar('inline')}
+          </div>
 
           {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence initial={false} mode="wait">
@@ -14479,176 +14654,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </span>
                   </motion.button>
                 </Portal>
-              ) : (
+              ) : isActionsFloating ? (
                 <Portal>
-                  <motion.div
-                    ref={actionButtonsBarRef}
-                    key="action-buttons-expanded-bar"
-                    initial={false}
-                    animate={floatingActionBarVariants.animate}
-                    exit={floatingActionBarVariants.exit}
-                    transition={smoothActionPanelTransition}
-                    data-soridraw-placement={isActionsFloating ? "floating" : "anchored"}
-                    className="soridraw-studio-action-bar soridraw-studio-action-bar--tracking fixed bottom-5 left-0 z-[120] flex w-full justify-center px-5 pointer-events-none will-change-transform md:bottom-7 md:px-8"
-                  >
-                    <div className="soridraw-studio-action-panel relative w-full max-w-4xl pointer-events-auto">
-                      {generationQueueItems.length > 0 && (
-                        <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
-                          <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
-                            {generationQueueItems.map((item, index) => {
-                              const isDelayed = item.status === 'running'
-                                && Boolean(item.startedAt)
-                                && generationQueueClock - Number(item.startedAt) >= STUDIO_GENERATION_DELAY_NOTICE_MS;
-                              const statusTitle = item.status === 'running'
-                                ? (isDelayed ? '생성 지연 중 · 계속 진행 중' : '생성 중')
-                                : item.status === 'queued'
-                                  ? '대기 중'
-                                  : item.status === 'completed'
-                                    ? '완료 · 누르면 결과로 이동'
-                                    : `생성 실패${item.errorMessage ? ` · ${item.errorMessage}` : ''}`;
-                              return (
-                                <button
-                                  key={item.id}
-                                  type="button"
-                                  onClick={() => handleGenerationQueueItemClick(item)}
-                                  className={cn(
-                                    "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
-                                    item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
-                                    isDelayed && "border-amber-300/80 shadow-[0_0_0_3px_rgba(251,191,36,0.10)]",
-                                    item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
-                                    item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
-                                    item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
-                                  )}
-                                  title={`${index + 1}. ${item.summary} · ${statusTitle}`}
-                                  aria-label={`${index + 1}번 생성 작업 ${statusTitle}`}
-                                >
-                                  {item.status === 'running' ? (
-                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                  ) : item.status === 'completed' ? (
-                                    <Check className="h-4 w-4" strokeWidth={3} />
-                                  ) : item.status === 'failed' ? (
-                                    <AlertCircle className="h-4 w-4" />
-                                  ) : (
-                                    <span>{index + 1}</span>
-                                  )}
-                                  {item.status === 'running' && (
-                                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
-                                      {index + 1}
-                                    </span>
-                                  )}
-                                  {isDelayed && (
-                                    <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.75)]" />
-                                  )}
-                                  {item.generationCount > 1 && (
-                                    <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#111] px-1 text-[8px] text-white/85">
-                                      {item.generationCount}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedGenerationQueueItem && selectedGenerationQueueItem.status !== 'completed' && (
-                        <div className="absolute bottom-[calc(100%+60px)] left-0 z-[147] w-[min(340px,calc(100vw-40px))] rounded-2xl border border-white/12 bg-[#1D1D1D]/98 p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-                          <div className="mb-3 flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                {selectedGenerationQueueItem.status === 'running' && <Loader2 className="h-4 w-4 animate-spin text-[#FFB400]" />}
-                                {selectedGenerationQueueItem.status === 'queued' && <span className="h-2 w-2 rounded-full bg-white/35" />}
-                                {selectedGenerationQueueItem.status === 'failed' && <AlertCircle className="h-4 w-4 text-red-300" />}
-                                <span className="text-xs font-black text-white">
-                                  {selectedGenerationQueueItem.status === 'running'
-                                    ? (selectedGenerationQueueItem.startedAt && generationQueueClock - selectedGenerationQueueItem.startedAt >= STUDIO_GENERATION_DELAY_NOTICE_MS
-                                      ? '생성 지연 중 · 계속 진행 중'
-                                      : '생성 중')
-                                    : selectedGenerationQueueItem.status === 'queued' ? '대기 중' : '생성 실패'}
-                                </span>
-                              </div>
-                              <p className="mt-1 truncate text-[11px] font-bold text-white/65">{selectedGenerationQueueItem.summary}</p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedGenerationQueueItemId(null)}
-                              className="rounded-lg p-1 text-white/40 transition-colors hover:bg-white/5 hover:text-white/75"
-                              aria-label="작업 정보 닫기"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                          <div className="max-h-52 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                            {selectedGenerationQueueItem.details.map((detail) => (
-                              <div key={`${selectedGenerationQueueItem.id}-${detail.label}`} className="grid grid-cols-[52px_1fr] gap-2 text-[11px] leading-relaxed">
-                                <span className="font-bold text-[#FFB400]/85">{detail.label}</span>
-                                <span className="break-words text-white/72">{detail.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                          {selectedGenerationQueueItem.status === 'failed' && selectedGenerationQueueItem.errorMessage && (
-                            <div className="mt-3 rounded-xl border border-red-400/20 bg-red-500/8 px-3 py-2.5">
-                              <p className="text-[10px] font-black text-red-300/90">실패 사유</p>
-                              <p className="mt-1 break-words text-[11px] leading-relaxed text-red-100/75">
-                                {selectedGenerationQueueItem.errorMessage}
-                              </p>
-                            </div>
-                          )}
-                          {selectedGenerationQueueItem.status === 'queued' && (
-                            <button
-                              type="button"
-                              onClick={() => cancelQueuedGeneration(selectedGenerationQueueItem.id)}
-                              className="mt-3 w-full rounded-xl border border-red-400/25 bg-red-500/10 py-2 text-[11px] font-bold text-red-300 transition-colors hover:bg-red-500/15"
-                            >
-                              대기 작업 취소
-                            </button>
-                          )}
-                          {selectedGenerationQueueItem.status === 'failed' && (
-                            <button
-                              type="button"
-                              onClick={() => removeGenerationQueueItem(selectedGenerationQueueItem.id)}
-                              className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 py-2 text-[11px] font-bold text-white/65 transition-colors hover:bg-white/10"
-                            >
-                              목록에서 지우기
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {generationModelNotice && (
-                        <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[140] whitespace-nowrap rounded-full border border-brand-orange/30 bg-[var(--card-bg)]/95 px-3 py-1.5 text-xs font-bold text-brand-orange shadow-lg shadow-brand-orange/10 backdrop-blur-md animate-in fade-in slide-in-from-bottom-1 duration-200">
-                          {generationModelNotice}
-                        </div>
-                      )}
-                      <motion.div
-                        drag={isActionDragMobile ? "x" : false}
-                        dragConstraints={isActionDragMobile ? { left: 0, right: 0 } : undefined}
-                        dragElastic={0.16}
-                        onDragEnd={(_, info) => {
-                          if (!isActionDragMobile) return;
-                          if (info.offset.x < -70 || info.velocity.x < -520) {
-                            setIsActionButtonsCollapsed(true);
-                          }
-                        }}
-                        style={{ transformOrigin: 'center bottom' }}
-                        className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
-                      >
-                        <motion.button
-                                type="button"
-                          onClick={() => setIsActionButtonsCollapsed(true)}
-                          onMouseEnter={() => {}}
-                          onMouseLeave={() => {}}
-                          className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
-                          aria-label="생성 버튼 접기"
-                        >
-                          <ArrowLeft className="w-5 h-5" />
-                        </motion.button>
-                        {actionButtonsContent}
-                      </motion.div>
-                    </div>
-                  </motion.div>
+                  {renderExpandedActionBar('floating')}
                 </Portal>
-              )
+              ) : null
             )}
           </AnimatePresence>
 
@@ -17737,15 +17747,28 @@ function CycleSectionComponent({
     ].filter((item) => item.label);
   }, [cycles, selected, pointSelected]);
   const selectedDisplayTextLength = selectedDisplayItems.reduce((sum, item) => sum + item.label.length + (item.mode === 'point' ? 5 : 2), 0);
-  const selectedDisplayTextClass = selectedDisplayTextLength > 120
-    ? 'text-[8.5px] leading-[1.05]'
-    : selectedDisplayTextLength > 92
-      ? 'text-[9.5px] leading-[1.08]'
-      : selectedDisplayTextLength > 68
-        ? 'text-[10.5px] leading-[1.12]'
-        : selectedDisplayTextLength > 44
-          ? 'text-[11.5px] leading-[1.15]'
-          : 'text-sm leading-tight';
+  const selectedSummaryItemCount = selectedDisplayItems.length;
+  const isSelectedSummaryDense = selectedSummaryItemCount >= 4 || selectedDisplayTextLength > 42;
+  const selectedSummaryFontSize = selectedSummaryItemCount >= 7
+    ? 8.75
+    : selectedSummaryItemCount === 6
+      ? 9.25
+      : selectedSummaryItemCount === 5
+        ? 10
+        : selectedSummaryItemCount === 4
+          ? 11
+          : selectedSummaryItemCount === 3
+            ? 12.25
+            : selectedSummaryItemCount === 2
+              ? 13.25
+              : 15;
+  const selectedSummaryLineHeight = selectedSummaryItemCount >= 6
+    ? 1.02
+    : selectedSummaryItemCount >= 4
+      ? 1.045
+      : selectedSummaryItemCount === 3
+        ? 1.08
+        : 1.15;
   const selectedKeywordCount = selected.length + pointSelected.length;
   const totalKeywordCount = cycles.reduce((sum, cycle) => sum + cycle.variants.filter((variant) => variant.kind !== 'separator').length, 0);
   const maxSelectableCount = Number.POSITIVE_INFINITY;
@@ -17758,6 +17781,11 @@ function CycleSectionComponent({
   const isExpandSummaryActive = isExpanded;
   const normalizedCycleSectionTitle = `${titleKo || title}`.trim().toLowerCase();
   const useGenreKeywordButtonFont = ['스타일', 'style', '사운드', 'sound'].includes(normalizedCycleSectionTitle);
+  const emptySummaryLabel = normalizedCycleSectionTitle === '스타일' || normalizedCycleSectionTitle === 'style'
+    ? '스타일을 설정하세요.'
+    : normalizedCycleSectionTitle === '사운드' || normalizedCycleSectionTitle === 'sound' || normalizedCycleSectionTitle.includes('sound')
+      ? '사운드를 설정하세요.'
+      : `${titleKo || title}을 설정하세요.`;
 
   useEffect(() => {
     if (!isDirectInputEditing) setDirectInputDraft(directInput?.selectedText || '');
@@ -17785,7 +17813,7 @@ function CycleSectionComponent({
   };
 
   return (
-    <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-full relative group">
+    <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
         <div className="soridraw-card-header flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -17986,7 +18014,7 @@ function CycleSectionComponent({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
+          "soridraw-expand-summary soridraw-menu-summary-box mt-5 h-[64px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
@@ -18031,16 +18059,24 @@ function CycleSectionComponent({
             </button>
           </div>
         ) : selectedDisplayItems.length > 0 ? (
-          <div className={cn("w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", selectedDisplayTextClass, directInput ? "pr-10" : "")}>
+          <div
+            data-summary-density={isSelectedSummaryDense ? "dense" : "normal"}
+            data-selected-count={selectedSummaryItemCount}
+            style={{
+              '--soridraw-cycle-summary-count-size': `${selectedSummaryFontSize}px`,
+              '--soridraw-cycle-summary-count-line-height': selectedSummaryLineHeight,
+            } as React.CSSProperties}
+            className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--selected soridraw-cycle-summary-text w-full max-h-[42px] overflow-hidden font-black soridraw-selected-summary break-keep flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5", directInput ? "pr-10" : "")}
+          >
             {selectedDisplayItems.map((item, index) => (
-              <span key={`${item.mode}-${item.id}`} className={cn("soridraw-selected-summary", sectionAccent.text)}>
+              <span key={`${item.mode}-${item.id}`} className="soridraw-menu-summary-token">
                 {item.mode === 'point' ? '포인트: ' : ''}{item.label}{index < selectedDisplayItems.length - 1 ? ',' : ''}
               </span>
             ))}
           </div>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", isPointSelectionMode ? "text-[#F0A3C9]/45" : sectionAccent.softText)}>
-            {isPointSelectionMode ? '포인트 사운드를 선택하세요.' : `${titleKo || title} 키워드를 선택하세요.`}
+          <p className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--empty text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", isPointSelectionMode && "text-[#F0A3C9]/55")}>
+            {isPointSelectionMode ? '포인트 사운드를 설정하세요.' : emptySummaryLabel}
           </p>
         )}
         {directInput && !isDirectInputEditing && (
@@ -18528,6 +18564,12 @@ function CategorySectionComponent({
   const [directInputDraft, setDirectInputDraft] = useState('');
   const sectionAccent = getStudioSectionAccent(titleKo || title);
   const isExpandSummaryActive = isExpanded;
+  const normalizedCategoryTitle = `${titleKo || title}`.trim().toLowerCase();
+  const emptySummaryLabel = normalizedCategoryTitle === '분위기' || normalizedCategoryTitle === 'mood'
+    ? '분위기를 설정하세요.'
+    : normalizedCategoryTitle === '주제' || normalizedCategoryTitle === 'theme'
+      ? '주제를 설정하세요.'
+      : `${titleKo || title}를 설정하세요.`;
 
   useStableContentHeight(contentRef, setContentHeight, [items, selected, pinned, uniformKeywordGrid], onHeightChange);
 
@@ -18539,6 +18581,8 @@ function CategorySectionComponent({
     const item = items.find(i => i.id === id);
     return item?.labelKo || item?.label || id;
   };
+  const selectedSummaryText = selected.map((id) => resolveSelectedLabel(id)).join(', ');
+  const isSelectedSummaryDense = selectedSummaryText.length > 34 || selected.length >= 5;
 
   const openDirectInput = () => {
     setDirectInputDraft(directInput?.selectedText || '');
@@ -18561,7 +18605,7 @@ function CategorySectionComponent({
   };
 
   return (
-    <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-full relative group">
+    <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
         <div className="soridraw-card-header flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
@@ -18851,7 +18895,7 @@ function CategorySectionComponent({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
+          "soridraw-expand-summary soridraw-menu-summary-box mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden relative transition-all",
           isExpandSummaryActive
             ? cn(sectionAccent.summaryActive, "border-dashed")
             : cn("border-dashed", sectionAccent.summaryRest),
@@ -18896,12 +18940,15 @@ function CategorySectionComponent({
             </button>
           </div>
         ) : selected.length > 0 ? (
-          <p className={cn("text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.text)}>
-            {selected.map(id => resolveSelectedLabel(id)).join(', ')}
+          <p
+            data-summary-density={isSelectedSummaryDense ? "dense" : "normal"}
+            className="soridraw-menu-summary-text soridraw-menu-summary-text--selected soridraw-category-summary-text text-[15px] font-black soridraw-selected-summary leading-tight w-full text-center overflow-hidden pr-10"
+          >
+            {selectedSummaryText}
           </p>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10", sectionAccent.softText)}>
-            키워드를 선택하여 곡의 {titleKo || title}를 설정하세요.
+          <p className="soridraw-menu-summary-text soridraw-menu-summary-text--empty text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis pr-10">
+            {emptySummaryLabel}
           </p>
         )}
         {directInput && !isDirectInputEditing && (

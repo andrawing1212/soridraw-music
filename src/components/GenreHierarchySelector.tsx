@@ -1176,7 +1176,7 @@ function GenreHierarchySelectorComponent({
           }
         }}
         className={cn(
-          "soridraw-expand-summary mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
+          "soridraw-expand-summary soridraw-menu-summary-box mt-5 h-[64px] rounded-2xl border border-dashed px-5 py-3 flex items-center justify-center text-center overflow-hidden transition-all relative",
           isExpandSummaryActive
             ? cn(genreAccent.summaryActive, "border-dashed")
             : "border-[var(--border-color)]",
@@ -1221,24 +1221,27 @@ function GenreHierarchySelectorComponent({
             </button>
           </div>
         ) : selectedDisplayLabels.length > 0 ? (
-          <div className={cn("soridraw-selected-summary flex min-w-0 w-full items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap text-[15px] font-black leading-tight", directInput ? "pr-10" : "")}>
+          <div
+            data-item-count={selectionRoleEntries.length}
+            className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--selected soridraw-genre-summary-items soridraw-selected-summary flex min-w-0 w-full items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap text-[15px] font-black leading-tight", directInput ? "pr-10" : "")}
+          >
             {selectionRoleEntries.map((item, index) => (
               <React.Fragment key={`${item.role}-${item.label}-${index}`}>
                 {index > 0 && (
-                  <span className="shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
+                  <span className="soridraw-genre-summary-separator shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
                 )}
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
+                <span className="soridraw-genre-summary-item flex min-w-0 items-center gap-1.5">
+                  <span className="soridraw-genre-summary-role shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
                     {item.role}
                   </span>
-                  <span className={cn("min-w-0 truncate", genreAccent.text)}>{item.label}</span>
+                  <span className="soridraw-genre-summary-item-label min-w-0 truncate">{item.label}</span>
                 </span>
               </React.Fragment>
             ))}
           </div>
         ) : (
-          <p className={cn("text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "", genreAccent.softText)}>
-            장르를 선택하세요.
+          <p className={cn("soridraw-menu-summary-text soridraw-menu-summary-text--empty text-[15px] font-medium leading-tight w-full text-center whitespace-nowrap overflow-hidden text-ellipsis", directInput ? "pr-10" : "")}>
+            장르를 설정하세요.
           </p>
         )}
         {directInput && !isDirectInputEditing && (

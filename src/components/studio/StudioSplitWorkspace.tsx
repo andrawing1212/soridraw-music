@@ -17,14 +17,7 @@ const MAX_PERCENT = 76;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
-const WIDE_DESKTOP_PIXEL_STEP = 2;
 const ACTION_CONTROL_PIXEL_STEP = 8;
-
-const RESPONSIVE_TYPOGRAPHY_SELECTOR = [
-  '.soridraw-cycle-summary-text',
-  '.soridraw-category-summary-text',
-  '.soridraw-genre-summary-items',
-].join(',');
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -81,7 +74,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastActionControlPixelRef = useRef<number | null>(null);
-  const frozenTypographyRef = useRef<HTMLElement[]>([]);
   const externalControlsReadyRef = useRef(false);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
@@ -121,32 +113,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     return current;
   }, []);
 
-  const releaseResponsiveTypography = useCallback(() => {
-    for (const element of frozenTypographyRef.current) {
-      delete element.dataset.soridrawDragTypography;
-      element.style.removeProperty('--soridraw-drag-font-size');
-      element.style.removeProperty('--soridraw-drag-line-height');
-    }
-    frozenTypographyRef.current = [];
-  }, []);
-
-  const freezeResponsiveTypography = useCallback(() => {
-    releaseResponsiveTypography();
-    const layout = layoutRef.current;
-    if (!layout) return;
-
-    const elements = Array.from(
-      layout.querySelectorAll<HTMLElement>(RESPONSIVE_TYPOGRAPHY_SELECTOR),
-    );
-    for (const element of elements) {
-      const computed = window.getComputedStyle(element);
-      element.style.setProperty('--soridraw-drag-font-size', computed.fontSize);
-      element.style.setProperty('--soridraw-drag-line-height', computed.lineHeight);
-      element.dataset.soridrawDragTypography = 'frozen';
-    }
-    frozenTypographyRef.current = elements;
-  }, [releaseResponsiveTypography]);
-
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
     searchButton?.style.removeProperty('right');
@@ -170,10 +136,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
 
     // The divider and search control remain pixel-accurate on every layout frame.
+    // Search is positioned inside the center/hero width, not against the full
+    // viewport. Using window.innerWidth included the right dashboard rail and
+    // made the icon jump far left while the divider was moving.
     splitterRef.current?.style.setProperty('left', `${Math.max(0, Math.round(splitterLeft) - 8)}px`);
     controls.searchButton?.style.setProperty(
       'right',
-      `${Math.max(0, Math.round(window.innerWidth - (left + roundedBuilderWidth) + 18))}px`,
+      `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
       'important',
     );
 
@@ -283,6 +252,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
     if (!layout || !builder || !result || !isStudioBlack()) {
       layout?.style.removeProperty('grid-template-columns');
+      builder?.style.removeProperty('flex-basis');
       clearRootMeasurements();
       return nextPercent;
     }
@@ -294,9 +264,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
-    // Directly updating the grid track avoids an inherited custom-property
-    // invalidation across every card and result node on each drag frame.
-    layout.style.gridTemplateColumns = `${Math.max(0, builderWidth)}px minmax(0, 1fr)`;
+    // The split workspace uses flex tracks. Updating only the builder's
+    // flex-basis gives the browser one simple width owner instead of rebuilding
+    // both CSS Grid tracks and every dependent container on every drag frame.
+    layout.style.removeProperty('grid-template-columns');
+    builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
     if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
     const nextBuilderMode = resolvePaneMode(
@@ -401,13 +373,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       }
       layoutRef.current?.classList.remove('is-dragging');
       document.documentElement.classList.remove('soridraw-split-dragging');
-      releaseResponsiveTypography();
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
+      builderRef.current?.style.removeProperty('flex-basis');
       clearExternalMeasurements();
       clearRootMeasurements();
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, releaseResponsiveTypography, scheduleFooterBoundaryRefresh]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
@@ -420,8 +392,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const deltaPercent = ((clientX - startX) / safeWidth) * 100;
     const rawPercent = clamp(startPercent + deltaPercent);
     const rawBuilderPixel = safeWidth * (rawPercent / 100);
-    const pixelStep = window.innerWidth >= 1500 ? WIDE_DESKTOP_PIXEL_STEP : 1;
-    const nextBuilderPixel = Math.round(rawBuilderPixel / pixelStep) * pixelStep;
+    // Preserve one-pixel pointer fidelity. The former 2px quantization made a
+    // healthy frame rate still look like stepping on wide desktop screens.
+    const nextBuilderPixel = Math.round(rawBuilderPixel);
     if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
     lastDragBuilderPixelRef.current = nextBuilderPixel;
     applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
@@ -458,7 +431,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     draggingRef.current = true;
     layoutRef.current?.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');
-    freezeResponsiveTypography();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
   };
 
@@ -488,7 +460,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     draggingRef.current = false;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
-    releaseResponsiveTypography();
     lastDragBuilderPixelRef.current = null;
     const builderWidth = metricsRef.current.width * (percentRef.current / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);

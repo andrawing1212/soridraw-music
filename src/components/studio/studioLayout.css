@@ -2467,29 +2467,37 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
   }
 }
 
-/* 238: wide-PC split drag performance.
- * Keep the real panes responsive, but stop only the known layout-sensitive
- * transitions and freeze summary typography until the pointer is released.
- * This avoids the expensive universal descendant selector used in 236. */
+/* 239: one lightweight width owner for desktop split dragging.
+ * Flex only recalculates the builder basis and the remaining result width;
+ * the previous two-track grid reconstruction was the largest synchronous
+ * layout cost left on wide PC screens. Classic remains untouched. */
 @media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    align-items: flex-start !important;
+    grid-template-columns: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane {
+    flex: 0 0 var(--soridraw-studio-builder-width, 50%);
+    width: auto !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane {
+    flex: 1 1 0 !important;
+    width: auto !important;
+  }
+
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging :is(
     .soridraw-studio-menu-card,
     .soridraw-expand-content,
-    .soridraw-cycle-summary-text,
-    .soridraw-category-summary-text,
-    .soridraw-genre-summary-items,
     .soridraw-tempo-card-header,
     .soridraw-result-title-card,
     .soridraw-result-keywords-card,
     .soridraw-result-prompt-card,
     .soridraw-result-lyrics-card
   ) {
-    transition: none !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging [data-soridraw-drag-typography="frozen"] {
-    font-size: var(--soridraw-drag-font-size) !important;
-    line-height: var(--soridraw-drag-line-height) !important;
     transition: none !important;
   }
 
@@ -2501,3 +2509,24 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
   }
 }
 
+/* 239: compact desktop/tablet bridge.
+ * Between the full three-rail desktop and the existing mobile composition,
+ * the fixed 214px + 292px side rails left too little room for both split panes.
+ * Hide only those auxiliary rails in this bridge range and give the split
+ * workspace the full viewport. The divider remains available and mobile below
+ * 1100px remains exactly as before. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-page-center {
+    grid-column: 1 !important;
+    width: 100% !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    display: none !important;
+  }
+}

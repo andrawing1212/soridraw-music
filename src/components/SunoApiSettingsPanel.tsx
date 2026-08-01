@@ -122,7 +122,7 @@ function ApiKeyModal({
  if (event.target === event.currentTarget) onClose();
  }}>
  <motion.div
- initial={{ opacity: 0, y: 16, scale: 0.98 }}
+ initial={false}
  animate={{ opacity: 1, y: 0, scale: 1 }}
  exit={{ opacity: 0, y: 16, scale: 0.98 }}
  className="w-full max-w-xl overflow-hidden rounded-[28px] bg-[#171717] shadow-2xl"
@@ -541,7 +541,7 @@ export default function SunoApiSettingsPanel({ className = '', showHeader = true
 
  return (
  <motion.section
- initial={{ opacity: 0, y: 10 }}
+ initial={false}
  animate={{ opacity: 1, y: 0 }}
  className={`rounded-[28px] bg-gradient-to-br from-[#24191f]/95 via-[#181824]/95 to-[#11161f]/95 p-5 md:p-6 shadow-2xl backdrop-blur-xl ${className}`}
  >

@@ -13788,7 +13788,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   )}
 
                   <motion.div
-                    initial={{ opacity: 0, y: -10 }}
+                    initial={false}
                     animate={{ opacity: 1, y: 0 }}
                     className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
                   >

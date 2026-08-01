@@ -496,7 +496,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  return (
  <div className="min-h-screen bg-[#09090d] px-4 md:px-6 pt-20 pb-16 text-[var(--text-primary)]">
  <div className="mx-auto w-full max-w-[1500px] space-y-7">
- <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
+ <motion.div initial={false} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-5">
  <div className="flex flex-wrap items-center justify-between gap-3">
  <button
  onClick={() => navigate('/')}
@@ -525,7 +525,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </motion.div>
 
  <div className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
- <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
+ <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
  <div className="flex items-start justify-between gap-4">
  <div className="flex items-center gap-4 min-w-0">
  <img src={user.photoURL || 'https://picsum.photos/seed/soridraw-user/160/160'} alt="profile" referrerPolicy="no-referrer" className="h-16 w-16 rounded-3xl object-cover shadow-xl" />
@@ -609,7 +609,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </div>
  </motion.section>
 
- <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`rounded-3xl bg-gradient-to-br ${plan.accentClass} p-5 md:p-6 shadow-2xl`}>
+ <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className={`rounded-3xl bg-gradient-to-br ${plan.accentClass} p-5 md:p-6 shadow-2xl`}>
  <div className="flex items-start justify-between gap-4">
  <div>
  <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] px-3 py-1.5 text-xs font-black">
@@ -635,7 +635,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
 
 
  <motion.section
- initial={{ opacity: 0, y: 10 }}
+ initial={false}
  animate={{ opacity: 1, y: 0 }}
  transition={{ delay: 0.14 }}
  className="soridraw-theme-surface rounded-3xl border border-white/[0.06] bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
@@ -675,7 +675,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </motion.section>
 
  <motion.section
- initial={{ opacity: 0, y: 10 }}
+ initial={false}
  animate={{ opacity: 1, y: 0 }}
  transition={{ delay: 0.16 }}
  className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
@@ -717,7 +717,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </div>
 
  <motion.section
- initial={{ opacity: 0, y: 10 }}
+ initial={false}
  animate={{ opacity: 1, y: 0 }}
  transition={{ delay: 0.2 }}
  className="h-full rounded-[28px] bg-gradient-to-br from-[#25151f]/95 via-[#181622]/95 to-[#1f1a10]/95 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
@@ -781,7 +781,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  </motion.section>
  </div>
 
- <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
+ <motion.section initial={false} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl">
  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
  <div>
  <h2 className="text-lg font-black">플랜별 기능 상태</h2>

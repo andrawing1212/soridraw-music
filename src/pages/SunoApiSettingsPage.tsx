@@ -11,7 +11,7 @@ export default function SunoApiSettingsPage() {
     <div className="min-h-screen bg-[var(--bg-primary)] px-4 md:px-6 pt-20 pb-16 text-[var(--text-primary)]">
       <div className="mx-auto w-full max-w-[920px] space-y-6">
         <motion.div
-          initial={{ opacity: 0, y: -10 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col gap-4"
         >

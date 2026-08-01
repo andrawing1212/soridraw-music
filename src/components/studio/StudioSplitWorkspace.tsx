@@ -64,6 +64,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
+  const lastDragBuilderPixelRef = useRef<number | null>(null);
 
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
@@ -78,6 +79,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.removeProperty('--soridraw-studio-builder-width');
     root.style.removeProperty('--soridraw-studio-left-rail-edge');
     root.style.removeProperty('--soridraw-studio-splitter-left');
+    splitterRef.current?.style.removeProperty('left');
     root.style.removeProperty('--soridraw-studio-splitter-bottom');
     root.style.removeProperty('--soridraw-studio-action-footer-offset');
   }, []);
@@ -131,11 +133,16 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
    *
    * Pointer movement must not call React setState on every event. Doing so made
    * the entire Studio tree reconcile and then wait for ResizeObserver before the
-   * fixed splitter/action bar caught up. Direct CSS writes keep the grid,
-   * splitter, search button and portal action bar in the same animation frame.
+   * fixed splitter/action bar caught up. During pointer movement only the
+   * workspace grid and divider update; global responsive state is committed
+   * once on release so the rest of the app does not recalculate every frame.
    */
-  const applyPercentToLayout = useCallback((rawPercent: number) => {
+  const applyPercentToLayout = useCallback((
+    rawPercent: number,
+    options: { syncExternal?: boolean } = {},
+  ) => {
     const nextPercent = clamp(rawPercent);
+    const syncExternal = options.syncExternal !== false;
     percentRef.current = nextPercent;
 
     const layout = layoutRef.current;
@@ -151,34 +158,41 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const root = document.documentElement;
     const { left, width, leftRailEdge } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
-    const builderWidth = safeWidth * (nextPercent / 100);
+    const builderWidth = Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
-    const splitterLeft = left + builderWidth;
+    const splitterLeft = Math.round(left + builderWidth);
 
-    layout.style.setProperty('--soridraw-studio-builder-percent', `${nextPercent}%`);
-    root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, left)}px`);
-    root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - (left + builderWidth))}px`);
-    root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
-    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
-    root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, splitterLeft)}px`);
+    // The complex Studio tree only inherits one workspace-local size variable
+    // while the pointer is moving. Root-level responsive variables and pane
+    // modes are committed once on pointer release so the rest of the app does
+    // not recalculate styles on every drag frame.
+    layout.style.setProperty('--soridraw-studio-builder-pixels', `${builderWidth}px`);
+    splitter?.style.setProperty('left', `${Math.max(0, splitterLeft - 8)}px`);
 
-    const nextBuilderMode: PaneMode = builderWidth < BUILDER_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
-    const nextResultMode: PaneMode = resultWidth < RESULT_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
+    if (syncExternal) {
+      root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, left)}px`);
+      root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - (left + builderWidth))}px`);
+      root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
+      root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
 
-    if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
-      modeRef.current.builder = nextBuilderMode;
-      builder.dataset.paneMode = nextBuilderMode;
-    }
-    if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
-      root.dataset.soridrawBuilderMode = nextBuilderMode;
-    }
+      const nextBuilderMode: PaneMode = builderWidth < BUILDER_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
+      const nextResultMode: PaneMode = resultWidth < RESULT_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
 
-    if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
-      modeRef.current.result = nextResultMode;
-      result.dataset.paneMode = nextResultMode;
-    }
-    if (root.dataset.soridrawResultMode !== nextResultMode) {
-      root.dataset.soridrawResultMode = nextResultMode;
+      if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
+        modeRef.current.builder = nextBuilderMode;
+        builder.dataset.paneMode = nextBuilderMode;
+      }
+      if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
+        root.dataset.soridrawBuilderMode = nextBuilderMode;
+      }
+
+      if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
+        modeRef.current.result = nextResultMode;
+        result.dataset.paneMode = nextResultMode;
+      }
+      if (root.dataset.soridrawResultMode !== nextResultMode) {
+        root.dataset.soridrawResultMode = nextResultMode;
+      }
     }
 
     splitter?.setAttribute('aria-valuenow', String(Math.round(nextPercent)));
@@ -260,7 +274,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
     const { startX, startPercent, width } = dragRef.current;
     const deltaPercent = ((clientX - startX) / Math.max(width, 1)) * 100;
-    applyPercentToLayout(startPercent + deltaPercent);
+    const nextPercent = clamp(startPercent + deltaPercent);
+    const nextBuilderPixel = Math.round(Math.max(width, 1) * (nextPercent / 100));
+    if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
+    lastDragBuilderPixelRef.current = nextBuilderPixel;
+    applyPercentToLayout(nextPercent, { syncExternal: false });
   }, [applyPercentToLayout]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
@@ -286,6 +304,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: rect.width,
     };
     pendingClientXRef.current = null;
+    lastDragBuilderPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -307,6 +326,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       dragFrameRef.current = null;
     }
     flushPendingPointer();
+    applyPercentToLayout(percentRef.current, { syncExternal: true });
+    lastDragBuilderPixelRef.current = null;
 
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
     document.body.style.removeProperty('cursor');

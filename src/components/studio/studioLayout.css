@@ -161,7 +161,7 @@
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace {
     display: grid;
-    grid-template-columns: minmax(0, var(--soridraw-studio-builder-pixels, 50%)) minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--soridraw-studio-builder-percent, 50%)) minmax(0, 1fr);
     position: relative;
     width: 100%;
     max-width: 100%;
@@ -1056,21 +1056,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
     will-change: left;
-  }
-
-  /* 234: During split dragging, stop decorative transitions and animated
-   * paint work inside both heavy panes. The divider and one local grid size
-   * remain live; global layout modes are committed once on pointer release. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging :where(*) {
-    transition-duration: 0s !important;
-    transition-delay: 0s !important;
-    animation-play-state: paused !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
-    contain: layout paint style;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar,

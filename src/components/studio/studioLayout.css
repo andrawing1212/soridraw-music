@@ -2451,7 +2451,7 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
 .soridraw-studio-main .soridraw-cycle-summary-text[data-selected-count] {
   font-size: var(--soridraw-cycle-summary-count-size, 15px) !important;
   line-height: var(--soridraw-cycle-summary-count-line-height, 1.15) !important;
-  transition: font-size 140ms ease, line-height 140ms ease !important;
+  transition: none !important;
 }
 
 .soridraw-studio-main .soridraw-cycle-summary-text[data-selected-count] .soridraw-menu-summary-token {
@@ -2464,6 +2464,40 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
 @container soridraw-menu-summary (max-width: 340px) {
   .soridraw-studio-main .soridraw-cycle-summary-text[data-selected-count] {
     font-size: max(8.25px, calc(var(--soridraw-cycle-summary-count-size, 15px) - 0.75px)) !important;
+  }
+}
+
+/* 238: wide-PC split drag performance.
+ * Keep the real panes responsive, but stop only the known layout-sensitive
+ * transitions and freeze summary typography until the pointer is released.
+ * This avoids the expensive universal descendant selector used in 236. */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging :is(
+    .soridraw-studio-menu-card,
+    .soridraw-expand-content,
+    .soridraw-cycle-summary-text,
+    .soridraw-category-summary-text,
+    .soridraw-genre-summary-items,
+    .soridraw-tempo-card-header,
+    .soridraw-result-title-card,
+    .soridraw-result-keywords-card,
+    .soridraw-result-prompt-card,
+    .soridraw-result-lyrics-card
+  ) {
+    transition: none !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging [data-soridraw-drag-typography="frozen"] {
+    font-size: var(--soridraw-drag-font-size) !important;
+    line-height: var(--soridraw-drag-line-height) !important;
+    transition: none !important;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body > :is(
+    .soridraw-studio-action-bar--tracking,
+    .soridraw-studio-action-collapsed
+  ) {
+    transition: none !important;
   }
 }
 

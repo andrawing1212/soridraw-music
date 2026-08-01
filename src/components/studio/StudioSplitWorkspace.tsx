@@ -16,6 +16,15 @@ const MAX_PERCENT = 76;
 // the split line reaches the first "라" at roughly an 820px builder width.
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
+const PANE_MODE_HYSTERESIS = 16;
+const WIDE_DESKTOP_PIXEL_STEP = 2;
+const ACTION_CONTROL_PIXEL_STEP = 8;
+
+const RESPONSIVE_TYPOGRAPHY_SELECTOR = [
+  '.soridraw-cycle-summary-text',
+  '.soridraw-category-summary-text',
+  '.soridraw-genre-summary-items',
+].join(',');
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -71,6 +80,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const footerFrameRef = useRef<number | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
+  const lastActionControlPixelRef = useRef<number | null>(null);
+  const frozenTypographyRef = useRef<HTMLElement[]>([]);
   const externalControlsReadyRef = useRef(false);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
@@ -110,6 +121,32 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     return current;
   }, []);
 
+  const releaseResponsiveTypography = useCallback(() => {
+    for (const element of frozenTypographyRef.current) {
+      delete element.dataset.soridrawDragTypography;
+      element.style.removeProperty('--soridraw-drag-font-size');
+      element.style.removeProperty('--soridraw-drag-line-height');
+    }
+    frozenTypographyRef.current = [];
+  }, []);
+
+  const freezeResponsiveTypography = useCallback(() => {
+    releaseResponsiveTypography();
+    const layout = layoutRef.current;
+    if (!layout) return;
+
+    const elements = Array.from(
+      layout.querySelectorAll<HTMLElement>(RESPONSIVE_TYPOGRAPHY_SELECTOR),
+    );
+    for (const element of elements) {
+      const computed = window.getComputedStyle(element);
+      element.style.setProperty('--soridraw-drag-font-size', computed.fontSize);
+      element.style.setProperty('--soridraw-drag-line-height', computed.lineHeight);
+      element.dataset.soridrawDragTypography = 'frozen';
+    }
+    frozenTypographyRef.current = elements;
+  }, [releaseResponsiveTypography]);
+
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
     searchButton?.style.removeProperty('right');
@@ -123,30 +160,39 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
     splitterRef.current?.style.removeProperty('left');
+    lastActionControlPixelRef.current = null;
     externalControlsReadyRef.current = false;
   }, []);
 
   const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
+    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
 
-    // These controls live outside the split workspace (some are body portals).
-    // Updating them directly keeps drag-time style invalidation local instead of
-    // rewriting html-level CSS variables and restyling the entire application.
-    splitterRef.current?.style.setProperty('left', `${Math.max(0, splitterLeft - 8)}px`);
+    // The divider and search control remain pixel-accurate on every layout frame.
+    splitterRef.current?.style.setProperty('left', `${Math.max(0, Math.round(splitterLeft) - 8)}px`);
     controls.searchButton?.style.setProperty(
       'right',
-      `${Math.max(0, window.innerWidth - (left + builderWidth) + 18)}px`,
+      `${Math.max(0, Math.round(window.innerWidth - (left + roundedBuilderWidth) + 18))}px`,
       'important',
     );
+
+    // The portal action controls contain their own responsive layout and were
+    // causing a second full reflow for every single divider pixel. Their visual
+    // width now follows in tiny 8px steps while the real panes remain live.
+    const actionControlPixel = Math.round(roundedBuilderWidth / ACTION_CONTROL_PIXEL_STEP)
+      * ACTION_CONTROL_PIXEL_STEP;
+    if (lastActionControlPixelRef.current === actionControlPixel) return;
+    lastActionControlPixelRef.current = actionControlPixel;
+
     if (controls.floatingActionBar) {
-      controls.floatingActionBar.style.setProperty('left', `${Math.max(0, left)}px`, 'important');
-      controls.floatingActionBar.style.setProperty('width', `${Math.max(0, builderWidth)}px`, 'important');
-      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
+      controls.floatingActionBar.style.setProperty('left', `${Math.max(0, Math.round(left))}px`, 'important');
+      controls.floatingActionBar.style.setProperty('width', `${actionControlPixel}px`, 'important');
+      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
     }
     if (controls.collapsedActionButton) {
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
     }
   }, [readExternalControls]);
 
@@ -204,6 +250,20 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     });
   }, [refreshSplitterFooterBoundary]);
 
+  const resolvePaneMode = useCallback((
+    pane: HTMLElement,
+    width: number,
+    breakpoint: number,
+    currentMode: PaneMode,
+  ): PaneMode => {
+    const hasCommittedMode = pane.dataset.paneMode === 'mobile' || pane.dataset.paneMode === 'desktop';
+    if (!hasCommittedMode) return width < breakpoint ? 'mobile' : 'desktop';
+    if (currentMode === 'desktop') {
+      return width < breakpoint - PANE_MODE_HYSTERESIS ? 'mobile' : 'desktop';
+    }
+    return width > breakpoint + PANE_MODE_HYSTERESIS ? 'desktop' : 'mobile';
+  }, []);
+
   /**
    * Apply the split directly to DOM/CSS variables.
    *
@@ -239,8 +299,18 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     layout.style.gridTemplateColumns = `${Math.max(0, builderWidth)}px minmax(0, 1fr)`;
     if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
-    const nextBuilderMode: PaneMode = builderWidth < BUILDER_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
-    const nextResultMode: PaneMode = resultWidth < RESULT_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
+    const nextBuilderMode = resolvePaneMode(
+      builder,
+      builderWidth,
+      BUILDER_MOBILE_BREAKPOINT,
+      modeRef.current.builder,
+    );
+    const nextResultMode = resolvePaneMode(
+      result,
+      resultWidth,
+      RESULT_MOBILE_BREAKPOINT,
+      modeRef.current.result,
+    );
 
     if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
       modeRef.current.builder = nextBuilderMode;
@@ -260,7 +330,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, syncExternalMeasurements]);
+  }, [clearRootMeasurements, isStudioBlack, resolvePaneMode, syncExternalMeasurements]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -330,12 +400,14 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
         window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
       }
       layoutRef.current?.classList.remove('is-dragging');
+      document.documentElement.classList.remove('soridraw-split-dragging');
+      releaseResponsiveTypography();
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       clearExternalMeasurements();
       clearRootMeasurements();
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, releaseResponsiveTypography, scheduleFooterBoundaryRefresh]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
@@ -344,12 +416,15 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     if (clientX === null) return;
 
     const { startX, startPercent, width } = dragRef.current;
-    const deltaPercent = ((clientX - startX) / Math.max(width, 1)) * 100;
-    const nextPercent = clamp(startPercent + deltaPercent);
-    const nextBuilderPixel = Math.round(Math.max(width, 1) * (nextPercent / 100));
+    const safeWidth = Math.max(width, 1);
+    const deltaPercent = ((clientX - startX) / safeWidth) * 100;
+    const rawPercent = clamp(startPercent + deltaPercent);
+    const rawBuilderPixel = safeWidth * (rawPercent / 100);
+    const pixelStep = window.innerWidth >= 1500 ? WIDE_DESKTOP_PIXEL_STEP : 1;
+    const nextBuilderPixel = Math.round(rawBuilderPixel / pixelStep) * pixelStep;
     if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
     lastDragBuilderPixelRef.current = nextBuilderPixel;
-    applyPercentToLayout(nextPercent);
+    applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
   }, [applyPercentToLayout]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
@@ -382,6 +457,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     document.body.style.userSelect = 'none';
     draggingRef.current = true;
     layoutRef.current?.classList.add('is-dragging');
+    document.documentElement.classList.add('soridraw-split-dragging');
+    freezeResponsiveTypography();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
   };
 
@@ -410,6 +487,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     document.body.style.removeProperty('user-select');
     draggingRef.current = false;
     layoutRef.current?.classList.remove('is-dragging');
+    document.documentElement.classList.remove('soridraw-split-dragging');
+    releaseResponsiveTypography();
     lastDragBuilderPixelRef.current = null;
     const builderWidth = metricsRef.current.width * (percentRef.current / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);

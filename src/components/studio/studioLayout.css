@@ -414,7 +414,7 @@
   .soridraw-studio-vocal-lyrics-grid
 ) {
   display: grid !important;
-  align-items: start !important;
+  align-items: stretch !important;
   align-content: start !important;
   grid-auto-flow: row !important;
   grid-auto-rows: max-content !important;
@@ -433,23 +433,23 @@
   .soridraw-studio-vocal-lyrics-grid
 ) > * {
   position: relative !important;
-  align-self: start !important;
+  align-self: stretch !important;
   justify-self: stretch !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
-  height: auto !important;
+  height: 100% !important;
   margin: 0 !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-vocal-slot,
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-lyrics-slot {
-  align-self: start !important;
+  align-self: stretch !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
-  height: auto !important;
+  height: 100% !important;
   margin: 0 !important;
 }
 
@@ -458,7 +458,7 @@
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
-  height: auto !important;
+  height: 100% !important;
   margin: 0 !important;
 }
 
@@ -653,6 +653,23 @@
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-card-header-actions {
   flex: 0 0 auto !important;
   min-width: 0 !important;
+}
+
+/* Classic keeps the original vertical breathing room between major rows. */
+:root[data-soridraw-theme="classic"] .soridraw-studio-builder-pane .soridraw-studio-selection-grid {
+  margin-bottom: 20px !important;
+}
+
+:root[data-soridraw-theme="classic"] .soridraw-studio-builder-pane .soridraw-studio-secondary-section {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 20px !important;
+}
+
+:root[data-soridraw-theme="classic"] .soridraw-studio-builder-pane .soridraw-studio-tempo-wrap {
+  margin-top: 0 !important;
+  margin-bottom: 16px !important;
 }
 
 /* Storyboard is a compact launcher card, not a full-height setting card. */
@@ -1620,7 +1637,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 
 /* 209 — Keep the pane in desktop composition longer, then adapt dense controls independently. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-vocal-role-buttons {
-  justify-content: center !important;
+  justify-content: flex-start !important;
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-vocal-member-heading {
@@ -1633,6 +1650,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-vocal-role-buttons {
   width: 100% !important;
   min-width: 0 !important;
+  justify-self: start !important;
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-vocal-role-button {
@@ -1914,24 +1932,39 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   transition: none !important;
 }
 
-/* Expanded Studio row: bottom-floating until the command slot reaches it,
- * then fixed to that measured slot without swapping DOM nodes. */
+/* Expanded Studio row uses two browser-native modes.
+ * Floating: fixed to the viewport bottom.
+ * Anchored: absolute at the reserved document slot, so page scrolling moves it
+ * together with the footer without JavaScript position chasing. */
 html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking {
   --soridraw-action-control-height: 52px;
   --soridraw-action-row-gap: 7px;
   --soridraw-action-row-padding: 7px;
-  position: fixed !important;
-  inset: auto auto auto 0 !important;
-  top: var(--soridraw-action-tracked-top, calc(100dvh - 92px)) !important;
+  --soridraw-action-bottom-gap: 20px;
   right: auto !important;
-  bottom: auto !important;
   left: 0 !important;
   width: 100% !important;
   margin: 0 !important;
   padding-inline: 12px !important;
   justify-content: center !important;
   z-index: 140 !important;
+  translate: none !important;
+  transform: none !important;
   transition: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  position: fixed !important;
+  inset: auto auto var(--soridraw-action-bottom-gap) 0 !important;
+  top: auto !important;
+  bottom: var(--soridraw-action-bottom-gap) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="anchored"] {
+  position: absolute !important;
+  inset: var(--soridraw-action-anchored-document-top, auto) auto auto 0 !important;
+  top: var(--soridraw-action-anchored-document-top, auto) !important;
+  bottom: auto !important;
 }
 
 html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel {
@@ -2024,9 +2057,9 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tra
  * clip-path exposes only the builder-side half. Avoid translate because Motion
  * owns transform while animating the heartbeat scale. */
 html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapsed {
-  --soridraw-collapsed-action-width: clamp(54px, 16vw, 66px);
-  --soridraw-collapsed-action-half-width: clamp(27px, 8vw, 33px);
-  --soridraw-collapsed-action-height: clamp(60px, 18vw, 78px);
+  --soridraw-collapsed-action-width: clamp(60px, 18vw, 74px);
+  --soridraw-collapsed-action-half-width: clamp(30px, 9vw, 37px);
+  --soridraw-collapsed-action-height: clamp(70px, 20vw, 92px);
   position: fixed !important;
   right: auto !important;
   left: calc(
@@ -2050,9 +2083,13 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   z-index: 140 !important;
   justify-content: flex-end !important;
   transition: width 120ms linear, height 120ms linear, background-color 150ms !important;
+  will-change: top !important;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
-html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapsed > span:first-child {
+
+html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapsed > .soridraw-studio-action-collapsed-arrow {
   position: absolute !important;
   inset: 0 0 0 50% !important;
   width: 50% !important;
@@ -2060,11 +2097,6 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-}
-
-html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapsed > span:last-child {
-  right: 4px !important;
-  height: clamp(20px, 38%, 30px) !important;
 }
 
 @container studio-action-panel (min-width: 681px) {
@@ -2088,6 +2120,7 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking {
     --soridraw-action-control-height: clamp(46px, calc(var(--soridraw-studio-builder-width, 920px) * 0.062), 60px);
+    --soridraw-action-bottom-gap: 28px;
     --soridraw-action-row-gap: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0105), 10px);
     --soridraw-action-row-padding: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0085), 9px);
     left: var(--soridraw-studio-builder-left, 214px) !important;
@@ -2130,9 +2163,9 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   }
 
   html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapsed {
-    --soridraw-collapsed-action-width: clamp(44px, calc(var(--soridraw-studio-builder-width, 920px) * 0.08), 68px);
-    --soridraw-collapsed-action-half-width: clamp(22px, calc(var(--soridraw-studio-builder-width, 920px) * 0.04), 34px);
-    --soridraw-collapsed-action-height: clamp(58px, calc(var(--soridraw-studio-builder-width, 920px) * 0.105), 90px);
+    --soridraw-collapsed-action-width: clamp(56px, calc(var(--soridraw-studio-builder-width, 920px) * 0.096), 76px);
+    --soridraw-collapsed-action-half-width: clamp(28px, calc(var(--soridraw-studio-builder-width, 920px) * 0.048), 38px);
+    --soridraw-collapsed-action-height: clamp(72px, calc(var(--soridraw-studio-builder-width, 920px) * 0.13), 100px);
     bottom: calc(
       var(--soridraw-studio-action-footer-offset, 0px)
       + clamp(22px, calc(var(--soridraw-studio-builder-width, 920px) * 0.035), 32px)

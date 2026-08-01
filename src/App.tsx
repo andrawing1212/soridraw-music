@@ -6422,6 +6422,10 @@ function App() {
   const actionButtonsBarRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(true);
   const isActionsFloatingRef = useRef(true);
+  const actionBarHeightRef = useRef(84);
+  const actionBarPlacementRafRef = useRef<number | null>(null);
+  const actionBarNeedsAnchoredSyncRef = useRef(false);
+  const anchoredActionBarDocumentTopRef = useRef<number | null>(null);
   const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   );
@@ -6583,14 +6587,43 @@ const toggleCycleVariantSelection = (
     }
   }, [isAppliedKeywordsExpanded, result]);
 
-  const updateActionBarPlacement = useCallback(() => {
+  const measureActionBarHeight = useCallback(() => {
+    const actionBar = actionButtonsBarRef.current;
+    const anchor = actionButtonsAnchorRef.current;
+    if (!actionBar) return actionBarHeightRef.current;
+    const nextHeight = Math.ceil(actionBar.offsetHeight || 84);
+    if (nextHeight > 0) actionBarHeightRef.current = nextHeight;
+    if (anchor) {
+      anchor.style.setProperty('--soridraw-action-anchor-height', `${Math.ceil(actionBarHeightRef.current + 12)}px`);
+    }
+    return actionBarHeightRef.current;
+  }, []);
+
+  const syncAnchoredActionBarDocumentTop = useCallback((anchorRect?: DOMRect) => {
+    const anchor = actionButtonsAnchorRef.current;
+    const actionBar = actionButtonsBarRef.current;
+    if (!anchor || !actionBar) return;
+
+    const rect = anchorRect || anchor.getBoundingClientRect();
+    const documentTop = window.scrollY + rect.top + 12;
+    if (
+      anchoredActionBarDocumentTopRef.current === null
+      || Math.abs(anchoredActionBarDocumentTopRef.current - documentTop) > 0.05
+    ) {
+      anchoredActionBarDocumentTopRef.current = documentTop;
+      actionBar.style.setProperty('--soridraw-action-anchored-document-top', `${documentTop}px`);
+    }
+  }, []);
+
+  const updateActionBarPlacement = useCallback((syncAnchoredPosition = false) => {
     const anchor = actionButtonsAnchorRef.current;
     const actionBar = actionButtonsBarRef.current;
     if (!anchor || !actionBar) return;
 
     const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
     if (!isStudioBlack) {
-      actionBar.style.removeProperty('--soridraw-action-tracked-top');
+      actionBar.style.removeProperty('--soridraw-action-anchored-document-top');
+      anchoredActionBarDocumentTopRef.current = null;
       anchor.style.removeProperty('--soridraw-action-anchor-height');
       if (!isActionsFloatingRef.current) {
         isActionsFloatingRef.current = true;
@@ -6601,48 +6634,61 @@ const toggleCycleVariantSelection = (
 
     const rect = anchor.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
-    const actionBarHeight = actionBar.getBoundingClientRect().height || 84;
+    const actionBarHeight = actionBarHeightRef.current;
     const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
     const dockLine = viewportHeight - actionBarHeight - viewportBottomGap;
     const anchoredTop = rect.top + 12;
-    const trackedTop = Math.min(anchoredTop, dockLine);
-
-    anchor.style.setProperty('--soridraw-action-anchor-height', `${Math.ceil(actionBarHeight + 12)}px`);
-
-    // Keep one portal-owned Studio row alive for the whole transition. Only its
-    // fixed top coordinate changes: it follows the viewport bottom until the
-    // command/keyword slot reaches it, then follows that slot upward.
-    actionBar.style.setProperty('--soridraw-action-tracked-top', `${trackedTop}px`);
-
     const nextIsFloating = anchoredTop > dockLine + 0.5;
-    if (isActionsFloatingRef.current !== nextIsFloating) {
+    const wasFloating = isActionsFloatingRef.current;
+
+    // The floating row only switches modes at the docking boundary. Once it is
+    // anchored, its top is a document coordinate, so the browser scrolls it with
+    // the page and JavaScript no longer chases the anchor every frame.
+    if (!nextIsFloating && (wasFloating || syncAnchoredPosition)) {
+      syncAnchoredActionBarDocumentTop(rect);
+    }
+
+    if (wasFloating !== nextIsFloating) {
       isActionsFloatingRef.current = nextIsFloating;
       setIsActionsFloating(nextIsFloating);
     }
-  }, []);
+  }, [syncAnchoredActionBarDocumentTop]);
+
+  const scheduleActionBarPlacement = useCallback((syncAnchoredPosition = false) => {
+    if (syncAnchoredPosition) actionBarNeedsAnchoredSyncRef.current = true;
+    if (actionBarPlacementRafRef.current !== null) return;
+    actionBarPlacementRafRef.current = window.requestAnimationFrame(() => {
+      actionBarPlacementRafRef.current = null;
+      const shouldSyncAnchoredPosition = actionBarNeedsAnchoredSyncRef.current;
+      actionBarNeedsAnchoredSyncRef.current = false;
+      updateActionBarPlacement(shouldSyncAnchoredPosition);
+    });
+  }, [updateActionBarPlacement]);
 
   useEffect(() => {
-    let rafId: number | null = null;
-
     const handleScroll = () => {
-      if (rafId !== null) return;
-      rafId = window.requestAnimationFrame(() => {
-        rafId = null;
-        updateActionBarPlacement();
-      });
+      scheduleActionBarPlacement(false);
+    };
+    const handleLayoutChange = () => {
+      measureActionBarHeight();
+      scheduleActionBarPlacement(true);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
-    window.addEventListener('soridraw-theme-change', handleScroll as EventListener);
-    handleScroll();
+    window.addEventListener('resize', handleLayoutChange);
+    window.addEventListener('soridraw-theme-change', handleLayoutChange as EventListener);
+    handleLayoutChange();
     return () => {
-      if (rafId !== null) window.cancelAnimationFrame(rafId);
+      if (actionBarPlacementRafRef.current !== null) {
+        window.cancelAnimationFrame(actionBarPlacementRafRef.current);
+        actionBarPlacementRafRef.current = null;
+      }
+      actionBarNeedsAnchoredSyncRef.current = false;
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-      window.removeEventListener('soridraw-theme-change', handleScroll as EventListener);
+      window.removeEventListener('resize', handleLayoutChange);
+      window.removeEventListener('soridraw-theme-change', handleLayoutChange as EventListener);
     };
-  }, [updateActionBarPlacement]);
+  }, [measureActionBarHeight, scheduleActionBarPlacement]);
 
   useEffect(() => {
     const updateActionDragMode = () => {
@@ -6741,17 +6787,25 @@ const toggleCycleVariantSelection = (
 
   useLayoutEffect(() => {
     if (isActionButtonsCollapsed || !shouldShowActionButtons) return;
-    updateActionBarPlacement();
-    const frame = window.requestAnimationFrame(updateActionBarPlacement);
-    const observer = typeof ResizeObserver !== 'undefined' && actionButtonsBarRef.current
-      ? new ResizeObserver(updateActionBarPlacement)
+    measureActionBarHeight();
+    updateActionBarPlacement(true);
+    const frame = window.requestAnimationFrame(() => {
+      measureActionBarHeight();
+      updateActionBarPlacement(true);
+    });
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          measureActionBarHeight();
+          scheduleActionBarPlacement(true);
+        })
       : null;
     if (observer && actionButtonsBarRef.current) observer.observe(actionButtonsBarRef.current);
+    if (observer && actionButtonsAnchorRef.current) observer.observe(actionButtonsAnchorRef.current);
     return () => {
       window.cancelAnimationFrame(frame);
       observer?.disconnect();
     };
-  }, [isActionButtonsCollapsed, shouldShowActionButtons, updateActionBarPlacement]);
+  }, [isActionButtonsCollapsed, shouldShowActionButtons, measureActionBarHeight, scheduleActionBarPlacement, updateActionBarPlacement]);
 
   const handleCycleKeywordModalStateChange = useCallback((sectionKey: string, isOpen: boolean) => {
     setCycleKeywordPopupOpenMap((prev) => {
@@ -13583,7 +13637,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <StudioSplitWorkspace>
                   <StudioBuilderPane>
                     {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-stretch">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -13799,7 +13853,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
         {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
         <div className="soridraw-studio-secondary-section space-y-5">
-          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
+          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-stretch">
             <CategorySection 
               title="Mood" 
               titleKo="분위기"
@@ -14103,7 +14157,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
             </AnimatePresence>
 
-            <div className="soridraw-studio-vocal-slot min-w-0">
+            <div className="soridraw-studio-vocal-slot min-w-0 h-full">
             <VocalControl 
               maleCount={maleCount}
               femaleCount={femaleCount}
@@ -14153,7 +14207,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               randomActivationKey={vocalRandomActivationKey}
             />
             </div>
-            <div className="soridraw-studio-lyrics-slot min-w-0">
+            <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
             <SongStructureIntegratedControl
               lyricsLength={lyricsLength}
               onLyricsLengthChange={setLyricsLength}
@@ -14420,10 +14474,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     aria-label="생성 버튼 펼치기"
                     className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFB400] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
-                                        <span className="relative flex h-9 w-9 items-center justify-center">
+                    <span className="soridraw-studio-action-collapsed-arrow relative flex h-9 w-9 items-center justify-center">
                       <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
                     </span>
-                    <span className="pointer-events-none absolute right-2 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-[#171717]/70" />
                   </motion.button>
                 </Portal>
               ) : (
@@ -17732,7 +17785,7 @@ function CycleSectionComponent({
   };
 
   return (
-    <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-full relative group">
       <div className="flex-1">
         <div className="soridraw-card-header flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -18508,7 +18561,7 @@ function CategorySectionComponent({
   };
 
   return (
-    <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
+    <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-full relative group">
       <div className="flex-1">
         <div className="soridraw-card-header flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">

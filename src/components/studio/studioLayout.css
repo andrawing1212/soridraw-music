@@ -161,7 +161,7 @@
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace {
     display: grid;
-    grid-template-columns: minmax(0, var(--soridraw-studio-builder-percent, 50%)) minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--soridraw-studio-builder-px, var(--soridraw-studio-builder-percent, 50%))) minmax(0, 1fr);
     position: relative;
     width: 100%;
     max-width: 100%;

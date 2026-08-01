@@ -14716,10 +14716,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </StudioBuilderPane>
                   <StudioResultPane>
                     {/* Result Area */}
-        {user && result && (
-            <div
+        <AnimatePresence>
+          {user && result && (
+            <motion.div
               ref={resultAreaRef}
-              className="soridraw-studio-result-content space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] relative"
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(
+                "soridraw-studio-result-content space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] transition-all duration-300 relative"
+              )}
             >
 
 
@@ -16075,8 +16080,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     )}
                   </div>
               </div>
-            </div>
+            </motion.div>
           )}
+        </AnimatePresence>
                   </StudioResultPane>
                 </StudioSplitWorkspace>
               )}

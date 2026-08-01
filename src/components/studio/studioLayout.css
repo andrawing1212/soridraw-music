@@ -161,7 +161,7 @@
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace {
     display: grid;
-    grid-template-columns: minmax(0, var(--soridraw-studio-builder-px, var(--soridraw-studio-builder-percent, 50%))) minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--soridraw-studio-builder-percent, 50%)) minmax(0, 1fr);
     position: relative;
     width: 100%;
     max-width: 100%;
@@ -177,8 +177,6 @@
     min-width: 0;
     overflow: hidden;
     container-type: inline-size;
-    contain: layout style;
-    isolation: isolate;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane {
@@ -1054,14 +1052,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
     pointer-events: none !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging :is(
-    .soridraw-studio-builder-pane,
-    .soridraw-studio-result-pane
-  ) :where(*) {
-    transition-duration: 0s !important;
-    animation-play-state: paused !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {

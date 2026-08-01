@@ -25,12 +25,6 @@ type LayoutMetrics = {
   leftRailEdge: number;
 };
 
-type ExternalSplitControls = {
-  searchButton: HTMLElement | null;
-  floatingActionBar: HTMLElement | null;
-  collapsedActionButton: HTMLElement | null;
-};
-
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
 
 const readStored = () => {
@@ -71,13 +65,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
-  const lastAriaPercentRef = useRef<number | null>(null);
-  const externalControlsReadyRef = useRef(false);
-  const externalControlsRef = useRef<ExternalSplitControls>({
-    searchButton: null,
-    floatingActionBar: null,
-    collapsedActionButton: null,
-  });
 
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
@@ -94,71 +81,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.removeProperty('--soridraw-studio-splitter-left');
     root.style.removeProperty('--soridraw-studio-splitter-bottom');
     root.style.removeProperty('--soridraw-studio-action-footer-offset');
-  }, []);
-
-  const readExternalControls = useCallback((force = false) => {
-    const current = externalControlsRef.current;
-    if (force || !externalControlsReadyRef.current) {
-      current.searchButton = document.querySelector<HTMLElement>('.soridraw-studio-hero-search-button');
-      current.floatingActionBar = document.querySelector<HTMLElement>(
-        'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
-      );
-      current.collapsedActionButton = document.querySelector<HTMLElement>(
-        'body > .soridraw-studio-action-collapsed',
-      );
-      externalControlsReadyRef.current = true;
-    }
-    return current;
-  }, []);
-
-  const clearExternalMeasurements = useCallback(() => {
-    const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
-    searchButton?.style.removeProperty('right');
-    if (floatingActionBar) {
-      floatingActionBar.style.removeProperty('left');
-      floatingActionBar.style.removeProperty('width');
-      floatingActionBar.style.removeProperty('--soridraw-studio-builder-width');
-    }
-    if (collapsedActionButton) {
-      collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
-      collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
-    }
-    splitterRef.current?.style.removeProperty('left');
-    externalControlsReadyRef.current = false;
-  }, []);
-
-  const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
-    const { left, leftRailEdge } = metricsRef.current;
-    const controls = readExternalControls();
-
-    // These controls live outside the split workspace (some are body portals).
-    // Updating them directly keeps drag-time style invalidation local instead of
-    // rewriting html-level CSS variables and restyling the entire application.
-    splitterRef.current?.style.setProperty('left', `${Math.max(0, splitterLeft - 8)}px`);
-    controls.searchButton?.style.setProperty(
-      'right',
-      `${Math.max(0, window.innerWidth - (left + builderWidth) + 18)}px`,
-      'important',
-    );
-    if (controls.floatingActionBar) {
-      controls.floatingActionBar.style.setProperty('left', `${Math.max(0, left)}px`, 'important');
-      controls.floatingActionBar.style.setProperty('width', `${Math.max(0, builderWidth)}px`, 'important');
-      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
-    }
-    if (controls.collapsedActionButton) {
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
-    }
-  }, [readExternalControls]);
-
-  const commitRootMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
-    const root = document.documentElement;
-    const { left, leftRailEdge } = metricsRef.current;
-    root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, left)}px`);
-    root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - (left + builderWidth))}px`);
-    root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
-    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
-    root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, splitterLeft)}px`);
   }, []);
 
   const refreshSplitterFooterBoundary = useCallback(() => {
@@ -223,22 +145,23 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const splitter = splitterRef.current;
 
     if (!layout || !builder || !result || !isStudioBlack()) {
-      layout?.style.removeProperty('grid-template-columns');
       clearRootMeasurements();
       return nextPercent;
     }
 
     const root = document.documentElement;
-    const { left, width } = metricsRef.current;
+    const { left, width, leftRailEdge } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
     const builderWidth = safeWidth * (nextPercent / 100);
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
-    // Directly updating the grid track avoids an inherited custom-property
-    // invalidation across every card and result node on each drag frame.
-    layout.style.gridTemplateColumns = `${Math.max(0, builderWidth)}px minmax(0, 1fr)`;
-    if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
+    layout.style.setProperty('--soridraw-studio-builder-percent', `${nextPercent}%`);
+    root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, left)}px`);
+    root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - (left + builderWidth))}px`);
+    root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
+    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
+    root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, splitterLeft)}px`);
 
     const nextBuilderMode: PaneMode = builderWidth < BUILDER_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
     const nextResultMode: PaneMode = resultWidth < RESULT_MOBILE_BREAKPOINT ? 'mobile' : 'desktop';
@@ -255,13 +178,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
     }
-    const roundedPercent = Math.round(nextPercent);
-    if (lastAriaPercentRef.current !== roundedPercent) {
-      lastAriaPercentRef.current = roundedPercent;
-      splitter?.setAttribute('aria-valuenow', String(roundedPercent));
+    if (root.dataset.soridrawResultMode !== nextResultMode) {
+      root.dataset.soridrawResultMode = nextResultMode;
     }
+
+    splitter?.setAttribute('aria-valuenow', String(Math.round(nextPercent)));
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, syncExternalMeasurements]);
+  }, [clearRootMeasurements, isStudioBlack]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -278,12 +201,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: Math.max(rect.width, 1),
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
-    const appliedPercent = applyPercentToLayout(percentRef.current);
-    const builderWidth = metricsRef.current.width * (appliedPercent / 100);
-    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
-    clearExternalMeasurements();
+    applyPercentToLayout(percentRef.current);
     refreshSplitterFooterBoundary();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary]);
+  }, [applyPercentToLayout, clearRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary]);
 
   useLayoutEffect(() => {
     percentRef.current = percent;
@@ -329,10 +249,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       draggingRef.current = false;
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
-      clearExternalMeasurements();
       clearRootMeasurements();
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
+  }, [clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
@@ -373,7 +292,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
-    readExternalControls(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -383,12 +301,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== dragRef.current.pointerId) return;
-    const nativeEvent = event.nativeEvent as PointerEvent;
-    const coalesced = typeof nativeEvent.getCoalescedEvents === 'function'
-      ? nativeEvent.getCoalescedEvents()
-      : [];
-    const latestEvent = coalesced.length > 0 ? coalesced[coalesced.length - 1] : nativeEvent;
-    schedulePointerUpdate(latestEvent.clientX);
+    schedulePointerUpdate(event.clientX);
   };
 
   const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -406,9 +319,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     document.body.style.removeProperty('user-select');
     draggingRef.current = false;
     lastDragBuilderPixelRef.current = null;
-    const builderWidth = metricsRef.current.width * (percentRef.current / 100);
-    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
-    clearExternalMeasurements();
     setDragging(false);
     setPercent(percentRef.current);
   };
@@ -419,9 +329,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const nextPercent = applyPercentToLayout(
       percentRef.current + (event.key === 'ArrowRight' ? 2 : -2),
     );
-    const builderWidth = metricsRef.current.width * (nextPercent / 100);
-    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
-    clearExternalMeasurements();
     setPercent(nextPercent);
   };
 

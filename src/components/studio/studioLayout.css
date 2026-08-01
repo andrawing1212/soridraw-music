@@ -206,7 +206,7 @@
     z-index: 70;
     top: 58px;
     bottom: var(--soridraw-studio-splitter-bottom, 0px);
-    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px);
+    left: -8px;
     width: 16px;
     height: auto;
     padding: 0;
@@ -232,7 +232,7 @@
     border-radius: 0 !important;
     box-shadow: none !important;
     filter: none !important;
-    transform: translate3d(var(--soridraw-split-preview-x, 0px), 0, 0) !important;
+    transform: translate3d(var(--soridraw-splitter-live-x, var(--soridraw-studio-splitter-left, 50vw)), 0, 0) !important;
     will-change: transform;
     scale: 1 !important;
     translate: 0 0 !important;
@@ -1056,7 +1056,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
-    will-change: left;
+    will-change: transform;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar,
@@ -2505,6 +2505,18 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
   html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body > :is(
     .soridraw-studio-action-bar--tracking,
     .soridraw-studio-action-collapsed
+  ) {
+    transition: none !important;
+  }
+
+  /* Width changes must never inherit old page/card easing. These selectors are
+   * deliberately targeted instead of the expensive universal rule that made
+   * 236 slower. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] :is(
+    .soridraw-studio-hero,
+    .soridraw-studio-main,
+    .soridraw-studio-builder-pane button,
+    .soridraw-studio-result-pane button
   ) {
     transition: none !important;
   }

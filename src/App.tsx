@@ -17733,7 +17733,17 @@ function CycleSectionComponent({
   const [isDirectInputEditing, setIsDirectInputEditing] = useState(false);
   const [directInputDraft, setDirectInputDraft] = useState(directInput?.selectedText || '');
 
-  useStableContentHeight(contentRef, setContentHeight, [cycles, selected, pointSelected, isPointSelectionMode, directInput?.selectedText], onHeightChange);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [cycles, selected, pointSelected, isPointSelectionMode, directInput?.selectedText, isExpanded],
+    onHeightChange,
+  );
+
+  // A collapsed 76px card exposes only one two-column row. Keeping every
+  // hidden cycle mounted forced the browser to reflow all offscreen buttons for
+  // every divider pixel. Mount the full list only while the card is expanded.
+  const renderedCycles = isExpanded ? cycles : cycles.slice(0, 2);
 
   const [keywordPopupCycleId, setKeywordPopupCycleId] = useState<string | null>(null);
 
@@ -17914,7 +17924,7 @@ function CycleSectionComponent({
           }}
         >
           <div ref={contentRef} className="grid grid-cols-2 gap-2.5 md:gap-3">
-            {cycles.map((cycle) => {
+            {renderedCycles.map((cycle) => {
               const selectedVariants = cycle.variants.filter((variant) => variant.kind !== 'separator' && selected.includes(variant.id));
               const pointSelectedVariants = cycle.variants.filter((variant) => variant.kind !== 'separator' && pointSelected.includes(variant.id));
               const activeModeVariants = isPointSelectionMode ? pointSelectedVariants : selectedVariants;
@@ -18592,7 +18602,17 @@ function CategorySectionComponent({
       ? '주제를 설정하세요.'
       : `${titleKo || title}를 설정하세요.`;
 
-  useStableContentHeight(contentRef, setContentHeight, [items, selected, pinned, uniformKeywordGrid], onHeightChange);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [items, selected, pinned, uniformKeywordGrid, isExpanded],
+    onHeightChange,
+  );
+
+  // Mood and Theme contain 60+ buttons each, but the collapsed 96px viewport
+  // shows only the first two desktop rows (14 items). Do not keep the invisible
+  // remainder in layout until the user expands the card.
+  const renderedItems = isExpanded || !uniformKeywordGrid ? items : items.slice(0, 14);
 
   const resolveSelectedLabel = (id: string) => {
     const customMoodText = getCustomKeywordText(id, CUSTOM_MOOD_PREFIX);
@@ -18747,7 +18767,7 @@ function CategorySectionComponent({
                 : "flex flex-wrap gap-2"
             )}
           >
-            {items.map((item) => {
+            {renderedItems.map((item) => {
             const isPinned = pinned.includes(item.id);
             const isSelected = selected.includes(item.id);
             const isKpop = item.id === 'kpop';

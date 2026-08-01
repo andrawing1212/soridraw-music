@@ -2531,66 +2531,9 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
   }
 }
 
-/* 245: measured split-drag optimization.
- * Chrome Performance trace showed the split itself laying out about 48 times/s,
- * while the box-shadow heartbeat forced style/paint/commit work about 139
- * times/s. Pause that paint-only animation during a drag so pointer frames own
- * the main thread. The visual state is restored immediately on pointer-up. */
+/* 246: pause only the measured continuous generate-heartbeat paint while the
+ * divider is held. No card shadows, pane composition, workspace height, or
+ * responsive layout are frozen, so both panes continue to update live. */
 html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-generate-heartbeat {
   animation-play-state: paused !important;
-}
-
-@media (min-width: 1100px) {
-  /* The result pane has no matching container-query consumers. Keeping it as an
-   * inline-size query container invalidated its whole generated-result subtree
-   * for every divider pixel. Builder containment remains because its responsive
-   * cards genuinely use it. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane {
-    container-type: normal !important;
-  }
-
-  /* Keep each large pane as a local layout/paint boundary only while resizing.
-   * StudioSplitWorkspace fixes its current block size in JS for the drag, so
-   * line wrapping inside either pane cannot bubble a full-document relayout. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
-    contain: layout paint;
-  }
-
-  /* Static card shadows dominate repaint cost while widths are changing. Their
-   * surfaces remain unchanged; only the nonessential shadow is omitted for the
-   * few seconds the pointer is held. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging :is(
-    .soridraw-studio-shadow-surface,
-    .soridraw-studio-result-content,
-    .soridraw-result-title-card,
-    .soridraw-result-keywords-card,
-    .soridraw-result-prompt-card,
-    .soridraw-result-lyrics-card,
-    .soridraw-result-music-api-card
-  ) {
-    box-shadow: none !important;
-  }
-
-  /* `will-change:left/width/right` cannot be composited and created needless
-   * layers. Those properties are already synchronized by the single drag rAF. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
-    will-change: auto !important;
-  }
-}
-
-/* Legacy translateZ(0) promotion put every expandable card and its clipped
- * content on separate layers. The trace recorded more than 19,000 layer updates
- * in eight seconds. These elements animate height, which the compositor cannot
- * accelerate, so the promotion adds layerization cost without avoiding layout. */
-:root[data-soridraw-theme="studio-black"] .studio-tone-down .soridraw-expand-card,
-:root[data-soridraw-theme="studio-black"] .studio-tone-down .soridraw-expand-content {
-  transform: none !important;
-  backface-visibility: visible !important;
-}
-
-:root[data-soridraw-theme="studio-black"] .studio-tone-down .soridraw-expand-content {
-  will-change: auto !important;
 }

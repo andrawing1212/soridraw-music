@@ -910,18 +910,6 @@ const getAppliedSelectionKeywordChipClass = (typeOrKey: string) => {
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
 };
 
-const getAppliedSelectionKeywordTextClass = (typeOrKey: string) => {
-  const normalized = String(typeOrKey || '').toLowerCase();
-
-  if (normalized === 'genre' || normalized === 'subgenre' || normalized.includes('genre')) return 'text-[#FFD36A]';
-  if (normalized === 'mood' || normalized.includes('mood') || normalized.includes('atmosphere')) return 'text-[#FFB4C4]';
-  if (normalized === 'theme' || normalized.includes('theme') || normalized.includes('topic')) return 'text-[#A9E7FF]';
-  if (normalized === 'style' || normalized.includes('style')) return 'text-[#D9CBFF]';
-  if (normalized === 'sound' || normalized === 'point-sound' || normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) return 'text-[#BDF6C4]';
-  if (normalized === 'mix' || normalized === 'rap') return 'text-[#FFD36A]';
-  return 'text-[var(--text-secondary)]';
-};
-
 
 function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
   // Keep expansion purely local. Auto-scroll during height transitions can fight
@@ -12291,29 +12279,6 @@ ${normalizePromptForDisplay(result.prompt)}
       label: resolveGenreChipLabel(id),
     }));
 
-  type LiveSelectedKeywordType = 'genre' | 'mood' | 'theme' | 'style' | 'sound' | 'point-sound' | 'mix' | 'rap';
-  type LiveSelectedKeywordItem = { id: string; type: LiveSelectedKeywordType; label: string };
-
-  const liveSelectedKeywordItems: LiveSelectedKeywordItem[] = [
-    ...displayGenreKeywords,
-    ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
-    ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
-    ...filterSelectableIds(selectedStyles).flatMap((id) => {
-      const label = getStyleVariantLabelById(id);
-      return label ? [{ id, type: 'style' as const, label }] : [];
-    }),
-    ...filterSelectableIds(selectedInstrumentSounds).flatMap((id) => {
-      const label = getSoundVariantLabelById(id);
-      return label ? [{ id, type: 'sound' as const, label }] : [];
-    }),
-    ...filterSelectableIds(selectedPointSounds).flatMap((id) => {
-      const label = getSoundVariantLabelById(id);
-      return label ? [{ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${label}` }] : [];
-    }),
-    ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
-    ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
-  ];
-
   const removeAppliedGenreKeyword = (id: string) => {
     setIsGenreRandomized(false);
     setSelectedGenres((prev) => prev.filter((value) => value !== id));
@@ -12328,26 +12293,6 @@ ${normalizePromptForDisplay(result.prompt)}
     } else if (id === 'semi-trot') {
       const moodsToRemove = ['bright', 'hopeful', 'warm', 'tense'];
       setSelectedMoods((prev) => prev.filter((moodId) => !moodsToRemove.includes(moodId)));
-    }
-  };
-
-  const removeLiveSelectedKeyword = (item: LiveSelectedKeywordItem) => {
-    if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
-    else if (item.type === 'mood') toggleSelection(item.id, 'mood');
-    else if (item.type === 'theme') toggleSelection(item.id, 'theme');
-    else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
-    else if (item.type === 'sound') {
-      if (!clearRecommendedSoundCombo(item.id)) {
-        setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
-      }
-    } else if (item.type === 'point-sound') {
-      const pointSoundId = item.id.replace(/^point-/, '');
-      setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
-    } else if (item.type === 'mix') {
-      setIsKoreanEnglishMix(false);
-      setEnglishMixRatio(10);
-    } else if (item.type === 'rap') {
-      setRapEnabled(false);
     }
   };
 
@@ -14751,7 +14696,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           </AnimatePresence>
 
           {/* Applied Keywords Display */}
-          <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
+          <div className="relative mt-2 md:mt-3">
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
               {[
                 ...displayGenreKeywords,
@@ -14803,30 +14748,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </div>
                   </StudioBuilderPane>
                   <StudioResultPane>
-                    {liveSelectedKeywordItems.length > 0 && (
-                      <Portal>
-                        <div className="soridraw-live-keywords-fixed" role="region" aria-label="현재 선택된 키워드">
-                          <div className="soridraw-live-keywords-row">
-                            {liveSelectedKeywordItems.map((item) => (
-                              <span
-                                key={`live-${item.type}-${item.id}`}
-                                className={cn('soridraw-live-keyword', getAppliedSelectionKeywordTextClass(item.type))}
-                              >
-                                <span>{item.label}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => removeLiveSelectedKeyword(item)}
-                                  aria-label={`${item.label} 선택 해제`}
-                                  className="soridraw-live-keyword-remove"
-                                >
-                                  <X aria-hidden="true" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </Portal>
-                    )}
                     {/* Result Area */}
         {user && result && (
             <div
@@ -15958,20 +15879,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 {/* Expand Button at Bottom Center */}
                 <button
-                  type="button"
                   data-expanded={isAppliedKeywordsExpanded ? 'true' : 'false'}
                   aria-pressed={isAppliedKeywordsExpanded}
-                  aria-label={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
-                  title={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   onClick={(event) => {
-                    const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
-                    if (isStudioBlack) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setIsAppliedKeywordsExpanded((prev) => !prev);
-                      return;
-                    }
-
                     setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
                     keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
                   }}
@@ -15982,11 +15892,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? (
-                    <ChevronUp aria-hidden="true" className="soridraw-result-keywords-chevron w-[18px] h-[18px]" />
-                  ) : (
-                    <ChevronDown aria-hidden="true" className="soridraw-result-keywords-chevron w-[18px] h-[18px]" />
-                  )}
+                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
                 </button>
               </div>
 

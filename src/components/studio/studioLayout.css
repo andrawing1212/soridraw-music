@@ -2901,297 +2901,74 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 }
 
 
-/* 279: restore the pre-measurement title-card UI and align the two top cards
- * without squeezing or re-spacing the result title.  StudioSplitWorkspace now
- * leaves the title card untouched and gives only the collapsed Genre card the
- * title card's measured minimum height.  Remove the result column's invisible
- * top padding so both cards begin on the same horizontal line. */
+/* 263: subtle resting summary border, borderless title actions, and exact
+ * left/right top-card height synchronization in Studio Black. The Genre card
+ * is measured by StudioSplitWorkspace while collapsed; the generated title
+ * card inherits that real height instead of relying on the old 288px guess. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary {
+  border-color: rgba(130, 108, 68, 0.38) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary:hover,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary:focus-visible {
+  border-color: #8f7548 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
+) {
+  border-width: 0 !important;
+  border-style: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-card--genre-height {
+  box-sizing: border-box !important;
+  height: var(--soridraw-studio-top-card-height, 248px) !important;
+  min-height: var(--soridraw-studio-top-card-height, 248px) !important;
+  max-height: var(--soridraw-studio-top-card-height, 248px) !important;
+  padding: 16px 20px !important;
+  transition-property: background-color, border-color, color, box-shadow !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-card--genre-height:focus-within {
+  height: auto !important;
+  min-height: var(--soridraw-studio-top-card-height, 248px) !important;
+  max-height: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-body {
+  gap: 5px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-heading-area,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-display {
+  min-height: 82px !important;
+  margin-top: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-lines {
+  min-height: 56px !important;
+  padding-top: 3px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-footer-controls {
+  margin-top: 0 !important;
+  gap: 8px !important;
+}
+
+/* 264: The result column still carried the legacy top-divider spacing even
+ * after the brown divider itself was hidden.  That invisible md:pt-5 kept the
+ * generated-song title card 20px lower than the collapsed Genre row.  Restore
+ * a single subtle divider without consuming layout height, and remove only the
+ * stale top padding so both top cards share the same vertical start. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-result-pane[data-pane-mode="desktop"]
-.soridraw-studio-result-content,
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-pane[data-pane-mode="mobile"]
 .soridraw-studio-result-content {
   padding-top: 0 !important;
   margin-top: -1px !important;
   border-top: 1px solid rgba(143, 117, 72, 0.34) !important;
   box-shadow: none !important;
-}
-
-/* 279: selected keywords remain in the existing fixed hero/header band.  This
- * body portal consumes no result-flow height, so the restored title-card UI and
- * every card below it keep their original positions. */
-:root:not([data-soridraw-theme="studio-black"]) .soridraw-live-keywords-fixed {
-  display: none !important;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-builder-live-keywords {
-  display: none !important;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-fixed {
-  position: fixed !important;
-  z-index: 64 !important;
-  top: 58px !important;
-  left: var(--soridraw-studio-result-left, 50vw) !important;
-  right: var(--soridraw-studio-result-right, 0px) !important;
-  height: 96px !important;
-  min-height: 96px !important;
-  max-height: 96px !important;
-  margin: 0 !important;
-  padding: 4px 18px 6px 0 !important;
-  display: flex !important;
-  align-items: flex-end !important;
-  justify-content: center !important;
-  overflow: hidden !important;
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  pointer-events: none !important;
-  container-type: inline-size;
-  container-name: soridraw-live-keywords;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  align-content: flex-end;
-  justify-content: center;
-  gap: 3px 10px;
-  width: 100%;
-  min-width: 0;
-  max-height: 84px;
-  overflow: hidden;
-  pointer-events: auto;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keyword {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 100%;
-  padding: 1px 0;
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keyword-remove {
-  display: inline-flex;
-  width: 17px;
-  height: 17px;
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  color: currentColor !important;
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  opacity: 0.58;
-  transition: opacity 120ms ease, transform 120ms ease;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keyword-remove:hover,
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keyword-remove:focus-visible {
-  background: transparent !important;
-  opacity: 1;
-  transform: scale(1.08);
-  outline: none !important;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-live-keyword-remove svg {
-  width: 14px;
-  height: 14px;
-  stroke-width: 2.25;
-}
-
-@container soridraw-live-keywords (max-width: 900px) {
-  .soridraw-live-keywords-row {
-    gap: 2px 8px;
-    max-height: 86px;
-  }
-
-  .soridraw-live-keyword {
-    gap: 2px;
-    font-size: 11.25px;
-    line-height: 1.2;
-    letter-spacing: -0.015em;
-  }
-
-  .soridraw-live-keyword-remove {
-    width: 14px;
-    height: 14px;
-  }
-
-  .soridraw-live-keyword-remove svg {
-    width: 12px;
-    height: 12px;
-  }
-}
-
-@container soridraw-live-keywords (max-width: 640px) {
-  .soridraw-live-keywords-row {
-    gap: 1px 6px;
-    max-height: 86px;
-  }
-
-  .soridraw-live-keyword {
-    gap: 1px;
-    padding-block: 0;
-    font-size: 10.5px;
-    line-height: 1.15;
-    letter-spacing: -0.02em;
-  }
-
-  .soridraw-live-keyword-remove {
-    width: 12px;
-    height: 12px;
-  }
-
-  .soridraw-live-keyword-remove svg {
-    width: 10.5px;
-    height: 10.5px;
-    stroke-width: 2.2;
-  }
-}
-
-/* The compact result pane receives the full reserved header band.  Extra
- * keyword rows grow downward into that already-empty band instead of being
- * clipped while unused space remains below them. */
-:root[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
-.soridraw-live-keywords-fixed {
-  height: 118px !important;
-  min-height: 118px !important;
-  max-height: 118px !important;
-  padding-top: 4px !important;
-  padding-bottom: 6px !important;
-}
-
-:root[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
-.soridraw-live-keywords-fixed .soridraw-live-keywords-row {
-  height: 100% !important;
-  max-height: 108px !important;
-  align-content: flex-end !important;
-  overflow: hidden !important;
-}
-
-@media (max-width: 1099px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-fixed {
-    left: 12px !important;
-    right: 12px !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
-  .soridraw-live-keywords-fixed {
-    height: 108px !important;
-    min-height: 108px !important;
-    max-height: 108px !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
-  .soridraw-live-keywords-fixed .soridraw-live-keywords-row {
-    max-height: 98px !important;
-  }
-}
-
-/* 282: keep the Applied Keywords toggle in normal document flow in Studio Black.
- * The toggle is ordered before the animated body, so opening/closing content
- * never changes the clicked control's vertical position. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content .soridraw-result-keywords-card {
-  display: flex !important;
-  flex-direction: column !important;
-  padding-bottom: 14px !important;
-  overflow-x: clip !important;
-  overflow-y: visible !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content .soridraw-result-keywords-body {
-  order: 3 !important;
-  overflow: clip !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content button.soridraw-result-keywords-expand {
-  order: 2 !important;
-  position: static !important;
-  inset: auto !important;
-  align-self: center !important;
-  flex: 0 0 28px !important;
-  width: 44px !important;
-  min-width: 44px !important;
-  max-width: 44px !important;
-  height: 28px !important;
-  min-height: 28px !important;
-  max-height: 28px !important;
-  margin: -2px auto 0 !important;
-  padding: 0 !important;
-  transform: none !important;
-  border: 0 !important;
-  border-radius: 999px !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  outline: 0 !important;
-  z-index: 2 !important;
-  pointer-events: auto !important;
-  cursor: pointer !important;
-  touch-action: manipulation !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
-  transition: color 140ms ease, opacity 140ms ease !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content button.soridraw-result-keywords-expand:is(:hover, :focus-visible, :active) {
-  transform: none !important;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  outline: 0 !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content button.soridraw-result-keywords-expand[data-expanded="false"]
-.soridraw-result-keywords-chevron {
-  color: #f4a900 !important;
-  stroke: #f4a900 !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content button.soridraw-result-keywords-expand[data-expanded="true"]
-.soridraw-result-keywords-chevron {
-  color: #f7f7f7 !important;
-  stroke: #f7f7f7 !important;
-}
-
-/* Title-card side actions are flat controls in Studio Black. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content :is(
-  .soridraw-result-music-note-button,
-  .soridraw-result-copy-all-button
-) {
-  border: 0 !important;
-  outline: 0 !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-content :is(
-  .soridraw-result-music-note-button,
-  .soridraw-result-copy-all-button
-):is(:hover, :focus, :focus-visible, :active) {
-  border: 0 !important;
-  outline: 0 !important;
 }

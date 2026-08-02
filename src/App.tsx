@@ -11931,7 +11931,7 @@ ${normalizePromptForDisplay(result.prompt)}
     hoverId: string,
     label: string,
     description: string,
-    variant: 'title-desktop' | 'title-mobile' | 'section' = 'section'
+    variant: 'title-desktop' | 'title-mobile' | 'title-inline' | 'section' = 'section'
   ) => {
     const isEditing = isRecentSongSectionEditing(focus);
     const wrapperClass = variant === 'title-mobile'
@@ -11969,11 +11969,13 @@ ${normalizePromptForDisplay(result.prompt)}
       );
     }
 
-    const baseClass = variant === 'title-mobile'
-      ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
-      : variant === 'title-desktop'
-        ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
-        : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
+    const baseClass = variant === 'title-inline'
+      ? 'soridraw-result-title-inline-edit flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-transparent text-[var(--text-primary)] transition-colors hover:bg-white/10 active:scale-95'
+      : variant === 'title-mobile'
+        ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
+        : variant === 'title-desktop'
+          ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
+          : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
 
     return (
       <button
@@ -11987,7 +11989,7 @@ ${normalizePromptForDisplay(result.prompt)}
         className={baseClass}
         title={label}
       >
-        <Edit2 className={variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
+        <Edit2 className={variant === 'title-inline' ? 'w-[18px] h-[18px] opacity-85' : variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
       </button>
     );
   };
@@ -14904,7 +14906,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   </div>
 
-
                   <div className="flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#e3a13a]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
@@ -14954,23 +14955,35 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   const titleSizeClass = index === 0
                                     ? 'text-[21px] leading-[1.08]'
                                     : 'text-[18px] leading-[1.06]';
-
-                                  return (
+                                  const titleNode = (
                                     <h2
-                                      key={entry.lang}
                                       data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
                                       className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
                                     >
                                       {entry.line}
                                     </h2>
                                   );
+
+                                  return index === 0 ? (
+                                    <div key={entry.lang} className="flex max-w-full min-w-0 items-center justify-center gap-1.5">
+                                      {renderRecentSongInlineEditActions(
+                                        'title',
+                                        'edit-generated-title-primary-mobile',
+                                        '생성곡 수정',
+                                        '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                                        'title-inline'
+                                      )}
+                                      {titleNode}
+                                    </div>
+                                  ) : (
+                                    <div key={entry.lang} className="max-w-full min-w-0">
+                                      {titleNode}
+                                    </div>
+                                  );
                                 })}
                               </div>
                             </div>
 
-                            <div className="flex justify-center pt-1">
-                              {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
-                            </div>
 
                             <div className="absolute right-0 top-[-10px] flex flex-col gap-2">
                               {entries.map((entry) => {
@@ -15158,15 +15171,30 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   const titleSizeClass = index === 0
                                     ? 'text-2xl md:text-3xl leading-[1.1]'
                                     : 'text-lg md:text-xl leading-[1.08]';
-
-                                  return (
+                                  const titleNode = (
                                     <h2
-                                      key={entry.lang}
                                       data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
                                       className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
                                     >
                                       {entry.line}
                                     </h2>
+                                  );
+
+                                  return index === 0 ? (
+                                    <div key={entry.lang} className="flex max-w-full min-w-0 items-center justify-center gap-2">
+                                      {renderRecentSongInlineEditActions(
+                                        'title',
+                                        'edit-generated-title-primary-desktop',
+                                        '생성곡 수정',
+                                        '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                                        'title-inline'
+                                      )}
+                                      {titleNode}
+                                    </div>
+                                  ) : (
+                                    <div key={entry.lang} className="max-w-full min-w-0">
+                                      {titleNode}
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -15203,9 +15231,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })}
                               </div>
 
-                              <div className="absolute left-1/2 top-[74px] -translate-x-1/2">
-                                {renderRecentSongInlineEditActions('title', 'edit-generated-title-desktop-inline', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
-                              </div>
                             </div>
                           </div>
                         );

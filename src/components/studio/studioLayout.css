@@ -3160,3 +3160,104 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   outline: 2px solid rgba(244, 169, 0, 0.72) !important;
   outline-offset: 2px !important;
 }
+
+
+/* 269: In Studio Black the generated-title edit control belongs to the top-left
+ * action cluster, directly below Music Note. Keep the original inline controls
+ * for Classic, but hide only their view-mode positions in Studio Black. Edit
+ * mode save/cancel actions remain beside the inputs. */
+:root:not([data-soridraw-theme="studio-black"]) .soridraw-result-title-edit-anchor {
+  display: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-result-title-edit-inline {
+  display: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-result-title-edit-anchor {
+  position: absolute !important;
+  z-index: 22 !important;
+  top: 65px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: auto !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-edit-anchor {
+  left: 43px !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-edit-anchor {
+  left: 57px !important;
+}
+
+/* 270: keep the fixed selected-keyword rail consistent as the result pane narrows.
+ * The rail is a body portal, so viewport media queries could not detect the
+ * split pane's mobile state on a wide desktop monitor. Size the contents from
+ * the rail's own live width instead. This does not consume result-flow height. */
+:root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-fixed {
+  container-type: inline-size;
+  container-name: soridraw-live-keywords;
+  padding-top: 4px !important;
+  padding-bottom: 6px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-row {
+  gap: 3px 10px;
+  max-height: 84px;
+}
+
+@container soridraw-live-keywords (max-width: 900px) {
+  .soridraw-live-keywords-row {
+    gap: 2px 8px;
+    max-height: 86px;
+  }
+
+  .soridraw-live-keyword {
+    gap: 2px;
+    font-size: 11.25px;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+  }
+
+  .soridraw-live-keyword-remove {
+    width: 14px;
+    height: 14px;
+  }
+
+  .soridraw-live-keyword-remove svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@container soridraw-live-keywords (max-width: 640px) {
+  .soridraw-live-keywords-row {
+    gap: 1px 6px;
+    max-height: 86px;
+  }
+
+  .soridraw-live-keyword {
+    gap: 1px;
+    padding-block: 0;
+    font-size: 10.5px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  .soridraw-live-keyword-remove {
+    width: 12px;
+    height: 12px;
+  }
+
+  .soridraw-live-keyword-remove svg {
+    width: 10.5px;
+    height: 10.5px;
+    stroke-width: 2.2;
+  }
+}

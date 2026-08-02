@@ -14859,7 +14859,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
 
                 <div className="soridraw-result-mobile-header sm:hidden space-y-1.5 pt-0">
-                  <div className="relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
+                  <div className="soridraw-result-mobile-topbar relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -14906,7 +14906,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   </div>
 
-                  <div className="flex justify-center pt-2.5 pb-0.5">
+                  <div className="soridraw-result-mobile-title-stack">
+                    <div className="soridraw-result-mobile-genre flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#e3a13a]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
@@ -14937,7 +14938,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     </div>
                   ) : (
-                    <div className="relative min-h-[92px] pt-0">
+                    <div className="soridraw-result-mobile-title-content relative min-h-[92px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -14965,14 +14966,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   );
 
                                   return index === 0 ? (
-                                    <div key={entry.lang} className="flex max-w-full min-w-0 items-center justify-center gap-1.5">
-                                      {renderRecentSongInlineEditActions(
-                                        'title',
-                                        'edit-generated-title-primary-mobile',
-                                        '생성곡 수정',
-                                        '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                                        'title-inline'
-                                      )}
+                                    <div key={entry.lang} className="soridraw-result-primary-title-line relative inline-flex max-w-full min-w-0 items-center justify-center">
+                                      <span className="soridraw-result-primary-title-edit">
+                                        {renderRecentSongInlineEditActions(
+                                          'title',
+                                          'edit-generated-title-primary-mobile',
+                                          '생성곡 수정',
+                                          '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                                          'title-inline'
+                                        )}
+                                      </span>
                                       {titleNode}
                                     </div>
                                   ) : (
@@ -15027,7 +15030,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
                     if (!generatedAtLabel) return null;
                     return (
-                      <div className="flex justify-center px-4">
+                      <div className="soridraw-result-title-date flex justify-center px-4">
                         <p className="text-[12px] font-semibold text-[var(--text-secondary)]/80 tracking-tight text-center">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
@@ -15037,8 +15040,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     );
                   })()}
+                  </div>
 
-                  <div className="flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
+                  <div className="soridraw-result-mobile-footer-controls flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {
@@ -15181,14 +15185,16 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   );
 
                                   return index === 0 ? (
-                                    <div key={entry.lang} className="flex max-w-full min-w-0 items-center justify-center gap-2">
-                                      {renderRecentSongInlineEditActions(
-                                        'title',
-                                        'edit-generated-title-primary-desktop',
-                                        '생성곡 수정',
-                                        '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                                        'title-inline'
-                                      )}
+                                    <div key={entry.lang} className="soridraw-result-primary-title-line relative inline-flex max-w-full min-w-0 items-center justify-center">
+                                      <span className="soridraw-result-primary-title-edit">
+                                        {renderRecentSongInlineEditActions(
+                                          'title',
+                                          'edit-generated-title-primary-desktop',
+                                          '생성곡 수정',
+                                          '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
+                                          'title-inline'
+                                        )}
+                                      </span>
                                       {titleNode}
                                     </div>
                                   ) : (
@@ -15241,7 +15247,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
                     if (!generatedAtLabel) return null;
                     return (
-                      <div className="flex justify-center -mt-1 px-4">
+                      <div className="soridraw-result-title-date flex justify-center -mt-1 px-4">
                         <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-secondary)]/80 tracking-tight">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (

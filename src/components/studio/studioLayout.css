@@ -3345,3 +3345,67 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 /* 286: Do not override the recent-title layout in Studio Black.
  * The shared App.tsx markup and Tailwind utilities are the Classic source of
  * truth for title, language-copy controls, date and footer placement. */
+
+/* 287: Compact only the generated-song date/footer spacing in Studio Black.
+ * PC and compact/mobile compositions keep the Classic title layout from 286;
+ * only the vertical breathing room around the timestamp and below the controls
+ * is reduced. Classic and every non-title card remain untouched. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+  padding-bottom: 14px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-heading-area,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-display {
+  min-height: 112px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-lines {
+  min-height: 80px !important;
+  padding-top: 6px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-date {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-footer-controls {
+  margin-top: 6px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-title-content {
+  min-height: 76px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-footer-controls {
+  padding-top: 2px !important;
+  margin-top: 2px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+  padding-bottom: 10px !important;
+}
+
+@media (max-width: 639px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+    padding-bottom: 10px !important;
+  }
+}

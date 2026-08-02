@@ -15958,9 +15958,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 {/* Expand Button at Bottom Center */}
                 <button
+                  type="button"
                   data-expanded={isAppliedKeywordsExpanded ? 'true' : 'false'}
                   aria-pressed={isAppliedKeywordsExpanded}
+                  aria-label={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
+                  title={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   onClick={(event) => {
+                    const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
+                    if (isStudioBlack) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsAppliedKeywordsExpanded((prev) => !prev);
+                      return;
+                    }
+
                     setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
                     keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
                   }}
@@ -15971,7 +15982,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
+                  {isAppliedKeywordsExpanded ? (
+                    <ChevronUp aria-hidden="true" className="soridraw-result-keywords-chevron w-[18px] h-[18px]" />
+                  ) : (
+                    <ChevronDown aria-hidden="true" className="soridraw-result-keywords-chevron w-[18px] h-[18px]" />
+                  )}
                 </button>
               </div>
 

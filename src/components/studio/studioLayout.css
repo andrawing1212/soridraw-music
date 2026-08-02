@@ -3105,3 +3105,63 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     max-height: 98px !important;
   }
 }
+
+/* 280: keep the Applied Keywords toggle fixed inside the card in Studio Black.
+ * The previous half-outside control called the shared scroll keeper on click,
+ * which moved the viewport and made the button appear to jump. Classic keeps
+ * its original placement and click behavior. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-card {
+  padding-bottom: 46px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand {
+  position: absolute !important;
+  left: 50% !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: 8px !important;
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: translateX(-50%) !important;
+  border-radius: 999px !important;
+  z-index: 80 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand:not(:disabled):active {
+  transform: translateX(-50%) scale(0.96) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand:focus-visible {
+  outline: 2px solid rgba(244, 169, 0, 0.72) !important;
+  outline-offset: 2px !important;
+}
+
+/* Never let the expand/collapse chevron inherit a black icon color. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand[data-expanded="false"]
+.soridraw-result-keywords-chevron {
+  color: #f4a900 !important;
+  stroke: #f4a900 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand[data-expanded="true"]
+.soridraw-result-keywords-chevron {
+  color: #f7f7f7 !important;
+  stroke: #f7f7f7 !important;
+}

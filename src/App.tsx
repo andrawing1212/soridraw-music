@@ -910,6 +910,18 @@ const getAppliedSelectionKeywordChipClass = (typeOrKey: string) => {
   return 'bg-[var(--input-bg)] border-[var(--border-color)] text-[var(--text-secondary)] shadow-[0_8px_18px_rgba(0,0,0,0.10)]';
 };
 
+const getAppliedSelectionKeywordTextClass = (typeOrKey: string) => {
+  const normalized = String(typeOrKey || '').toLowerCase();
+
+  if (normalized === 'genre' || normalized === 'subgenre' || normalized.includes('genre')) return 'text-[#FFD36A]';
+  if (normalized === 'mood' || normalized.includes('mood') || normalized.includes('atmosphere')) return 'text-[#FFB4C4]';
+  if (normalized === 'theme' || normalized.includes('theme') || normalized.includes('topic')) return 'text-[#A9E7FF]';
+  if (normalized === 'style' || normalized.includes('style')) return 'text-[#D9CBFF]';
+  if (normalized === 'sound' || normalized === 'point-sound' || normalized.includes('sound') || normalized.includes('instrument') || normalized.includes('point')) return 'text-[#BDF6C4]';
+  if (normalized === 'mix' || normalized === 'rap') return 'text-[#FFD36A]';
+  return 'text-[var(--text-secondary)]';
+};
+
 
 function keepExpandableSectionInView(_trigger: HTMLElement, _wasExpanded: boolean) {
   // Keep expansion purely local. Auto-scroll during height transitions can fight
@@ -12279,6 +12291,29 @@ ${normalizePromptForDisplay(result.prompt)}
       label: resolveGenreChipLabel(id),
     }));
 
+  type LiveSelectedKeywordType = 'genre' | 'mood' | 'theme' | 'style' | 'sound' | 'point-sound' | 'mix' | 'rap';
+  type LiveSelectedKeywordItem = { id: string; type: LiveSelectedKeywordType; label: string };
+
+  const liveSelectedKeywordItems: LiveSelectedKeywordItem[] = [
+    ...displayGenreKeywords,
+    ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
+    ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
+    ...filterSelectableIds(selectedStyles).flatMap((id) => {
+      const label = getStyleVariantLabelById(id);
+      return label ? [{ id, type: 'style' as const, label }] : [];
+    }),
+    ...filterSelectableIds(selectedInstrumentSounds).flatMap((id) => {
+      const label = getSoundVariantLabelById(id);
+      return label ? [{ id, type: 'sound' as const, label }] : [];
+    }),
+    ...filterSelectableIds(selectedPointSounds).flatMap((id) => {
+      const label = getSoundVariantLabelById(id);
+      return label ? [{ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${label}` }] : [];
+    }),
+    ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
+    ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
+  ];
+
   const removeAppliedGenreKeyword = (id: string) => {
     setIsGenreRandomized(false);
     setSelectedGenres((prev) => prev.filter((value) => value !== id));
@@ -12293,6 +12328,26 @@ ${normalizePromptForDisplay(result.prompt)}
     } else if (id === 'semi-trot') {
       const moodsToRemove = ['bright', 'hopeful', 'warm', 'tense'];
       setSelectedMoods((prev) => prev.filter((moodId) => !moodsToRemove.includes(moodId)));
+    }
+  };
+
+  const removeLiveSelectedKeyword = (item: LiveSelectedKeywordItem) => {
+    if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
+    else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+    else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+    else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
+    else if (item.type === 'sound') {
+      if (!clearRecommendedSoundCombo(item.id)) {
+        setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+      }
+    } else if (item.type === 'point-sound') {
+      const pointSoundId = item.id.replace(/^point-/, '');
+      setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
+    } else if (item.type === 'mix') {
+      setIsKoreanEnglishMix(false);
+      setEnglishMixRatio(10);
+    } else if (item.type === 'rap') {
+      setRapEnabled(false);
     }
   };
 
@@ -14695,59 +14750,57 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             )}
           </AnimatePresence>
 
-          {/* Applied Keywords Display */}
-          <div className="relative mt-2 md:mt-3">
+          {/* Applied Keywords Display (Classic only; Studio Black uses the sticky result-pane strip.) */}
+          <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
-              {[
-                ...displayGenreKeywords,
-                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
-                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
-                ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
-                ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
-                ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
-                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
-                ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
-              ].map((item) => {
-                  const chipClassName = cn(
-                    'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                    getAppliedSelectionKeywordChipClass(item.type)
-                  );
-                  return (
-                    <span
-                      key={`${item.type}-${item.id}`}
-                      className={chipClassName}
+              {liveSelectedKeywordItems.map((item) => {
+                const chipClassName = cn(
+                  'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                  getAppliedSelectionKeywordChipClass(item.type)
+                );
+                return (
+                  <span key={`${item.type}-${item.id}`} className={chipClassName}>
+                    {item.label}
+                    <button
+                      type="button"
+                      onClick={() => removeLiveSelectedKeyword(item)}
+                      aria-label={`${item.label} 선택 해제`}
+                      className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
                     >
-                      {item.label}
-                      <button 
-                        onClick={() => {
-                          if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
-                          else if (item.type === 'mood') toggleSelection(item.id, 'mood');
-                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
-                          else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
-                          else if (item.type === 'sound') {
-                            if (!clearRecommendedSoundCombo(item.id)) {
-                              setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
-                            }
-                          }
-                          else if (item.type === 'point-sound') {
-                            const pointSoundId = item.id.replace(/^point-/, '');
-                            setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
-                          }
-                          else if (item.type === 'mix') { setIsKoreanEnglishMix(false); setEnglishMixRatio(10); }
-                          else if (item.type === 'rap') setRapEnabled(false);
-                              }}
-                        className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
-                      >
-                        <X className="w-[18px] h-[18px]" />
-                      </button>
-                    </span>
-                  );
-                })}
+                      <X className="w-[18px] h-[18px]" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           </div>
         </div>
                   </StudioBuilderPane>
                   <StudioResultPane>
+                    {liveSelectedKeywordItems.length > 0 && (
+                      <Portal>
+                        <div className="soridraw-live-keywords-fixed" role="region" aria-label="현재 선택된 키워드">
+                          <div className="soridraw-live-keywords-row">
+                            {liveSelectedKeywordItems.map((item) => (
+                              <span
+                                key={`live-${item.type}-${item.id}`}
+                                className={cn('soridraw-live-keyword', getAppliedSelectionKeywordTextClass(item.type))}
+                              >
+                                <span>{item.label}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeLiveSelectedKeyword(item)}
+                                  aria-label={`${item.label} 선택 해제`}
+                                  className="soridraw-live-keyword-remove"
+                                >
+                                  <X aria-hidden="true" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </Portal>
+                    )}
                     {/* Result Area */}
         {user && result && (
             <div
@@ -14757,7 +14810,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
               {/* Title Card */}
-              <div className="soridraw-result-title-card bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
+              <div className="soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
@@ -15046,14 +15099,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
                 </div>
 
-                <div className="soridraw-result-desktop-header hidden sm:block space-y-4 pt-0">
+                <div className="soridraw-result-desktop-header soridraw-result-title-body hidden sm:block space-y-4 pt-0">
                   <div className="flex flex-col items-center gap-2">
                     <div className="flex items-center gap-2 text-[var(--text-primary)] font-mono text-sm tracking-widest uppercase font-bold">
                       <Music className="w-[18px] h-[18px] text-[#e3a13a]" />
                       제목 (Title)
                     </div>
                   </div>
-                  <div className="relative h-auto min-h-[132px] flex items-center justify-center w-full px-4 mt-2">
+                  <div className="soridraw-result-title-heading-area relative h-auto min-h-[132px] flex items-center justify-center w-full px-4 mt-2">
                     <div className="w-full max-w-none text-center flex flex-col items-center">
                       {(() => {
                         if (isRecentSongSectionEditing('title') && recentSongEditDraft) {
@@ -15093,12 +15146,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const secondaryClass = hasAddedLyricsLanguage ? 'text-[#e3a13a]' : (isRecent ? 'text-[#e3a13a]' : 'text-[#e3a13a]/90');
 
                         return (
-                          <div className="relative w-full min-h-[132px] flex flex-col items-center justify-start pt-0">
+                          <div className="soridraw-result-title-display relative w-full min-h-[132px] flex flex-col items-center justify-start pt-0">
                             <p className="max-w-[calc(100%-160px)] truncate text-center text-base md:text-lg font-extrabold text-[#e3a13a]/90 tracking-tight">
                               [{genrePrefix}]
                             </p>
 
-                            <div className="relative w-full min-h-[92px] flex items-start justify-center pt-3">
+                            <div className="soridraw-result-title-lines relative w-full min-h-[92px] flex items-start justify-center pt-3">
                               <div className="flex flex-col items-center justify-center gap-2 px-[96px] w-full overflow-hidden text-center">
                                 {entries.map((entry, index) => {
                                   const titleClassName = index === 0 ? primaryClass : secondaryClass;
@@ -15173,7 +15226,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     );
                   })()}
-                  <div className="flex items-center justify-center gap-3 mt-4">
+                  <div className="soridraw-result-title-footer-controls flex items-center justify-center gap-3 mt-4">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {
@@ -15879,20 +15932,24 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 {/* Expand Button at Bottom Center */}
                 <button
+                  type="button"
                   data-expanded={isAppliedKeywordsExpanded ? 'true' : 'false'}
                   aria-pressed={isAppliedKeywordsExpanded}
+                  aria-label={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
+                  title={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   onClick={(event) => {
-                    setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
-                    keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setIsAppliedKeywordsExpanded((prev) => !prev);
                   }}
                   className={cn(
-                    "soridraw-result-keywords-expand section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
+                    "soridraw-result-keywords-expand section-expand-button absolute left-1/2 flex items-center justify-center border transition-all z-20",
                     isAppliedKeywordsExpanded 
                       ? "bg-[#e3a13a] text-white border-[#e3a13a]" 
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
+                  {isAppliedKeywordsExpanded ? <ChevronUp aria-hidden="true" className="w-[18px] h-[18px]" /> : <ChevronDown aria-hidden="true" className="w-[18px] h-[18px]" />}
                 </button>
               </div>
 

@@ -3165,3 +3165,52 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   color: #f7f7f7 !important;
   stroke: #f7f7f7 !important;
 }
+
+/* 281: the Applied Keywords toggle stays at one fixed vertical position while
+ * the keyword body opens below it. Anchoring the control to the card bottom
+ * made the same button travel with the animated card height and look like it
+ * jumped. Studio Black only; Classic keeps its original flow and controls. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-card {
+  padding-bottom: 46px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand {
+  top: 80px !important;
+  bottom: auto !important;
+  transform: translateX(-50%) !important;
+  transition-property: background-color, color, border-color, opacity !important;
+  transition-duration: 160ms !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand:not(:disabled):active {
+  transform: translateX(-50%) !important;
+}
+
+/* Reserve the toggle slot inside the measured animated body so expanded
+ * keyword content begins below the stationary button instead of under it. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-body > div:first-child {
+  padding-top: 44px !important;
+}
+
+/* Title-card side actions are flat controls in Studio Black. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
+) {
+  border: 0 !important;
+  outline: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(
+  .soridraw-result-music-note-button,
+  .soridraw-result-copy-all-button
+):is(:hover, :focus, :focus-visible, :active) {
+  border: 0 !important;
+  outline: 0 !important;
+}

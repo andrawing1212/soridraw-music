@@ -20585,6 +20585,9 @@ function SongStructureIntegratedControlComponent({
         </div>
       </div>
 
+      {/* Keep the entire section-custom modal stack at document level so Studio Black
+          split-pane containment cannot clip or confine fixed overlays. */}
+      <Portal>
       <AnimatePresence>
         {isCustomModalOpen && (
           <motion.div
@@ -21261,6 +21264,7 @@ function SongStructureIntegratedControlComponent({
           />
         )}
       </AnimatePresence>
+      </Portal>
     </>
   );
 }

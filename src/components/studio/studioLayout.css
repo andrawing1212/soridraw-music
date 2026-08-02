@@ -2788,22 +2788,21 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   border-color: rgba(196, 163, 101, 0.52) !important;
 }
 
-/* 258: make the five menu summary wells visibly darker and win against the
- * older app-root `:is(.soridraw-expand-summary)` rule, which has higher
- * specificity and was overriding 257 even though 257 was appended later.
- * Scope: Studio Black menu-card direct summary only (Genre/Style/Sound/Mood/Theme). */
+/* 259: keep the five menu summary wells only slightly darker than #202021.
+ * The resting dashed border stays subtle; hover/focus restores the stronger
+ * warm-brown emphasis requested for Genre/Style/Sound/Mood/Theme only. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary {
-  background: #171718 !important;
-  background-color: #171718 !important;
+  background: #1e1e1f !important;
+  background-color: #1e1e1f !important;
   background-image: none !important;
-  border-color: #8f7548 !important;
+  border-color: rgba(184, 151, 91, 0.34) !important;
   border-style: dashed !important;
   box-shadow: none !important;
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary:hover,
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary:focus-visible {
-  background: #1c1c1d !important;
-  background-color: #1c1c1d !important;
-  border-color: #aa8b55 !important;
+  background: #202021 !important;
+  background-color: #202021 !important;
+  border-color: #8f7548 !important;
 }

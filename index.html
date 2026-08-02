@@ -22,15 +22,37 @@
       html,
       body,
       #root {
-        background: #0f0f0f;
-        color: #f8f9fa;
+        background: var(--soridraw-initial-bg, #0f0f0f);
+        color: var(--soridraw-initial-text, #f8f9fa);
       }
     </style>
 
     <script>
       (function() {
-        document.documentElement.classList.add('dark');
-        localStorage.setItem('themeMode', 'dark');
+        try {
+          var nav = navigator || {};
+          var ua = nav.userAgent || '';
+          var isPhone = typeof nav.userAgentData?.mobile === 'boolean'
+            ? nav.userAgentData.mobile
+            : /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)
+              || (/Android/i.test(ua) && /Mobile/i.test(ua));
+          var requestedTheme = localStorage.getItem('soridraw_app_theme') === 'studio-black' ? 'studio-black' : 'classic';
+          var colorKey = isPhone ? 'soridraw_phone_color_mode' : 'soridraw_large_screen_color_mode';
+          var requestedColor = localStorage.getItem(colorKey)
+            || localStorage.getItem('soridraw_color_mode')
+            || localStorage.getItem('themeMode')
+            || 'dark';
+          var effectiveTheme = isPhone ? 'classic' : requestedTheme;
+          var effectiveColor = effectiveTheme === 'studio-black' ? 'dark' : (requestedColor === 'light' ? 'light' : 'dark');
+          document.documentElement.dataset.soridrawTheme = effectiveTheme;
+          document.documentElement.dataset.soridrawColorMode = effectiveColor;
+          document.documentElement.dataset.soridrawDevice = isPhone ? 'phone' : 'large-screen';
+          document.documentElement.classList.toggle('dark', effectiveColor === 'dark');
+          document.documentElement.style.setProperty('--soridraw-initial-bg', effectiveColor === 'light' ? '#ffffff' : effectiveTheme === 'studio-black' ? '#101010' : '#0f0f0f');
+          document.documentElement.style.setProperty('--soridraw-initial-text', effectiveColor === 'light' ? '#1a1a1a' : '#f8f9fa');
+        } catch (error) {
+          document.documentElement.classList.add('dark');
+        }
       })();
     </script>
 

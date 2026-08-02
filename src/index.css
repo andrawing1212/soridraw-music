@@ -3687,3 +3687,61 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   background-color: #101010 !important;
   background-image: none !important;
 }
+
+/* 289: device-aware appearance controls. Studio Black remains tablet/desktop-only. */
+:root[data-soridraw-color-mode="light"] {
+  color-scheme: light;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-top-navigation,
+:root[data-soridraw-color-mode="light"] .soridraw-mobile-navigation {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-color: rgba(28, 25, 23, 0.10) !important;
+  box-shadow: 0 8px 24px rgba(28, 25, 23, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-top-navigation :where(button, a),
+:root[data-soridraw-color-mode="light"] .soridraw-mobile-navigation :where(button, a) {
+  color: rgba(28, 25, 23, 0.72) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-top-navigation :where(button, a):hover,
+:root[data-soridraw-color-mode="light"] .soridraw-mobile-navigation :where(button, a):hover {
+  color: #b56b00 !important;
+  background: rgba(255, 180, 0, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(28, 25, 23, 0.12) !important;
+  box-shadow: 0 16px 38px rgba(28, 25, 23, 0.16) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where(p, span) {
+  color: rgba(28, 25, 23, 0.78);
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where(button) {
+  color: rgba(28, 25, 23, 0.76) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where(button):hover {
+  color: #9a5a00 !important;
+  background: rgba(255, 180, 0, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where([class*="border-white"]) {
+  border-color: rgba(28, 25, 23, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where([class*="bg-white"]) {
+  background: rgba(28, 25, 23, 0.06) !important;
+}
+
+:root[data-soridraw-color-mode="light"] :where(.soridraw-top-navigation, .soridraw-mobile-navigation, .soridraw-profile-menu) :where([class*="text-[#FFB400]"], [class*="text-[#ffb400]"]) {
+  color: #b56b00 !important;
+}
+
+:root[data-soridraw-color-mode="light"] :where(.soridraw-top-navigation, .soridraw-mobile-navigation) :where([class*="bg-[#FFB400]"], [class*="bg-[#ffb400]"]) {
+  background: rgba(255, 180, 0, 0.12) !important;
+}

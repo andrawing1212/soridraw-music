@@ -3409,3 +3409,26 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     padding-bottom: 10px !important;
   }
 }
+
+/* 288: Keep the visible song title mathematically centered.
+ * The inline edit pencil is positioned outside the title's layout box, so it
+ * never contributes to the measured width on either PC or compact/mobile. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-primary-title-line {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-primary-title-edit {
+  position: absolute !important;
+  top: 50% !important;
+  right: 100% !important;
+  left: auto !important;
+  margin-right: 6px !important;
+  transform: translateY(-50%) !important;
+}

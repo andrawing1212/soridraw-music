@@ -2958,17 +2958,3 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   margin-top: 0 !important;
   gap: 8px !important;
 }
-
-/* 264: The result column still carried the legacy top-divider spacing even
- * after the brown divider itself was hidden.  That invisible md:pt-5 kept the
- * generated-song title card 20px lower than the collapsed Genre row.  Restore
- * a single subtle divider without consuming layout height, and remove only the
- * stale top padding so both top cards share the same vertical start. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-result-pane[data-pane-mode="desktop"]
-.soridraw-studio-result-content {
-  padding-top: 0 !important;
-  margin-top: -1px !important;
-  border-top: 1px solid rgba(143, 117, 72, 0.34) !important;
-  box-shadow: none !important;
-}

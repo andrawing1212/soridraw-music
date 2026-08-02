@@ -1968,8 +1968,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-action-anchor-expanded {
   position: relative !important;
   width: 100% !important;
-  height: var(--soridraw-action-anchor-height, 84px) !important;
-  min-height: var(--soridraw-action-anchor-height, 84px) !important;
+  height: var(--soridraw-action-anchor-height, 100px) !important;
+  min-height: var(--soridraw-action-anchor-height, 100px) !important;
   overflow: visible !important;
   transition: none !important;
 }
@@ -1979,7 +1979,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
  * Inline: rendered inside the real command slot, so card-height changes and the
  * copyright/footer always move it through normal document flow. */
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-  --soridraw-action-control-height: 52px;
+  --soridraw-action-control-height: 60px;
   --soridraw-action-row-gap: 7px;
   --soridraw-action-row-padding: 7px;
   --soridraw-action-bottom-gap: 20px;
@@ -2165,7 +2165,7 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
 
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-    --soridraw-action-control-height: clamp(46px, calc(var(--soridraw-studio-builder-width, 920px) * 0.062), 60px);
+    --soridraw-action-control-height: clamp(58px, calc(var(--soridraw-studio-builder-width, 920px) * 0.078), 76px);
     --soridraw-action-bottom-gap: 28px;
     --soridraw-action-row-gap: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0105), 10px);
     --soridraw-action-row-padding: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0085), 9px);
@@ -2709,4 +2709,101 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
     min-height: 0 !important;
   }
+}
+
+/* 253: keep Mood/Theme expansion direction identical to Genre/Style/Sound.
+ * In Studio Black the builder can be its own scroll container. Chrome scroll
+ * anchoring was preserving the clicked bottom summary while the keyword area
+ * above it grew, so lower-row cards appeared to open upward. Disable anchoring
+ * only inside the Black builder pane; the card top now stays fixed and every
+ * expandable menu grows downward in normal document order. Classic is untouched. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane {
+  overflow-anchor: none !important;
+}
+
+/* 254: lock the left rail to vertical-only movement and place the right result
+ * pane scrollbar on the actual center/right boundary. Studio Black wide PC only.
+ * Classic and compact layouts are intentionally untouched. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel-inner,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-rail-nav {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    overscroll-behavior-x: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel-inner {
+    box-sizing: border-box !important;
+    touch-action: pan-y !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel-inner > *,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-rail-nav,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-rail-brand,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-rail-item {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* The theme button previously kept width:100% plus 10px side margins, which
+   * made the rail wider than its column and created the bottom horizontal bar. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-studio-rail-theme {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 20px) !important;
+    align-self: stretch !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Keep the split boundary and builder width exactly where they are. Only the
+   * result scroll container reaches through the main's 18px right gutter; its
+   * content receives the same 18px padding, so cards do not move. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    overflow: visible !important;
+    contain: size layout style !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    right: -18px !important;
+    padding-right: 18px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 257: Studio Black menu summary surfaces are visually separated from their
+ * parent menu cards. This applies only to the lower selected-summary area for
+ * Genre, Style, Sound, Mood and Theme; Classic remains untouched. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary {
+  background-color: #202021 !important;
+  background-image: none !important;
+  border-color: rgba(184, 151, 91, 0.38) !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary:hover {
+  background-color: #222223 !important;
+  border-color: rgba(196, 163, 101, 0.52) !important;
+}
+
+/* 258: make the five menu summary wells visibly darker and win against the
+ * older app-root `:is(.soridraw-expand-summary)` rule, which has higher
+ * specificity and was overriding 257 even though 257 was appended later.
+ * Scope: Studio Black menu-card direct summary only (Genre/Style/Sound/Mood/Theme). */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary {
+  background: #171718 !important;
+  background-color: #171718 !important;
+  background-image: none !important;
+  border-color: #8f7548 !important;
+  border-style: dashed !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary:hover,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-main .soridraw-studio-menu-card > .soridraw-expand-summary:focus-visible {
+  background: #1c1c1d !important;
+  background-color: #1c1c1d !important;
+  border-color: #aa8b55 !important;
 }

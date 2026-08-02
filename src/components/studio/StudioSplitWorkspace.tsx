@@ -18,7 +18,6 @@ const MAX_PERCENT = 76;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
-const ACTION_CONTROL_PIXEL_STEP = 8;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
@@ -142,7 +141,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
-    const isIsolatedWorkspace = layoutRef.current?.dataset.scrollIsolated === 'true';
 
     // The divider is a fixed body portal. Give it one coordinate owner only:
     // the exact viewport left position. The previous transform preview lost to
@@ -171,18 +169,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       );
     }
 
-    // The floating action bar is a body portal with its own responsive layout.
-    // In the isolated wide-desktop workspace, resizing that portal on every
-    // pointer frame would escape the containment boundary and invalidate the
-    // whole document again. Keep it stable during the drag and synchronize it
-    // exactly once on pointer-up through the existing drag-end event.
-    if (isIsolatedWorkspace) return;
-
-    // The portal action controls contain their own responsive layout and were
-    // causing a second full reflow for every single divider pixel. Their visual
-    // width now follows in tiny 8px steps while the real panes remain live.
-    const actionControlPixel = Math.round(roundedBuilderWidth / ACTION_CONTROL_PIXEL_STEP)
-      * ACTION_CONTROL_PIXEL_STEP;
+    // The floating action bar lives in a body portal, so it does not inherit
+    // the builder pane width automatically. Keep its outer box and responsive
+    // controls on the exact same builder width in this animation frame. The
+    // previous wide-desktop early return froze the bar until pointer-up.
+    const actionControlPixel = roundedBuilderWidth;
     if (lastActionControlPixelRef.current === actionControlPixel) return;
     lastActionControlPixelRef.current = actionControlPixel;
 

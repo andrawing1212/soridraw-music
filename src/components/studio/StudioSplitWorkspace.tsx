@@ -79,7 +79,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const lastActionControlPixelRef = useRef<number | null>(null);
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
-  const lastMatchedTopCardHeightRef = useRef<number | null>(null);
+  const lastTopCardHeightRef = useRef<number | null>(null);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
     floatingActionBar: null,
@@ -90,37 +90,30 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
 
-  const syncTopCardHeights = useCallback(() => {
+  const syncResultTitleHeight = useCallback(() => {
     const builder = builderRef.current;
     const result = resultRef.current;
-    const genreCard = builder?.querySelector<HTMLElement>('[data-studio-menu="genre"]') ?? null;
-    const titleCard = result?.querySelector<HTMLElement>('.soridraw-result-title-card--genre-height') ?? null;
-
-    if (!builder || !result || !genreCard || !titleCard || !isStudioBlack()) {
-      genreCard?.style.removeProperty('min-height');
-      lastMatchedTopCardHeightRef.current = null;
+    if (!builder || !result || !isStudioBlack()) {
+      result?.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
       return;
     }
 
+    const genreCard = builder.querySelector<HTMLElement>('[data-studio-menu="genre"]');
+    if (!genreCard) return;
+
+    // Keep the result title aligned to the normal collapsed Genre card. When
+    // Genre is expanded, retain the last collapsed measurement instead of
+    // making the generated-song title grow to the full keyword-list height.
     const summary = genreCard.querySelector<HTMLElement>('.soridraw-expand-summary');
-    if (summary?.dataset.expanded === 'true') {
-      genreCard.style.removeProperty('min-height');
-      lastMatchedTopCardHeightRef.current = null;
-      return;
-    }
+    if (summary?.dataset.expanded === 'true') return;
 
-    // Preserve the previously verified title-card UI.  The result card keeps
-    // its own natural/fixed layout; only the collapsed Genre card grows to the
-    // same outer height.  Title edit mode is ignored so opening inputs never
-    // stretches the left column.
-    if (titleCard.querySelector('input, textarea')) return;
-
-    const nextHeight = Math.round(titleCard.getBoundingClientRect().height);
+    const nextHeight = Math.round(genreCard.getBoundingClientRect().height);
     if (!Number.isFinite(nextHeight) || nextHeight < 160) return;
-    if (lastMatchedTopCardHeightRef.current === nextHeight) return;
+    if (lastTopCardHeightRef.current === nextHeight) return;
 
-    lastMatchedTopCardHeightRef.current = nextHeight;
-    genreCard.style.setProperty('min-height', `${nextHeight}px`, 'important');
+    lastTopCardHeightRef.current = nextHeight;
+    result.style.setProperty('--soridraw-studio-top-card-height', `${nextHeight}px`);
   }, [isStudioBlack]);
 
   const clearRootMeasurements = useCallback(() => {
@@ -431,10 +424,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
     }
-    const root = document.documentElement;
-    if (root.dataset.soridrawResultMode !== nextResultMode) {
-      root.dataset.soridrawResultMode = nextResultMode;
-    }
     const roundedPercent = Math.round(nextPercent);
     if (lastAriaPercentRef.current !== roundedPercent) {
       lastAriaPercentRef.current = roundedPercent;
@@ -481,43 +470,34 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const result = resultRef.current;
     if (!builder || !result || typeof ResizeObserver === 'undefined') return;
 
-    let observedTitleCard: HTMLElement | null = null;
-    const titleObserver = new ResizeObserver(() => syncTopCardHeights());
+    let observedCard: HTMLElement | null = null;
+    const observer = new ResizeObserver(() => syncResultTitleHeight());
     const connect = () => {
-      const nextTitleCard = result.querySelector<HTMLElement>('.soridraw-result-title-card--genre-height');
-      if (nextTitleCard !== observedTitleCard) {
-        if (observedTitleCard) titleObserver.unobserve(observedTitleCard);
-        observedTitleCard = nextTitleCard;
-        if (observedTitleCard) titleObserver.observe(observedTitleCard);
+      const nextCard = builder.querySelector<HTMLElement>('[data-studio-menu="genre"]');
+      if (nextCard !== observedCard) {
+        if (observedCard) observer.unobserve(observedCard);
+        observedCard = nextCard;
+        if (observedCard) observer.observe(observedCard);
       }
-      syncTopCardHeights();
+      syncResultTitleHeight();
     };
 
-    const contentObserver = new MutationObserver(connect);
-    contentObserver.observe(builder, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ['data-expanded'],
-    });
-    contentObserver.observe(result, { subtree: true, childList: true });
-
-    const themeObserver = new MutationObserver(connect);
+    connect();
+    const frame = window.requestAnimationFrame(connect);
+    const themeObserver = new MutationObserver(syncResultTitleHeight);
     themeObserver.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['data-soridraw-theme'],
     });
 
-    const frame = window.requestAnimationFrame(connect);
     return () => {
       window.cancelAnimationFrame(frame);
-      titleObserver.disconnect();
-      contentObserver.disconnect();
+      observer.disconnect();
       themeObserver.disconnect();
-      builder.querySelector<HTMLElement>('[data-studio-menu="genre"]')?.style.removeProperty('min-height');
-      lastMatchedTopCardHeightRef.current = null;
+      result.style.removeProperty('--soridraw-studio-top-card-height');
+      lastTopCardHeightRef.current = null;
     };
-  }, [syncTopCardHeights]);
+  }, [syncResultTitleHeight]);
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {

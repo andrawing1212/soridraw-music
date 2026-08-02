@@ -11931,7 +11931,7 @@ ${normalizePromptForDisplay(result.prompt)}
     hoverId: string,
     label: string,
     description: string,
-    variant: 'title-desktop' | 'title-mobile' | 'title-inline' | 'section' = 'section'
+    variant: 'title-desktop' | 'title-mobile' | 'section' = 'section'
   ) => {
     const isEditing = isRecentSongSectionEditing(focus);
     const wrapperClass = variant === 'title-mobile'
@@ -11969,13 +11969,11 @@ ${normalizePromptForDisplay(result.prompt)}
       );
     }
 
-    const baseClass = variant === 'title-inline'
-      ? 'soridraw-result-title-inline-edit flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-transparent text-[var(--text-primary)] transition-colors hover:bg-white/10 active:scale-95'
-      : variant === 'title-mobile'
-        ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
-        : variant === 'title-desktop'
-          ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
-          : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
+    const baseClass = variant === 'title-mobile'
+      ? 'flex h-[38px] w-[38px] items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all active:scale-95 border border-white/10 shadow-sm'
+      : variant === 'title-desktop'
+        ? 'order-2 flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 rounded-xl bg-white/5 px-3 py-3 hover:bg-white/15 text-[var(--text-primary)] transition-all shrink-0 active:scale-95 border border-white/10 shadow-sm sm:order-1 sm:h-11 sm:w-auto sm:min-h-0 sm:min-w-0 sm:px-3.5 sm:py-2.5'
+        : 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/15 text-[var(--text-primary)] transition-all border border-white/10 active:scale-95 shadow-btn';
 
     return (
       <button
@@ -11989,7 +11987,7 @@ ${normalizePromptForDisplay(result.prompt)}
         className={baseClass}
         title={label}
       >
-        <Edit2 className={variant === 'title-inline' ? 'w-[18px] h-[18px] opacity-85' : variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
+        <Edit2 className={variant === 'title-mobile' ? 'w-[20px] h-[20px] opacity-85' : 'w-5 h-5 opacity-80'} />
       </button>
     );
   };
@@ -14752,28 +14750,54 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             )}
           </AnimatePresence>
 
-          {/* Applied Keywords Display (Classic only; Studio Black uses the sticky result-pane strip.) */}
+          {/* Applied Keywords Display */}
           <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
-              {liveSelectedKeywordItems.map((item) => {
-                const chipClassName = cn(
-                  'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                  getAppliedSelectionKeywordChipClass(item.type)
-                );
-                return (
-                  <span key={`${item.type}-${item.id}`} className={chipClassName}>
-                    {item.label}
-                    <button
-                      type="button"
-                      onClick={() => removeLiveSelectedKeyword(item)}
-                      aria-label={`${item.label} 선택 해제`}
-                      className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
+              {[
+                ...displayGenreKeywords,
+                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
+                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
+                ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
+                ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
+                ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
+                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
+                ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
+              ].map((item) => {
+                  const chipClassName = cn(
+                    'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                    getAppliedSelectionKeywordChipClass(item.type)
+                  );
+                  return (
+                    <span
+                      key={`${item.type}-${item.id}`}
+                      className={chipClassName}
                     >
-                      <X className="w-[18px] h-[18px]" />
-                    </button>
-                  </span>
-                );
-              })}
+                      {item.label}
+                      <button 
+                        onClick={() => {
+                          if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
+                          else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+                          else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
+                          else if (item.type === 'sound') {
+                            if (!clearRecommendedSoundCombo(item.id)) {
+                              setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+                            }
+                          }
+                          else if (item.type === 'point-sound') {
+                            const pointSoundId = item.id.replace(/^point-/, '');
+                            setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
+                          }
+                          else if (item.type === 'mix') { setIsKoreanEnglishMix(false); setEnglishMixRatio(10); }
+                          else if (item.type === 'rap') setRapEnabled(false);
+                              }}
+                        className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
+                      >
+                        <X className="w-[18px] h-[18px]" />
+                      </button>
+                    </span>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -14812,10 +14836,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
               {/* Title Card */}
-              <div className={cn(
-                "soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500",
-                isRecentSongSectionEditing('title') && "soridraw-result-title-card--editing"
-              )}>
+              <div className="soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}
@@ -14862,7 +14883,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   </div>
 
                 <div className="soridraw-result-mobile-header sm:hidden space-y-1.5 pt-0">
-                  <div className="soridraw-result-mobile-topbar relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
+                  <div className="relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
                     <button
                       onClick={() => navigate('/history')}
                       onMouseEnter={() =>
@@ -14909,8 +14930,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   </div>
 
-                  <div className="soridraw-result-mobile-title-stack">
-                    <div className="soridraw-result-mobile-genre flex justify-center pt-2.5 pb-0.5">
+
+                  <div className="flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#e3a13a]/90 tracking-tight">
                       [{getResolvedGenre(result) || getSubGenre(result) || 'Song'}]
                     </p>
@@ -14941,7 +14962,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     </div>
                   ) : (
-                    <div className="soridraw-result-mobile-title-content relative min-h-[92px] pt-0">
+                    <div className="relative min-h-[92px] pt-0">
                       {(() => {
                         const entries = getTitleOnlyEntriesForDisplay(result);
                         const isRecent = isInLatestGenerationBatch(result);
@@ -14959,37 +14980,23 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   const titleSizeClass = index === 0
                                     ? 'text-[21px] leading-[1.08]'
                                     : 'text-[18px] leading-[1.06]';
-                                  const titleNode = (
+
+                                  return (
                                     <h2
+                                      key={entry.lang}
                                       data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
                                       className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
                                     >
                                       {entry.line}
                                     </h2>
                                   );
-
-                                  return index === 0 ? (
-                                    <div key={entry.lang} className="soridraw-result-primary-title-line relative inline-flex max-w-full min-w-0 items-center justify-center">
-                                      <span className="soridraw-result-primary-title-edit">
-                                        {renderRecentSongInlineEditActions(
-                                          'title',
-                                          'edit-generated-title-primary-mobile',
-                                          '생성곡 수정',
-                                          '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                                          'title-inline'
-                                        )}
-                                      </span>
-                                      {titleNode}
-                                    </div>
-                                  ) : (
-                                    <div key={entry.lang} className="max-w-full min-w-0">
-                                      {titleNode}
-                                    </div>
-                                  );
                                 })}
                               </div>
                             </div>
 
+                            <div className="flex justify-center pt-1">
+                              {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
+                            </div>
 
                             <div className="absolute right-0 top-[-10px] flex flex-col gap-2">
                               {entries.map((entry) => {
@@ -15033,7 +15040,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
                     if (!generatedAtLabel) return null;
                     return (
-                      <div className="soridraw-result-title-date flex justify-center px-4">
+                      <div className="flex justify-center px-4">
                         <p className="text-[12px] font-semibold text-[var(--text-secondary)]/80 tracking-tight text-center">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
@@ -15043,9 +15050,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </div>
                     );
                   })()}
-                  </div>
 
-                  <div className="soridraw-result-mobile-footer-controls flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
+                  <div className="flex w-full max-w-full items-center justify-center gap-2 pt-2 overflow-visible">
                     <button
                       onClick={() => {
                         if (isConfirmingDeleteHistory) {
@@ -15178,32 +15184,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                   const titleSizeClass = index === 0
                                     ? 'text-2xl md:text-3xl leading-[1.1]'
                                     : 'text-lg md:text-xl leading-[1.08]';
-                                  const titleNode = (
+
+                                  return (
                                     <h2
+                                      key={entry.lang}
                                       data-soridraw-title-tone={`${titleTone}-${index === 0 ? 'primary' : 'secondary'}`}
                                       className={`max-w-full min-w-0 truncate text-center font-extrabold tracking-tight ${titleSizeClass} ${titleClassName}`}
                                     >
                                       {entry.line}
                                     </h2>
-                                  );
-
-                                  return index === 0 ? (
-                                    <div key={entry.lang} className="soridraw-result-primary-title-line relative inline-flex max-w-full min-w-0 items-center justify-center">
-                                      <span className="soridraw-result-primary-title-edit">
-                                        {renderRecentSongInlineEditActions(
-                                          'title',
-                                          'edit-generated-title-primary-desktop',
-                                          '생성곡 수정',
-                                          '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                                          'title-inline'
-                                        )}
-                                      </span>
-                                      {titleNode}
-                                    </div>
-                                  ) : (
-                                    <div key={entry.lang} className="max-w-full min-w-0">
-                                      {titleNode}
-                                    </div>
                                   );
                                 })}
                               </div>
@@ -15240,6 +15229,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })}
                               </div>
 
+                              <div className="absolute left-1/2 top-[74px] -translate-x-1/2">
+                                {renderRecentSongInlineEditActions('title', 'edit-generated-title-desktop-inline', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
+                              </div>
                             </div>
                           </div>
                         );
@@ -15250,7 +15242,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     const generatedAtLabel = formatGeneratedDateTimeLabel((result as any).createdAt || (result as any).updatedAt || (result as any).savedAt);
                     if (!generatedAtLabel) return null;
                     return (
-                      <div className="soridraw-result-title-date flex justify-center -mt-1 px-4">
+                      <div className="flex justify-center -mt-1 px-4">
                         <p className="text-[11px] sm:text-xs font-semibold text-[var(--text-secondary)]/80 tracking-tight">
                           {generatedAtLabel}
                           {isInLatestGenerationBatch(result) && (
@@ -15966,24 +15958,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                 {/* Expand Button at Bottom Center */}
                 <button
-                  type="button"
                   data-expanded={isAppliedKeywordsExpanded ? 'true' : 'false'}
                   aria-pressed={isAppliedKeywordsExpanded}
-                  aria-label={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
-                  title={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setIsAppliedKeywordsExpanded((prev) => !prev);
+                    setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
+                    keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
                   }}
                   className={cn(
-                    "soridraw-result-keywords-expand section-expand-button absolute left-1/2 flex items-center justify-center border transition-all z-20",
+                    "soridraw-result-keywords-expand section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
                     isAppliedKeywordsExpanded 
                       ? "bg-[#e3a13a] text-white border-[#e3a13a]" 
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? <ChevronUp aria-hidden="true" className="w-[18px] h-[18px]" /> : <ChevronDown aria-hidden="true" className="w-[18px] h-[18px]" />}
+                  {isAppliedKeywordsExpanded ? <ChevronUp className="w-[18px] h-[18px]" /> : <ChevronDown className="w-[18px] h-[18px]" />}
                 </button>
               </div>
 

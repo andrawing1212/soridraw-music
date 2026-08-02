@@ -14750,28 +14750,54 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             )}
           </AnimatePresence>
 
-          {/* Applied Keywords Display (Classic only; Studio Black uses the sticky result-pane strip.) */}
+          {/* Applied Keywords Display */}
           <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
             <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
-              {liveSelectedKeywordItems.map((item) => {
-                const chipClassName = cn(
-                  'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                  getAppliedSelectionKeywordChipClass(item.type)
-                );
-                return (
-                  <span key={`${item.type}-${item.id}`} className={chipClassName}>
-                    {item.label}
-                    <button
-                      type="button"
-                      onClick={() => removeLiveSelectedKeyword(item)}
-                      aria-label={`${item.label} 선택 해제`}
-                      className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
+              {[
+                ...displayGenreKeywords,
+                ...selectedMoods.map((id) => ({ id, type: 'mood' as const, label: getMoodKeywordLabel(id) })),
+                ...selectedThemes.map((id) => ({ id, type: 'theme' as const, label: getThemeKeywordLabel(id) })),
+                ...filterSelectableIds(selectedStyles).map((id) => ({ id, type: 'style' as const, label: getStyleVariantLabelById(id) })).filter((item) => item.label),
+                ...filterSelectableIds(selectedInstrumentSounds).map((id) => ({ id, type: 'sound' as const, label: getSoundVariantLabelById(id) })).filter((item) => item.label),
+                ...filterSelectableIds(selectedPointSounds).map((id) => ({ id: `point-${id}`, type: 'point-sound' as const, label: `#포인트: ${getSoundVariantLabelById(id)}` })).filter((item) => item.label !== '#포인트: '),
+                ...(isKoreanEnglishMix ? [{ id: 'mix', type: 'mix' as const, label: '#언어혼합' }] : []),
+                ...(rapEnabled ? [{ id: 'rap', type: 'rap' as const, label: '#랩 ON' }] : []),
+              ].map((item) => {
+                  const chipClassName = cn(
+                    'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                    getAppliedSelectionKeywordChipClass(item.type)
+                  );
+                  return (
+                    <span
+                      key={`${item.type}-${item.id}`}
+                      className={chipClassName}
                     >
-                      <X className="w-[18px] h-[18px]" />
-                    </button>
-                  </span>
-                );
-              })}
+                      {item.label}
+                      <button 
+                        onClick={() => {
+                          if (item.type === 'genre') removeAppliedGenreKeyword(item.id);
+                          else if (item.type === 'mood') toggleSelection(item.id, 'mood');
+                          else if (item.type === 'theme') toggleSelection(item.id, 'theme');
+                          else if (item.type === 'style') setSelectedStyles((prev) => prev.filter((value) => value !== item.id));
+                          else if (item.type === 'sound') {
+                            if (!clearRecommendedSoundCombo(item.id)) {
+                              setSelectedInstrumentSounds((prev) => prev.filter((value) => value !== item.id));
+                            }
+                          }
+                          else if (item.type === 'point-sound') {
+                            const pointSoundId = item.id.replace(/^point-/, '');
+                            setSelectedPointSounds((prev) => prev.filter((value) => value !== pointSoundId));
+                          }
+                          else if (item.type === 'mix') { setIsKoreanEnglishMix(false); setEnglishMixRatio(10); }
+                          else if (item.type === 'rap') setRapEnabled(false);
+                              }}
+                        className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
+                      >
+                        <X className="w-[18px] h-[18px]" />
+                      </button>
+                    </span>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -14904,18 +14930,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
                   </div>
 
-                  {!isRecentSongSectionEditing('title') && (
-                    <div className="soridraw-result-title-edit-anchor" aria-label="생성곡 제목 수정">
-                      {renderRecentSongInlineEditActions(
-                        'title',
-                        'edit-generated-title-top-left',
-                        '생성곡 수정',
-                        '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.',
-                        'title-mobile'
-                      )}
-                    </div>
-                  )}
-
 
                   <div className="flex justify-center pt-2.5 pb-0.5">
                     <p className="max-w-[calc(100%-80px)] truncate text-center text-[15px] font-extrabold text-[#e3a13a]/90 tracking-tight">
@@ -14980,7 +14994,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                               </div>
                             </div>
 
-                            <div className="soridraw-result-title-edit-inline soridraw-result-title-edit-inline--mobile flex justify-center pt-1">
+                            <div className="flex justify-center pt-1">
                               {renderRecentSongInlineEditActions('title', 'edit-generated-title-mobile', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                             </div>
 
@@ -15215,7 +15229,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 })}
                               </div>
 
-                              <div className="soridraw-result-title-edit-inline soridraw-result-title-edit-inline--desktop absolute left-1/2 top-[74px] -translate-x-1/2">
+                              <div className="absolute left-1/2 top-[74px] -translate-x-1/2">
                                 {renderRecentSongInlineEditActions('title', 'edit-generated-title-desktop-inline', '생성곡 수정', '보관함 저장 전 제목, 프롬프트, 가사를 수정합니다.', 'title-mobile')}
                               </div>
                             </div>
@@ -15950,18 +15964,29 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   aria-label={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   title={isAppliedKeywordsExpanded ? '적용된 키워드 접기' : '적용된 키워드 펼치기'}
                   onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setIsAppliedKeywordsExpanded((prev) => !prev);
+                    const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
+                    if (isStudioBlack) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsAppliedKeywordsExpanded((prev) => !prev);
+                      return;
+                    }
+
+                    setIsAppliedKeywordsExpanded(!isAppliedKeywordsExpanded);
+                    keepExpandableSectionInView(event.currentTarget, isAppliedKeywordsExpanded);
                   }}
                   className={cn(
-                    "soridraw-result-keywords-expand section-expand-button absolute left-1/2 flex items-center justify-center border transition-all z-20",
+                    "soridraw-result-keywords-expand section-expand-button section-expand-button--half-y absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-8 h-8 rounded-full border flex items-center justify-center transition-all z-20 shadow-xl",
                     isAppliedKeywordsExpanded 
                       ? "bg-[#e3a13a] text-white border-[#e3a13a]" 
                       : "bg-[var(--card-bg)] border-[var(--border-color)] text-[#e3a13a] hover:text-white hover:bg-[#e3a13a]"
                   )}
                 >
-                  {isAppliedKeywordsExpanded ? <ChevronUp aria-hidden="true" className="w-[18px] h-[18px]" /> : <ChevronDown aria-hidden="true" className="w-[18px] h-[18px]" />}
+                  {isAppliedKeywordsExpanded ? (
+                    <ChevronUp aria-hidden="true" className="soridraw-result-keywords-chevron w-[18px] h-[18px]" />
+                  ) : (
+                    <ChevronDown aria-hidden="true" className="soridraw-result-keywords-chevron w-[18px] h-[18px]" />
+                  )}
                 </button>
               </div>
 

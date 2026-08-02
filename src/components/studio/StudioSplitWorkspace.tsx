@@ -33,6 +33,7 @@ type ExternalSplitControls = {
   searchButton: HTMLElement | null;
   floatingActionBar: HTMLElement | null;
   collapsedActionButton: HTMLElement | null;
+  liveKeywords: HTMLElement | null;
 };
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
@@ -83,6 +84,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     searchButton: null,
     floatingActionBar: null,
     collapsedActionButton: null,
+    liveKeywords: null,
   });
 
   const isStudioBlack = useCallback(() =>
@@ -126,6 +128,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.removeProperty('--soridraw-studio-splitter-left');
     root.style.removeProperty('--soridraw-studio-splitter-bottom');
     root.style.removeProperty('--soridraw-studio-action-footer-offset');
+    root.style.removeProperty('--soridraw-studio-result-left');
+    root.style.removeProperty('--soridraw-studio-result-right');
   }, []);
 
   const readExternalControls = useCallback((force = false) => {
@@ -138,13 +142,16 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       current.collapsedActionButton = document.querySelector<HTMLElement>(
         'body > .soridraw-studio-action-collapsed',
       );
+      current.liveKeywords = document.querySelector<HTMLElement>(
+        'body > .soridraw-live-keywords-fixed',
+      );
       externalControlsReadyRef.current = true;
     }
     return current;
   }, []);
 
   const clearExternalMeasurements = useCallback(() => {
-    const { searchButton, floatingActionBar, collapsedActionButton } = externalControlsRef.current;
+    const { searchButton, floatingActionBar, collapsedActionButton, liveKeywords } = externalControlsRef.current;
     searchButton?.style.removeProperty('left');
     searchButton?.style.removeProperty('right');
     searchButton?.style.removeProperty('transform');
@@ -158,6 +165,10 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
       collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
+    if (liveKeywords) {
+      liveKeywords.style.removeProperty('left');
+      liveKeywords.style.removeProperty('right');
+    }
     splitterRef.current?.style.removeProperty('left');
     splitterRef.current?.style.removeProperty('transform');
     lastActionControlPixelRef.current = null;
@@ -168,6 +179,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
+    const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
 
     // The divider is a fixed body portal. Give it one coordinate owner only:
     // the exact viewport left position. The previous transform preview lost to
@@ -178,6 +190,18 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       splitterRef.current.style.setProperty(
         'left',
         `${Math.max(0, Math.round(splitterLeft) - 8)}px`,
+        'important',
+      );
+    }
+    if (controls.liveKeywords) {
+      controls.liveKeywords.style.setProperty(
+        'left',
+        `${Math.max(0, Math.round(splitterLeft + 18))}px`,
+        'important',
+      );
+      controls.liveKeywords.style.setProperty(
+        'right',
+        `${Math.max(0, Math.round(workspaceRight))}px`,
         'important',
       );
     }
@@ -223,6 +247,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
     root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
     root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, splitterLeft)}px`);
+    root.style.setProperty('--soridraw-studio-result-left', `${Math.max(0, splitterLeft + 18)}px`);
+    root.style.setProperty(
+      '--soridraw-studio-result-right',
+      `${Math.max(0, window.innerWidth - (metricsRef.current.left + metricsRef.current.width))}px`,
+    );
   }, []);
 
   const refreshSplitterFooterBoundary = useCallback(() => {

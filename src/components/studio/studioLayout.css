@@ -3177,21 +3177,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   stroke: #f7f7f7 !important;
 }
 
-/* 282: keep the 279 left/right outer-height match, but do not let the added
- * Genre card height get distributed between its content and summary.  The
- * Genre controls keep their original compact positions and only harmless empty
- * space remains below them. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-builder-pane [data-studio-menu="genre"] {
-  justify-content: flex-start !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-builder-pane [data-studio-menu="genre"] > .flex-1 {
-  flex: 0 0 auto !important;
-  width: 100% !important;
-}
-
 /* Title-card side actions are flat controls in Studio Black. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-result-content :is(

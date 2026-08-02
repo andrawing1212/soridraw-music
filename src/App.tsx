@@ -14812,7 +14812,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
 
               {/* Title Card */}
-              <div className="soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500">
+              <div className={cn(
+                "soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500",
+                isRecentSongSectionEditing('title') && "soridraw-result-title-card--editing"
+              )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
                       onClick={() => navigate('/history')}

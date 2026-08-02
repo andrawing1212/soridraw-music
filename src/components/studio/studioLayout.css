@@ -3592,16 +3592,47 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   padding-top: 0 !important;
 }
 
-/* 276: keep the generated-title text optically centered while the edit icon
- * sits immediately before the primary title, and lock the compact footer row
- * to the bottom of the title card.  Only the recent-song title card is touched. */
+/* 278: rebuild only the Studio Black generated-title card internals using the
+ * same stable layout principle as Classic: the title text owns the center,
+ * while the edit control is taken out of flow, and the date/footer occupy
+ * fixed rows. One- and two-language titles therefore cannot move the footer. */
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane .soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing),
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane .soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing):focus-within {
+  height: var(--soridraw-studio-top-card-height, 248px) !important;
+  min-height: var(--soridraw-studio-top-card-height, 248px) !important;
+  max-height: var(--soridraw-studio-top-card-height, 248px) !important;
+  overflow: hidden !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane .soridraw-result-title-card--genre-height.soridraw-result-title-card--editing,
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane .soridraw-result-title-card--genre-height.soridraw-result-title-card--editing:focus-within {
+  height: auto !important;
+  min-height: var(--soridraw-studio-top-card-height, 248px) !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* The pencil does not participate in title width, so the representative title
+ * itself stays at the exact horizontal center in both pane compositions. */
 :root[data-soridraw-theme="studio-black"]
 .soridraw-studio-result-pane .soridraw-result-primary-title-line {
   position: relative !important;
+  display: block !important;
   width: fit-content !important;
   max-width: 100% !important;
+  min-width: 0 !important;
   margin-left: auto !important;
   margin-right: auto !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane .soridraw-result-primary-title-line::after {
+  display: none !important;
+  content: none !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
@@ -3610,98 +3641,255 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   top: 50% !important;
   right: 100% !important;
   transform: translateY(-50%) !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 28px !important;
   margin-right: 4px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   z-index: 2 !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
 .soridraw-studio-result-pane .soridraw-result-primary-title-edit .soridraw-result-title-inline-edit {
   width: 28px !important;
-  height: 28px !important;
   min-width: 28px !important;
+  height: 28px !important;
   min-height: 28px !important;
   padding: 4px !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-header {
+.soridraw-studio-result-pane .soridraw-result-primary-title-line > h2 {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  text-align: center !important;
+}
+
+/* Wide/desktop result composition: label, content, date and controls have
+ * dedicated rows. The footer remains on the same baseline for every song. */
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-body {
   display: grid !important;
-  grid-template-rows: 32px minmax(0, 1fr) 34px !important;
-  align-items: stretch !important;
-  justify-content: normal !important;
+  grid-template-rows: 18px minmax(0, 1fr) 13px 34px !important;
   gap: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-body > :first-child {
+  grid-row: 1 !important;
+  align-self: center !important;
+  margin: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-heading-area {
+  grid-row: 2 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 4px !important;
+  align-self: stretch !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-heading-area > div {
+  width: 100% !important;
   height: 100% !important;
   min-height: 0 !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-title-stack {
-  grid-row: 2 !important;
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-display {
+  display: grid !important;
+  grid-template-rows: 18px minmax(0, 1fr) !important;
+  width: 100% !important;
+  height: 100% !important;
   min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-display > p {
+  align-self: center !important;
+  margin: 0 !important;
+  line-height: 1 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-lines {
   display: flex !important;
-  flex-direction: column !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  align-items: center !important;
   justify-content: center !important;
-  align-items: stretch !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-lines > div:first-child {
+  gap: 2px !important;
+  align-self: center !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-date {
+  grid-row: 3 !important;
+  align-self: center !important;
+  min-height: 13px !important;
+  margin: 0 !important;
+  padding: 0 4px !important;
+  line-height: 1 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="desktop"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-footer-controls {
+  grid-row: 4 !important;
+  align-self: end !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+}
+
+/* Compact/mobile result composition follows the same four-part structure.
+ * The title stack may contain one or two languages without moving the footer. */
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-header {
+  display: grid !important;
+  grid-template-rows: 32px minmax(0, 1fr) 34px !important;
   gap: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-items: stretch !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-topbar {
+  grid-row: 1 !important;
+  align-self: start !important;
+  margin: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-title-stack {
+  grid-row: 2 !important;
+  display: grid !important;
+  grid-template-rows: 14px minmax(0, 1fr) 12px !important;
+  gap: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
   overflow: visible !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-genre {
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-genre {
+  grid-row: 1 !important;
+  align-self: center !important;
   min-height: 14px !important;
-  padding: 0 !important;
   margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-title-content {
-  min-height: 34px !important;
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-title-content {
+  grid-row: 2 !important;
+  align-self: stretch !important;
+  min-height: 0 !important;
+  height: 100% !important;
   margin: 0 !important;
   padding: 0 !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-title-content > .flex {
-  min-height: 28px !important;
-  padding-top: 0 !important;
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-title-content > .flex {
+  min-height: 0 !important;
+  height: 100% !important;
   align-items: center !important;
+  justify-content: center !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-title-content .inline-flex {
-  gap: 1px !important;
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-title-content .inline-flex {
+  gap: 2px !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-title-content h2 {
-  line-height: 1.02 !important;
-}
-
-:root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-title-date {
-  min-height: 11px !important;
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-title-date {
+  grid-row: 3 !important;
+  align-self: center !important;
+  min-height: 12px !important;
   margin: 0 !important;
   padding: 0 2px !important;
   line-height: 1 !important;
 }
 
 :root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="mobile"] .soridraw-result-mobile-footer-controls {
+.soridraw-studio-result-pane[data-pane-mode="mobile"]
+.soridraw-result-title-card--genre-height:not(.soridraw-result-title-card--editing)
+.soridraw-result-mobile-footer-controls {
   grid-row: 3 !important;
   align-self: end !important;
-  min-height: 34px !important;
   height: 34px !important;
+  min-height: 34px !important;
   margin: 0 !important;
-  padding-top: 0 !important;
+  padding: 0 !important;
   transform: none !important;
 }
 
-:root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-title-lines > div:first-child {
-  gap: 1px !important;
-}
-
-:root[data-soridraw-theme="studio-black"]
-.soridraw-studio-result-pane[data-pane-mode="desktop"] .soridraw-result-primary-title-edit {
-  margin-right: 5px !important;
-}

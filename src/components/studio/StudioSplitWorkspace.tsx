@@ -20,8 +20,7 @@ const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
 const ACTION_CONTROL_PIXEL_STEP = 8;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
-const MIN_ISOLATED_WORKSPACE_HEIGHT = 560;
-const ISOLATED_WORKSPACE_BOTTOM_GAP = 16;
+const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -272,9 +271,17 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     // all the way to #document.
     const rect = layout.getBoundingClientRect();
     const visibleTop = Math.max(58, Math.min(window.innerHeight - 1, rect.top));
+    const parentBottomPadding = layout.parentElement
+      ? Number.parseFloat(window.getComputedStyle(layout.parentElement).paddingBottom) || 0
+      : 0;
     const nextHeight = Math.max(
-      MIN_ISOLATED_WORKSPACE_HEIGHT,
-      Math.floor(window.innerHeight - visibleTop - ISOLATED_WORKSPACE_BOTTOM_GAP),
+      1,
+      Math.floor(
+        window.innerHeight
+        - visibleTop
+        - parentBottomPadding
+        - ISOLATED_WORKSPACE_BOTTOM_GAP,
+      ),
     );
 
     layout.dataset.scrollIsolated = 'true';

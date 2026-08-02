@@ -2238,7 +2238,9 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
 
 /* Explicit Classic recovery: the tracking class is inert outside Studio Black,
  * and the original full-viewport bottom position remains available. */
-html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking {
+html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  position: fixed !important;
+  inset: auto auto clamp(1rem, 2.4vh, 1.75rem) 0 !important;
   top: auto !important;
   right: auto !important;
   bottom: clamp(1rem, 2.4vh, 1.75rem) !important;
@@ -2677,3 +2679,34 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   }
 }
 
+
+/* 252: Studio Black wide-desktop owns the viewport.
+ * The center workspace already has independent pane scrolling, so the document
+ * itself must not create a third vertical scrollbar at the far right. Scope the
+ * lock to the mounted /studio frame and Studio Black only; Classic and every
+ * other route keep their original document scrolling. */
+@media (min-width: 1600px) {
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"],
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] body.soridraw-studio-route-active,
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] body.soridraw-studio-route-active > #root,
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] body.soridraw-studio-route-active > #root > .soridraw-app-root {
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+  }
+
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame,
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] .soridraw-studio-page-center {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    min-height: 0 !important;
+  }
+}

@@ -29,17 +29,7 @@ import { AppUserInfo, UserRole } from '../types';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
 import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
-import {
- applySoridrawAppearance,
- applySoridrawDisplayMode,
- isSoridrawPhoneDevice,
- normalizeSoridrawColorMode,
- normalizeSoridrawTheme,
- readSoridrawColorMode,
- readSoridrawDisplayMode,
- readSoridrawTheme,
- type SoridrawDisplayMode,
-} from '../services/themePreferences';
+import { applySoridrawTheme, normalizeSoridrawTheme, readSoridrawTheme, SoridrawTheme } from '../services/themePreferences';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -275,8 +265,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const [autoModelFallback, setAutoModelFallback] = useState(() => readGeminiAutoModelFallback(auth.currentUser?.uid));
  const [isSavingAutoModelFallback, setIsSavingAutoModelFallback] = useState(false);
  const [autoModelFallbackMessage, setAutoModelFallbackMessage] = useState<string | null>(null);
- const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
- const isPhoneAppearance = isSoridrawPhoneDevice();
+ const [appTheme, setAppTheme] = useState<SoridrawTheme>(() => readSoridrawTheme());
  const [isSavingTheme, setIsSavingTheme] = useState(false);
  const [themeMessage, setThemeMessage] = useState<string | null>(null);
 
@@ -299,15 +288,9 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
  const nextProfile = snapshot.exists() ? ({ uid: user.uid, ...snapshot.data() } as AppUserInfo) : null;
  setProfile(nextProfile);
- const preferences = (snapshot.data() as any)?.appPreferences || {};
- const savedTheme = normalizeSoridrawTheme(preferences.theme ?? readSoridrawTheme());
- const savedColorMode = normalizeSoridrawColorMode(
-  (isPhoneAppearance ? preferences.mobileColorMode : preferences.desktopColorMode)
-  ?? preferences.colorMode
-  ?? readSoridrawColorMode(),
- );
- applySoridrawAppearance(savedTheme, savedColorMode);
- setDisplayMode(readSoridrawDisplayMode());
+ const savedTheme = normalizeSoridrawTheme((snapshot.data() as any)?.appPreferences?.theme);
+ setAppTheme(savedTheme);
+ applySoridrawTheme(savedTheme);
  });
  return () => unsubscribe();
  }, [user]);
@@ -476,30 +459,24 @@ export default function MyPage({ onLogout }: MyPageProps) {
  await onLogout();
  }, [onLogout]);
 
- const handleThemeChange = useCallback(async (mode: SoridrawDisplayMode) => {
+ const handleThemeChange = useCallback(async (theme: SoridrawTheme) => {
   if (!user?.uid || isSavingTheme) return;
-  const previous = displayMode;
-  setDisplayMode(mode);
-  applySoridrawDisplayMode(mode);
+  const previous = appTheme;
+  setAppTheme(theme);
+  applySoridrawTheme(theme);
   setIsSavingTheme(true);
   setThemeMessage(null);
   try {
-   const appearanceUpdate = isPhoneAppearance
-    ? { 'appPreferences.mobileColorMode': readSoridrawColorMode() }
-    : {
-      'appPreferences.theme': readSoridrawTheme(),
-      'appPreferences.desktopColorMode': readSoridrawColorMode(),
-     };
-   await updateDoc(doc(db, 'users', user.uid), appearanceUpdate);
-   setThemeMessage(`${mode === 'studio-black' ? 'Studio Black' : mode === 'light' ? '라이트' : '다크'} 모드가 적용되었습니다.`);
+   await updateDoc(doc(db, 'users', user.uid), { 'appPreferences.theme': theme });
+   setThemeMessage(theme === 'classic' ? 'Classic 테마가 적용되었습니다.' : 'Studio Black 테마가 적용되었습니다.');
   } catch {
-   setDisplayMode(previous);
-   applySoridrawDisplayMode(previous);
+   setAppTheme(previous);
+   applySoridrawTheme(previous);
    setThemeMessage('테마 저장에 실패해 이전 디자인으로 되돌렸습니다.');
   } finally {
    setIsSavingTheme(false);
   }
- }, [displayMode, isPhoneAppearance, isSavingTheme, user?.uid]);
+ }, [appTheme, isSavingTheme, user?.uid]);
 
  if (!user) {
  return (
@@ -668,21 +645,15 @@ export default function MyPage({ onLogout }: MyPageProps) {
  <div>
  <p className="text-xs font-black uppercase tracking-[0.22em] text-[#ffb400]">앱 설정</p>
  <h2 className="mt-1 text-lg font-black text-white">디자인 테마</h2>
- <p className="mt-1 text-sm leading-relaxed text-white/56">프로필 메뉴에서도 바로 변경할 수 있습니다. 휴대폰은 다크·라이트만, 태블릿과 PC는 Studio Black까지 사용할 수 있습니다.</p>
+ <p className="mt-1 text-sm leading-relaxed text-white/56">기존 디자인은 Classic으로 그대로 보존됩니다. Studio Black은 PC와 모바일에 함께 적용됩니다.</p>
  </div>
  </div>
- <div className="mt-5 grid gap-3 sm:grid-cols-3">
- {(isPhoneAppearance
-  ? [
-    { value: 'dark' as const, label: '다크', description: '모바일 기본 다크 디자인' },
-    { value: 'light' as const, label: '라이트', description: '밝은 모바일 디자인' },
-   ]
-  : [
-    { value: 'dark' as const, label: '다크', description: 'Classic 다크 디자인' },
-    { value: 'light' as const, label: '라이트', description: 'Classic 라이트 디자인' },
-    { value: 'studio-black' as const, label: 'Studio Black', description: '태블릿·PC 전용 블랙 디자인' },
-   ]).map((option) => {
-  const selected = displayMode === option.value;
+ <div className="mt-5 grid gap-3 sm:grid-cols-2">
+ {[
+  { value: 'classic' as const, label: 'Classic', description: '현재 SORIDRAW 디자인' },
+  { value: 'studio-black' as const, label: 'Studio Black', description: '차가운 중성 블랙 + 노란 포인트' },
+ ].map((option) => {
+  const selected = appTheme === option.value;
   return (
    <button
     key={option.value}

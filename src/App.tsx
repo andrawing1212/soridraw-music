@@ -304,13 +304,11 @@ import {
 import { EMPTY_ADMIN_PERMISSIONS, getFirstAccessibleAdminPath, normalizeAdminPermissions, normalizeStaffRole } from './constants/adminPermissions';
 import { getResolvedGenre, getSubGenre, formatKoreanTitle, formatEnglishTitle, formatInlineTitle, resolveKeywordsForDisplay, formatDisplayTitle } from './lib/songUtils';
 import {
-  applyStoredSoridrawAppearance,
+  applyStoredSoridrawDisplayMode,
   cycleSoridrawDisplayMode,
   getSoridrawDisplayModeLabel,
   isSoridrawPhoneDevice,
-  readSoridrawColorMode,
   readSoridrawDisplayMode,
-  readSoridrawTheme,
   type SoridrawDisplayMode,
 } from './services/themePreferences';
 
@@ -3331,21 +3329,7 @@ function Navigation({
   }, []);
 
   const handleDisplayModeCycle = () => {
-    const nextMode = cycleSoridrawDisplayMode();
-    setDisplayMode(nextMode);
-    if (user?.uid) {
-      const nextTheme = readSoridrawTheme();
-      const nextColorMode = readSoridrawColorMode();
-      const appearanceUpdate = isPhoneAppearance
-        ? { 'appPreferences.mobileColorMode': nextColorMode }
-        : {
-          'appPreferences.theme': nextTheme,
-          'appPreferences.desktopColorMode': nextColorMode,
-        };
-      updateDoc(doc(db, 'users', user.uid), appearanceUpdate).catch((error) => {
-        console.warn('Display mode preference sync failed:', error);
-      });
-    }
+    setDisplayMode(cycleSoridrawDisplayMode());
   };
 
   const displayModeCycleText = isPhoneAppearance
@@ -3526,15 +3510,14 @@ function Navigation({
                     <button
                       type="button"
                       onClick={handleDisplayModeCycle}
-                      className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#ffb400]/10"
-                      aria-label={`디자인 모드 변경, 현재 ${getSoridrawDisplayModeLabel(displayMode)}`}
+                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#ffb400]/10"
                     >
                       <Palette className="h-5 w-5 shrink-0 text-[#ffb400]" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-black text-white/82">모드 변경</span>
                         <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
                       </span>
-                      <span className="rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#ffb400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#ffb400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
                     </button>
                     <div className="my-1 border-t border-white/10" />
                     <button type="button" disabled className="flex h-10 w-full items-center rounded-xl px-3 text-left text-sm font-bold text-white/30">고객지원 · 준비중</button>
@@ -3632,7 +3615,7 @@ function Navigation({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -6, scale: 0.96 }}
                     transition={{ duration: 0.16 }}
-                    className="soridraw-profile-menu absolute right-0 top-full z-[80] mt-2 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#181818]/96 p-2 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
+                    className="soridraw-profile-menu absolute right-0 top-full z-[80] mt-2 w-56 max-h-[calc(100vh-84px)] overflow-y-auto rounded-2xl border border-white/10 bg-[#181818]/96 p-2 shadow-[0_14px_32px_rgba(0,0,0,0.48)] backdrop-blur-xl"
                   >
                     <div className="border-b border-white/10 px-3 py-2.5">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#FFB400]">계정 메뉴</p>
@@ -3647,7 +3630,7 @@ function Navigation({
                           setIsProfileOpen(false);
                           setIsExpanded(false);
                         }}
-                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
+                        className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-white/78 transition-all hover:bg-[#FFB400]/12 hover:text-[#FFB400]"
                       >
                         <Users className="h-5 w-5" />
                         관리자메뉴
@@ -3672,15 +3655,14 @@ function Navigation({
                     <button
                       type="button"
                       onClick={handleDisplayModeCycle}
-                      className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#FFB400]/12"
-                      aria-label={`디자인 모드 변경, 현재 ${getSoridrawDisplayModeLabel(displayMode)}`}
+                      className="soridraw-theme-cycle-button flex min-h-12 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-all hover:bg-[#FFB400]/12"
                     >
                       <Palette className="h-5 w-5 shrink-0 text-[#FFB400]" />
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13px] font-black text-white/82">모드 변경</span>
                         <span className="block truncate text-[10px] font-bold text-white/38">{displayModeCycleText}</span>
                       </span>
-                      <span className="rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#FFB400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
+                      <span className="soridraw-theme-current-label rounded-lg bg-white/[0.06] px-2 py-1 text-[11px] font-black text-[#FFB400]">{getSoridrawDisplayModeLabel(displayMode)}</span>
                     </button>
                     <div className="my-1 border-t border-white/10" />
                     <button
@@ -3692,7 +3674,7 @@ function Navigation({
                         if (timeoutRef.current) clearTimeout(timeoutRef.current);
                         if (profileTimeoutRef.current) clearTimeout(profileTimeoutRef.current);
                       }}
-                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[13px] font-black text-[#FFB400] transition-all hover:bg-[#FFB400]/12"
+                      className="flex h-10 w-full items-center gap-3 rounded-xl px-3.5 text-left text-[13px] font-black text-[#FFB400] transition-all hover:bg-[#FFB400]/12"
                     >
                       <LogOut className="h-5 w-5" />
                       로그아웃
@@ -3922,7 +3904,7 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
 
 function App() {
   useEffect(() => {
-    applyStoredSoridrawAppearance();
+    applyStoredSoridrawDisplayMode();
   }, []);
   // Screen size detection for FHD / QHD Desktop monitors to preserve styles during browser zoom
   useEffect(() => {
@@ -6020,6 +6002,11 @@ function App() {
       document.removeEventListener('visibilitychange', handleReEntry);
     };
   }, [isLoggingIn]);
+
+  useEffect(() => {
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('themeMode', 'dark');
+  }, []);
 
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [subGenre, setSubGenre] = useState<string[]>([]);

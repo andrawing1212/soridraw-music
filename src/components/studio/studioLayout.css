@@ -10,11 +10,22 @@
   min-width: 0;
 }
 
+.soridraw-studio-pane-content {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-page-frame,
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-page-center,
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-split-workspace,
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-builder-pane,
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-result-pane {
+  display: contents !important;
+}
+
+:root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-pane-content {
   display: contents !important;
 }
 
@@ -1055,12 +1066,49 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
-    will-change: left;
+    will-change: transform;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle {
+    will-change: transform !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero .soridraw-studio-hero-search-button {
     will-change: left, width, right;
+  }
+}
+
+/* 308: decouple the 60fps divider boundary from the expensive deep card
+ * reflow on wide PC. During a drag, the outer pane edges keep following every
+ * animation frame, while these inner width owners update on a paced cadence.
+ * Moving the builder query container to the inner owner prevents every 1px
+ * pointer step from invalidating all container-query descendants. */
+@media (min-width: 1600px) {
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body > .soridraw-studio-splitter,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle {
+    will-change: transform !important;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    container-type: normal !important;
+    container-name: none !important;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-builder-content {
+    container-type: inline-size !important;
+    container-name: soridraw-builder-pane !important;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-pane-content {
+    contain: layout paint style !important;
+    overflow: visible !important;
   }
 }
 

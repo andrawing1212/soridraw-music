@@ -84,7 +84,16 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     builder: 'desktop',
     result: 'desktop',
   });
-  const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
+  const dragRef = useRef({
+    pointerId: -1,
+    startX: 0,
+    startPercent: DEFAULT_PERCENT,
+    width: 1,
+    startBuilderPixel: 0,
+    startResultPixel: 0,
+  });
+  const builderInnerRef = useRef<HTMLDivElement | null>(null);
+  const resultInnerRef = useRef<HTMLDivElement | null>(null);
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
@@ -374,13 +383,10 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   }, [isStudioBlack]);
 
   const resolvePaneMode = useCallback((
-    pane: HTMLElement,
     width: number,
     breakpoint: number,
     currentMode: PaneMode,
   ): PaneMode => {
-    const hasCommittedMode = pane.dataset.paneMode === 'mobile' || pane.dataset.paneMode === 'desktop';
-    if (!hasCommittedMode) return width < breakpoint ? 'mobile' : 'desktop';
     if (currentMode === 'desktop') {
       return width < breakpoint - PANE_MODE_HYSTERESIS ? 'mobile' : 'desktop';
     }
@@ -415,7 +421,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
     const { left, width } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
-    const builderWidth = builderCollapsedRef.current ? 0 : safeWidth * (nextPercent / 100);
+    const builderWidth = builderCollapsedRef.current ? 0 : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
@@ -430,6 +436,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       builder.style.removeProperty('flex-basis');
       builder.style.setProperty('width', `${Math.max(0, builderWidth)}px`, 'important');
       result.style.setProperty('left', `${Math.max(0, builderWidth)}px`, 'important');
+      result.style.setProperty('width', `${Math.max(0, resultWidth)}px`, 'important');
     } else {
       builder.style.removeProperty('width');
       result.style.removeProperty('left');
@@ -440,23 +447,21 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const nextBuilderMode = builderCollapsedRef.current
       ? modeRef.current.builder
       : resolvePaneMode(
-          builder,
           builderWidth,
           BUILDER_MOBILE_BREAKPOINT,
           modeRef.current.builder,
         );
     const nextResultMode = resolvePaneMode(
-      result,
       resultWidth,
       RESULT_MOBILE_BREAKPOINT,
       modeRef.current.result,
     );
 
-    if (!builderCollapsedRef.current && (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
+    if (!builderCollapsedRef.current && modeRef.current.builder !== nextBuilderMode) {
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
     }
-    if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
+    if (modeRef.current.result !== nextResultMode) {
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
     }
@@ -627,6 +632,17 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       builderRef.current?.style.removeProperty('flex-basis');
       builderRef.current?.style.removeProperty('width');
       resultRef.current?.style.removeProperty('left');
+      resultRef.current?.style.removeProperty('width');
+      if (builderInnerRef.current) {
+        builderInnerRef.current.style.removeProperty('width');
+        builderInnerRef.current.style.removeProperty('min-width');
+        builderInnerRef.current.style.removeProperty('max-width');
+      }
+      if (resultInnerRef.current) {
+        resultInnerRef.current.style.removeProperty('width');
+        resultInnerRef.current.style.removeProperty('min-width');
+        resultInnerRef.current.style.removeProperty('max-width');
+      }
       clearExternalMeasurements();
       clearRootMeasurements();
       delete document.documentElement.dataset.soridrawBuilderCollapsed;
@@ -663,20 +679,41 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const rect = layoutRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
 
+    const safeWidth = Math.max(rect.width, 1);
+    const startBuilderPixel = builderCollapsedRef.current
+      ? 0
+      : Math.round(safeWidth * (percentRef.current / 100));
+    const startResultPixel = Math.max(0, safeWidth - startBuilderPixel);
+
     metricsRef.current = {
       left: rect.left,
-      width: rect.width,
+      width: safeWidth,
       leftRailEdge: metricsRef.current.leftRailEdge,
     };
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startPercent: percentRef.current,
-      width: rect.width,
+      width: safeWidth,
+      startBuilderPixel,
+      startResultPixel,
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
     readExternalControls(true);
+
+    // Lock inner content widths during drag so cards and text DO NOT reflow every pixel frame:
+    if (builderInnerRef.current) {
+      builderInnerRef.current.style.width = `${startBuilderPixel}px`;
+      builderInnerRef.current.style.minWidth = `${startBuilderPixel}px`;
+      builderInnerRef.current.style.maxWidth = `${startBuilderPixel}px`;
+    }
+    if (resultInnerRef.current) {
+      resultInnerRef.current.style.width = `${startResultPixel}px`;
+      resultInnerRef.current.style.minWidth = `${startResultPixel}px`;
+      resultInnerRef.current.style.maxWidth = `${startResultPixel}px`;
+    }
+
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -713,9 +750,22 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
     lastDragBuilderPixelRef.current = null;
+
+    // Release inner pane content width locks
+    if (builderInnerRef.current) {
+      builderInnerRef.current.style.removeProperty('width');
+      builderInnerRef.current.style.removeProperty('min-width');
+      builderInnerRef.current.style.removeProperty('max-width');
+    }
+    if (resultInnerRef.current) {
+      resultInnerRef.current.style.removeProperty('width');
+      resultInnerRef.current.style.removeProperty('min-width');
+      resultInnerRef.current.style.removeProperty('max-width');
+    }
+
     const builderWidth = builderCollapsedRef.current
       ? 0
-      : metricsRef.current.width * (percentRef.current / 100);
+      : Math.round(metricsRef.current.width * (percentRef.current / 100));
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
@@ -775,8 +825,16 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   return (
     <>
       <div ref={layoutRef} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}`}>
-        <div id="soridraw-studio-builder-pane" ref={builderRef} className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
-        <div ref={resultRef} className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
+        <div id="soridraw-studio-builder-pane" ref={builderRef} className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
+          <div ref={builderInnerRef} className="soridraw-studio-pane-inner">
+            {panes[0] ?? null}
+          </div>
+        </div>
+        <div ref={resultRef} className="soridraw-studio-result-pane">
+          <div ref={resultInnerRef} className="soridraw-studio-pane-inner">
+            {panes[1] ?? null}
+          </div>
+        </div>
       </div>
       {typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl}
       {typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl}

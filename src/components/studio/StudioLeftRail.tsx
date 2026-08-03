@@ -41,6 +41,12 @@ type MenuPosition = {
   left: number;
 };
 
+type RailTooltip = {
+  label: string;
+  top: number;
+  left: number;
+};
+
 const PROFILE_MENU_WIDTH = 200;
 const PROFILE_MENU_GAP = 8;
 
@@ -68,10 +74,30 @@ export default function StudioLeftRail({
   const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
   const [menuPosition, setMenuPosition] = useState<MenuPosition>({ top: 0, left: 0 });
+  const [railTooltip, setRailTooltip] = useState<RailTooltip | null>(null);
 
   const closeProfileMenu = useCallback(() => {
     setIsProfileMenuOpen(false);
     setIsThemeMenuOpen(false);
+  }, []);
+
+  const showRailTooltip = useCallback((target: HTMLElement, label: string) => {
+    const frame = target.closest('.soridraw-studio-page-frame');
+    if (!frame?.classList.contains('is-left-rail-collapsed')) {
+      setRailTooltip(null);
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    setRailTooltip({
+      label,
+      top: Math.round(rect.top + (rect.height / 2)),
+      left: Math.round(rect.right + 8),
+    });
+  }, []);
+
+  const hideRailTooltip = useCallback(() => {
+    setRailTooltip(null);
   }, []);
 
   const updateMenuPosition = useCallback(() => {
@@ -136,6 +162,21 @@ export default function StudioLeftRail({
       window.removeEventListener('soridraw-studio-frame-resize', handleViewportChange as EventListener);
     };
   }, [closeProfileMenu, isProfileMenuOpen]);
+
+  useEffect(() => {
+    if (!railTooltip) return;
+
+    const hideTooltip = () => setRailTooltip(null);
+    window.addEventListener('resize', hideTooltip);
+    window.addEventListener('scroll', hideTooltip, true);
+    window.addEventListener('soridraw-studio-frame-resize', hideTooltip as EventListener);
+
+    return () => {
+      window.removeEventListener('resize', hideTooltip);
+      window.removeEventListener('scroll', hideTooltip, true);
+      window.removeEventListener('soridraw-studio-frame-resize', hideTooltip as EventListener);
+    };
+  }, [railTooltip]);
 
   const runMenuAction = (action: () => void) => {
     closeProfileMenu();
@@ -232,6 +273,19 @@ export default function StudioLeftRail({
       )
     : null;
 
+  const railTooltipPortal = railTooltip && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className="soridraw-studio-rail-tooltip-portal"
+          style={{ top: railTooltip.top, left: railTooltip.left }}
+          role="tooltip"
+        >
+          {railTooltip.label}
+        </div>,
+        document.body,
+      )
+    : null;
+
   return (
     <>
       <aside className="soridraw-studio-left-panel" aria-label="소리스튜디오 작업 메뉴">
@@ -248,6 +302,9 @@ export default function StudioLeftRail({
             aria-haspopup="menu"
             aria-expanded={isProfileMenuOpen}
             aria-label="개인 메뉴 열기"
+            onMouseEnter={(event) => showRailTooltip(event.currentTarget, '프로필')}
+            onMouseLeave={hideRailTooltip}
+            onClickCapture={hideRailTooltip}
           >
             <span className="soridraw-studio-rail-profile-avatar" aria-hidden="true">
               {profilePhotoURL ? (
@@ -265,21 +322,45 @@ export default function StudioLeftRail({
 
           <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">
             <p className="soridraw-studio-rail-label">WORKSPACE</p>
-            <button type="button" className="soridraw-studio-rail-item is-active" onClick={onCreate}>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item is-active"
+              onClick={onCreate}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '곡 만들기')}
+              onMouseLeave={hideRailTooltip}
+            >
               <PenTool className="h-5 w-5" />
               <span>곡 만들기</span>
             </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onRecentSongs}>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item"
+              onClick={onRecentSongs}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '최근 생성곡')}
+              onMouseLeave={hideRailTooltip}
+            >
               <History className="h-5 w-5" />
               <span>최근 생성곡</span>
               <ChevronRight className="ml-auto h-4 w-4" />
             </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onMusicNote}>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item"
+              onClick={onMusicNote}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '뮤직노트')}
+              onMouseLeave={hideRailTooltip}
+            >
               <Music className="h-5 w-5" />
               <span>뮤직노트</span>
               <ChevronRight className="ml-auto h-4 w-4" />
             </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onLibrary}>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item"
+              onClick={onLibrary}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '라이브러리')}
+              onMouseLeave={hideRailTooltip}
+            >
               <Library className="h-5 w-5" />
               <span>라이브러리</span>
               <ChevronRight className="ml-auto h-4 w-4" />
@@ -287,17 +368,35 @@ export default function StudioLeftRail({
 
             <div className="soridraw-studio-rail-divider" />
             <p className="soridraw-studio-rail-label">TOOLS</p>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onSearch}>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item"
+              onClick={onSearch}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '통합 검색')}
+              onMouseLeave={hideRailTooltip}
+            >
               <Search className="h-5 w-5" />
               <span>통합 검색</span>
             </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onApiSettings}>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item"
+              onClick={onApiSettings}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, 'API 설정')}
+              onMouseLeave={hideRailTooltip}
+            >
               <Settings className="h-5 w-5" />
               <span>API 설정</span>
             </button>
           </nav>
 
-          <button type="button" className="soridraw-studio-rail-theme" onClick={onThemeSettings}>
+          <button
+            type="button"
+            className="soridraw-studio-rail-theme"
+            onClick={onThemeSettings}
+            onMouseEnter={(event) => showRailTooltip(event.currentTarget, '디자인 테마')}
+            onMouseLeave={hideRailTooltip}
+          >
             <Palette className="h-5 w-5" />
             <span><strong>디자인 테마</strong><small>Classic / Studio Black</small></span>
             <ChevronRight className="ml-auto h-4 w-4" />
@@ -305,6 +404,7 @@ export default function StudioLeftRail({
         </div>
       </aside>
       {profileMenu}
+      {railTooltipPortal}
     </>
   );
 }

@@ -10,10 +10,14 @@ import React, {
 import { createPortal } from 'react-dom';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
+const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
 const BUILDER_COLLAPSED_STORAGE_KEY = 'soridraw_studio_black_builder_collapsed_v1';
 const DEFAULT_PERCENT = 50;
 const MIN_PERCENT = 24;
 const MAX_PERCENT = 76;
+const TABLET_VIEWPORT_MIN = 1100;
+const TABLET_VIEWPORT_MAX = 1599;
+const TABLET_MIN_PANE_PX = 430;
 // Align the builder's mobile composition with the top-nav "라이브러리" label:
 // the split line reaches the first "라" at roughly an 820px builder width.
 const BUILDER_MOBILE_BREAKPOINT = 820;
@@ -23,6 +27,12 @@ const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
 type PaneMode = 'mobile' | 'desktop';
+type SplitProfile = 'wide' | 'tablet';
+
+type SplitBounds = {
+  min: number;
+  max: number;
+};
 
 type LayoutMetrics = {
   left: number;
@@ -39,6 +49,39 @@ type ExternalSplitControls = {
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
 
+const getSplitProfile = (): SplitProfile => {
+  if (typeof window === 'undefined') return 'wide';
+  return window.innerWidth >= TABLET_VIEWPORT_MIN && window.innerWidth <= TABLET_VIEWPORT_MAX
+    ? 'tablet'
+    : 'wide';
+};
+
+const getStorageKey = (profile: SplitProfile) => (
+  profile === 'tablet' ? TABLET_STORAGE_KEY : STORAGE_KEY
+);
+
+const getSplitBounds = (layoutWidth: number): SplitBounds => {
+  if (getSplitProfile() !== 'tablet' || !Number.isFinite(layoutWidth) || layoutWidth <= 1) {
+    return { min: MIN_PERCENT, max: MAX_PERCENT };
+  }
+
+  // Tablet keeps a real pixel safety floor for both panes. Because this is
+  // calculated from the current center workspace width, the draggable range
+  // narrows automatically as the browser or either side rail gets wider.
+  // Wide desktop keeps the original 24-76 range unchanged.
+  const safeWidth = Math.max(layoutWidth, 1);
+  const minimumPaneWidth = Math.min(TABLET_MIN_PANE_PX, safeWidth / 2);
+  const minimumPercent = (minimumPaneWidth / safeWidth) * 100;
+  const min = Math.max(MIN_PERCENT, minimumPercent);
+  const max = Math.min(MAX_PERCENT, 100 - minimumPercent);
+
+  if (min >= max) return { min: 50, max: 50 };
+  return { min, max };
+};
+
+const clampToBounds = (value: number, bounds: SplitBounds) => (
+  Math.min(bounds.max, Math.max(bounds.min, value))
+);
 
 const readStoredBuilderCollapsed = () => {
   if (typeof window === 'undefined') return false;
@@ -49,10 +92,10 @@ const readStoredBuilderCollapsed = () => {
   }
 };
 
-const readStored = () => {
+const readStored = (profile: SplitProfile = getSplitProfile()) => {
   if (typeof window === 'undefined') return DEFAULT_PERCENT;
   try {
-    const value = Number(window.localStorage.getItem(STORAGE_KEY));
+    const value = Number(window.localStorage.getItem(getStorageKey(profile)));
     return Number.isFinite(value) ? clamp(value) : DEFAULT_PERCENT;
   } catch {
     return DEFAULT_PERCENT;
@@ -78,6 +121,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const splitterRef = useRef<HTMLButtonElement | null>(null);
   const builderCollapseToggleRef = useRef<HTMLButtonElement | null>(null);
   const percentRef = useRef(percent);
+  const splitProfileRef = useRef<SplitProfile>(getSplitProfile());
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({
@@ -90,6 +134,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const footerFrameRef = useRef<number | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
+  const lastAriaBoundsRef = useRef<string | null>(null);
   const lastActionControlPixelRef = useRef<number | null>(null);
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
@@ -396,7 +441,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
    * splitter, search button and portal action bar in the same animation frame.
    */
   const applyPercentToLayout = useCallback((rawPercent: number) => {
-    const nextPercent = clamp(rawPercent);
+    const bounds = getSplitBounds(metricsRef.current.width);
+    const nextPercent = clampToBounds(rawPercent, bounds);
     percentRef.current = nextPercent;
 
     const layout = layoutRef.current;
@@ -460,6 +506,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
     }
+    const ariaBoundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
+    if (lastAriaBoundsRef.current !== ariaBoundsKey) {
+      lastAriaBoundsRef.current = ariaBoundsKey;
+      splitter?.setAttribute('aria-valuemin', bounds.min.toFixed(1));
+      splitter?.setAttribute('aria-valuemax', bounds.max.toFixed(1));
+    }
+
     const roundedPercent = Math.round(nextPercent);
     if (lastAriaPercentRef.current !== roundedPercent) {
       lastAriaPercentRef.current = roundedPercent;
@@ -484,7 +537,19 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: Math.max(rect.width, 1),
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
-    const appliedPercent = applyPercentToLayout(percentRef.current);
+
+    const nextProfile = getSplitProfile();
+    const profileChanged = splitProfileRef.current !== nextProfile;
+    const requestedPercent = profileChanged
+      ? readStored(nextProfile)
+      : percentRef.current;
+
+    if (profileChanged) splitProfileRef.current = nextProfile;
+
+    const appliedPercent = applyPercentToLayout(requestedPercent);
+    if (profileChanged || Math.abs(appliedPercent - requestedPercent) > 0.001) {
+      setPercent(appliedPercent);
+    }
     const builderWidth = builderCollapsedRef.current
       ? 0
       : metricsRef.current.width * (appliedPercent / 100);
@@ -545,7 +610,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   }, [isBuilderCollapsed]);
 
   useEffect(() => {
-    try { window.localStorage.setItem(STORAGE_KEY, String(percent)); } catch { /* ignore */ }
+    try {
+      window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percent));
+    } catch {
+      // Local storage is optional. PC and tablet still remain isolated in memory.
+    }
   }, [percent]);
 
   useEffect(() => {
@@ -645,7 +714,10 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const { startX, startPercent, width } = dragRef.current;
     const safeWidth = Math.max(width, 1);
     const deltaPercent = ((clientX - startX) / safeWidth) * 100;
-    const rawPercent = clamp(startPercent + deltaPercent);
+    const rawPercent = clampToBounds(
+      startPercent + deltaPercent,
+      getSplitBounds(safeWidth),
+    );
     const rawBuilderPixel = safeWidth * (rawPercent / 100);
     // Preserve one-pixel pointer fidelity. The former 2px quantization made a
     // healthy frame rate still look like stepping on wide desktop screens.
@@ -758,14 +830,16 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     </button>
   );
 
+  const renderedBounds = getSplitBounds(metricsRef.current.width);
+
   const splitterControl = (
     <button
       ref={splitterRef}
       type="button"
       className="soridraw-studio-splitter"
       aria-label="곡 만들기와 생성 결과 영역 너비 조절"
-      aria-valuemin={MIN_PERCENT}
-      aria-valuemax={MAX_PERCENT}
+      aria-valuemin={renderedBounds.min}
+      aria-valuemax={renderedBounds.max}
       aria-valuenow={Math.round(percent)}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

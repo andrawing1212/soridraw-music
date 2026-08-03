@@ -1,4 +1,16 @@
-import React, { type ReactNode, useLayoutEffect } from 'react';
+import React, { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+
+const LEFT_RAIL_STORAGE_KEY = 'soridraw_studio_black_left_rail_collapsed_v1';
+
+const readStoredLeftRailState = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(LEFT_RAIL_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
 
 type StudioPageFrameProps = {
   leftRail: ReactNode;
@@ -7,6 +19,8 @@ type StudioPageFrameProps = {
 };
 
 export default function StudioPageFrame({ leftRail, rightRail, children }: StudioPageFrameProps) {
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readStoredLeftRailState);
+
   useLayoutEffect(() => {
     const root = document.documentElement;
     const body = document.body;
@@ -19,9 +33,35 @@ export default function StudioPageFrame({ leftRail, rightRail, children }: Studi
     };
   }, []);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LEFT_RAIL_STORAGE_KEY, String(isLeftRailCollapsed));
+    } catch {
+      // Local storage is optional. The current session still keeps the state.
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
+      window.dispatchEvent(new Event('resize'));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isLeftRailCollapsed]);
+
   return (
-    <div className="soridraw-studio-page-frame">
+    <div className={`soridraw-studio-page-frame${isLeftRailCollapsed ? ' is-left-rail-collapsed' : ''}`}>
       {leftRail}
+      <button
+        type="button"
+        className="soridraw-studio-left-rail-collapse-toggle"
+        onClick={() => setIsLeftRailCollapsed((current) => !current)}
+        aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+        title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+        aria-expanded={!isLeftRailCollapsed}
+      >
+        {isLeftRailCollapsed
+          ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+          : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+      </button>
       <div className="soridraw-studio-page-center">{children}</div>
       {rightRail}
     </div>

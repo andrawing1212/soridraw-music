@@ -3432,3 +3432,185 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   margin-right: 6px !important;
   transform: translateY(-50%) !important;
 }
+
+/* 291: Studio Black menu collapse controls.
+ * Both controls are single shared toggle buttons: the same button that closes
+ * a menu remains visible and restores it. Classic and mobile layouts are not
+ * changed by this section. */
+.soridraw-studio-left-rail-collapse-toggle,
+.soridraw-studio-builder-collapse-toggle {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle {
+    display: inline-flex !important;
+    position: fixed !important;
+    z-index: 145 !important;
+    top: 78px !important;
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 86px) !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid rgba(255,255,255,.11) !important;
+    border-radius: 9px !important;
+    background: #1c1c1e !important;
+    color: #b9b9bc !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle:focus-visible {
+    border-color: rgba(255,180,0,.42) !important;
+    background: #242426 !important;
+    color: #ffb400 !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + 12px) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-hero {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-main {
+    padding-top: 18px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-split-workspace {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-split-workspace > .soridraw-studio-builder-pane {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-split-workspace > .soridraw-studio-result-pane {
+    grid-column: 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-splitter,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-action-bar--tracking,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-action-collapsed {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle {
+    display: inline-flex !important;
+    position: fixed !important;
+    z-index: 145 !important;
+    top: 72px !important;
+    left: 172px !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid rgba(255,255,255,.10) !important;
+    border-radius: 8px !important;
+    background: #1c1c1e !important;
+    color: #a9a9ad !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle:focus-visible {
+    border-color: rgba(255,180,0,.42) !important;
+    background: #242426 !important;
+    color: #ffb400 !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr) 292px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle {
+    left: 17px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-panel-inner {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-brand {
+    min-height: 52px !important;
+    padding: 0 0 12px !important;
+    justify-content: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame:not(.is-left-rail-collapsed) .soridraw-studio-rail-brand {
+    padding-right: 38px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-brand > span:not(.soridraw-studio-rail-brand-mark),
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-label,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-item > span,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-item > svg.ml-auto,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-theme > span,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-theme > svg.ml-auto {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-item,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed button.soridraw-studio-rail-theme {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-item.is-active {
+    box-shadow: inset 2px 0 0 #ffb400 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-divider {
+    width: 32px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    left: 0 !important;
+    right: -18px !important;
+    width: auto !important;
+  }
+}

@@ -8,8 +8,10 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
+const BUILDER_COLLAPSED_STORAGE_KEY = 'soridraw_studio_black_builder_collapsed_v1';
 const DEFAULT_PERCENT = 50;
 const MIN_PERCENT = 24;
 const MAX_PERCENT = 76;
@@ -38,6 +40,16 @@ type ExternalSplitControls = {
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
 
+
+const readStoredBuilderCollapsed = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(BUILDER_COLLAPSED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+};
+
 const readStored = () => {
   if (typeof window === 'undefined') return DEFAULT_PERCENT;
   try {
@@ -59,12 +71,14 @@ export function StudioResultPane({ children }: { children: ReactNode }) {
 export default function StudioSplitWorkspace({ children }: { children: ReactNode }) {
   const panes = Children.toArray(children);
   const [percent, setPercent] = useState(readStored);
+  const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const draggingRef = useRef(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
   const splitterRef = useRef<HTMLButtonElement | null>(null);
   const percentRef = useRef(percent);
+  const builderCollapsedRef = useRef(isBuilderCollapsed);
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({
     builder: 'desktop',
@@ -93,7 +107,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const syncResultTitleHeight = useCallback(() => {
     const builder = builderRef.current;
     const result = resultRef.current;
-    if (!builder || !result || !isStudioBlack()) {
+    if (!builder || !result || !isStudioBlack() || builderCollapsedRef.current) {
       result?.style.removeProperty('--soridraw-studio-top-card-height');
       lastTopCardHeightRef.current = null;
       return;
@@ -381,7 +395,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
     const { left, width } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
-    const builderWidth = safeWidth * (nextPercent / 100);
+    const builderWidth = builderCollapsedRef.current ? 0 : safeWidth * (nextPercent / 100);
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
@@ -403,12 +417,14 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     }
     if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
-    const nextBuilderMode = resolvePaneMode(
-      builder,
-      builderWidth,
-      BUILDER_MOBILE_BREAKPOINT,
-      modeRef.current.builder,
-    );
+    const nextBuilderMode = builderCollapsedRef.current
+      ? modeRef.current.builder
+      : resolvePaneMode(
+          builder,
+          builderWidth,
+          BUILDER_MOBILE_BREAKPOINT,
+          modeRef.current.builder,
+        );
     const nextResultMode = resolvePaneMode(
       result,
       resultWidth,
@@ -416,7 +432,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       modeRef.current.result,
     );
 
-    if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
+    if (!builderCollapsedRef.current && (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
     }
@@ -449,7 +465,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
     const appliedPercent = applyPercentToLayout(percentRef.current);
-    const builderWidth = metricsRef.current.width * (appliedPercent / 100);
+    const builderWidth = builderCollapsedRef.current
+      ? 0
+      : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     refreshSplitterFooterBoundary();
@@ -460,6 +478,38 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const frame = window.requestAnimationFrame(refreshLayoutMetrics);
     return () => window.cancelAnimationFrame(frame);
   }, [percent, refreshLayoutMetrics]);
+
+  useLayoutEffect(() => {
+    builderCollapsedRef.current = isBuilderCollapsed;
+    const root = document.documentElement;
+    if (isBuilderCollapsed) {
+      root.dataset.soridrawBuilderCollapsed = 'true';
+    } else {
+      delete root.dataset.soridrawBuilderCollapsed;
+    }
+
+    const layout = layoutRef.current;
+    if (layout) {
+      if (isBuilderCollapsed) layout.dataset.builderCollapsed = 'true';
+      else delete layout.dataset.builderCollapsed;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      refreshLayoutMetrics();
+      window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', {
+        detail: { collapsed: isBuilderCollapsed },
+      }));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isBuilderCollapsed, refreshLayoutMetrics]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(BUILDER_COLLAPSED_STORAGE_KEY, String(isBuilderCollapsed));
+    } catch {
+      // Local storage is optional. The current session still keeps the state.
+    }
+  }, [isBuilderCollapsed]);
 
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, String(percent)); } catch { /* ignore */ }
@@ -512,6 +562,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const themeObserver = new MutationObserver(refreshLayoutMetrics);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
     window.addEventListener('resize', refreshLayoutMetrics);
+    window.addEventListener('soridraw-studio-frame-resize', refreshLayoutMetrics as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
     scheduleFooterBoundaryRefresh();
 
@@ -519,6 +570,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       observer.disconnect();
       themeObserver.disconnect();
       window.removeEventListener('resize', refreshLayoutMetrics);
+      window.removeEventListener('soridraw-studio-frame-resize', refreshLayoutMetrics as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       if (dragFrameRef.current !== null) {
         window.cancelAnimationFrame(dragFrameRef.current);
@@ -547,6 +599,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       resultRef.current?.style.removeProperty('left');
       clearExternalMeasurements();
       clearRootMeasurements();
+      delete document.documentElement.dataset.soridrawBuilderCollapsed;
     };
   }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
 
@@ -576,7 +629,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   }, [flushPendingPointer]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!isStudioBlack()) return;
+    if (!isStudioBlack() || builderCollapsedRef.current) return;
     const rect = layoutRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
 
@@ -630,7 +683,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
     lastDragBuilderPixelRef.current = null;
-    const builderWidth = metricsRef.current.width * (percentRef.current / 100);
+    const builderWidth = builderCollapsedRef.current
+      ? 0
+      : metricsRef.current.width * (percentRef.current / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
@@ -639,6 +694,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (builderCollapsedRef.current) return;
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
     const nextPercent = applyPercentToLayout(
@@ -649,6 +705,22 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     clearExternalMeasurements();
     setPercent(nextPercent);
   };
+
+  const builderCollapseControl = (
+    <button
+      type="button"
+      className={`soridraw-studio-builder-collapse-toggle${isBuilderCollapsed ? ' is-collapsed' : ''}`}
+      onClick={() => setIsBuilderCollapsed((current) => !current)}
+      aria-label={isBuilderCollapsed ? '곡 만들기 메뉴 펼치기' : '곡 만들기 메뉴 접기'}
+      title={isBuilderCollapsed ? '곡 만들기 메뉴 펼치기' : '곡 만들기 메뉴 접기'}
+      aria-expanded={!isBuilderCollapsed}
+      aria-controls="soridraw-studio-builder-pane"
+    >
+      {isBuilderCollapsed
+        ? <ChevronsRight className="h-4 w-4" aria-hidden="true" />
+        : <ChevronsLeft className="h-4 w-4" aria-hidden="true" />}
+    </button>
+  );
 
   const splitterControl = (
     <button
@@ -669,11 +741,12 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   return (
     <>
-      <div ref={layoutRef} className="soridraw-studio-split-workspace">
-        <div ref={builderRef} className="soridraw-studio-builder-pane">{panes[0] ?? null}</div>
+      <div ref={layoutRef} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}`}>
+        <div id="soridraw-studio-builder-pane" ref={builderRef} className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
         <div ref={resultRef} className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
       </div>
       {typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl}
+      {typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl}
     </>
   );
 }

@@ -76,6 +76,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const builderRef = useRef<HTMLDivElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
   const splitterRef = useRef<HTMLButtonElement | null>(null);
+  const builderCollapseToggleRef = useRef<HTMLButtonElement | null>(null);
   const percentRef = useRef(percent);
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
@@ -184,6 +185,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     }
     splitterRef.current?.style.removeProperty('left');
     splitterRef.current?.style.removeProperty('transform');
+    builderCollapseToggleRef.current?.style.removeProperty('left');
     lastActionControlPixelRef.current = null;
     externalControlsReadyRef.current = false;
   }, []);
@@ -203,6 +205,18 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       splitterRef.current.style.setProperty(
         'left',
         `${Math.max(0, Math.round(splitterLeft) - 8)}px`,
+        'important',
+      );
+    }
+
+    // The builder collapse control is another body portal. During pointer drag
+    // the committed root CSS variable intentionally stays unchanged until the
+    // drag ends, so drive this button from the same live splitter coordinate.
+    // Otherwise it appears to jump only after pointer-up.
+    if (builderCollapseToggleRef.current && !builderCollapsedRef.current) {
+      builderCollapseToggleRef.current.style.setProperty(
+        'left',
+        `${Math.max(0, Math.round(splitterLeft) - 54)}px`,
         'important',
       );
     }
@@ -493,8 +507,18 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       else delete layout.dataset.builderCollapsed;
     }
 
+    if (isBuilderCollapsed && resultRef.current) {
+      resultRef.current.scrollTop = 0;
+    }
+
     const frame = window.requestAnimationFrame(() => {
       refreshLayoutMetrics();
+      // Width reflow can trigger browser scroll anchoring and leave the title
+      // card partially above the visible result pane. A collapsed result view
+      // always opens from its true top boundary.
+      if (isBuilderCollapsed && resultRef.current) {
+        resultRef.current.scrollTop = 0;
+      }
       window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', {
         detail: { collapsed: isBuilderCollapsed },
       }));
@@ -707,6 +731,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   const builderCollapseControl = (
     <button
+      ref={builderCollapseToggleRef}
       type="button"
       className={`soridraw-studio-builder-collapse-toggle${isBuilderCollapsed ? ' is-collapsed' : ''}`}
       onClick={() => setIsBuilderCollapsed((current) => !current)}

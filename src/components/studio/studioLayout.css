@@ -206,14 +206,7 @@
     z-index: 70;
     top: 58px;
     bottom: var(--soridraw-studio-splitter-bottom, 0px);
-    /* Follow the same live split-width variable as both panes during drag.
-     * This keeps the divider on the exact boundary without waiting for the
-     * pointer-up commit that updates --soridraw-studio-splitter-left. */
-    left: calc(
-      var(--soridraw-studio-builder-left, 0px)
-      + var(--studio-split-x, var(--soridraw-studio-builder-width, 50vw))
-      - 8px
-    );
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px);
     width: 16px;
     height: auto;
     padding: 0;
@@ -2658,7 +2651,7 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
     z-index: 130 !important;
     top: 58px !important;
     bottom: 0 !important;
-    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50vw) - 8px) !important;
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px) !important;
     right: auto !important;
     width: 16px !important;
     height: auto !important;
@@ -3537,7 +3530,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle {
     display: inline-flex !important;
     position: fixed !important;
@@ -3680,7 +3673,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle {
     top: 15px !important;
     left: 17px !important;
@@ -3703,7 +3696,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * while the profile photo and every following menu row move down by one slot.
  * The two controls no longer overlap or replace each other. Studio Black wide
  * desktop only. Builder/result controls and Classic stay untouched. */
-@media (min-width: 1100px) {
+@media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile {
     position: relative !important;
     display: flex !important;
@@ -3833,7 +3826,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * a separate right-hand submenu, matching the compact Suno-style interaction.
  * The menu is rendered to document.body so the rail's overflow lock cannot crop
  * it. Classic, mobile and compact Studio layouts remain untouched. */
-@media (min-width: 1100px) {
+@media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-studio-rail-profile-trigger {
     width: 100% !important;
     max-width: 100% !important;
@@ -4060,7 +4053,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * trigger also receives a compact downward chevron, while the collapsed rail
  * keeps only the circular avatar in its second slot. Studio Black wide desktop
  * only; Classic, mobile and the existing collapsed ordering are unchanged. */
-@media (min-width: 1100px) {
+@media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"]
   .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
   .soridraw-studio-rail-profile {
@@ -4413,703 +4406,73 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 307 Studio Black split workspace - single CSS variable driven positioning */
-@media (min-width: 1100px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace > .soridraw-studio-builder-pane,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace > .soridraw-studio-result-pane {
-    contain: layout paint;
-    min-width: 0;
+/* 309: live split-content performance pass.
+ * Keep the verified 307 divider path unchanged. The optimization is limited to
+ * the two heavy pane trees: isolate their layout/paint work, skip off-screen
+ * cards, and suspend decorative animation/transition work only while dragging.
+ * Classic and sub-1600 layouts remain untouched. */
+@media (min-width: 1600px) {
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    contain: strict !important;
+    isolation: isolate;
+    overflow-anchor: none;
+    backface-visibility: hidden;
   }
 
-  /* Off-screen cards rendering optimization */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace .soridraw-studio-builder-pane > *,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace .soridraw-studio-result-content > * {
+  /* Off-screen sections no longer participate in every width-frame layout.
+   * `auto` preserves each section's real measured size once it has been seen,
+   * so pane scroll height remains stable. */
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane
+  > *,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-builder-pane .soridraw-studio-menu-card,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-result-content
+  > * {
     content-visibility: auto;
     contain-intrinsic-size: auto 240px;
+    contain: layout paint style;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    will-change: width;
+    transform: translateZ(0);
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    will-change: left;
+    transform: translateZ(0);
+  }
+
+  /* Width changes should not also run hundreds of transition/animation
+   * calculations inside both panes. The final visual state is restored
+   * immediately when pointer-up removes the drag class. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *::before,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *::after {
+    transition: none !important;
+    animation-play-state: paused !important;
   }
-
-  /* Wide desktop isolated workspace */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
-    width: var(--soridraw-studio-builder-width, 50%) !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
-    left: var(--soridraw-studio-builder-width, 50%) !important;
-    width: calc(100% - var(--soridraw-studio-builder-width, 50%)) !important;
-  }
-
-  /* Non-isolated flex workspace */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace:not([data-scroll-isolated="true"]) > .soridraw-studio-builder-pane {
-    flex-basis: var(--soridraw-studio-builder-width, 50%) !important;
-    width: var(--soridraw-studio-builder-width, 50%) !important;
-  }
-
-  /* Splitter button portal */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
-    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50%) - 8px) !important;
-  }
-
-  /* Collapse toggle button portal */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-builder-collapse-toggle:not(.is-collapsed) {
-    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50%) - 54px) !important;
-  }
-
-  /* Live keywords portal */
-  html[data-soridraw-theme="studio-black"] body > .soridraw-live-keywords-fixed {
-    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50%) + 18px) !important;
-  }
-
-  /* Search button */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
-    right: calc(100% - var(--soridraw-studio-builder-width, 50%) + 18px) !important;
-  }
-
-  /* Floating Action Bar */
-  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
-    left: var(--soridraw-studio-builder-left, 0px) !important;
-    width: var(--soridraw-studio-builder-width, 100vw) !important;
-  }
-}
-
-
-
-/* 312: Tablet-landscape auxiliary rails + independent right rail toggle.
- * 1100-1599 previously removed both rails entirely. Keep both rails mounted,
- * enter that compact bridge with 64px rails, and let the user independently
- * expand either side. Wide PC keeps its existing left preference and gains the
- * same right-side collapse/expand control. Classic and <1100px mobile remain
- * unchanged. */
-.soridraw-studio-right-rail-collapse-toggle {
-  display: none;
-}
-
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame {
-    --soridraw-studio-left-rail-width: 214px;
-    --soridraw-studio-right-rail-width: 292px;
-    grid-template-columns:
-      var(--soridraw-studio-left-rail-width)
-      minmax(0, 1fr)
-      var(--soridraw-studio-right-rail-width) !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed {
-    --soridraw-studio-left-rail-width: 64px;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed {
-    --soridraw-studio-right-rail-width: 64px;
-  }
-
-  /* Override the old 1100-1599 bridge that hid both rails. */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame .soridraw-studio-left-panel,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame .soridraw-studio-dashboard-panel {
-    display: block !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame .soridraw-studio-page-center {
-    grid-column: 2 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-right-rail-collapse-toggle {
-    display: inline-flex !important;
-    position: fixed !important;
-    z-index: 145 !important;
-    top: 72px !important;
-    right: 250px !important;
-    width: 30px !important;
-    height: 30px !important;
-    min-width: 30px !important;
-    min-height: 30px !important;
-    padding: 0 !important;
-    align-items: center !important;
-    justify-content: center !important;
-    border: 0 !important;
-    border-radius: 6px !important;
-    background: transparent !important;
-    color: #a9a9ad !important;
-    box-shadow: none !important;
-    outline: none !important;
-    transition: background-color .12s ease, color .12s ease !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-right-rail-collapse-toggle:hover,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-right-rail-collapse-toggle:focus-visible {
-    background: rgba(255,255,255,.05) !important;
-    color: #ffb400 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed .soridraw-studio-right-rail-collapse-toggle {
-    right: 15px !important;
-    width: 34px !important;
-    height: 34px !important;
-    min-width: 34px !important;
-    min-height: 34px !important;
-    color: #b9b9bc !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-panel-toggle-icon.is-right {
-    transform: scaleX(-1) !important;
-  }
-
-  /* Reserve a clean top slot for the new right toggle while expanded. */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame:not(.is-right-rail-collapsed)
-  .soridraw-studio-dashboard-inner {
-    padding-top: 48px !important;
-  }
-
-  /* The collapsed right rail is a real visible strip, not a removed panel. */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed
-  .soridraw-studio-dashboard-panel {
-    overflow: hidden !important;
-    border-left: 1px solid var(--sb-divider) !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed
-  .soridraw-studio-dashboard-inner {
-    display: none !important;
-  }
-}
-
-/* The compact desktop/tablet bridge starts with both 64px rails via React,
- * but retains the exact same independent expanded widths when either toggle is
- * used. */
-@media (min-width: 1100px) and (max-width: 1599px) {
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame {
-    min-height: 100vh !important;
-    align-items: start !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle {
-    display: inline-flex !important;
-  }
-
-  /* Match the wide-PC simple left rail in the compact bridge. */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-left-panel-inner {
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-profile-copy,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-profile-chevron,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-label,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-item > span,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-item > svg.ml-auto,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-theme > span,
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-theme > svg.ml-auto {
-    display: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-nav {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    gap: 6px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  :is(.soridraw-studio-rail-item, button.soridraw-studio-rail-theme) {
-    width: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    padding: 0 !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
-  .soridraw-studio-rail-divider {
-    width: 32px !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-}
-
-/* 313: Make the auxiliary-rail collapse state own the actual grid tracks.
- * 312 only hid the inner right-rail content because older, more-specific
- * !important grid rules still kept the 292px track. The same specificity
- * conflict left the compact/tablet bridge on its legacy one-column grid,
- * so expanding the left rail displaced/overlapped the workspace. Use the
- * real app-root chain to outrank those legacy rules and keep all three grid
- * owners synchronized from the same width variables. Studio Black >=1100px
- * only; Classic and mobile remain unchanged. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame {
-    --soridraw-studio-left-rail-width: 214px;
-    --soridraw-studio-right-rail-width: 292px;
-    display: grid !important;
-    grid-template-columns:
-      var(--soridraw-studio-left-rail-width)
-      minmax(0, 1fr)
-      var(--soridraw-studio-right-rail-width) !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame.is-left-rail-collapsed {
-    --soridraw-studio-left-rail-width: 64px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame.is-right-rail-collapsed {
-    --soridraw-studio-right-rail-width: 64px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame > .soridraw-studio-left-panel {
-    display: block !important;
-    grid-column: 1 !important;
-    grid-row: 1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame > .soridraw-studio-page-center {
-    display: block !important;
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame > .soridraw-studio-dashboard-panel {
-    display: block !important;
-    grid-column: 3 !important;
-    grid-row: 1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame.is-right-rail-collapsed
-  > .soridraw-studio-dashboard-panel {
-    width: 64px !important;
-    min-width: 64px !important;
-    max-width: 64px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame:not(.is-right-rail-collapsed)
-  > .soridraw-studio-dashboard-panel {
-    width: 292px !important;
-    min-width: 292px !important;
-    max-width: 292px !important;
-  }
-}
-
-/* 314: Keep Studio Black's outer rails and builder pane mounted while Music
- * Note or Suno Library is shown inside the split result pane. These overrides
- * remove the standalone-route top offset only for the embedded result copy;
- * the original /history and /suno-library pages, Classic, and mobile retain
- * their existing layout. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-pane > .soridraw-studio-embedded-result-page {
-    width: 100% !important;
-    min-width: 0 !important;
-    min-height: 100% !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page > .soridraw-musicnote-theme--studio-embedded,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page > .soridraw-library-theme--studio-embedded {
-    width: 100% !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    min-height: 100% !important;
-    margin: 0 !important;
-    padding: 18px clamp(14px, 1.35vw, 24px) 44px !important;
-    background: #161617 !important;
-    box-sizing: border-box !important;
-    overflow-x: hidden !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-musicnote-theme--studio-embedded > .md\:hidden.h-7 {
-    display: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-loading {
-    min-height: 240px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    color: rgba(255,255,255,.62);
-    font-size: 13px;
-    font-weight: 700;
-  }
-}
-
-/* 315: Embedded Music Note / Library must keep the exact flat Classic page
- * surface language inside Studio Black. The result pane sits below
- * `.studio-tone-down`, whose broad border/shadow rules otherwise repaint every
- * Classic card and control with visible outlines. Reset only the two embedded
- * page copies; standalone Classic routes, the Studio builder, and mobile are
- * untouched. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page > .soridraw-musicnote-theme--studio-embedded,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page > .soridraw-library-theme--studio-embedded {
-    --bg-primary: #0f0f0f;
-    --bg-secondary: #1a1a1a;
-    --card-bg: #1e1e1e;
-    --input-bg: rgba(255, 255, 255, 0.15);
-    --hover-bg: rgba(255, 255, 255, 0.12);
-    --hover-bg-solid: #2a2a2a;
-    --button-bg: rgba(255, 255, 255, 0.05);
-    --button-border: transparent;
-    --button-hover-bg: rgba(255, 255, 255, 0.12);
-    --button-shadow: none;
-    --shadow-sm: none;
-    --shadow-md: none;
-    --shadow-lg: none;
-    --shadow-xl: none;
-    --shadow-2xl: none;
-    --page-soft-border: transparent;
-    --page-soft-border-hover: transparent;
-    background: #0f0f0f !important;
-  }
-
-  /* Remove every inherited Studio outline/shadow while retaining the original
-   * Classic component backgrounds, spacing, radii, active colors, and hover
-   * behavior. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  :where(button, input, textarea, select, section, article, div)[class*="border"] {
-    border-color: transparent !important;
-    box-shadow: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  :where(button, input, textarea, select, section, article, div)[class*="border"]:hover,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  :where(button, input, textarea, select, section, article, div)[class*="border"]:focus,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  :where(button, input, textarea, select, section, article, div)[class*="border"]:focus-visible {
-    border-color: transparent !important;
-    box-shadow: none !important;
-    outline: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  :where([class*="shadow"], [class*="ring-"]) {
-    box-shadow: none !important;
-  }
-
-  /* The Library title mark intentionally uses its own stroke as part of the
-   * icon artwork; restore only that internal mark after the flat reset. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  .soridraw-library-theme--studio-embedded .soridraw-library-title-icon > div {
-    border-color: currentColor !important;
-  }
-}
-
-/* 316: Embedded Music Note / Library parity and responsive containment.
- * The standalone Classic pages are viewport-responsive. When the same pages
- * are mounted inside the Studio result pane, viewport breakpoints no longer
- * describe the available width, which caused toolbar collisions, oversized
- * cards/text, inactive tab colors, and clipped fixed dialogs. Keep these
- * adjustments strictly inside the embedded result copy. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page {
-    container-name: soridraw-embedded-result;
-    container-type: inline-size;
-    width: 100% !important;
-    min-width: 0 !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-    background: #0f0f0f !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page > :where(
-    .soridraw-musicnote-theme--studio-embedded,
-    .soridraw-library-theme--studio-embedded
-  ) {
-    /* Match the visual density of the Studio builder pane rather than the
-     * standalone full-width page. Chromium/Electron supports zoom and it
-     * preserves normal document flow better than transform:scale. */
-    zoom: .82;
-    width: 121.952% !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    min-height: 100% !important;
-    padding: 14px 16px 34px !important;
-    overflow-x: hidden !important;
-    background: #0f0f0f !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-page-header {
-    transform: none !important;
-    margin-top: 0 !important;
-    margin-bottom: 12px !important;
-    gap: 8px !important;
-    position: relative !important;
-    z-index: 2 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-page-header h1 {
-    font-size: clamp(28px, 3.2vw, 42px) !important;
-    line-height: 1 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-page-header p {
-    font-size: 13px !important;
-    line-height: 1.45 !important;
-    margin-top: 7px !important;
-  }
-
-  /* Use the same Classic controls, but lay them out from the result pane's
-   * actual width instead of the global xl viewport breakpoint. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-toolbar {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, auto) !important;
-    align-items: center !important;
-    gap: 8px !important;
-    margin-top: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    overflow: visible !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    position: relative !important;
-    z-index: 3 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-toolbar-search {
-    grid-column: 1 / -1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-filter-group {
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    height: 42px !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    background: #1a1a1a !important;
-    scrollbar-width: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-filter-group::-webkit-scrollbar {
-    display: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-filter-group button {
-    height: 34px !important;
-    min-height: 34px !important;
-    font-size: 11px !important;
-  }
-
-  /* Restore the exact active-folder emphasis that Studio's generic button
-   * rules were overriding. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-view-tabs > div {
-    width: min(100%, 520px) !important;
-    max-width: 520px !important;
-    padding: 4px !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    background: #1a1a1a !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-embedded-view-tab {
-    border: 0 !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    color: rgba(255,255,255,.58) !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-musicnote-view-tabs
-  .soridraw-embedded-view-tab[data-active="true"] {
-    background: #d9534f !important;
-    color: #fff !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-library-view-tabs
-  .soridraw-embedded-view-tab[data-active="true"] {
-    background: #6fa66b !important;
-    color: #fff !important;
-  }
-
-  /* Keyword chips must stay inside each card's text column. The old
-   * max-width used the viewport, so embedded cards could draw beneath the
-   * action area and visually stack chips on top of one another. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-musicnote-theme--studio-embedded
-  .favorite-keyword-strip {
-    width: 100% !important;
-    max-width: 100% !important;
-    min-width: 0 !important;
-    flex: 1 1 auto !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    white-space: nowrap !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page .soridraw-musicnote-theme--studio-embedded
-  .favorite-keyword-strip > * {
-    flex: 0 0 auto !important;
-  }
-
-  /* Flat Classic surfaces: no Studio card outline, ring, or extra shadow. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  :where(article, section, button, input, textarea, select, div)[class*="border"] {
-    border-width: 0 !important;
-    border-color: transparent !important;
-    box-shadow: none !important;
-    outline: none !important;
-  }
-
-  /* Keep list titles readable when the split pane is narrow. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-embedded-result-page
-  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
-  h3.truncate {
-    min-width: 0 !important;
-    max-width: 100% !important;
-  }
-}
-
-/* Result-pane responsive scaling. These are container breakpoints, so they
- * follow divider width changes immediately even on a wide desktop viewport. */
-@container soridraw-embedded-result (max-width: 900px) {
-  .soridraw-musicnote-theme--studio-embedded,
-  .soridraw-library-theme--studio-embedded {
-    zoom: .78 !important;
-    width: 128.206% !important;
-  }
-}
-
-@container soridraw-embedded-result (max-width: 700px) {
-  .soridraw-musicnote-theme--studio-embedded,
-  .soridraw-library-theme--studio-embedded {
-    zoom: .72 !important;
-    width: 138.889% !important;
-  }
-
-  .soridraw-embedded-toolbar {
-    grid-template-columns: minmax(0, 1fr) !important;
-  }
-
-  .soridraw-embedded-filter-group {
-    width: 100% !important;
-  }
-
-  .soridraw-embedded-view-tabs > div {
-    width: 100% !important;
-    max-width: none !important;
-  }
-
-  .soridraw-embedded-view-tab {
-    padding-left: 10px !important;
-    padding-right: 10px !important;
-    font-size: 11px !important;
-  }
-}
-
-@container soridraw-embedded-result (max-width: 560px) {
-  .soridraw-musicnote-theme--studio-embedded,
-  .soridraw-library-theme--studio-embedded {
-    zoom: .66 !important;
-    width: 151.516% !important;
-  }
-
-  .soridraw-embedded-page-header h1 {
-    font-size: 28px !important;
-  }
-
-  .soridraw-embedded-toolbar,
-  .soridraw-embedded-view-tabs {
-    min-width: 0 !important;
-    max-width: 100% !important;
-  }
-
-  .soridraw-musicnote-theme--studio-embedded h3.truncate,
-  .soridraw-library-theme--studio-embedded h3.truncate {
-    white-space: normal !important;
-    display: -webkit-box !important;
-    -webkit-box-orient: vertical !important;
-    -webkit-line-clamp: 2 !important;
-    line-clamp: 2 !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-}
-
-/* Detail dialogs are now portaled to body, outside the clipped/contained
- * result pane. Keep their Classic dark colors and remove only the unwanted
- * Studio outline. */
-html[data-soridraw-theme="studio-black"] body > .soridraw-musicnote-detail-portal,
-html[data-soridraw-theme="studio-black"] body > .soridraw-library-detail-portal {
-  z-index: 10050 !important;
-  padding-top: max(18px, env(safe-area-inset-top)) !important;
-  padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
-}
-
-html[data-soridraw-theme="studio-black"] body > .soridraw-musicnote-detail-portal
-.soridraw-musicnote-detail-panel,
-html[data-soridraw-theme="studio-black"] body > .soridraw-library-detail-portal
-.soridraw-library-detail-panel {
-  border: 0 !important;
-  outline: 0 !important;
-  max-height: calc(100dvh - 36px) !important;
 }

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
@@ -677,9 +676,7 @@ export default function FavoritesPage({
   onLoadMoreFavorites,
   onServerSearchFavorites,
   onManualSyncFavorites,
-  onLogin,
-  embeddedInStudio = false,
-  onRequestStudio
+  onLogin
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void | Promise<void>; 
@@ -699,8 +696,6 @@ export default function FavoritesPage({
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
   onManualSyncFavorites?: () => Promise<{ ok: boolean; limited?: boolean; message?: string }>;
   onLogin?: () => void;
-  embeddedInStudio?: boolean;
-  onRequestStudio?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
@@ -2618,13 +2613,6 @@ export default function FavoritesPage({
   }, [selectedSong]);
 
   const navigate = useNavigate();
-  const requestStudioView = () => {
-    if (onRequestStudio) {
-      onRequestStudio();
-      return;
-    }
-    navigate('/studio');
-  };
 
   useEffect(() => {
     if (selectedSong) {
@@ -3804,7 +3792,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     requestAnimationFrame(() => {
       window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
-      onRequestStudio?.();
       navigate(`/studio?applyPending=1&t=${Date.now()}`);
     });
   };
@@ -5202,7 +5189,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     <div 
       className={cn(
         "soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
-        embeddedInStudio ? "soridraw-musicnote-theme--studio-embedded" : "",
         isSelectionMode ? "select-none" : ""
       )}
       onClickCapture={(e) => {
@@ -5256,7 +5242,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0 }}
-        className="soridraw-embedded-page-header soridraw-musicnote-page-header mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+        className="mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
       >
           <div>
             <h1 className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3", isMusicNoteSharedView ? "font-sans" : "font-display")}>
@@ -5274,10 +5260,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
       {!isMusicNoteSharedView && (
       <div className="space-y-4 md:space-y-5">
-        <div className="soridraw-embedded-toolbar soridraw-musicnote-toolbar flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-embedded-toolbar-search flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
-              onClick={requestStudioView}
+              onClick={() => navigate('/studio')}
               className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#FFBB22] transition-all flex items-center justify-center"
             >
               <Zap className="w-4 h-4" />
@@ -5342,7 +5328,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </div>
           </div>
 
-          <div className="soridraw-embedded-filter-group soridraw-musicnote-color-filter flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+          <div className="flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             <button
               onClick={() => setFavoriteColorFilter('all')}
               className={`h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
@@ -5362,7 +5348,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
           </div>
 
-          <div className="soridraw-embedded-filter-group soridraw-musicnote-sort-filter flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+          <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
               <button
                 key={mode}
@@ -5397,7 +5383,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       {!isMusicNoteSharedView && (
-      <div className="soridraw-embedded-view-tabs soridraw-musicnote-view-tabs mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+      <div className="mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
         <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
             <button
@@ -5413,9 +5399,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
               onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
               onTouchEnd={onLongPressEnd}
-              data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
               className={cn(
-                'soridraw-embedded-view-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
+                'min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
                   ? 'bg-[#FF5C52]/78 text-white shadow-lg'
                   : 'text-white/60 hover:text-white'
@@ -6484,10 +6469,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       {/* Lyrics Modal */}
-      {typeof document !== 'undefined' && createPortal(
-        <AnimatePresence>
+      <AnimatePresence>
         {selectedSong && (
-          <div className="soridraw-musicnote-detail-portal fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
+          <div className="fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
             <motion.div
               initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
@@ -6501,7 +6485,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0 }}
-              className="soridraw-musicnote-detail-panel relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
+              className="relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
               onClick={(e) => e.stopPropagation()}
               onClickCapture={(e) => {
                 if (confirmDeleteSong && !(e.target as HTMLElement).closest('[data-detail-delete-button="true"]')) {
@@ -7465,9 +7449,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </motion.div>
           </div>
         )}
-        </AnimatePresence>,
-        document.body
-      )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showFavoriteMusicApiModal && selectedSong && (

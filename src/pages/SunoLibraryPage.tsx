@@ -231,23 +231,8 @@ function AnimatedTrackPlayButton({
   );
 }
 
-export default function SunoLibraryPage({
-  appUser = null,
-  embeddedInStudio = false,
-  onRequestStudio,
-}: {
-  appUser?: any;
-  embeddedInStudio?: boolean;
-  onRequestStudio?: () => void;
-} = {}) {
+export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
   const navigate = useNavigate();
-  const requestStudioView = () => {
-    if (onRequestStudio) {
-      onRequestStudio();
-      return;
-    }
-    navigate('/studio');
-  };
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
@@ -5233,10 +5218,10 @@ export default function SunoLibraryPage({
 
     return (
       <>
-        <div className="soridraw-embedded-toolbar soridraw-library-toolbar -mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="soridraw-embedded-toolbar-search flex min-w-0 flex-1 items-center gap-2">
+        <div className="-mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
-              onClick={requestStudioView}
+              onClick={() => navigate('/studio')}
               className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-white/5 shadow-btn transition-all"
             >
               <Zap className="w-4 h-4" />
@@ -5275,7 +5260,7 @@ export default function SunoLibraryPage({
 
           {isWorkspaceMode ? (
             <>
-              <div className="soridraw-embedded-filter-group flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setWorkspaceColorFilter('all')}
                   className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
@@ -5295,7 +5280,7 @@ export default function SunoLibraryPage({
                   </button>
                 ))}
               </div>
-              <div className="soridraw-embedded-filter-group flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+              <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
                 {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
                   <button
                     key={f}
@@ -5311,7 +5296,7 @@ export default function SunoLibraryPage({
             </>
           ) : (
             <>
-              <div className="soridraw-embedded-filter-group flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setPlaylistColorFilter('all')}
                   className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
@@ -5339,7 +5324,7 @@ export default function SunoLibraryPage({
                   </button>
                 ))}
               </div>
-              <div className="soridraw-embedded-filter-group flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
                 {[
                   { value: 'added', label: '저장순' },
                   { value: 'genre', label: '장르순' },
@@ -5387,17 +5372,15 @@ export default function SunoLibraryPage({
   const renderLibraryModeTabs = () => {
     if (isSharedView) return null;
     return (
-      <div className="soridraw-embedded-view-tabs soridraw-library-view-tabs flex items-center gap-2 max-w-full whitespace-nowrap">
+      <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
         <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
-            data-active={libraryViewMode === 'workspace' ? 'true' : 'false'}
             onClick={() => setLibraryViewMode('workspace')}
-            className={`soridraw-embedded-view-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
           </button>
           <button
-            data-active={libraryViewMode === 'playlist' ? 'true' : 'false'}
             onClick={() => {
               if (libraryViewMode !== 'playlist') {
                 setLibraryViewMode('playlist');
@@ -5407,12 +5390,11 @@ export default function SunoLibraryPage({
                 }
               }
             }}
-            className={`soridraw-embedded-view-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             플레이리스트
           </button>
           <button
-            data-active={libraryViewMode === 'sharedPlaylist' ? 'true' : 'false'}
             onClick={() => {
               if (libraryViewMode !== 'sharedPlaylist') {
                 setLibraryViewMode('sharedPlaylist');
@@ -5422,7 +5404,7 @@ export default function SunoLibraryPage({
                 }
               }
             }}
-            className={`soridraw-embedded-view-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             공유 플레이리스트
           </button>
@@ -5689,7 +5671,7 @@ export default function SunoLibraryPage({
   return (
     <div
       ref={libraryPageRootRef}
-      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${embeddedInStudio ? 'soridraw-library-theme--studio-embedded' : ''} ${multiSelectMode ? 'select-none' : ''}`}
+      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
@@ -6074,12 +6056,12 @@ export default function SunoLibraryPage({
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0 }}
-          className="soridraw-embedded-page-header soridraw-library-page-header flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+          className="flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
         >
           <div className="flex items-start gap-4 min-w-0">
             {isSharedView && (
               <button
-                onClick={requestStudioView}
+                onClick={() => navigate('/studio')}
                 className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
               >
                 <Zap className="w-4 h-4" />스튜디오

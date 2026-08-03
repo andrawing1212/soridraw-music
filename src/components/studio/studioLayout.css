@@ -4046,3 +4046,56 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     padding-bottom: 56px !important;
   }
 }
+
+/* 301: Expanded rail gets the same dedicated toggle slot as the collapsed rail.
+ * The collapse control stays alone in the first row at the far right. The
+ * profile and every following menu item move down by one 46px slot. The profile
+ * trigger also receives a compact downward chevron, while the collapsed rail
+ * keeps only the circular avatar in its second slot. Studio Black wide desktop
+ * only; Classic, mobile and the existing collapsed ordering are unchanged. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile {
+    margin-top: 46px !important;
+    padding-right: 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-left-rail-collapse-toggle {
+    top: 72px !important;
+    left: 172px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-rail-profile-chevron {
+    display: block !important;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    flex: 0 0 16px !important;
+    margin-left: auto !important;
+    color: #8f8f94 !important;
+    stroke: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  button.soridraw-studio-rail-profile-trigger:hover
+  .soridraw-studio-rail-profile-chevron,
+  html[data-soridraw-theme="studio-black"]
+  button.soridraw-studio-rail-profile-trigger:focus-visible
+  .soridraw-studio-rail-profile-chevron,
+  html[data-soridraw-theme="studio-black"]
+  button.soridraw-studio-rail-profile-trigger[aria-expanded="true"]
+  .soridraw-studio-rail-profile-chevron {
+    color: #c7c7ca !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-profile-chevron {
+    display: none !important;
+  }
+}
+

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import {
   Check,
+  ChevronDown,
   ChevronRight,
   History,
   Library,
@@ -259,6 +260,7 @@ export default function StudioLeftRail({
               <strong>{profileName || 'SORiDRAW'}</strong>
               <small>{profileEmail || 'Studio Black'}</small>
             </span>
+            <ChevronDown className="soridraw-studio-rail-profile-chevron" aria-hidden="true" />
           </button>
 
           <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">

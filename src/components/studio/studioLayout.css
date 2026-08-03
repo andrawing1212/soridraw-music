@@ -4265,3 +4265,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     -webkit-text-fill-color: currentColor !important;
   }
 }
+
+/* 303 — Recent songs expand in place on the Studio Black PC right rail.
+ * The dashboard rail already owns vertical scrolling, so showing the full
+ * history does not move the center workspace or navigate away. */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-list {
+    min-height: 0;
+  }
+}

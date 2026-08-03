@@ -23,7 +23,6 @@ type StudioRightRailProps = {
   onRemoveSelectedKeyword: (keyword: SelectedKeyword) => void;
   formatTime: (value?: unknown) => string;
   onOpenGenerationOptions: () => void;
-  onOpenAllSongs: () => void;
   onOpenSong: (song: RecentSong, index: number) => void;
   onOpenApiSettings: () => void;
 };
@@ -40,10 +39,12 @@ export default function StudioRightRail({
   onRemoveSelectedKeyword,
   formatTime,
   onOpenGenerationOptions,
-  onOpenAllSongs,
   onOpenSong,
   onOpenApiSettings,
 }: StudioRightRailProps) {
+  const [showAllRecentSongs, setShowAllRecentSongs] = React.useState(false);
+  const visibleRecentSongs = showAllRecentSongs ? history : history.slice(0, 3);
+
   return (
     <aside className="soridraw-studio-dashboard-panel" aria-label="소리스튜디오 보조 대시보드">
       <div className="soridraw-studio-dashboard-inner">
@@ -69,10 +70,18 @@ export default function StudioRightRail({
         <section className="soridraw-studio-dashboard-card">
           <div className="soridraw-studio-dashboard-heading">
             <div><p>RECENT SONGS</p><h2>최근 생성곡</h2></div>
-            <button type="button" className="soridraw-studio-dashboard-text-button" onClick={onOpenAllSongs}>전체</button>
+            <button
+              type="button"
+              className="soridraw-studio-dashboard-text-button"
+              onClick={() => setShowAllRecentSongs((current) => !current)}
+              aria-expanded={showAllRecentSongs}
+              aria-controls="soridraw-studio-recent-song-list"
+            >
+              {showAllRecentSongs ? '접기' : '전체'}
+            </button>
           </div>
-          <div className="soridraw-studio-dashboard-song-list">
-            {history.length > 0 ? history.slice(0, 3).map((song, index) => (
+          <div id="soridraw-studio-recent-song-list" className="soridraw-studio-dashboard-song-list">
+            {history.length > 0 ? visibleRecentSongs.map((song, index) => (
               <button
                 key={`studio-dashboard-song-${String(song.createdAt || index)}-${song.title || ''}`}
                 type="button"

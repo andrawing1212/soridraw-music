@@ -13906,7 +13906,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                 formatTime={formatStudioDashboardTime}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
-                onOpenAllSongs={() => navigate('/suno-library')}
                 onOpenSong={openStudioDashboardSong}
                 onOpenApiSettings={() => navigate('/suno-api-settings')}
               />

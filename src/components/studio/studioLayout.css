@@ -2658,7 +2658,7 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
     z-index: 130 !important;
     top: 58px !important;
     bottom: 0 !important;
-    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px) !important;
+    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50vw) - 8px) !important;
     right: auto !important;
     width: 16px !important;
     height: auto !important;

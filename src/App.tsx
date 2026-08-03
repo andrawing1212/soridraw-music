@@ -13368,44 +13368,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     return new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(timestamp);
   };
 
-  const studioDashboardActivities = useMemo(() => {
-    const activities: Array<{ id: string; label: string; detail: string; timestamp: number; status: 'active' | 'done' | 'info' | 'error' }> = [];
-
-    generationQueueItems.forEach((item) => {
-      const timestamp = item.completedAt || item.startedAt || item.queuedAt;
-      activities.push({
-        id: `queue-${item.id}`,
-        label: item.status === 'running' ? '곡 생성 진행 중' : item.status === 'queued' ? '생성 대기 등록' : item.status === 'completed' ? '곡 생성 완료' : '곡 생성 오류',
-        detail: item.summary || `${item.generationCount}곡 작업`,
-        timestamp,
-        status: item.status === 'running' || item.status === 'queued' ? 'active' : item.status === 'completed' ? 'done' : 'error',
-      });
-    });
-
-    history.slice(0, 3).forEach((song, index) => {
-      activities.push({
-        id: `history-${song.createdAt || index}-${song.title}`,
-        label: '최근 생성곡 저장',
-        detail: song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`,
-        timestamp: song.updatedAt || song.createdAt || Date.now() - index,
-        status: 'done',
-      });
-    });
-
-    if (sunoRemainingCreditsUpdatedAt) {
-      activities.push({
-        id: `credits-${sunoRemainingCreditsUpdatedAt}`,
-        label: 'Music API 크레딧 확인',
-        detail: sunoRemainingCredits === null ? '크레딧 정보 없음' : `${sunoRemainingCredits.toLocaleString()} 남음`,
-        timestamp: sunoRemainingCreditsUpdatedAt,
-        status: 'info',
-      });
-    }
-
-    return activities
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 4);
-  }, [generationQueueItems, history, sunoRemainingCredits, sunoRemainingCreditsUpdatedAt]);
 
   const openStudioDashboardSong = (song: SongResult, index: number) => {
     setHistoryIndex(index);
@@ -13940,7 +13902,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 selectedIndex={historyIndex}
                 remainingCredits={sunoRemainingCredits}
                 creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
-                activities={studioDashboardActivities}
+                selectedKeywords={liveSelectedKeywordItems}
+                onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                 formatTime={formatStudioDashboardTime}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenAllSongs={() => navigate('/suno-library')}

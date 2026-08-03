@@ -1,9 +1,15 @@
 import React from 'react';
-import { Activity, ChevronRight, Music, Sparkles } from 'lucide-react';
+import { Activity, ChevronRight, Music, Sparkles, X } from 'lucide-react';
 
 type RecentSong = any;
 
-type StudioActivity = any;
+type SelectedKeywordType = 'genre' | 'mood' | 'theme' | 'style' | 'sound' | 'point-sound' | 'mix' | 'rap';
+
+type SelectedKeyword = {
+  id: string;
+  type: SelectedKeywordType;
+  label: string;
+};
 
 type StudioRightRailProps = {
   isGenerating: boolean;
@@ -13,7 +19,8 @@ type StudioRightRailProps = {
   selectedIndex: number;
   remainingCredits: number | null;
   creditsUpdatedAt?: unknown;
-  activities: StudioActivity[];
+  selectedKeywords: SelectedKeyword[];
+  onRemoveSelectedKeyword: (keyword: SelectedKeyword) => void;
   formatTime: (value?: unknown) => string;
   onOpenGenerationOptions: () => void;
   onOpenAllSongs: () => void;
@@ -29,7 +36,8 @@ export default function StudioRightRail({
   selectedIndex,
   remainingCredits,
   creditsUpdatedAt,
-  activities,
+  selectedKeywords,
+  onRemoveSelectedKeyword,
   formatTime,
   onOpenGenerationOptions,
   onOpenAllSongs,
@@ -97,17 +105,33 @@ export default function StudioRightRail({
           </div>
         </section>
 
-        <section className="soridraw-studio-dashboard-card">
-          <div className="soridraw-studio-dashboard-heading compact"><div><p>ACTIVITY</p><h2>최근 활동</h2></div></div>
-          <div className="soridraw-studio-dashboard-activity-list">
-            {activities.length > 0 ? activities.map((activity) => (
-              <div key={activity.id} className="soridraw-studio-dashboard-activity">
-                <span className={`soridraw-studio-dashboard-activity-dot is-${activity.status}`} />
-                <span><strong>{activity.label}</strong><small>{activity.detail}</small></span>
-                <time>{formatTime(activity.timestamp)}</time>
-              </div>
+        <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-keywords-card">
+          <div className="soridraw-studio-dashboard-heading compact">
+            <div><p>SELECTED KEYWORDS</p><h2>선택된 키워드</h2></div>
+            <span className="soridraw-studio-dashboard-keyword-count">{selectedKeywords.length}</span>
+          </div>
+          <div className="soridraw-studio-dashboard-keyword-list" role="list" aria-label="현재 선택된 키워드">
+            {selectedKeywords.length > 0 ? selectedKeywords.map((keyword) => (
+              <span
+                key={`studio-right-keyword-${keyword.type}-${keyword.id}`}
+                className={`soridraw-studio-dashboard-keyword is-${keyword.type}`}
+                role="listitem"
+              >
+                <span className="soridraw-studio-dashboard-keyword-label">{keyword.label}</span>
+                <button
+                  type="button"
+                  className="soridraw-studio-dashboard-keyword-remove"
+                  onClick={() => onRemoveSelectedKeyword(keyword)}
+                  aria-label={`${keyword.label} 선택 해제`}
+                  title={`${keyword.label} 선택 해제`}
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </span>
             )) : (
-              <div className="soridraw-studio-dashboard-empty compact"><Activity className="h-5 w-5" /><span>활동 기록이 아직 없습니다.</span></div>
+              <div className="soridraw-studio-dashboard-empty compact">
+                <span>선택된 키워드가 없습니다.</span>
+              </div>
             )}
           </div>
         </section>

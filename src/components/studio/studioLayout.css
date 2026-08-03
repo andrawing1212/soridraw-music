@@ -4099,3 +4099,169 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
+
+/* 302: On desktop, move the live selected-keyword rail into the right
+ * dashboard and retire the old Recent Activity section. The body portal stays
+ * available below desktop width so the existing compact/mobile behavior is
+ * unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-live-keywords-fixed {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keywords-card {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    flex-direction: column !important;
+    border-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-count {
+    display: inline-flex !important;
+    min-width: 24px !important;
+    height: 22px !important;
+    padding: 0 7px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 999px !important;
+    background: var(--sb-card-2) !important;
+    color: var(--sb-muted) !important;
+    -webkit-text-fill-color: currentColor !important;
+    font-size: 9px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-list {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    align-content: flex-start !important;
+    align-items: flex-start !important;
+    flex-wrap: wrap !important;
+    gap: 8px 10px !important;
+    overflow-y: auto !important;
+    padding: 2px 2px 12px !important;
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(255,255,255,.18) transparent !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-list::-webkit-scrollbar {
+    width: 5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-list::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-list::-webkit-scrollbar-thumb {
+    border-radius: 999px !important;
+    background: rgba(255,255,255,.18) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword {
+    display: inline-flex !important;
+    max-width: 100% !important;
+    min-height: 22px !important;
+    align-items: center !important;
+    gap: 3px !important;
+    padding: 1px 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    font-size: 10px !important;
+    font-weight: 850 !important;
+    line-height: 1.25 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-label {
+    display: block !important;
+    max-width: 210px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  button.soridraw-studio-dashboard-keyword-remove {
+    display: inline-flex !important;
+    width: 16px !important;
+    min-width: 16px !important;
+    height: 16px !important;
+    min-height: 16px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: currentColor !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    opacity: .52 !important;
+    cursor: pointer !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  button.soridraw-studio-dashboard-keyword-remove:hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  button.soridraw-studio-dashboard-keyword-remove:focus-visible {
+    color: currentColor !important;
+    background: transparent !important;
+    opacity: 1 !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword-remove svg {
+    width: 12px !important;
+    height: 12px !important;
+    stroke-width: 2.2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-genre,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-mix,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-rap {
+    color: #FFD36A !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-mood {
+    color: #FFB4C4 !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-theme {
+    color: #A9E7FF !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-style {
+    color: #D9CBFF !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-sound,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-keyword.is-point-sound {
+    color: #BDF6C4 !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+}

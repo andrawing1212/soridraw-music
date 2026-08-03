@@ -4751,3 +4751,154 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     border-radius: inherit !important;
   }
 }
+
+/* 312 rollback-branch: make the expanded tablet left-rail header match the
+ * existing desktop header exactly. The tablet rail previously inherited the
+ * generic Studio button surface, so the account row looked permanently active,
+ * its text collapsed into one line, and the rail toggle sat on top of it.
+ * Only Studio Black 1100-1599px is affected; desktop, Classic and mobile stay
+ * unchanged. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  button.soridraw-studio-rail-profile-trigger {
+    position: relative !important;
+    display: flex !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 52px !important;
+    margin-top: 46px !important;
+    padding: 0 2px 12px 0 !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    color: var(--sb-text) !important;
+    text-align: left !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  button.soridraw-studio-rail-profile-trigger:hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  button.soridraw-studio-rail-profile-trigger:focus-visible,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  button.soridraw-studio-rail-profile-trigger[aria-expanded="true"] {
+    border: 0 !important;
+    background: rgba(255,255,255,.045) !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-avatar {
+    display: flex !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    flex: 0 0 34px !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-copy {
+    display: flex !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    overflow: hidden !important;
+    text-align: left !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-copy > strong,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-copy > small {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    text-align: left !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-copy > strong {
+    line-height: 1.15 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-copy > small {
+    line-height: 1.2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-rail-profile-chevron {
+    display: block !important;
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    flex: 0 0 16px !important;
+    margin-left: auto !important;
+    color: #8f8f94 !important;
+    stroke: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-left-rail-collapse-toggle {
+    display: inline-flex !important;
+    position: fixed !important;
+    z-index: 145 !important;
+    top: 72px !important;
+    left: 172px !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 0 !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    color: #a9a9ad !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-left-rail-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  .soridraw-studio-left-rail-collapse-toggle:focus-visible {
+    border: 0 !important;
+    background: rgba(255,255,255,.05) !important;
+    color: #ffb400 !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+}

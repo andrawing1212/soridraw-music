@@ -1974,6 +1974,25 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   transition: none !important;
 }
 
+/* 299 — One interactive owner during floating/inline hand-off.
+ * AnimatePresence may retain the exiting portal node for a frame (or longer on
+ * some browsers).  Its panel had pointer-events:auto, which left an invisible
+ * duplicate hit area below the visible Generate row.  The html owner flag is
+ * updated in useLayoutEffect, and every non-owner copy is removed from hit
+ * testing and layout immediately. */
+html[data-soridraw-theme="studio-black"][data-soridraw-action-owner="inline"]
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"],
+html[data-soridraw-theme="studio-black"][data-soridraw-action-owner="floating"]
+  .soridraw-studio-action-anchor-expanded > .soridraw-studio-action-bar--tracking[data-soridraw-placement="inline"],
+html[data-soridraw-theme="studio-black"]:is(
+  [data-soridraw-action-owner="collapsed"],
+  [data-soridraw-action-owner="hidden"]
+) .soridraw-studio-action-bar--tracking {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* Expanded Studio row has two copies of the same control panel.
  * Floating: fixed to the exact builder-command width.
  * Inline: rendered inside the real command slot, so card-height changes and the

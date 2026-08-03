@@ -6867,6 +6867,25 @@ const toggleCycleVariantSelection = (
   const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
   const shouldShowActionButtons = !isActionBarBlockedByModal && !isAnyModalOpen;
+  const studioActionOwner = !shouldShowActionButtons
+    ? 'hidden'
+    : isActionButtonsCollapsed
+      ? 'collapsed'
+      : isActionsFloating
+        ? 'floating'
+        : 'inline';
+
+  // 299: Framer Motion can briefly retain an exiting portal copy while the
+  // action row changes between floating and inline ownership.  Publish the
+  // single current owner before paint so any retained copy is made completely
+  // non-interactive by Studio Black CSS.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.soridrawActionOwner = studioActionOwner;
+  }, [studioActionOwner]);
+
+  useEffect(() => () => {
+    delete document.documentElement.dataset.soridrawActionOwner;
+  }, []);
 
   useLayoutEffect(() => {
     if (isActionButtonsCollapsed || !shouldShowActionButtons) return;

@@ -21,10 +21,6 @@ const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
-// Keep the divider itself at display refresh rate, but pace deep pane/card
-// reflow separately. At 60 Hz this resolves to every second frame (~30 fps),
-// while the outer clipping boundary continues to follow the pointer at 60 fps.
-const DRAG_CONTENT_LAYOUT_INTERVAL_MS = 24;
 
 type PaneMode = 'mobile' | 'desktop';
 
@@ -79,8 +75,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
-  const builderContentRef = useRef<HTMLDivElement | null>(null);
-  const resultContentRef = useRef<HTMLDivElement | null>(null);
   const splitterRef = useRef<HTMLButtonElement | null>(null);
   const builderCollapseToggleRef = useRef<HTMLButtonElement | null>(null);
   const percentRef = useRef(percent);
@@ -94,19 +88,12 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
-  const contentReleaseFrameRef = useRef<number | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastActionControlPixelRef = useRef<number | null>(null);
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
-  const lastContentLayoutTimeRef = useRef(0);
-  const dragContentMetricsRef = useRef({
-    startBuilderWidth: 0,
-    startBuilderContentWidth: 0,
-    startResultContentWidth: 0,
-  });
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
     floatingActionBar: null,
@@ -118,6 +105,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
 
   const syncResultTitleHeight = useCallback(() => {
+    // Width dragging already owns the pane geometry for this frame. Running a
+    // second ResizeObserver-driven measurement here forces another synchronous
+    // layout of both large panes and is the main source of visible card stutter.
+    // Keep the last stable title height during the drag and refresh it once on
+    // pointer-up instead.
+    if (draggingRef.current) return;
+
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result || !isStudioBlack() || builderCollapsedRef.current) {
@@ -177,83 +171,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     return current;
   }, []);
 
-  const clearPaneContentMeasurements = useCallback(() => {
-    builderContentRef.current?.style.removeProperty('width');
-    builderContentRef.current?.style.removeProperty('min-width');
-    builderContentRef.current?.style.removeProperty('max-width');
-    resultContentRef.current?.style.removeProperty('width');
-    resultContentRef.current?.style.removeProperty('min-width');
-    resultContentRef.current?.style.removeProperty('max-width');
-    lastContentLayoutTimeRef.current = 0;
-  }, []);
-
-  const beginPacedPaneContentLayout = useCallback((builderWidth: number) => {
-    const builderContent = builderContentRef.current;
-    const resultContent = resultContentRef.current;
-    if (!builderContent || !resultContent || window.innerWidth < WIDE_DESKTOP_ISOLATION_BREAKPOINT) {
-      clearPaneContentMeasurements();
-      return;
-    }
-
-    const builderContentWidth = builderContent.getBoundingClientRect().width;
-    const resultContentWidth = resultContent.getBoundingClientRect().width;
-    dragContentMetricsRef.current = {
-      startBuilderWidth: builderWidth,
-      startBuilderContentWidth: builderContentWidth,
-      startResultContentWidth: resultContentWidth,
-    };
-
-    for (const [element, width] of [
-      [builderContent, builderContentWidth],
-      [resultContent, resultContentWidth],
-    ] as const) {
-      const pixelWidth = `${Math.max(0, width)}px`;
-      element.style.width = pixelWidth;
-      element.style.minWidth = pixelWidth;
-      element.style.maxWidth = pixelWidth;
-    }
-    lastContentLayoutTimeRef.current = performance.now();
-  }, [clearPaneContentMeasurements]);
-
-  const syncPacedPaneContentLayout = useCallback((builderWidth: number, force = false) => {
-    const builderContent = builderContentRef.current;
-    const resultContent = resultContentRef.current;
-    if (!builderContent || !resultContent || window.innerWidth < WIDE_DESKTOP_ISOLATION_BREAKPOINT) {
-      return true;
-    }
-
-    const now = performance.now();
-    if (!force && now - lastContentLayoutTimeRef.current < DRAG_CONTENT_LAYOUT_INTERVAL_MS) {
-      return false;
-    }
-    lastContentLayoutTimeRef.current = now;
-
-    const metrics = dragContentMetricsRef.current;
-    const delta = builderWidth - metrics.startBuilderWidth;
-    const nextBuilderContentWidth = Math.max(1, metrics.startBuilderContentWidth + delta);
-    const nextResultContentWidth = Math.max(1, metrics.startResultContentWidth - delta);
-
-    const builderPixelWidth = `${nextBuilderContentWidth}px`;
-    const resultPixelWidth = `${nextResultContentWidth}px`;
-    builderContent.style.width = builderPixelWidth;
-    builderContent.style.minWidth = builderPixelWidth;
-    builderContent.style.maxWidth = builderPixelWidth;
-    resultContent.style.width = resultPixelWidth;
-    resultContent.style.minWidth = resultPixelWidth;
-    resultContent.style.maxWidth = resultPixelWidth;
-    return true;
-  }, []);
-
-  const schedulePaneContentRelease = useCallback(() => {
-    if (contentReleaseFrameRef.current !== null) {
-      window.cancelAnimationFrame(contentReleaseFrameRef.current);
-    }
-    contentReleaseFrameRef.current = window.requestAnimationFrame(() => {
-      contentReleaseFrameRef.current = null;
-      clearPaneContentMeasurements();
-    });
-  }, [clearPaneContentMeasurements]);
-
   const clearExternalMeasurements = useCallback(() => {
     const { searchButton, floatingActionBar, collapsedActionButton, liveKeywords } = externalControlsRef.current;
     searchButton?.style.removeProperty('left');
@@ -276,35 +193,37 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     splitterRef.current?.style.removeProperty('left');
     splitterRef.current?.style.removeProperty('transform');
     builderCollapseToggleRef.current?.style.removeProperty('left');
-    builderCollapseToggleRef.current?.style.removeProperty('transform');
     lastActionControlPixelRef.current = null;
     externalControlsReadyRef.current = false;
   }, []);
 
-  const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number, syncResponsiveControls = true) => {
+  const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
 
-    // The divider and collapse control are body portals. Move them on the
-    // compositor with translate3d instead of relaying out their fixed `left`
-    // position every frame. Inline `!important` intentionally beats the older
-    // defensive transform reset while the drag is active.
+    // The divider is a fixed body portal. Give it one coordinate owner only:
+    // the exact viewport left position. The previous transform preview lost to
+    // an older higher-specificity `transform: none !important` rule, leaving
+    // the divider at x=0 and making it appear to have vanished.
     if (splitterRef.current) {
-      splitterRef.current.style.setProperty('left', '0px', 'important');
+      splitterRef.current.style.removeProperty('transform');
       splitterRef.current.style.setProperty(
-        'transform',
-        `translate3d(${Math.max(0, Math.round(splitterLeft) - 8)}px, 0, 0)`,
+        'left',
+        `${Math.max(0, Math.round(splitterLeft) - 8)}px`,
         'important',
       );
     }
 
+    // The builder collapse control is another body portal. During pointer drag
+    // the committed root CSS variable intentionally stays unchanged until the
+    // drag ends, so drive this button from the same live splitter coordinate.
+    // Otherwise it appears to jump only after pointer-up.
     if (builderCollapseToggleRef.current && !builderCollapsedRef.current) {
-      builderCollapseToggleRef.current.style.setProperty('left', '0px', 'important');
       builderCollapseToggleRef.current.style.setProperty(
-        'transform',
-        `translate3d(${Math.max(0, Math.round(splitterLeft) - 54)}px, 0, 0)`,
+        'left',
+        `${Math.max(0, Math.round(splitterLeft) - 54)}px`,
         'important',
       );
     }
@@ -339,12 +258,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     // the builder pane width automatically. Keep its outer box and responsive
     // controls on the exact same builder width in this animation frame. The
     // previous wide-desktop early return froze the bar until pointer-up.
-    // The action row contains container-query driven controls. Reflow it on
-    // the same paced cadence as the pane content instead of on every pointer
-    // frame; the divider, collapse toggle and search icon still track at full
-    // display refresh rate.
-    if (!syncResponsiveControls) return;
-
     const actionControlPixel = roundedBuilderWidth;
     if (lastActionControlPixelRef.current === actionControlPixel) return;
     lastActionControlPixelRef.current = actionControlPixel;
@@ -522,12 +435,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       result.style.removeProperty('left');
       builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
     }
-    if (draggingRef.current) {
-      const contentLayoutSynced = isIsolatedWorkspace
-        ? syncPacedPaneContentLayout(builderWidth)
-        : true;
-      syncExternalMeasurements(builderWidth, splitterLeft, contentLayoutSynced);
-    }
+    if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
     const nextBuilderMode = builderCollapsedRef.current
       ? modeRef.current.builder
@@ -558,7 +466,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, resolvePaneMode, syncExternalMeasurements, syncPacedPaneContentLayout]);
+  }, [clearRootMeasurements, isStudioBlack, resolvePaneMode, syncExternalMeasurements]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -576,7 +484,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: Math.max(rect.width, 1),
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
-    if (!draggingRef.current) clearPaneContentMeasurements();
     const appliedPercent = applyPercentToLayout(percentRef.current);
     const builderWidth = builderCollapsedRef.current
       ? 0
@@ -584,7 +491,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     refreshSplitterFooterBoundary();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearPaneContentMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary, refreshWorkspaceIsolation]);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary, refreshWorkspaceIsolation]);
 
   useLayoutEffect(() => {
     percentRef.current = percent;
@@ -703,10 +610,6 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
         window.cancelAnimationFrame(footerFrameRef.current);
         footerFrameRef.current = null;
       }
-      if (contentReleaseFrameRef.current !== null) {
-        window.cancelAnimationFrame(contentReleaseFrameRef.current);
-        contentReleaseFrameRef.current = null;
-      }
       if (draggingRef.current) {
         draggingRef.current = false;
         window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
@@ -724,12 +627,11 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       builderRef.current?.style.removeProperty('flex-basis');
       builderRef.current?.style.removeProperty('width');
       resultRef.current?.style.removeProperty('left');
-      clearPaneContentMeasurements();
       clearExternalMeasurements();
       clearRootMeasurements();
       delete document.documentElement.dataset.soridrawBuilderCollapsed;
     };
-  }, [clearExternalMeasurements, clearPaneContentMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
@@ -766,18 +668,12 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       width: rect.width,
       leftRailEdge: metricsRef.current.leftRailEdge,
     };
-    const startBuilderWidth = rect.width * (percentRef.current / 100);
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startPercent: percentRef.current,
       width: rect.width,
     };
-    if (contentReleaseFrameRef.current !== null) {
-      window.cancelAnimationFrame(contentReleaseFrameRef.current);
-      contentReleaseFrameRef.current = null;
-    }
-    beginPacedPaneContentLayout(startBuilderWidth);
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
     readExternalControls(true);
@@ -820,13 +716,14 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const builderWidth = builderCollapsedRef.current
       ? 0
       : metricsRef.current.width * (percentRef.current / 100);
-    syncPacedPaneContentLayout(builderWidth, true);
-    syncExternalMeasurements(builderWidth, metricsRef.current.left + builderWidth, true);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
-    schedulePaneContentRelease();
     scheduleFooterBoundaryRefresh();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
+    // Reconnect the result title to the final builder-card height after the
+    // drag has committed. This keeps the expensive cross-pane measurement out
+    // of pointer frames without changing the final layout.
+    window.requestAnimationFrame(syncResultTitleHeight);
     setPercent(percentRef.current);
   };
 
@@ -878,12 +775,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   return (
     <>
       <div ref={layoutRef} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}`}>
-        <div id="soridraw-studio-builder-pane" ref={builderRef} className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
-          <div ref={builderContentRef} className="soridraw-studio-pane-content soridraw-studio-builder-content">{panes[0] ?? null}</div>
-        </div>
-        <div ref={resultRef} className="soridraw-studio-result-pane">
-          <div ref={resultContentRef} className="soridraw-studio-pane-content soridraw-studio-result-pane-content">{panes[1] ?? null}</div>
-        </div>
+        <div id="soridraw-studio-builder-pane" ref={builderRef} className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
+        <div ref={resultRef} className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
       </div>
       {typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl}
       {typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl}

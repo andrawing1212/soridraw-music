@@ -4841,3 +4841,275 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     border-color: currentColor !important;
   }
 }
+
+/* 316: Embedded Music Note / Library parity and responsive containment.
+ * The standalone Classic pages are viewport-responsive. When the same pages
+ * are mounted inside the Studio result pane, viewport breakpoints no longer
+ * describe the available width, which caused toolbar collisions, oversized
+ * cards/text, inactive tab colors, and clipped fixed dialogs. Keep these
+ * adjustments strictly inside the embedded result copy. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page {
+    container-name: soridraw-embedded-result;
+    container-type: inline-size;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #0f0f0f !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page > :where(
+    .soridraw-musicnote-theme--studio-embedded,
+    .soridraw-library-theme--studio-embedded
+  ) {
+    /* Match the visual density of the Studio builder pane rather than the
+     * standalone full-width page. Chromium/Electron supports zoom and it
+     * preserves normal document flow better than transform:scale. */
+    zoom: .82;
+    width: 121.952% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 100% !important;
+    padding: 14px 16px 34px !important;
+    overflow-x: hidden !important;
+    background: #0f0f0f !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-page-header {
+    transform: none !important;
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    gap: 8px !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-page-header h1 {
+    font-size: clamp(28px, 3.2vw, 42px) !important;
+    line-height: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-page-header p {
+    font-size: 13px !important;
+    line-height: 1.45 !important;
+    margin-top: 7px !important;
+  }
+
+  /* Use the same Classic controls, but lay them out from the result pane's
+   * actual width instead of the global xl viewport breakpoint. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto) !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 3 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-toolbar-search {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-filter-group {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 42px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #1a1a1a !important;
+    scrollbar-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-filter-group::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-filter-group button {
+    height: 34px !important;
+    min-height: 34px !important;
+    font-size: 11px !important;
+  }
+
+  /* Restore the exact active-folder emphasis that Studio's generic button
+   * rules were overriding. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-view-tabs > div {
+    width: min(100%, 520px) !important;
+    max-width: 520px !important;
+    padding: 4px !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #1a1a1a !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-embedded-view-tab {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: rgba(255,255,255,.58) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-musicnote-view-tabs
+  .soridraw-embedded-view-tab[data-active="true"] {
+    background: #d9534f !important;
+    color: #fff !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-library-view-tabs
+  .soridraw-embedded-view-tab[data-active="true"] {
+    background: #6fa66b !important;
+    color: #fff !important;
+  }
+
+  /* Keyword chips must stay inside each card's text column. The old
+   * max-width used the viewport, so embedded cards could draw beneath the
+   * action area and visually stack chips on top of one another. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-musicnote-theme--studio-embedded
+  .favorite-keyword-strip {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-musicnote-theme--studio-embedded
+  .favorite-keyword-strip > * {
+    flex: 0 0 auto !important;
+  }
+
+  /* Flat Classic surfaces: no Studio card outline, ring, or extra shadow. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  :where(article, section, button, input, textarea, select, div)[class*="border"] {
+    border-width: 0 !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  /* Keep list titles readable when the split pane is narrow. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  h3.truncate {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Result-pane responsive scaling. These are container breakpoints, so they
+ * follow divider width changes immediately even on a wide desktop viewport. */
+@container soridraw-embedded-result (max-width: 900px) {
+  .soridraw-musicnote-theme--studio-embedded,
+  .soridraw-library-theme--studio-embedded {
+    zoom: .78 !important;
+    width: 128.206% !important;
+  }
+}
+
+@container soridraw-embedded-result (max-width: 700px) {
+  .soridraw-musicnote-theme--studio-embedded,
+  .soridraw-library-theme--studio-embedded {
+    zoom: .72 !important;
+    width: 138.889% !important;
+  }
+
+  .soridraw-embedded-toolbar {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .soridraw-embedded-filter-group {
+    width: 100% !important;
+  }
+
+  .soridraw-embedded-view-tabs > div {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .soridraw-embedded-view-tab {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    font-size: 11px !important;
+  }
+}
+
+@container soridraw-embedded-result (max-width: 560px) {
+  .soridraw-musicnote-theme--studio-embedded,
+  .soridraw-library-theme--studio-embedded {
+    zoom: .66 !important;
+    width: 151.516% !important;
+  }
+
+  .soridraw-embedded-page-header h1 {
+    font-size: 28px !important;
+  }
+
+  .soridraw-embedded-toolbar,
+  .soridraw-embedded-view-tabs {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .soridraw-musicnote-theme--studio-embedded h3.truncate,
+  .soridraw-library-theme--studio-embedded h3.truncate {
+    white-space: normal !important;
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+}
+
+/* Detail dialogs are now portaled to body, outside the clipped/contained
+ * result pane. Keep their Classic dark colors and remove only the unwanted
+ * Studio outline. */
+html[data-soridraw-theme="studio-black"] body > .soridraw-musicnote-detail-portal,
+html[data-soridraw-theme="studio-black"] body > .soridraw-library-detail-portal {
+  z-index: 10050 !important;
+  padding-top: max(18px, env(safe-area-inset-top)) !important;
+  padding-bottom: max(18px, env(safe-area-inset-bottom)) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body > .soridraw-musicnote-detail-portal
+.soridraw-musicnote-detail-panel,
+html[data-soridraw-theme="studio-black"] body > .soridraw-library-detail-portal
+.soridraw-library-detail-panel {
+  border: 0 !important;
+  outline: 0 !important;
+  max-height: calc(100dvh - 36px) !important;
+}

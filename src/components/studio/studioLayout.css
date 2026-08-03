@@ -4033,3 +4033,16 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     scroll-padding-bottom: 0 !important;
   }
 }
+
+/* 300: Reduce the dead scroll space below the inline Generate controls.
+ * The isolated builder pane previously kept 112px of bottom padding even after
+ * the real inline action row occupied its own 100px anchor. Halve only that
+ * extra desktop Studio Black reserve so the remaining space is roughly 2cm,
+ * while keeping enough clearance for the floating action row. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    padding-bottom: 56px !important;
+  }
+}

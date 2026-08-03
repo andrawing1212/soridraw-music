@@ -3537,7 +3537,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle {
     display: inline-flex !important;
     position: fixed !important;
@@ -3680,7 +3680,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle {
     top: 15px !important;
     left: 17px !important;
@@ -3703,7 +3703,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * while the profile photo and every following menu row move down by one slot.
  * The two controls no longer overlap or replace each other. Studio Black wide
  * desktop only. Builder/result controls and Classic stay untouched. */
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile {
     position: relative !important;
     display: flex !important;
@@ -3833,7 +3833,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * a separate right-hand submenu, matching the compact Suno-style interaction.
  * The menu is rendered to document.body so the rail's overflow lock cannot crop
  * it. Classic, mobile and compact Studio layouts remain untouched. */
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.soridraw-studio-rail-profile-trigger {
     width: 100% !important;
     max-width: 100% !important;
@@ -4060,7 +4060,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * trigger also receives a compact downward chevron, while the collapsed rail
  * keeps only the circular avatar in its second slot. Studio Black wide desktop
  * only; Classic, mobile and the existing collapsed ordering are unchanged. */
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"]
   .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
   .soridraw-studio-rail-profile {
@@ -4472,3 +4472,171 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 
+
+/* 312: Tablet-landscape auxiliary rails + independent right rail toggle.
+ * 1100-1599 previously removed both rails entirely. Keep both rails mounted,
+ * enter that compact bridge with 64px rails, and let the user independently
+ * expand either side. Wide PC keeps its existing left preference and gains the
+ * same right-side collapse/expand control. Classic and <1100px mobile remain
+ * unchanged. */
+.soridraw-studio-right-rail-collapse-toggle {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame {
+    --soridraw-studio-left-rail-width: 214px;
+    --soridraw-studio-right-rail-width: 292px;
+    grid-template-columns:
+      var(--soridraw-studio-left-rail-width)
+      minmax(0, 1fr)
+      var(--soridraw-studio-right-rail-width) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed {
+    --soridraw-studio-left-rail-width: 64px;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed {
+    --soridraw-studio-right-rail-width: 64px;
+  }
+
+  /* Override the old 1100-1599 bridge that hid both rails. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame .soridraw-studio-left-panel,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame .soridraw-studio-dashboard-panel {
+    display: block !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame .soridraw-studio-page-center {
+    grid-column: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-right-rail-collapse-toggle {
+    display: inline-flex !important;
+    position: fixed !important;
+    z-index: 145 !important;
+    top: 72px !important;
+    right: 250px !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 0 !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    color: #a9a9ad !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transition: background-color .12s ease, color .12s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-right-rail-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-right-rail-collapse-toggle:focus-visible {
+    background: rgba(255,255,255,.05) !important;
+    color: #ffb400 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed .soridraw-studio-right-rail-collapse-toggle {
+    right: 15px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    color: #b9b9bc !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-panel-toggle-icon.is-right {
+    transform: scaleX(-1) !important;
+  }
+
+  /* Reserve a clean top slot for the new right toggle while expanded. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame:not(.is-right-rail-collapsed)
+  .soridraw-studio-dashboard-inner {
+    padding-top: 48px !important;
+  }
+
+  /* The collapsed right rail is a real visible strip, not a removed panel. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed
+  .soridraw-studio-dashboard-panel {
+    overflow: hidden !important;
+    border-left: 1px solid var(--sb-divider) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-right-rail-collapsed
+  .soridraw-studio-dashboard-inner {
+    display: none !important;
+  }
+}
+
+/* The compact desktop/tablet bridge starts with both 64px rails via React,
+ * but retains the exact same independent expanded widths when either toggle is
+ * used. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame {
+    min-height: 100vh !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle {
+    display: inline-flex !important;
+  }
+
+  /* Match the wide-PC simple left rail in the compact bridge. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-left-panel-inner {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-profile-copy,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-profile-chevron,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-label,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-item > span,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-item > svg.ml-auto,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-theme > span,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-theme > svg.ml-auto {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-nav {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  :is(.soridraw-studio-rail-item, button.soridraw-studio-rail-theme) {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-divider {
+    width: 32px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}

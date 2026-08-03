@@ -18,6 +18,7 @@ type RecentSongScrollableCopyProps = {
 
 function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps) {
   const scrollRef = React.useRef<HTMLSpanElement>(null);
+  const resetTimerRef = React.useRef<number | null>(null);
   const dragRef = React.useRef({
     pointerId: -1,
     startX: 0,
@@ -26,11 +27,42 @@ function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps
   });
   const [isDragging, setIsDragging] = React.useState(false);
 
+  const clearResetTimer = React.useCallback(() => {
+    if (resetTimerRef.current === null) return;
+    window.clearTimeout(resetTimerRef.current);
+    resetTimerRef.current = null;
+  }, []);
+
+  const scheduleReturnToStart = React.useCallback(() => {
+    clearResetTimer();
+
+    const target = scrollRef.current;
+    if (!target || target.scrollLeft <= 0) return;
+
+    resetTimerRef.current = window.setTimeout(() => {
+      const currentTarget = scrollRef.current;
+      resetTimerRef.current = null;
+      if (!currentTarget || currentTarget.scrollLeft <= 0) return;
+
+      currentTarget.scrollTo({ left: 0, behavior: 'smooth' });
+    }, 7000);
+  }, [clearResetTimer]);
+
+  React.useEffect(() => {
+    const target = scrollRef.current;
+    clearResetTimer();
+    if (target) target.scrollLeft = 0;
+
+    return clearResetTimer;
+  }, [title, time, clearResetTimer]);
+
   const handlePointerDown = (event: React.PointerEvent<HTMLSpanElement>) => {
     if (event.button !== 0) return;
 
     const target = scrollRef.current;
     if (!target || target.scrollWidth <= target.clientWidth) return;
+
+    clearResetTimer();
 
     dragRef.current = {
       pointerId: event.pointerId,
@@ -64,6 +96,7 @@ function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps
     }
     drag.pointerId = -1;
     setIsDragging(false);
+    scheduleReturnToStart();
   };
 
   const handleClickCapture = (event: React.MouseEvent<HTMLSpanElement>) => {
@@ -81,6 +114,7 @@ function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps
     if (delta === 0) return;
 
     target.scrollLeft += delta;
+    scheduleReturnToStart();
     event.preventDefault();
     event.stopPropagation();
   };

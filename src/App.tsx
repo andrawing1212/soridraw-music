@@ -13907,6 +13907,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 formatTime={formatStudioDashboardTime}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={openStudioDashboardSong}
+                isSongFavorited={isSongFavorited}
                 onOpenApiSettings={() => navigate('/suno-api-settings')}
               />
             }

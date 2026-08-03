@@ -4274,3 +4274,59 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     min-height: 0;
   }
 }
+
+
+/* 304 — Improve PC recent-song readability and surface favorite state.
+ * Favorite rows keep the existing navigation behavior; only the leading
+ * music-note glyph changes to the same filled gold heart used by Studio. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song {
+    min-height: 52px !important;
+    gap: 9px !important;
+    padding: 8px 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy {
+    gap: 3px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy strong {
+    font-size: 12px !important;
+    font-weight: 760 !important;
+    line-height: 1.25 !important;
+    letter-spacing: -0.015em !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy small {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-icon {
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    flex-basis: 32px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-icon.is-favorite,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  button.soridraw-studio-dashboard-song:hover .soridraw-studio-dashboard-song-icon.is-favorite,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  button.soridraw-studio-dashboard-song.is-selected .soridraw-studio-dashboard-song-icon.is-favorite {
+    color: #e3a13a !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-icon.is-favorite svg {
+    fill: currentColor !important;
+    stroke: currentColor !important;
+  }
+}

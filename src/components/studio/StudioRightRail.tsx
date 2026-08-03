@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, ChevronRight, Music, Sparkles, X } from 'lucide-react';
+import { Activity, ChevronRight, Heart, Music, Sparkles, X } from 'lucide-react';
 
 type RecentSong = any;
 
@@ -24,6 +24,7 @@ type StudioRightRailProps = {
   formatTime: (value?: unknown) => string;
   onOpenGenerationOptions: () => void;
   onOpenSong: (song: RecentSong, index: number) => void;
+  isSongFavorited: (song: RecentSong) => boolean;
   onOpenApiSettings: () => void;
 };
 
@@ -40,6 +41,7 @@ export default function StudioRightRail({
   formatTime,
   onOpenGenerationOptions,
   onOpenSong,
+  isSongFavorited,
   onOpenApiSettings,
 }: StudioRightRailProps) {
   const [showAllRecentSongs, setShowAllRecentSongs] = React.useState(false);
@@ -81,21 +83,26 @@ export default function StudioRightRail({
             </button>
           </div>
           <div id="soridraw-studio-recent-song-list" className="soridraw-studio-dashboard-song-list">
-            {history.length > 0 ? visibleRecentSongs.map((song, index) => (
-              <button
-                key={`studio-dashboard-song-${String(song.createdAt || index)}-${song.title || ''}`}
-                type="button"
-                className={`soridraw-studio-dashboard-song ${selectedIndex === index ? 'is-selected' : ''}`}
-                onClick={() => onOpenSong(song, index)}
-              >
-                <span className="soridraw-studio-dashboard-song-icon"><Music className="h-4 w-4" /></span>
-                <span className="soridraw-studio-dashboard-song-copy">
-                  <strong>{song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`}</strong>
-                  <small>{formatTime(song.updatedAt || song.createdAt)}</small>
-                </span>
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            )) : (
+            {history.length > 0 ? visibleRecentSongs.map((song, index) => {
+              const isFavorited = isSongFavorited(song);
+              return (
+                <button
+                  key={`studio-dashboard-song-${String(song.createdAt || index)}-${song.title || ''}`}
+                  type="button"
+                  className={`soridraw-studio-dashboard-song ${selectedIndex === index ? 'is-selected' : ''}`}
+                  onClick={() => onOpenSong(song, index)}
+                >
+                  <span className={`soridraw-studio-dashboard-song-icon ${isFavorited ? 'is-favorite' : ''}`}>
+                    {isFavorited ? <Heart className="h-4 w-4" aria-label="즐겨찾기 곡" /> : <Music className="h-4 w-4" />}
+                  </span>
+                  <span className="soridraw-studio-dashboard-song-copy">
+                    <strong>{song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`}</strong>
+                    <small>{formatTime(song.updatedAt || song.createdAt)}</small>
+                  </span>
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              );
+            }) : (
               <div className="soridraw-studio-dashboard-empty"><Music className="h-5 w-5" /><span>아직 생성된 곡이 없습니다.</span></div>
             )}
           </div>

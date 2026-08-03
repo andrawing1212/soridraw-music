@@ -3991,3 +3991,26 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     overflow-anchor: none !important;
   }
 }
+
+/* 298: Collapsed builder viewport boundary correction.
+ * Hiding the Studio hero removed the only top offset below the fixed 58px
+ * navigation, so the isolated result pane began behind the navigation even at
+ * scrollTop 0. Reserve the navigation height plus a compact 18px breathing
+ * space in the collapsed main area. Also remove the inherited main bottom
+ * padding so the independently scrolling result pane reaches the viewport
+ * bottom instead of ending in an arbitrary 24px gap. Studio Black wide desktop
+ * only; expanded builder, Classic and mobile remain unchanged. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 76px !important;
+    padding-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    scroll-padding-top: 18px !important;
+    scroll-padding-bottom: 0 !important;
+  }
+}

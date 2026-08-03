@@ -18,6 +18,9 @@ type StudioLeftRailProps = {
   onSearch: () => void;
   onApiSettings: () => void;
   onThemeSettings: () => void;
+  profileName: string;
+  profileEmail?: string;
+  profilePhotoURL?: string;
 };
 
 export default function StudioLeftRail({
@@ -28,13 +31,27 @@ export default function StudioLeftRail({
   onSearch,
   onApiSettings,
   onThemeSettings,
+  profileName,
+  profileEmail = '',
+  profilePhotoURL = '',
 }: StudioLeftRailProps) {
+  const profileInitial = String(profileName || 'S').trim().charAt(0).toUpperCase() || 'S';
+
   return (
     <aside className="soridraw-studio-left-panel" aria-label="소리스튜디오 작업 메뉴">
       <div className="soridraw-studio-left-panel-inner">
-        <div className="soridraw-studio-rail-brand">
-          <span className="soridraw-studio-rail-brand-mark">SD</span>
-          <span><strong>Sori Studio</strong><small>Studio Black</small></span>
+        <div className="soridraw-studio-rail-brand soridraw-studio-rail-profile">
+          <div className="soridraw-studio-rail-profile-avatar" aria-hidden="true">
+            {profilePhotoURL ? (
+              <img src={profilePhotoURL} alt="" referrerPolicy="no-referrer" />
+            ) : (
+              <span>{profileInitial}</span>
+            )}
+          </div>
+          <span className="soridraw-studio-rail-profile-copy">
+            <strong>{profileName || 'SORiDRAW'}</strong>
+            <small>{profileEmail || 'Studio Black'}</small>
+          </span>
         </div>
 
         <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">

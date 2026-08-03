@@ -3669,3 +3669,133 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     opacity: 1 !important;
   }
 }
+
+
+/* 293: Left rail profile + shared collapse/expand interaction.
+ * Expanded: the old Sori Studio label is replaced by the signed-in profile,
+ * and the same panel toggle stays at the right side of that profile row.
+ * Collapsed: the profile photo remains at the top of the simple rail. Hovering
+ * anywhere over the simple rail temporarily swaps the photo for the shared
+ * expand control; leaving restores the photo without a click. Studio Black
+ * wide desktop only. Builder/result controls and Classic stay untouched. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile {
+    position: relative !important;
+    display: flex !important;
+    min-height: 52px !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
+    padding: 0 38px 12px 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile-avatar {
+    display: flex !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    flex: 0 0 34px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(255,255,255,.13) !important;
+    border-radius: 50% !important;
+    background: #1c1c1e !important;
+    color: #ffb400 !important;
+    font-size: 12px !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+    opacity: 1;
+    transition: opacity .1s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile-avatar > img {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: inherit !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile-copy {
+    min-width: 0 !important;
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile-copy > strong,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-rail-profile-copy > small {
+    display: block !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* The expanded-state collapse control belongs to the profile row, not the
+   * global top-navigation strip. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle {
+    top: 74px !important;
+    left: 174px !important;
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    border: 0 !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    color: #a9a9ad !important;
+    box-shadow: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle:focus-visible {
+    border: 0 !important;
+    background: rgba(255,255,255,.05) !important;
+    color: #ffb400 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-profile {
+    min-height: 52px !important;
+    padding: 0 0 12px !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-rail-profile-copy {
+    display: none !important;
+  }
+
+  /* In the simple rail the shared control occupies the exact profile-photo
+   * position. It is revealed by hovering anywhere on that simple rail. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle {
+    top: 72px !important;
+    left: 15px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    opacity: 0 !important;
+    pointer-events: auto !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: #0f0f10 !important;
+    color: #b9b9bc !important;
+    transition: opacity .1s ease, color .1s ease, background-color .1s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-panel:hover + .soridraw-studio-left-rail-collapse-toggle,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle:focus-visible {
+    opacity: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-panel:hover .soridraw-studio-rail-profile-avatar,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed:has(.soridraw-studio-left-rail-collapse-toggle:hover) .soridraw-studio-rail-profile-avatar,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed:has(.soridraw-studio-left-rail-collapse-toggle:focus-visible) .soridraw-studio-rail-profile-avatar {
+    opacity: 0 !important;
+  }
+}

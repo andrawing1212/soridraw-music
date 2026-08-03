@@ -13902,6 +13902,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onThemeSettings={() => navigate('/my-page?tab=app')}
+                profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
+                profileEmail={user?.email || ''}
+                profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
               />
             }
             rightRail={

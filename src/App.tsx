@@ -13905,6 +13905,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 selectedKeywords={liveSelectedKeywordItems}
                 onRemoveSelectedKeyword={removeLiveSelectedKeyword}
                 formatTime={formatStudioDashboardTime}
+                formatSongTitle={formatUnifiedTitle}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={openStudioDashboardSong}
                 isSongFavorited={isSongFavorited}

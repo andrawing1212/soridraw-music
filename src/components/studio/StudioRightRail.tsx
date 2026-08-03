@@ -22,6 +22,7 @@ type StudioRightRailProps = {
   selectedKeywords: SelectedKeyword[];
   onRemoveSelectedKeyword: (keyword: SelectedKeyword) => void;
   formatTime: (value?: unknown) => string;
+  formatSongTitle: (song: RecentSong) => string;
   onOpenGenerationOptions: () => void;
   onOpenSong: (song: RecentSong, index: number) => void;
   isSongFavorited: (song: RecentSong) => boolean;
@@ -39,6 +40,7 @@ export default function StudioRightRail({
   selectedKeywords,
   onRemoveSelectedKeyword,
   formatTime,
+  formatSongTitle,
   onOpenGenerationOptions,
   onOpenSong,
   isSongFavorited,
@@ -96,7 +98,7 @@ export default function StudioRightRail({
                     {isFavorited ? <Heart className="h-4 w-4" aria-label="즐겨찾기 곡" /> : <Music className="h-4 w-4" />}
                   </span>
                   <span className="soridraw-studio-dashboard-song-copy">
-                    <strong>{song.title || song.koreanTitle || song.englishTitle || `생성곡 ${index + 1}`}</strong>
+                    <strong>{formatSongTitle(song) || `생성곡 ${index + 1}`}</strong>
                     <small>{formatTime(song.updatedAt || song.createdAt)}</small>
                   </span>
                   <ChevronRight className="h-4 w-4" />

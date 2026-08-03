@@ -4330,3 +4330,49 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     stroke: currentColor !important;
   }
 }
+
+
+/* 305 — Keep the complete unified title in the Studio Black PC recent list.
+ * The title is composed by App from the same genre and language-title fields
+ * used by the result card. Long title/date content scrolls horizontally inside
+ * the fixed row, while the favorite icon and open-arrow remain in place. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy {
+    min-width: 0 !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #4b4b4f transparent;
+    padding-bottom: 2px;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy::-webkit-scrollbar-thumb {
+    background: #4b4b4f;
+    border-radius: 999px;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy strong,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy small {
+    width: max-content !important;
+    min-width: 100%;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+  }
+}

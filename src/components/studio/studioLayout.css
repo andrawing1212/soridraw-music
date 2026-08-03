@@ -4376,3 +4376,32 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     white-space: nowrap !important;
   }
 }
+
+
+/* 306 — Hide per-row recent-song scrollbars and make only the title copy area
+ * horizontally draggable. A vertical mouse-wheel gesture over that copy area
+ * is translated to horizontal title scrolling; the rest of the row keeps its
+ * existing click and right-rail scroll behavior. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+    padding-bottom: 0 !important;
+    cursor: grab;
+    user-select: none;
+    touch-action: pan-y;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy.is-dragging {
+    cursor: grabbing;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-copy::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+}

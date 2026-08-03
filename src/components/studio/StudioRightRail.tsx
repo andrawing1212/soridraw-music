@@ -11,6 +11,97 @@ type SelectedKeyword = {
   label: string;
 };
 
+type RecentSongScrollableCopyProps = {
+  title: string;
+  time: string;
+};
+
+function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps) {
+  const scrollRef = React.useRef<HTMLSpanElement>(null);
+  const dragRef = React.useRef({
+    pointerId: -1,
+    startX: 0,
+    startScrollLeft: 0,
+    moved: false,
+  });
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLSpanElement>) => {
+    if (event.button !== 0) return;
+
+    const target = scrollRef.current;
+    if (!target || target.scrollWidth <= target.clientWidth) return;
+
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: target.scrollLeft,
+      moved: false,
+    };
+    target.setPointerCapture(event.pointerId);
+    setIsDragging(true);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLSpanElement>) => {
+    const target = scrollRef.current;
+    const drag = dragRef.current;
+    if (!target || drag.pointerId !== event.pointerId) return;
+
+    const distance = event.clientX - drag.startX;
+    if (Math.abs(distance) > 3) drag.moved = true;
+    target.scrollLeft = drag.startScrollLeft - distance;
+
+    if (drag.moved) event.preventDefault();
+  };
+
+  const finishPointerDrag = (event: React.PointerEvent<HTMLSpanElement>) => {
+    const target = scrollRef.current;
+    const drag = dragRef.current;
+    if (drag.pointerId !== event.pointerId) return;
+
+    if (target?.hasPointerCapture(event.pointerId)) {
+      target.releasePointerCapture(event.pointerId);
+    }
+    drag.pointerId = -1;
+    setIsDragging(false);
+  };
+
+  const handleClickCapture = (event: React.MouseEvent<HTMLSpanElement>) => {
+    if (!dragRef.current.moved) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragRef.current.moved = false;
+  };
+
+  const handleWheel = (event: React.WheelEvent<HTMLSpanElement>) => {
+    const target = scrollRef.current;
+    if (!target || target.scrollWidth <= target.clientWidth) return;
+
+    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    if (delta === 0) return;
+
+    target.scrollLeft += delta;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  return (
+    <span
+      ref={scrollRef}
+      className={`soridraw-studio-dashboard-song-copy ${isDragging ? 'is-dragging' : ''}`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishPointerDrag}
+      onPointerCancel={finishPointerDrag}
+      onClickCapture={handleClickCapture}
+      onWheel={handleWheel}
+    >
+      <strong>{title}</strong>
+      <small>{time}</small>
+    </span>
+  );
+}
+
 type StudioRightRailProps = {
   isGenerating: boolean;
   runningCount: number;
@@ -97,10 +188,10 @@ export default function StudioRightRail({
                   <span className={`soridraw-studio-dashboard-song-icon ${isFavorited ? 'is-favorite' : ''}`}>
                     {isFavorited ? <Heart className="h-4 w-4" aria-label="즐겨찾기 곡" /> : <Music className="h-4 w-4" />}
                   </span>
-                  <span className="soridraw-studio-dashboard-song-copy">
-                    <strong>{formatSongTitle(song) || `생성곡 ${index + 1}`}</strong>
-                    <small>{formatTime(song.updatedAt || song.createdAt)}</small>
-                  </span>
+                  <RecentSongScrollableCopy
+                    title={formatSongTitle(song) || `생성곡 ${index + 1}`}
+                    time={formatTime(song.updatedAt || song.createdAt)}
+                  />
                   <ChevronRight className="h-4 w-4" />
                 </button>
               );

@@ -4766,3 +4766,78 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     font-weight: 700;
   }
 }
+
+/* 315: Embedded Music Note / Library must keep the exact flat Classic page
+ * surface language inside Studio Black. The result pane sits below
+ * `.studio-tone-down`, whose broad border/shadow rules otherwise repaint every
+ * Classic card and control with visible outlines. Reset only the two embedded
+ * page copies; standalone Classic routes, the Studio builder, and mobile are
+ * untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page > .soridraw-musicnote-theme--studio-embedded,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page > .soridraw-library-theme--studio-embedded {
+    --bg-primary: #0f0f0f;
+    --bg-secondary: #1a1a1a;
+    --card-bg: #1e1e1e;
+    --input-bg: rgba(255, 255, 255, 0.15);
+    --hover-bg: rgba(255, 255, 255, 0.12);
+    --hover-bg-solid: #2a2a2a;
+    --button-bg: rgba(255, 255, 255, 0.05);
+    --button-border: transparent;
+    --button-hover-bg: rgba(255, 255, 255, 0.12);
+    --button-shadow: none;
+    --shadow-sm: none;
+    --shadow-md: none;
+    --shadow-lg: none;
+    --shadow-xl: none;
+    --shadow-2xl: none;
+    --page-soft-border: transparent;
+    --page-soft-border-hover: transparent;
+    background: #0f0f0f !important;
+  }
+
+  /* Remove every inherited Studio outline/shadow while retaining the original
+   * Classic component backgrounds, spacing, radii, active colors, and hover
+   * behavior. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  :where(button, input, textarea, select, section, article, div)[class*="border"] {
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  :where(button, input, textarea, select, section, article, div)[class*="border"]:hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  :where(button, input, textarea, select, section, article, div)[class*="border"]:focus,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  :where(button, input, textarea, select, section, article, div)[class*="border"]:focus-visible {
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  :where(.soridraw-musicnote-theme--studio-embedded, .soridraw-library-theme--studio-embedded)
+  :where([class*="shadow"], [class*="ring-"]) {
+    box-shadow: none !important;
+  }
+
+  /* The Library title mark intentionally uses its own stroke as part of the
+   * icon artwork; restore only that internal mark after the flat reset. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page
+  .soridraw-library-theme--studio-embedded .soridraw-library-title-icon > div {
+    border-color: currentColor !important;
+  }
+}

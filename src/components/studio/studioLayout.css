@@ -2832,8 +2832,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 html[data-soridraw-theme="studio-black"].soridraw-studio-route-active
 body.soridraw-studio-route-active
 :is(.fixed.inset-0, .absolute.inset-0)[class*="backdrop-blur"] {
-  backdrop-filter: blur(0.35px) !important;
-  -webkit-backdrop-filter: blur(0.35px) !important;
+  backdrop-filter: blur(0.2px) !important;
+  -webkit-backdrop-filter: blur(0.2px) !important;
 }
 
 /* 262: Recent-result surfaces use a deeper neutral charcoal while the Applied
@@ -4999,4 +4999,52 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-left-rail-collapse-toggle:focus-visible {
     background: rgba(255,255,255,.05) !important;
   }
+}
+
+/* 315: Split Mode Genre / Style / Sound popup tone refinement.
+ * Keep all keyword buttons and selected-button rules untouched; only the
+ * modal shell, content surface, information footer, and selection strip are
+ * unified for Split Mode. */
+:root[data-soridraw-theme="studio-black"] {
+  --sb-studio-modal-edge: #1b1b1c;
+  --sb-studio-modal-body: #232325;
+  --sb-studio-modal-selection: #343126;
+}
+
+html[data-soridraw-theme="studio-black"] body
+:is(.soridraw-studio-genre-modal-panel, .soridraw-studio-cycle-modal-panel) {
+  background: var(--sb-studio-modal-edge) !important;
+  background-color: var(--sb-studio-modal-edge) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+:is(.soridraw-studio-genre-modal-panel, .soridraw-studio-cycle-modal-panel)
+> .soridraw-studio-modal-header,
+html[data-soridraw-theme="studio-black"] body
+.soridraw-studio-genre-modal-panel
+> .soridraw-studio-modal-footer {
+  background: var(--sb-studio-modal-edge) !important;
+  background-color: var(--sb-studio-modal-edge) !important;
+  background-image: none !important;
+  border-color: rgba(184, 151, 91, 0.20) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+:is(.soridraw-studio-genre-modal-panel, .soridraw-studio-cycle-modal-panel)
+> .soridraw-studio-modal-body {
+  background: var(--sb-studio-modal-body) !important;
+  background-color: var(--sb-studio-modal-body) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+:is(.soridraw-studio-genre-modal-panel, .soridraw-studio-cycle-modal-panel)
+> .soridraw-studio-modal-selection-bar {
+  background: var(--sb-studio-modal-selection) !important;
+  background-color: var(--sb-studio-modal-selection) !important;
+  background-image: none !important;
+  border-color: rgba(184, 151, 91, 0.32) !important;
+  box-shadow: none !important;
 }

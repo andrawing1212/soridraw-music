@@ -98,7 +98,7 @@ export const cycleSoridrawDisplayMode = () => {
 };
 
 export const getSoridrawDisplayModeLabel = (mode: SoridrawDisplayMode): string => {
-  if (mode === 'studio-black') return '블랙';
+  if (mode === 'studio-black') return '분할';
   return mode === 'light' ? '라이트' : '다크';
 };
 

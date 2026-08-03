@@ -253,7 +253,7 @@ export default function StudioLeftRail({
               {([
                 { mode: 'dark' as const, label: '다크' },
                 { mode: 'light' as const, label: '라이트' },
-                { mode: 'studio-black' as const, label: '블랙' },
+                { mode: 'studio-black' as const, label: '분할' },
               ]).map((item) => (
                 <button
                   key={item.mode}
@@ -315,7 +315,7 @@ export default function StudioLeftRail({
             </span>
             <span className="soridraw-studio-rail-profile-copy">
               <strong>{profileName || 'SORiDRAW'}</strong>
-              <small>{profileEmail || 'Studio Black'}</small>
+              <small>{profileEmail || '분할 모드'}</small>
             </span>
             <ChevronDown className="soridraw-studio-rail-profile-chevron" aria-hidden="true" />
           </button>
@@ -398,7 +398,7 @@ export default function StudioLeftRail({
             onMouseLeave={hideRailTooltip}
           >
             <Palette className="h-5 w-5" />
-            <span><strong>디자인 테마</strong><small>Classic / Studio Black</small></span>
+            <span><strong>디자인 테마</strong><small>Classic / 분할 모드</small></span>
             <ChevronRight className="ml-auto h-4 w-4" />
           </button>
         </div>

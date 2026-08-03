@@ -3334,7 +3334,7 @@ function Navigation({
 
   const displayModeCycleText = isPhoneAppearance
     ? '다크 · 라이트'
-    : '다크 · 라이트 · 블랙';
+    : '다크 · 라이트 · 분할';
 
   // Collapse menu on scroll
   useEffect(() => {
@@ -18487,6 +18487,15 @@ function CycleKeywordPopup({
   const isAtLimit = Number.isFinite(maxSelectableCount) && localTotalSelectedCount >= maxSelectableCount;
   const cycleDescriptionText = cycle.descriptionKo || cycle.description || '';
   const selectedCountText = localSelected.length > 0 ? ` (${localSelected.length})` : '';
+  const cycleVariantLabelMap = new Map(
+    cycle.variants
+      .filter((variant) => variant.kind !== 'separator')
+      .map((variant) => [variant.id, variant.labelKo || variant.label] as const)
+  );
+  const modalSelectionStatusItems = [
+    ...localSelected.map((id) => ({ id: `selected-${id}`, role: '선택', label: cycleVariantLabelMap.get(id) || id })),
+    ...localOtherSelected.map((id) => ({ id: `point-${id}`, role: '포인트', label: cycleVariantLabelMap.get(id) || id })),
+  ];
 
   useEffect(() => {
     onHover(null);
@@ -18524,7 +18533,7 @@ function CycleKeywordPopup({
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
+          <div className="soridraw-studio-modal-header px-5 py-4 border-b border-[var(--border-color)] flex items-start justify-between gap-4 shrink-0">
             <div className="min-w-0">
               <p className={cn("text-[10px] font-black tracking-[0.16em] uppercase mb-1", sectionAccent.text)}>{isPointSelectionMode ? `${title} Point Keyword` : `${title} Keyword`}</p>
               <h3 className="text-2xl font-black text-[var(--text-primary)] leading-tight truncate">{cycle.titleKo || cycle.title}</h3>
@@ -18571,8 +18580,35 @@ function CycleKeywordPopup({
             </div>
           </div>
 
+          <div className="soridraw-studio-modal-selection-bar px-5 py-2.5 border-b flex items-center justify-start gap-2 overflow-hidden text-left shrink-0">
+            <span className="text-[10px] font-black text-[var(--soridraw-menu-amber-soft)] uppercase tracking-widest shrink-0">
+              Selection
+            </span>
+            <div className="min-w-0 flex items-center gap-1.5 text-xs font-bold text-[var(--text-primary)] truncate break-keep">
+              {modalSelectionStatusItems.length > 0 ? (
+                <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap">
+                  {modalSelectionStatusItems.map((item, index) => (
+                    <React.Fragment key={item.id}>
+                      {index > 0 && (
+                        <span className="shrink-0 text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.35)]">·</span>
+                      )}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="shrink-0 rounded-full border border-[rgb(var(--soridraw-menu-amber-rgb)/0.24)] bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] px-1.5 py-[2px] text-[10px] font-black leading-none tracking-tight text-[rgb(var(--soridraw-menu-amber-soft-rgb)/0.78)]">
+                          {item.role}
+                        </span>
+                        <span className="min-w-0 truncate text-[var(--soridraw-menu-amber-soft)]">{item.label}</span>
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[var(--text-secondary)]">미선택</span>
+              )}
+            </div>
+          </div>
+
           <div
-            className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-5 pt-5 pb-8 space-y-3 scroll-pb-8"
+            className="soridraw-studio-modal-body min-h-0 flex-1 overflow-y-auto custom-scrollbar px-5 pt-5 pb-8 space-y-3 scroll-pb-8"
             onWheel={(e) => e.stopPropagation()}
             onTouchMove={(e) => e.stopPropagation()}
           >

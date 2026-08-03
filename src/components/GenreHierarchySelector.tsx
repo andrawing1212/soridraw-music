@@ -1290,7 +1290,7 @@ function GenreHierarchySelectorComponent({
                 onTouchMove={blockModalOuterScroll}
               >
               {/* Modal Header */}
-              <div className="px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
+              <div className="soridraw-studio-modal-header px-6 py-5 border-b border-[var(--border-color)] flex items-center justify-between gap-3 relative bg-[var(--bg-secondary)]">
                 <h3
                   className="min-w-0 flex-1 text-left text-xl md:text-2xl font-bold text-[var(--text-primary)] whitespace-nowrap truncate pr-2"
                 >
@@ -1335,7 +1335,7 @@ function GenreHierarchySelectorComponent({
               </div>
 
               {/* Selection Status Bar */}
-              <div className="px-6 py-2.5 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.06)] border-b border-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] flex items-center justify-start gap-2 overflow-hidden text-left">
+              <div className="soridraw-studio-modal-selection-bar px-6 py-2.5 bg-[rgb(var(--soridraw-menu-amber-rgb)/0.06)] border-b border-[rgb(var(--soridraw-menu-amber-rgb)/0.18)] flex items-center justify-start gap-2 overflow-hidden text-left">
                 <span className="text-[10px] font-black text-[var(--soridraw-menu-amber-soft)] uppercase tracking-widest shrink-0">
                   Selection
                 </span>
@@ -1367,7 +1367,7 @@ function GenreHierarchySelectorComponent({
               </div>
 
               <div
-                className="p-5 md:p-6 space-y-4 max-h-[60vh] md:max-h-[62vh] overflow-y-auto overscroll-contain custom-scrollbar"
+                className="soridraw-studio-modal-body p-5 md:p-6 space-y-4 max-h-[60vh] md:max-h-[62vh] overflow-y-auto overscroll-contain custom-scrollbar"
                 style={{ overscrollBehavior: 'contain' }}
                 onWheel={handleModalWheel}
                 onTouchStart={handleModalTouchStart}
@@ -1477,7 +1477,7 @@ function GenreHierarchySelectorComponent({
               </div>
 
               {/* Bottom Info Area */}
-              <div className="px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
+              <div className="soridraw-studio-modal-footer px-6 py-5 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] h-[110px] flex items-center justify-center gap-4 overflow-hidden shadow-inner">
                 <div className="p-2.5 rounded-xl bg-[rgb(var(--soridraw-menu-amber-rgb)/0.12)] text-[var(--soridraw-menu-amber-soft)] shrink-0 shadow-inner hidden md:flex">
                   <Info className="w-5 h-5" />
                 </div>

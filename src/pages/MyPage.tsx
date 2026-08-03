@@ -468,7 +468,7 @@ export default function MyPage({ onLogout }: MyPageProps) {
   setThemeMessage(null);
   try {
    await updateDoc(doc(db, 'users', user.uid), { 'appPreferences.theme': theme });
-   setThemeMessage(theme === 'classic' ? 'Classic 테마가 적용되었습니다.' : 'Studio Black 테마가 적용되었습니다.');
+   setThemeMessage(theme === 'classic' ? 'Classic 테마가 적용되었습니다.' : '분할 모드가 적용되었습니다.');
   } catch {
    setAppTheme(previous);
    applySoridrawTheme(previous);
@@ -645,13 +645,13 @@ export default function MyPage({ onLogout }: MyPageProps) {
  <div>
  <p className="text-xs font-black uppercase tracking-[0.22em] text-[#ffb400]">앱 설정</p>
  <h2 className="mt-1 text-lg font-black text-white">디자인 테마</h2>
- <p className="mt-1 text-sm leading-relaxed text-white/56">기존 디자인은 Classic으로 그대로 보존됩니다. Studio Black은 PC와 모바일에 함께 적용됩니다.</p>
+ <p className="mt-1 text-sm leading-relaxed text-white/56">기존 디자인은 Classic으로 그대로 보존됩니다. 분할 모드는 PC와 모바일에 함께 적용됩니다.</p>
  </div>
  </div>
  <div className="mt-5 grid gap-3 sm:grid-cols-2">
  {[
   { value: 'classic' as const, label: 'Classic', description: '현재 SORIDRAW 디자인' },
-  { value: 'studio-black' as const, label: 'Studio Black', description: '차가운 중성 블랙 + 노란 포인트' },
+  { value: 'studio-black' as const, label: '분할 모드', description: '좌우 분할 작업 화면 + 노란 포인트' },
  ].map((option) => {
   const selected = appTheme === option.value;
   return (

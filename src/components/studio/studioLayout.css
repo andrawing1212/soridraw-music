@@ -4640,3 +4640,80 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     margin-right: auto !important;
   }
 }
+
+/* 313: Make the auxiliary-rail collapse state own the actual grid tracks.
+ * 312 only hid the inner right-rail content because older, more-specific
+ * !important grid rules still kept the 292px track. The same specificity
+ * conflict left the compact/tablet bridge on its legacy one-column grid,
+ * so expanding the left rail displaced/overlapped the workspace. Use the
+ * real app-root chain to outrank those legacy rules and keep all three grid
+ * owners synchronized from the same width variables. Studio Black >=1100px
+ * only; Classic and mobile remain unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame {
+    --soridraw-studio-left-rail-width: 214px;
+    --soridraw-studio-right-rail-width: 292px;
+    display: grid !important;
+    grid-template-columns:
+      var(--soridraw-studio-left-rail-width)
+      minmax(0, 1fr)
+      var(--soridraw-studio-right-rail-width) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed {
+    --soridraw-studio-left-rail-width: 64px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-right-rail-collapsed {
+    --soridraw-studio-right-rail-width: 64px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-left-panel {
+    display: block !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-page-center {
+    display: block !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-dashboard-panel {
+    display: block !important;
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-right-rail-collapsed
+  > .soridraw-studio-dashboard-panel {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-right-rail-collapsed)
+  > .soridraw-studio-dashboard-panel {
+    width: 292px !important;
+    min-width: 292px !important;
+    max-width: 292px !important;
+  }
+}

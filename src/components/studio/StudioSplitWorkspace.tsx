@@ -526,6 +526,9 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       if (isBuilderCollapsed && resultRef.current) {
         resultRef.current.scrollTop = 0;
       }
+      if (isBuilderCollapsed && window.innerWidth >= 1100 && window.innerWidth < 1600) {
+        window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' });
+      }
       window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', {
         detail: { collapsed: isBuilderCollapsed },
       }));

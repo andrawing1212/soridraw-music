@@ -4406,17 +4406,62 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* Inner pane container for zero-reflow clipping during split drag */
-.soridraw-studio-pane-inner {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  box-sizing: border-box;
+/* 307 Studio Black split workspace - single CSS variable driven positioning */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace > .soridraw-studio-builder-pane,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace > .soridraw-studio-result-pane {
+    contain: layout paint;
+    min-width: 0;
+  }
+
+  /* Off-screen cards rendering optimization */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace .soridraw-studio-builder-pane > *,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace .soridraw-studio-result-content > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 240px;
+  }
+
+  /* Wide desktop isolated workspace */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
+    width: var(--soridraw-studio-builder-width, 50%) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    left: var(--soridraw-studio-builder-width, 50%) !important;
+    width: calc(100% - var(--soridraw-studio-builder-width, 50%)) !important;
+  }
+
+  /* Non-isolated flex workspace */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace:not([data-scroll-isolated="true"]) > .soridraw-studio-builder-pane {
+    flex-basis: var(--soridraw-studio-builder-width, 50%) !important;
+    width: var(--soridraw-studio-builder-width, 50%) !important;
+  }
+
+  /* Splitter button portal */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-splitter {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50%) - 8px) !important;
+  }
+
+  /* Collapse toggle button portal */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-builder-collapse-toggle:not(.is-collapsed) {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50%) - 54px) !important;
+  }
+
+  /* Live keywords portal */
+  html[data-soridraw-theme="studio-black"] body > .soridraw-live-keywords-fixed {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + var(--soridraw-studio-builder-width, 50%) + 18px) !important;
+  }
+
+  /* Search button */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    right: calc(100% - var(--soridraw-studio-builder-width, 50%) + 18px) !important;
+  }
+
+  /* Floating Action Bar */
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    left: var(--soridraw-studio-builder-left, 0px) !important;
+    width: var(--soridraw-studio-builder-width, 100vw) !important;
+  }
 }
 
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-.soridraw-studio-split-workspace
-:is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-  overflow: hidden !important;
-}
 

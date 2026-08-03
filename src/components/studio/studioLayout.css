@@ -206,7 +206,14 @@
     z-index: 70;
     top: 58px;
     bottom: var(--soridraw-studio-splitter-bottom, 0px);
-    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 8px);
+    /* Follow the same live split-width variable as both panes during drag.
+     * This keeps the divider on the exact boundary without waiting for the
+     * pointer-up commit that updates --soridraw-studio-splitter-left. */
+    left: calc(
+      var(--soridraw-studio-builder-left, 0px)
+      + var(--studio-split-x, var(--soridraw-studio-builder-width, 50vw))
+      - 8px
+    );
     width: 16px;
     height: auto;
     padding: 0;

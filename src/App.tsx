@@ -13902,14 +13902,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onThemeSettings={() => navigate('/my-page?tab=app')}
-                onProfile={() => navigate('/my-page')}
-                onSettings={() => navigate('/my-page?tab=settings')}
-                onPlan={() => navigate('/my-page?tab=plan')}
-                onBilling={() => navigate('/my-page?tab=billing')}
-                onLogout={handleLogout}
-                profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
-                profileEmail={user?.email || ''}
-                profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
               />
             }
             rightRail={

@@ -2424,6 +2424,8 @@ function HistoryRouteWrapper({
   lockAllFavorites,
   user,
   handleLogin,
+  embeddedInStudio = false,
+  onRequestStudio,
 }: any) {
   const favorites = useFavorites();
   const location = useLocation();
@@ -2448,6 +2450,8 @@ function HistoryRouteWrapper({
       hoveredItem={null}
       onLongPressStart={() => {}}
       onLongPressEnd={() => {}}
+      embeddedInStudio={embeddedInStudio}
+      onRequestStudio={onRequestStudio}
     />
   );
 }
@@ -4097,6 +4101,54 @@ function App() {
       setIsStudioLoaded(false);
     }
   }, [location.pathname]);
+
+  const [studioResultView, setStudioResultView] = useState<'song' | 'music-note' | 'library'>('song');
+
+  const resetStudioResultPaneScroll = () => {
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('.soridraw-studio-result-pane')?.scrollTo({ top: 0, left: 0 });
+    });
+  };
+
+  const showStudioSongView = () => {
+    setStudioResultView('song');
+    resetStudioResultPaneScroll();
+  };
+
+  const openStudioEmbeddedResult = (view: 'music-note' | 'library') => {
+    const canEmbed = typeof window !== 'undefined'
+      && window.innerWidth >= 1100
+      && document.documentElement.dataset.soridrawTheme === 'studio-black';
+
+    if (!canEmbed) {
+      navigate(view === 'music-note' ? '/history' : '/suno-library');
+      return;
+    }
+
+    setStudioResultView(view);
+    resetStudioResultPaneScroll();
+  };
+
+  useEffect(() => {
+    if (location.pathname !== '/studio') {
+      setStudioResultView('song');
+      return;
+    }
+
+    const ensureEmbeddedViewIsSupported = () => {
+      if (studioResultView === 'song') return;
+      const canEmbed = window.innerWidth >= 1100
+        && document.documentElement.dataset.soridrawTheme === 'studio-black';
+      if (!canEmbed) setStudioResultView('song');
+    };
+
+    window.addEventListener('resize', ensureEmbeddedViewIsSupported);
+    window.addEventListener('soridraw-theme-change', ensureEmbeddedViewIsSupported as EventListener);
+    return () => {
+      window.removeEventListener('resize', ensureEmbeddedViewIsSupported);
+      window.removeEventListener('soridraw-theme-change', ensureEmbeddedViewIsSupported as EventListener);
+    };
+  }, [location.pathname, studioResultView]);
 
   // 1. ALL STATES & REFS FIRST
   const [user, setUser] = useState<User | null>(() => auth.currentUser);
@@ -13876,10 +13928,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           <StudioPageFrame
             leftRail={
               <StudioLeftRail
-                onCreate={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                onRecentSongs={() => navigate('/suno-library')}
-                onMusicNote={() => navigate('/history')}
-                onLibrary={() => navigate('/suno-library')}
+                activeView={studioResultView === 'song' ? 'create' : studioResultView}
+                onCreate={() => {
+                  showStudioSongView();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onMusicNote={() => openStudioEmbeddedResult('music-note')}
+                onLibrary={() => openStudioEmbeddedResult('library')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onThemeSettings={() => navigate('/my-page?tab=app')}
@@ -13907,7 +13962,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 formatTime={formatStudioDashboardTime}
                 formatSongTitle={formatUnifiedTitle}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
-                onOpenSong={openStudioDashboardSong}
+                onOpenSong={(song, index) => {
+                  showStudioSongView();
+                  openStudioDashboardSong(song, index);
+                }}
                 isSongFavorited={isSongFavorited}
                 onOpenApiSettings={() => navigate('/suno-api-settings')}
               />
@@ -14831,6 +14889,40 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </div>
                   </StudioBuilderPane>
                   <StudioResultPane>
+                    {studioResultView === 'music-note' ? (
+                      <div className="soridraw-studio-embedded-result-page is-music-note">
+                        <Suspense fallback={<div className="soridraw-studio-embedded-loading"><Loader2 className="h-7 w-7 animate-spin" /><span>뮤직노트를 불러오는 중...</span></div>}>
+                          <HistoryRouteWrapper
+                            isFavoritesLoading={isFavoritesLoading}
+                            hasMoreFavorites={hasMoreFavorites}
+                            isLoadingMoreFavorites={isLoadingMoreFavorites}
+                            loadMoreFavorites={loadMoreFavorites}
+                            searchFavoritesOnServer={searchFavoritesOnServer}
+                            refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                            toggleFavorite={toggleFavorite}
+                            updateFavorite={updateFavorite}
+                            clearAllFavorites={clearAllFavorites}
+                            unlockAllFavorites={unlockAllFavorites}
+                            lockAllFavorites={lockAllFavorites}
+                            user={user || auth.currentUser}
+                            handleLogin={handleLogin}
+                            embeddedInStudio
+                            onRequestStudio={showStudioSongView}
+                          />
+                        </Suspense>
+                      </div>
+                    ) : studioResultView === 'library' ? (
+                      <div className="soridraw-studio-embedded-result-page is-library">
+                        <Suspense fallback={<div className="soridraw-studio-embedded-loading"><Loader2 className="h-7 w-7 animate-spin" /><span>라이브러리를 불러오는 중...</span></div>}>
+                          <SunoLibraryPageLazy
+                            appUser={user || auth.currentUser}
+                            embeddedInStudio
+                            onRequestStudio={showStudioSongView}
+                          />
+                        </Suspense>
+                      </div>
+                    ) : (
+                      <>
                     {liveSelectedKeywordItems.length > 0 && (
                       <Portal>
                         <div className="soridraw-live-keywords-fixed" role="region" aria-label="현재 선택된 키워드">
@@ -14870,7 +14962,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
-                      onClick={() => navigate('/history')}
+                      onClick={() => openStudioEmbeddedResult('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
@@ -14916,7 +15008,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <div className="soridraw-result-mobile-header sm:hidden space-y-1.5 pt-0">
                   <div className="soridraw-result-mobile-topbar relative grid grid-cols-[84px_minmax(0,1fr)_84px] items-center gap-2 min-h-[38px]">
                     <button
-                      onClick={() => navigate('/history')}
+                      onClick={() => openStudioEmbeddedResult('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history-mobile',
@@ -16237,7 +16329,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button
                           onClick={() => {
                             clearSunoLibrarySignal();
-                            navigate('/suno-library');
+                            openStudioEmbeddedResult('library');
                           }}
                           className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"
@@ -16253,6 +16345,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
             </div>
           )}
+                      </>
+                    )}
                   </StudioResultPane>
                 </StudioSplitWorkspace>
               )}

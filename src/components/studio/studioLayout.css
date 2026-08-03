@@ -4717,3 +4717,52 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     max-width: 292px !important;
   }
 }
+
+/* 314: Keep Studio Black's outer rails and builder pane mounted while Music
+ * Note or Suno Library is shown inside the split result pane. These overrides
+ * remove the standalone-route top offset only for the embedded result copy;
+ * the original /history and /suno-library pages, Classic, and mobile retain
+ * their existing layout. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane > .soridraw-studio-embedded-result-page {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 100% !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page > .soridraw-musicnote-theme--studio-embedded,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page > .soridraw-library-theme--studio-embedded {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 18px clamp(14px, 1.35vw, 24px) 44px !important;
+    background: #161617 !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-result-page .soridraw-musicnote-theme--studio-embedded > .md\:hidden.h-7 {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-embedded-loading {
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: rgba(255,255,255,.62);
+    font-size: 13px;
+    font-weight: 700;
+  }
+}

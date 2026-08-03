@@ -676,7 +676,9 @@ export default function FavoritesPage({
   onLoadMoreFavorites,
   onServerSearchFavorites,
   onManualSyncFavorites,
-  onLogin
+  onLogin,
+  embeddedInStudio = false,
+  onRequestStudio
 }: { 
   favorites: any[]; 
   toggleFavorite: (song: any) => void | Promise<void>; 
@@ -696,6 +698,8 @@ export default function FavoritesPage({
   onServerSearchFavorites?: (searchText: string) => Promise<any[]>;
   onManualSyncFavorites?: () => Promise<{ ok: boolean; limited?: boolean; message?: string }>;
   onLogin?: () => void;
+  embeddedInStudio?: boolean;
+  onRequestStudio?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
@@ -2613,6 +2617,13 @@ export default function FavoritesPage({
   }, [selectedSong]);
 
   const navigate = useNavigate();
+  const requestStudioView = () => {
+    if (onRequestStudio) {
+      onRequestStudio();
+      return;
+    }
+    navigate('/studio');
+  };
 
   useEffect(() => {
     if (selectedSong) {
@@ -3792,6 +3803,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     requestAnimationFrame(() => {
       window.dispatchEvent(new CustomEvent('soridraw:clear-interaction-hints'));
+      onRequestStudio?.();
       navigate(`/studio?applyPending=1&t=${Date.now()}`);
     });
   };
@@ -5189,6 +5201,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     <div 
       className={cn(
         "soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
+        embeddedInStudio ? "soridraw-musicnote-theme--studio-embedded" : "",
         isSelectionMode ? "select-none" : ""
       )}
       onClickCapture={(e) => {
@@ -5263,7 +5276,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
-              onClick={() => navigate('/studio')}
+              onClick={requestStudioView}
               className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#FFBB22] transition-all flex items-center justify-center"
             >
               <Zap className="w-4 h-4" />

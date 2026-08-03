@@ -4,7 +4,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  History,
   Library,
   Music,
   Palette,
@@ -20,7 +19,7 @@ import {
 
 type StudioLeftRailProps = {
   onCreate: () => void;
-  onRecentSongs: () => void;
+  activeView?: 'create' | 'music-note' | 'library';
   onMusicNote: () => void;
   onLibrary: () => void;
   onSearch: () => void;
@@ -46,7 +45,7 @@ const PROFILE_MENU_GAP = 8;
 
 export default function StudioLeftRail({
   onCreate,
-  onRecentSongs,
+  activeView = 'create',
   onMusicNote,
   onLibrary,
   onSearch,
@@ -265,21 +264,16 @@ export default function StudioLeftRail({
 
           <nav className="soridraw-studio-rail-nav" aria-label="스튜디오 내부 이동">
             <p className="soridraw-studio-rail-label">WORKSPACE</p>
-            <button type="button" className="soridraw-studio-rail-item is-active" onClick={onCreate}>
+            <button type="button" className={`soridraw-studio-rail-item ${activeView === 'create' ? 'is-active' : ''}`} onClick={onCreate}>
               <PenTool className="h-5 w-5" />
               <span>곡 만들기</span>
             </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onRecentSongs}>
-              <History className="h-5 w-5" />
-              <span>최근 생성곡</span>
-              <ChevronRight className="ml-auto h-4 w-4" />
-            </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onMusicNote}>
+            <button type="button" className={`soridraw-studio-rail-item ${activeView === 'music-note' ? 'is-active' : ''}`} onClick={onMusicNote}>
               <Music className="h-5 w-5" />
               <span>뮤직노트</span>
               <ChevronRight className="ml-auto h-4 w-4" />
             </button>
-            <button type="button" className="soridraw-studio-rail-item" onClick={onLibrary}>
+            <button type="button" className={`soridraw-studio-rail-item ${activeView === 'library' ? 'is-active' : ''}`} onClick={onLibrary}>
               <Library className="h-5 w-5" />
               <span>라이브러리</span>
               <ChevronRight className="ml-auto h-4 w-4" />

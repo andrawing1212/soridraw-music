@@ -231,8 +231,23 @@ function AnimatedTrackPlayButton({
   );
 }
 
-export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
+export default function SunoLibraryPage({
+  appUser = null,
+  embeddedInStudio = false,
+  onRequestStudio,
+}: {
+  appUser?: any;
+  embeddedInStudio?: boolean;
+  onRequestStudio?: () => void;
+} = {}) {
   const navigate = useNavigate();
+  const requestStudioView = () => {
+    if (onRequestStudio) {
+      onRequestStudio();
+      return;
+    }
+    navigate('/studio');
+  };
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
@@ -5221,7 +5236,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         <div className="-mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
-              onClick={() => navigate('/studio')}
+              onClick={requestStudioView}
               className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-white/5 shadow-btn transition-all"
             >
               <Zap className="w-4 h-4" />
@@ -5671,7 +5686,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   return (
     <div
       ref={libraryPageRootRef}
-      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
+      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${embeddedInStudio ? 'soridraw-library-theme--studio-embedded' : ''} ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
@@ -6061,7 +6076,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <div className="flex items-start gap-4 min-w-0">
             {isSharedView && (
               <button
-                onClick={() => navigate('/studio')}
+                onClick={requestStudioView}
                 className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
               >
                 <Zap className="w-4 h-4" />스튜디오

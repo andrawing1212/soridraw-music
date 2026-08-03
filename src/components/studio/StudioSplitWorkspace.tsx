@@ -275,31 +275,35 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const { width } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
     const builderWidth = builderCollapsedRef.current ? 0 : Math.round(safeWidth * (nextPercent / 100));
-    const resultWidth = Math.max(0, safeWidth - builderWidth);
 
     // Single CSS variable updates split position for all components simultaneously:
     root.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+    root.style.setProperty('--studio-split-x', `${builderWidth}px`);
 
-    const nextBuilderMode = builderCollapsedRef.current
-      ? modeRef.current.builder
-      : resolvePaneMode(
-          builderWidth,
-          BUILDER_MOBILE_BREAKPOINT,
-          modeRef.current.builder,
-        );
-    const nextResultMode = resolvePaneMode(
-      resultWidth,
-      RESULT_MOBILE_BREAKPOINT,
-      modeRef.current.result,
-    );
+    // During drag, skip JS pane-mode dataset mutations for maximum FPS
+    if (!draggingRef.current) {
+      const resultWidth = Math.max(0, safeWidth - builderWidth);
+      const nextBuilderMode = builderCollapsedRef.current
+        ? modeRef.current.builder
+        : resolvePaneMode(
+            builderWidth,
+            BUILDER_MOBILE_BREAKPOINT,
+            modeRef.current.builder,
+          );
+      const nextResultMode = resolvePaneMode(
+        resultWidth,
+        RESULT_MOBILE_BREAKPOINT,
+        modeRef.current.result,
+      );
 
-    if (!builderCollapsedRef.current && modeRef.current.builder !== nextBuilderMode) {
-      modeRef.current.builder = nextBuilderMode;
-      if (builder) builder.dataset.paneMode = nextBuilderMode;
-    }
-    if (modeRef.current.result !== nextResultMode) {
-      modeRef.current.result = nextResultMode;
-      if (result) result.dataset.paneMode = nextResultMode;
+      if (!builderCollapsedRef.current && modeRef.current.builder !== nextBuilderMode) {
+        modeRef.current.builder = nextBuilderMode;
+        if (builder) builder.dataset.paneMode = nextBuilderMode;
+      }
+      if (modeRef.current.result !== nextResultMode) {
+        modeRef.current.result = nextResultMode;
+        if (result) result.dataset.paneMode = nextResultMode;
+      }
     }
 
     const roundedPercent = Math.round(nextPercent);
@@ -563,6 +567,22 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     const builderWidth = builderCollapsedRef.current
       ? 0
       : Math.round(metricsRef.current.width * (percentRef.current / 100));
+
+    // Update dataset pane mode once on drag end
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (builder) {
+      const nextBuilderMode = resolvePaneMode(builderWidth, BUILDER_MOBILE_BREAKPOINT, modeRef.current.builder);
+      modeRef.current.builder = nextBuilderMode;
+      builder.dataset.paneMode = nextBuilderMode;
+    }
+    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
+    if (result) {
+      const nextResultMode = resolvePaneMode(resultWidth, RESULT_MOBILE_BREAKPOINT, modeRef.current.result);
+      modeRef.current.result = nextResultMode;
+      result.dataset.paneMode = nextResultMode;
+    }
+
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();

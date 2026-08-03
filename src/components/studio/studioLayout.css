@@ -3614,3 +3614,58 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     width: auto !important;
   }
 }
+
+
+/* 292: collapse/expand control polish.
+ * - Both controls use the same compact outlined panel glyph.
+ * - The collapsed left-rail restore control is hidden until its hit area is hovered.
+ * - The builder control is aligned closer to the builder pane's right edge.
+ * Studio Black desktop only; Classic and mobile remain unchanged. */
+.soridraw-studio-panel-toggle-icon {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 1.4px solid currentColor;
+  border-radius: 4px;
+}
+
+.soridraw-studio-panel-toggle-icon::before {
+  content: '';
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  left: 5px;
+  width: 1px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: .9;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 54px) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle > svg,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-left-rail-collapse-toggle > svg {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle {
+    top: 15px !important;
+    left: 17px !important;
+    opacity: 0 !important;
+    pointer-events: auto !important;
+    background: #1c1c1e !important;
+    transition: opacity .12s ease, background-color .12s ease, color .12s ease, border-color .12s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle:hover,
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-page-frame.is-left-rail-collapsed .soridraw-studio-left-rail-collapse-toggle:focus-visible {
+    opacity: 1 !important;
+  }
+}

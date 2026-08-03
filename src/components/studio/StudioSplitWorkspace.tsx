@@ -8,7 +8,6 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const BUILDER_COLLAPSED_STORAGE_KEY = 'soridraw_studio_black_builder_collapsed_v1';
@@ -716,9 +715,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
       aria-expanded={!isBuilderCollapsed}
       aria-controls="soridraw-studio-builder-pane"
     >
-      {isBuilderCollapsed
-        ? <ChevronsRight className="h-4 w-4" aria-hidden="true" />
-        : <ChevronsLeft className="h-4 w-4" aria-hidden="true" />}
+      <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
     </button>
   );
 

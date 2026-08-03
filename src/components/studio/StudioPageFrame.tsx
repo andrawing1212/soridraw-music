@@ -1,5 +1,4 @@
 import React, { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 
 const LEFT_RAIL_STORAGE_KEY = 'soridraw_studio_black_left_rail_collapsed_v1';
 
@@ -58,9 +57,7 @@ export default function StudioPageFrame({ leftRail, rightRail, children }: Studi
         title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
         aria-expanded={!isLeftRailCollapsed}
       >
-        {isLeftRailCollapsed
-          ? <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
-          : <PanelLeftClose className="h-4 w-4" aria-hidden="true" />}
+        <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
       </button>
       <div className="soridraw-studio-page-center">{children}</div>
       {rightRail}

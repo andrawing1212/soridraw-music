@@ -5332,3 +5332,118 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   contain: none !important;
   content-visibility: visible !important;
 }
+
+/* 321: reveal each split-pane collapse control only at that pane's true
+ * minimum width. Both sides use the same compact control and each collapsed
+ * pane keeps its own restore button visible. Wide PC and tablet split layouts
+ * only; Classic and mobile remain unchanged. */
+.soridraw-studio-result-collapse-toggle {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle {
+    display: none !important;
+    position: fixed !important;
+    z-index: 145 !important;
+    top: 78px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 1px solid rgba(255,255,255,.11) !important;
+    border-radius: 9px !important;
+    background: #1c1c1e !important;
+    color: #b9b9bc !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: background-color .12s ease, color .12s ease, border-color .12s ease, transform .12s ease !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-at-minimum="true"] body > .soridraw-studio-builder-collapse-toggle,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-builder-collapse-toggle,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-at-minimum="true"] body > .soridraw-studio-result-collapse-toggle,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"] body > .soridraw-studio-result-collapse-toggle {
+    display: inline-flex !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 54px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) + 20px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > :is(
+    .soridraw-studio-builder-collapse-toggle,
+    .soridraw-studio-result-collapse-toggle
+  ):is(:hover, :focus-visible) {
+    border-color: rgba(255,180,0,.42) !important;
+    background: #242426 !important;
+    color: #ffb400 !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + 12px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"] body > .soridraw-studio-result-collapse-toggle {
+    left: auto !important;
+    right: calc(var(--soridraw-studio-result-right, 0px) + 12px) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle .soridraw-studio-panel-toggle-icon {
+    transform: scaleX(-1) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace > .soridraw-studio-result-pane {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace > .soridraw-studio-builder-pane {
+    display: block !important;
+    flex: 0 0 100% !important;
+    flex-basis: 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"] body > .soridraw-studio-splitter,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-splitter {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
+    display: none !important;
+  }
+}

@@ -3749,3 +3749,93 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 :root[data-soridraw-theme="studio-black"] {
   color-scheme: dark;
 }
+
+/* 316: Section Custom shared design system.
+ * Classic and Split Mode intentionally use the exact same component geometry,
+ * spacing, radii, border hierarchy and control states. Classic owns the neutral
+ * grayscale below; Split Mode only changes the color temperature in
+ * studioLayout.css while preserving the same perceived brightness. */
+.dark .studio-section-custom-modal-panel {
+  --soridraw-section-shell: #1b1b1b;
+  --soridraw-section-body: #232323;
+  --soridraw-section-soft: #262626;
+  --soridraw-section-card: #2b2b2b;
+  --soridraw-section-control: #2e2e2e;
+  --soridraw-section-control-hover: #343434;
+  --soridraw-section-search: #303030;
+  --soridraw-section-preview: #272727;
+  background: var(--soridraw-section-shell) !important;
+  background-color: var(--soridraw-section-shell) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel > .px-5.py-4 {
+  background: var(--soridraw-section-shell) !important;
+  background-color: var(--soridraw-section-shell) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel > .p-5 {
+  background: var(--soridraw-section-body) !important;
+  background-color: var(--soridraw-section-body) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel :is(input, textarea, select),
+.dark .studio-section-custom-modal-panel [class*="bg-[var(--bg-secondary)]"] {
+  background-color: var(--soridraw-section-soft) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel :is(
+  button[class*="bg-[var(--hover-bg)]"],
+  button[class*="bg-btn-bg"],
+  button[class*="bg-white/5"],
+  button[class*="bg-white/10"]
+) {
+  background-color: var(--soridraw-section-control) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel :is(
+  button[class*="bg-[var(--hover-bg)]"],
+  button[class*="bg-btn-bg"],
+  button[class*="bg-white/5"],
+  button[class*="bg-white/10"]
+):hover {
+  background-color: var(--soridraw-section-control-hover) !important;
+}
+
+.dark .studio-section-custom-modal-panel [data-reorder-section-id],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: var(--soridraw-section-card) !important;
+  background-image: none !important;
+}
+
+
+/* 317: Section Custom small luminance lift.
+ * Keep the shared Classic/Split geometry and temperature split from 316,
+ * but make controls, current-structure cards and Keep cards easier to read.
+ * The Keep search is intentionally one step brighter; Preview stays dark gray. */
+.dark .studio-section-custom-modal-panel .soridraw-section-current-card,
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-card {
+  background-color: var(--soridraw-section-card) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-search {
+  background-color: var(--soridraw-section-search) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-reaction-group {
+  background-color: var(--soridraw-section-control) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}

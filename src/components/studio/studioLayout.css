@@ -5048,3 +5048,287 @@ html[data-soridraw-theme="studio-black"] body
   border-color: rgba(184, 151, 91, 0.32) !important;
   box-shadow: none !important;
 }
+
+/* 316: Section Custom Split Mode temperature only.
+ * Geometry and luminance are inherited from the shared Classic design in
+ * index.css. These values add the same subtle cool-violet temperature used by
+ * Split Mode menu cards and the Genre / Style / Sound popup family. */
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel {
+  --soridraw-section-shell: #1b1b1c;
+  --soridraw-section-body: #232325;
+  --soridraw-section-soft: #262628;
+  --soridraw-section-card: #2b2b2d;
+  --soridraw-section-control: #2e2e31;
+  --soridraw-section-control-hover: #343438;
+  --soridraw-section-search: #303034;
+  --soridraw-section-preview: #272729;
+  background: var(--soridraw-section-shell) !important;
+  background-color: var(--soridraw-section-shell) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel > .px-5.py-4 {
+  background: var(--soridraw-section-shell) !important;
+  background-color: var(--soridraw-section-shell) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel > .p-5 {
+  background: var(--soridraw-section-body) !important;
+  background-color: var(--soridraw-section-body) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel :is(input, textarea, select),
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel [class*="bg-[var(--bg-secondary)]"] {
+  background-color: var(--soridraw-section-soft) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel :is(
+  button[class*="bg-[var(--hover-bg)]"],
+  button[class*="bg-btn-bg"],
+  button[class*="bg-white/5"],
+  button[class*="bg-white/10"]
+) {
+  background-color: var(--soridraw-section-control) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel :is(
+  button[class*="bg-[var(--hover-bg)]"],
+  button[class*="bg-btn-bg"],
+  button[class*="bg-white/5"],
+  button[class*="bg-white/10"]
+):hover {
+  background-color: var(--soridraw-section-control-hover) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel [data-reorder-section-id],
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: var(--soridraw-section-card) !important;
+  background-image: none !important;
+}
+
+
+/* 317: Split Mode keeps the 316 cool temperature while matching the same
+ * luminance lift as Classic. Search is brighter; Preview remains dark gray. */
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-current-card,
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-keep-card {
+  background-color: var(--soridraw-section-card) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-keep-search {
+  background-color: var(--soridraw-section-search) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-reaction-group {
+  background-color: var(--soridraw-section-control) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+/* 318 — Genre / Style / Sound selected-order badges.
+ * Keep every count/remove badge perfectly circular, center the glyph optically,
+ * and swap number -> X without changing the badge footprint. */
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:is(.soridraw-count-badge-main, .soridraw-count-badge-point),
+html[data-soridraw-theme="studio-black"] body .soridraw-count-badge-main,
+html[data-soridraw-theme="studio-black"] body .soridraw-count-badge-point {
+  width: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  padding: 0 !important;
+  border-radius: 9999px !important;
+  box-sizing: border-box !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  flex: 0 0 20px !important;
+  line-height: 1 !important;
+  overflow: visible !important;
+  transform-origin: center center !important;
+  transition: transform 120ms ease, box-shadow 120ms ease !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:is(.soridraw-count-badge-main, .soridraw-count-badge-point):hover,
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:is(.soridraw-count-badge-main, .soridraw-count-badge-point):focus-visible {
+  width: 20px !important;
+  min-width: 20px !important;
+  max-width: 20px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  padding: 0 !important;
+  transform: scale(1.08) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-count-badge-main .soridraw-badge-number,
+html[data-soridraw-theme="studio-black"] body .soridraw-count-badge-point .soridraw-badge-number {
+  display: block !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: translateY(-0.45px) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-count-badge-main .soridraw-badge-number {
+  color: var(--soridraw-badge-accent, #FFB400) !important;
+  -webkit-text-fill-color: var(--soridraw-badge-accent, #FFB400) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-count-badge-point .soridraw-badge-number {
+  color: #050505 !important;
+  -webkit-text-fill-color: #050505 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge .soridraw-badge-x {
+  width: 12px !important;
+  min-width: 12px !important;
+  max-width: 12px !important;
+  height: 12px !important;
+  min-height: 12px !important;
+  max-height: 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  flex: none !important;
+  transform: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:hover .soridraw-badge-number,
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:focus-visible .soridraw-badge-number {
+  display: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:hover .soridraw-badge-x,
+html[data-soridraw-theme="studio-black"] body .soridraw-clearable-badge:focus-visible .soridraw-badge-x {
+  display: block !important;
+}
+
+/* 319: Restore the original card-title help bubble in Split mode.
+ * Title help must sit directly below the hovered title, remain fully opaque,
+ * and paint above the card controls/content. Tempo now uses the same bubble. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-menu-card:has(.soridraw-card-title-tooltip) {
+  position: relative !important;
+  z-index: 480 !important;
+  overflow: visible !important;
+  contain: none !important;
+  content-visibility: visible !important;
+  isolation: auto !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-menu-card:has(.soridraw-card-title-tooltip) .soridraw-card-header,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-menu-card:has(.soridraw-card-title-tooltip) .soridraw-tempo-card-header {
+  position: relative !important;
+  z-index: 481 !important;
+  overflow: visible !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-card-title-tooltip {
+  display: block !important;
+  z-index: 999 !important;
+  min-width: 220px !important;
+  width: max-content !important;
+  max-width: min(320px, calc(100vw - 32px)) !important;
+  padding: 10px 12px !important;
+  border: 1px solid rgba(255, 180, 0, 0.18) !important;
+  border-radius: 10px !important;
+  background: #1b1b1c !important;
+  background-color: #1b1b1c !important;
+  background-image: none !important;
+  color: #f4f4f5 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34) !important;
+  pointer-events: none !important;
+  text-align: left !important;
+  white-space: normal !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-card-title-tooltip-label {
+  display: block !important;
+  margin: 0 0 4px !important;
+  color: #f4f4f5 !important;
+  -webkit-text-fill-color: #f4f4f5 !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.01em !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-card-title-tooltip-description {
+  display: block !important;
+  margin: 0 !important;
+  color: #a8a8ad !important;
+  -webkit-text-fill-color: #a8a8ad !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+  font-weight: 500 !important;
+  opacity: 1 !important;
+}
+
+
+/* 320: Keep help overlays inside the split pane that owns the hovered control.
+ * The App computes the live pane center/width, so right-pane controls can no
+ * longer paint their description over the builder pane (and vice versa). */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-description-overlay[data-description-pane="builder"],
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-description-overlay[data-description-pane="result"] {
+  box-sizing: border-box !important;
+  overflow-wrap: anywhere !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-card-title-anchor {
+  position: relative !important;
+  z-index: 481 !important;
+  overflow: visible !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-storyboard-card:has(.soridraw-card-title-tooltip) {
+  z-index: 480 !important;
+  overflow: visible !important;
+  contain: none !important;
+  content-visibility: visible !important;
+}

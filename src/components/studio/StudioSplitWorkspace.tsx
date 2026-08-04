@@ -852,8 +852,8 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   return (
     <>
       <div ref={layoutRef} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}`}>
-        <div id="soridraw-studio-builder-pane" ref={builderRef} className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
-        <div ref={resultRef} className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
+        <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
+        <div ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane">{panes[1] ?? null}</div>
       </div>
       {typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl}
       {typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl}

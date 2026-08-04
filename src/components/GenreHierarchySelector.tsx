@@ -1003,7 +1003,7 @@ function GenreHierarchySelectorComponent({
       <div className="flex-1">
         <div className="soridraw-card-header flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="relative min-w-0">
+            <div className="soridraw-card-title-anchor relative min-w-0">
               <h3
                 onMouseEnter={() => setShowTitleTooltip(true)}
                 onMouseLeave={() => setShowTitleTooltip(false)}
@@ -1021,12 +1021,11 @@ function GenreHierarchySelectorComponent({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", genreAccent.selectedBorder)}
+                    className={cn("soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-64 pointer-events-none", genreAccent.selectedBorder)}
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
-                      곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류를
-                      선택하고 메인 장르와 세부 장르를 조합하여 원하는 음악적
-                      색깔을 만드세요.
+                    <p className="soridraw-card-title-tooltip-label hidden">장르</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">
+                      곡의 핵심 장르와 세부 스타일을 결정합니다. 대분류와 세부 장르를 조합해 원하는 음악적 색깔을 만드세요.
                     </p>
                   </motion.div>
                 )}

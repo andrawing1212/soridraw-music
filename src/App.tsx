@@ -2145,7 +2145,7 @@ const ReorderableSectionItem = ({
         onSelect(index);
       }}
       className={cn(
-        "flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 select-none shadow-sm cursor-pointer transition-[border-color,background-color,opacity,transform] duration-150",
+        "soridraw-section-current-card flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 select-none shadow-sm cursor-pointer transition-[border-color,background-color,opacity,transform] duration-150",
         isDraggingItem
           ? "border-brand-orange/70 bg-white/[0.08] opacity-80 scale-[0.995]"
           : isInsertionTarget
@@ -6280,6 +6280,7 @@ function App() {
   const storyboardModalBackdropMouseDownRef = useRef(false);
   const storyboardOpenTimerRef = useRef<number | null>(null);
   const [isStoryboardOpening, setIsStoryboardOpening] = useState(false);
+  const [showStoryboardTitleTooltip, setShowStoryboardTitleTooltip] = useState(false);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [isGlobalSearchOpening, setIsGlobalSearchOpening] = useState(false);
   const globalSearchOpenTimerRef = useRef<number | null>(null);
@@ -6487,8 +6488,86 @@ function App() {
   const [isConfirmingDeleteHistory, setIsConfirmingDeleteHistory] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
   const [isAppliedKeywordsExpanded, setIsAppliedKeywordsExpanded] = useState(false);
-  const [hoveredItem, setHoveredItem] = useState<CategoryItem | null>(null);
+  type StudioDescriptionPane = 'builder' | 'result' | 'global';
+  type StudioDescriptionPlacement = {
+    pane: StudioDescriptionPane;
+    left: number;
+    maxWidth: number;
+  };
+
+  const getDefaultStudioDescriptionPlacement = (): StudioDescriptionPlacement => ({
+    pane: 'global',
+    left: typeof window !== 'undefined' ? window.innerWidth / 2 : 0,
+    maxWidth: typeof window !== 'undefined' && window.innerWidth < 768 ? 200 : 400,
+  });
+
+  const [hoveredItem, setHoveredItemState] = useState<CategoryItem | null>(null);
+  const [hoveredItemPlacement, setHoveredItemPlacement] = useState<StudioDescriptionPlacement>(
+    getDefaultStudioDescriptionPlacement,
+  );
+  const studioDescriptionPointerRef = useRef({ x: 0, y: 0 });
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    studioDescriptionPointerRef.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    const rememberPointer = (event: PointerEvent) => {
+      studioDescriptionPointerRef.current = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener('pointermove', rememberPointer, { capture: true, passive: true });
+    window.addEventListener('pointerdown', rememberPointer, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('pointermove', rememberPointer, true);
+      window.removeEventListener('pointerdown', rememberPointer, true);
+    };
+  }, []);
+
+  const resolveStudioDescriptionPlacement = useCallback((): StudioDescriptionPlacement => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      return getDefaultStudioDescriptionPlacement();
+    }
+
+    const fallback = getDefaultStudioDescriptionPlacement();
+    if (
+      location.pathname !== '/studio' ||
+      document.documentElement.dataset.soridrawTheme !== 'studio-black' ||
+      window.innerWidth < 1100
+    ) {
+      return fallback;
+    }
+
+    const { x, y } = studioDescriptionPointerRef.current;
+    const hoveredElement = document.elementFromPoint(x, y) as HTMLElement | null;
+    const builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+    const resultPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="result"]');
+    let paneElement = hoveredElement?.closest<HTMLElement>('[data-soridraw-studio-pane]') ?? null;
+
+    if (!paneElement && hoveredElement?.closest('.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed')) {
+      paneElement = builderPane;
+    }
+
+    if (!paneElement && y >= 58) {
+      const builderRect = builderPane?.getBoundingClientRect();
+      const resultRect = resultPane?.getBoundingClientRect();
+      if (builderRect && x >= builderRect.left && x <= builderRect.right) paneElement = builderPane;
+      else if (resultRect && x >= resultRect.left && x <= resultRect.right) paneElement = resultPane;
+    }
+
+    if (!paneElement) return fallback;
+
+    const rect = paneElement.getBoundingClientRect();
+    if (!Number.isFinite(rect.width) || rect.width < 1) return fallback;
+    const maxWidth = Math.max(180, Math.min(400, rect.width - 28));
+    const rawLeft = rect.left + rect.width / 2;
+    const left = Math.max(maxWidth / 2 + 12, Math.min(window.innerWidth - maxWidth / 2 - 12, rawLeft));
+    const pane = paneElement.dataset.soridrawStudioPane === 'result' ? 'result' : 'builder';
+    return { pane, left, maxWidth };
+  }, [location.pathname]);
+
+  const setHoveredItem = useCallback((item: CategoryItem | null) => {
+    setHoveredItemState(item);
+    if (item) setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+  }, [resolveStudioDescriptionPlacement]);
   const appliedKeywordsRef = useRef<HTMLDivElement>(null);
   const [appliedKeywordsHeight, setAppliedKeywordsHeight] = useState<number | string>(0);
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
@@ -6791,7 +6870,20 @@ const toggleCycleVariantSelection = (
     } else {
       setIsTooltipHovered(false);
     }
-  }, [hoveredItem]);
+  }, [hoveredItem, setHoveredItem]);
+
+  useEffect(() => {
+    if (!hoveredItem) return;
+    const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());
+    window.addEventListener('resize', refreshPlacement);
+    window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+    window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    return () => {
+      window.removeEventListener('resize', refreshPlacement);
+      window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
+    };
+  }, [hoveredItem, resolveStudioDescriptionPlacement]);
 
   const [exitCount, setExitCount] = useState(0);
   const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -14237,10 +14329,29 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
                       <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
+                        <h3
+                          onMouseEnter={() => setShowStoryboardTitleTooltip(true)}
+                          onMouseLeave={() => setShowStoryboardTitleTooltip(false)}
+                          className="text-base md:text-lg font-black text-[var(--text-primary)] cursor-help"
+                        >
+                          스토리보드
+                        </h3>
                       </div>
+                      <AnimatePresence>
+                        {showStoryboardTitleTooltip && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl w-64 pointer-events-none"
+                          >
+                            <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
+                            <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                       <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
                         {buildStoryboardSummary(situation)}
                       </p>
@@ -16379,15 +16490,21 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             exit={{ opacity: 0, x: '-50%' }}
             onMouseEnter={() => setIsTooltipHovered(true)}
             onMouseLeave={() => setIsTooltipHovered(false)}
+            style={{
+              left: hoveredItemPlacement.left,
+              width: 'max-content',
+              maxWidth: hoveredItemPlacement.maxWidth,
+            }}
+            data-description-pane={hoveredItemPlacement.pane}
             className={cn(
-              "soridraw-studio-description-overlay fixed left-1/2 z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
+              "soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/studio' 
                 ? (!isActionButtonsCollapsed && shouldShowActionButtons
-                    ? "bottom-[6.75rem] md:bottom-[8.5rem] max-w-[200px] md:max-w-[400px]" 
-                    : "bottom-10 max-w-[200px] md:max-w-[400px]")
+                    ? "bottom-[6.75rem] md:bottom-[8.5rem]" 
+                    : "bottom-10")
                 : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')
-                    ? "bottom-[7.75rem] md:bottom-[8.75rem] max-w-[250px] md:max-w-[400px]"
-                    : "bottom-10 max-w-[250px] md:max-w-[400px]")
+                    ? "bottom-[7.75rem] md:bottom-[8.75rem]"
+                    : "bottom-10")
             )}
           >
             <p className="text-brand-orange font-black text-sm mb-1 tracking-tight">{hoveredItem.label}</p>
@@ -17543,9 +17660,10 @@ function GenreCategorySectionComponent({
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", sectionAccent.selectedBorder)}
+                  className={cn("soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-56 pointer-events-none", sectionAccent.selectedBorder)}
                 >
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
+                  <p className="soridraw-card-title-tooltip-label hidden">{title}</p>
+                  <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{description}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -18007,9 +18125,10 @@ function CycleSectionComponent({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
+                    className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-brand-orange/30 shadow-[var(--shadow-md)] w-56 pointer-events-none"
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                    <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -18833,9 +18952,10 @@ function CategorySectionComponent({
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className={cn("absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-48 pointer-events-none", sectionAccent.selectedBorder)}
+                    className={cn("soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border shadow-[var(--shadow-md)] w-48 pointer-events-none", sectionAccent.selectedBorder)}
                   >
-                    <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
+                    <p className="soridraw-card-title-tooltip-label hidden">{titleKo || title}</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{descriptionKo || description}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -20508,9 +20628,10 @@ function SongStructureIntegratedControlComponent({
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
-                className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-56 pointer-events-none"
+                className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-56 pointer-events-none"
               >
-                <p className="text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
+                <p className="soridraw-card-title-tooltip-label hidden">가사</p>
+                <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">가사 분량과 곡의 전개 방식을 통합적으로 설정합니다.</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -20900,7 +21021,7 @@ function SongStructureIntegratedControlComponent({
                           }
                           onMouseLeave={() => onHover(null)}
                           className={cn(
-                            "px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5 shadow-btn",
+                            "soridraw-section-control-button px-3.5 py-2 rounded-xl text-[13px] font-bold transition-all border flex items-center gap-1.5 shadow-btn",
                             isLocked 
                               ? "bg-white/5 border-[var(--modal-button-border)] text-[var(--text-secondary)]/40 cursor-not-allowed"
                               : "bg-btn-bg border-[var(--modal-button-border)] text-[var(--text-primary)] hover:bg-btn-hover"
@@ -20926,7 +21047,7 @@ function SongStructureIntegratedControlComponent({
                     <button
                       type="button"
                       onClick={() => openCustomSectionEditor()}
-                      className="px-3.5 py-2 rounded-xl border border-[var(--modal-button-border)] bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
+                      className="soridraw-section-control-button px-3.5 py-2 rounded-xl border border-[var(--modal-button-border)] bg-white/5 text-[var(--text-primary)] text-[13px] font-black transition-all hover:bg-white/10 flex items-center gap-1.5 shadow-btn"
                     >
                       <Plus className="w-3.5 h-3.5" /> 섹션 추가
                     </button>
@@ -20991,7 +21112,7 @@ function SongStructureIntegratedControlComponent({
 
                 <div className="space-y-4 min-w-0">
                   <div className="flex flex-col lg:flex-row gap-3 lg:items-stretch min-w-0">
-                    <div className="flex-1 min-w-0 rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3 overflow-hidden">
+                    <div className="soridraw-section-preview-card flex-1 min-w-0 rounded-2xl bg-[var(--hover-bg)]/60 border border-[var(--border-color)] px-4 py-3 overflow-hidden">
                       <p className="text-[11px] font-bold text-[#FFD36A] mb-2">미리보기</p>
                       <div className="h-[42px] overflow-y-auto pr-1 custom-scrollbar">
                         <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed break-words">
@@ -21132,7 +21253,7 @@ function SongStructureIntegratedControlComponent({
                               value={structureSearch}
                               onChange={(e) => setStructureSearch(e.target.value)}
                               placeholder="섹션 이름 또는 내용 검색..."
-                              className="w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#FFB400]/40 shadow-inner"
+                              className="soridraw-section-keep-search w-full rounded-xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-secondary)]/50 focus:outline-none focus:ring-1 focus:ring-[#FFB400]/40 shadow-inner"
                             />
                             {structureSearch && (
                               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center">
@@ -21178,7 +21299,7 @@ function SongStructureIntegratedControlComponent({
                           </div>
                         ) : (
                           filteredSavedStructures.map((preset) => (
-                            <div key={preset.id} className="relative rounded-2xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] p-3 min-h-[132px] hover:border-black/20/30 transition-all group shadow-sm overflow-hidden min-w-0">
+                            <div key={preset.id} className="soridraw-section-keep-card relative rounded-2xl bg-[var(--bg-secondary)] border border-[var(--modal-button-border)] p-3 min-h-[132px] hover:border-black/20/30 transition-all group shadow-sm overflow-hidden min-w-0">
                               <div className="absolute right-3 top-2 z-10 flex items-center gap-1.5">
                                 {editingPresetTitleId === preset.id ? (
                                   <button
@@ -21256,7 +21377,7 @@ function SongStructureIntegratedControlComponent({
                               </div>
                               
                               <div className="mt-3 flex gap-2 min-w-0">
-                                <div className="flex gap-1 bg-white/5 p-1 rounded-xl border border-[var(--modal-button-border)]">
+                                <div className="soridraw-section-reaction-group flex gap-1 bg-white/5 p-1 rounded-xl border border-[var(--modal-button-border)]">
                                   <button
                                     onClick={() => handleToggleReaction(preset.id, 'like')}
                                     className={cn(
@@ -23427,9 +23548,10 @@ function VocalControlComponent({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-48 pointer-events-none"
+              className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl bg-[var(--card-bg)] border border-black/20/30 shadow-2xl w-48 pointer-events-none"
             >
-              <p className="text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
+              <p className="soridraw-card-title-tooltip-label hidden">보컬</p>
+              <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">{getCombinedDescription()}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -24145,14 +24267,29 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
       <div className="soridraw-tempo-card-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
           <div className="flex items-center gap-3">
-            <h3 
-              onMouseEnter={() => setShowTitleTooltip(true)}
-              onMouseLeave={() => setShowTitleTooltip(false)}
-              className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
-            >
-              <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
-              템포(BPM)
-            </h3>
+            <div className="relative min-w-0">
+              <h3 
+                onMouseEnter={() => setShowTitleTooltip(true)}
+                onMouseLeave={() => setShowTitleTooltip(false)}
+                className="text-[22px] font-bold text-[var(--text-primary)] flex items-center gap-2.5 cursor-help"
+              >
+                <span className="w-1.5 h-6 bg-[#FFB400] rounded-full" />
+                템포(BPM)
+              </h3>
+              <AnimatePresence>
+                {showTitleTooltip && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl w-56 pointer-events-none"
+                  >
+                    <p className="soridraw-card-title-tooltip-label hidden">템포(BPM)</p>
+                    <p className="soridraw-card-title-tooltip-description text-[11px] text-[var(--text-secondary)] leading-snug">음악의 전체적인 속도를 설정합니다.</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <div 
               className={cn(

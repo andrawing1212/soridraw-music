@@ -3763,7 +3763,11 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   --soridraw-section-control: #2e2e2e;
   --soridraw-section-control-hover: #343434;
   --soridraw-section-search: #303030;
-  --soridraw-section-preview: #272727;
+  --soridraw-section-preview: #1b1b1b;
+  --soridraw-section-current-list: #1b1b1b;
+  --soridraw-section-current-card: #1b1b1b;
+  --soridraw-section-keep-panel: #1b1b1b;
+  --soridraw-section-keep-card: #252525;
   background: var(--soridraw-section-shell) !important;
   background-color: var(--soridraw-section-shell) !important;
   background-image: none !important;
@@ -3836,6 +3840,61 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 }
 
 .dark .studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+
+/* 322: Section Custom darker work surfaces and border cleanup.
+ * Preview, current-structure work area/cards and the Keep workspace are
+ * deliberately darker while preserving the shared Classic/Split geometry.
+ * The modal outer outline and Keep-card outlines are removed. */
+.dark .studio-section-custom-modal-panel {
+  border: 0 !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-current-list {
+  background-color: var(--soridraw-section-current-list) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-current-card {
+  background-color: var(--soridraw-section-current-card) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-panel {
+  background-color: var(--soridraw-section-keep-panel) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-card {
+  background-color: var(--soridraw-section-keep-card) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-card:hover {
+  border: 0 !important;
+}
+
+
+/* 323: Unify the three requested Section Custom work surfaces.
+ * Preview, current-structure rows/workspace and the Keep background use the
+ * same darker neutral gray. Keep preset cards remain separately readable. */
+.dark .studio-section-custom-modal-panel :is(
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel
+) {
+  background: var(--soridraw-section-preview) !important;
   background-color: var(--soridraw-section-preview) !important;
   background-image: none !important;
 }

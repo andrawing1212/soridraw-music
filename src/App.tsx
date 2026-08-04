@@ -6975,6 +6975,11 @@ const toggleCycleVariantSelection = (
     document.documentElement.dataset.soridrawActionOwner = studioActionOwner;
   }, [studioActionOwner]);
 
+  useEffect(() => {
+    if (studioActionOwner === 'floating') return;
+    setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
+  }, [studioActionOwner]);
+
   useEffect(() => () => {
     delete document.documentElement.dataset.soridrawActionOwner;
   }, []);
@@ -13177,30 +13182,45 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
   };
 
-  const setActionButtonHint = (item: CategoryItem) => {
-    if (isActionsFloating || isActionButtonsCollapsed) return;
+  const isActionButtonHintItem = (item: CategoryItem | null) =>
+    Boolean(item && ['generate', 'random', 'clear-all'].includes(item.id));
+
+  const setActionButtonHint = (item: CategoryItem, placement: 'floating' | 'inline') => {
+    // The inline copy is already docked directly above the page footer. Showing
+    // the shared bottom description there covers the action row itself, so only
+    // the temporary floating copy may publish action-button hints.
+    if (placement !== 'floating' || isActionButtonsCollapsed) return;
     setHoveredItem(item);
   };
 
   const clearActionButtonHint = () => {
-    if (isActionsFloating || isActionButtonsCollapsed) return;
-    setHoveredItem(null);
+    setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
   };
 
-  const actionButtonsContent = (
+  const renderActionButtonsContent = (placement: 'floating' | 'inline') => (
     <>
       <div className="soridraw-action-item soridraw-action-random relative flex-shrink-0">
         <button
           onClick={() => {
             applyRandom();
-            setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' });
+            if (placement === 'floating') {
+              setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' }, placement);
+            }
           }}
-          onMouseEnter={() => setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
+          onMouseEnter={() => {
+            if (placement === 'floating') {
+              setActionButtonHint({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' }, placement);
+            }
+          }}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' })}
+          onTouchStart={() => {
+            if (placement === 'floating') {
+              handleLongPressStart({ id: 'random', label: 'Random all', labelKo: '무작위', description: '키워드를 무작위로 조합합니다.' });
+            }
+          }}
           onTouchEnd={handleLongPressEnd}
           className="h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl bg-[var(--card-bg)] hover:bg-btn-hover text-[#FFB400] transition-all duration-150 ease-out border border-btn-border flex items-center justify-center gap-2 group/random shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
@@ -13214,42 +13234,54 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           data-soridraw-button-variant="primary"
           onClick={() => {
             setShowMainGenerationModal(true);
-            setActionButtonHint({
-              id: 'generate',
-              label: '생성하기',
-              description: isGenerating
-                ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
-                : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
-            });
+            if (placement === 'floating') {
+              setActionButtonHint({
+                id: 'generate',
+                label: '생성하기',
+                description: isGenerating
+                  ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                  : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+              }, placement);
+            }
           }}
-          onMouseEnter={() => setActionButtonHint({
-            id: 'generate',
-            label: '생성하기',
-            description: isGenerating
-              ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
-              : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
-          })}
+          onMouseEnter={() => {
+            if (placement === 'floating') {
+              setActionButtonHint({
+                id: 'generate',
+                label: '생성하기',
+                description: isGenerating
+                  ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                  : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+              }, placement);
+            }
+          }}
           onMouseLeave={() => {
             clearActionButtonHint();
             handleLongPressEnd();
           }}
-          onTouchStart={() => handleLongPressStart({
-            id: 'generate',
-            label: '생성하기',
-            description: isGenerating
-              ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
-              : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
-          })}
+          onTouchStart={() => {
+            if (placement === 'floating') {
+              handleLongPressStart({
+                id: 'generate',
+                label: '생성하기',
+                description: isGenerating
+                  ? `현재 ${runningGenerationCount}곡을 동시에 생성 중이며, 빈 자리가 생기면 대기 작업이 자동 시작됩니다.`
+                  : '생성 옵션을 선택한 뒤 곡을 생성합니다.',
+              });
+            }
+          }}
           onTouchEnd={handleLongPressEnd}
           className="soridraw-action-generate-button soridraw-generate-heartbeat relative w-full py-4 md:py-5 rounded-2xl bg-[#FFC15A] text-[#171717] text-[25px] md:text-[34px] font-black shadow-[0_8px_18px_rgba(0,0,0,0.30),0_4px_14px_rgba(255,193,90,0.16)] hover:bg-[#FFCB70] transition-all duration-150 ease-out flex items-center justify-center gap-2 md:gap-3 active:scale-[0.95] active:translate-y-[3px] active:brightness-90 active:shadow-inner"
         >
           {isGenerating && (
             <span
-              className="pointer-events-none absolute left-2 top-2 inline-flex h-7 min-w-7 items-center justify-center rounded-full border border-black/20 bg-[#171717] px-1.5 text-[10px] font-black text-[#FFC15A] shadow-lg"
+              className="soridraw-generation-running-badge pointer-events-none absolute left-2 top-2"
               aria-label={`${runningGenerationCount}곡 생성 중`}
             >
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {runningGenerationCount > 1 && <span className="ml-0.5">{runningGenerationCount}</span>}
+              <span className="soridraw-generation-running-spinner" aria-hidden="true" />
+              {runningGenerationCount > 1 && (
+                <span className="soridraw-generation-running-count">{runningGenerationCount}</span>
+              )}
             </span>
           )}
           <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
@@ -13260,7 +13292,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       <div className="soridraw-action-item soridraw-action-reset relative flex-shrink-0">
         <button
           onClick={() => clearAll({ preserveHistory: true })}
-          onMouseEnter={() => setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' })}
+          onMouseEnter={() => {
+            if (placement === 'floating') {
+              setActionButtonHint({ id: 'clear-all', label: 'Clear all', description: '선택한 옵션만 초기화하고, 아래 생성 곡 히스토리는 유지합니다.' }, placement);
+            }
+          }}
           onMouseLeave={() => clearActionButtonHint()}
           className={cn(
             "soridraw-action-reset-button h-full w-14 md:w-auto md:px-6 py-4 md:py-0 rounded-2xl transition-all duration-150 ease-out border flex items-center justify-center gap-2 shadow-btn active:scale-[0.94] active:translate-y-[3px] active:brightness-90 active:shadow-inner",
@@ -13277,6 +13313,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     </>
   );
 
+  const generationQueueIndicatorItems = useMemo(() => (
+    generationQueueItems.flatMap((item) => {
+      const indicatorCount = Math.max(1, Math.floor(Number(item.generationCount) || 1));
+      return Array.from({ length: indicatorCount }, (_, copyIndex) => ({ item, copyIndex }));
+    })
+  ), [generationQueueItems]);
+
   const renderExpandedActionBar = (placement: 'floating' | 'inline') => (
 <motion.div
   ref={actionButtonsBarRef}
@@ -13292,7 +13335,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     {generationQueueItems.length > 0 && (
       <div className="absolute bottom-[calc(100%+10px)] left-0 z-[146] max-w-full md:max-w-[48%]">
         <div className="flex max-w-full items-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
-          {generationQueueItems.map((item, index) => {
+          {generationQueueIndicatorItems.map(({ item, copyIndex }, indicatorIndex) => {
             const isDelayed = item.status === 'running'
               && Boolean(item.startedAt)
               && generationQueueClock - Number(item.startedAt) >= STUDIO_GENERATION_DELAY_NOTICE_MS;
@@ -13305,19 +13348,20 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   : `생성 실패${item.errorMessage ? ` · ${item.errorMessage}` : ''}`;
             return (
               <button
-                key={item.id}
+                key={`${item.id}-indicator-${copyIndex}`}
                 type="button"
                 onClick={() => handleGenerationQueueItemClick(item)}
                 className={cn(
-                  "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
+                  "soridraw-generation-queue-indicator relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[11px] font-black shadow-lg backdrop-blur-md transition-all hover:scale-105 active:scale-95",
+                  item.status === 'completed' && "is-completed",
                   item.status === 'running' && "border-[#FFB400]/65 bg-[#2A2418]/95 text-[#FFD36A] shadow-[#FFB400]/15",
                   isDelayed && "border-amber-300/80 shadow-[0_0_0_3px_rgba(251,191,36,0.10)]",
                   item.status === 'queued' && "border-white/15 bg-[#242424]/95 text-white/60",
                   item.status === 'completed' && "border-emerald-400/55 bg-emerald-500/20 text-emerald-300 shadow-emerald-500/10",
                   item.status === 'failed' && "border-red-400/45 bg-red-500/15 text-red-300"
                 )}
-                title={`${index + 1}. ${item.summary} · ${statusTitle}`}
-                aria-label={`${index + 1}번 생성 작업 ${statusTitle}`}
+                title={`${indicatorIndex + 1}. ${item.summary} · ${statusTitle}`}
+                aria-label={`${indicatorIndex + 1}번 생성 결과 ${statusTitle}`}
               >
                 {item.status === 'running' ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -13330,16 +13374,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 )}
                 {item.status === 'running' && (
                   <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">
-                    {index + 1}
+                    {indicatorIndex + 1}
                   </span>
                 )}
                 {isDelayed && (
                   <span className="pointer-events-none absolute -left-0.5 -top-0.5 h-2 w-2 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.75)]" />
-                )}
-                {item.generationCount > 1 && (
-                  <span className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#111] px-1 text-[8px] text-white/85">
-                    {item.generationCount}
-                  </span>
                 )}
               </button>
             );
@@ -13440,7 +13479,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       >
         <ArrowLeft className="w-5 h-5" />
       </motion.button>
-      {actionButtonsContent}
+      {renderActionButtonsContent(placement)}
     </motion.div>
   </div>
 </motion.div>
@@ -13461,7 +13500,37 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
   };
 
 
+  const getStudioSongGenerationBatchId = (song: SongResult | null | undefined) =>
+    String((song?.appliedKeywords as any)?.generationBatchId || '');
+
+  const completedGenerationBatchIds = useMemo(() => new Set(
+    generationQueueItems
+      .filter((item) => item.status === 'completed' && item.generationBatchId)
+      .map((item) => String(item.generationBatchId)),
+  ), [generationQueueItems]);
+
+  const isStudioDashboardSongUnread = (song: SongResult) => {
+    const batchId = getStudioSongGenerationBatchId(song);
+    return Boolean(batchId && completedGenerationBatchIds.has(batchId));
+  };
+
+  const clearCompletedGenerationForSong = (song: SongResult) => {
+    const batchId = getStudioSongGenerationBatchId(song);
+    if (!batchId) return;
+    setGenerationQueueItems((current) => current.filter((item) => !(
+      item.status === 'completed' && String(item.generationBatchId || '') === batchId
+    )));
+    setSelectedGenerationQueueItemId((current) => {
+      if (!current) return current;
+      const selectedItem = generationQueueItems.find((item) => item.id === current);
+      return selectedItem?.status === 'completed' && String(selectedItem.generationBatchId || '') === batchId
+        ? null
+        : current;
+    });
+  };
+
   const openStudioDashboardSong = (song: SongResult, index: number) => {
+    clearCompletedGenerationForSong(song);
     setHistoryIndex(index);
     setResult(song);
     setLatestGenerationBatchId((song.appliedKeywords as any)?.generationBatchId || null);
@@ -14000,6 +14069,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 formatSongTitle={formatUnifiedTitle}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={openStudioDashboardSong}
+                isSongUnread={isStudioDashboardSongUnread}
                 isSongFavorited={isSongFavorited}
                 onOpenApiSettings={() => navigate('/suno-api-settings')}
               />
@@ -16480,7 +16550,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
       {/* Tooltip / Description Overlay */}
       <AnimatePresence>
-        {hoveredItem && (
+        {hoveredItem && !(studioActionOwner !== 'floating' && isActionButtonHintItem(hoveredItem)) && (
           <motion.div
             initial={{ opacity: 0, x: '-50%' }}
             animate={{ 
@@ -21205,7 +21275,7 @@ function SongStructureIntegratedControlComponent({
                       <div
                         ref={currentStructureScrollRef}
                         className={cn(
-                          "flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 custom-scrollbar flex flex-col gap-2 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]",
+                          "soridraw-section-current-list flex-1 min-h-0 rounded-2xl border border-dashed border-[var(--border-color)] p-3 custom-scrollbar flex flex-col gap-2 [touch-action:pan-y] [-webkit-overflow-scrolling:touch]",
                           hasDraftStructureSelection ? "overflow-y-auto overscroll-y-auto" : "overflow-visible",
                           isReorderDragging && "cursor-grabbing select-none"
                         )}
@@ -21237,7 +21307,7 @@ function SongStructureIntegratedControlComponent({
                     </div>
 
                     <div className="hidden xl:block min-w-0 overflow-hidden h-[520px]">
-                      <div className="h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
+                      <div className="soridraw-section-keep-panel h-full rounded-2xl border border-[var(--border-color)] p-4 min-w-0 overflow-hidden flex flex-col">
                       <div className="flex flex-col gap-3 mb-4 min-w-0">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-xs font-bold text-[#FFD36A] uppercase tracking-wider">Keep 섹션</p>

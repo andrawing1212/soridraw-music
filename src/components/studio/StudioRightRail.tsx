@@ -150,6 +150,7 @@ type StudioRightRailProps = {
   formatSongTitle: (song: RecentSong) => string;
   onOpenGenerationOptions: () => void;
   onOpenSong: (song: RecentSong, index: number) => void;
+  isSongUnread: (song: RecentSong) => boolean;
   isSongFavorited: (song: RecentSong) => boolean;
   onOpenApiSettings: () => void;
 };
@@ -168,6 +169,7 @@ export default function StudioRightRail({
   formatSongTitle,
   onOpenGenerationOptions,
   onOpenSong,
+  isSongUnread,
   isSongFavorited,
   onOpenApiSettings,
 }: StudioRightRailProps) {
@@ -180,7 +182,15 @@ export default function StudioRightRail({
         <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-status">
           <div className="soridraw-studio-dashboard-heading">
             <div><p>GENERATION</p><h2>생성 상태</h2></div>
-            <span className={`soridraw-studio-dashboard-live-dot ${(isGenerating || runningCount > 0) ? 'is-running' : ''}`} />
+            <div
+              className="soridraw-studio-dashboard-status-indicators"
+              aria-label={(isGenerating || runningCount > 0) ? `${Math.max(1, runningCount)}곡 생성 중` : '생성 대기'}
+            >
+              <span className={`soridraw-studio-dashboard-live-dot ${(isGenerating || runningCount > 0) ? 'is-running' : ''}`} />
+              {(isGenerating || runningCount > 0) && (
+                <span className="soridraw-studio-dashboard-running-spinner" aria-hidden="true" />
+              )}
+            </div>
           </div>
           <div className="soridraw-studio-dashboard-state">
             <strong>{runningCount > 0 ? `${runningCount}곡 생성 중` : queuedCount > 0 ? '대기 작업 있음' : '생성 준비 완료'}</strong>
@@ -211,6 +221,7 @@ export default function StudioRightRail({
           </div>
           <div id="soridraw-studio-recent-song-list" className="soridraw-studio-dashboard-song-list">
             {history.length > 0 ? visibleRecentSongs.map((song, index) => {
+              const isUnread = isSongUnread(song);
               const isFavorited = isSongFavorited(song);
               return (
                 <button
@@ -219,8 +230,14 @@ export default function StudioRightRail({
                   className={`soridraw-studio-dashboard-song ${selectedIndex === index ? 'is-selected' : ''}`}
                   onClick={() => onOpenSong(song, index)}
                 >
-                  <span className={`soridraw-studio-dashboard-song-icon ${isFavorited ? 'is-favorite' : ''}`}>
-                    {isFavorited ? <Heart className="h-4 w-4" aria-label="즐겨찾기 곡" /> : <Music className="h-4 w-4" />}
+                  <span className={`soridraw-studio-dashboard-song-icon ${isUnread ? 'is-unread' : isFavorited ? 'is-favorite' : ''}`}>
+                    {isUnread ? (
+                      <span className="soridraw-studio-dashboard-song-unread-dot" aria-label="확인하지 않은 새 생성곡" />
+                    ) : isFavorited ? (
+                      <Heart className="h-4 w-4" aria-label="즐겨찾기 곡" />
+                    ) : (
+                      <Music className="h-4 w-4" />
+                    )}
                   </span>
                   <RecentSongScrollableCopy
                     title={formatSongTitle(song) || `생성곡 ${index + 1}`}

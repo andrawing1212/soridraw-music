@@ -5061,7 +5061,11 @@ html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel
   --soridraw-section-control: #2e2e31;
   --soridraw-section-control-hover: #343438;
   --soridraw-section-search: #303034;
-  --soridraw-section-preview: #272729;
+  --soridraw-section-preview: #1b1b1d;
+  --soridraw-section-current-list: #1b1b1d;
+  --soridraw-section-current-card: #1b1b1d;
+  --soridraw-section-keep-panel: #1b1b1d;
+  --soridraw-section-keep-card: #252527;
   background: var(--soridraw-section-shell) !important;
   background-color: var(--soridraw-section-shell) !important;
   background-image: none !important;
@@ -5445,5 +5449,328 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
     display: none !important;
+  }
+}
+
+
+/* 322: Split Mode keeps the same darker luminance as Classic with the
+ * existing cool-violet temperature. Remove only the requested outlines. */
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel {
+  border: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-current-list {
+  background-color: var(--soridraw-section-current-list) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-current-card {
+  background-color: var(--soridraw-section-current-card) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-keep-panel {
+  background-color: var(--soridraw-section-keep-panel) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-keep-card {
+  background-color: var(--soridraw-section-keep-card) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel .soridraw-section-keep-card:hover {
+  border: 0 !important;
+}
+
+
+/* 323: Split Mode uses the same luminance as Classic with its cool-violet
+ * temperature. The three requested work surfaces are exactly one tone. */
+html[data-soridraw-theme="studio-black"] body
+.studio-section-custom-modal-panel :is(
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel
+) {
+  background: var(--soridraw-section-preview) !important;
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+/* 324 — Generation progress visibility and unread recent-song handoff.
+ * The running badge was rendered as a black dot because the primary-button
+ * descendant color rule also recolored its spinner. Keep the badge compact but
+ * restore the intended gold loader. The right-rail generation action remains a
+ * clearly visible primary control. Newly completed batches use a small green
+ * unread dot until either the recent row or its matching completion indicator
+ * is opened. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-action-generate-button .soridraw-generation-running-badge {
+  color: #FFC15A !important;
+  -webkit-text-fill-color: #FFC15A !important;
+  background: #171717 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-action-generate-button .soridraw-generation-running-badge :where(svg, span) {
+  color: #FFC15A !important;
+  -webkit-text-fill-color: #FFC15A !important;
+  stroke: currentColor !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-primary,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-primary:hover,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-primary:focus-visible {
+  background: #FFB400 !important;
+  background-color: #FFB400 !important;
+  background-image: none !important;
+  color: #171717 !important;
+  -webkit-text-fill-color: #171717 !important;
+  border: 0 !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-primary:hover {
+  background: #FFC126 !important;
+  background-color: #FFC126 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-primary :where(svg, span) {
+  color: #171717 !important;
+  -webkit-text-fill-color: #171717 !important;
+  stroke: currentColor !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-icon.is-unread {
+    display: inline-grid !important;
+    place-items: center !important;
+    color: #35D07F !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-song-unread-dot {
+    display: block !important;
+    width: 8px !important;
+    min-width: 8px !important;
+    height: 8px !important;
+    min-height: 8px !important;
+    border-radius: 999px !important;
+    background: #35D07F !important;
+    box-shadow: 0 0 0 4px rgba(53, 208, 127, 0.10), 0 0 10px rgba(53, 208, 127, 0.28) !important;
+  }
+}
+
+/* 325 — Keep floating and inline generation controls visually identical.
+ * The primary-button descendant color rule could still flatten the running
+ * Loader2 into a solid black dot in the inline owner. Draw the progress arc
+ * with borders instead, so it cannot inherit the button icon color. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-action-generate-button .soridraw-generation-running-badge {
+  display: grid !important;
+  place-items: center !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #171717 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28) !important;
+  overflow: visible !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-action-generate-button .soridraw-generation-running-spinner {
+  display: block !important;
+  width: 17px !important;
+  height: 17px !important;
+  border: 2.5px solid rgba(255, 193, 90, 0.28) !important;
+  border-top-color: #FFC15A !important;
+  border-right-color: #FFC15A !important;
+  border-radius: 999px !important;
+  animation: soridraw-generation-running-spin 0.72s linear infinite !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-action-generate-button .soridraw-generation-running-count {
+  position: absolute !important;
+  right: -5px !important;
+  top: -5px !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: #FFC15A !important;
+  color: #171717 !important;
+  -webkit-text-fill-color: #171717 !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0 0 2px #171717 !important;
+}
+
+@keyframes soridraw-generation-running-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* A multi-song request is represented by one queue job internally. Render one
+ * completion circle per requested song so two generated songs again show two
+ * green checks instead of one check with a tiny count badge. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-generation-queue-indicator.is-completed {
+  border-color: rgba(52, 211, 153, 0.82) !important;
+  background: #087A58 !important;
+  color: #D7FFEE !important;
+  -webkit-text-fill-color: #D7FFEE !important;
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.10), 0 8px 18px rgba(0, 0, 0, 0.28) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-generation-queue-indicator.is-completed svg {
+  color: #D7FFEE !important;
+  stroke: currentColor !important;
+}
+
+/* 326 — Match the portal/floating generation bar to the docked inline bar.
+ * The floating copy is mounted directly under <body>, so the 325 selectors
+ * scoped through #root never reached it. Keep the docked row free of action
+ * hints in App.tsx and give the portal copy the exact same running ring. */
+html[data-soridraw-theme="studio-black"]
+body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
+.soridraw-action-generate-button .soridraw-generation-running-badge {
+  display: grid !important;
+  place-items: center !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #171717 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28) !important;
+  overflow: visible !important;
+}
+
+html[data-soridraw-theme="studio-black"]
+body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
+.soridraw-action-generate-button .soridraw-generation-running-spinner {
+  display: block !important;
+  width: 17px !important;
+  min-width: 17px !important;
+  height: 17px !important;
+  min-height: 17px !important;
+  border: 2.5px solid rgba(255, 193, 90, 0.28) !important;
+  border-top-color: #FFC15A !important;
+  border-right-color: #FFC15A !important;
+  border-radius: 999px !important;
+  animation: soridraw-generation-running-spin 0.72s linear infinite !important;
+  animation-play-state: running !important;
+}
+
+html[data-soridraw-theme="studio-black"]
+body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
+.soridraw-action-generate-button .soridraw-generation-running-count {
+  position: absolute !important;
+  right: -5px !important;
+  top: -5px !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: #FFC15A !important;
+  color: #171717 !important;
+  -webkit-text-fill-color: #171717 !important;
+  font-size: 9px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0 0 2px #171717 !important;
+}
+
+/* Right dashboard: keep the existing live dot and add an unmistakable
+ * rotating progress ring beside it while one or more songs are generating. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-status-indicators {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 9px !important;
+  min-width: 34px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-running-spinner {
+  display: block !important;
+  width: 18px !important;
+  min-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  border: 2.5px solid rgba(255, 180, 0, 0.22) !important;
+  border-top-color: #FFB400 !important;
+  border-right-color: #FFB400 !important;
+  border-radius: 999px !important;
+  animation: soridraw-generation-running-spin 0.72s linear infinite !important;
+  animation-play-state: running !important;
+  box-shadow: 0 0 12px rgba(255, 180, 0, 0.12) !important;
+}
+
+/* 328 — Remove the real tail below the expanded Generate row without scroll locking.
+ * 327 changed the builder bottom reserve only after the action row switched to
+ * the inline owner. That owner-dependent height change moved the pane's scroll
+ * end while the user was still scrolling, so the floating/inline test could
+ * flip repeatedly and the viewport appeared to shake.
+ *
+ * Keep the expanded layout geometry identical in both owner states instead:
+ * the in-flow action anchor already reserves the full Generate-row height, so
+ * no additional builder bottom padding is needed while the row is expanded.
+ * The collapsed tab keeps the previous 56px safety reserve. No scrollTop,
+ * scroll-padding or overscroll lock is used here. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-action-owner="floating"],
+    [data-soridraw-action-owner="inline"]
+  )
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    padding-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-action-owner="floating"],
+    [data-soridraw-action-owner="inline"]
+  )
+  .soridraw-studio-action-anchor-expanded {
+    margin-bottom: 0 !important;
   }
 }

@@ -3925,3 +3925,97 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
 ) {
   cursor: default !important;
 }
+
+
+/* 363: shared Music Note / Library star rating controls */
+body #root button.soridraw-rating-all {
+  border: 0 !important;
+  background: transparent !important;
+  color: rgba(255,255,255,0.58) !important;
+  box-shadow: none !important;
+}
+body #root button.soridraw-rating-all[data-selected="true"] {
+  background: rgba(232,182,74,0.18) !important;
+  color: #f4c763 !important;
+}
+body #root button.soridraw-rating-control,
+body #root button.soridraw-rating-trigger {
+  position: relative !important;
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: rgba(255,255,255,0.43) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+body #root button.soridraw-rating-trigger {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 9px !important;
+}
+body #root button.soridraw-rating-control:hover,
+body #root button.soridraw-rating-trigger:hover,
+body #root button.soridraw-rating-trigger[data-open="true"] {
+  background: rgba(232,182,74,0.10) !important;
+  color: #e7b950 !important;
+}
+body #root button.soridraw-rating-control[data-selected="true"] {
+  background: rgba(232,182,74,0.18) !important;
+  color: #f4c763 !important;
+}
+body #root button.soridraw-rating-control .soridraw-rating-star,
+body #root button.soridraw-rating-trigger .soridraw-rating-star {
+  width: 26px !important;
+  height: 26px !important;
+  color: inherit !important;
+  stroke: currentColor !important;
+  fill: currentColor !important;
+}
+body #root button.soridraw-rating-trigger .soridraw-rating-star {
+  width: 22px !important;
+  height: 22px !important;
+}
+body #root button.soridraw-rating-control[data-rating="0"] .soridraw-rating-star,
+body #root button.soridraw-rating-trigger[data-rating="0"] .soridraw-rating-star {
+  fill: transparent !important;
+}
+body #root button.soridraw-rating-control[data-rating]:not([data-rating="0"]),
+body #root button.soridraw-rating-trigger[data-rating]:not([data-rating="0"]) {
+  color: #d9aa43 !important;
+}
+body #root button.soridraw-rating-control[data-selected="true"][data-rating]:not([data-rating="0"]) {
+  color: #ffd36b !important;
+}
+body #root .soridraw-rating-number {
+  position: absolute !important;
+  inset: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding-top: 0.5px !important;
+  color: #17140d !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.04em !important;
+  pointer-events: none !important;
+}
+body #root button.soridraw-rating-trigger .soridraw-rating-number {
+  font-size: 10px !important;
+}
+body #root .soridraw-rating-popover {
+  min-width: max-content !important;
+  border: 0 !important;
+  background: #29292a !important;
+}
+body #root .favorite-keyword-strip > * {
+  flex: 0 0 auto !important;
+  position: static !important;
+}

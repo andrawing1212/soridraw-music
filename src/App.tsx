@@ -14114,7 +14114,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
               {isStudioLoaded && (
-                <StudioSplitWorkspace viewMode={studioWorkspaceView === 'recent' ? 'result-only' : studioWorkspaceView === 'create' ? 'split' : 'hidden'}>
+                <StudioSplitWorkspace viewMode="split">
                   <StudioBuilderPane>
                     {/* Selection Sections */}
                   <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
@@ -15018,6 +15018,43 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         </div>
                   </StudioBuilderPane>
                   <StudioResultPane>
+                    {studioWorkspaceView === 'music-note' ? (
+                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
+                        {!isAuthReady ? (
+                          <div className="soridraw-studio-workspace-loading">
+                            <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
+                            <span>뮤직노트를 불러오는 중...</span>
+                          </div>
+                        ) : (user || auth.currentUser) ? (
+                          <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                            <HistoryRouteWrapper
+                              isFavoritesLoading={isFavoritesLoading}
+                              hasMoreFavorites={hasMoreFavorites}
+                              isLoadingMoreFavorites={isLoadingMoreFavorites}
+                              loadMoreFavorites={loadMoreFavorites}
+                              searchFavoritesOnServer={searchFavoritesOnServer}
+                              refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                              toggleFavorite={toggleFavorite}
+                              updateFavorite={updateFavorite}
+                              clearAllFavorites={clearAllFavorites}
+                              unlockAllFavorites={unlockAllFavorites}
+                              lockAllFavorites={lockAllFavorites}
+                              user={user || auth.currentUser}
+                              handleLogin={handleLogin}
+                            />
+                          </Suspense>
+                        ) : (
+                          <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
+                        )}
+                      </section>
+                    ) : studioWorkspaceView === 'library' ? (
+                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
+                        <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                          <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+                        </Suspense>
+                      </section>
+                    ) : (
+                      <>
                     {liveSelectedKeywordItems.length > 0 && (
                       <Portal>
                         <div className="soridraw-live-keywords-fixed" role="region" aria-label="현재 선택된 키워드">
@@ -16440,49 +16477,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
             </div>
           )}
+                      </>
+                    )}
                   </StudioResultPane>
                 </StudioSplitWorkspace>
               )}
             </main>
 
-            {studioWorkspaceView === 'music-note' && (
-              <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
-                {!isAuthReady ? (
-                  <div className="soridraw-studio-workspace-loading">
-                    <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-                    <span>뮤직노트를 불러오는 중...</span>
-                  </div>
-                ) : (user || auth.currentUser) ? (
-                  <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
-                    <HistoryRouteWrapper
-                      isFavoritesLoading={isFavoritesLoading}
-                      hasMoreFavorites={hasMoreFavorites}
-                      isLoadingMoreFavorites={isLoadingMoreFavorites}
-                      loadMoreFavorites={loadMoreFavorites}
-                      searchFavoritesOnServer={searchFavoritesOnServer}
-                      refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-                      toggleFavorite={toggleFavorite}
-                      updateFavorite={updateFavorite}
-                      clearAllFavorites={clearAllFavorites}
-                      unlockAllFavorites={unlockAllFavorites}
-                      lockAllFavorites={lockAllFavorites}
-                      user={user || auth.currentUser}
-                      handleLogin={handleLogin}
-                    />
-                  </Suspense>
-                ) : (
-                  <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
-                )}
-              </section>
-            )}
-
-            {studioWorkspaceView === 'library' && (
-              <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
-                <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
-                  <SunoLibraryPageLazy appUser={user || auth.currentUser} />
-                </Suspense>
-              </section>
-            )}
           </StudioPageFrame>
           ) : (
             <FeatureUnavailablePage label="스튜디오" fallbackPath={navigationFallbackPath} />

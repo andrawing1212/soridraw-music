@@ -6337,55 +6337,54 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   }
 }
 
-/* 341 — Studio WORKSPACE pages share the Split Mode shell.
- * WORKSPACE selections keep both side rails mounted and replace only the
- * center canvas. TOOLS continue to open their existing standalone flows. */
+/* 361 — WORKSPACE navigation now keeps the Sori Studio builder mounted.
+ * Create remains the normal two-pane workspace. Recent Songs, Music Note and
+ * Library replace only the right result pane, so the left builder, vertical
+ * splitter and both pane controls never unmount during WORKSPACE navigation. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame:is(
     [data-workspace-view="music-note"],
     [data-workspace-view="library"]
-  ) > .soridraw-studio-page-center > .soridraw-studio-hero,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame:is(
-    [data-workspace-view="music-note"],
-    [data-workspace-view="library"]
-  ) > .soridraw-studio-page-center > .soridraw-studio-main {
-    display: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame:is(
-    [data-workspace-view="music-note"],
-    [data-workspace-view="library"]
   ) > .soridraw-studio-page-center {
-    height: calc(100vh - 58px) !important;
-    margin-top: 58px !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-workspace-page {
     width: 100% !important;
-    height: 100% !important;
+    height: auto !important;
     min-height: 0 !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain !important;
-    background: var(--sb-page) !important;
-    scrollbar-gutter: stable !important;
+    margin-top: 0 !important;
+    overflow: clip !important;
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-workspace-page > .soridraw-musicnote-theme,
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) > .soridraw-studio-page-center > :is(
+    .soridraw-studio-hero,
+    .soridraw-studio-main
+  ) {
+    display: block !important;
+  }
+
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-workspace-page > .soridraw-library-theme {
-    width: min(calc(100% - 36px), 1500px) !important;
-    max-width: 1500px !important;
+  .soridraw-studio-result-pane > .soridraw-studio-workspace-page {
+    width: 100% !important;
+    height: auto !important;
     min-height: 100% !important;
-    margin: 0 auto !important;
-    padding-top: 28px !important;
+    overflow: visible !important;
+    background: transparent !important;
+    scrollbar-gutter: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane > .soridraw-studio-workspace-page > :is(
+    .soridraw-musicnote-theme,
+    .soridraw-library-theme
+  ) {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding-top: 0 !important;
     padding-bottom: 48px !important;
     box-sizing: border-box !important;
   }
@@ -6393,7 +6392,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-workspace-loading {
     display: flex !important;
-    min-height: 100% !important;
+    min-height: 320px !important;
     align-items: center !important;
     justify-content: center !important;
     gap: 12px !important;
@@ -6402,29 +6401,11 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
     font-weight: 700 !important;
   }
 
-  /* The selected WORKSPACE item is the only highlighted row. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-left-panel .soridraw-studio-rail-item.is-active {
     background: #2c2c2e !important;
     color: #ffffff !important;
   }
-}
-
-/* Embedded WORKSPACE pages own the center canvas. Suppress builder-owned
- * body portals that would otherwise remain visible while the preserved song
- * builder stays mounted in the background. */
-html[data-soridraw-theme="studio-black"]:is(
-  [data-soridraw-studio-workspace-view="music-note"],
-  [data-soridraw-studio-workspace-view="library"]
-) body > :is(
-  .soridraw-studio-action-bar--tracking,
-  .soridraw-studio-action-collapsed,
-  .soridraw-live-keywords-fixed,
-  .soridraw-studio-builder-collapse-toggle,
-  .soridraw-studio-result-collapse-toggle,
-  .soridraw-studio-splitter
-) {
-  display: none !important;
 }
 
 /* 342: Slightly lift neutral keyword controls without changing selected states.

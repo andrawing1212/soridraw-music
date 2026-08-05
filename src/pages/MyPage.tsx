@@ -16,7 +16,6 @@ import {
  Lock,
  LogOut,
  Music,
- Palette,
  ShieldAlert,
  ShieldCheck,
  Sparkles,
@@ -29,7 +28,6 @@ import { AppUserInfo, UserRole } from '../types';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import SunoApiSettingsPanel from '../components/SunoApiSettingsPanel';
 import { readGeminiAutoModelFallback, writeGeminiAutoModelFallback } from '../services/geminiModelPreferences';
-import { applySoridrawTheme, normalizeSoridrawTheme, readSoridrawTheme, SoridrawTheme } from '../services/themePreferences';
 
 type FeatureState = boolean | 'partial';
 type FeatureKey =
@@ -265,9 +263,6 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const [autoModelFallback, setAutoModelFallback] = useState(() => readGeminiAutoModelFallback(auth.currentUser?.uid));
  const [isSavingAutoModelFallback, setIsSavingAutoModelFallback] = useState(false);
  const [autoModelFallbackMessage, setAutoModelFallbackMessage] = useState<string | null>(null);
- const [appTheme, setAppTheme] = useState<SoridrawTheme>(() => readSoridrawTheme());
- const [isSavingTheme, setIsSavingTheme] = useState(false);
- const [themeMessage, setThemeMessage] = useState<string | null>(null);
 
  useEffect(() => {
  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -288,9 +283,6 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
  const nextProfile = snapshot.exists() ? ({ uid: user.uid, ...snapshot.data() } as AppUserInfo) : null;
  setProfile(nextProfile);
- const savedTheme = normalizeSoridrawTheme((snapshot.data() as any)?.appPreferences?.theme);
- setAppTheme(savedTheme);
- applySoridrawTheme(savedTheme);
  });
  return () => unsubscribe();
  }, [user]);
@@ -459,24 +451,6 @@ export default function MyPage({ onLogout }: MyPageProps) {
  await onLogout();
  }, [onLogout]);
 
- const handleThemeChange = useCallback(async (theme: SoridrawTheme) => {
-  if (!user?.uid || isSavingTheme) return;
-  const previous = appTheme;
-  setAppTheme(theme);
-  applySoridrawTheme(theme);
-  setIsSavingTheme(true);
-  setThemeMessage(null);
-  try {
-   await updateDoc(doc(db, 'users', user.uid), { 'appPreferences.theme': theme });
-   setThemeMessage(theme === 'classic' ? 'Classic 테마가 적용되었습니다.' : '분할 모드가 적용되었습니다.');
-  } catch {
-   setAppTheme(previous);
-   applySoridrawTheme(previous);
-   setThemeMessage('테마 저장에 실패해 이전 디자인으로 되돌렸습니다.');
-  } finally {
-   setIsSavingTheme(false);
-  }
- }, [appTheme, isSavingTheme, user?.uid]);
 
  if (!user) {
  return (
@@ -638,46 +612,6 @@ export default function MyPage({ onLogout }: MyPageProps) {
  initial={false}
  animate={{ opacity: 1, y: 0 }}
  transition={{ delay: 0.14 }}
- className="soridraw-theme-surface rounded-3xl border border-white/[0.06] bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
- >
- <div className="flex items-start gap-3">
- <div className="rounded-2xl bg-[#ffb400]/12 p-3 text-[#ffb400]"><Palette className="h-5 w-5" /></div>
- <div>
- <p className="text-xs font-black uppercase tracking-[0.22em] text-[#ffb400]">앱 설정</p>
- <h2 className="mt-1 text-lg font-black text-white">디자인 테마</h2>
- <p className="mt-1 text-sm leading-relaxed text-white/56">기존 디자인은 Classic으로 그대로 보존됩니다. 분할 모드는 PC와 모바일에 함께 적용됩니다.</p>
- </div>
- </div>
- <div className="mt-5 grid gap-3 sm:grid-cols-2">
- {[
-  { value: 'classic' as const, label: 'Classic', description: '현재 SORIDRAW 디자인' },
-  { value: 'studio-black' as const, label: '분할 모드', description: '좌우 분할 작업 화면 + 노란 포인트' },
- ].map((option) => {
-  const selected = appTheme === option.value;
-  return (
-   <button
-    key={option.value}
-    type="button"
-    onClick={() => handleThemeChange(option.value)}
-    disabled={isSavingTheme}
-    className={`rounded-2xl border p-4 text-left transition-all ${selected ? 'border-[#ffb400] bg-[#ffb400]/10' : 'border-white/10 bg-white/[0.025] hover:bg-white/[0.05]'}`}
-   >
-    <div className="flex items-center justify-between gap-3">
-     <span className="font-black text-white">{option.label}</span>
-     {selected && <CheckCircle2 className="h-5 w-5 text-[#ffb400]" />}
-    </div>
-    <p className="mt-1 text-xs text-white/52">{option.description}</p>
-   </button>
-  );
- })}
- </div>
- {themeMessage && <p className="mt-3 text-xs font-bold text-[#ffb400]">{themeMessage}</p>}
- </motion.section>
-
- <motion.section
- initial={false}
- animate={{ opacity: 1, y: 0 }}
- transition={{ delay: 0.16 }}
  className="rounded-3xl bg-[#15151c]/88 p-5 md:p-6 shadow-2xl backdrop-blur-xl"
  >
  <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">

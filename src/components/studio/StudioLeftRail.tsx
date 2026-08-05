@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Bell,
   Check,
   ChevronDown,
   ChevronRight,
+  Ellipsis,
+  FlaskConical,
   History,
   Library,
   Music,
-  Palette,
   PenTool,
   Search,
   Settings,
@@ -25,7 +27,7 @@ type StudioLeftRailProps = {
   onLibrary: () => void;
   onSearch: () => void;
   onApiSettings: () => void;
-  onThemeSettings: () => void;
+  onLab: () => void;
   onProfile: () => void;
   onSettings: () => void;
   onPlan: () => void;
@@ -57,7 +59,7 @@ export default function StudioLeftRail({
   onLibrary,
   onSearch,
   onApiSettings,
-  onThemeSettings,
+  onLab,
   onProfile,
   onSettings,
   onPlan,
@@ -390,17 +392,39 @@ export default function StudioLeftRail({
             </button>
           </nav>
 
-          <button
-            type="button"
-            className="soridraw-studio-rail-theme"
-            onClick={onThemeSettings}
-            onMouseEnter={(event) => showRailTooltip(event.currentTarget, '디자인 테마')}
-            onMouseLeave={hideRailTooltip}
-          >
-            <Palette className="h-5 w-5" />
-            <span><strong>디자인 테마</strong><small>Classic / 분할 모드</small></span>
-            <ChevronRight className="ml-auto h-4 w-4" />
-          </button>
+          <div className="soridraw-studio-rail-bottom-actions" aria-label="추가 메뉴">
+            <button
+              type="button"
+              className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item"
+              onClick={onLab}
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, 'Labs')}
+              onMouseLeave={hideRailTooltip}
+            >
+              <FlaskConical className="h-5 w-5" />
+              <span>Labs</span>
+            </button>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item"
+              aria-label="알림"
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '알림')}
+              onMouseLeave={hideRailTooltip}
+            >
+              <Bell className="h-5 w-5" />
+              <span>알림</span>
+            </button>
+            <button
+              type="button"
+              className="soridraw-studio-rail-item soridraw-studio-rail-bottom-item"
+              aria-label="기타 메뉴"
+              onMouseEnter={(event) => showRailTooltip(event.currentTarget, '더보기')}
+              onMouseLeave={hideRailTooltip}
+            >
+              <Ellipsis className="h-5 w-5" />
+              <span>더보기</span>
+            </button>
+          </div>
+
         </div>
       </aside>
       {profileMenu}

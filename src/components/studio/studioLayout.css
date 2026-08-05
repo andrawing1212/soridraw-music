@@ -5790,7 +5790,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   --soridraw-page-card-header: #202022;
   --soridraw-page-row-surface: #171719;
   --soridraw-page-control-surface: #242426;
-  --soridraw-page-control-hover: #2c2c2e;
+  --soridraw-page-control-hover: #333336;
   --soridraw-page-input-surface: #29292a;
 }
 
@@ -5911,4 +5911,429 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   border-style: solid !important;
   border-color: currentColor !important;
   box-shadow: none !important;
+}
+
+
+/* 331 — Restore visible hover emphasis on Music Note / Suno Library controls.
+ * 329/330 removed borders and normalized control surfaces, but inactive filter,
+ * sort and mode-tab buttons only changed text color on hover. Against the new
+ * flat shells that read as no visual feedback. Give inactive rectangular
+ * controls a clear surface lift, while keeping color-dot swatches circular and
+ * preserving the red/green selected accents. */
+.dark .soridraw-musicnote-theme
+:where(
+  div[class*="h-[46px]"][class*="bg-[var(--bg-secondary)]"],
+  div[class*="grid-cols-3"][class*="bg-white/5"]
+) > button:not(:disabled):not([class*="rounded-full"]):not([class*="bg-[#FF5C52]"]):not([class*="bg-brand-orange"]):hover,
+.dark .soridraw-library-theme
+:where(
+  div[class*="h-[46px]"][class*="bg-[var(--bg-secondary)]"],
+  div[class*="grid-cols-3"][class*="bg-white/5"]
+) > button:not(:disabled):not([class*="rounded-full"]):not([class*="bg-[#7FBD75]"]):not([class*="bg-emerald"]):not([class*="bg-green"]):hover {
+  background-color: var(--soridraw-page-control-hover) !important;
+  background-image: none !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Utility square/icon controls use the same stronger hover lift. */
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+button[class*="bg-[var(--bg-secondary)]"]:not(:disabled):hover,
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+button[class*="bg-white/"]:not(:disabled):hover {
+  background-color: var(--soridraw-page-control-hover) !important;
+  background-image: none !important;
+}
+
+/* Selected controls remain accented and brighten slightly on hover. */
+.dark .soridraw-musicnote-theme
+button:not(:disabled):is([class*="bg-[#FF5C52]"], [class*="bg-brand-orange"]):hover {
+  background-color: #ff6d64 !important;
+}
+
+.dark .soridraw-library-theme
+button:not(:disabled):is([class*="bg-[#7FBD75]"], [class*="bg-emerald"], [class*="bg-green"]):hover {
+  background-color: #8ac982 !important;
+}
+
+/* 333 — Match both one-pane fullscreen compositions to one balanced width.
+ * The generated-result fullscreen view was capped at 1360px, so it could look
+ * narrower than the widest normal split state. The builder fullscreen view had
+ * the opposite problem and stretched almost edge-to-edge. On wide desktop,
+ * center both surviving panes inside the same 1500px outer width and give both
+ * contents the same 24px inner gutter. Normal split, tablet, mobile and Classic
+ * layouts remain unchanged. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"] {
+    --soridraw-studio-full-pane-max-width: 1500px;
+    --soridraw-studio-full-pane-gutter: 24px;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    padding-left: var(--soridraw-studio-full-pane-gutter) !important;
+    padding-right: var(--soridraw-studio-full-pane-gutter) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: var(--soridraw-studio-full-pane-gutter) !important;
+    padding-right: var(--soridraw-studio-full-pane-gutter) !important;
+  }
+}
+
+/* 334 — Keep one-pane fullscreen scrollbars on the Studio workspace edge.
+ * 333 centered the surviving scroll pane itself at the 1500px reading width.
+ * Because the pane owns overflow-y, its scrollbar also moved inward with that
+ * cap. The scroll shell must instead keep the full center-workspace width so
+ * its scrollbar remains immediately before the right rail. Only the pane
+ * contents stay centered at the approved 1500px width. Wide Split Mode only. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* The scrolling shell reaches the workspace edge; the visible page remains
+   * at the same 1500px composition established in 333. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > *,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane
+  > * {
+    width: min(calc(100% - (var(--soridraw-studio-full-pane-gutter) * 2)), var(--soridraw-studio-full-pane-max-width)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Result content already owns its internal 24px padding. Do not add a second
+   * outer gutter while moving only the scrollbar shell. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content {
+    padding-left: var(--soridraw-studio-full-pane-gutter) !important;
+    padding-right: var(--soridraw-studio-full-pane-gutter) !important;
+  }
+}
+
+/* 335 — Align the one-pane result fullscreen with the Sori Studio fullscreen.
+ * The left builder fullscreen is the visual reference: it keeps the hero/header
+ * slot, a 1500px centered content composition, and its own pane scrollbar. The
+ * result fullscreen previously hid the hero entirely, stretched its cards wider
+ * than the builder, and pulled the scrollbar away from the normal result-pane
+ * boundary. Preserve an empty hero slot for future design, match the builder's
+ * content width, and keep only the result scrollbar on the center/right edge
+ * immediately before the recent-songs rail. Wide Split Mode only. */
+@media (min-width: 1600px) {
+  /* Keep exactly the same vertical header footprint as the builder fullscreen,
+   * but leave it visually empty while the builder is collapsed. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-hero {
+    display: block !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-main {
+    padding-top: 24px !important;
+  }
+
+  /* Use the same outer composition width as the builder fullscreen. The pane
+   * remains the full scroll shell, so its scrollbar does not move inward. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    left: 0 !important;
+    right: -18px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 18px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* The builder's direct fullscreen content is 1500px wide. Match that exact
+   * visible width on the result side and remove the extra horizontal inset that
+   * made the two fullscreen panes read as different sizes. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content {
+    width: min(calc(100% - (var(--soridraw-studio-full-pane-gutter) * 2)), var(--soridraw-studio-full-pane-max-width)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 336 — One-pane fullscreen alignment correction.
+ * The visible builder fullscreen is the reference for both one-pane states.
+ * Constrain the hero's inner composition to the same centered width as the
+ * cards, keep the search control inside that composition, remove the older
+ * 76px result-only top offset, and place the builder scrollbar on the same
+ * center/right boundary used by the result pane. Wide Split Mode only. */
+@media (min-width: 1600px) {
+  /* The hero itself remains a full-width structural slot. Only its inner
+   * composition narrows with the one-pane content so the logo/search never
+   * protrude beyond the card column. Apply to both one-pane directions so the
+   * hidden result-side header slot keeps the exact same future design bounds. */
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-collapsed="true"],
+    [data-soridraw-result-collapsed="true"]
+  ) body #root .soridraw-app-root .soridraw-studio-hero {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-collapsed="true"],
+    [data-soridraw-result-collapsed="true"]
+  ) body #root .soridraw-app-root .soridraw-studio-hero
+  > .soridraw-studio-shell {
+    width: min(
+      calc(100% - (var(--soridraw-studio-full-pane-gutter) * 2)),
+      var(--soridraw-studio-full-pane-max-width)
+    ) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* In builder fullscreen the old split-position formula still treated the
+   * search button as if a second pane existed. Anchor it to the narrowed hero
+   * composition instead. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    left: auto !important;
+    right: 0 !important;
+    transform: none !important;
+    translate: 0 0 !important;
+  }
+
+  /* 298's result-only 76px main padding had higher specificity than 335 and
+   * made the generated-song fullscreen begin lower than the builder cards.
+   * Match the normal builder main top padding exactly. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 24px !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* The builder scrollbar was left inside the main's 18px right padding,
+   * leaving a visible gap before the right-rail divider. Use the same edge
+   * ownership as the approved result fullscreen while preserving the existing
+   * centered content width. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    left: 0 !important;
+    right: -18px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 18px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 337 — Final one-pane fullscreen edge and top alignment.
+ * Builder fullscreen still inherited the Studio main's 18px right inset, so
+ * its pane scrollbar stopped before the center/right boundary. Let only that
+ * fullscreen scroll shell use the complete center column, while keeping the
+ * already-approved visible 1500px composition at the same 42px outer inset
+ * (18px former main padding + 24px content gutter). Result fullscreen also
+ * retained the older 18px inner top padding; reduce it by 12px so its first
+ * card reaches the requested upper guide without removing the reserved hero
+ * slot. Wide Split Mode only. */
+@media (min-width: 1600px) {
+  /* Use the complete center-column width for the builder fullscreen scroll
+   * shell. The scrollbar now sits directly on the boundary before the right
+   * rail instead of floating 18px inside it. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Preserve the exact visible content width/centering that was approved in
+   * 336 even though the outer scroll shell is now 36px wider. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane
+  > * {
+    width: min(calc(100% - 84px), var(--soridraw-studio-full-pane-max-width)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Keep the empty future header area, but remove the obsolete extra 12px
+   * inside the result content so the first card starts at the requested line. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content {
+    padding-top: 6px !important;
+  }
+}
+
+/* 338 — Slightly raise the generated-result fullscreen composition.
+ * Keep the reserved empty hero slot, approved card width and scrollbar edge,
+ * but trim the remaining result-only top gap by 12px. Wide Split Mode only. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 18px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-content {
+    padding-top: 0 !important;
+  }
+}
+
+
+/* 339 — Theme ownership cleanup and phone Split Mode parity.
+ * Theme selection now lives in the profile menu only. Phone navigation supports
+ * Dark / Light / Split, and the active top-navigation icon keeps the original
+ * SORIDRAW yellow accent in Split Mode. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-top-navigation button.soridraw-top-nav-item.is-active > svg,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation button.soridraw-mobile-nav-item.is-active > svg {
+  color: #ffb400 !important;
+  stroke: #ffb400 !important;
+  -webkit-text-fill-color: #ffb400 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation button.soridraw-mobile-nav-item.is-active {
+  color: #ffb400 !important;
+  background: rgba(255, 180, 0, 0.16) !important;
+  background-color: rgba(255, 180, 0, 0.16) !important;
+}
+
+/* 340: persistent utility buttons at the bottom of the Studio left rail.
+ * Labs uses the existing /lab page. Notifications and More are intentionally
+ * visual-only placeholders until their product flows are implemented. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel .soridraw-studio-rail-bottom-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 100% !important;
+    margin-top: auto !important;
+    padding-top: 12px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel .soridraw-studio-rail-bottom-item {
+    width: 100% !important;
+    min-height: 40px !important;
+    justify-content: flex-start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-bottom-actions {
+    align-items: center !important;
+    padding-top: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-rail-bottom-item {
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
 }

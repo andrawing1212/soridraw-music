@@ -33,13 +33,12 @@ export const readSoridrawTheme = (): SoridrawTheme => {
 const readStoredDisplayMode = (isPhone: boolean): SoridrawDisplayMode => {
   try {
     const stored = localStorage.getItem(isPhone ? PHONE_MODE_STORAGE_KEY : LARGE_MODE_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark') return stored;
-    if (!isPhone && stored === 'studio-black') return 'studio-black';
+    if (stored === 'light' || stored === 'dark' || stored === 'studio-black') return stored;
 
-    if (!isPhone && readSoridrawTheme() === 'studio-black') return 'studio-black';
+    if (readSoridrawTheme() === 'studio-black') return 'studio-black';
     return 'dark';
   } catch {
-    return !isPhone && readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
+    return readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
   }
 };
 
@@ -62,9 +61,7 @@ export const applySoridrawDisplayMode = (requestedMode: SoridrawDisplayMode) => 
   if (typeof document === 'undefined') return requestedMode;
 
   const isPhone = isSoridrawPhoneDevice();
-  const mode: SoridrawDisplayMode = isPhone && requestedMode === 'studio-black'
-    ? 'dark'
-    : requestedMode;
+  const mode: SoridrawDisplayMode = requestedMode;
   const theme: SoridrawTheme = mode === 'studio-black' ? 'studio-black' : 'classic';
   const colorMode: SoridrawColorMode = mode === 'light' ? 'light' : 'dark';
 
@@ -88,9 +85,7 @@ export const applyStoredSoridrawDisplayMode = () =>
 
 export const cycleSoridrawDisplayMode = () => {
   const isPhone = isSoridrawPhoneDevice();
-  const sequence: SoridrawDisplayMode[] = isPhone
-    ? ['dark', 'light']
-    : ['dark', 'light', 'studio-black'];
+  const sequence: SoridrawDisplayMode[] = ['dark', 'light', 'studio-black'];
   const current = readStoredDisplayMode(isPhone);
   const currentIndex = sequence.indexOf(current);
   const next = sequence[(currentIndex < 0 ? 0 : currentIndex + 1) % sequence.length];
@@ -110,8 +105,5 @@ export const applySoridrawTheme = (theme: SoridrawTheme) => {
     // Keep the current in-memory appearance even when storage is unavailable.
   }
 
-  if (isSoridrawPhoneDevice()) {
-    return applySoridrawDisplayMode(readStoredDisplayMode(true));
-  }
   return applySoridrawDisplayMode(normalized === 'studio-black' ? 'studio-black' : 'dark');
 };

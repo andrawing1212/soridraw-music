@@ -307,7 +307,6 @@ import {
   applyStoredSoridrawDisplayMode,
   cycleSoridrawDisplayMode,
   getSoridrawDisplayModeLabel,
-  isSoridrawPhoneDevice,
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
 } from './services/themePreferences';
@@ -3235,7 +3234,6 @@ function Navigation({
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const profileTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [displayMode, setDisplayMode] = useState<SoridrawDisplayMode>(() => readSoridrawDisplayMode());
-  const isPhoneAppearance = isSoridrawPhoneDevice();
   const headerIdentity = user
     ? getHeaderIdentityFromUser(user)
     : !isAuthReady
@@ -3332,9 +3330,7 @@ function Navigation({
     setDisplayMode(cycleSoridrawDisplayMode());
   };
 
-  const displayModeCycleText = isPhoneAppearance
-    ? '다크 · 라이트'
-    : '다크 · 라이트 · 분할';
+  const displayModeCycleText = '다크 · 라이트 · 분할';
 
   // Collapse menu on scroll
   useEffect(() => {
@@ -3555,9 +3551,10 @@ function Navigation({
                   type="button"
                   onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
                   className={cn(
-                    "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                    isActivePath(item.path) && "bg-[#FFB400]/18 text-[#FFB400]"
+                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                    isActivePath(item.path) && "is-active bg-[#FFB400]/18 text-[#FFB400]"
                   )}
+                  aria-current={isActivePath(item.path) ? 'page' : undefined}
                   aria-label={item.label}
                   title={item.label}
                 >
@@ -14043,7 +14040,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onLibrary={() => navigate('/suno-library')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
-                onThemeSettings={() => navigate('/my-page?tab=app')}
+                onLab={() => navigate('/lab')}
                 onProfile={() => navigate('/my-page')}
                 onSettings={() => navigate('/my-page?tab=settings')}
                 onPlan={() => navigate('/my-page?tab=plan')}

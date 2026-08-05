@@ -7093,9 +7093,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       aria-expanded={favoriteMemoExpanded}
                       aria-label={favoriteMemoExpanded ? '메모 입력창 기본 크기로 줄이기' : '메모 입력창 크게 펼치기'}
                       onClick={() => setFavoriteMemoExpanded(prev => !prev)}
-                      className="mt-2 flex h-8 w-full cursor-pointer touch-manipulation items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.035] transition-all hover:border-[#FF5C52]/35 hover:bg-[#FF5C52]/10 active:bg-[#FF5C52]/14"
+                      className="mx-auto mt-2 flex h-6 w-[88px] cursor-pointer touch-manipulation items-center justify-center rounded-full bg-[#454549] transition-all hover:bg-[#525257] active:scale-[0.97]"
                     >
-                      <span className={`h-1.5 rounded-full bg-white/24 transition-all ${favoriteMemoExpanded ? 'w-20' : 'w-16'}`} />
+                      <span className={`h-1 rounded-full bg-[#d0d0d4] transition-all ${favoriteMemoExpanded ? 'w-9' : 'w-7'}`} />
                     </button>
                     {favoriteMemoSavingIds[selectedSong.id] && (
                       <div className="mt-2 text-[11px] font-bold text-[#FF8B84]/75">메모 저장 중...</div>

@@ -37,13 +37,20 @@
             : /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)
               || (/Android/i.test(ua) && /Mobile/i.test(ua));
           var requestedTheme = localStorage.getItem('soridraw_app_theme') === 'studio-black' ? 'studio-black' : 'classic';
-          var colorKey = isPhone ? 'soridraw_phone_color_mode' : 'soridraw_large_screen_color_mode';
-          var requestedColor = localStorage.getItem(colorKey)
+          var displayKey = isPhone ? 'soridraw_phone_display_mode' : 'soridraw_large_display_mode';
+          var storedDisplay = localStorage.getItem(displayKey);
+          var legacyColorKey = isPhone ? 'soridraw_phone_color_mode' : 'soridraw_large_screen_color_mode';
+          var legacyColor = localStorage.getItem(legacyColorKey)
             || localStorage.getItem('soridraw_color_mode')
             || localStorage.getItem('themeMode')
             || 'dark';
-          var effectiveTheme = isPhone ? 'classic' : requestedTheme;
-          var effectiveColor = effectiveTheme === 'studio-black' ? 'dark' : (requestedColor === 'light' ? 'light' : 'dark');
+          var requestedDisplay = storedDisplay === 'studio-black' || storedDisplay === 'light' || storedDisplay === 'dark'
+            ? storedDisplay
+            : requestedTheme === 'studio-black'
+              ? 'studio-black'
+              : legacyColor === 'light' ? 'light' : 'dark';
+          var effectiveTheme = requestedDisplay === 'studio-black' ? 'studio-black' : 'classic';
+          var effectiveColor = requestedDisplay === 'light' ? 'light' : 'dark';
           document.documentElement.dataset.soridrawTheme = effectiveTheme;
           document.documentElement.dataset.soridrawColorMode = effectiveColor;
           document.documentElement.dataset.soridrawDevice = isPhone ? 'phone' : 'large-screen';

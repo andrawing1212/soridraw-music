@@ -3898,3 +3898,30 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   background-color: var(--soridraw-section-preview) !important;
   background-image: none !important;
 }
+
+/* 347: Use the hand cursor for every genuinely clickable app control.
+ * Disabled controls keep the normal cursor so unfinished/unavailable actions
+ * are not presented as interactive. */
+:where(
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  [role="link"]:not([aria-disabled="true"]),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  summary
+) {
+  cursor: pointer !important;
+}
+
+:where(
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  [role="link"][aria-disabled="true"],
+  input[type="button"]:disabled,
+  input[type="submit"]:disabled,
+  input[type="reset"]:disabled
+) {
+  cursor: default !important;
+}

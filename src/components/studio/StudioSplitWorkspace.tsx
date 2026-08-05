@@ -630,6 +630,12 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
     if (isBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
     if (isResultCollapsed && builderRef.current) builderRef.current.scrollTop = 0;
 
+    // Workspace-view and collapse changes must commit their pane geometry
+    // before the browser paints. Waiting for the next animation frame leaves
+    // one visible frame of the previous full-width result layout, which reads
+    // as an entrance effect when returning to the compact split view.
+    refreshLayoutMetrics();
+
     const frame = window.requestAnimationFrame(() => {
       refreshLayoutMetrics();
       if (isBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
@@ -811,7 +817,7 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
     lastDragBuilderPixelRef.current = null;
     readExternalControls(true);
     event.currentTarget.setPointerCapture(event.pointerId);
-    document.body.style.cursor = 'col-resize';
+    document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
     draggingRef.current = true;
     layoutRef.current?.classList.add('is-dragging');
@@ -911,7 +917,7 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
     </button>
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previousViewMode = previousViewModeRef.current;
     previousViewModeRef.current = viewMode;
 

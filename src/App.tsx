@@ -14039,7 +14039,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 activeWorkspace={studioWorkspaceView}
                 onCreate={() => {
                   setStudioWorkspaceView('create');
-                  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+                  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
                 }}
                 onRecentSongs={() => setStudioWorkspaceView('recent')}
                 onMusicNote={() => setStudioWorkspaceView('music-note')}
@@ -15052,7 +15052,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
               {/* Title Card */}
               <div className={cn(
-                "soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-all duration-500",
+                "soridraw-result-title-card soridraw-result-title-card--genre-height bg-[var(--card-bg)] rounded-3xl p-5 sm:p-8 border border-[#e3a13a]/[0.18] shadow-[0_18px_50px_rgba(0,0,0,0.32)] relative overflow-visible sm:overflow-hidden group hover:border-[#e3a13a]/[0.18] transition-colors duration-150",
                 isRecentSongSectionEditing('title') && "soridraw-result-title-card--editing"
               )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
@@ -15575,7 +15575,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Applied Keywords After Generation */}
-              <div data-expand-section className="soridraw-result-keywords-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+              <div data-expand-section className="soridraw-result-keywords-card bg-[var(--card-bg)] rounded-3xl p-6 border border-[#e3a13a]/[0.16] shadow-[0_14px_36px_rgba(0,0,0,0.26)] relative hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                 <div className="flex items-center justify-between gap-4 mb-3">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-[#e3a13a]" />
@@ -16227,7 +16227,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Prompt Section */}
-              <div className="soridraw-result-prompt-card bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+              <div className="soridraw-result-prompt-card bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                 <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <Sparkles className="w-4 h-4 text-[#e3a13a]" />
@@ -16246,7 +16246,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                   </div>
                 </div>
-                <div className="p-5 sm:p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
+                <div data-soridraw-selectable-text="true" className="p-5 sm:p-8 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
                   {isRecentSongSectionEditing('prompt') && recentSongEditDraft ? (
                     <textarea
                       value={recentSongEditDraft.prompt}
@@ -16271,14 +16271,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       const missingLyricLanguages = getMissingLyricLanguages(result);
 
                       const renderAddLyricsLanguageCard = () => missingLyricLanguages.length > 0 ? (
-                        <div className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-all duration-500">
+                        <div className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-dashed border-[#e3a13a]/[0.22] overflow-hidden flex flex-col shadow-[0_14px_36px_rgba(0,0,0,0.26)] transition-colors duration-150">
                           <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                             <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                               <Languages className="w-4 h-4 text-[#e3a13a]" />
                               가사 언어 추가
                             </h3>
                           </div>
-                          <div className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
+                          <div data-soridraw-selectable-text="true" className="flex-1 p-6 overflow-y-auto custom-scrollbar flex flex-col justify-center gap-4">
                             <div className="text-center space-y-2">
                               <p className="text-sm font-bold text-[var(--text-primary)]">다른 언어 가사가 필요해?</p>
                               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
@@ -16311,7 +16311,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         const copyType = `lyrics-${lang}`;
 
                         return (
-                          <div key={lang} className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-all duration-500">
+                          <div key={lang} className="soridraw-result-lyrics-card aspect-square bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col group/lyrics shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                             <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                               <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                                 <Music className="w-4 h-4 text-[#e3a13a]" />
@@ -16345,7 +16345,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                                 </button>
                               </div>
                             </div>
-                            <div className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
+                            <div data-soridraw-selectable-text="true" className="soridraw-result-lyrics-scroll flex-1 p-5 sm:p-8 overflow-y-scroll custom-scrollbar flex flex-col items-center h-full">
                               {isRecentSongSectionEditing('lyrics') && recentSongEditDraft ? (
                                 <textarea
                                   value={getRecentSongLyricsDraftValue(lang)}
@@ -20869,7 +20869,7 @@ function SongStructureIntegratedControlComponent({
                 </div>
                 
                 {/* Structure Guide - Always Visible */}
-                <div className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
+                <div data-soridraw-selectable-text="true" className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
                   <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
@@ -24419,7 +24419,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 min={TEMPO_MIN_BPM}
                 max={max}
                 value={min}
-                disabled={enabled}
+                readOnly={enabled}
+                aria-disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   if (!isNaN(val)) {
@@ -24435,7 +24436,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 min={min}
                 max={TEMPO_MAX_BPM}
                 value={max}
-                disabled={enabled}
+                readOnly={enabled}
+                aria-disabled={enabled}
                 onChange={(e) => {
                   const val = parseInt(e.target.value);
                   if (!isNaN(val)) {
@@ -24537,7 +24539,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
             min={TEMPO_MIN_BPM}
             max={max}
             value={min}
-            disabled={enabled}
+            readOnly={enabled}
+                aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -24553,7 +24556,8 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
             min={min}
             max={TEMPO_MAX_BPM}
             value={max}
-            disabled={enabled}
+            readOnly={enabled}
+                aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {

@@ -215,7 +215,7 @@
     border: 0;
     border-radius: 0;
     background: transparent;
-    cursor: col-resize;
+    cursor: ew-resize;
     touch-action: none;
     outline: none;
   }
@@ -1045,7 +1045,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
-    cursor: col-resize !important;
+    cursor: ew-resize !important;
     user-select: none !important;
   }
 
@@ -2245,13 +2245,12 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
     ) 0 !important;
   }
 
+  /* The description overlay now receives the owning pane's live center and
+   * width from App.tsx. Do not force every tooltip back onto the builder pane:
+   * that legacy override made result-pane hints appear at the lower center of
+   * the left pane. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-studio-description-overlay {
-    left: calc(
-      var(--soridraw-studio-builder-left, 0px)
-      + (var(--soridraw-studio-builder-width, 100vw) * 0.5)
-    ) !important;
     width: max-content;
-    max-width: min(400px, calc(var(--soridraw-studio-builder-width, 400px) - 24px)) !important;
   }
 }
 
@@ -6427,3 +6426,294 @@ html[data-soridraw-theme="studio-black"]:is(
 ) {
   display: none !important;
 }
+
+/* 342: Slightly lift neutral keyword controls without changing selected states.
+ * Keep icon-only header actions and direct-input controls on the existing surface tone. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button:not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):not(.soridraw-direct-input-button):not(.soridraw-expand-summary):not(:has(> svg:only-child)) {
+  background-color: #2e2e30 !important;
+  background-image: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button:not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]):not([data-soridraw-button-variant="primary"]):not(.soridraw-direct-input-button):not(.soridraw-expand-summary):not(:has(> svg:only-child)):hover {
+  background-color: var(--sb-control-hover) !important;
+}
+
+/* 342: Prevent accidental drag-selection on Sori Studio controls and headings.
+ * Inputs, textareas, generated lyrics and prompt text remain selectable. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :is(button, [role="button"], h1, h2, h3, h4, h5, h6),
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero :is(button, [role="button"], h1, h2, h3, h4, h5, h6) {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* 344: Lock accidental text drag-selection across the split-mode chrome and
+ * song workspace, then reopen selection only for the user-approved content
+ * regions. This keeps navigation, buttons, cards, labels and dashboard text
+ * from highlighting while preserving copy/edit behavior where it is useful. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
+  .soridraw-top-navigation,
+  .soridraw-mobile-navigation,
+  .soridraw-studio-left-panel,
+  .soridraw-studio-dashboard-panel
+),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
+  .soridraw-top-navigation,
+  .soridraw-mobile-navigation,
+  .soridraw-studio-left-panel,
+  .soridraw-studio-dashboard-panel
+) *,
+html[data-soridraw-theme="studio-black"]:is(
+  [data-soridraw-studio-workspace-view="create"],
+  [data-soridraw-studio-workspace-view="recent"]
+) body #root .soridraw-app-root :is(
+  .soridraw-studio-main,
+  .soridraw-studio-hero,
+  .soridraw-studio-result-content
+),
+html[data-soridraw-theme="studio-black"]:is(
+  [data-soridraw-studio-workspace-view="create"],
+  [data-soridraw-studio-workspace-view="recent"]
+) body #root .soridraw-app-root :is(
+  .soridraw-studio-main,
+  .soridraw-studio-hero,
+  .soridraw-studio-result-content
+) *,
+html[data-soridraw-theme="studio-black"] body > .soridraw-studio-description-overlay,
+html[data-soridraw-theme="studio-black"] body > .soridraw-studio-description-overlay * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* Editable form controls must always keep normal text-selection behavior. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
+  input,
+  textarea,
+  [contenteditable="true"]
+),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
+  input,
+  textarea,
+  [contenteditable="true"]
+) * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Approved selectable result content: generated title/date, music prompt,
+ * lyrics and the add-language explanatory copy. Action buttons stay locked. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-title-card :is(
+  .soridraw-result-title-body p,
+  .soridraw-result-title-body h2,
+  .soridraw-result-mobile-genre p,
+  .soridraw-result-mobile-title-content p,
+  .soridraw-result-mobile-title-content h2,
+  .soridraw-result-title-date,
+  .soridraw-result-title-date *
+),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-prompt-card :is(pre, textarea),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-lyrics-card :is(h3, p, pre, textarea),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-result-lyrics-card :is(h3, p, pre, textarea) * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Approved selectable builder content: structure guide, vocal-character copy,
+ * direct writing fields and the displayed BPM range. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-structure-guide,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-structure-guide *,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-vocal-character-launcher :is(div, span),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-command-card textarea,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-tempo-desktop-input,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-tempo-desktop-input * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* The active BPM range is visually disabled while the slider owns editing,
+ * but it still needs pointer access so its numbers can be drag-selected. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-tempo-desktop-input,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-tempo-mobile-input {
+  pointer-events: auto !important;
+}
+
+/* Right dashboard: only Selected Keywords remains selectable. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-keywords-card,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-keywords-card * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-keywords-card :is(button, button *) {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+/* 345: Reopen drag-selection for the exact result/build copy regions approved
+ * by the user. The data attribute keeps the exception stable even when the
+ * surrounding split workspace remains globally selection-locked. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+[data-soridraw-selectable-text="true"],
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+[data-soridraw-selectable-text="true"] * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* 346: The 345 selectable exceptions were attached to the correct DOM regions,
+ * but the earlier workspace-wide `user-select: none !important` rule had higher
+ * specificity, so Chromium kept those descendants locked. Mirror the full
+ * workspace selector context and add the explicit selectable attribute after it
+ * so the approved prompt/lyrics/language-guide/structure-guide text wins the
+ * cascade without reopening selection elsewhere. */
+html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="create"] body #root .soridraw-app-root
+:is(.soridraw-studio-main, .soridraw-studio-hero, .soridraw-studio-result-content)
+[data-soridraw-selectable-text="true"],
+html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="create"] body #root .soridraw-app-root
+:is(.soridraw-studio-main, .soridraw-studio-hero, .soridraw-studio-result-content)
+[data-soridraw-selectable-text="true"] *,
+html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="recent"] body #root .soridraw-app-root
+:is(.soridraw-studio-main, .soridraw-studio-hero, .soridraw-studio-result-content)
+[data-soridraw-selectable-text="true"],
+html[data-soridraw-theme="studio-black"][data-soridraw-studio-workspace-view="recent"] body #root .soridraw-app-root
+:is(.soridraw-studio-main, .soridraw-studio-hero, .soridraw-studio-result-content)
+[data-soridraw-selectable-text="true"] * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* 347: Give every functional split-mode rail control a quiet hover surface.
+ * Active/selected buttons keep their existing stronger state; only inactive,
+ * clickable controls receive the faint neutral lift requested for discoverability. */
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item:not(.is-active):not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item:not(.is-active):not(:disabled):focus-visible {
+    background: rgba(255, 255, 255, 0.055) !important;
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    color: #f4f4f5 !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item.is-active:not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item.is-active:not(:disabled):focus-visible {
+    background: rgba(255, 255, 255, 0.085) !important;
+    background-color: rgba(255, 255, 255, 0.085) !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song:not(.is-selected):not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song:not(.is-selected):not(:disabled):focus-visible {
+    background: rgba(255, 255, 255, 0.055) !important;
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song.is-selected:not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel button.soridraw-studio-dashboard-song.is-selected:not(:disabled):focus-visible {
+    background: rgba(255, 255, 255, 0.085) !important;
+    background-color: rgba(255, 255, 255, 0.085) !important;
+    outline: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel :is(
+    button.soridraw-studio-dashboard-text-button,
+    .soridraw-studio-dashboard-credit-footer button,
+    button.soridraw-studio-dashboard-keyword-remove
+  ):not(:disabled):hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel :is(
+    button.soridraw-studio-dashboard-text-button,
+    .soridraw-studio-dashboard-credit-footer button,
+    button.soridraw-studio-dashboard-keyword-remove
+  ):not(:disabled):focus-visible {
+    background: rgba(255, 255, 255, 0.07) !important;
+    background-color: rgba(255, 255, 255, 0.07) !important;
+    outline: none !important;
+  }
+}
+
+/* 348: Normalize interactive cursors and active navigation icon tone.
+ * Recent-song title strips keep their horizontal drag behavior but present the
+ * same pointer cursor as the clickable row. Active top/mobile navigation icons
+ * inherit the menu label color instead of using a separate yellow accent. The
+ * split divider uses the horizontal resize cursor, including while dragging. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-song-copy,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-dashboard-song-copy.is-dragging {
+  cursor: pointer !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-top-navigation button.soridraw-top-nav-item.is-active > svg,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-mobile-navigation button.soridraw-mobile-nav-item.is-active > svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-splitter,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-splitter *,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-dragging,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-dragging .soridraw-studio-builder-pane,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace.is-dragging .soridraw-studio-result-pane {
+    cursor: ew-resize !important;
+  }
+}
+
+/* 350: The splitter is rendered through a body portal, outside #root.
+ * The previous 348 selector was scoped under #root, so the app-wide button
+ * pointer rule could still win on hover. Target the real portal element and
+ * force the horizontal <-> resize cursor both before and during dragging. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter:hover,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter:active,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter:focus,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter:focus-visible,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter *,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body * {
+    cursor: ew-resize !important;
+  }
+}
+

@@ -3956,9 +3956,9 @@ body #root button.soridraw-rating-trigger {
   transform: none !important;
 }
 body #root button.soridraw-rating-trigger {
-  width: 30px !important;
-  height: 30px !important;
-  border-radius: 9px !important;
+  width: 33px !important;
+  height: 33px !important;
+  border-radius: 10px !important;
 }
 body #root button.soridraw-rating-control:hover,
 body #root button.soridraw-rating-trigger:hover,
@@ -3979,8 +3979,8 @@ body #root button.soridraw-rating-trigger .soridraw-rating-star {
   fill: currentColor !important;
 }
 body #root button.soridraw-rating-trigger .soridraw-rating-star {
-  width: 22px !important;
-  height: 22px !important;
+  width: 24px !important;
+  height: 24px !important;
 }
 body #root button.soridraw-rating-control[data-rating="0"] .soridraw-rating-star,
 body #root button.soridraw-rating-trigger[data-rating="0"] .soridraw-rating-star {
@@ -4008,7 +4008,7 @@ body #root .soridraw-rating-number {
   pointer-events: none !important;
 }
 body #root button.soridraw-rating-trigger .soridraw-rating-number {
-  font-size: 10px !important;
+  font-size: 11px !important;
 }
 body #root .soridraw-rating-popover {
   min-width: max-content !important;

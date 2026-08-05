@@ -20,7 +20,10 @@ import {
   type SoridrawDisplayMode,
 } from '../../services/themePreferences';
 
+export type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
+
 type StudioLeftRailProps = {
+  activeWorkspace: StudioWorkspaceView;
   onCreate: () => void;
   onRecentSongs: () => void;
   onMusicNote: () => void;
@@ -53,6 +56,7 @@ const PROFILE_MENU_WIDTH = 200;
 const PROFILE_MENU_GAP = 8;
 
 export default function StudioLeftRail({
+  activeWorkspace,
   onCreate,
   onRecentSongs,
   onMusicNote,
@@ -326,8 +330,9 @@ export default function StudioLeftRail({
             <p className="soridraw-studio-rail-label">WORKSPACE</p>
             <button
               type="button"
-              className="soridraw-studio-rail-item is-active"
+              className={`soridraw-studio-rail-item${activeWorkspace === 'create' ? ' is-active' : ''}`}
               onClick={onCreate}
+              aria-current={activeWorkspace === 'create' ? 'page' : undefined}
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '곡 만들기')}
               onMouseLeave={hideRailTooltip}
             >
@@ -336,8 +341,9 @@ export default function StudioLeftRail({
             </button>
             <button
               type="button"
-              className="soridraw-studio-rail-item"
+              className={`soridraw-studio-rail-item${activeWorkspace === 'recent' ? ' is-active' : ''}`}
               onClick={onRecentSongs}
+              aria-current={activeWorkspace === 'recent' ? 'page' : undefined}
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '최근 생성곡')}
               onMouseLeave={hideRailTooltip}
             >
@@ -347,8 +353,9 @@ export default function StudioLeftRail({
             </button>
             <button
               type="button"
-              className="soridraw-studio-rail-item"
+              className={`soridraw-studio-rail-item${activeWorkspace === 'music-note' ? ' is-active' : ''}`}
               onClick={onMusicNote}
+              aria-current={activeWorkspace === 'music-note' ? 'page' : undefined}
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '뮤직노트')}
               onMouseLeave={hideRailTooltip}
             >
@@ -358,8 +365,9 @@ export default function StudioLeftRail({
             </button>
             <button
               type="button"
-              className="soridraw-studio-rail-item"
+              className={`soridraw-studio-rail-item${activeWorkspace === 'library' ? ' is-active' : ''}`}
               onClick={onLibrary}
+              aria-current={activeWorkspace === 'library' ? 'page' : undefined}
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '라이브러리')}
               onMouseLeave={hideRailTooltip}
             >

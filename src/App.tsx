@@ -76,7 +76,7 @@ import { createPortal } from 'react-dom';
 import { buildPreviewSongIntent, renderPreviewCards } from './services/songPreviewEngine';
 import { favoritesStore, useFavorites, useIsSongFavorited } from './hooks/useFavoritesStore';
 import StudioPageFrame from './components/studio/StudioPageFrame';
-import StudioLeftRail from './components/studio/StudioLeftRail';
+import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 
@@ -4085,6 +4085,7 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
+  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>('create');
 
   const [isStudioLoaded, setIsStudioLoaded] = useState(location.pathname === '/studio');
   useEffect(() => {
@@ -14032,12 +14033,17 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         <Route path="/studio" element={
           canAccessNavigationMenu('studio') ? (
           <StudioPageFrame
+            workspaceView={studioWorkspaceView}
             leftRail={
               <StudioLeftRail
-                onCreate={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                onRecentSongs={() => navigate('/suno-library')}
-                onMusicNote={() => navigate('/history')}
-                onLibrary={() => navigate('/suno-library')}
+                activeWorkspace={studioWorkspaceView}
+                onCreate={() => {
+                  setStudioWorkspaceView('create');
+                  window.requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+                }}
+                onRecentSongs={() => setStudioWorkspaceView('recent')}
+                onMusicNote={() => setStudioWorkspaceView('music-note')}
+                onLibrary={() => setStudioWorkspaceView('library')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onLab={() => navigate('/lab')}
@@ -14065,7 +14071,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 formatTime={formatStudioDashboardTime}
                 formatSongTitle={formatUnifiedTitle}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
-                onOpenSong={openStudioDashboardSong}
+                onOpenSong={(song, index) => {
+                  setStudioWorkspaceView('recent');
+                  openStudioDashboardSong(song, index);
+                }}
                 isSongUnread={isStudioDashboardSongUnread}
                 isSongFavorited={isSongFavorited}
                 onOpenApiSettings={() => navigate('/suno-api-settings')}
@@ -14105,7 +14114,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
               {isStudioLoaded && (
-                <StudioSplitWorkspace>
+                <StudioSplitWorkspace viewMode={studioWorkspaceView === 'recent' ? 'result-only' : studioWorkspaceView === 'create' ? 'split' : 'hidden'}>
                   <StudioBuilderPane>
                     {/* Selection Sections */}
                   <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
@@ -15048,7 +15057,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
-                      onClick={() => navigate('/history')}
+                      onClick={() => setStudioWorkspaceView('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
@@ -16415,7 +16424,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button
                           onClick={() => {
                             clearSunoLibrarySignal();
-                            navigate('/suno-library');
+                            setStudioWorkspaceView('library');
                           }}
                           className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"
@@ -16435,6 +16444,45 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </StudioSplitWorkspace>
               )}
             </main>
+
+            {studioWorkspaceView === 'music-note' && (
+              <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
+                {!isAuthReady ? (
+                  <div className="soridraw-studio-workspace-loading">
+                    <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
+                    <span>뮤직노트를 불러오는 중...</span>
+                  </div>
+                ) : (user || auth.currentUser) ? (
+                  <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                    <HistoryRouteWrapper
+                      isFavoritesLoading={isFavoritesLoading}
+                      hasMoreFavorites={hasMoreFavorites}
+                      isLoadingMoreFavorites={isLoadingMoreFavorites}
+                      loadMoreFavorites={loadMoreFavorites}
+                      searchFavoritesOnServer={searchFavoritesOnServer}
+                      refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                      toggleFavorite={toggleFavorite}
+                      updateFavorite={updateFavorite}
+                      clearAllFavorites={clearAllFavorites}
+                      unlockAllFavorites={unlockAllFavorites}
+                      lockAllFavorites={lockAllFavorites}
+                      user={user || auth.currentUser}
+                      handleLogin={handleLogin}
+                    />
+                  </Suspense>
+                ) : (
+                  <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
+                )}
+              </section>
+            )}
+
+            {studioWorkspaceView === 'library' && (
+              <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
+                <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                  <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+                </Suspense>
+              </section>
+            )}
           </StudioPageFrame>
           ) : (
             <FeatureUnavailablePage label="스튜디오" fallbackPath={navigationFallbackPath} />

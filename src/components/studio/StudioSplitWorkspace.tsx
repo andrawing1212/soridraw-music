@@ -114,7 +114,12 @@ export function StudioResultPane({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-export default function StudioSplitWorkspace({ children }: { children: ReactNode }) {
+type StudioSplitWorkspaceProps = {
+  children: ReactNode;
+  viewMode?: 'split' | 'result-only' | 'hidden';
+};
+
+export default function StudioSplitWorkspace({ children, viewMode = 'split' }: StudioSplitWorkspaceProps) {
   const panes = Children.toArray(children);
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
@@ -128,6 +133,7 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
   const resultCollapseToggleRef = useRef<HTMLButtonElement | null>(null);
   const percentRef = useRef(percent);
   const splitProfileRef = useRef<SplitProfile>(getSplitProfile());
+  const previousViewModeRef = useRef(viewMode);
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const resultCollapsedRef = useRef(isResultCollapsed);
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
@@ -905,6 +911,22 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
     </button>
   );
 
+  useEffect(() => {
+    const previousViewMode = previousViewModeRef.current;
+    previousViewModeRef.current = viewMode;
+
+    if (viewMode === 'result-only') {
+      setIsResultCollapsed(false);
+      setIsBuilderCollapsed(true);
+      return;
+    }
+
+    if (viewMode === 'hidden' || previousViewMode !== 'split') {
+      setIsBuilderCollapsed(false);
+      setIsResultCollapsed(false);
+    }
+  }, [viewMode]);
+
   const renderedBounds = getSplitBounds(metricsRef.current.width);
 
   const splitterControl = (
@@ -926,13 +948,13 @@ export default function StudioSplitWorkspace({ children }: { children: ReactNode
 
   return (
     <>
-      <div ref={layoutRef} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
+      <div ref={layoutRef} data-workspace-view-mode={viewMode} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>{panes[1] ?? null}</div>
       </div>
-      {typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl}
-      {typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl}
-      {typeof document !== 'undefined' ? createPortal(resultCollapseControl, document.body) : resultCollapseControl}
+      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl)}
+      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderCollapseControl, document.body) : builderCollapseControl)}
+      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultCollapseControl, document.body) : resultCollapseControl)}
     </>
   );
 }

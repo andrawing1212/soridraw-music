@@ -35,12 +35,13 @@ const readInitialRightRailState = () => (
 );
 
 type StudioPageFrameProps = {
+  workspaceView?: string;
   leftRail: ReactNode;
   rightRail: ReactNode;
   children: ReactNode;
 };
 
-export default function StudioPageFrame({ leftRail, rightRail, children }: StudioPageFrameProps) {
+export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children }: StudioPageFrameProps) {
   const [railViewport, setRailViewport] = useState<RailViewport>(getRailViewport);
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);
@@ -54,8 +55,13 @@ export default function StudioPageFrame({ leftRail, rightRail, children }: Studi
     return () => {
       root.classList.remove('soridraw-studio-route-active');
       body.classList.remove('soridraw-studio-route-active');
+      delete root.dataset.soridrawStudioWorkspaceView;
     };
   }, []);
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.soridrawStudioWorkspaceView = workspaceView;
+  }, [workspaceView]);
 
   useEffect(() => {
     let currentViewport = getRailViewport();
@@ -107,6 +113,7 @@ export default function StudioPageFrame({ leftRail, rightRail, children }: Studi
     <div
       className={`soridraw-studio-page-frame${isLeftRailCollapsed ? ' is-left-rail-collapsed' : ''}${isRightRailCollapsed ? ' is-right-rail-collapsed' : ''}`}
       data-rail-viewport={railViewport}
+      data-workspace-view={workspaceView}
     >
       {leftRail}
       <button

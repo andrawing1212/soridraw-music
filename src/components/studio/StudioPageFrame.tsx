@@ -115,6 +115,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
       data-rail-viewport={railViewport}
       data-workspace-view={workspaceView}
     >
+      <div className="soridraw-studio-masthead-divider" aria-hidden="true" />
       {leftRail}
       <button
         type="button"

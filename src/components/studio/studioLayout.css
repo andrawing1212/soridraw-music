@@ -6717,3 +6717,134 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
+
+/* 351: Match the Music Note and Suno Library brand-title text scale to the
+ * Sori Studio masthead in Split mode. Keep each page's icon and accent colors
+ * unchanged; only the title lettering and line height are normalized. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+h1.text-3xl.md\:text-5xl {
+  font-size: clamp(1.7rem, 1.95vw, 2.2rem) !important;
+  line-height: 1.05 !important;
+}
+
+@media (max-width: 767px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  h1.text-3xl.md\:text-5xl {
+    font-size: 1.75rem !important;
+  }
+}
+
+/* 352: Reserve the same upper masthead slot for Music Note and Suno Library
+ * that Sori Studio / Recent Songs already use in Split Mode. Standalone pages
+ * begin behind the fixed 58px top navigation, so they need the nav height plus
+ * the Studio hero's 96px top slot. Embedded WORKSPACE pages already begin below
+ * the top navigation and therefore use only the 96px hero slot. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    padding-top: 154px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-page > :is(
+    .soridraw-musicnote-theme,
+    .soridraw-library-theme
+  ) {
+    padding-top: 96px !important;
+  }
+}
+
+/* 353: One fixed masthead divider across the complete Split Mode center canvas.
+ * It belongs to the page frame rather than either pane, so moving the vertical
+ * splitter cannot divide, resize or shift it. The line also remains mounted
+ * when WORKSPACE swaps the center canvas to Recent Songs, Music Note or Library. */
+.soridraw-studio-masthead-divider {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-masthead-divider {
+    display: block !important;
+    position: fixed !important;
+    top: 102px !important;
+    left: calc(var(--soridraw-studio-left-rail-width, 214px) - 1px) !important;
+    right: calc(var(--soridraw-studio-right-rail-width, 292px) - 1px) !important;
+    width: auto !important;
+    height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: var(--sb-divider) !important;
+    box-shadow: none !important;
+    pointer-events: none !important;
+    z-index: 25 !important;
+  }
+}
+
+/* 356: Keep the masthead divider at the approved lowered position, but place
+ * the actual left/right split-pane collapse controls inside that header band.
+ * These controls are body portals owned by StudioSplitWorkspace; auxiliary
+ * side-rail toggles are intentionally left at their original positions. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-masthead-divider {
+    top: 110px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle {
+    top: 64px !important;
+  }
+}
+
+/* 358: Align the real split-pane portal controls by equal edge spacing.
+ * The masthead band runs from the 58px navigation edge to the 110px divider,
+ * so a 34px button has 9px above and below. Use that same 9px gap from the
+ * active vertical boundary: builder control sits 9px left of the splitter,
+ * result control 9px right of it. Collapsed restore controls use the same 9px
+ * inset from their surviving pane boundary. Auxiliary side-rail toggles are
+ * intentionally untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle,
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle {
+    top: 67px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 43px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) + 9px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + 9px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"] body > .soridraw-studio-result-collapse-toggle {
+    left: auto !important;
+    right: calc(var(--soridraw-studio-result-right, 0px) + 9px) !important;
+  }
+}
+
+/* 359: In the collapsed states only, nudge each restore control slightly
+ * closer to its surviving vertical boundary. Expanded split controls keep the
+ * approved 9px spacing from 358. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + 6px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"] body > .soridraw-studio-result-collapse-toggle {
+    left: auto !important;
+    right: calc(var(--soridraw-studio-result-right, 0px) + 6px) !important;
+  }
+}

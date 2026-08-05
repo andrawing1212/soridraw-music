@@ -263,6 +263,7 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
     const { left, leftRailEdge } = metricsRef.current;
     const controls = readExternalControls();
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
+    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
     const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
 
     // The divider is a fixed body portal. Give it one coordinate owner only:
@@ -273,19 +274,21 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
       splitterRef.current.style.removeProperty('transform');
       splitterRef.current.style.setProperty(
         'left',
-        `${Math.max(0, Math.round(splitterLeft) - 8)}px`,
+        `${Math.max(0, roundedSplitterLeft - 8)}px`,
         'important',
       );
     }
 
-    // The builder collapse control is another body portal. During pointer drag
-    // the committed root CSS variable intentionally stays unchanged until the
-    // drag ends, so drive this button from the same live splitter coordinate.
-    // Otherwise it appears to jump only after pointer-up.
+    // The pane collapse controls are body portals. During pointer drag the
+    // committed root CSS variable intentionally stays unchanged until pointer-up,
+    // so drive both controls from the same rounded live splitter coordinate.
+    // Keep the exact approved 9px edge gap used by the resting CSS; using the
+    // older -54/+20 offsets made the newly revealed buttons jump while the
+    // pointer remained held at either drag limit, then snap back on release.
     if (builderCollapseToggleRef.current && !builderCollapsedRef.current) {
       builderCollapseToggleRef.current.style.setProperty(
         'left',
-        `${Math.max(0, Math.round(splitterLeft) - 54)}px`,
+        `${Math.max(0, roundedSplitterLeft - 43)}px`,
         'important',
       );
     }
@@ -293,14 +296,14 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
       resultCollapseToggleRef.current.style.removeProperty('right');
       resultCollapseToggleRef.current.style.setProperty(
         'left',
-        `${Math.min(window.innerWidth - 44, Math.round(splitterLeft + 20))}px`,
+        `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`,
         'important',
       );
     }
     if (controls.liveKeywords) {
       controls.liveKeywords.style.setProperty(
         'left',
-        `${Math.max(0, Math.round(splitterLeft + 18))}px`,
+        `${Math.max(0, roundedSplitterLeft + 18)}px`,
         'important',
       );
       controls.liveKeywords.style.setProperty(
@@ -346,16 +349,27 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
   const commitRootMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const root = document.documentElement;
     const { left, leftRailEdge } = metricsRef.current;
-    root.style.setProperty('--soridraw-studio-builder-left', `${Math.max(0, left)}px`);
-    root.style.setProperty('--soridraw-studio-builder-right', `${Math.max(0, window.innerWidth - (left + builderWidth))}px`);
-    root.style.setProperty('--soridraw-studio-builder-width', `${Math.max(0, builderWidth)}px`);
-    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, leftRailEdge)}px`);
-    root.style.setProperty('--soridraw-studio-splitter-left', `${Math.max(0, splitterLeft)}px`);
-    root.style.setProperty('--soridraw-studio-result-left', `${Math.max(0, splitterLeft + 18)}px`);
-    root.style.setProperty(
-      '--soridraw-studio-result-right',
-      `${Math.max(0, window.innerWidth - (metricsRef.current.left + metricsRef.current.width))}px`,
+    const roundedLeft = Math.max(0, Math.round(left));
+    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
+    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
+    const roundedWorkspaceRight = Math.max(
+      0,
+      Math.round(window.innerWidth - (metricsRef.current.left + metricsRef.current.width)),
     );
+
+    // Pointer frames use integer pixel coordinates. Commit those same rounded
+    // coordinates after pointer-up so the divider and portal controls do not
+    // shift by a visible subpixel/one-pixel step when inline drag styles clear.
+    root.style.setProperty('--soridraw-studio-builder-left', `${roundedLeft}px`);
+    root.style.setProperty(
+      '--soridraw-studio-builder-right',
+      `${Math.max(0, Math.round(window.innerWidth - (left + roundedBuilderWidth)))}px`,
+    );
+    root.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
+    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
+    root.style.setProperty('--soridraw-studio-splitter-left', `${roundedSplitterLeft}px`);
+    root.style.setProperty('--soridraw-studio-result-left', `${roundedSplitterLeft + 18}px`);
+    root.style.setProperty('--soridraw-studio-result-right', `${roundedWorkspaceRight}px`);
   }, []);
 
   const refreshSplitterFooterBoundary = useCallback(() => {
@@ -490,7 +504,7 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
       ? 0
       : resultCollapsedRef.current
         ? safeWidth
-        : safeWidth * (nextPercent / 100);
+        : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 

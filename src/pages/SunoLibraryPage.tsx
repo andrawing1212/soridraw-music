@@ -6146,10 +6146,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   initial={{ opacity: 1, x: 0 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0 }}
-                  className="bg-[#151515] border border-black/24 rounded-2xl shadow-[0_14px_34px_rgba(0,0,0,0.24)]"
+                  className="soridraw-library-workspace-group bg-[#151515] rounded-2xl"
                 >
                   {/* Group Header */}
-                  <div className="px-4 md:px-6 py-4 border-b border-[#7FBD75]/10 flex items-start md:items-center justify-between gap-2 md:gap-3 bg-[#171717] rounded-t-2xl overflow-hidden">
+                  <div className="soridraw-library-workspace-header px-4 md:px-6 py-4 flex items-start md:items-center justify-between gap-2 md:gap-3 rounded-t-2xl overflow-hidden">
                     <div className="flex items-start md:items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#7FBD75] shrink-0">
                         <Music className="w-5 h-5" />
@@ -6199,7 +6199,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </div>
 
                   {/* Tracks List */}
-                  <div className="divide-y divide-[#7FBD75]/8">
+                  <div className="soridraw-library-workspace-tracks">
                     {items.map(({ item, idx }: { item: any; idx: number }) => {
                       const audioUrl = getAudioUrl(item, group);
                       const duration = getDuration(item, group);
@@ -6217,7 +6217,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 bg-[var(--bg-secondary)] transition-all cursor-pointer last:rounded-b-2xl ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`soridraw-library-workspace-track-row group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-all cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
                             handleLibraryDragSelectStart(event, selection);
                             handleLibraryCardLongPressStart(event, selection);
@@ -6262,11 +6262,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           }}
                           onMouseEnter={(event) => {
                             handleLibraryDragSelectEnter(event, selection);
-                            event.currentTarget.style.backgroundColor = '#171717';
                           }}
-                          onMouseLeave={(event) => {
+                          onMouseLeave={() => {
                             handleLibraryCardLongPressEnd();
-                            event.currentTarget.style.backgroundColor = '';
                           }}
                           onClick={(e) => {
                              if (consumeLibrarySuppressedClick(e, selection.key)) return;

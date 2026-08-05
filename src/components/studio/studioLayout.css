@@ -5774,3 +5774,141 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     margin-bottom: 0 !important;
   }
 }
+
+/* 329 — Music Note / Suno Library surface contrast and borderless cleanup.
+ * The page roots were using the same near-black background for list cards and
+ * the filter/tab control shells, so cards and controls visually disappeared
+ * into the page. Give the two pages a shared neutral/cool surface hierarchy
+ * while preserving their red/green active accent buttons.
+ *
+ * Product rule: buttons and windows in these pages do not use outline borders.
+ * Remove border/ring/shadow lines inside the page roots, including embedded
+ * split-pane copies. The Library title mark is the only intentional drawn line
+ * and is restored below. */
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) {
+  --soridraw-page-card-surface: #1a1a1c;
+  --soridraw-page-card-header: #202022;
+  --soridraw-page-row-surface: #171719;
+  --soridraw-page-control-surface: #242426;
+  --soridraw-page-control-hover: #2c2c2e;
+  --soridraw-page-input-surface: #29292a;
+}
+
+/* Remove every visible border/ring/shadow line owned by these two pages. */
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(button, input, textarea, select, section, article, aside, nav, form, div) {
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(button, input, textarea, select, section, article, aside, nav, form, div)[class*="border"] {
+  border-width: 0 !important;
+  border-style: none !important;
+}
+
+/* Neutral search fields and utility buttons now read as controls, not page bg. */
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(input, textarea, select) {
+  background-color: var(--soridraw-page-input-surface) !important;
+  background-image: none !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(button[class*="bg-[var(--bg-secondary)]"], button[class*="bg-white/"]) {
+  background-color: var(--soridraw-page-control-surface) !important;
+  background-image: none !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(button[class*="bg-[var(--bg-secondary)]"], button[class*="bg-white/"]):hover {
+  background-color: var(--soridraw-page-control-hover) !important;
+}
+
+/* Music Note: filter/sort shells, mode tabs and song cards. */
+.dark .soridraw-musicnote-theme div[class*="h-[46px]"][class*="rounded-2xl"][class*="bg-[var(--bg-secondary)]"],
+.dark .soridraw-musicnote-theme div[class*="grid-cols-3"][class*="bg-white/5"] {
+  background-color: var(--soridraw-page-control-surface) !important;
+  background-image: none !important;
+}
+
+.dark .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl {
+  background-color: var(--soridraw-page-card-surface) !important;
+  background-image: none !important;
+}
+
+.dark .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl:hover {
+  background-color: #1e1e20 !important;
+}
+
+/* Keep accent-selected Music Note controls red after neutral button cleanup. */
+.dark .soridraw-musicnote-theme button[class*="bg-[#FF5C52]"],
+.dark .soridraw-musicnote-theme button[class*="bg-brand-orange"] {
+  background-color: var(--page-accent) !important;
+}
+
+/* Library: filter shells/tabs and grouped track cards. */
+.dark .soridraw-library-theme div[class*="h-[46px]"][class*="rounded-2xl"][class*="bg-[var(--bg-secondary)]"],
+.dark .soridraw-library-theme div[class*="grid-cols-3"][class*="bg-white/5"] {
+  background-color: var(--soridraw-page-control-surface) !important;
+  background-image: none !important;
+}
+
+/* Library workspace cards use dedicated hooks. The previous generic
+ * data-selection selectors also painted nested children inside each track row,
+ * which created black strips and a rounded block protruding from the lower-left. */
+.dark .soridraw-library-theme .soridraw-library-workspace-group {
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--soridraw-page-card-surface) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark .soridraw-library-theme .soridraw-library-workspace-header {
+  background-color: var(--soridraw-page-card-header) !important;
+  background-image: none !important;
+  border: 0 !important;
+}
+
+.dark .soridraw-library-theme .soridraw-library-workspace-tracks {
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--soridraw-page-row-surface) !important;
+  border-radius: 0 0 1rem 1rem;
+}
+
+.dark .soridraw-library-theme .soridraw-library-workspace-track-row {
+  width: 100%;
+  min-width: 0;
+  margin: 0 !important;
+  background-color: var(--soridraw-page-row-surface) !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark .soridraw-library-theme .soridraw-library-workspace-track-row:hover {
+  background-color: #1c1c1e !important;
+}
+
+
+/* Keep accent-selected Library controls green after neutral button cleanup. */
+.dark .soridraw-library-theme button[class*="bg-[#7FBD75]"],
+.dark .soridraw-library-theme button[class*="bg-emerald"],
+.dark .soridraw-library-theme button[class*="bg-green"] {
+  background-color: var(--page-accent) !important;
+}
+
+/* The three-line Library logomark is artwork, not a UI outline. */
+.dark .soridraw-library-theme .soridraw-library-title-icon > div {
+  border-width: 2px !important;
+  border-style: solid !important;
+  border-color: currentColor !important;
+  box-shadow: none !important;
+}

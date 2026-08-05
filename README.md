@@ -72,3 +72,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Vercel 테스트앱 도메인 `soridraw-music.vercel.app`을 포함한 올바른 프로젝트 소속 키를 사용합니다.
 - AI Studio 디버그 제공자, Gemini 3.6 모델 라우팅, Functions, Firestore/Auth 저장 구조는 변경하지 않았습니다.
 - App Check 강제 차단은 테스트앱에서 `token status: available` 및 `server status: valid`가 확인될 때까지 유지하지 않습니다.
+
+## 329차 — 뮤직노트·라이브러리 카드/버튼 톤 및 외곽선 제거
+- 뮤직노트와 Suno Library의 곡 목록 카드가 페이지 배경과 섞이지 않도록 카드 표면색을 `#1a1a1c`로 분리했습니다.
+- 필터·정렬·탭 외부 버튼 영역은 `#242426`, 검색창은 `#29292a`로 통일했습니다.
+- Library 그룹 헤더와 개별 트랙 행에도 단계가 보이는 진회색 톤을 적용했습니다.
+- 두 페이지 내부의 버튼·입력창·카드·팝업/창 외곽선, 링, 그림자를 제거했습니다.
+- 선택된 Music Note 빨강 / Library 초록 강조 버튼은 기존 강조색을 유지합니다.
+- Suno Library 대문 아이콘의 세로선은 로고 그래픽이므로 유지했습니다.

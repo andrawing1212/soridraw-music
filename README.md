@@ -80,3 +80,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 두 페이지 내부의 버튼·입력창·카드·팝업/창 외곽선, 링, 그림자를 제거했습니다.
 - 선택된 Music Note 빨강 / Library 초록 강조 버튼은 기존 강조색을 유지합니다.
 - Suno Library 대문 아이콘의 세로선은 로고 그래픽이므로 유지했습니다.
+
+## 366차 — 별 등급 UI 롤백 및 키워드 겹침 수정 유지
+- 뮤직노트와 Suno Library의 별 등급 필터·목록 표시·선택 팝업을 361차의 기존 색상 원 방식으로 복구했습니다.
+- 362~365차에서 추가된 별 등급 전용 CSS와 임시 별점 매핑은 제거했습니다.
+- 뮤직노트 곡 목록의 선택 키워드 칩이 서로 겹치지 않도록 한 363차 수정은 그대로 유지했습니다.
+- 기존 사용자 색상 데이터와 Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.

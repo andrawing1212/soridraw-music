@@ -88,30 +88,6 @@ const COLOR_OPTIONS = [
   { value: 'purple', color: '#a855f7', label: '보라' }
 ];
 
-const STAR_RATING_OPTIONS = [
-  { value: 'gray', rating: 0, label: '별 미지정', saveValue: 'gray' },
-  { value: 'red', rating: 1, label: '별 1개', saveValue: 'red' },
-  { value: 'orange', rating: 2, label: '별 2개', saveValue: 'orange' },
-  { value: 'yellow', rating: 3, label: '별 3개', saveValue: 'yellow' },
-  { value: 'green', rating: 4, label: '별 4개', saveValue: 'green' },
-  { value: 'star5', rating: 5, label: '별 5개', saveValue: 'blue' },
-];
-
-const colorTagToRating = (value?: string | null): number => {
-  if (value === 'red') return 1;
-  if (value === 'orange') return 2;
-  if (value === 'yellow') return 3;
-  if (value === 'green') return 4;
-  if (value === 'blue' || value === 'purple') return 5;
-  return 0;
-};
-
-const matchesRatingFilter = (color: string, filterValue: string): boolean => {
-  if (filterValue === 'all') return true;
-  if (filterValue === 'star5') return color === 'blue' || color === 'purple';
-  return color === filterValue;
-};
-
 const getColorHex = (colorTag?: string | null) => {
   const found = COLOR_OPTIONS.find(c => c.value === colorTag);
   return found?.color || '#6b7280';
@@ -1701,7 +1677,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (workspaceColorFilter === 'all') return true;
 
     const color = getWorkspaceItemColor(group, idx);
-    return matchesRatingFilter(color, workspaceColorFilter);
+    return workspaceColorFilter === 'gray' ? color === 'gray' : color === workspaceColorFilter;
   };
 
   const handleChangeWorkspaceColor = async (group: any, idx: number, color: string | null) => {
@@ -3456,7 +3432,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       if (!matchesPlaylistVisibilityFilter(item)) return false;
       if (playlistColorFilter === 'all') return true;
       const itemColor = getPlaylistItemColor(item);
-      return matchesRatingFilter(itemColor, playlistColorFilter);
+      if (playlistColorFilter === 'gray') return itemColor === 'gray';
+      return itemColor === playlistColorFilter;
     });
 
     if (normalizedPlaylistSearch) {
@@ -5283,29 +5260,23 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
           {isWorkspaceMode ? (
             <>
-              <div className="soridraw-rating-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
-                  type="button"
                   onClick={() => setWorkspaceColorFilter('all')}
-                  className="soridraw-rating-all h-9 shrink-0 whitespace-nowrap rounded-xl px-4 text-xs font-bold"
-                  data-selected={workspaceColorFilter === 'all'}
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
                 >
                   전체
                 </button>
-                <div className="w-px h-3 bg-white/10 mx-1" />
-                {STAR_RATING_OPTIONS.map((option) => (
+                <div className="w-px h-3 bg-white/10 mx-1"></div>
+                {COLOR_OPTIONS.map(opt => (
                   <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setWorkspaceColorFilter(option.value)}
-                    className="soridraw-rating-control"
-                    data-selected={workspaceColorFilter === option.value}
-                    data-rating={option.rating}
-                    title={option.label}
-                    aria-label={option.label}
+                    key={opt.value}
+                    onClick={() => setWorkspaceColorFilter(opt.value)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      workspaceColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
                   >
-                    <Star className="soridraw-rating-star" strokeWidth={option.rating === 0 ? 1.8 : 1.35} />
-                    {option.rating > 0 && <span className="soridraw-rating-number">{option.rating}</span>}
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                   </button>
                 ))}
               </div>
@@ -5325,29 +5296,31 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </>
           ) : (
             <>
-              <div className="soridraw-rating-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] rounded-2xl p-1 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
                 <button
-                  type="button"
                   onClick={() => setPlaylistColorFilter('all')}
-                  className="soridraw-rating-all h-9 shrink-0 whitespace-nowrap rounded-xl px-4 text-xs font-bold"
-                  data-selected={playlistColorFilter === 'all'}
+                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
                 >
                   전체
                 </button>
-                <div className="w-px h-3 bg-white/10 mx-1" />
-                {STAR_RATING_OPTIONS.map((option) => (
+                <div className="w-px h-3 bg-white/10 mx-1"></div>
+                {[
+                  { value: 'gray', color: '#6b7280' },
+                  { value: 'red', color: '#ef4444' },
+                  { value: 'orange', color: '#f97316' },
+                  { value: 'yellow', color: '#eab308' },
+                  { value: 'green', color: '#22c55e' },
+                  { value: 'blue', color: '#3b82f6' },
+                  { value: 'purple', color: '#a855f7' }
+                ].map(opt => (
                   <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setPlaylistColorFilter(option.value)}
-                    className="soridraw-rating-control"
-                    data-selected={playlistColorFilter === option.value}
-                    data-rating={option.rating}
-                    title={option.label}
-                    aria-label={option.label}
+                    key={opt.value}
+                    onClick={() => setPlaylistColorFilter(opt.value)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
+                      playlistColorFilter === opt.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'
+                    }`}
                   >
-                    <Star className="soridraw-rating-star" strokeWidth={option.rating === 0 ? 1.8 : 1.35} />
-                    {option.rating > 0 && <span className="soridraw-rating-number">{option.rating}</span>}
+                    <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: opt.color }}></div>
                   </button>
                 ))}
               </div>
@@ -6351,7 +6324,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                           
                           <div className="flex-1 min-w-0 pr-2 flex items-center gap-3 relative">
                             <button
-                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const colorMenuId = `workspace-${group.id}-${idx}`;
@@ -6360,41 +6332,26 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 setActivePlaylistItemMenu(null);
                                 setBulkMenuState(null);
                               }}
-                              className="soridraw-rating-trigger"
-                              data-rating={colorTagToRating(getWorkspaceItemColor(group, idx))}
-                              data-open={activeColorMenu === `workspace-${group.id}-${idx}`}
-                              title="별점 지정"
-                              aria-label="별점 지정"
-                            >
-                              <Star className="soridraw-rating-star" strokeWidth={colorTagToRating(getWorkspaceItemColor(group, idx)) === 0 ? 1.8 : 1.35} />
-                              {colorTagToRating(getWorkspaceItemColor(group, idx)) > 0 && (
-                                <span className="soridraw-rating-number">{colorTagToRating(getWorkspaceItemColor(group, idx))}</span>
-                              )}
-                            </button>
+                              className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
+                              style={{ backgroundColor: getColorHex(getWorkspaceItemColor(group, idx)) }}
+                            />
                             {activeColorMenu === `workspace-${group.id}-${idx}` && (
-                              <div data-floating-menu="true" className="soridraw-rating-popover absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#29292a] rounded-xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-                                {STAR_RATING_OPTIONS.map((option) => (
+                              <div data-floating-menu="true" className="absolute top-7 left-0 z-30 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20" onClick={(e) => e.stopPropagation()}>
+                                {COLOR_OPTIONS.map(c => (
                                   <button
-                                    key={option.value}
-                                    type="button"
+                                    key={c.value}
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (multiSelectMode && selectedTrackCount > 0) {
-                                        handleBulkChangeColor(option.saveValue);
+                                        handleBulkChangeColor(c.value);
                                       } else {
-                                        handleChangeWorkspaceColor(group, idx, option.saveValue);
+                                        handleChangeWorkspaceColor(group, idx, c.value);
                                         setActiveColorMenu(null);
                                       }
                                     }}
-                                    className="soridraw-rating-control"
-                                    data-selected={colorTagToRating(getWorkspaceItemColor(group, idx)) === option.rating}
-                                    data-rating={option.rating}
-                                    title={option.label}
-                                    aria-label={option.label}
-                                  >
-                                    <Star className="soridraw-rating-star" strokeWidth={option.rating === 0 ? 1.8 : 1.35} />
-                                    {option.rating > 0 && <span className="soridraw-rating-number">{option.rating}</span>}
-                                  </button>
+                                    className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                    style={{ backgroundColor: c.color }}
+                                  />
                                 ))}
                               </div>
                             )}
@@ -6624,7 +6581,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     if (!matchesPlaylistVisibilityFilter(item)) return false;
                     if (playlistColorFilter === 'all') return true;
                     const itemColor = getPlaylistItemColor(item);
-                    return matchesRatingFilter(itemColor, playlistColorFilter);
+                    if (playlistColorFilter === 'gray') return itemColor === 'gray';
+                    return itemColor === playlistColorFilter;
                   });
 
                   if (normalizedPlaylistSearch) {
@@ -6847,44 +6805,36 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       <div className={`flex flex-col ml-3 flex-1 min-w-0 ${isUnavailable ? 'opacity-50 grayscale' : ''}`}>
                         <div className="flex items-center gap-2 relative">
                           {/* Color Point */}
-                          <button
-                            type="button"
+                          <button 
                             onClick={(e) => { e.stopPropagation(); setActiveColorMenu(activeColorMenu === item.id ? null : item.id!); setActivePlaylistItemMenu(null); setBulkMenuState(null); }}
-                            className="soridraw-rating-trigger"
-                            data-rating={colorTagToRating(getPlaylistItemColor(item))}
-                            data-open={activeColorMenu === item.id}
-                            title="별점 지정"
-                            aria-label="별점 지정"
-                          >
-                            <Star className="soridraw-rating-star" strokeWidth={colorTagToRating(getPlaylistItemColor(item)) === 0 ? 1.8 : 1.35} />
-                            {colorTagToRating(getPlaylistItemColor(item)) > 0 && (
-                              <span className="soridraw-rating-number">{colorTagToRating(getPlaylistItemColor(item))}</span>
-                            )}
-                          </button>
+                            className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center hover:scale-110 transition-transform"
+                            style={{ backgroundColor: getColorHex(getPlaylistItemColor(item)) }}
+                          />
                           {activeColorMenu === item.id && (
-                            <div data-floating-menu="true" className="soridraw-rating-popover absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#29292a] rounded-xl shadow-xl" onClick={(e) => e.stopPropagation()}>
-                              {STAR_RATING_OPTIONS.map((option) => (
+                            <div data-floating-menu="true" className="absolute top-6 left-0 z-10 flex items-center gap-1.5 p-2 bg-[#2a2a2a] rounded-xl shadow-xl border border-black/20">
+                              {[
+                                { value: 'gray', color: '#6b7280' },
+                                { value: 'red', color: '#ef4444' },
+                                { value: 'orange', color: '#f97316' },
+                                { value: 'yellow', color: '#eab308' },
+                                { value: 'green', color: '#22c55e' },
+                                { value: 'blue', color: '#3b82f6' },
+                                { value: 'purple', color: '#a855f7' }
+                              ].map(c => (
                                 <button
-                                  key={option.value}
-                                  type="button"
+                                  key={c.value}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (multiSelectMode && selectedTrackCount > 0) {
-                                      handleBulkChangeColor(option.saveValue);
+                                      handleBulkChangeColor(c.value);
                                     } else {
-                                      handleChangeColor(item, option.saveValue);
+                                      handleChangeColor(item, c.value);
                                       setActiveColorMenu(null);
                                     }
                                   }}
-                                  className="soridraw-rating-control"
-                                  data-selected={colorTagToRating(getPlaylistItemColor(item)) === option.rating}
-                                  data-rating={option.rating}
-                                  title={option.label}
-                                  aria-label={option.label}
-                                >
-                                  <Star className="soridraw-rating-star" strokeWidth={option.rating === 0 ? 1.8 : 1.35} />
-                                  {option.rating > 0 && <span className="soridraw-rating-number">{option.rating}</span>}
-                                </button>
+                                  className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                                  style={{ backgroundColor: c.color }}
+                                />
                               ))}
                             </div>
                           )}

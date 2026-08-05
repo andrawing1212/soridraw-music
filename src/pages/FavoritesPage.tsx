@@ -1215,28 +1215,6 @@ export default function FavoritesPage({
     { value: 'purple', color: '#a855f7', label: '보라' },
   ];
 
-  // 별 등급은 기존 색상 저장값을 그대로 사용해 기존 사용자 데이터와 호환한다.
-  // 회색=미지정, 빨강=1, 주황=2, 노랑=3, 초록=4, 파랑/보라=5.
-  const FAVORITE_STAR_FILTER_OPTIONS = [
-    { value: 'gray', rating: 0, label: '별 미지정', saveValue: 'gray' },
-    { value: 'red', rating: 1, label: '별 1개', saveValue: 'red' },
-    { value: 'orange', rating: 2, label: '별 2개', saveValue: 'orange' },
-    { value: 'yellow', rating: 3, label: '별 3개', saveValue: 'yellow' },
-    { value: 'green', rating: 4, label: '별 4개', saveValue: 'green' },
-    { value: 'star5', rating: 5, label: '별 5개', saveValue: 'blue' },
-  ];
-
-  const favoriteColorToRating = (value?: string | null): number => {
-    if (value === 'red') return 1;
-    if (value === 'orange') return 2;
-    if (value === 'yellow') return 3;
-    if (value === 'green') return 4;
-    if (value === 'blue' || value === 'purple') return 5;
-    return 0;
-  };
-
-  const getFavoriteRatingValue = (song: any): number => favoriteColorToRating(getFavoriteColorValue(song));
-
   const getFavoriteColorValue = (song: any): string => {
     return favoriteColorMap[song?.id] || song?.favoriteColorTag || song?.colorTag || 'gray';
   };
@@ -4639,11 +4617,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   const songMatchesMusicNoteFilters = (song: any) => {
     if (isMusicNoteSharedView) return true;
     if (isFavoriteSoftRemoved(song)) return false;
-    const favoriteColorValue = getFavoriteColorValue(song);
-    const matchesColor = favoriteColorFilter === 'all'
-      || (favoriteColorFilter === 'star5'
-        ? favoriteColorValue === 'blue' || favoriteColorValue === 'purple'
-        : favoriteColorValue === favoriteColorFilter);
+    const matchesColor = favoriteColorFilter === 'all' || getFavoriteColorValue(song) === favoriteColorFilter;
     const isTrashed = isFavoriteInTrash(song);
     const matchesTrashState = favoriteTrashView
       ? musicNoteViewMode === 'noteSpace' && isTrashed
@@ -5354,35 +5328,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </div>
           </div>
 
-          <div className="soridraw-rating-filter flex h-[46px] items-center gap-1.5 rounded-2xl bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+          <div className="flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             <button
-              type="button"
               onClick={() => setFavoriteColorFilter('all')}
-              className="soridraw-rating-all h-9 shrink-0 whitespace-nowrap rounded-xl px-4 text-xs font-bold"
-              data-selected={favoriteColorFilter === 'all'}
+              className={`h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
             >
               전체
             </button>
             <div className="mx-1 h-3 w-px bg-white/10" />
-            {FAVORITE_STAR_FILTER_OPTIONS.map((option) => {
-              const isActive = favoriteColorFilter === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setFavoriteColorFilter(option.value)}
-                  className="soridraw-rating-control"
-                  data-selected={isActive}
-                  data-rating={option.rating}
-                  title={option.label}
-                  aria-label={option.label}
-                  aria-current={isActive ? 'true' : undefined}
-                >
-                  <Star className="soridraw-rating-star" strokeWidth={option.rating === 0 ? 1.8 : 1.35} />
-                  {option.rating > 0 && <span className="soridraw-rating-number">{option.rating}</span>}
-                </button>
-              );
-            })}
+            {FAVORITE_COLOR_OPTIONS.map((color) => (
+              <button
+                key={color.value}
+                onClick={() => setFavoriteColorFilter(color.value)}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[var(--bg-secondary)] scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
+              >
+                <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color.color }} />
+              </button>
+            ))}
+
           </div>
 
           <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
@@ -5479,7 +5442,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <div className="space-y-4" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
-              const favoriteRating = getFavoriteRatingValue(song);
+              const colorHex = getFavoriteColorHex(song.id, song);
               const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
               const mobileGenreLabel = getDisplaySubGenre(song);
               const mobileTitles = getNormalizedTitles(song);
@@ -5634,45 +5597,27 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     <button
                       data-no-card-long-press="true"
                       data-favorite-color-control="true"
-                      type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
                         setActiveFavoriteMenuId(null);
                       }}
-                      className="soridraw-rating-trigger"
-                      data-rating={favoriteRating}
-                      data-open={activeFavoriteColorMenuId === song.id}
-                      title={favoriteRating === 0 ? '별점 지정' : `별 ${favoriteRating}개`}
-                      aria-label={favoriteRating === 0 ? '별점 지정' : `별 ${favoriteRating}개`}
-                    >
-                      <Star className="soridraw-rating-star" strokeWidth={favoriteRating === 0 ? 1.8 : 1.35} />
-                      {favoriteRating > 0 && <span className="soridraw-rating-number">{favoriteRating}</span>}
-                    </button>
+                      className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
+                      style={{ backgroundColor: colorHex }}
+                    />
 
                     {activeFavoriteColorMenuId === song.id && (
-                      <div
-                        data-favorite-color-menu="true"
-                        className="soridraw-rating-popover absolute left-14 md:left-20 top-[54px] z-[260] flex items-center gap-1.5 rounded-xl bg-[#29292a] p-2 shadow-2xl"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {FAVORITE_STAR_FILTER_OPTIONS.map((option) => (
+                      <div data-favorite-color-menu="true" className="absolute left-14 md:left-20 top-[54px] z-[260] flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                        {FAVORITE_COLOR_OPTIONS.map((color) => (
                           <button
-                            key={option.value}
-                            type="button"
+                            key={color.value}
                             onClick={(event) => {
                               event.stopPropagation();
-                              handleFavoriteColorSelect(song, option.saveValue);
+                              handleFavoriteColorSelect(song, color.value);
                             }}
-                            className="soridraw-rating-control"
-                            data-selected={favoriteRating === option.rating}
-                            data-rating={option.rating}
-                            title={option.label}
-                            aria-label={option.label}
-                          >
-                            <Star className="soridraw-rating-star" strokeWidth={option.rating === 0 ? 1.8 : 1.35} />
-                            {option.rating > 0 && <span className="soridraw-rating-number">{option.rating}</span>}
-                          </button>
+                            className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                            style={{ backgroundColor: color.color }}
+                          />
                         ))}
                       </div>
                     )}

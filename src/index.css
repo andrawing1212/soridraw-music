@@ -4116,6 +4116,18 @@ body #root .favorite-keyword-strip > * {
   .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
   html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
   .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
-    bottom: 12px !important;
+    bottom: 16px !important;
+  }
+}
+
+/* 443 — Classic desktop dark mode: reduce only the vertical gap between the
+ * Sori Studio masthead and the first card row. Keep the hero, global-search
+ * button, Music Note, Suno Library, mobile and Studio Black/split geometry
+ * unchanged. The existing FHD padding formula remains the source value; this
+ * override subtracts only 8px from the main content top padding. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-top: calc(clamp(2.25rem, 4vh, 2.85rem) - 8px) !important;
   }
 }

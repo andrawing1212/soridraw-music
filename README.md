@@ -456,3 +456,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 ## 441차 메모
 - 모바일 Classic 다크·라이트에서 Sori Studio 통합 검색 버튼만 12px 위로 이동.
 - 대문, 카드, 메뉴, 분할모드 및 기타 화면은 변경하지 않음.
+
+## 442차 메모
+- 모바일 Classic 다크·라이트에서 Sori Studio 통합 검색 버튼만 4px 추가 상향하여 총 16px 위로 이동.
+- 대문, 카드, 메뉴, 분할모드 및 기타 화면은 변경하지 않음.
+
+## 443차 메모
+- PC Classic 다크모드의 Sori Studio 대문과 첫 카드 줄 사이 여백만 8px 축소.
+- 오른쪽 통합검색 버튼, Music Note, Suno Library, 모바일, 분할모드는 변경하지 않음.

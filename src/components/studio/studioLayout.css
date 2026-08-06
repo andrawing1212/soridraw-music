@@ -9995,3 +9995,44 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   top: -3px !important;
   bottom: -3px !important;
 }
+
+/* 432 — Raise the Music Note / Suno Library search control brightness as one
+ * unit. Keep the approved 46px geometry and neutral hue; brighten only the
+ * field surface, search glyph and placeholder/input text for clearer contrast. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input {
+  background: #343434 !important;
+  background-color: #343434 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search:focus-within,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input:focus {
+  background: #393939 !important;
+  background-color: #393939 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-icon svg {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-placeholder > div {
+  color: rgba(255, 255, 255, 0.66) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input {
+  color: rgba(255, 255, 255, 0.9) !important;
+}

@@ -5376,7 +5376,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      <div className="md:hidden h-7" aria-hidden="true" />
       {studioWorkspaceHeroHost
         ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
         : musicNotePageHeader}

@@ -5718,7 +5718,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0 }}
-      className="soridraw-workspace-ported-header flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+      className="soridraw-workspace-ported-header soridraw-library-page-header flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 translate-y-2 md:translate-y-3"
     >
       <div className="flex items-start gap-4 min-w-0">
         {isSharedView && (
@@ -5743,12 +5743,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </div>
         </div>
       </div>
-      <div className="flex gap-2 items-center self-end md:self-center">
+      <div className="flex shrink-0 gap-2 items-center self-center">
         {!isSharedView && typeof remainingCredits === 'number' && (
           <button
             type="button"
             onClick={handleCreditShortcutClick}
-            className="soridraw-library-credit-button hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
+            className="soridraw-library-credit-button flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
           >
             남은 크레딧 {remainingCredits.toLocaleString()}
           </button>
@@ -6128,18 +6128,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       <div className="w-full space-y-3 md:space-y-5">
         
-        {!isSharedView && typeof remainingCredits === 'number' && (
-          <div className="flex md:hidden items-center justify-end">
-            <button
-              type="button"
-              onClick={handleCreditShortcutClick}
-              className="soridraw-library-credit-button h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#7FBD75]/12 border border-[#7FBD75]/22 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
-            >
-              {remainingCredits.toLocaleString()} credit
-            </button>
-          </div>
-        )}
-
         {/* Header Block */}
         {studioWorkspaceHeroHost
           ? createPortal(libraryPageHeader, studioWorkspaceHeroHost)

@@ -8446,3 +8446,45 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   color: #101010 !important;
   -webkit-text-fill-color: #101010 !important;
 }
+
+/* 401 — One real mobile masthead rhythm for Studio, Music Note and Library.
+ * Music Note still inserted a dedicated md:hidden 28px spacer before its title,
+ * while Library rendered a separate mobile credit row before its title. Those
+ * two DOM rows overrode the shared 96px guide from 399 and made both the top and
+ * title-to-controls spacing differ from Sori Studio. The spacer/extra row are
+ * removed in the components; this rule fixes all three page headers to the same
+ * normal-flow rhythm and keeps Library credit on the title row. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  > .soridraw-workspace-ported-header {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-height: 40px !important;
+    margin-top: 0 !important;
+    margin-bottom: 12px !important;
+    gap: 8px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-page-header > :first-child {
+    min-width: 0 !important;
+    align-items: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-page-title-hover h1 {
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-library-credit-button {
+    flex: 0 0 auto !important;
+    margin-left: auto !important;
+  }
+}

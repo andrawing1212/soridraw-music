@@ -254,3 +254,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 뮤직노트/라이브러리 3개 탭 부모 쉘 배경을 필터/비활성 폴더 버튼과 같은 회색으로 통일.
 - 부모 쉘의 추가 보더/그림자를 제거해 이중 버튼처럼 보이던 현상 완화.
 
+
+## 401차 메모
+- 모바일 Music Note 제목 앞에 남아 있던 전용 28px 빈 행을 제거했습니다.
+- 모바일 Suno Library의 크레딧 전용 상단 행을 제거하고 대문과 같은 행에 배치했습니다.
+- Music Note/Library 대문 아래 간격을 같은 12px 정상 흐름으로 통일했습니다.
+- 검색/필터/폴더/곡 목록과 PC·Classic·Firebase 구조는 변경하지 않았습니다.

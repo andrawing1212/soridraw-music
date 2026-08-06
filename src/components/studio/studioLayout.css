@@ -7312,3 +7312,24 @@ h1.text-3xl.md\:text-5xl {
     font-size: 10px;
   }
 }
+
+/* 374: Match Suno Library's horizontal page gutter to Music Note in the
+ * embedded WORKSPACE result pane. Only the outer left/right width is aligned;
+ * cards, filters, list structure, data and page-specific styling are unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  > .soridraw-studio-workspace-page--library
+  > .soridraw-library-theme {
+    padding-left: 12px !important;
+    padding-right: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  > .soridraw-studio-workspace-page--library
+  > .soridraw-library-theme {
+    padding-left: 7px !important;
+    padding-right: 6px !important;
+  }
+}

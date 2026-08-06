@@ -5329,10 +5329,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <div className="min-w-0">
             <div className="soridraw-page-title-hover relative inline-flex max-w-full">
               <h1
-                className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3", isMusicNoteSharedView ? "font-sans" : "font-display")}
+                className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
                 title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
               >
-                <HeartIcon className="w-9 h-9 text-[#FF5C52] shrink-0" />
                 {isMusicNoteSharedView ? (
                   <span>공유 <span className="text-[#FF5C52]">뮤직노트</span></span>
                 ) : (
@@ -5413,6 +5412,28 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </div>
           </div>
 
+          <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+            <button
+              onClick={() => setFavoriteColorFilter('all')}
+              className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
+              aria-label="전체 색상 보기"
+            >
+              <span className="soridraw-color-reset-text">전체</span>
+              <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
+            </button>
+            <div className="w-px h-3 bg-white/10 mx-1"></div>
+            {FAVORITE_COLOR_OPTIONS.map((color) => (
+              <button
+                key={color.value}
+                onClick={() => setFavoriteColorFilter(color.value)}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-offset-2 ring-offset-[var(--bg-secondary)] ring-white scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
+              >
+                <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: color.color }}></div>
+              </button>
+            ))}
+
+          </div>
+
           <div ref={sortPopupRef} className="relative shrink-0" data-selection-keep="true">
             <button
               type="button"
@@ -5481,28 +5502,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
-
-          <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-            <button
-              onClick={() => setFavoriteColorFilter('all')}
-              className={`soridraw-color-reset-button h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
-              aria-label="전체 색상 보기"
-            >
-              <span className="soridraw-color-reset-text">전체</span>
-              <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
-            </button>
-            <div className="mx-1 h-3 w-px bg-white/10" />
-            {FAVORITE_COLOR_OPTIONS.map((color) => (
-              <button
-                key={color.value}
-                onClick={() => setFavoriteColorFilter(color.value)}
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${favoriteColorFilter === color.value ? 'ring-2 ring-white ring-offset-2 ring-offset-[var(--bg-secondary)] scale-110' : 'hover:scale-110 brightness-75 hover:brightness-100'}`}
-              >
-                <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: color.color }} />
-              </button>
-            ))}
-
           </div>
 
         </div>

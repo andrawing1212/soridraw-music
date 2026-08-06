@@ -8287,3 +8287,65 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     right: auto !important;
   }
 }
+
+/* 398 — Mobile Studio masthead/card gap and icon-only global search.
+ * The visible gap under the wordmark was not owned by <main>; Studio Black's
+ * legacy shell rule still reserved 18px of padding and a divider below the
+ * mobile masthead. Remove that real layout space at mobile widths instead of
+ * visually translating the title. Keep desktop geometry untouched.
+ *
+ * The mobile search control also inherited the legacy 40px filled button.
+ * Strip the control chrome, keep only the yellow search glyph, and anchor it
+ * slightly lower and farther inside the viewport as requested. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero > .soridraw-studio-shell {
+    padding-bottom: 0 !important;
+    border-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-masthead,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-title {
+    margin-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    width: 28px !important;
+    min-width: 28px !important;
+    max-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    right: 18px !important;
+    bottom: -4px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+    translate: 0 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"]:is(:hover, :focus-visible, :active) {
+    border: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] svg {
+    width: 23px !important;
+    height: 23px !important;
+  }
+}

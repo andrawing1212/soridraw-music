@@ -232,3 +232,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 제목을 `top`이나 `transform`으로 억지 이동하지 않아 대문 글자 잘림과 PC 레이아웃 변형을 방지했습니다.
 - 접힌 `생성하기` 버튼은 모바일에서 분할 작업영역/왼쪽 레일 좌표를 더 이상 따르지 않고 브라우저 전체창의 실제 왼쪽 끝에 고정됩니다.
 - PC Studio, Classic, 카드 내부, 생성 기능, Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 398차 — 모바일 대문 하단 여백 제거 및 검색 아이콘 단독 배치
+
+- 기준: 397차
+- 모바일 Sori Studio 대문 아래에 남아 있던 `soridraw-studio-shell`의 실제 18px 하단 패딩과 구분선을 제거했습니다.
+- 제목을 `top`/`transform`으로 움직이지 않고 실제 레이아웃 공간만 제거해 하단 잘림 없이 첫 카드가 가까워지도록 했습니다.
+- 모바일 통합 검색 버튼의 배경, 테두리, 그림자를 제거하고 노란 검색 아이콘만 남겼습니다.
+- 검색 아이콘을 기존보다 아래로 4px, 오른쪽 끝에서 안쪽 18px 위치로 옮겼습니다.
+- 1100px 이상 PC 레이아웃, Classic 테마, Firebase/Auth/Firestore/Functions 및 저장 구조는 변경하지 않았습니다.

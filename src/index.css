@@ -4103,3 +4103,19 @@ body #root .favorite-keyword-strip > * {
     background-image: none !important;
   }
 }
+
+
+/* 441 — Classic mobile: raise only the Sori Studio global-search button.
+ * Keep every masthead/card/menu measurement from 440 frozen. The button still
+ * uses its existing size, color and horizontal position; only its absolute
+ * bottom anchor moves 12px upward so the magnifier sits just above the first
+ * card, matching the approved split-mode relationship without touching split
+ * mode itself. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    bottom: 12px !important;
+  }
+}

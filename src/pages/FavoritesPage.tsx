@@ -24,7 +24,6 @@ import {
   CheckSquare,
   Square,
   SlidersHorizontal,
-  Zap,
   Heart as HeartIcon,
   Lock,
   Unlock,
@@ -1155,6 +1154,15 @@ export default function FavoritesPage({
   const selectionLongPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectionLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const cardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const horizontalListDragRef = useRef<{
+    element: HTMLElement;
+    pointerId: number;
+    startX: number;
+    startScrollLeft: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressHorizontalListClickRef = useRef(false);
+  const horizontalListClickTimerRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
   const suppressNextCardClickRef = useRef(false);
   const suppressNextCardClickSongIdRef = useRef<string | null>(null);
@@ -3079,6 +3087,74 @@ export default function FavoritesPage({
     return { x: event.clientX, y: event.clientY };
   };
 
+  const handleHorizontalListPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+    const element = event.currentTarget;
+    if (element.scrollWidth <= element.clientWidth + 1) return;
+
+    horizontalListDragRef.current = {
+      element,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: element.scrollLeft,
+      moved: false,
+    };
+    cardClickStartPointRef.current = { x: event.clientX, y: event.clientY };
+    element.setPointerCapture?.(event.pointerId);
+  };
+
+  const handleHorizontalListPointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = horizontalListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.element !== event.currentTarget) return;
+
+    const deltaX = event.clientX - drag.startX;
+    if (!drag.moved && Math.abs(deltaX) > 3) {
+      drag.moved = true;
+      clearSelectionLongPressTimer();
+    }
+    if (!drag.moved) return;
+
+    drag.element.scrollLeft = drag.startScrollLeft - deltaX;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const finishHorizontalListPointerDrag = (event: React.PointerEvent<HTMLElement>) => {
+    const drag = horizontalListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.element !== event.currentTarget) return;
+
+    try {
+      drag.element.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+
+    horizontalListDragRef.current = null;
+    if (!drag.moved) return;
+
+    suppressHorizontalListClickRef.current = true;
+    if (horizontalListClickTimerRef.current) window.clearTimeout(horizontalListClickTimerRef.current);
+    horizontalListClickTimerRef.current = window.setTimeout(() => {
+      suppressHorizontalListClickRef.current = false;
+      horizontalListClickTimerRef.current = null;
+    }, 0);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const consumeHorizontalListClick = (event: React.MouseEvent<HTMLElement>) => {
+    if (!suppressHorizontalListClickRef.current) return;
+    suppressHorizontalListClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
+  const handleHorizontalListWheel = (event: React.WheelEvent<HTMLElement>) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    event.currentTarget.scrollLeft += event.deltaY;
+  };
+
   const handleCardLongPressMove = (event: React.MouseEvent | React.TouchEvent) => {
     if (!selectionLongPressTimerRef.current || !selectionLongPressStartPointRef.current) return;
 
@@ -4591,7 +4667,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               _ts: Date.now(),
             });
           }}
-          className="inline-flex h-5 shrink-0 items-center rounded-md bg-white/[0.075] px-2 text-[9px] leading-none text-white/58 whitespace-nowrap cursor-pointer transition-colors hover:bg-white/[0.11] hover:text-white/78"
+          className="soridraw-musicnote-keyword-chip inline-flex h-5 shrink-0 items-center rounded-md bg-white/[0.075] px-2 text-[9px] leading-none text-white/58 whitespace-nowrap cursor-pointer transition-colors hover:bg-white/[0.11] hover:text-white/78"
         >
           #{entry.displayLabel || meta?.labelKo || entry.value}
         </span>
@@ -4730,6 +4806,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     filteredFavorites.length >= MUSIC_NOTE_VISIBLE_BATCH_SIZE
   );
   const shouldShowMusicNoteMoreButton = canShowCachedMusicNoteMore || canRequestMoreMusicNotePage;
+
+  const musicNoteFilterCount = (sortBy !== 'latest' ? 1 : 0) + (favoriteTrashView ? 1 : 0);
 
   const musicNoteTabs = [
     { id: 'noteSpace' as const, label: '노트 스페이스', description: '내가 저장한 전체 뮤직노트입니다.' },
@@ -5090,7 +5168,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
     return (
       <div className="mt-4 md:mt-5 space-y-3" data-selection-keep="true">
-        <h3 className="px-2 text-[12px] md:text-sm font-bold text-[#FF8B84]/80 tracking-wide">
+        <h3 className="soridraw-musicnote-folder-heading px-2 text-[12px] md:text-sm font-bold text-[#FF8B84]/80 tracking-wide">
           {isShared ? '공유 받은 노트' : '나의 노트폴더'}
         </h3>
         <div
@@ -5117,7 +5195,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   exitSelectionMode('ui');
                 }}
                 className={cn(
-                  'shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none inline-flex items-center gap-1.5',
+                  'soridraw-musicnote-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none inline-flex items-center gap-1.5',
                   !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-pan-x',
                   isDefaultFolder && 'touch-pan-x',
                   isDraggingFolder && 'soridraw-folder-drag-active touch-none z-10',
@@ -5134,7 +5212,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <button
             type="button"
             onClick={() => handleAddMusicNoteFolder(mode)}
-            className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+            className="soridraw-musicnote-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
           >
             <span className="text-lg font-light leading-none">+</span>
           </button>
@@ -5188,7 +5266,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
   return (
     <div 
       className={cn(
-        "soridraw-musicnote-theme mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
+        "soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
         isSelectionMode ? "select-none" : ""
       )}
       onClickCapture={(e) => {
@@ -5218,15 +5296,19 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       }}
     >
       <style>{`
-        .favorite-keyword-strip {
+        .favorite-keyword-strip,
+        .favorite-title-strip {
           scrollbar-width: none;
           -ms-overflow-style: none;
           -webkit-overflow-scrolling: touch;
           touch-action: pan-x pan-y;
           cursor: grab;
+          user-select: none;
         }
-        .favorite-keyword-strip:active { cursor: grabbing; }
-        .favorite-keyword-strip::-webkit-scrollbar { display: none; }
+        .favorite-keyword-strip:active,
+        .favorite-title-strip:active { cursor: grabbing; }
+        .favorite-keyword-strip::-webkit-scrollbar,
+        .favorite-title-strip::-webkit-scrollbar { display: none; }
         .favorite-mobile-title-strip {
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -5244,30 +5326,25 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         transition={{ duration: 0 }}
         className="mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
       >
-          <div>
-            <h1 className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3", isMusicNoteSharedView ? "font-sans" : "font-display")}>
-              <HeartIcon className="w-9 h-9 text-[#FF5C52] shrink-0" />
-              {isMusicNoteSharedView ? (
-                <span>공유 <span className="text-[#FF5C52]">뮤직노트</span></span>
-              ) : (
-                <span>Music <span className="text-[#FF5C52]">Note</span></span>
-              )}
-            </h1>
-            <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">{isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}</p>
+          <div className="min-w-0">
+            <div className="soridraw-page-title-hover relative inline-flex max-w-full">
+              <h1
+                className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3", isMusicNoteSharedView ? "font-sans" : "font-display")}
+                title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
+              >
+                <HeartIcon className="w-9 h-9 text-[#FF5C52] shrink-0" />
+                {isMusicNoteSharedView ? (
+                  <span>공유 <span className="text-[#FF5C52]">뮤직노트</span></span>
+                ) : (
+                  <span>Music <span className="text-[#FF5C52]">Note</span></span>
+                )}
+              </h1>
+              <div className="soridraw-page-title-description" role="tooltip">
+                {isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
+              </div>
+            </div>
           </div>
-
-      </motion.div>
-
-      {!isMusicNoteSharedView && (
-      <div className="space-y-4 md:space-y-5">
-        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button
-              onClick={() => navigate('/studio')}
-              className="h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/75 hover:bg-white/5 hover:text-[#FFBB22] transition-all flex items-center justify-center"
-            >
-              <Zap className="w-4 h-4" />
-            </button>
+          {!isMusicNoteSharedView && (
             <button
               type="button"
               disabled={!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday}
@@ -5280,18 +5357,26 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               })}
               onMouseLeave={() => onHover(null)}
               className={cn(
-                "h-[46px] w-[46px] shrink-0 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-white/70 transition-all flex items-center justify-center",
+                "soridraw-musicnote-hero-sync flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/55 transition-all",
                 isManualSyncingFavorites
                   ? "cursor-wait text-[#FFBB22]"
                   : isManualSyncUsedToday
-                    ? "opacity-40 cursor-not-allowed"
-                    : "hover:bg-white/5 hover:text-[#FFBB22]"
+                    ? "cursor-not-allowed opacity-35"
+                    : "hover:bg-white/[0.09] hover:text-[#FFBB22]"
               )}
               title={isManualSyncUsedToday ? '오늘 동기화 1회 사용 완료' : '뮤직노트 동기화'}
             >
-              <RefreshCw className={cn("w-4 h-4", isManualSyncingFavorites && "animate-spin")} />
+              <RefreshCw className={cn("h-4 w-4", isManualSyncingFavorites && "animate-spin")} />
             </button>
-            <div className="relative flex-1 min-w-0 group overflow-hidden">
+          )}
+
+      </motion.div>
+
+      {!isMusicNoteSharedView && (
+      <div className="space-y-4 md:space-y-5">
+        <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+            <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
             <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF5C52] transition-colors" />
             </div>
@@ -5307,10 +5392,10 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               }}
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setIsSearchFocused(false)}
-              className="w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF5C52]/50 transition-all"
+              className="soridraw-responsive-search-input w-full h-[46px] bg-white/[0.145] border border-white/[0.14] rounded-2xl pl-12 pr-4 text-sm text-[var(--text-primary)] focus:outline-none focus:bg-white/[0.17] focus:border-[#FF5C52]/50 transition-all"
             />
             {!searchQuery && !isSearchFocused && (
-              <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
+              <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={placeholderIndex}
@@ -5328,12 +5413,84 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </div>
           </div>
 
-          <div className="flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
+          <div ref={sortPopupRef} className="relative shrink-0" data-selection-keep="true">
+            <button
+              type="button"
+              onClick={toggleSortPopup}
+              className={cn(
+                "soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black text-white/70 transition-all hover:bg-white/[0.08] hover:text-white",
+                showSortPopup && "bg-white/[0.09] text-white"
+              )}
+              aria-expanded={showSortPopup}
+            >
+              <Filter className="h-4 w-4" />
+              <span className="soridraw-filter-label">필터{musicNoteFilterCount > 0 ? ` (${musicNoteFilterCount})` : ''}</span>
+              <ChevronDown className={cn("soridraw-filter-chevron h-3.5 w-3.5 transition-transform", showSortPopup && "rotate-180")} />
+            </button>
+            <AnimatePresence>
+              {showSortPopup && (
+                <motion.div
+                  data-floating-menu="true"
+                  initial={{ opacity: 1, y: 0 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0 }}
+                  className="absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => {
+                    const active =
+                      (mode === 'latest' && sortBy === 'latest') ||
+                      (mode === 'oldest' && sortBy === 'oldest') ||
+                      (mode === 'genre' && sortBy.startsWith('genre')) ||
+                      (mode === 'title' && sortBy.startsWith('title')) ||
+                      (mode === 'locked' && sortBy.startsWith('locked'));
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => { handleSortChange(mode); setShowSortPopup(false); }}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
+                          active ? "bg-[#FF5C52]/16 text-[#FF8B84]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
+                        )}
+                      >
+                        <span>{mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}</span>
+                        {active && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    );
+                  })}
+                  <div className="my-1 h-px bg-white/[0.07]" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMusicNoteViewMode('noteSpace');
+                      setFavoriteTrashView((prev) => !prev);
+                      resetVisibleCount();
+                      exitSelectionMode('ui');
+                      setShowSortPopup(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all",
+                      favoriteTrashView ? "bg-[#FF5C52]/16 text-[#FF8B84]" : "text-white/66 hover:bg-white/[0.06] hover:text-white"
+                    )}
+                  >
+                    <span>휴지통</span>
+                    {favoriteTrashView && <Check className="h-3.5 w-3.5" />}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
             <button
               onClick={() => setFavoriteColorFilter('all')}
-              className={`h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
+              className={`soridraw-color-reset-button h-9 shrink-0 whitespace-nowrap px-4 rounded-xl text-xs font-bold transition-all ${favoriteColorFilter === 'all' ? 'bg-[#FF5C52]/24 text-[#FF8B84]' : 'bg-transparent text-white/60 hover:text-white/75'}`}
+              aria-label="전체 색상 보기"
             >
-              전체
+              <span className="soridraw-color-reset-text">전체</span>
+              <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
             </button>
             <div className="mx-1 h-3 w-px bg-white/10" />
             {FAVORITE_COLOR_OPTIONS.map((color) => (
@@ -5348,43 +5505,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
           </div>
 
-          <div className="flex h-[46px] items-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] p-1 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-            {(['latest', 'oldest', 'genre', 'title', 'locked'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => handleSortChange(mode)}
-                className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                  (mode === 'latest' && sortBy === 'latest') ||
-                  (mode === 'oldest' && sortBy === 'oldest') ||
-                  (mode === 'genre' && sortBy.startsWith('genre')) ||
-                  (mode === 'title' && sortBy.startsWith('title')) ||
-                  (mode === 'locked' && sortBy.startsWith('locked'))
-                    ? 'bg-[#FF5C52]/72 text-white'
-                    : 'bg-transparent text-white/50 hover:text-white/75'
-                }`}
-              >
-                {mode === 'latest' ? '최신' : mode === 'oldest' ? '오래된' : mode === 'genre' ? '장르' : mode === 'title' ? '제목' : '잠금'}
-              </button>
-            ))}
-            <button
-              onClick={() => {
-                setMusicNoteViewMode('noteSpace');
-                setFavoriteTrashView((prev) => !prev);
-                resetVisibleCount();
-                exitSelectionMode('ui');
-              }}
-              className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${favoriteTrashView ? 'bg-[#FF5C52]/72 text-white' : 'bg-transparent text-white/50 hover:text-white/75'}`}
-            >
-              휴지통
-            </button>
-          </div>
         </div>
       </div>
       )}
 
       {!isMusicNoteSharedView && (
       <div className="mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
-        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
+        <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
             <button
               key={tab.id}
@@ -5400,7 +5527,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
               onTouchEnd={onLongPressEnd}
               className={cn(
-                'min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
+                'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
                   ? 'bg-[#FF5C52]/78 text-white shadow-lg'
                   : 'text-white/60 hover:text-white'
@@ -5522,13 +5649,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     setSelectedSong(song);
                   }}
                   className={cn(
-                    "group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
+                    "soridraw-musicnote-song-card group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
                     (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "z-[220]" : "z-0",
                     isSelectionMode ? "cursor-pointer" : "",
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
                   )}
                 >
-                  <div className="flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
+                  <div className="soridraw-musicnote-song-row flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
                     {isSelectionMode && (
                       <button
                         data-no-card-long-press="true"
@@ -5561,7 +5688,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                         onTouchStart={() => onLongPressStart({ id: `favorite-suno-open-${song.id}`, label: '수노에서 열기', description: '연결된 수노 공유 링크를 새 창으로 엽니다.' })}
                         onTouchEnd={onLongPressEnd}
-                        className="-ml-1 relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#FF5C52]/24 text-[#FF8B84] transition-all hover:bg-[#FF5C52]/34 hover:text-white md:ml-0 md:h-14 md:w-14 md:bg-[#FF5C52]/22 md:hover:bg-[#FF5C52]/30 shadow-[0_0_0_1px_rgba(255,139,132,0.18)]"
+                        className="soridraw-musicnote-song-media relative flex h-[52px] w-[42px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#FF5C52]/24 text-[#FF8B84] transition-colors hover:bg-[#FF5C52]/34 hover:text-white md:h-[60px] md:w-12 md:bg-[#FF5C52]/22 md:hover:bg-[#FF5C52]/30 shadow-[0_0_0_1px_rgba(255,139,132,0.18)]"
                       >
                         {getFavoriteSunoLinkCount(song) > 1 && (
                           <span className="absolute right-0.5 top-0.5 z-20 flex h-4 min-w-4 items-center justify-center rounded-full border border-black/30 bg-[#FF8B84] px-1 text-[9px] font-black leading-none text-[#211615] shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
@@ -5580,8 +5707,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                               }}
                             />
                             <span className="absolute inset-0 bg-black/10" />
-                            <span className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full bg-black/42 text-white shadow-[0_0_14px_rgba(0,0,0,0.36)]">
-                              <Play className="h-4 w-4 translate-x-[1px] fill-current" />
+                            <span className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/42 text-white shadow-[0_0_14px_rgba(0,0,0,0.36)] md:h-7 md:w-7">
+                              <Play className="h-3.5 w-3.5 translate-x-[1px] fill-current md:h-4 md:w-4" />
                             </span>
                           </>
                         ) : (
@@ -5589,100 +5716,90 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         )}
                       </button>
                     ) : (
-                      <div className="-ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/[0.10] text-[#FF9B8D] md:ml-0 md:h-14 md:w-14 md:bg-white/[0.09] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
-                        <Music className="w-7 h-7" />
+                      <div className="soridraw-musicnote-song-media flex h-[52px] w-[42px] shrink-0 items-center justify-center rounded-xl bg-white/[0.10] text-[#FF9B8D] md:h-[60px] md:w-12 md:bg-white/[0.09] shadow-[0_0_0_1px_rgba(255,255,255,0.07)]">
+                        <Music className="h-6 w-6 md:h-7 md:w-7" />
                       </div>
                     )}
 
                     <button
                       data-no-card-long-press="true"
                       data-favorite-color-control="true"
+                      type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         setActiveFavoriteColorMenuId(activeFavoriteColorMenuId === song.id ? null : song.id);
                         setActiveFavoriteMenuId(null);
                       }}
-                      className="w-3 h-3 rounded-full shrink-0 hover:scale-110 transition-transform"
-                      style={{ backgroundColor: colorHex }}
-                    />
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-transparent transition-transform hover:scale-110"
+                      aria-label="곡 색상 지정"
+                    >
+                      <span className="block h-3 w-3 rounded-full" style={{ backgroundColor: colorHex }} />
+                    </button>
 
                     {activeFavoriteColorMenuId === song.id && (
                       <div data-favorite-color-menu="true" className="absolute left-14 md:left-20 top-[54px] z-[260] flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#2a2a2a] p-2 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                         {FAVORITE_COLOR_OPTIONS.map((color) => (
                           <button
                             key={color.value}
+                            type="button"
                             onClick={(event) => {
                               event.stopPropagation();
                               handleFavoriteColorSelect(song, color.value);
                             }}
-                            className="w-5 h-5 rounded-full outline-none hover:scale-110 transition-transform focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
-                            style={{ backgroundColor: color.color }}
-                          />
+                            className="flex h-6 w-6 items-center justify-center rounded-full bg-transparent outline-none transition-transform hover:scale-110 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-[#2a2a2a]"
+                            aria-label={`${color.label} 색상 지정`}
+                          >
+                            <span className="block h-4 w-4 rounded-full" style={{ backgroundColor: color.color }} />
+                          </button>
                         ))}
                       </div>
                     )}
 
-                                        <div className="flex-1 min-w-0 pl-1 pr-1 md:pl-0 md:pr-0">
-                      <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 cursor-default">
-                        <div className="md:hidden min-w-0 leading-tight cursor-default">
-                          <div className="text-[13px] font-extrabold text-white truncate select-none cursor-default">
-                            {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
-                          </div>
-                          <div className="favorite-mobile-title-strip mt-0.5 max-w-[calc(100vw-192px)] overflow-x-auto overflow-y-hidden whitespace-nowrap text-[14px] font-bold text-white/92 md:max-w-none cursor-default">
-                            <span
-                              className={cn("inline-block max-w-full", isSelectionMode ? "select-none cursor-pointer" : "select-text cursor-text")}
-                              onMouseDown={(event) => {
-                                const point = getLongPressPoint(event);
-                                if (point) cardClickStartPointRef.current = point;
-                              }}
-                              onTouchStart={(event) => {
-                                const point = getLongPressPoint(event);
-                                if (point) cardClickStartPointRef.current = point;
-                              }}
-                            >
-                              {mobileTitleText}
-                            </span>
-                          </div>
-                        </div>
-                        <h3 className="hidden md:block min-w-0 text-[15px] font-bold text-white truncate cursor-default">
-                          <span
-                            className={cn("inline-block max-w-full truncate align-bottom", isSelectionMode ? "select-none cursor-pointer" : "select-text cursor-text")}
-                            onMouseDown={(event) => {
-                              const point = getLongPressPoint(event);
-                              if (point) cardClickStartPointRef.current = point;
-                            }}
-                            onTouchStart={(event) => {
-                              const point = getLongPressPoint(event);
-                              if (point) cardClickStartPointRef.current = point;
-                            }}
-                          >
-                            {getCombinedFavoriteTitle(song)}
-                          </span>
-                        </h3>
-                        <span className="hidden md:inline text-[10px] text-white/35 shrink-0 select-none cursor-default">{getRelativeTime(song.createdAtMs || song.createdAt)}</span>
+                    <div className="soridraw-musicnote-song-copy flex min-w-0 flex-1 flex-col justify-center px-0.5 md:px-1">
+                      <div className="soridraw-musicnote-song-meta flex min-w-0 items-center gap-2 leading-none">
+                        <span className="soridraw-musicnote-song-genre min-w-0 flex-1 truncate text-[12px] font-extrabold text-white md:text-[13px] select-none cursor-default">
+                          {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
+                        </span>
+                        <span className="soridraw-musicnote-song-date shrink-0 whitespace-nowrap text-[9px] font-semibold text-white/35 md:text-[10px] select-none cursor-default">
+                          {getRelativeTime(song.createdAtMs || song.createdAt)}
+                        </span>
                       </div>
-                      <div className="mt-2 flex items-center gap-2 min-w-0">
+
+                      <div
+                        className="soridraw-musicnote-song-title favorite-mobile-title-strip favorite-title-strip mt-1 min-w-0 max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap text-[13px] font-bold leading-tight text-white/92 md:text-[15px]"
+                        onPointerDown={handleHorizontalListPointerDown}
+                        onPointerMove={handleHorizontalListPointerMove}
+                        onPointerUp={finishHorizontalListPointerDrag}
+                        onPointerCancel={finishHorizontalListPointerDrag}
+                        onClickCapture={consumeHorizontalListClick}
+                        onWheel={handleHorizontalListWheel}
+                      >
+                        <span className="inline-block w-max max-w-none select-none whitespace-nowrap">
+                          {mobileTitleText}
+                        </span>
+                      </div>
+
+                      <div className="mt-1.5 flex min-w-0 items-center gap-2">
                         {musicNoteListCreator && (
-                          <span className="shrink-0 whitespace-nowrap text-[10px] font-bold leading-none text-[#FF8B84]/90 select-none cursor-default">
+                          <span className="soridraw-musicnote-song-creator shrink-0 whitespace-nowrap text-[9px] font-bold leading-none text-[#FF8B84]/90 md:text-[10px] select-none cursor-default">
                             {musicNoteListCreator}
                           </span>
                         )}
                         <div
-                          className="favorite-keyword-strip flex h-5 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md pr-2 md:max-w-[min(42vw,520px)]"
-                          onWheel={(event) => {
-                            if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-                            event.currentTarget.scrollLeft += event.deltaY;
-                          }}
+                          className="soridraw-musicnote-song-keywords favorite-keyword-strip flex h-5 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md pr-2"
+                          onPointerDown={handleHorizontalListPointerDown}
+                          onPointerMove={handleHorizontalListPointerMove}
+                          onPointerUp={finishHorizontalListPointerDrag}
+                          onPointerCancel={finishHorizontalListPointerDrag}
+                          onClickCapture={consumeHorizontalListClick}
+                          onWheel={handleHorizontalListWheel}
                         >
                           {renderFavoriteKeywordChips(song)}
                         </div>
-                        <span className="shrink-0 text-[10px] font-semibold text-white/35 md:hidden">
-                          {getRelativeTime(song.createdAtMs || song.createdAt)}
-                        </span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="soridraw-musicnote-song-actions flex items-center gap-2 shrink-0">
                       {song.isLocked && (
                         <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-[#FF5C52]">
                           <Lock className="w-4 h-4" />

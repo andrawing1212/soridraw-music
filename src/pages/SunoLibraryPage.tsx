@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Settings, Zap, Music, RefreshCw, Loader2, AlertCircle, 
   Search, Filter, PlayCircle, MoreVertical, Download, 
-  Share2, Star, Trash2, Info, ChevronRight, X, Play,
+  Share2, Star, Trash2, Info, ChevronRight, ChevronDown, X, Play,
   Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, VolumeX,
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, Plus, Check, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
@@ -596,6 +596,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     "곡 제목으로 검색해보세요..."
   ];
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
+  const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
+  const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
   const [workspaceVisibleCount, setWorkspaceVisibleCount] = useState(WORKSPACE_PAGE_SIZE);
   const [hasMoreWorkspaceServerTracks, setHasMoreWorkspaceServerTracks] = useState(false);
   const [isLoadingMoreWorkspaceTracks, setIsLoadingMoreWorkspaceTracks] = useState(false);
@@ -609,6 +611,20 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }, 4000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const handleLibraryFilterOutside = (event: MouseEvent) => {
+      if (libraryFilterPopupRef.current && !libraryFilterPopupRef.current.contains(event.target as Node)) {
+        setShowLibraryFilterPopup(false);
+      }
+    };
+    document.addEventListener('mousedown', handleLibraryFilterOutside);
+    return () => document.removeEventListener('mousedown', handleLibraryFilterOutside);
+  }, []);
+
+  useEffect(() => {
+    setShowLibraryFilterPopup(false);
+  }, [libraryViewMode]);
 
   useEffect(() => {
     if (libraryViewMode === 'workspace') {
@@ -5218,15 +5234,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return (
       <>
-        <div className="-mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <button
-              onClick={() => navigate('/studio')}
-              className="h-[46px] w-[46px] shrink-0 flex items-center justify-center rounded-2xl border border-black/20 bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-white/5 shadow-btn transition-all"
-            >
-              <Zap className="w-4 h-4" />
-            </button>
-            <div className="relative flex-1 min-w-0 group overflow-hidden">
+        <div className="soridraw-responsive-top-controls -mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
+            <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#7FBD75] transition-colors" />
               <input
                 type="text"
@@ -5237,10 +5247,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }}
                 onFocus={() => setIsLibrarySearchFocused(true)}
                 onBlur={() => setIsLibrarySearchFocused(false)}
-                className="w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
+                className="soridraw-responsive-search-input w-full h-[46px] pl-12 pr-4 rounded-2xl bg-white/[0.145] border border-white/[0.14] outline-none focus:bg-white/[0.17] focus:border-[#7FBD75]/45 transition-all text-sm text-[var(--text-primary)]"
               />
               {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
-                <div className="absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
+                <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
                   <AnimatePresence mode="wait">
                     <motion.div
                       key={`${isWorkspaceMode ? 'workspace' : 'playlist'}-${libraryPlaceholderIndex}`}
@@ -5260,12 +5270,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
           {isWorkspaceMode ? (
             <>
-              <div className="flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1.5 bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setWorkspaceColorFilter('all')}
-                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
+                  className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${workspaceColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
+                  aria-label="전체 색상 보기"
                 >
-                  전체
+                  <span className="soridraw-color-reset-text">전체</span>
+                  <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
                 {COLOR_OPTIONS.map(opt => (
@@ -5280,28 +5292,48 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </button>
                 ))}
               </div>
-              <div className="flex h-[46px] items-center bg-[var(--bg-secondary)] border border-black/20 p-1 rounded-2xl shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-                {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 rounded-xl text-[11px] sm:text-xs font-bold transition-all ${
-                      filter === f ? 'bg-[#7FBD75]/78 text-white' : 'bg-transparent text-white/50 hover:text-white/75'
-                    }`}
+              <div ref={libraryFilterPopupRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
+                  className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
+                  aria-expanded={showLibraryFilterPopup}
+                >
+                  <Filter className="h-4 w-4" />
+                  <span className="soridraw-filter-label">필터{filter !== 'all' ? ' (1)' : ''}</span>
+                  <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
+                </button>
+                {showLibraryFilterPopup && (
+                  <div
+                    data-floating-menu="true"
+                    className="absolute right-0 top-[52px] z-[120] w-[210px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    {f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}
-                  </button>
-                ))}
+                    {(['all', 'completed', 'favorite', 'public', 'private', 'trash'] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => { setFilter(f); setShowLibraryFilterPopup(false); }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${filter === f ? 'bg-[#7FBD75]/16 text-[#C7F7BD]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
+                      >
+                        <span>{f === 'all' ? '전체' : f === 'completed' ? '완료' : f === 'favorite' ? '즐겨찾기' : f === 'public' ? '공개' : f === 'private' ? '비공개' : '휴지통'}</span>
+                        {filter === f && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           ) : (
             <>
-              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
+              <div className="soridraw-responsive-color-filter flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 px-2 border border-black/15 shrink-0 overflow-x-auto hide-scrollbar">
                 <button
                   onClick={() => setPlaylistColorFilter('all')}
-                  className={`h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
+                  className={`soridraw-color-reset-button h-9 text-xs font-bold px-4 transition-all rounded-xl ${playlistColorFilter === 'all' ? 'text-[#C7F7BD] bg-[#7FBD75]/24' : 'text-white/40 hover:text-white/70'}`}
+                  aria-label="전체 색상 보기"
                 >
-                  전체
+                  <span className="soridraw-color-reset-text">전체</span>
+                  <RefreshCw className="soridraw-color-reset-icon hidden h-4 w-4" />
                 </button>
                 <div className="w-px h-3 bg-white/10 mx-1"></div>
                 {[
@@ -5324,42 +5356,58 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   </button>
                 ))}
               </div>
-              <div className="flex h-[46px] items-center gap-1 bg-[var(--bg-secondary)] rounded-2xl p-1 border border-black/15 shrink-0 overflow-x-auto overflow-y-hidden hide-scrollbar">
-                {[
-                  { value: 'added', label: '저장순' },
-                  { value: 'genre', label: '장르순' },
-                  { value: 'custom', label: '사용자' }
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setPlaylistSortMode(opt.value as any)}
-                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
-                      playlistSortMode === opt.value
-                        ? 'bg-[#7FBD75]/24 text-[#C7F7BD]'
-                        : 'text-white/40 hover:text-white/70'
-                    }`}
+              <div ref={libraryFilterPopupRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={(event) => { event.stopPropagation(); setShowLibraryFilterPopup((prev) => !prev); }}
+                  className={`soridraw-responsive-filter-button flex h-[46px] items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] px-4 text-xs font-black transition-all ${showLibraryFilterPopup ? 'bg-white/[0.09] text-white' : 'text-white/70 hover:bg-white/[0.08] hover:text-white'}`}
+                  aria-expanded={showLibraryFilterPopup}
+                >
+                  <Filter className="h-4 w-4" />
+                  <span className="soridraw-filter-label">필터{(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0) > 0 ? ` (${(playlistSortMode !== 'added' ? 1 : 0) + (playlistVisibilityFilter !== 'all' ? 1 : 0)})` : ''}</span>
+                  <ChevronDown className={`soridraw-filter-chevron h-3.5 w-3.5 transition-transform ${showLibraryFilterPopup ? 'rotate-180' : ''}`} />
+                </button>
+                {showLibraryFilterPopup && (
+                  <div
+                    data-floating-menu="true"
+                    className="absolute right-0 top-[52px] z-[120] w-[220px] overflow-hidden rounded-2xl bg-[#1d1d1f] p-2 shadow-[0_18px_50px_rgba(0,0,0,0.48)]"
+                    onClick={(event) => event.stopPropagation()}
                   >
-                    {opt.label}
-                  </button>
-                ))}
-                <div className="w-px h-4 bg-white/10 mx-1" />
-                {[
-                  { value: 'all', label: '전체' },
-                  { value: 'public', label: '공개' },
-                  { value: 'private', label: '비공개' }
-                ].map(opt => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setPlaylistVisibilityFilter(opt.value as any)}
-                    className={`h-9 shrink-0 whitespace-nowrap px-3.5 sm:px-4 text-[11px] sm:text-xs font-bold rounded-xl transition-all ${
-                      playlistVisibilityFilter === opt.value
-                        ? 'bg-[#7FBD75]/24 text-[#C7F7BD]'
-                        : 'text-white/40 hover:text-white/70'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">정렬</p>
+                    {[
+                      { value: 'added', label: '저장순' },
+                      { value: 'genre', label: '장르순' },
+                      { value: 'custom', label: '사용자' }
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setPlaylistSortMode(opt.value as any); setShowLibraryFilterPopup(false); }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${playlistSortMode === opt.value ? 'bg-[#7FBD75]/16 text-[#C7F7BD]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
+                      >
+                        <span>{opt.label}</span>
+                        {playlistSortMode === opt.value && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    ))}
+                    <div className="my-1 h-px bg-white/[0.07]" />
+                    <p className="px-3 pb-1 pt-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/30">공개 상태</p>
+                    {[
+                      { value: 'all', label: '전체' },
+                      { value: 'public', label: '공개' },
+                      { value: 'private', label: '비공개' }
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setPlaylistVisibilityFilter(opt.value as any); setShowLibraryFilterPopup(false); }}
+                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-xs font-bold transition-all ${playlistVisibilityFilter === opt.value ? 'bg-[#7FBD75]/16 text-[#C7F7BD]' : 'text-white/66 hover:bg-white/[0.06] hover:text-white'}`}
+                      >
+                        <span>{opt.label}</span>
+                        {playlistVisibilityFilter === opt.value && <Check className="h-3.5 w-3.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -5373,10 +5421,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (isSharedView) return null;
     return (
       <div className="flex items-center gap-2 max-w-full whitespace-nowrap">
-        <div className="grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
+        <div className="soridraw-library-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
             onClick={() => setLibraryViewMode('workspace')}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
           </button>
@@ -5390,7 +5438,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             플레이리스트
           </button>
@@ -5404,7 +5452,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             공유 플레이리스트
           </button>
@@ -6068,17 +6116,22 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               </button>
             )}
             <div className="min-w-0">
-              <h1 className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3 ${isSharedView ? 'font-sans' : 'font-display'}`}>
-                <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#7FBD75] shrink-0">
-                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
-                  <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
-                  <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
+              <div className="soridraw-page-title-hover relative inline-flex max-w-full">
+                <h1
+                  className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white flex items-center gap-3 ${isSharedView ? 'font-sans' : 'font-display'}`}
+                  title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
+                >
+                  <div className="soridraw-library-title-icon flex gap-[5px] items-end justify-center w-9 h-9 text-[#7FBD75] shrink-0">
+                    <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] opacity-80" />
+                    <div className="w-[6px] h-[29px] border-[2px] border-current rounded-[3px]" />
+                    <div className="w-[6px] h-[24px] border-[2px] border-current rounded-[3px] transform origin-bottom -rotate-12 translate-x-[2px] opacity-90" />
+                  </div>
+                  {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
+                </h1>
+                <div className="soridraw-page-title-description" role="tooltip">
+                  {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
                 </div>
-                {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
-              </h1>
-              <p className="text-[var(--text-secondary)] text-sm md:text-base mt-2 mb-[2px]">
-                {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
-              </p>
+              </div>
             </div>
           </div>
           <div className="flex gap-2 items-center self-end md:self-center">
@@ -6471,7 +6524,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             
             {libraryViewMode === 'playlist' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
+              <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 px-2 uppercase tracking-wider">나의 플레이리스트</h3>
               <div
                 ref={(element) => { playlistBarRefs.current.normal = element; }}
                 className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
@@ -6493,7 +6546,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedNormalPlaylistId(playlist.id!);
                         setActivePlaylistSection('normal');
                       }}
-                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
+                      className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
                         isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
@@ -6509,7 +6562,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 })}
                 <button 
                   onClick={() => handleAddPlaylist('normal')}
-                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+                  className="soridraw-library-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>
@@ -6520,7 +6573,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
             {libraryViewMode === 'sharedPlaylist' && (
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
+              <h3 className="soridraw-library-folder-heading text-sm font-bold text-white/50 px-2 uppercase tracking-wider">공유 받은 곡</h3>
               <div
                 ref={(element) => { playlistBarRefs.current.shared = element; }}
                 className="soridraw-folder-drag-scrollbar flex items-center gap-2 overflow-x-auto hide-scrollbar px-2 pb-2"
@@ -6542,7 +6595,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedSharedPlaylistId(playlist.id!);
                         setActivePlaylistSection('shared');
                       }}
-                      className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
+                      className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
                         isDraggingPlaylist ? 'soridraw-folder-drag-active touch-none z-10' : ''
@@ -6559,7 +6612,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 })}
                 <button 
                   onClick={() => handleAddPlaylist('shared')}
-                  className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
+                  className="soridraw-library-folder-add shrink-0 px-3 py-2 rounded-xl text-sm font-bold transition-all bg-[var(--bg-secondary)] text-white/40 hover:bg-white/5 hover:text-white flex items-center gap-1 shadow-btn"
                 >
                   <span className="text-lg font-light leading-none">+</span>
                 </button>

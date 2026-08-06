@@ -8536,3 +8536,14 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     padding-right: 12px !important;
   }
 }
+
+/* 403 — Lower only the Music Note wordmark by 2px in compact/mobile layouts.
+ * Widths, header row height, sync button, controls and list positions stay
+ * unchanged; this is a title-only optical alignment correction. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-page-title-hover {
+    position: relative !important;
+    top: 2px !important;
+  }
+}

@@ -260,3 +260,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모바일 Suno Library의 크레딧 전용 상단 행을 제거하고 대문과 같은 행에 배치했습니다.
 - Music Note/Library 대문 아래 간격을 같은 12px 정상 흐름으로 통일했습니다.
 - 검색/필터/폴더/곡 목록과 PC·Classic·Firebase 구조는 변경하지 않았습니다.
+
+## 402차 메모
+- 모바일 Sori Studio 기준 좌우 12px 가이드에 Music Note와 Suno Library의 검색/필터/폴더/목록 폭을 통일했습니다.
+- Music Note는 대문 아래 실제 레이아웃 간격을 12px에서 4px로 줄여 아래 메뉴와 목록 전체를 함께 위로 올렸습니다.
+- Suno Library는 모바일 상단 가이드를 1px만 줄여 대문, 메뉴, 목록을 한꺼번에 미세하게 위로 이동했습니다.
+- PC 일반 레이아웃, Classic, Firebase/Auth/Firestore/Functions 구조는 변경하지 않았습니다.
+
+## 403차 메모
+- 모바일/컴팩트 화면의 Music Note 제목만 2px 아래로 미세 조정했습니다.
+- 새로고침 버튼, 헤더 높이, 아래 메뉴, 목록과 좌우폭은 변경하지 않았습니다.

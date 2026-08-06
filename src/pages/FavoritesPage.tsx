@@ -6870,7 +6870,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                           onTouchStart={() => onLongPressStart({ id: 'popup-apply-next', label: '다음 곡에 적용', description: '이 곡의 모든 설정을 다음 곡 생성에 적용합니다.' })}
                           onTouchEnd={onLongPressEnd}
-                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF7A72] px-4 text-[13px] font-black text-white shadow-[0_12px_30px_rgba(255,122,114,0.22)] transition-all hover:bg-[#FF8C85] active:scale-95"
+                          className="inline-flex h-[42px] min-w-[124px] items-center justify-center gap-2 rounded-xl bg-[#FF7A72] px-4 text-[13px] font-black text-[#101010] shadow-[0_12px_30px_rgba(255,122,114,0.22)] transition-all hover:bg-[#FF8C85] active:scale-95"
                         >
                           <RefreshCw className="h-[17px] w-[17px]" />
                           <span className="whitespace-nowrap font-black tracking-[-0.01em]">다음 곡에 적용</span>

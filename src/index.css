@@ -3931,3 +3931,26 @@ body #root .favorite-keyword-strip > * {
   flex: 0 0 auto !important;
   position: static !important;
 }
+
+/* 436 — Classic mobile masthead guide: match every page to Music Note.
+ *
+ * Dark and Light share the Classic layout, so this rule intentionally covers
+ * both Classic color modes while excluding Studio Black (split mode). The
+ * reference capture places the Music Note wordmark at the approved mobile
+ * guide. Sori Studio was about 2px higher and Suno Library still used its old
+ * 72px page top. Move each page through real layout spacing so the title and all
+ * following content travel together; do not use transforms and do not touch
+ * split-mode geometry. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root .soridraw-studio-hero,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root .soridraw-studio-hero {
+    padding-top: 82px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root .soridraw-musicnote-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root .soridraw-musicnote-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root .soridraw-library-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root .soridraw-library-theme {
+    padding-top: 96px !important;
+  }
+}

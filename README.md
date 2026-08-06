@@ -223,3 +223,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 모바일 `flex-col`로 인해 버튼이 제목 아래로 줄바꿈되던 구조를 제거했습니다.
 - PC 분할화면에서는 헤더 오른쪽에 실제 안전 여백을 확보해 새로고침 버튼이 바깥으로 삐져나가지 않고 조금 왼쪽에 머물도록 했습니다.
 - 검색, 색상 필터, 폴더 탭, 곡 카드 및 Firebase 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 397차 — 모바일 Sori Studio 대문 간격 및 접힌 생성 버튼 창 왼쪽 고정
+
+- 기준: `SORIDRAW_396차_뮤직노트_새로고침버튼_한줄정렬.zip`
+- `src/components/studio/studioLayout.css`만 수정했습니다.
+- 모바일/태블릿 Studio에서 Hero 뒤에 중복으로 남아 있던 `main` 상단 18px 여백을 제거해 `Sori Studio` 대문·검색 버튼과 첫 카드가 PC처럼 자연스럽게 붙도록 했습니다.
+- 제목을 `top`이나 `transform`으로 억지 이동하지 않아 대문 글자 잘림과 PC 레이아웃 변형을 방지했습니다.
+- 접힌 `생성하기` 버튼은 모바일에서 분할 작업영역/왼쪽 레일 좌표를 더 이상 따르지 않고 브라우저 전체창의 실제 왼쪽 끝에 고정됩니다.
+- PC Studio, Classic, 카드 내부, 생성 기능, Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.

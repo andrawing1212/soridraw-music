@@ -8265,3 +8265,25 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     height: 38px !important;
   }
 }
+
+/* 397 — Mobile Studio masthead spacing and viewport-owned collapsed action tab.
+ * Desktop spacing is already approved. The mobile composition still inherited
+ * an older 18px main top padding after the hero, so the title/search row looked
+ * detached from the first card. Remove only that extra mobile gap in real
+ * layout flow; do not use top/transform offsets that can clip the wordmark.
+ *
+ * The collapsed Generate tab is a body portal. On mobile it must attach to the
+ * viewport edge, not to the builder/left-rail metric left over from split-mode
+ * tracking. Center its hidden half outside x=0 so the visible half begins at
+ * the mobile window's exact left edge. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapsed {
+    left: calc(0px - var(--soridraw-collapsed-action-half-width)) !important;
+    right: auto !important;
+  }
+}

@@ -8215,3 +8215,53 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     right: 12px;
   }
 }
+
+/* 396 — Keep the Music Note title and manual refresh action on one masthead
+ * row at every width. The old mobile `flex-col` header forced the refresh
+ * button onto a second line, while the portaled desktop header could place the
+ * action against the result-pane edge. Reserve real right-side space inside
+ * the header and keep the action shrink-proof, so it stays inside the pane and
+ * shifts left without changing search/filter/card layout. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-page-header {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding-right: 10px !important;
+  box-sizing: border-box !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-page-header > .min-w-0 {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-page-header .soridraw-page-title-hover h1 {
+  white-space: nowrap !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-page-header .soridraw-musicnote-hero-sync {
+  flex: 0 0 auto !important;
+  margin-left: auto !important;
+}
+
+@media (max-width: 767px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header {
+    gap: 8px !important;
+    padding-right: 6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-musicnote-hero-sync {
+    width: 38px !important;
+    height: 38px !important;
+  }
+}

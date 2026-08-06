@@ -216,3 +216,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note 선택은 빨간 배경, Suno Library 선택은 초록 배경으로 표시하고 선택 텍스트는 검정색으로 통일했습니다.
 - 버튼/창 외곽선, Firebase, 저장 구조는 변경하지 않았습니다.
 
+
+## 396차 — 뮤직노트 새로고침 버튼 한 줄 정렬
+
+- 모바일에서 Music Note 제목과 수동 새로고침 버튼을 항상 같은 행에 배치했습니다.
+- 기존 모바일 `flex-col`로 인해 버튼이 제목 아래로 줄바꿈되던 구조를 제거했습니다.
+- PC 분할화면에서는 헤더 오른쪽에 실제 안전 여백을 확보해 새로고침 버튼이 바깥으로 삐져나가지 않고 조금 왼쪽에 머물도록 했습니다.
+- 검색, 색상 필터, 폴더 탭, 곡 카드 및 Firebase 저장 구조는 변경하지 않았습니다.

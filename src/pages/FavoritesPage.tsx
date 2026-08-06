@@ -5273,12 +5273,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0 }}
-      className="soridraw-workspace-ported-header mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+      className="soridraw-workspace-ported-header soridraw-musicnote-page-header mb-4 md:mb-5 flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 translate-y-2 md:translate-y-3"
     >
       <div className="min-w-0">
         <div className="soridraw-page-title-hover relative inline-flex max-w-full">
           <h1
-            className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
+            className={cn("whitespace-nowrap text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
             title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
           >
             {isMusicNoteSharedView ? (

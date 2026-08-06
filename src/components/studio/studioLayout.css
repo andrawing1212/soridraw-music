@@ -9966,3 +9966,32 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   border-top-right-radius: 16px;
   border-bottom-right-radius: 16px;
 }
+
+/* 431 — Match the Music Note / Suno Library category shell to the 46px search
+ * control height. Keep the inactive 40px inset buttons, so the remaining inset
+ * becomes 3px above and below. Hovered/selected paint expands exactly to the
+ * parent shell's full 46px height. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  height: 46px !important;
+  min-height: 46px !important;
+  max-height: 46px !important;
+  padding: 3px 4px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):not([aria-pressed="true"]):not([data-active="true"]):hover::before,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-mode-tabs > .soridraw-musicnote-mode-tab:is(
+  [aria-pressed="true"],
+  [data-active="true"]
+)::before,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-mode-tabs > .soridraw-library-mode-tab:is(
+  [aria-pressed="true"],
+  [data-active="true"]
+)::before {
+  top: -3px !important;
+  bottom: -3px !important;
+}

@@ -9576,3 +9576,83 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     padding-top: 0 !important;
   }
 }
+
+/* 420 — Unify the desktop workspace top guide with the approved Music Note /
+ * Suno Library result-only view. Split mode was one full 64px step lower because
+ * the shared hero row already owned a 64px top offset and the Sori Studio
+ * masthead added another 64px margin. The portaled right title was then
+ * bottom-aligned to that oversized left cell. Remove only the duplicate
+ * masthead margin and return the right title host to the row start. This raises
+ * Sori Studio, generated/recent results, Music Note and Suno Library together
+ * without changing their internal card/menu spacing.
+ *
+ * Result-only recent/generated views previously removed the hero completely and
+ * replaced it with a separate 18–24px main padding. Keep one invisible 40px
+ * hero guide instead, matching the title-row footprint used by the approved
+ * Music Note / Library fullscreen state. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-masthead {
+    margin-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host {
+    align-self: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  /* Music Note / Library fullscreen keeps its visible portaled title from 419.
+   * Recent/generated fullscreen receives the same structural title-row height,
+   * but the unused hero content stays invisible. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-hero {
+    display: block !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-hero-row {
+    min-height: 40px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-hero-row > .soridraw-studio-masthead,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-workspace-hero-host {
+    display: none !important;
+  }
+}
+
+/* 422 — Remove the real 64px split/builder-only top spacer.
+ *
+ * 421 diagnosed the visible black band as a hero-row height problem and hard-
+ * clamped the shared hero to 40px. That was the wrong owner. The video shows an
+ * exact 64 CSS-pixel difference (32px in the half-scale capture) between the
+ * approved right-only fullscreen guide and split mode. The source is the legacy
+ * `margin-top: 64px` on `.soridraw-studio-hero-row` from the portal migration.
+ * It creates real empty black space above the shared title row, so changing only
+ * title height/position cannot raise the menus and cards below it.
+ *
+ * Remove that spacer only while the builder is present: normal split mode and
+ * builder-only fullscreen. Right-only fullscreen (Music Note, Library, recent
+ * result) remains the approved reference and is intentionally untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero-row {
+    margin-top: 0 !important;
+  }
+}

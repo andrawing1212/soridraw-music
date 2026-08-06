@@ -347,3 +347,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 전체화면에서는 Sori Studio 대문·통합검색만 숨기고, Music Note / Suno Library 대문은 그대로 표시합니다.
 - 전체화면에만 남아 있던 main 상단 18px 여백을 제거해 카테고리·검색·목록 시작 높이를 분할화면과 동일하게 복구했습니다.
 - 일반 생성결과 전체화면, 모바일, Classic, Firebase 저장 구조는 변경하지 않았습니다.
+
+## 420차 메모
+- 기준: 419차.
+- 데스크톱 분할모드에서 중복 적용되던 Sori Studio 대문 상단 64px 여백을 제거했다.
+- Music Note / Suno Library 포털 제목의 하단 정렬을 시작점 정렬로 바꿔 네 작업화면의 상단 기준선을 통일했다.
+- Sori Studio 전체모드도 같은 대문 시작선을 사용한다.
+- 최근 생성곡/생성결과 전체모드는 사라진 hero 대신 Music Note / Library 전체모드와 같은 40px 구조 가이드를 유지한다.
+- 내부 메뉴·카드 간격, 모바일, Classic, Firebase 데이터 구조는 변경하지 않았다.

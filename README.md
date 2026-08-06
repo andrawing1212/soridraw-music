@@ -249,3 +249,8 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note와 Suno Library 대문을 Sori Studio와 같은 y=96px 시작선에 맞췄습니다.
 - Music Note/Library 헤더에 남아 있던 `translate-y`를 모바일에서 제거해 실제 레이아웃 기준으로 정렬했습니다.
 - 검색, 필터, 폴더 탭, 곡 목록의 내부 간격과 PC/Classic/Firebase 구조는 변경하지 않았습니다.
+
+## 400차 메모
+- 뮤직노트/라이브러리 3개 탭 부모 쉘 배경을 필터/비활성 폴더 버튼과 같은 회색으로 통일.
+- 부모 쉘의 추가 보더/그림자를 제거해 이중 버튼처럼 보이던 현상 완화.
+

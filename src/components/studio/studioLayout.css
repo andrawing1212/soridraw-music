@@ -9637,85 +9637,45 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 421 — One structural 40px desktop hero band for every workspace mode.
+/* 422 — Remove the real 64px split/builder-only top spacer.
  *
- * Root cause: the split panes are not clipping the content vertically. The
- * builder/result panes begin after the shared hero grid. In split mode the
- * left Sori Studio heading had an unconstrained inherited line box (roughly
- * 58px), while the portaled Music Note / Library heading and the approved
- * result-only hero guide were fixed at 40px. CSS Grid therefore made the whole
- * split hero row as tall as the left heading. Moving only the portaled title
- * changed the title line but could not move the menus/cards below the hero.
+ * 421 diagnosed the visible black band as a hero-row height problem and hard-
+ * clamped the shared hero to 40px. That was the wrong owner. The video shows an
+ * exact 64 CSS-pixel difference (32px in the half-scale capture) between the
+ * approved right-only fullscreen guide and split mode. The source is the legacy
+ * `margin-top: 64px` on `.soridraw-studio-hero-row` from the portal migration.
+ * It creates real empty black space above the shared title row, so changing only
+ * title height/position cannot raise the menus and cards below it.
  *
- * Make the shared row, both title hosts, and the Sori title line use the same
- * 40px layout box. Overflow remains visible so the display font is not clipped.
- * The main split workspace then starts at the same y-coordinate in split,
- * builder-only, result-only, recent, Music Note and Library modes. */
+ * Remove that spacer only while the builder is present: normal split mode and
+ * builder-only fullscreen. Right-only fullscreen (Music Note, Library, recent
+ * result) remains the approved reference and is intentionally untouched. */
 @media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root {
-    --soridraw-studio-desktop-hero-row-height: 40px;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero > .soridraw-studio-shell {
-    overflow: visible !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero-row {
-    height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    min-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    max-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    align-items: center !important;
-    overflow: visible !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero-row > .soridraw-studio-masthead {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    min-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    max-height: var(--soridraw-studio-desktop-hero-row-height) !important;
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero-row {
     margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    overflow: visible !important;
   }
+}
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero-row > .soridraw-studio-masthead
-  > .soridraw-studio-title {
-    display: inline-flex !important;
-    align-items: center !important;
-    height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    min-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    max-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    line-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    overflow: visible !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-workspace-hero-host {
-    align-self: stretch !important;
-    height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    min-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    max-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    overflow: visible !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-workspace-hero-host
-  > .soridraw-workspace-ported-header {
-    height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    min-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    max-height: var(--soridraw-studio-desktop-hero-row-height) !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    overflow: visible !important;
+/* 423 — Restore only the portaled Music Note / Suno Library masthead position
+ * in true desktop split mode after the 422 shared 64px spacer removal.
+ *
+ * 422 correctly raised the shared workspace content, but the right workspace
+ * masthead is painted through an independent hero portal. Its tabs/search/list
+ * already stayed on the approved vertical guide while only the portaled title
+ * jumped into the upper utility row. Move that painted header back down to the
+ * same title guide used by Sori Studio and right-only fullscreen, without
+ * restoring the removed shared spacer or moving any menus/cards. The host keeps
+ * overflow visible, so the title and Library credit shortcut are not clipped. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-workspace-hero-host > .soridraw-workspace-ported-header {
+    position: relative !important;
+    top: 46px !important;
+    transform: none !important;
   }
 }

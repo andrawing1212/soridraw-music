@@ -8547,3 +8547,152 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     top: 2px !important;
   }
 }
+
+/* 405 — Compact/tablet left rail alignment lock.
+ * In the 1100–1599px range the collapsed rail inherited `width: 100%` plus
+ * horizontal padding without the wide-layout box-sizing lock. Later generic
+ * hover/active rules then painted that shifted button box, which made icons
+ * jump left and the state surface look like a clipped square. Keep the left
+ * rail geometry explicit in both compact collapsed and expanded states. The
+ * right rail, center workspace, Classic and mobile layouts are untouched. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-left-panel,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-left-panel
+  .soridraw-studio-left-panel-inner,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-left-panel
+  .soridraw-studio-rail-nav,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame > .soridraw-studio-left-panel
+  .soridraw-studio-rail-bottom-actions {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel .soridraw-studio-left-panel-inner {
+    width: 64px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    align-items: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel
+  :is(.soridraw-studio-rail-nav, .soridraw-studio-rail-bottom-actions) {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    align-items: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel
+  button.soridraw-studio-rail-item {
+    display: inline-flex !important;
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    transform: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel
+  button.soridraw-studio-rail-item > svg:not(.ml-auto) {
+    display: block !important;
+    flex: 0 0 20px !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel
+  button.soridraw-studio-rail-item:not(.is-active):is(:hover, :focus-visible) {
+    background: rgba(255, 255, 255, 0.055) !important;
+    background-color: rgba(255, 255, 255, 0.055) !important;
+    border-radius: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel
+  button.soridraw-studio-rail-item.is-active,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel
+  button.soridraw-studio-rail-item.is-active:is(:hover, :focus-visible) {
+    background: #2c2c2e !important;
+    background-color: #2c2c2e !important;
+    border: 0 !important;
+    border-left: 0 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  > .soridraw-studio-left-panel {
+    width: 214px !important;
+    min-width: 214px !important;
+    max-width: 214px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  > .soridraw-studio-left-panel button.soridraw-studio-rail-item {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 40px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    justify-content: flex-start !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not(.is-left-rail-collapsed)
+  > .soridraw-studio-left-panel button.soridraw-studio-rail-item.is-active {
+    border-left: 0 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+  }
+}

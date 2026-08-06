@@ -3954,3 +3954,58 @@ body #root .favorite-keyword-strip > * {
     padding-top: 96px !important;
   }
 }
+
+/* 437 — Classic mobile vertical rhythm now uses Suno Library as the reference.
+ *
+ * Scope is intentionally limited to Classic dark/light mobile. Studio Black
+ * split/fullscreen rules remain frozen. Library already has the approved top
+ * guide and compact title-to-controls/list rhythm. Match Music Note's real flow
+ * gaps to Library, remove Studio's extra main top spacer, and standardize the
+ * menu/list gutters to Studio's established 12px mobile guide instead of
+ * copying Library's former 16px width. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme),
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    padding-top: 96px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Library's header-to-primary-controls flow is 12px. Music Note previously
+   * kept 16px here, pushing every control and song card lower. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header {
+    margin-bottom: 12px !important;
+  }
+
+  /* Library begins its first list card 8px below the search/filter row. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-list-start-divider,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-musicnote-list-start-divider {
+    margin-top: 8px !important;
+  }
+
+  /* Align Sori Studio's wordmark and first menu card to the same compact upper
+   * rhythm. The hero supplies the title slot; the old main pt-6 was a second
+   * spacer that Library does not have. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-hero,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-hero {
+    padding-top: 77px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-top: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}

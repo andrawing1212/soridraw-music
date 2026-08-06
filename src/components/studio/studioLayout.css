@@ -8488,3 +8488,51 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     margin-left: auto !important;
   }
 }
+
+/* 402 — Mobile Studio/Music Note/Library width and vertical-guide alignment.
+ * The three pages were using three different outer gutters at the same mobile
+ * width: Studio 12px, Music Note 8px (legacy 369 mobile override), and Library
+ * 16px (component px-4). Use Studio's 12px gutter for both workspace pages so
+ * top controls, folder tabs and list cards share the same left/right guides.
+ *
+ * Music Note's mobile header still reserved a 12px bottom margin after its
+ * 40px title row, leaving the search/filter row visibly lower than Studio.
+ * Reduce only that real flow gap to 4px, which lifts every Music Note control
+ * and list item together without moving the title with transform/top offsets.
+ * Library is already nearly aligned; reduce only its mobile page top guide by
+ * 1px so its title, controls and list move upward as one unit. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-shell,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-theme > .soridraw-workspace-ported-header {
+    margin-bottom: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme {
+    padding-top: 95px !important;
+  }
+}
+
+/* Keep the same Studio-owned 12px mobile gutter when a desktop split pane
+ * switches its result side into the compact/mobile composition. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  > .soridraw-studio-workspace-page--music-note
+  > .soridraw-musicnote-page-shell,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  > .soridraw-studio-workspace-page--library
+  > .soridraw-library-theme {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}

@@ -367,7 +367,7 @@ export default function StudioSplitWorkspace({
       controls.searchButton.style.removeProperty('--soridraw-studio-search-x');
       controls.searchButton.style.setProperty(
         'right',
-        `${Math.max(18, Math.round(metricsRef.current.width - roundedBuilderWidth + 18))}px`,
+        `${Math.max(26, Math.round(metricsRef.current.width - roundedBuilderWidth + 26))}px`,
         'important',
       );
     }

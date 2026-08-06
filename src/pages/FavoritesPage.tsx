@@ -5414,7 +5414,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       {!isMusicNoteSharedView && (
-      <div className="mt-3 md:mt-5 space-y-4 md:space-y-5">
+      <div className="mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
@@ -5544,12 +5544,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       {((isFavoritesLoading && activeFavoriteSource.length === 0) || sharedMusicNoteLoading) ? (
-        <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+        <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Loader2 className="w-12 h-12 text-[#FF5C52] animate-spin mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">노트를 불러오는 중...</p>
         </div>
       ) : activeFavoriteSource.length === 0 ? (
-        <div className="mt-[13px] md:mt-[21px] min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
+        <div className="mt-2 md:mt-3 min-h-[40vh] flex flex-col items-center justify-center text-center bg-[var(--card-bg)] rounded-3xl border border-black/20 p-12 shadow-[var(--shadow-md)]">
           <Music className="w-12 h-12 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)] text-lg font-medium">{isMusicNoteSharedView ? (sharedMusicNoteError ? '공유 노트 조회 중 오류가 발생했습니다.' : '공유된 뮤직노트를 이용할 수 없습니다.') : '아직 저장된 곡이 없습니다.'}</p>
           {!isMusicNoteSharedView && (
@@ -5559,13 +5559,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           )}
         </div>
       ) : filteredFavorites.length === 0 ? (
-        <div className="mt-[13px] md:mt-[21px] min-h-[30vh] flex flex-col items-center justify-center text-center">
+        <div className="mt-2 md:mt-3 min-h-[30vh] flex flex-col items-center justify-center text-center">
           <Search className="w-10 h-10 text-[var(--text-secondary)]/20 mb-4" />
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
-          <div className="space-y-4" data-selection-keep="true">
+        <div className="soridraw-musicnote-list-start-divider mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
+          <div className="space-y-2 md:space-y-3" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id, song);

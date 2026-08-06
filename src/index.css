@@ -4009,3 +4009,40 @@ body #root .favorite-keyword-strip > * {
     padding-right: 12px !important;
   }
 }
+
+/* 438 — Classic mobile: lower Suno Library slightly and compact the two
+ * header utility controls. Scope stays on Classic dark/light mobile only;
+ * Studio Black split/fullscreen geometry remains frozen. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme {
+    padding-top: 100px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-musicnote-hero-sync,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-musicnote-hero-sync {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    border-radius: 10px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-library-credit-button,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-library-credit-button {
+    height: 30px !important;
+    min-height: 30px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 10px !important;
+    gap: 3px !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+  }
+}

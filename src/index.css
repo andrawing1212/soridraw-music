@@ -4131,3 +4131,19 @@ body #root .favorite-keyword-strip > * {
     padding-top: calc(clamp(2.25rem, 4vh, 2.85rem) - 8px) !important;
   }
 }
+
+
+/* 444 — Classic PC dark/light: reduce only the real Sori Studio title-to-card
+ * flow gap. 443 subtracted 8px from the FHD clamp, but the user's short desktop
+ * viewport is held by the clamp's 36px minimum, leaving a still-large 28px
+ * content inset. Scope the correction to the Create workspace and set the
+ * actual main-flow inset directly. The hero and its absolutely positioned
+ * global-search button are intentionally untouched. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main {
+    padding-top: 16px !important;
+  }
+}

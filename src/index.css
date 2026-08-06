@@ -4172,3 +4172,23 @@ body #root .favorite-keyword-strip > * {
     bottom: 12px !important;
   }
 }
+
+
+/* 446 — Classic PC profile dropdown: neutral gray panel background.
+ * Scope is limited to the desktop Classic dark/light account popup. Mobile,
+ * Music Note, Library and Studio Black/split layouts remain unchanged. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  body #root .soridraw-app-root .soridraw-top-navigation .soridraw-profile-menu {
+    background: rgba(42, 42, 44, 0.98) !important;
+    background-color: rgba(42, 42, 44, 0.98) !important;
+    background-image: none !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+  body #root .soridraw-app-root .soridraw-top-navigation .soridraw-profile-menu {
+    background: rgba(232, 232, 234, 0.99) !important;
+    background-color: rgba(232, 232, 234, 0.99) !important;
+    background-image: none !important;
+  }
+}

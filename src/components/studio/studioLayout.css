@@ -9825,3 +9825,46 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   border-top-right-radius: 16px !important;
   border-bottom-right-radius: 16px !important;
 }
+
+
+/* 429 — Let hovered/selected category tabs fill the parent vertically too.
+ * Default inactive tabs keep the approved 40px inset shape. Only the tab being
+ * hovered or selected expands to the parent's full 48px height, while the first
+ * and last tabs continue to meet the parent's outside edge exactly. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  align-self: center !important;
+  margin-top: -4px !important;
+  margin-bottom: -4px !important;
+  border-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):first-child:is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  border-top-left-radius: 16px !important;
+  border-bottom-left-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):last-child:is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  border-top-right-radius: 16px !important;
+  border-bottom-right-radius: 16px !important;
+}

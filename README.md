@@ -270,3 +270,8 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 ## 403차 메모
 - 모바일/컴팩트 화면의 Music Note 제목만 2px 아래로 미세 조정했습니다.
 - 새로고침 버튼, 헤더 높이, 아래 메뉴, 목록과 좌우폭은 변경하지 않았습니다.
+
+
+## 404차 메모
+- 뮤직노트와 Suno Library에서 폴더 모드 탭 행과 검색/색상/필터 행의 표시 순서를 서로 교체했습니다.
+- 기존 각 행의 높이, 좌우폭, 선택 상태, 검색/필터 기능은 유지했습니다.

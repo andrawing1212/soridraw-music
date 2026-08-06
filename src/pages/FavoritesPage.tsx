@@ -5381,7 +5381,40 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (
-      <div className="space-y-4 md:space-y-5">
+      <div className="flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+        <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
+          {musicNoteTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                setMusicNoteViewMode(tab.id);
+                setFavoriteTrashView(false);
+                resetVisibleCount();
+                exitSelectionMode('ui');
+              }}
+              onMouseEnter={() => onHover({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description, _ts: Date.now() })}
+              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
+              onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
+              onTouchEnd={onLongPressEnd}
+              aria-pressed={musicNoteViewMode === tab.id}
+              data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
+              className={cn(
+                'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
+                musicNoteViewMode === tab.id
+                  ? 'soridraw-musicnote-mode-tab--active bg-[#FF5C52]/78 text-white shadow-lg'
+                  : 'text-white/60 hover:text-white'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      )}
+
+      {!isMusicNoteSharedView && (
+      <div className="mt-3 md:mt-5 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
@@ -5502,39 +5535,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             </AnimatePresence>
           </div>
 
-        </div>
-      </div>
-      )}
-
-      {!isMusicNoteSharedView && (
-      <div className="mt-3 md:mt-5 flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
-        <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
-          {musicNoteTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => {
-                setMusicNoteViewMode(tab.id);
-                setFavoriteTrashView(false);
-                resetVisibleCount();
-                exitSelectionMode('ui');
-              }}
-              onMouseEnter={() => onHover({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description, _ts: Date.now() })}
-              onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
-              onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
-              onTouchEnd={onLongPressEnd}
-              aria-pressed={musicNoteViewMode === tab.id}
-              data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
-              className={cn(
-                'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
-                musicNoteViewMode === tab.id
-                  ? 'soridraw-musicnote-mode-tab--active bg-[#FF5C52]/78 text-white shadow-lg'
-                  : 'text-white/60 hover:text-white'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
         </div>
       </div>
       )}

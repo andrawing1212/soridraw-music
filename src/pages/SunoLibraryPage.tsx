@@ -6135,9 +6135,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
-        {renderLibraryTopControls()}
-
         {renderLibraryModeTabs()}
+
+        {renderLibraryTopControls()}
 
         {libraryViewMode === 'workspace' && (
           <>

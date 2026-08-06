@@ -4046,3 +4046,60 @@ body #root .favorite-keyword-strip > * {
     line-height: 1 !important;
   }
 }
+
+
+/* 439 — Classic mobile: use one 102px page-top guide for Music Note and
+ * Suno Library in both dark and light color modes. This changes only the real
+ * mobile page top spacing; split mode / Studio Black remains frozen. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme),
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    padding-top: 102px !important;
+  }
+}
+
+/* 440 — Classic mobile Library accent hover states stay lavender.
+ * The old shared dark-page hover rule still changed any purple-accent Library
+ * button to the former green (#8ac982). That made the selected space tab,
+ * filter reset button and remaining-credit button flash green on hover/click.
+ * Scope this correction to Classic dark/light mobile only; Studio Black split
+ * and fullscreen layouts remain frozen. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ),
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ) {
+    background-color: #A98BFF !important;
+    background-image: none !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme :is(.soridraw-color-reset-button, .soridraw-library-credit-button):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme :is(.soridraw-color-reset-button, .soridraw-library-credit-button):hover {
+    background-color: #B79FFF !important;
+    background-image: none !important;
+  }
+}

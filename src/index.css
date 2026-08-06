@@ -4147,3 +4147,28 @@ body #root .favorite-keyword-strip > * {
     padding-top: 16px !important;
   }
 }
+
+/* 445 — Classic PC dark/light Create screen only.
+ * Tighten the remaining Sori Studio title-to-card gap and restore the global
+ * search button above the card edge. The previous 16px main inset still left
+ * visible empty space, while the button kept its original bottom:0 + 50%
+ * translation and therefore appeared too low as the card row moved upward.
+ * Use zero real flow inset and raise only that button by 12px. Music Note,
+ * Library, mobile and Studio Black/split geometry remain untouched. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"]
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"]
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    bottom: 12px !important;
+  }
+}

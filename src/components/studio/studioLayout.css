@@ -5898,7 +5898,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 
 /* Keep accent-selected Library controls green after neutral button cleanup. */
-.dark .soridraw-library-theme button[class*="bg-[#7FBD75]"],
+.dark .soridraw-library-theme button[class*="bg-[#A98BFF]"],
 .dark .soridraw-library-theme button[class*="bg-emerald"],
 .dark .soridraw-library-theme button[class*="bg-green"] {
   background-color: var(--page-accent) !important;
@@ -5928,7 +5928,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :where(
   div[class*="h-[46px]"][class*="bg-[var(--bg-secondary)]"],
   div[class*="grid-cols-3"][class*="bg-white/5"]
-) > button:not(:disabled):not([class*="rounded-full"]):not([class*="bg-[#7FBD75]"]):not([class*="bg-emerald"]):not([class*="bg-green"]):hover {
+) > button:not(:disabled):not([class*="rounded-full"]):not([class*="bg-[#A98BFF]"]):not([class*="bg-emerald"]):not([class*="bg-green"]):hover {
   background-color: var(--soridraw-page-control-hover) !important;
   background-image: none !important;
   color: rgba(255, 255, 255, 0.92) !important;
@@ -5951,7 +5951,7 @@ button:not(:disabled):is([class*="bg-[#FF5C52]"], [class*="bg-brand-orange"]):ho
 }
 
 .dark .soridraw-library-theme
-button:not(:disabled):is([class*="bg-[#7FBD75]"], [class*="bg-emerald"], [class*="bg-green"]):hover {
+button:not(:disabled):is([class*="bg-[#A98BFF]"], [class*="bg-emerald"], [class*="bg-green"]):hover {
   background-color: #8ac982 !important;
 }
 
@@ -7871,7 +7871,7 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
 }
 
 .soridraw-library-mode-tab--active {
-  background-color: rgba(127, 189, 117, 0.78) !important;
+  background-color: rgba(169, 139, 255, 0.78) !important;
   color: #ffffff !important;
 }
 
@@ -8178,8 +8178,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-library-folder-button[aria-pressed="true"],
   .soridraw-library-folder-button[data-active="true"]
 ):hover {
-  background: #7fbd75 !important;
-  background-color: #7fbd75 !important;
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
   background-image: none !important;
   color: #101010 !important;
   -webkit-text-fill-color: #101010 !important;
@@ -8441,8 +8441,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-library-mode-tab[aria-pressed="true"],
   .soridraw-library-mode-tab[data-active="true"]
 ):hover {
-  background: #7fbd75 !important;
-  background-color: #7fbd75 !important;
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
   color: #101010 !important;
   -webkit-text-fill-color: #101010 !important;
 }
@@ -9939,7 +9939,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   top: -4px;
   bottom: -4px;
   border-radius: 16px;
-  background: #7fbd75;
+  background: #A98BFF;
 }
 
 /* Edge tabs also meet the parent shell's outside rounded edge exactly. */

@@ -470,10 +470,10 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .dark .soridraw-library-theme {
-  --page-accent: #7FBD75;
-  --page-accent-soft: rgba(127, 189, 117, 0.14);
-  --page-accent-hover: rgba(127, 189, 117, 0.20);
-  --page-accent-text: #B8F4AA;
+  --page-accent: #A98BFF;
+  --page-accent-soft: rgba(169, 139, 255, 0.14);
+  --page-accent-hover: rgba(169, 139, 255, 0.20);
+  --page-accent-text: #D8CCFF;
   --page-soft-border: rgba(0, 0, 0, 0.30);
   --page-soft-border-hover: rgba(0, 0, 0, 0.38);
 }
@@ -1102,17 +1102,17 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     border-radius: 0.5rem !important; /* rounded-lg */
   }
   /* Group Header */
-  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 {
+  .soridraw-library-theme .py-4.border-b.border-\[\#A98BFF\]\/10 {
     padding-top: clamp(0.48rem, 0.88vh, 0.58rem) !important;
     padding-bottom: clamp(0.48rem, 0.88vh, 0.58rem) !important;
     padding-left: clamp(0.75rem, 1vw, 1rem) !important;
     padding-right: clamp(0.75rem, 1vw, 1rem) !important;
   }
-  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 .w-10.h-10 {
+  .soridraw-library-theme .py-4.border-b.border-\[\#A98BFF\]\/10 .w-10.h-10 {
     width: clamp(1.75rem, 3.2vh, 2rem) !important;
     height: clamp(1.75rem, 3.2vh, 2rem) !important;
   }
-  .soridraw-library-theme .py-4.border-b.border-\[\#7FBD75\]\/10 h3 {
+  .soridraw-library-theme .py-4.border-b.border-\[\#A98BFF\]\/10 h3 {
     font-size: 13px !important;
   }
   /* Tracks */

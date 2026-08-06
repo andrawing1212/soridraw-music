@@ -5844,7 +5844,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 /* Keep accent-selected Music Note controls red after neutral button cleanup. */
-.dark .soridraw-musicnote-theme button[class*="bg-[#FF5C52]"],
+.dark .soridraw-musicnote-theme button[class*="bg-[#FF7A72]"],
 .dark .soridraw-musicnote-theme button[class*="bg-brand-orange"] {
   background-color: var(--page-accent) !important;
 }
@@ -5923,7 +5923,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :where(
   div[class*="h-[46px]"][class*="bg-[var(--bg-secondary)]"],
   div[class*="grid-cols-3"][class*="bg-white/5"]
-) > button:not(:disabled):not([class*="rounded-full"]):not([class*="bg-[#FF5C52]"]):not([class*="bg-brand-orange"]):hover,
+) > button:not(:disabled):not([class*="rounded-full"]):not([class*="bg-[#FF7A72]"]):not([class*="bg-brand-orange"]):hover,
 .dark .soridraw-library-theme
 :where(
   div[class*="h-[46px]"][class*="bg-[var(--bg-secondary)]"],
@@ -5946,8 +5946,8 @@ button[class*="bg-white/"]:not(:disabled):hover {
 
 /* Selected controls remain accented and brighten slightly on hover. */
 .dark .soridraw-musicnote-theme
-button:not(:disabled):is([class*="bg-[#FF5C52]"], [class*="bg-brand-orange"]):hover {
-  background-color: #ff6d64 !important;
+button:not(:disabled):is([class*="bg-[#FF7A72]"], [class*="bg-brand-orange"]):hover {
+  background-color: #FF8C85 !important;
 }
 
 .dark .soridraw-library-theme
@@ -8155,8 +8155,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-musicnote-folder-button[aria-pressed="true"],
   .soridraw-musicnote-folder-button[data-active="true"]
 ):hover {
-  background: #e05249 !important;
-  background-color: #e05249 !important;
+  background: #FF7A72 !important;
+  background-color: #FF7A72 !important;
   background-image: none !important;
   color: #101010 !important;
   -webkit-text-fill-color: #101010 !important;
@@ -8425,8 +8425,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-musicnote-mode-tab[aria-pressed="true"],
   .soridraw-musicnote-mode-tab[data-active="true"]
 ):hover {
-  background: #e05249 !important;
-  background-color: #e05249 !important;
+  background: #FF7A72 !important;
+  background-color: #FF7A72 !important;
   color: #101010 !important;
   -webkit-text-fill-color: #101010 !important;
 }
@@ -9928,7 +9928,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   top: -4px;
   bottom: -4px;
   border-radius: 16px;
-  background: #e05249;
+  background: #FF7A72;
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root

@@ -413,3 +413,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Suno Library 대표색을 밝은 라벤더 바이올렛 `#A98BFF`로 변경.
 - 제목, 선택 탭, 검색 포커스, 아이콘, 버튼, 로딩/선택 상태와 보조 강조색을 같은 보라 계열로 통일.
 - 사용자 색상 필터의 실제 초록색 선택지와 성공/상태 의미의 일반 green 표시는 유지.
+
+## 434차 메모
+- Music Note 대표색을 밝은 코랄 `#FF7A72`로 변경.
+- 제목, 선택 탭, 검색 포커스, 아이콘, 강조 버튼, 선택/팝업 상태를 같은 코랄 계열로 통일.
+- 호버는 `#FF8C85`, 밝은 보조 텍스트는 `#FFC1BC`를 사용해 검정 선택 글자의 대비를 높임.
+- Suno Library 라벤더 색상과 사용자 색상 필터는 변경하지 않음.

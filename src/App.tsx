@@ -4086,6 +4086,11 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>('create');
+  const [studioWorkspaceLayoutRequestId, setStudioWorkspaceLayoutRequestId] = useState(0);
+  const selectStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
+    setStudioWorkspaceView(view);
+    setStudioWorkspaceLayoutRequestId((current) => current + 1);
+  }, []);
 
   const [isStudioLoaded, setIsStudioLoaded] = useState(location.pathname === '/studio');
   useEffect(() => {
@@ -14038,12 +14043,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               <StudioLeftRail
                 activeWorkspace={studioWorkspaceView}
                 onCreate={() => {
-                  setStudioWorkspaceView('create');
+                  selectStudioWorkspaceView('create');
                   window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
                 }}
-                onRecentSongs={() => setStudioWorkspaceView('recent')}
-                onMusicNote={() => setStudioWorkspaceView('music-note')}
-                onLibrary={() => setStudioWorkspaceView('library')}
+                onRecentSongs={() => selectStudioWorkspaceView('recent')}
+                onMusicNote={() => selectStudioWorkspaceView('music-note')}
+                onLibrary={() => selectStudioWorkspaceView('library')}
                 onSearch={openGlobalSearchModal}
                 onApiSettings={() => navigate('/suno-api-settings')}
                 onLab={() => navigate('/lab')}
@@ -14072,7 +14077,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 formatSongTitle={formatUnifiedTitle}
                 onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
                 onOpenSong={(song, index) => {
-                  setStudioWorkspaceView('recent');
+                  selectStudioWorkspaceView('recent');
                   openStudioDashboardSong(song, index);
                 }}
                 isSongUnread={isStudioDashboardSongUnread}
@@ -14114,7 +14119,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
               {isStudioLoaded && (
-                <StudioSplitWorkspace viewMode="split">
+                <StudioSplitWorkspace
+                  viewMode="split"
+                  workspaceView={studioWorkspaceView}
+                  workspaceRequestId={studioWorkspaceLayoutRequestId}
+                >
                   <StudioBuilderPane>
                     {/* Selection Sections */}
                   <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
@@ -15094,7 +15103,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}>
           <div className="soridraw-result-desktop-header absolute top-4 left-4 hidden items-center gap-3 z-10 sm:flex">
                     <button
-                      onClick={() => setStudioWorkspaceView('music-note')}
+                      onClick={() => selectStudioWorkspaceView('music-note')}
                       onMouseEnter={() =>
                         setHoveredItem({
                           id: 'go-history',
@@ -16461,7 +16470,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <button
                           onClick={() => {
                             clearSunoLibrarySignal();
-                            setStudioWorkspaceView('library');
+                            selectStudioWorkspaceView('library');
                           }}
                           className="relative flex bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] py-3 px-4 rounded-xl text-[#e3a13a]/80 hover:text-[#f4bc63] transition-all items-center justify-center shrink-0 border border-[#e3a13a]/[0.22] text-sm font-bold"
                           title="라이브러리로 이동"

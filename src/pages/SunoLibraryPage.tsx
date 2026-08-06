@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -11,7 +11,7 @@ import {
 import { auth, db } from '../firebase';
 import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
+import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
@@ -277,6 +277,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const [playlistVisibilityFilter, setPlaylistVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   const [playlistColorFilter, setPlaylistColorFilter] = useState<string>('all');
   const [playlistSearchTerm, setPlaylistSearchTerm] = useState('');
+  const deferredPlaylistSearchTerm = useDeferredValue(playlistSearchTerm);
   const [workspaceColorFilter, setWorkspaceColorFilter] = useState<string>('all');
   const [workspaceLocalColorMap, setWorkspaceLocalColorMap] = useState<Record<string, string>>({});
   const [playlistLocalColorMap, setPlaylistLocalColorMap] = useState<Record<string, string>>({});
@@ -581,20 +582,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
   // UI States
   const [searchTerm, setSearchTerm] = useState('');
-  const [libraryPlaceholderIndex, setLibraryPlaceholderIndex] = useState(0);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [isLibrarySearchFocused, setIsLibrarySearchFocused] = useState(false);
-  const librarySearchPlaceholders = [
-    "음악 제목이나 스타일 검색...",
-    "곡 제목으로 검색해보세요...",
-    "장르나 키워드로 검색해보세요...",
-    "제작자 이름으로 검색해보세요..."
-  ];
-  const playlistSearchPlaceholders = [
-    "음악 제목이나 제작자 검색...",
-    "플레이리스트 이름으로 검색해보세요...",
-    "공유 플레이리스트를 찾아보세요...",
-    "곡 제목으로 검색해보세요..."
-  ];
   const [filter, setFilter] = useState<'all' | 'completed' | 'favorite' | 'public' | 'private' | 'trash'>('all');
   const [showLibraryFilterPopup, setShowLibraryFilterPopup] = useState(false);
   const libraryFilterPopupRef = useRef<HTMLDivElement | null>(null);
@@ -604,13 +593,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const workspaceLastTrackDocRef = useRef<any>(null);
   const workspacePaginationFallbackRef = useRef(false);
   const [showWorkspaceMoreTooltip, setShowWorkspaceMoreTooltip] = useState(false);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setLibraryPlaceholderIndex((prev) => (prev + 1) % librarySearchPlaceholders.length);
-    }, 4000);
-    return () => window.clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const handleLibraryFilterOutside = (event: MouseEvent) => {
@@ -630,13 +612,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     if (libraryViewMode === 'workspace') {
       setWorkspaceVisibleCount(WORKSPACE_PAGE_SIZE);
     }
-  }, [libraryViewMode, searchTerm, filter, workspaceColorFilter]);
+  }, [libraryViewMode, deferredSearchTerm, filter, workspaceColorFilter]);
 
   useEffect(() => {
     if (libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist') {
       setPlaylistVisibleCount(WORKSPACE_PAGE_SIZE);
     }
-  }, [libraryViewMode, activePlaylistId, playlistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode]);
+  }, [libraryViewMode, activePlaylistId, deferredPlaylistSearchTerm, playlistVisibilityFilter, playlistColorFilter, playlistSortMode]);
 
   useEffect(() => {
     setMultiSelectMode(false);
@@ -899,7 +881,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const modalHistoryPushedRef = React.useRef(false);
   const multiSelectHistoryPushedRef = React.useRef(false);
 
-  const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayer();
+  const { currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode } = useGlobalPlayerControls();
 
   // Scroll to top on page enter
   useEffect(() => {
@@ -2562,8 +2544,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (allHidden) return false;
       }
 
-      const matchesSearch = (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (t.prompt || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (t.title || '').toLowerCase().includes(deferredSearchTerm.toLowerCase()) || 
+                            (t.prompt || '').toLowerCase().includes(deferredSearchTerm.toLowerCase());
       
       const matchesFilter = filter === 'all' || filter === 'trash' ||
                             (filter === 'completed' && t.status === 'completed') || 
@@ -2575,7 +2557,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
       return matchesSearch && matchesFilter && matchesColor;
     });
-  }, [tracks, searchTerm, filter, workspaceColorFilter]);
+  }, [tracks, deferredSearchTerm, filter, workspaceColorFilter]);
 
   const displayedWorkspaceTracks = useMemo(() => {
     if (libraryViewMode !== 'workspace') return filteredTracks;
@@ -2586,7 +2568,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const canRequestMoreWorkspacePage = Boolean(
     libraryViewMode === 'workspace' &&
     !isSharedView &&
-    !searchTerm.trim() &&
+    !deferredSearchTerm.trim() &&
     filter === 'all' &&
     workspaceColorFilter === 'all' &&
     hasMoreWorkspaceServerTracks &&
@@ -3443,7 +3425,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getVisiblePlaylistItemsForSelection = () => {
-    const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
+    const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
     let items = playlistItems.filter((item) => {
       if (!matchesPlaylistVisibilityFilter(item)) return false;
       if (playlistColorFilter === 'all') return true;
@@ -5234,10 +5216,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
     return (
       <>
-        <div className="soridraw-responsive-top-controls -mt-[12px] md:mt-0 flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#7FBD75] transition-colors" />
+              <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
+                <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#7FBD75] transition-colors" />
+              </div>
               <input
                 type="text"
                 value={isWorkspaceMode ? searchTerm : playlistSearchTerm}
@@ -5251,18 +5235,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               />
               {!(isWorkspaceMode ? searchTerm : playlistSearchTerm) && !isLibrarySearchFocused && (
                 <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={`${isWorkspaceMode ? 'workspace' : 'playlist'}-${libraryPlaceholderIndex}`}
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -12 }}
-                      transition={{ duration: 0.35 }}
-                      className="text-sm text-white/40 whitespace-nowrap"
-                    >
-                      {(isWorkspaceMode ? librarySearchPlaceholders : playlistSearchPlaceholders)[libraryPlaceholderIndex % (isWorkspaceMode ? librarySearchPlaceholders.length : playlistSearchPlaceholders.length)]}
-                    </motion.div>
-                  </AnimatePresence>
+                  <div className="text-sm text-white/40 whitespace-nowrap">
+                    {isWorkspaceMode ? '음악 제목이나 스타일 검색...' : '음악 제목이나 제작자 검색...'}
+                  </div>
                 </div>
               )}
             </div>
@@ -5440,7 +5415,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             }}
             className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
-            플레이리스트
+            마이 리스트
           </button>
           <button
             onClick={() => {
@@ -5454,7 +5429,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             }}
             className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
-            공유 플레이리스트
+            공유 리스트
           </button>
         </div>
       </div>
@@ -6092,7 +6067,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             <button
               type="button"
               onClick={handleCreditShortcutClick}
-              className="h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#7FBD75]/12 border border-[#7FBD75]/22 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
+              className="soridraw-library-credit-button h-10 flex items-center px-3 rounded-xl text-xs font-bold bg-[#7FBD75]/12 border border-[#7FBD75]/22 text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
             >
               {remainingCredits.toLocaleString()} credit
             </button>
@@ -6136,7 +6111,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 <button
                   type="button"
                   onClick={handleCreditShortcutClick}
-                  className="hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
+                  className="soridraw-library-credit-button hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
                 >
                   남은 크레딧 {remainingCredits.toLocaleString()}
                 </button>
@@ -6189,12 +6164,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               const dateStr = formatCreatedAt(group.createdAt);
               
               return (
-                <motion.div
+                <div
                   key={group.id}
-                  initial={{ opacity: 1, x: 0 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0 }}
-                  className="soridraw-library-workspace-group bg-[#151515] rounded-2xl"
+                  className={`soridraw-library-workspace-group soridraw-list-perf-item bg-[#151515] rounded-2xl ${activeColorMenu?.startsWith(`workspace-${group.id}-`) ? 'soridraw-list-perf-item--active' : ''}`}
                 >
                   {/* Group Header */}
                   <div className="soridraw-library-workspace-header px-4 md:px-6 py-4 flex items-start md:items-center justify-between gap-2 md:gap-3 rounded-t-2xl overflow-hidden">
@@ -6203,27 +6175,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <Music className="w-5 h-5" />
                       </div>
                       <div className="min-w-0 flex-1 pr-1 md:pr-0">
-                        {(() => {
-                          const titleParts = splitSunoDisplayTitleParts(group.title || 'Untitled Generation');
-                          return (
-                            <>
-                              <h3 className="hidden md:block font-bold leading-tight truncate">
-                                {formatSunoDisplayTitle(group.title || 'Untitled Generation')}
-                              </h3>
-                              <div className="md:hidden min-w-0 leading-tight">
-                                {titleParts.genre && (
-                                  <div className="text-sm font-black text-[var(--text-primary)] truncate">
-                                    {titleParts.genre}
-                                  </div>
-                                )}
-                                <div className="mt-0.5 text-sm font-black text-[var(--text-primary)] truncate">
-                                  {titleParts.title}
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()}
-                        <div className="flex items-center gap-2 mt-1 opacity-40 text-[10px] min-w-0">
+                        <div className="soridraw-library-workspace-meta flex items-center gap-2 opacity-40 text-[11px] min-w-0">
                           <span className="truncate">{dateStr}</span>
                           <span className="shrink-0">•</span>
                           <span className="shrink-0">{items.length}곡</span>
@@ -6256,6 +6208,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       const isCompleted = Boolean(audioUrl && (group.status === 'completed' || group.status === 'success' || hasValidDuration));
                       const isPending = !isFailed && !audioUrl;
                       const sunoVersionLabel = getSunoModelVersionLabel(item, group);
+                      const itemTitleParts = splitSunoDisplayTitleParts(getTitle(item, group, idx));
                       
                       const isCurrent = isCurrentWorkspaceItem(group, item, idx);
                       const selection = buildWorkspaceSelection(group, item, idx);
@@ -6265,7 +6218,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`soridraw-library-workspace-track-row group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-all cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`soridraw-library-workspace-track-row group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
                             handleLibraryDragSelectStart(event, selection);
                             handleLibraryCardLongPressStart(event, selection);
@@ -6403,12 +6356,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                                 ))}
                               </div>
                             )}
-                            <h4 className={`text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#7FBD75]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
-                              <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
-                                {getTitle(item, group, idx)}
-                              </span>
-                              <span className="hidden md:block truncate">
-                                {getTitle(item, group, idx)}
+                            <h4 className={`soridraw-library-item-title-wrap text-sm md:text-base font-bold transition-colors min-w-0 flex-1 max-w-full overflow-hidden ${isCurrent ? 'text-[#7FBD75]' : 'text-[var(--text-primary)] group-hover:text-white'}`}>
+                              <span className="soridraw-library-item-title suno-mobile-title-strip">
+                                {itemTitleParts.genre && (
+                                  <span className="soridraw-library-item-genre">{itemTitleParts.genre}</span>
+                                )}
+                                <span className="soridraw-library-item-name">{itemTitleParts.title}</span>
                               </span>
                             </h4>
                             {sunoVersionLabel && (
@@ -6478,7 +6431,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       );
                     })}
                   </div>
-                </motion.div>
+                </div>
               );
             })}
             {hasMoreWorkspaceTracks && (
@@ -6624,7 +6577,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             ) : playlistItems.length > 0 ? (
               <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-black/15" data-selection-keep="true">
                 {(() => {
-                  const normalizedPlaylistSearch = playlistSearchTerm.trim().toLowerCase();
+                  const normalizedPlaylistSearch = deferredPlaylistSearchTerm.trim().toLowerCase();
                   let items = playlistItems.filter(item => {
                     if (!matchesPlaylistVisibilityFilter(item)) return false;
                     if (playlistColorFilter === 'all') return true;
@@ -6747,7 +6700,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         }
                       }}
                       data-selection-keep="true"
-                      className={`group relative flex items-center p-2 rounded-2xl transition-all border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
+                      className={`soridraw-library-playlist-row soridraw-list-perf-item group relative flex items-center p-2 rounded-2xl transition-colors border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${(activeColorMenu === item.id || activePlaylistItemMenu === item.id) ? 'soridraw-list-perf-item--active' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}
                       <AnimatedTrackPlayButton
@@ -6887,13 +6840,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             </div>
                           )}
                           
-                          <h3 className={`text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#7FBD75]' : 'text-white'}`}>
-                            <span className="suno-mobile-title-strip block md:hidden w-full max-w-full overflow-x-auto overflow-y-hidden whitespace-nowrap">
-                              {formatSunoDisplayTitle(item.title)}
-                            </span>
-                            <span className="hidden md:block truncate">
-                              {formatSunoDisplayTitle(item.title)}
-                            </span>
+                          <h3 className={`soridraw-library-item-title-wrap text-sm font-bold min-w-0 flex-1 max-w-full overflow-hidden ${isActive ? 'text-[#7FBD75]' : 'text-white'}`}>
+                            {(() => {
+                              const itemTitleParts = splitSunoDisplayTitleParts(item.title);
+                              return (
+                                <span className="soridraw-library-item-title suno-mobile-title-strip">
+                                  {itemTitleParts.genre && (
+                                    <span className="soridraw-library-item-genre">{itemTitleParts.genre}</span>
+                                  )}
+                                  <span className="soridraw-library-item-name">{itemTitleParts.title}</span>
+                                </span>
+                              );
+                            })()}
                           </h3>
                         </div>
                         

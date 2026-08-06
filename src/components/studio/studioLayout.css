@@ -7333,3 +7333,346 @@ h1.text-3xl.md\:text-5xl {
     padding-right: 6px !important;
   }
 }
+
+/* 375: Remove the duplicated workspace group title and keep the generated
+ * date/count metadata in the group header. Individual track titles remain the
+ * only visible song titles. The same title structure is used at every width;
+ * a narrow result pane switches genre and title to two compact lines instead
+ * of replacing the markup at a viewport breakpoint. */
+.soridraw-library-item-title-wrap {
+  min-width: 0 !important;
+}
+
+.soridraw-library-item-title {
+  display: flex !important;
+  align-items: baseline !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: nowrap !important;
+}
+
+.soridraw-library-item-genre {
+  flex: 0 0 auto !important;
+  margin-right: 4px !important;
+}
+
+.soridraw-library-item-name {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-meta {
+    font-size: 8px !important;
+    gap: 5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-item-title-wrap {
+    font-size: 10.5px !important;
+    line-height: 1.08 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-item-title {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+    overflow-x: auto !important;
+    white-space: normal !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-item-genre {
+    margin-right: 0 !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-item-name {
+    max-width: 100% !important;
+    font-size: 10.5px !important;
+    line-height: 1.08 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-track-row {
+    gap: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-track-row span[class*="text-[10px]"],
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-track-row span[class*="text-xs"] {
+    font-size: 8.5px !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .soridraw-library-workspace-meta {
+    font-size: 8px !important;
+    gap: 5px !important;
+  }
+
+  .soridraw-library-item-title-wrap {
+    font-size: 10.5px !important;
+    line-height: 1.08 !important;
+  }
+
+  .soridraw-library-item-title {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+    white-space: normal !important;
+  }
+
+  .soridraw-library-item-genre {
+    margin-right: 0 !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  .soridraw-library-item-name {
+    max-width: 100% !important;
+    font-size: 10.5px !important;
+    line-height: 1.08 !important;
+  }
+}
+
+
+/* 376: Library labels and song typography align with Music Note.
+ * Keep the three-tab shell unchanged, enlarge only narrow-pane labels,
+ * make workspace date/count easier to read, and use a stable two-line
+ * genre/title layout at every width. */
+.soridraw-library-item-title {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 3px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  white-space: normal !important;
+}
+
+.soridraw-library-item-genre {
+  flex: 0 0 auto !important;
+  margin-right: 0 !important;
+  width: max-content !important;
+  max-width: none !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.soridraw-library-item-name {
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  max-width: none !important;
+  min-width: max-content !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  line-height: 1.12 !important;
+  white-space: nowrap !important;
+}
+
+.soridraw-library-workspace-meta {
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+}
+
+@media (min-width: 768px) {
+  .soridraw-library-item-genre {
+    font-size: 13px !important;
+  }
+
+  .soridraw-library-item-name {
+    font-size: 15px !important;
+  }
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-mode-tab {
+    font-size: 10.5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-meta {
+    font-size: 9.5px !important;
+    gap: 5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-item-genre {
+    font-size: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-item-name {
+    font-size: 11.5px !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .soridraw-library-mode-tab {
+    font-size: 11px !important;
+  }
+
+  .soridraw-library-workspace-meta {
+    font-size: 9.5px !important;
+    gap: 5px !important;
+  }
+
+  .soridraw-library-item-genre {
+    font-size: 10px !important;
+  }
+
+  .soridraw-library-item-name {
+    font-size: 11.5px !important;
+  }
+}
+
+/* 377: Vertically center the three navigation labels and make the compact
+ * Music Note / Library search controls share one exact alignment model. */
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  align-items: stretch !important;
+}
+
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 40px !important;
+  line-height: 1 !important;
+}
+
+.soridraw-responsive-top-controls,
+.soridraw-responsive-search-slot,
+.soridraw-responsive-search {
+  min-height: 46px;
+}
+
+.soridraw-responsive-search-icon {
+  height: 46px !important;
+  align-items: center !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+    min-height: 40px !important;
+    line-height: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  :is(.soridraw-responsive-top-controls, .soridraw-responsive-search-slot, .soridraw-responsive-search) {
+    height: 46px !important;
+    min-height: 46px !important;
+    align-items: center !important;
+  }
+}
+
+@media (max-width: 767px) {
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+    min-height: 40px !important;
+    line-height: 1 !important;
+  }
+
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  :is(.soridraw-responsive-top-controls, .soridraw-responsive-search-slot, .soridraw-responsive-search) {
+    height: 46px !important;
+    min-height: 46px !important;
+    align-items: center !important;
+  }
+}
+
+/* 378: Keep the Suno Library credit shortcut compact when the result pane
+ * switches to its mobile layout. The desktop/full-width button remains intact. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-credit-button {
+    height: 36px !important;
+    min-height: 36px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .soridraw-library-theme .soridraw-library-credit-button {
+    height: 34px !important;
+    min-height: 34px !important;
+    padding-left: 9px !important;
+    padding-right: 9px !important;
+    border-radius: 11px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+}
+
+
+
+/* 380: Music Note / Suno Library frame-rate pass.
+ * Long lists skip layout/paint work while they are outside the viewport.
+ * Inline menus opt back into normal rendering. During splitter dragging, all
+ * nonessential transitions, keyframes and hit-testing in these pages are
+ * suspended so width changes can stay on the layout fast path. */
+.soridraw-list-perf-item:not(.soridraw-list-perf-item--active) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 108px;
+  contain: layout style paint;
+}
+
+.soridraw-library-workspace-group.soridraw-list-perf-item:not(.soridraw-list-perf-item--active) {
+  contain-intrinsic-size: auto 190px;
+}
+
+.soridraw-list-perf-item--active {
+  content-visibility: visible;
+  contain: none;
+}
+
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme),
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) * {
+  animation: none !important;
+  transition: none !important;
+}
+
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+  pointer-events: none !important;
+  user-select: none !important;
+}

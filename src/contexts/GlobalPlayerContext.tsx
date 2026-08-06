@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 
 export interface Track {
   url: string;
@@ -54,6 +54,13 @@ interface GlobalPlayerContextType {
 }
 
 const GlobalPlayerContext = createContext<GlobalPlayerContextType | null>(null);
+
+type GlobalPlayerControlsContextType = Pick<
+  GlobalPlayerContextType,
+  'currentTrack' | 'isPlaying' | 'playTrack' | 'togglePlayPause' | 'setIsSharedPlayerMode'
+>;
+
+const GlobalPlayerControlsContext = createContext<GlobalPlayerControlsContextType | null>(null);
 
 export function GlobalPlayerProvider({ children }: { children: React.ReactNode }) {
   // App lifecycle singleton audio instance. Do not recreate this per track.
@@ -554,7 +561,19 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
   }, []);
 
 
+  // List-heavy pages only need track identity and play controls. Keeping this
+  // value separate prevents audio currentTime updates from re-rendering every
+  // Library card several times per second while a song is playing.
+  const controlsValue = useMemo<GlobalPlayerControlsContextType>(() => ({
+    currentTrack,
+    isPlaying,
+    playTrack,
+    togglePlayPause,
+    setIsSharedPlayerMode,
+  }), [currentTrack, isPlaying, playTrack, togglePlayPause, setIsSharedPlayerMode]);
+
   return (
+    <GlobalPlayerControlsContext.Provider value={controlsValue}>
     <GlobalPlayerContext.Provider
       value={{
         currentTrack,
@@ -586,7 +605,16 @@ export function GlobalPlayerProvider({ children }: { children: React.ReactNode }
     >
       {children}
     </GlobalPlayerContext.Provider>
+    </GlobalPlayerControlsContext.Provider>
   );
+}
+
+export function useGlobalPlayerControls() {
+  const context = useContext(GlobalPlayerControlsContext);
+  if (!context) {
+    throw new Error('useGlobalPlayerControls must be used within a GlobalPlayerProvider');
+  }
+  return context;
 }
 
 export function useGlobalPlayer() {

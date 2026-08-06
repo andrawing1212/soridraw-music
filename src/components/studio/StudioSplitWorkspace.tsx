@@ -114,12 +114,21 @@ export function StudioResultPane({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
+
 type StudioSplitWorkspaceProps = {
   children: ReactNode;
   viewMode?: 'split' | 'result-only' | 'hidden';
+  workspaceView?: StudioWorkspaceView;
+  workspaceRequestId?: number;
 };
 
-export default function StudioSplitWorkspace({ children, viewMode = 'split' }: StudioSplitWorkspaceProps) {
+export default function StudioSplitWorkspace({
+  children,
+  viewMode = 'split',
+  workspaceView,
+  workspaceRequestId = 0,
+}: StudioSplitWorkspaceProps) {
   const panes = Children.toArray(children);
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
@@ -941,11 +950,33 @@ export default function StudioSplitWorkspace({ children, viewMode = 'split' }: S
       return;
     }
 
-    if (viewMode === 'hidden' || previousViewMode !== 'split') {
+    if (viewMode === 'hidden') {
+      setIsBuilderCollapsed(false);
+      setIsResultCollapsed(false);
+      return;
+    }
+
+    // WORKSPACE navigation keeps both panes mounted so every Sori Studio
+    // selection/draft remains intact. "곡 만들기" opens the builder as the
+    // single full-width workspace, while every lower WORKSPACE item starts
+    // from a clean two-pane split even if either pane was previously folded.
+    if (workspaceView === 'create') {
+      setIsBuilderCollapsed(false);
+      setIsResultCollapsed(true);
+      return;
+    }
+
+    if (workspaceView) {
+      setIsBuilderCollapsed(false);
+      setIsResultCollapsed(false);
+      return;
+    }
+
+    if (previousViewMode !== 'split') {
       setIsBuilderCollapsed(false);
       setIsResultCollapsed(false);
     }
-  }, [viewMode]);
+  }, [viewMode, workspaceRequestId, workspaceView]);
 
   const renderedBounds = getSplitBounds(metricsRef.current.width);
 

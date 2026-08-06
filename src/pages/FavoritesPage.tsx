@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useDeferredValue } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
@@ -708,6 +708,7 @@ export default function FavoritesPage({
   const musicNoteShareParam = new URLSearchParams(window.location.search).get('note');
   const isMusicNoteShareRoute = Boolean(musicNoteShareParam);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [serverSearchFavorites, setServerSearchFavorites] = useState<any[]>([]);
   const [isServerSearchLoading, setIsServerSearchLoading] = useState(false);
   const [isManualSyncingFavorites, setIsManualSyncingFavorites] = useState(false);
@@ -716,7 +717,7 @@ export default function FavoritesPage({
   const serverSearchRunIdRef = useRef(0);
   const [musicNoteViewMode, setMusicNoteViewMode] = useState<'noteSpace' | 'myNote' | 'sharedNote'>('noteSpace');
   const baseFavoriteSource = isMusicNoteSharedView ? sharedMusicNoteSongs : favorites;
-  const activeFavoriteSource = !isMusicNoteSharedView && searchQuery.trim()
+  const activeFavoriteSource = !isMusicNoteSharedView && deferredSearchQuery.trim()
     ? mergeMusicNoteSearchSource(baseFavoriteSource, serverSearchFavorites)
     : baseFavoriteSource;
   const [creatorNameByUid, setCreatorNameByUid] = useState<Record<string, string>>({});
@@ -1127,7 +1128,6 @@ export default function FavoritesPage({
   const deleteTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [drafts, setDrafts] = useState<Record<string, { title: string; korean: string; english: string; prompt: string; isEditing: boolean; activeEditSection: 'title' | 'lyrics-ko' | 'lyrics-en' | 'prompt' | null; foreignTargetLanguage?: string }>>({});
   const favoriteDraftCommitRef = useRef(false);
-  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
@@ -1176,13 +1176,6 @@ export default function FavoritesPage({
   const selectionBeforeSelectAllRef = useRef<string[]>([]);
   const selectionHistoryPushedRef = useRef(false);
   const detailHistoryPushedRef = useRef(false);
-  const placeholders = [
-    "제목으로 검색해보세요...",
-    "가사 내용으로 검색해보세요...",
-    "장르나 키워드로 검색해보세요...",
-    "분위기로 검색해보세요..."
-  ];
-
   useEffect(() => {
     let cancelled = false;
     const loadUserProfile = async () => {
@@ -2585,13 +2578,6 @@ export default function FavoritesPage({
     };
     document.addEventListener('click', closeMenus);
     return () => document.removeEventListener('click', closeMenus);
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPlaceholderIndex((prev) => (prev + 1) % placeholders.length);
-    }, 4000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -4675,7 +4661,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     });
   };
 
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase();
   const songMatchesMusicNoteSearch = (song: any, queryText = normalizedSearchQuery) => {
     if (!queryText) return true;
     return (song.koreanTitle || '').toLowerCase().includes(queryText) ||
@@ -5376,7 +5362,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none z-10">
+            <div className="soridraw-responsive-search-icon absolute inset-y-0 left-4 z-10 flex items-center pointer-events-none">
               <Search className="w-4 h-4 text-[var(--text-secondary)] group-focus-within:text-[#FF5C52] transition-colors" />
             </div>
             <input
@@ -5395,18 +5381,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
             />
             {!searchQuery && !isSearchFocused && (
               <div className="soridraw-responsive-search-placeholder absolute inset-0 flex items-center pl-12 pr-4 pointer-events-none overflow-hidden">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={placeholderIndex}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -12 }}
-                    transition={{ duration: 0.35 }}
-                    className="text-sm text-white/40 whitespace-nowrap"
-                  >
-                    {placeholders[placeholderIndex]}
-                  </motion.div>
-                </AnimatePresence>
+                <div className="text-sm text-white/40 whitespace-nowrap">제목이나 키워드로 검색해보세요...</div>
               </div>
             )}
             </div>
@@ -5581,12 +5556,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 : '';
 
               return (
-                <motion.div
+                <div
                   key={song.id}
                   data-selection-keep="true"
-                  initial={{ opacity: 1, x: 0 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0 }}
                   onMouseDown={(event) => {
                     handleSelectionDragStart(event, song.id);
                     handleCardLongPressStart(event, song);
@@ -5648,8 +5620,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     setSelectedSong(song);
                   }}
                   className={cn(
-                    "soridraw-musicnote-song-card group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
-                    (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "z-[220]" : "z-0",
+                    "soridraw-musicnote-song-card soridraw-list-perf-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
+                    (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "soridraw-list-perf-item--active z-[220]" : "z-0",
                     isSelectionMode ? "cursor-pointer" : "",
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
                   )}
@@ -5904,7 +5876,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               );
             })}
           </div>

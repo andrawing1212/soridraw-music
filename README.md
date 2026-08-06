@@ -86,3 +86,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 362~365차에서 추가된 별 등급 전용 CSS와 임시 별점 매핑은 제거했습니다.
 - 뮤직노트 곡 목록의 선택 키워드 칩이 서로 겹치지 않도록 한 363차 수정은 그대로 유지했습니다.
 - 기존 사용자 색상 데이터와 Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+
+## 380차 성능 최적화
+- 뮤직노트/라이브러리 검색 안내 문구의 4초 자동 교체와 모션을 제거해 전체 페이지 주기적 재렌더를 없앴습니다.
+- 검색 결과 계산에 React deferred value를 적용해 입력 타이핑과 대형 목록 필터 계산을 분리했습니다.
+- 화면 밖 목록 카드에 content-visibility를 적용하고, 분할바 드래그 중 전환/애니메이션/hover hit-test를 일시 중지했습니다.
+- 목록 카드에 붙어 있던 실제 동작 없는 motion wrapper를 일반 div로 변경했습니다.
+- 라이브러리는 재생 진행시간이 바뀔 때마다 전체 목록이 재렌더되던 GlobalPlayer 전체 Context 구독을 끊고, 재생 제어 전용 Context만 구독하도록 분리했습니다.

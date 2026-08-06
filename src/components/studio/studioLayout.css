@@ -9675,7 +9675,153 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     [data-workspace-view="library"]
   ) .soridraw-studio-workspace-hero-host > .soridraw-workspace-ported-header {
     position: relative !important;
-    top: 46px !important;
+    top: 64px !important;
     transform: none !important;
   }
+}
+
+
+/* 426 — Make the Music Note / Suno Library category shell and its inner buttons
+ * share one exact outer height. The existing 4px parent padding created a visible
+ * inset, so the active button looked smaller than the parent container. Remove
+ * the inset, clip the strip with the parent radius, and let each of the three
+ * buttons occupy the full shell height. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  padding: 0 !important;
+  gap: 0 !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  min-height: 48px !important;
+  height: 48px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-radius: 0 !important;
+  align-self: stretch !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):first-child {
+  border-top-left-radius: 16px !important;
+  border-bottom-left-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):last-child {
+  border-top-right-radius: 16px !important;
+  border-bottom-right-radius: 16px !important;
+}
+
+
+/* 427 — Restore the approved inset tab style from 425, but remove only the
+ * outer horizontal gap on the active edge tab. The parent keeps its 4px inner
+ * breathing room and the buttons keep the smaller 40px height. When the first
+ * or last tab is active, only that outside end extends across the parent's 4px
+ * side padding so its rounded end lands exactly on the parent edge. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  padding: 4px !important;
+  gap: 0 !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  min-height: 40px !important;
+  height: 40px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-radius: 12px !important;
+  align-self: center !important;
+  width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):first-child:is(
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  width: calc(100% + 4px) !important;
+  margin-left: -4px !important;
+  border-top-left-radius: 16px !important;
+  border-bottom-left-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):last-child:is(
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  width: calc(100% + 4px) !important;
+  margin-right: -4px !important;
+  border-top-right-radius: 16px !important;
+  border-bottom-right-radius: 16px !important;
+}
+
+/* 428 — Keep the approved inset tab-button height, but make the outside end
+ * cover the parent edge whenever the edge tab is hovered or selected.
+ * The previous rule extended only the selected state and did not lock the
+ * rendered button box in every compact split-pane state. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  box-sizing: border-box !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 4px !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  box-sizing: border-box !important;
+  height: 40px !important;
+  min-height: 40px !important;
+  max-height: 40px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  align-self: center !important;
+  border-radius: 12px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):first-child:is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  width: calc(100% + 4px) !important;
+  margin-left: -4px !important;
+  margin-right: 0 !important;
+  border-top-left-radius: 16px !important;
+  border-bottom-left-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):last-child:is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+) {
+  width: calc(100% + 4px) !important;
+  margin-left: 0 !important;
+  margin-right: -4px !important;
+  border-top-right-radius: 16px !important;
+  border-bottom-right-radius: 16px !important;
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -233,6 +234,21 @@ function AnimatedTrackPlayButton({
 
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
   const navigate = useNavigate();
+  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const syncStudioWorkspaceHeroHost = () => {
+      const nextHost = window.innerWidth >= 1100
+        ? document.getElementById('soridraw-studio-workspace-hero-host')
+        : null;
+      setStudioWorkspaceHeroHost(nextHost);
+    };
+
+    syncStudioWorkspaceHeroHost();
+    window.addEventListener('resize', syncStudioWorkspaceHeroHost);
+    return () => window.removeEventListener('resize', syncStudioWorkspaceHeroHost);
+  }, []);
+
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusChecking, setStatusChecking] = useState<string | null>(null);
@@ -5399,11 +5415,15 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         <div className="soridraw-library-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[520px] md:w-fit md:max-w-none">
           <button
             onClick={() => setLibraryViewMode('workspace')}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            aria-pressed={libraryViewMode === 'workspace'}
+            data-active={libraryViewMode === 'workspace' ? 'true' : 'false'}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'soridraw-library-mode-tab--active bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
           </button>
           <button
+            aria-pressed={libraryViewMode === 'playlist'}
+            data-active={libraryViewMode === 'playlist' ? 'true' : 'false'}
             onClick={() => {
               if (libraryViewMode !== 'playlist') {
                 setLibraryViewMode('playlist');
@@ -5413,11 +5433,13 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'soridraw-library-mode-tab--active bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             마이 리스트
           </button>
           <button
+            aria-pressed={libraryViewMode === 'sharedPlaylist'}
+            data-active={libraryViewMode === 'sharedPlaylist' ? 'true' : 'false'}
             onClick={() => {
               if (libraryViewMode !== 'sharedPlaylist') {
                 setLibraryViewMode('sharedPlaylist');
@@ -5427,7 +5449,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'soridraw-library-mode-tab--active bg-[#7FBD75]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             공유 리스트
           </button>
@@ -5690,6 +5712,50 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       </div>
     );
   };
+
+  const libraryPageHeader = (
+    <motion.div
+      initial={false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0 }}
+      className="soridraw-workspace-ported-header flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+    >
+      <div className="flex items-start gap-4 min-w-0">
+        {isSharedView && (
+          <button
+            onClick={() => navigate('/studio')}
+            className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
+          >
+            <Zap className="w-4 h-4" />스튜디오
+          </button>
+        )}
+        <div className="min-w-0">
+          <div className="soridraw-page-title-hover relative inline-flex max-w-full">
+            <h1
+              className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
+              title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
+            >
+              {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
+            </h1>
+            <div className="soridraw-page-title-description" role="tooltip">
+              {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-2 items-center self-end md:self-center">
+        {!isSharedView && typeof remainingCredits === 'number' && (
+          <button
+            type="button"
+            onClick={handleCreditShortcutClick}
+            className="soridraw-library-credit-button hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
+          >
+            남은 크레딧 {remainingCredits.toLocaleString()}
+          </button>
+        )}
+      </div>
+    </motion.div>
+  );
 
   return (
     <div
@@ -6075,51 +6141,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
 
         {/* Header Block */}
-        <motion.div
-          initial={false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0 }}
-          className="flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
-        >
-          <div className="flex items-start gap-4 min-w-0">
-            {isSharedView && (
-              <button
-                onClick={() => navigate('/studio')}
-                className="hidden md:flex mt-1 px-4 py-2.5 text-sm font-bold rounded-xl border border-btn-border bg-btn-bg text-[var(--text-secondary)] hover:text-[#FFBB22] hover:bg-btn-hover shadow-btn transition-all shrink-0 items-center gap-2"
-              >
-                <Zap className="w-4 h-4" />스튜디오
-              </button>
-            )}
-            <div className="min-w-0">
-              <div className="soridraw-page-title-hover relative inline-flex max-w-full">
-                <h1
-                  className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
-                  title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
-                >
-                  {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#7FBD75]">Library</span></>}
-                </h1>
-                <div className="soridraw-page-title-description" role="tooltip">
-                  {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2 items-center self-end md:self-center">
-          {!isSharedView && (
-            <>
-              {typeof remainingCredits === 'number' && (
-                <button
-                  type="button"
-                  onClick={handleCreditShortcutClick}
-                  className="soridraw-library-credit-button hidden md:flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#7FBD75]/22 bg-[#7FBD75]/12 text-xs font-bold text-[#C7F7BD] transition-all hover:bg-[#7FBD75]/18 active:scale-[0.98]"
-                >
-                  남은 크레딧 {remainingCredits.toLocaleString()}
-                </button>
-              )}
-            </>
-          )}
-          </div>
-        </motion.div>
+        {studioWorkspaceHeroHost
+          ? createPortal(libraryPageHeader, studioWorkspaceHeroHost)
+          : libraryPageHeader}
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
@@ -6494,6 +6518,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedNormalPlaylistId(playlist.id!);
                         setActivePlaylistSection('normal');
                       }}
+                      aria-pressed={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id}
+                      data-active={activePlaylistSection === 'normal' && selectedNormalPlaylistId === playlist.id ? 'true' : 'false'}
                       className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${
@@ -6543,6 +6569,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         setSelectedSharedPlaylistId(playlist.id!);
                         setActivePlaylistSection('shared');
                       }}
+                      aria-pressed={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id}
+                      data-active={activePlaylistSection === 'shared' && selectedSharedPlaylistId === playlist.id ? 'true' : 'false'}
                       className={`soridraw-library-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border flex items-center gap-1.5 touch-pan-x select-none ${
                         !isDefaultPlaylist && !(playlist as any).isFallback ? 'cursor-grab active:cursor-grabbing touch-pan-x' : 'touch-pan-x'
                       } ${

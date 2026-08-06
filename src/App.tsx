@@ -14102,18 +14102,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </button>
                   )}
 
-                  <motion.div
-                    initial={false}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex flex-col items-start mt-4 md:mt-10 translate-y-6 md:translate-y-5"
-                  >
-                    <h1 
-                      className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                  <div className="soridraw-studio-hero-row">
+                    <motion.div
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="soridraw-studio-masthead flex flex-col items-start mt-4 md:mt-10"
                     >
-                      <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
-                      <span>Sori <span className="text-[#FFB400]">Studio</span></span>
-                    </h1>
-                  </motion.div>
+                      <h1 
+                        className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                      >
+                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
+                      </h1>
+                    </motion.div>
+                    <div
+                      id="soridraw-studio-workspace-hero-host"
+                      className="soridraw-studio-workspace-hero-host"
+                      aria-live="polite"
+                    />
+                  </div>
                 </div>
               </header>
 

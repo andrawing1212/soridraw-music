@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useDeferredValue } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
+import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
 import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
@@ -697,6 +699,21 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const syncStudioWorkspaceHeroHost = () => {
+      const nextHost = window.innerWidth >= 1100
+        ? document.getElementById('soridraw-studio-workspace-hero-host')
+        : null;
+      setStudioWorkspaceHeroHost(nextHost);
+    };
+
+    syncStudioWorkspaceHeroHost();
+    window.addEventListener('resize', syncStudioWorkspaceHeroHost);
+    return () => window.removeEventListener('resize', syncStudioWorkspaceHeroHost);
+  }, []);
+
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
   const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
   const [sharedMusicNoteLoading, setSharedMusicNoteLoading] = useState(false);
@@ -5180,6 +5197,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                   resetVisibleCount();
                   exitSelectionMode('ui');
                 }}
+                aria-pressed={selectedId === folder.id}
+                data-active={selectedId === folder.id ? 'true' : 'false'}
                 className={cn(
                   'soridraw-musicnote-folder-button shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all border select-none inline-flex items-center gap-1.5',
                   !isDefaultFolder && 'cursor-grab active:cursor-grabbing touch-pan-x',
@@ -5249,6 +5268,58 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     );
   };
 
+  const musicNotePageHeader = (
+    <motion.div
+      initial={false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0 }}
+      className="soridraw-workspace-ported-header mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
+    >
+      <div className="min-w-0">
+        <div className="soridraw-page-title-hover relative inline-flex max-w-full">
+          <h1
+            className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
+            title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
+          >
+            {isMusicNoteSharedView ? (
+              <span>공유 <span className="text-[#FF5C52]">뮤직노트</span></span>
+            ) : (
+              <span>Music <span className="text-[#FF5C52]">Note</span></span>
+            )}
+          </h1>
+          <div className="soridraw-page-title-description" role="tooltip">
+            {isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
+          </div>
+        </div>
+      </div>
+      {!isMusicNoteSharedView && (
+        <button
+          type="button"
+          disabled={!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday}
+          onClick={handleManualFavoriteSync}
+          onMouseEnter={() => onHover({
+            id: 'music-note-manual-sync',
+            label: '동기화',
+            description: isManualSyncUsedToday ? '오늘 수동 동기화 1회를 이미 사용했습니다.' : '서버의 최신 뮤직노트 20개를 다시 확인합니다. 하루 1회만 사용할 수 있습니다.',
+            _ts: Date.now(),
+          })}
+          onMouseLeave={() => onHover(null)}
+          className={cn(
+            "soridraw-musicnote-hero-sync flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/55 transition-all",
+            isManualSyncingFavorites
+              ? "cursor-wait text-[#FFBB22]"
+              : isManualSyncUsedToday
+                ? "cursor-not-allowed opacity-35"
+                : "hover:bg-white/[0.09] hover:text-[#FFBB22]"
+          )}
+          title={isManualSyncUsedToday ? '오늘 동기화 1회 사용 완료' : '뮤직노트 동기화'}
+        >
+          <RefreshCw className={cn("h-4 w-4", isManualSyncingFavorites && "animate-spin")} />
+        </button>
+      )}
+    </motion.div>
+  );
+
   return (
     <div 
       className={cn(
@@ -5306,56 +5377,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
       <div className="md:hidden h-7" aria-hidden="true" />
-      <motion.div
-        initial={false}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0 }}
-        className="mb-4 md:mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4 translate-y-2 md:translate-y-3"
-      >
-          <div className="min-w-0">
-            <div className="soridraw-page-title-hover relative inline-flex max-w-full">
-              <h1
-                className={cn("text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
-                title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
-              >
-                {isMusicNoteSharedView ? (
-                  <span>공유 <span className="text-[#FF5C52]">뮤직노트</span></span>
-                ) : (
-                  <span>Music <span className="text-[#FF5C52]">Note</span></span>
-                )}
-              </h1>
-              <div className="soridraw-page-title-description" role="tooltip">
-                {isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
-              </div>
-            </div>
-          </div>
-          {!isMusicNoteSharedView && (
-            <button
-              type="button"
-              disabled={!onManualSyncFavorites || isManualSyncingFavorites || isManualSyncUsedToday}
-              onClick={handleManualFavoriteSync}
-              onMouseEnter={() => onHover({
-                id: 'music-note-manual-sync',
-                label: '동기화',
-                description: isManualSyncUsedToday ? '오늘 수동 동기화 1회를 이미 사용했습니다.' : '서버의 최신 뮤직노트 20개를 다시 확인합니다. 하루 1회만 사용할 수 있습니다.',
-                _ts: Date.now(),
-              })}
-              onMouseLeave={() => onHover(null)}
-              className={cn(
-                "soridraw-musicnote-hero-sync flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.055] text-white/55 transition-all",
-                isManualSyncingFavorites
-                  ? "cursor-wait text-[#FFBB22]"
-                  : isManualSyncUsedToday
-                    ? "cursor-not-allowed opacity-35"
-                    : "hover:bg-white/[0.09] hover:text-[#FFBB22]"
-              )}
-              title={isManualSyncUsedToday ? '오늘 동기화 1회 사용 완료' : '뮤직노트 동기화'}
-            >
-              <RefreshCw className={cn("h-4 w-4", isManualSyncingFavorites && "animate-spin")} />
-            </button>
-          )}
-
-      </motion.div>
+      {studioWorkspaceHeroHost
+        ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
+        : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (
       <div className="space-y-4 md:space-y-5">
@@ -5500,10 +5524,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
               onTouchStart={() => onLongPressStart({ id: `music-note-tab-${tab.id}`, label: tab.label, description: tab.description })}
               onTouchEnd={onLongPressEnd}
+              aria-pressed={musicNoteViewMode === tab.id}
+              data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
               className={cn(
                 'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
-                  ? 'bg-[#FF5C52]/78 text-white shadow-lg'
+                  ? 'soridraw-musicnote-mode-tab--active bg-[#FF5C52]/78 text-white shadow-lg'
                   : 'text-white/60 hover:text-white'
               )}
             >
@@ -6543,23 +6569,24 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       </AnimatePresence>
 
       {/* Lyrics Modal */}
+      <StudioCenterModalPortal themeClassName="soridraw-musicnote-theme">
       <AnimatePresence>
         {selectedSong && (
-          <div className="fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
+          <div className="soridraw-detail-modal-frame fixed inset-0 z-[350] flex items-center justify-center p-3 md:p-6 font-sans">
             <motion.div
               initial={{ opacity: 1 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 1 }}
               transition={{ duration: 0 }}
               onClick={() => closeSelectedSong()}
-              className="absolute inset-0 bg-black/72 backdrop-blur-[7px]"
+              className="soridraw-detail-modal-backdrop absolute inset-0 bg-black/60 backdrop-blur-[5px]"
             />
             <motion.div
               initial={{ opacity: 1, scale: 1, y: 0 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0 }}
-              className="relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
+              className="soridraw-musicnote-detail-panel relative flex w-full max-w-[1120px] flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#131313] shadow-[0_40px_140px_rgba(0,0,0,0.58)] max-h-[92vh] musicnote-edit-mobile-boost"
               onClick={(e) => e.stopPropagation()}
               onClickCapture={(e) => {
                 if (confirmDeleteSong && !(e.target as HTMLElement).closest('[data-detail-delete-button="true"]')) {
@@ -7524,6 +7551,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           </div>
         )}
       </AnimatePresence>
+      </StudioCenterModalPortal>
 
       <AnimatePresence>
         {showFavoriteMusicApiModal && selectedSong && (

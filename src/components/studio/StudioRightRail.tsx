@@ -110,7 +110,28 @@ function RecentSongScrollableCopy({ title, time }: RecentSongScrollableCopyProps
     const target = scrollRef.current;
     if (!target || target.scrollWidth <= target.clientWidth) return;
 
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+    const railScroller = target.closest('.soridraw-studio-dashboard-inner') as HTMLElement | null;
+    const isVerticalIntent = !event.shiftKey && Math.abs(event.deltaY) >= Math.abs(event.deltaX);
+
+    if (isVerticalIntent && railScroller) {
+      const maxScrollTop = Math.max(0, railScroller.scrollHeight - railScroller.clientHeight);
+      const canScrollRail = event.deltaY > 0
+        ? railScroller.scrollTop < maxScrollTop - 1
+        : railScroller.scrollTop > 1;
+
+      if (canScrollRail) {
+        railScroller.scrollTop = Math.max(0, Math.min(maxScrollTop, railScroller.scrollTop + event.deltaY));
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+    }
+
+    const delta = event.shiftKey
+      ? event.deltaY
+      : Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY;
     if (delta === 0) return;
 
     target.scrollLeft += delta;
@@ -177,7 +198,10 @@ export default function StudioRightRail({
   const visibleRecentSongs = showAllRecentSongs ? history : history.slice(0, 3);
 
   return (
-    <aside className="soridraw-studio-dashboard-panel" aria-label="소리스튜디오 보조 대시보드">
+    <aside
+      className={`soridraw-studio-dashboard-panel${showAllRecentSongs ? ' is-recent-expanded' : ''}`}
+      aria-label="소리스튜디오 보조 대시보드"
+    >
       <div className="soridraw-studio-dashboard-inner">
         <section className="soridraw-studio-dashboard-card soridraw-studio-dashboard-status">
           <div className="soridraw-studio-dashboard-heading">

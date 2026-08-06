@@ -94,3 +94,125 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 화면 밖 목록 카드에 content-visibility를 적용하고, 분할바 드래그 중 전환/애니메이션/hover hit-test를 일시 중지했습니다.
 - 목록 카드에 붙어 있던 실제 동작 없는 motion wrapper를 일반 div로 변경했습니다.
 - 라이브러리는 재생 진행시간이 바뀔 때마다 전체 목록이 재렌더되던 GlobalPlayer 전체 Context 구독을 끊고, 재생 제어 전용 Context만 구독하도록 분리했습니다.
+
+## 381차 중앙 디테일 팝업 통합
+- 분할모드에서 뮤직노트와 Suno Library의 디테일 창을 오른쪽 결과 pane 내부가 아니라 좌우 pane 전체가 공유하는 중앙 오버레이에 표시합니다.
+- 중앙 오버레이의 위치와 크기는 현재 Studio 중앙 workspace 경계를 기준으로 계산하므로 왼쪽/오른쪽 보조 rail과 상단 전역 메뉴는 가리지 않습니다.
+- 독립 뮤직노트/라이브러리 페이지에서는 기존 전체 페이지 팝업 동작을 유지합니다.
+- 분할모드 디테일 배경의 blur와 반투명 비침을 제거하고 각 페이지의 기본 패널 색을 불투명하게 유지해 뿌연 색감 차이를 줄였습니다.
+- 곡 데이터, Firebase/Auth/Firestore 저장 구조와 디테일 기능은 변경하지 않았습니다.
+
+### 382차 — 우측 최근 생성곡 확장 시 전체 스크롤 복구
+- 최근 생성곡을 `전체`로 펼쳤을 때 선택된 키워드 카드가 짧은 내부 스크롤로 압축되던 구조를 제거했습니다.
+- 펼친 상태에서는 오른쪽 보조 메뉴 자체가 세로 스크롤을 소유하며, 선택된 키워드 마지막 항목까지 확인할 수 있습니다.
+- 최근 생성곡의 긴 제목 위에서 마우스 휠을 사용해도 오른쪽 메뉴가 더 내려갈 수 있는 동안에는 세로 스크롤을 우선합니다.
+- 중앙 작업영역과 전체 페이지 스크롤에는 영향을 주지 않습니다.
+
+
+## 383차 — 디테일 팝업 클리핑 제거 및 배경 명도 조정
+- 분할모드의 Music Note / Suno Library 디테일 창을 body 기반 공통 중앙 레이어에서 렌더링합니다.
+- 중앙 모달 호스트의 `overflow:hidden`, transform, paint containment를 제거해 분할 pane 경계에 잘리지 않게 했습니다.
+- 모달 프레임을 중앙 호스트 기준 absolute 레이어로 고정하고 패널 높이를 공통 중앙영역에 맞게 제한합니다.
+- 분할모드 backdrop은 `rgba(0,0,0,0.56)`으로 낮춰 기존보다 배경이 조금 덜 어두워집니다.
+- 독립 뮤직노트/라이브러리 페이지의 backdrop도 각각 소폭 밝게 조정했습니다.
+- 곡 데이터와 Firebase 저장 구조는 변경하지 않았습니다.
+
+## 384차 — Sori Studio 대문·검색 위치 조정
+- 분할모드 Sori Studio 대문을 기존보다 14px 아래로 이동해 첫 카드와의 과한 공백을 줄였습니다.
+- 통합 검색 버튼을 기존보다 아래로 내리고 빌더 안쪽으로 8px 이동했습니다.
+- 곡 만들기 단독 전체화면에서도 같은 간격을 유지합니다.
+- 카드 위치, 분할 너비, Classic 테마, Firebase 저장 구조는 변경하지 않았습니다.
+
+
+## 385차 — 디테일창 전체화면 오버레이 및 Sori Studio 대문 잘림 수정
+- 분할모드의 뮤직노트·Suno Library 디테일창 공통 포털 영역을 중앙 workspace 경계가 아닌 브라우저 전체 화면으로 확장했습니다.
+- 디테일창을 열면 상단 메뉴와 좌우 보조 메뉴까지 포함한 전체 창이 함께 어두워지고, 팝업 패널은 분할선 경계에 제한되지 않습니다.
+- 384차에서 추가한 Sori Studio 대문의 14px 상대 이동을 취소하고 헤더 오버플로를 열어 글자 일부가 가려지는 문제를 수정했습니다.
+- 곡 데이터, Firebase/Auth/Firestore 저장 구조, Classic 테마는 변경하지 않았습니다.
+
+## 386차 — Sori Studio 대문 상단 간격 조정
+- 분할모드 Sori Studio 대문을 현재 위치에서 10px 위로 이동해 Music Note 대문처럼 상단 구분선에 더 가깝게 배치했습니다.
+- 헤더와 내부 셸의 오버플로를 계속 열어 둬 글자 상단·하단이 잘리지 않도록 유지했습니다.
+- 첫 카드 위치, 통합 검색 버튼, 디테일창 전체화면 오버레이, Classic 테마와 Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## 387차 — 뮤직노트·라이브러리 선택 탭 색상 및 검색 아이콘 정렬
+- 뮤직노트의 노트 스페이스/마이 노트/공유 노트에서 현재 선택된 탭이 빨간 강조색으로 확실히 표시되도록 전용 활성 상태 클래스를 추가했습니다.
+- Suno Library의 뮤직 스페이스/마이 리스트/공유 리스트도 현재 선택된 탭이 초록 강조색으로 표시되도록 동일한 방식으로 수정했습니다.
+- 좁은 분할화면과 모바일에서 42px 검색 버튼으로 접혀 있을 때 돋보기 아이콘이 버튼의 정확한 좌우 중앙에 오도록 맞췄습니다.
+- 검색창을 누르면 기존처럼 입력창이 펼쳐지고, 펼친 상태에서는 아이콘이 정상적인 왼쪽 입력 여백으로 이동합니다.
+- 곡 데이터, 폴더 데이터, 검색 기능, Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## 388차 — 장르·스타일·사운드 접힘 키워드 정확히 한 줄
+- 접힌 상태에서 키워드 영역만 첫 번째 버튼 줄 높이인 58px로 고정했습니다.
+- 두 번째 키워드 줄이 일부 걸쳐 보이던 현상을 제거했습니다.
+- 제목, 카드 시작 위치, 요약 입력창 사이에 추가 간격을 만들지 않고 오히려 불필요했던 18px 빈 영역을 제거했습니다.
+- 펼친 상태의 전체 키워드, 팝업, 선택, 잠금, 랜덤, 직접입력 기능은 변경하지 않았습니다.
+- Classic 테마와 Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 389차 — Sori Studio 대문 하단 간격 정확 보정
+
+- 기준: `SORIDRAW_388차_장르_스타일_사운드_접힘키워드_정확히한줄.zip`
+- 변경 파일: `src/components/studio/studioLayout.css`, `README.md`
+- `Sori Studio` 대문을 위로 올리던 386차 규칙을 제거했습니다.
+- 카드 위치는 그대로 두고 대문만 현재 위치에서 22px 아래(최종 기준 `top: 12px`)로 이동해 Music Note처럼 다음 콘텐츠에 가깝게 붙였습니다.
+- 384/385/386에 누적된 대문 위치 충돌 규칙을 정리해 최종 위치 규칙을 하나로 통일했습니다.
+- Hero/Shell의 `overflow: visible`과 제목 `z-index`를 유지해 글자 잘림을 방지했습니다.
+- 검색 버튼, 장르·스타일·사운드 카드, 분할 화면, Classic, Firebase 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 390차 — Sori Studio 대문 하단 잘림 구조 수정
+
+- 기준: 389차 ZIP
+- `src/App.tsx`: 대문 래퍼의 `translate-y` 제거 및 전용 `soridraw-studio-masthead` 훅 추가
+- `src/components/studio/studioLayout.css`: 제목만 이동시키던 `top: 12px` 제거
+- 대문을 실제 레이아웃 흐름의 margin으로 배치하고, 첫 카드 위 여백은 main padding으로 보정
+- 제목 하단 글리프가 다음 main 레이어에 덮이지 않도록 line-height와 하단 안전 여백 적용
+- Music Note/Library, Classic, Firebase 저장 구조는 변경하지 않음
+
+
+## SORIDRAW 391차 — Sori Studio 대문 고정 하단 여백 제거
+
+- 기준: `SORIDRAW_390차_소리스튜디오_대문_하단잘림_구조수정.zip`
+- 실제 원인은 제목 위치가 아니라 `src/index.css`의 `.soridraw-studio-shell { padding-bottom: 18px !important; }` 고정 규칙이었습니다.
+- 제목을 아래로 이동하면 헤더 높이도 함께 늘어나 카드까지 같이 내려가므로 간격이 줄지 않았고, 상대 위치로 움직이면 부모 경계에서 글자가 잘렸습니다.
+- 제목은 정상 레이아웃 흐름에 그대로 두고, Studio Black 데스크톱에서 셸의 실제 하단 여백만 18px에서 6px로 줄였습니다.
+- 첫 카드가 제목 쪽으로 12px 가까워지며, 제목 글자는 레이아웃 영역 밖으로 이동하지 않아 하단이 잘리지 않습니다.
+- 검색 버튼, 카드 내부 구성, 분할 너비, Music Note/Library, Classic, Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 392차 — 뮤직노트·라이브러리 대문 시작점 통일
+
+- 기준: `SORIDRAW_391차_소리스튜디오_대문_고정하단여백제거.zip`
+- `src/App.tsx`: Sori Studio 대문과 오른쪽 작업공간 대문이 같은 행을 사용할 수 있도록 전용 Hero 행과 포털 호스트를 추가했습니다.
+- `src/pages/FavoritesPage.tsx`: Studio 안에서 열릴 때 Music Note 대문과 동기화 버튼을 Hero 포털로 이동합니다.
+- `src/pages/SunoLibraryPage.tsx`: Studio 안에서 열릴 때 Suno Library 대문과 남은 크레딧 버튼을 Hero 포털로 이동합니다.
+- `src/components/studio/studioLayout.css`: Sori Studio와 오른쪽 대문을 실시간 분할 너비에 맞춘 같은 Grid 행에 배치하고, 기존 96px 상단 예약 여백을 제거했습니다.
+- 검색·필터 영역은 첫 Sori Studio 카드와 같은 시작선에서 시작하며, 독립 뮤직노트/라이브러리 페이지와 모바일 레이아웃은 기존 구조를 유지합니다.
+- 곡 데이터, 폴더/플레이리스트 데이터, Firebase/Auth/Firestore 저장 구조와 Classic 테마는 변경하지 않았습니다.
+
+## SORIDRAW 393차 — 뮤직노트·라이브러리 대문 줄 정확 정렬
+
+- 기준: `SORIDRAW_392차_뮤직노트_라이브러리_대문시작점_통일.zip`
+- 확인된 충돌 원인은 390차의 고우선순위 `.soridraw-studio-masthead { margin-top: 64px !important; }` 규칙입니다.
+- 392차 Grid가 `align-items: start`를 사용해 Sori Studio는 64px 아래에서 시작하고, 오른쪽 Music Note/Suno Library 포털은 Grid 최상단에 남아 있었습니다.
+- 검색·필터·탭·곡 목록 위치는 이미 정상이라 건드리지 않고, 오른쪽 40px 대문 포털만 같은 Grid 행의 하단에 정렬했습니다.
+- 고정 `top`, `transform`, 추가 padding을 사용하지 않아 제목 잘림과 메뉴/목록 재이동을 막았습니다.
+- Music Note 동기화 버튼과 Suno Library 남은 크레딧 버튼도 각 대문과 같은 줄로 이동합니다.
+- 모바일, 독립 페이지, Classic, Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 394차 — 뮤직노트·라이브러리 대문 실시간 분할 추적 및 크레딧 버튼 축소
+
+- 기준: `SORIDRAW_393차_뮤직노트_라이브러리_대문줄_정확정렬.zip`
+- `src/components/studio/StudioSplitWorkspace.tsx`: 분할바 드래그 중 매 requestAnimationFrame마다 Hero Grid에도 현재 빌더 픽셀 폭을 직접 전달합니다.
+- Music Note와 Suno Library 대문이 마우스를 놓은 뒤에만 이동하던 원인은 Hero Grid가 pointer-up 때 갱신되는 루트 CSS 변수만 보고 있었기 때문입니다.
+- 드래그 중에는 Hero 행의 로컬 `--soridraw-studio-builder-width`를 갱신하고, pointer-up에는 기존 루트 변수로 자연스럽게 인계해 제목이 분할바를 실시간으로 따라옵니다.
+- Suno Library의 남은 크레딧 버튼은 일반 화면에서 높이 32px로 축소하고, 좁은 결과 패널 및 모바일에서는 28px로 더 작게 표시합니다.
+- 검색·필터·탭·곡 목록, Music Note 동기화 버튼, 곡/Firebase/Auth/Firestore 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 395차 — 라이브러리 생성일 가독성·곡 구분선·폴더 선택색 복구
+
+- Suno Library 생성일/곡 수 메타 줄의 글자 크기를 소폭 키웠습니다.
+- 한 생성 카드 안의 두 곡 사이에 희미한 내부 가로 구분선을 추가했습니다.
+- Music Note와 Suno Library의 상단 공간 탭 및 실제 폴더 버튼에 안정적인 `aria-pressed`/`data-active` 상태를 추가했습니다.
+- 분할화면의 중립 버튼 CSS보다 선택 상태가 우선하도록 전용 선택색 규칙을 강화했습니다.
+- Music Note 선택은 빨간 배경, Suno Library 선택은 초록 배경으로 표시하고 선택 텍스트는 검정색으로 통일했습니다.
+- 버튼/창 외곽선, Firebase, 저장 구조는 변경하지 않았습니다.
+

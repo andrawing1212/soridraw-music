@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Copy, Check, RefreshCw } from 'lucide-react';
 import { auth } from '../firebase';
+import StudioCenterModalPortal from './studio/StudioCenterModalPortal';
 
 interface SunoTrackDetailModalProps {
   open: boolean;
@@ -209,22 +210,23 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
   };
 
   return (
+    <StudioCenterModalPortal themeClassName="soridraw-library-theme">
     <AnimatePresence>
       {open && track && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center px-4 py-6" onClick={onClose}>
+        <div className="soridraw-detail-modal-frame fixed inset-0 z-[300] flex items-center justify-center px-4 py-6" onClick={onClose}>
           <motion.div
             initial={{ opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 1 }}
             transition={{ duration: 0 }}
-            className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+            className="soridraw-detail-modal-backdrop absolute inset-0 bg-black/28 backdrop-blur-[2px]"
           />
           <motion.div
             initial={{ opacity: 1, scale: 1, y: 0 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0 }}
-            className="relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[34px] border border-[#877198]/28 bg-[#171719]/96 shadow-[0_30px_90px_rgba(0,0,0,0.52)]"
+            className="soridraw-library-detail-panel relative flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[34px] border border-[#877198]/28 bg-[#171719]/96 shadow-[0_30px_90px_rgba(0,0,0,0.52)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="relative border-b border-white/8 bg-[radial-gradient(circle_at_12%_0%,rgba(135,113,152,0.22),transparent_38%),linear-gradient(135deg,rgba(20,20,21,0.98),rgba(24,22,26,0.98))] px-6 py-5 md:px-8">
@@ -306,6 +308,7 @@ export default function SunoTrackDetailModal({ open, track, onClose, onEdit }: S
         </div>
       )}
     </AnimatePresence>
+    </StudioCenterModalPortal>
   );
 }
 

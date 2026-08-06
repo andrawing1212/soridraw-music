@@ -7676,3 +7676,542 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
   pointer-events: none !important;
   user-select: none !important;
 }
+
+/* 383: Music Note and Suno Library detail overlays use one body-level center
+ * workspace layer. The previous host created a transformed paint-containment
+ * box with overflow:hidden; fixed modal frames then became descendants of that
+ * clipped box and could be cut by the split workspace edges. Keep the host in
+ * document.body, use absolute positioning inside its measured central bounds,
+ * and size each panel from that shared area rather than from viewport vh units. */
+.soridraw-studio-center-modal-host {
+  position: fixed !important;
+  z-index: 340 !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+  isolation: isolate;
+  transform: none !important;
+  contain: none !important;
+}
+
+.soridraw-studio-center-modal-host .soridraw-detail-modal-portal-scope {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: visible !important;
+  pointer-events: none !important;
+}
+
+.soridraw-studio-center-modal-host
+.soridraw-detail-modal-portal-scope > .soridraw-detail-modal-frame {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+.soridraw-detail-modal-portal-scope.is-studio-center-overlay .soridraw-detail-modal-backdrop {
+  background: rgba(0, 0, 0, 0.56) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.soridraw-detail-modal-portal-scope.is-studio-center-overlay .soridraw-musicnote-detail-panel {
+  width: 100% !important;
+  max-width: min(1120px, calc(100% - 24px)) !important;
+  max-height: calc(100% - 24px) !important;
+  background-color: #131313 !important;
+  background-image: none !important;
+}
+
+.soridraw-detail-modal-portal-scope.is-studio-center-overlay .soridraw-library-detail-panel {
+  width: 100% !important;
+  max-width: min(1024px, calc(100% - 24px)) !important;
+  max-height: calc(100% - 24px) !important;
+  background-color: #171719 !important;
+  background-image: none !important;
+}
+
+/* 382 — Expanded recent songs hand vertical scrolling to the right rail.
+ * The previous flex layout compressed Selected Keywords into a nested, short
+ * scroller after Recent Songs was expanded. Let the rail itself grow and own
+ * the scroll so every selected keyword remains reachable without moving the
+ * center workspace or the page. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel.is-recent-expanded
+  .soridraw-studio-dashboard-inner {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-x: none !important;
+    overscroll-behavior-y: contain !important;
+    scrollbar-gutter: stable !important;
+    padding-bottom: 28px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel.is-recent-expanded
+  .soridraw-studio-dashboard-card {
+    flex-shrink: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel.is-recent-expanded
+  .soridraw-studio-dashboard-keywords-card {
+    flex: 0 0 auto !important;
+    min-height: auto !important;
+    height: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-dashboard-panel.is-recent-expanded
+  .soridraw-studio-dashboard-keyword-list {
+    flex: 0 0 auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow-y: visible !important;
+    overscroll-behavior: auto !important;
+    padding-bottom: 10px !important;
+  }
+}
+
+/* 384: Lower the Sori Studio masthead into the reserved hero slot so its
+ * title/search relationship matches Music Note more closely. Keep the hero
+ * height and card layout unchanged; only move the visible masthead controls.
+ * The search icon also shifts a few pixels toward the builder interior. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    right: calc(100% - var(--soridraw-studio-builder-width, 50%) + 26px) !important;
+    bottom: -6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    right: 8px !important;
+    bottom: -6px !important;
+  }
+}
+
+
+/* 385 — Music Note / Library details become true Studio-wide modals.
+ * The 383 host intentionally followed only the center workspace, which left
+ * both rails and the top navigation outside the dimmed area and visually kept
+ * the panel inside the split screen. The body portal now owns the full viewport.
+ * Also cancel 384's title-only visual offset because it pushed the Playfair
+ * masthead into the following paint layer and clipped the Sori Studio wordmark. */
+.soridraw-studio-center-modal-host {
+  left: 0 !important;
+  top: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+}
+
+.soridraw-detail-modal-portal-scope.is-studio-center-overlay .soridraw-detail-modal-backdrop {
+  background: rgba(0, 0, 0, 0.64) !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero > .soridraw-studio-shell {
+    overflow: visible !important;
+  }
+
+}
+
+/* 390 — Place the Sori Studio masthead in normal document flow.
+ * 389 visually moved only the title with `top`, while the existing Tailwind
+ * translate still created a separate paint position. The following main layer
+ * could therefore cover the lower glyphs. Remove both visual-only offsets and
+ * reproduce the approved close spacing with real margin/padding instead. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero
+  .soridraw-studio-masthead {
+    margin-top: 64px !important;
+    transform: none !important;
+    translate: none !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero
+  .soridraw-studio-title {
+    position: static !important;
+    top: auto !important;
+    line-height: 1.08 !important;
+    padding-bottom: 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+}
+
+/* 387: Restore explicit selected-folder color for Music Note / Library mode
+ * tabs. The page-wide neutral button cleanup intentionally normalizes generic
+ * button backgrounds, so the active state uses a dedicated stable hook rather
+ * than relying only on an arbitrary utility-class substring. */
+.soridraw-musicnote-mode-tab--active {
+  background-color: rgba(255, 92, 82, 0.78) !important;
+  color: #ffffff !important;
+}
+
+.soridraw-library-mode-tab--active {
+  background-color: rgba(127, 189, 117, 0.78) !important;
+  color: #ffffff !important;
+}
+
+/* 387: In the compact 42px search-button state, center the magnifier on the
+ * actual button width. When the field receives focus and expands, return the
+ * icon to the normal 16px input inset. Applied equally to Music Note and
+ * Library, both in the Studio result pane and standalone mobile pages. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-responsive-search-icon {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    justify-content: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-responsive-search-slot:focus-within .soridraw-responsive-search-icon {
+    left: 16px !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  .soridraw-responsive-search-icon {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    justify-content: center !important;
+  }
+
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  .soridraw-responsive-search-slot:focus-within .soridraw-responsive-search-icon {
+    left: 16px !important;
+    transform: none !important;
+  }
+}
+
+
+/* 388 — Keep only the first keyword row visible when Genre / Style / Sound
+ * cards are collapsed. Do not add spacing or move the header/summary apart:
+ * clip only the keyword viewport to the exact 58px button-row height.
+ * Expanded cards keep their existing measured height and full keyword list. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane :is(
+  [data-studio-menu="genre"],
+  [data-studio-menu="style"],
+  [data-studio-menu="sound"]
+).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"])
+.soridraw-expand-content {
+  height: 58px !important;
+  min-height: 58px !important;
+  max-height: 58px !important;
+  overflow: hidden !important;
+}
+
+/* 391 — Remove the legacy fixed gap below the Sori Studio masthead.
+ * The title itself was not the spacing owner. An older Studio Black rule in
+ * index.css forced 18px of padding below `.soridraw-studio-shell`; moving the
+ * title in normal flow therefore moved the following cards by the same amount,
+ * while relative movement caused clipping. Keep the title in normal flow and
+ * reduce only the real bottom spacing so the title-to-card relationship matches
+ * Music Note without painting outside its layout box. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero > .soridraw-studio-shell {
+    padding-bottom: 6px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-masthead,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-title {
+    margin-bottom: 0 !important;
+  }
+}
+
+/* 392 — Music Note / Suno Library share the real Sori Studio masthead row.
+ * The right workspace pages were rendered inside <main>, so their page titles
+ * could never line up with Sori Studio in the preceding <header>. Earlier
+ * padding changes only moved the title inside the wrong box and left the large
+ * empty band intact. A dedicated hero host now receives each active workspace
+ * header through a React portal. The builder title and right workspace title
+ * therefore occupy one grid row and follow the live split width exactly. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero-row {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, var(--soridraw-studio-builder-width, 50%))
+      minmax(0, 1fr) !important;
+    align-items: start !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: 64px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero-row > .soridraw-studio-masthead {
+    grid-column: 1 !important;
+    margin-top: 0 !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host {
+    grid-column: 2 !important;
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 40px !important;
+    padding-left: 18px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host:empty {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host > .soridraw-workspace-ported-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    gap: 12px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host
+  .soridraw-page-title-hover h1 {
+    font-size: clamp(1.7rem, 1.95vw, 2.2rem) !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host
+  .soridraw-library-credit-button {
+    height: 40px !important;
+    min-height: 40px !important;
+  }
+
+  /* The header is now owned by the hero. Remove the obsolete 96px page-top
+   * reservation so search/filter controls begin on the same horizontal guide
+   * as the first Sori Studio cards. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-page > :is(
+    .soridraw-musicnote-theme,
+    .soridraw-library-theme
+  ) {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-workspace-hero-host {
+    display: none !important;
+  }
+}
+
+/* 393 — Align the portaled Music Note / Suno Library masthead with Sori Studio.
+ * A high-specificity 390 rule still gives the left masthead a real 64px top
+ * margin. The 392 hero grid used align-items:start, so the right portal stayed
+ * at the top of the same grid row while Sori Studio started lower. Do not move
+ * the search/filter/list controls: bottom-align only the 40px portal host inside
+ * the already-tall grid row. This follows the actual Sori Studio masthead height
+ * without another fixed top/transform offset and keeps overflow/clipping stable. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host {
+    align-self: end !important;
+  }
+}
+
+/* 394 — Portaled workspace mastheads follow the split live, and the Library
+ * credit shortcut uses a smaller normal size with an even smaller mobile size.
+ * The live masthead width itself is written by StudioSplitWorkspace on each rAF
+ * pointer frame; this CSS only consumes the same grid variable and sizes the
+ * button without adding borders or moving the search/list controls. */
+@media (min-width: 768px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-workspace-hero-host,
+    .soridraw-library-theme
+  ) .soridraw-library-credit-button {
+    height: 32px !important;
+    min-height: 32px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 11px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-workspace-hero-host[data-pane-mode="mobile"]
+  .soridraw-library-credit-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 9px !important;
+    font-size: 9px !important;
+  }
+}
+
+@media (max-width: 767px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-credit-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 9px !important;
+    gap: 3px !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+}
+
+
+/* 395 — Library creation metadata, paired-track divider, and reliable folder
+ * selection feedback in both full and split workspaces. The selected state is
+ * carried by aria-pressed/data-active so neutral page button rules cannot erase
+ * it when the result pane switches layout. Selected labels use black text as
+ * requested. The track separator is an internal faint divider, not a card or
+ * button outline. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-meta {
+  font-size: 12px !important;
+  line-height: 1.2 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-track-row {
+  position: relative !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme
+.soridraw-library-workspace-track-row + .soridraw-library-workspace-track-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.055);
+  pointer-events: none;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-theme :is(
+  .soridraw-musicnote-mode-tab[aria-pressed="true"],
+  .soridraw-musicnote-mode-tab[data-active="true"],
+  .soridraw-musicnote-folder-button[aria-pressed="true"],
+  .soridraw-musicnote-folder-button[data-active="true"]
+),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-musicnote-theme :is(
+  .soridraw-musicnote-mode-tab[aria-pressed="true"],
+  .soridraw-musicnote-mode-tab[data-active="true"],
+  .soridraw-musicnote-folder-button[aria-pressed="true"],
+  .soridraw-musicnote-folder-button[data-active="true"]
+):hover {
+  background: #e05249 !important;
+  background-color: #e05249 !important;
+  background-image: none !important;
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme :is(
+  .soridraw-library-mode-tab[aria-pressed="true"],
+  .soridraw-library-mode-tab[data-active="true"],
+  .soridraw-library-folder-button[aria-pressed="true"],
+  .soridraw-library-folder-button[data-active="true"]
+),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-library-theme :is(
+  .soridraw-library-mode-tab[aria-pressed="true"],
+  .soridraw-library-mode-tab[data-active="true"],
+  .soridraw-library-folder-button[aria-pressed="true"],
+  .soridraw-library-folder-button[data-active="true"]
+):hover {
+  background: #7fbd75 !important;
+  background-color: #7fbd75 !important;
+  background-image: none !important;
+  color: #101010 !important;
+  -webkit-text-fill-color: #101010 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-meta {
+    font-size: 10.5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-library-workspace-track-row + .soridraw-library-workspace-track-row::before {
+    left: 16px;
+    right: 16px;
+  }
+}
+
+@media (max-width: 767px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-workspace-meta {
+    font-size: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme
+  .soridraw-library-workspace-track-row + .soridraw-library-workspace-track-row::before {
+    left: 12px;
+    right: 12px;
+  }
+}

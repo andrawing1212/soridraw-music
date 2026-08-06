@@ -8349,3 +8349,33 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     height: 23px !important;
   }
 }
+
+/* 399 — Use one mobile masthead top guide for Sori Studio, Music Note and
+ * Suno Library. Sori Studio already carries a real 16px masthead margin inside
+ * the hero, so an 80px hero top padding places its wordmark at y=96px. The two
+ * workspace pages start their normal-flow headers at that same 96px guide.
+ * Remove only the legacy Tailwind translate on the page headers; do not move
+ * search/filter/folder/list content independently. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero {
+    padding-top: 80px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-masthead {
+    margin-top: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    padding-top: 96px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  > .soridraw-workspace-ported-header {
+    transform: none !important;
+    translate: none !important;
+  }
+}

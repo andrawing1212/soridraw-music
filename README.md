@@ -241,3 +241,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모바일 통합 검색 버튼의 배경, 테두리, 그림자를 제거하고 노란 검색 아이콘만 남겼습니다.
 - 검색 아이콘을 기존보다 아래로 4px, 오른쪽 끝에서 안쪽 18px 위치로 옮겼습니다.
 - 1100px 이상 PC 레이아웃, Classic 테마, Firebase/Auth/Firestore/Functions 및 저장 구조는 변경하지 않았습니다.
+
+## SORIDRAW 399차 — 모바일 3개 대문 상단 여백 통일
+
+- 기준: `SORIDRAW_398차_모바일대문_하단여백제거_검색아이콘단독배치.zip`
+- 모바일 Sori Studio 대문의 윗공간을 8px 늘려 답답함을 완화했습니다.
+- Music Note와 Suno Library 대문을 Sori Studio와 같은 y=96px 시작선에 맞췄습니다.
+- Music Note/Library 헤더에 남아 있던 `translate-y`를 모바일에서 제거해 실제 레이아웃 기준으로 정렬했습니다.
+- 검색, 필터, 폴더 탭, 곡 목록의 내부 간격과 PC/Classic/Firebase 구조는 변경하지 않았습니다.

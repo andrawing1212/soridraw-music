@@ -9421,3 +9421,158 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     --soridraw-list-start-gap: 8px;
   }
 }
+
+/* 416 — Brighten the Music Note / Suno Library search fields with the same
+ * cool-neutral gray family used by the surrounding Studio Black controls.
+ * The previous shared input surface read slightly warm and too close to the
+ * page background. Change only the search field surface; button, filter, tab,
+ * list and spacing geometry remain untouched. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input {
+  background: #2d2d2e !important;
+  background-color: #2d2d2e !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input:focus {
+  background: #323233 !important;
+  background-color: #323233 !important;
+  background-image: none !important;
+}
+
+
+/* 417 — Keep the brighter search-field value from 416, but remove the blue/cool
+ * cast. Only the gray hue is returned toward the warmer neutral Studio palette;
+ * size, spacing, contrast, and every surrounding control remain unchanged. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search {
+  background: #2d2d2e !important;
+  background-color: #2d2d2e !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search:focus-within {
+  background: #323233 !important;
+  background-color: #323233 !important;
+}
+
+/* 418 — Restore the Music Note / Suno Library search field to the same rounded
+ * geometry as nearby controls, then raise only its neutral-gray brightness and
+ * inner readability slightly. Keep the hue neutral and preserve all approved
+ * spacing, height, filter, category and list geometry. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search {
+  background: #303030 !important;
+  background-color: #303030 !important;
+  background-image: none !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input {
+  background: #303030 !important;
+  background-color: #303030 !important;
+  background-image: none !important;
+  border-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search:focus-within,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input:focus {
+  background: #353535 !important;
+  background-color: #353535 !important;
+  border-radius: 16px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search:not(:focus-within)
+.soridraw-responsive-search-icon svg {
+  color: rgba(255, 255, 255, 0.58) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-placeholder > div {
+  color: rgba(255, 255, 255, 0.52) !important;
+}
+
+/* 419 — Keep the active Music Note / Suno Library masthead visible when the
+ * builder pane is collapsed into result-only fullscreen. The legacy one-pane
+ * rules hid the complete Studio hero (`display:none` below 1600px and
+ * `visibility:hidden` at 1600px+), but the workspace title now lives inside
+ * that hero through a portal. Show the shared hero only for these two workspace
+ * views, hide the unused Sori Studio masthead/search, and let the right header
+ * own the full hero row. Remove the old result-only main top padding so the
+ * category/search/list stack stays on the same vertical guide as split mode. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero {
+    display: block !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero-row {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero .soridraw-studio-masthead,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-workspace-hero-host {
+    display: block !important;
+    visibility: visible !important;
+    grid-column: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    pointer-events: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+}

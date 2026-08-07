@@ -4955,3 +4955,49 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   color: currentColor !important;
   stroke: currentColor !important;
 }
+
+/* 456 — Classic Light accent controls need readable foreground contrast.
+ * Keep layout and the approved coral/lavender identity unchanged; strengthen
+ * only the credit label and the Music Note / Library "전체" reset labels.
+ * Classic Dark and Studio Black/split mode are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-credit-button {
+  background: #E1D8F7 !important;
+  background-color: #E1D8F7 !important;
+  color: #56359F !important;
+  -webkit-text-fill-color: #56359F !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-credit-button:hover {
+  background: #D8CCF4 !important;
+  background-color: #D8CCF4 !important;
+  color: #482887 !important;
+  -webkit-text-fill-color: #482887 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-color-reset-button {
+  color: #56359F !important;
+  -webkit-text-fill-color: #56359F !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-color-reset-button[class*="bg-[#A98BFF]/24"] {
+  background: #D8CCF4 !important;
+  background-color: #D8CCF4 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-color-reset-button {
+  color: #A13C37 !important;
+  -webkit-text-fill-color: #A13C37 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-color-reset-button[class*="bg-[#FF7A72]/24"] {
+  background: #F6D1CE !important;
+  background-color: #F6D1CE !important;
+}

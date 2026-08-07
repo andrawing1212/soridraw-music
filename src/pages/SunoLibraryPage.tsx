@@ -6951,7 +6951,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                             <div
                               data-floating-menu="true"
                               data-more-menu-panel="true" data-soridraw-library-more-menu="true"
-                              className={`absolute w-40 max-h-[calc(100vh-24px)] bg-[#2a2a2a] rounded-xl shadow-xl overflow-y-auto z-20 border border-black/15 text-sm py-1 ${playlistItemContextMenuPosition?.id === item.id ? '' : 'right-0 top-8'}`}
+                              className={`soridraw-library-more-menu-panel absolute w-40 max-h-[calc(100vh-24px)] bg-[#2a2a2a] rounded-xl shadow-xl overflow-y-auto z-20 border border-black/15 text-sm py-1 ${playlistItemContextMenuPosition?.id === item.id ? '' : 'right-0 top-8'}`}
                               style={playlistItemContextMenuPosition?.id === item.id ? {
                                 top: playlistItemContextMenuPosition.top,
                                 left: playlistItemContextMenuPosition.left,
@@ -7329,7 +7329,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
-              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#A98BFF]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-selection-keep="true" data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="soridraw-library-more-menu-panel fixed z-[9999] w-56 bg-[var(--bg-secondary)] border border-[#A98BFF]/22 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{ top: bulkMenuState.top, right: bulkMenuState.right }}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
@@ -7665,7 +7665,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               initial={{ opacity: 0, scale: 0.9, y: -10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -10 }}
-              data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
+              data-floating-menu="true" data-more-menu-panel="true" data-soridraw-library-more-menu="true" className="soridraw-library-more-menu-panel absolute z-[9999] w-48 bg-[var(--bg-secondary)] border border-black/20 rounded-xl shadow-2xl py-2 overflow-hidden pointer-events-auto"
               style={{
                 top: activeMenuState.position.top,
                 left: activeMenuState.position.left,

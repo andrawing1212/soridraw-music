@@ -10598,3 +10598,136 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   color: #655D55 !important;
   -webkit-text-fill-color: #655D55 !important;
 }
+
+/* 459 — Classic Light strong-rule corrections.
+ * Keep Dark and Studio Black/split untouched. The floating generation panel is
+ * intentionally darker than its inner controls, the Genre selected-summary
+ * uses the same neutral warm-gray treatment as the other menu summaries, and
+ * every Library more-menu receives the exact borderless tonal hierarchy used
+ * by Music Note. Dedicated classes are used so older Tailwind utility rules
+ * cannot re-introduce dark or yellow surfaces. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-action-row,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+  background: #C5BAAF !important;
+  background-color: #C5BAAF !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 18px 42px rgba(69, 59, 48, 0.22) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-action-row .soridraw-action-collapse,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-action-bar--tracking .soridraw-action-collapse {
+  background: #B6AA9E !important;
+  background-color: #B6AA9E !important;
+  background-image: none !important;
+  color: #6E500E !important;
+  -webkit-text-fill-color: #6E500E !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-action-row .soridraw-action-collapse:hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-action-bar--tracking .soridraw-action-collapse:hover {
+  background: #AA9D90 !important;
+  background-color: #AA9D90 !important;
+  color: #543B08 !important;
+  -webkit-text-fill-color: #543B08 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-genre-card .soridraw-genre-summary-box,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-genre-card .soridraw-genre-summary-box:is(:hover, [data-expanded="true"], [aria-pressed="true"]) {
+  background: #DCD4CA !important;
+  background-color: #DCD4CA !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  color: #655D55 !important;
+  -webkit-text-fill-color: #655D55 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-genre-card .soridraw-genre-summary-box .soridraw-genre-selected-summary,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-genre-card .soridraw-genre-summary-box .soridraw-selected-summary {
+  color: #655D55 !important;
+  -webkit-text-fill-color: #655D55 !important;
+  text-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] {
+  background: #D8D1C8 !important;
+  background-color: #D8D1C8 !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 14px 34px rgba(69, 59, 48, 0.18) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] > :is(button, div) {
+  border: 0 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] button {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #625B54 !important;
+  -webkit-text-fill-color: #625B54 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] button:hover {
+  background: #CFC6BC !important;
+  background-color: #CFC6BC !important;
+  color: #2F2A26 !important;
+  -webkit-text-fill-color: #2F2A26 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] button[class*="text-[#8A4EAD]"] {
+  color: #74429B !important;
+  -webkit-text-fill-color: #74429B !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] button[class*="text-red-400"] {
+  color: #B83843 !important;
+  -webkit-text-fill-color: #B83843 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-more-menu-panel[data-soridraw-library-more-menu="true"] button svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-menu-card .soridraw-active-reset-button svg.lucide-trash-2 {
+  color: #8A5700 !important;
+  stroke: #8A5700 !important;
+  stroke-width: 2.2 !important;
+  opacity: 1 !important;
+}

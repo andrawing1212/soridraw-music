@@ -17861,7 +17861,8 @@ function GenreCategorySectionComponent({
               "p-2.5 rounded-xl transition-all border shadow-btn",
               (!!selectedChild || isRandomized)
                 ? "bg-white/5 border-red-500/40 text-red-400 hover:bg-red-500/20"
-                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover",
+              (!!selectedChild || isRandomized) && "soridraw-active-reset-button"
             )}
           >
             <Trash2 className="w-4 h-4" />
@@ -17939,7 +17940,7 @@ function GenreCategorySectionComponent({
           }
         }}
         className={cn(
-        "soridraw-expand-summary mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
+        "soridraw-expand-summary soridraw-genre-summary-box mt-4 min-h-[44px] rounded-2xl border border-dashed px-4 py-3 flex items-center justify-center text-center transition-all",
         isExpandSummaryActive
           ? cn(sectionAccent.summaryActive, "border-dashed")
           : cn("border-dashed", sectionAccent.summaryRest),
@@ -17953,7 +17954,7 @@ function GenreCategorySectionComponent({
         } as React.CSSProperties}
       >
         {selectedChild ? (
-          <p className={cn("text-[15px] font-black soridraw-selected-summary", sectionAccent.text)}>
+          <p className={cn("text-[15px] font-black soridraw-selected-summary soridraw-genre-selected-summary", sectionAccent.text)}>
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
@@ -18327,7 +18328,8 @@ function CycleSectionComponent({
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (activeSelected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (activeSelected.length > 0 || isRandomized) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />
@@ -19190,7 +19192,8 @@ function CategorySectionComponent({
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (selected.length > 0 || isRandomized)
                   ? sectionAccent.selectedSoft 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (selected.length > 0 || isRandomized) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />

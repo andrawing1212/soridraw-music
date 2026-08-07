@@ -6035,11 +6035,6 @@ function App() {
     };
   }, [isLoggingIn]);
 
-  useEffect(() => {
-    document.documentElement.classList.add('dark');
-    localStorage.setItem('themeMode', 'dark');
-  }, []);
-
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [subGenre, setSubGenre] = useState<string[]>([]);
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);

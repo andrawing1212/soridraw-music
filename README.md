@@ -503,3 +503,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 보컬 캐릭터 만들기 기본 상태를 기존 호버 상태처럼 자연스러운 밝은 미색으로 고정했다.
 - 뮤직노트 검색창 주변의 남은 사각 테두리/그림자를 제거했다.
 - 다크모드와 Studio Black/분할모드는 변경하지 않았다.
+
+## 451차 메모
+- Classic 라이트모드에 남아 있던 검은 Music Note/Library 목록 카드와 디테일 창을 미색·웜그레이 계열로 정리.
+- 생성 결과의 제목·적용 키워드·프롬프트·가사·Music API 카드에서 검은 배경과 선 구분을 제거하고 톤 차이로 구분.
+- Music Note/Library 탭·필터·검색/목록 계층을 따뜻한 회색으로 통일.
+- Classic 다크모드와 Studio Black 분할모드는 변경하지 않음.
+
+## 452차 메모
+- 앱 시작 시 저장된 라이트/다크 모드를 복구한 뒤 다시 다크로 강제하던 App.tsx 초기화 코드를 제거했습니다.
+- 새로고침 후 라이트와 다크 스타일이 동시에 섞이던 문제를 해결했습니다.
+- 라이트모드 Suno Library 검색창을 Music Note와 같은 46px / 16px 라운드 / 무테 구조로 통일했습니다.
+- Studio Black 분할모드와 Classic Dark 디자인은 변경하지 않았습니다.

@@ -4779,3 +4779,47 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   background: #E8E3DC !important;
   background-color: #E8E3DC !important;
 }
+
+
+/* 452 — Keep stored Classic Light/Dark appearance stable after reload and make
+ * the Suno Library search field match the approved Music Note pill geometry.
+ * Scope is Classic + Light for the visual rule; Studio Black/split and Classic
+ * Dark remain untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) :is(
+  .soridraw-responsive-search-slot,
+  .soridraw-responsive-search,
+  .soridraw-responsive-search-input
+) {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-slot {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  border-radius: 16px !important;
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}

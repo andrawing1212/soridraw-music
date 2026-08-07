@@ -10036,3 +10036,310 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-responsive-search-input {
   color: rgba(255, 255, 255, 0.9) !important;
 }
+
+/* 451 — Classic Light remaining dark-surface cleanup.
+ * Scope is intentionally limited to Classic + Light. Studio Black/split and
+ * Classic Dark are untouched. Replace the remaining near-black list/result/
+ * detail surfaces with warm ivory-gray tones, remove line-only separators,
+ * and use adjacent tonal blocks to express hierarchy instead. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --soridraw-light-canvas: #F7F4EF;
+  --soridraw-light-panel: #E8E3DC;
+  --soridraw-light-panel-strong: #DED8D0;
+  --soridraw-light-panel-soft: #F1EDE7;
+  --soridraw-light-control: #F5F1EB;
+  --soridraw-light-text: #2B2723;
+  --soridraw-light-text-soft: #625B54;
+  --soridraw-light-text-muted: #817970;
+}
+
+/* Music Note / Library top controls: replace black shells with warm tonal
+ * surfaces. Selected coral/purple tabs remain unchanged. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs,
+    .soridraw-responsive-color-filter, .soridraw-responsive-filter-button) {
+  background: var(--soridraw-light-panel) !important;
+  background-color: var(--soridraw-light-panel) !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):not([aria-pressed="true"]):not([data-active="true"]) {
+  color: var(--soridraw-light-text-soft) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text-soft) !important;
+}
+
+/* Music Note cards. The card itself is the separator; no outline is needed. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-musicnote-song-card {
+  background: var(--soridraw-light-panel) !important;
+  background-color: var(--soridraw-light-panel) !important;
+  background-image: none !important;
+  color: var(--soridraw-light-text) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 7px 18px rgba(69, 59, 48, 0.07) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-musicnote-song-card:hover {
+  background: var(--soridraw-light-panel-strong) !important;
+  background-color: var(--soridraw-light-panel-strong) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-musicnote-song-card
+:is(h1, h2, h3, h4, p, time, [class*="text-white"], [class*="text-[var(--text-primary)]"]) {
+  color: var(--soridraw-light-text) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-musicnote-song-card
+:is([class*="text-white/"], [class*="text-[var(--text-secondary)]"]) {
+  color: var(--soridraw-light-text-muted) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text-muted) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-musicnote-song-card button:not([class*="bg-[#FF7A72]"]):not([class*="bg-brand-orange"]) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Library groups: header and track list are separated by tone, not a line. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-group {
+  background: var(--soridraw-light-panel-strong) !important;
+  background-color: var(--soridraw-light-panel-strong) !important;
+  background-image: none !important;
+  color: var(--soridraw-light-text) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 7px 18px rgba(69, 59, 48, 0.07) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-header {
+  background: var(--soridraw-light-panel-soft) !important;
+  background-color: var(--soridraw-light-panel-soft) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-tracks {
+  background: var(--soridraw-light-panel) !important;
+  background-color: var(--soridraw-light-panel) !important;
+  background-image: none !important;
+  border: 0 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-track-row {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-track-row:hover {
+  background: var(--soridraw-light-panel-strong) !important;
+  background-color: var(--soridraw-light-panel-strong) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme :is(.soridraw-library-workspace-header, .soridraw-library-workspace-track-row)
+:is(h1, h2, h3, h4, p, time, [class*="text-white"], [class*="text-[var(--text-primary)]"]) {
+  color: var(--soridraw-light-text) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme :is(.soridraw-library-workspace-header, .soridraw-library-workspace-track-row)
+:is([class*="text-white/"], [class*="text-[var(--text-secondary)]"]) {
+  color: var(--soridraw-light-text-muted) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text-muted) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+button[class*="bg-white/"] {
+  background: var(--soridraw-light-control) !important;
+  background-color: var(--soridraw-light-control) !important;
+  color: var(--soridraw-light-text-soft) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Music Note and Library detail windows. All header/body/footer divisions use
+ * neighboring warm tones instead of border lines. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel) {
+  background: var(--soridraw-light-canvas) !important;
+  background-color: var(--soridraw-light-canvas) !important;
+  background-image: none !important;
+  color: var(--soridraw-light-text) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 26px 74px rgba(69, 59, 48, 0.20) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-detail-panel > div:first-child,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel > div:nth-of-type(3) {
+  background: var(--soridraw-light-panel-strong) !important;
+  background-color: var(--soridraw-light-panel-strong) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-detail-panel > div:last-child {
+  background: var(--soridraw-light-panel) !important;
+  background-color: var(--soridraw-light-panel) !important;
+  border: 0 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+:where(section, [class*="rounded-[28px]"], [class*="rounded-[30px]"], [class*="rounded-2xl"])[class*="bg-"] {
+  background: var(--soridraw-light-panel-soft) !important;
+  background-color: var(--soridraw-light-panel-soft) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+:where([class*="bg-black/"], [class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151516]"], [class*="bg-[#171719]"]) {
+  background: var(--soridraw-light-panel-strong) !important;
+  background-color: var(--soridraw-light-panel-strong) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+:where([class*="text-white"], [class*="text-white/"]) {
+  color: var(--soridraw-light-text) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+:where([class*="border-white"], [class*="border-black"], [class*="border-[#877198]"]) {
+  border-color: transparent !important;
+  border-width: 0 !important;
+}
+
+/* Generated result area: remove the line-only separators and convert all
+ * remaining dark cards into the same warm tonal hierarchy. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content {
+  --card-bg: var(--soridraw-light-panel);
+  border: 0 !important;
+  border-top: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(
+  .soridraw-result-title-card,
+  .soridraw-result-keywords-card,
+  .soridraw-result-prompt-card,
+  .soridraw-result-lyrics-card,
+  .soridraw-result-music-api-card
+) {
+  background: var(--soridraw-light-panel) !important;
+  background-color: var(--soridraw-light-panel) !important;
+  background-image: none !important;
+  color: var(--soridraw-light-text) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 9px 24px rgba(69, 59, 48, 0.08) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(.soridraw-result-prompt-card, .soridraw-result-lyrics-card)
+> div:first-child,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-music-api-toggle {
+  background: var(--soridraw-light-panel-strong) !important;
+  background-color: var(--soridraw-light-panel-strong) !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-prompt-card > div:last-child,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-lyrics-scroll,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-body {
+  background: var(--soridraw-light-panel-soft) !important;
+  background-color: var(--soridraw-light-panel-soft) !important;
+  background-image: none !important;
+  border: 0 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-music-api-card > div {
+  background: var(--soridraw-light-panel-soft) !important;
+  background-color: var(--soridraw-light-panel-soft) !important;
+  border: 0 !important;
+  border-top: 0 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(
+  .soridraw-result-title-card,
+  .soridraw-result-keywords-card,
+  .soridraw-result-prompt-card,
+  .soridraw-result-lyrics-card,
+  .soridraw-result-music-api-card
+) :where([class*="bg-black/"], [class*="bg-white/"]) {
+  background: var(--soridraw-light-control) !important;
+  background-color: var(--soridraw-light-control) !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(
+  .soridraw-result-title-card,
+  .soridraw-result-keywords-card,
+  .soridraw-result-prompt-card,
+  .soridraw-result-lyrics-card,
+  .soridraw-result-music-api-card
+) :where(h1, h2, h3, h4, p, pre, textarea, [class*="text-white"], [class*="text-[var(--text-primary)]"]) {
+  color: var(--soridraw-light-text) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(.soridraw-result-prompt-card, .soridraw-result-lyrics-card)
+:where(pre, textarea, [class*="text-[var(--text-secondary)]"]) {
+  color: var(--soridraw-light-text-soft) !important;
+  -webkit-text-fill-color: var(--soridraw-light-text-soft) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :is(
+  .soridraw-result-title-card,
+  .soridraw-result-keywords-card,
+  .soridraw-result-prompt-card,
+  .soridraw-result-lyrics-card,
+  .soridraw-result-music-api-card
+) :where([class*="border"], [class*="border-dashed"]) {
+  border-color: transparent !important;
+  border-width: 0 !important;
+}

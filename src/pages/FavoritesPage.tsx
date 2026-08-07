@@ -7019,17 +7019,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           <div
                             key={`suno-cover-preview-${index}`}
                             className={cn(
-                              'overflow-hidden rounded-2xl border bg-black/15',
+                              'soridraw-musicnote-suno-cover-card overflow-hidden rounded-2xl border bg-black/15',
                               link ? 'border-white/10' : 'border-white/[0.055] opacity-55',
                               isMain && link ? 'ring-1 ring-[#FFC1BC]/35' : ''
                             )}
                           >
-                            <div className="relative aspect-[16/9] bg-black/25">
+                            <div className="soridraw-musicnote-suno-cover-media relative aspect-[16/9] bg-black/25">
                               {link?.coverUrl ? (
                                 <img
                                   src={link.coverUrl}
                                   alt={`수노 URL ${index + 1} 커버`}
-                                  className="h-full w-full object-cover"
+                                  className="soridraw-musicnote-suno-cover-image h-full w-full object-cover"
                                   loading="lazy"
                                 />
                               ) : (
@@ -7042,9 +7042,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                                 <button
                                   type="button"
                                   onClick={() => openFavoriteSunoLinkAt(selectedSong, index)}
-                                  className="absolute inset-0 flex items-center justify-center bg-black/10 transition-all hover:bg-black/24"
+                                  className="soridraw-musicnote-suno-cover-open absolute inset-0 flex items-center justify-center bg-black/10 transition-all hover:bg-black/24"
                                 >
-                                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-[0_8px_22px_rgba(0,0,0,0.35)] backdrop-blur">
+                                  <span className="soridraw-musicnote-suno-cover-play flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-[0_8px_22px_rgba(0,0,0,0.35)] backdrop-blur">
                                     <Play className="ml-0.5 h-5 w-5 fill-current" />
                                   </span>
                                 </button>

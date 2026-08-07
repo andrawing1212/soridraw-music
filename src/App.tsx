@@ -14844,7 +14844,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   animate={{ opacity: isInputFocused ? 0.78 : 0.92, y: 0, filter: 'blur(0px)' }}
                   exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
                   transition={{ duration: 0.35, ease: 'easeOut' }}
-                  className="pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
+                  className="soridraw-command-placeholder pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
                 >
                   {commandPlaceholderExamples[commandPlaceholderIndex]}
                 </motion.div>
@@ -14878,8 +14878,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onClick={() => setIsLyricMode(!isLyricMode)}
                 onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
+                aria-pressed={isLyricMode}
                 className={cn(
-                  "flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
+                  "soridraw-direct-lyrics-toggle flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
                   isLyricMode 
                     ? "bg-[#F4A900] text-[#18110A] border-[#F4A900] hover:bg-[#F7B31A] hover:border-[#F7B31A]" 
                     : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-[#F4A900]/80"

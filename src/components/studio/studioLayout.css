@@ -10343,3 +10343,49 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   border-color: transparent !important;
   border-width: 0 !important;
 }
+
+/* 455 — Music Note light detail: keep registered Suno cover artwork visible.
+ * The broad light-detail background conversion also matched the full-size play
+ * overlay (`bg-black/10`), turning it into an opaque warm panel over the image.
+ * Restore only the media overlay/play control; dark and split themes stay unchanged. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel .soridraw-musicnote-suno-cover-media {
+  background: #D9D2C9 !important;
+  background-color: #D9D2C9 !important;
+  background-image: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel .soridraw-musicnote-suno-cover-image {
+  position: relative;
+  z-index: 0;
+  display: block;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel .soridraw-musicnote-suno-cover-open {
+  z-index: 1;
+  background: rgba(22, 19, 17, 0.03) !important;
+  background-color: rgba(22, 19, 17, 0.03) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel .soridraw-musicnote-suno-cover-open:hover {
+  background: rgba(22, 19, 17, 0.14) !important;
+  background-color: rgba(22, 19, 17, 0.14) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel .soridraw-musicnote-suno-cover-play {
+  background: rgba(247, 244, 239, 0.92) !important;
+  background-color: rgba(247, 244, 239, 0.92) !important;
+  color: #2F2A26 !important;
+  -webkit-text-fill-color: #2F2A26 !important;
+  border: 0 !important;
+  box-shadow: 0 8px 22px rgba(69, 59, 48, 0.20) !important;
+}

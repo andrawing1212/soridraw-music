@@ -4850,3 +4850,108 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
     bottom: 12px !important;
   }
 }
+
+
+/* 454 — Classic Light selected-keyword readability and control hierarchy.
+ * Keep the approved warm ivory palette, but give the direct-input summary box
+ * a clearly separate tonal surface, replace the black selection-count badge,
+ * and restore readable command guidance / Direct Lyrics controls. Classic Dark
+ * and Studio Black/split mode are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box {
+  background: #DCD4CA !important;
+  background-color: #DCD4CA !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  color: #655E56 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box:is(:hover, [data-expanded="true"], [aria-pressed="true"]) {
+  background: #D5CCC1 !important;
+  background-color: #D5CCC1 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box
+:is(.soridraw-menu-summary-text--selected, .soridraw-selected-summary, .soridraw-menu-summary-token) {
+  color: #74591E !important;
+  -webkit-text-fill-color: #74591E !important;
+  text-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box .soridraw-menu-summary-text--empty {
+  color: #756D64 !important;
+  -webkit-text-fill-color: #756D64 !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box input {
+  color: #3B3631 !important;
+  -webkit-text-fill-color: #3B3631 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box input::placeholder {
+  color: #81786F !important;
+  -webkit-text-fill-color: #81786F !important;
+  opacity: 1 !important;
+}
+
+/* Replace the dark count dot on selected keyword buttons with a warm light
+ * badge that remains legible over the amber selected state. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-count-badge-main,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-selected-strong .soridraw-count-badge-main {
+  background: #F2E2B2 !important;
+  background-color: #F2E2B2 !important;
+  color: #59420E !important;
+  border: 0 !important;
+  box-shadow: 0 3px 8px rgba(83, 67, 39, 0.18) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-count-badge-main > .soridraw-badge-number,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-count-badge-main .soridraw-badge-x {
+  color: #59420E !important;
+  stroke: #59420E !important;
+  -webkit-text-fill-color: #59420E !important;
+  text-shadow: none !important;
+}
+
+/* Command guidance and inactive Direct Lyrics button need their own visible
+ * neutral tone on the light command surface. The active amber state remains. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-command-placeholder {
+  color: #756D64 !important;
+  -webkit-text-fill-color: #756D64 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button.soridraw-direct-lyrics-toggle[aria-pressed="false"] {
+  background: #D8D0C6 !important;
+  background-color: #D8D0C6 !important;
+  color: #443E38 !important;
+  -webkit-text-fill-color: #443E38 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button.soridraw-direct-lyrics-toggle[aria-pressed="false"]:hover {
+  background: #CEC4B8 !important;
+  background-color: #CEC4B8 !important;
+  color: #2F2A26 !important;
+  -webkit-text-fill-color: #2F2A26 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button.soridraw-direct-lyrics-toggle[aria-pressed="false"] svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}

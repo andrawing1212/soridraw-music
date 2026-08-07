@@ -599,3 +599,231 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 1100px 미만 모바일/태블릿은 Sori Studio, Music Note, Library 모두 80px page-top + 동일 84px masthead flow block + 좌우 12px gutter를 사용한다.
 - 기존 Music Note 2px optical top 보정, Library 95px 모바일 top 보정, 모바일 title translate 등 오래된 개별 보정은 마지막 462 규칙에서 무효화한다.
 - Classic 다크/라이트와 Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+## 463차 메모
+
+- 기준: `SORIDRAW_462차_대문규격_소리스튜디오분할기준_전체모드통일.zip`
+- 이번 차수는 **Sori Studio 대문만** 조정하고 Music Note / Suno Library는 건드리지 않음.
+- 461차의 실제 pane 스크롤 구조와 462차의 현재 대문/검색 크기는 그대로 유지.
+- Studio builder masthead 84px 박스 내부의 위/아래 여백을 `20/12px` → `28/4px`로 재배분해 제목 행을 8px 아래로 이동.
+- 첫 카드 시작 위치는 유지되므로 대문과 첫 카드 사이의 보이는 간격은 8px 감소.
+- 검색 버튼 크기는 유지하면서 제목 행 기준으로 4px 더 아래에 배치해 카드 쪽에 더 붙도록 조정.
+- 넓은 분할, 좁은 `data-pane-mode="mobile"` 분할, builder-only 전체화면 모두 동일한 builder masthead 구조/위치를 사용.
+- 다크/라이트 Classic, Music Note, Suno Library, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 464차 메모
+
+### 기준
+- 기준 ZIP: `SORIDRAW_463차_소리스튜디오대문_하향_검색버튼밀착_전체화면동일.zip`
+- 이번 차수는 Studio Black의 Sori Studio 분할/분할 전체화면 대문과 검색 위치만 수정한다.
+- Music Note, Suno Library, Classic, Firebase/저장 구조는 변경하지 않는다.
+
+### 원인
+- 461차의 일반 분할 전용 선택자가 Sori Studio 제목에 `clamp(2rem, 2.45vw, 2.65rem)`을 높은 우선순위로 적용하고 있었다.
+- 분할 전체화면(`data-soridraw-result-collapsed=true`)에서는 그 461 선택자가 빠지고 462차의 `2rem` 규칙으로 내려가 제목이 더 작아졌다.
+- 검색 버튼은 463차에서 52px 제목 행의 중앙을 기준으로 `top: calc(50% + 4px)` 배치해, 카드 상단과 직접 연결되지 않고 분할/전체화면에서 체감 위치도 달라 보였다.
+
+### 변경
+- Sori Studio builder가 보이는 모든 1100px 이상 상태에서 제목 크기를 하나의 최종 규칙으로 고정했다.
+  - 일반 분할
+  - 좁은 pane 분할
+  - result pane을 접은 Sori Studio 분할 전체화면
+- 제목 크기는 461차 일반 분할 기준인 `clamp(2rem, 2.45vw, 2.65rem)`으로 통일했다.
+- 번개 아이콘은 기존 34px 유지.
+- 검색 버튼은 기존 34px, 내부 검색 아이콘 24px을 그대로 유지하고 위치 계산만 변경했다.
+- 검색 버튼을 제목 행 중앙 기준이 아니라 행 하단 `bottom: -2px`에 고정해 첫 카드 바로 위에 오도록 했다.
+- 동일 선택자가 일반 분할과 전체화면에 동시에 적용되므로 모드 전환 시 검색 버튼의 수직 위치 계산이 달라지지 않는다.
+
+### 사용자 실제 테스트
+1. 일반 분할에서 Sori Studio 제목 크기 확인.
+2. 오른쪽 pane을 완전히 접어 Sori Studio 전체화면으로 만든 뒤 제목이 작아지지 않는지 확인.
+3. 두 상태 모두 검색 버튼이 첫 카드 바로 위에 붙는지 확인.
+4. 분할바를 넓게/좁게 움직여도 검색 버튼의 카드 기준 높이가 변하지 않는지 확인.
+5. 461차의 pane 실제 스크롤 구조와 상단 실선 공간 사용이 유지되는지 확인.
+
+## 465차 메모
+
+### 기준
+- 기준 ZIP: `SORIDRAW_464차_소리스튜디오_분할전체화면_대문크기통일_검색카드밀착.zip`
+- 이번 차수는 **Sori Studio 대문의 수직 위치와 검색 아이콘 위치만** 조정한다.
+- 사용자가 승인한 `분할 전체화면(builder-only fullscreen)`의 대문 하단을 기준선으로 삼는다.
+- Music Note, Suno Library, Classic 다크/라이트, Firebase/저장 구조는 변경하지 않는다.
+
+### 변경
+- Sori Studio의 84px 대문 박스와 52px 제목 행, 제목/번개/검색 크기는 모두 그대로 유지했다.
+- 1100px 이상 일반 분할, 좁은 pane 분할, builder-only 전체화면의 대문 내부 여백을 모두 `상단 28px / 하단 4px`로 최종 고정했다.
+- 1099px 이하 모바일/태블릿도 크기는 바꾸지 않고 동일하게 `상단 28px / 하단 4px`로 재배치해 제목 행의 **하단 위치**가 전체화면 기준과 같아지도록 했다.
+- 검색 버튼은 배경이 없는 아이콘형이므로 34px 클릭영역의 박스가 아니라 실제 24px 검색 그림의 하단을 기준으로 맞췄다.
+- 1100px 이상 pane 내부 검색은 `bottom: -9px`, 1099px 이하 hero 검색은 `bottom: -5px`로 내려 실제 검색 그림 하단이 대문 박스 하단선에 오도록 조정했다.
+- 첫 카드의 시작 위치와 대문 전체 높이는 변경하지 않아, 기존 461차의 실선까지 스크롤 영역을 사용하는 구조를 유지한다.
+
+### 사용자 실제 테스트
+1. Sori Studio 분할 전체화면의 현재 대문 위치가 그대로 유지되는지 확인.
+2. 일반 분할/좁은 pane 분할에서 대문 글자의 하단이 전체화면과 같은 위치감으로 내려왔는지 확인.
+3. 모바일/태블릿에서 제목 크기는 그대로이면서 대문 하단 위치만 동일하게 맞춰졌는지 확인.
+4. 분할/전체화면/모바일 모두 검색 그림이 이전보다 아래로 내려와 대문 하단선에 맞는지 확인.
+5. 검색 버튼 크기, 제목 크기, 번개 아이콘 크기, 첫 카드 위치가 변하지 않았는지 확인.
+6. 461차의 pane 실제 스크롤과 상단 실선 공간 사용이 그대로 유지되는지 확인.
+
+## 466차 메모
+- 기준: `SORIDRAW_465차_소리스튜디오_전체화면하단기준_대문위치_검색하단정렬.zip`
+- 이번 차수는 Sori Studio의 두 사용자 승인 지점만 기준으로 다시 고정했다.
+- 승인 기준 A: 일반 분할모드 검색 버튼 위치는 유지한다.
+- 승인 기준 B: builder 단독 전체화면의 Sori Studio 대문 위치는 유지한다.
+- 일반 분할/compact pane에서는 검색은 그대로 두고 대문만 5px 내려 전체화면 대문 기준선에 맞췄다.
+- builder 단독 전체화면에서는 대문은 그대로 두고 검색만 8px 내려 일반 분할 검색의 카드 간격에 맞췄다.
+- Music Note, Library, Classic, 일반 모바일 흐름은 이번 차수에서 건드리지 않았다.
+
+
+## 467차 메모
+- 기준: 466차.
+- Sori Studio 분할 전체화면(builder-only fullscreen)의 검색 버튼만 추가 하향.
+- 기존 전체화면 대문 위치, 일반 분할 검색 위치, 카드/대문 크기, 다른 페이지와 다른 모드는 변경하지 않음.
+- fullscreen 검색 위치: `bottom: -17px` → `bottom: -29px`.
+
+## 468차 메모
+
+### 기준
+- 기준 ZIP: `SORIDRAW_467차_전체화면_검색버튼만_추가하향.zip`
+- 이번 차수는 **Sori Studio Studio Black 데스크톱/분할 계열의 검색 버튼 위치 계약만** 수정한다.
+- 사용자 승인 기준은 **일반 분할모드의 검색 버튼 위치**이며, 이 위치를 분할 전체화면에도 그대로 사용한다.
+- Sori Studio 대문 위치/크기, Music Note, Suno Library, Classic 다크/라이트, 모바일 일반 흐름은 변경하지 않는다.
+
+### 원인
+- 463~467차에서 검색 버튼의 `bottom` 값은 여러 차례 바뀌었지만, 전체화면 상태에서는 검색 버튼이 항상 동일한 positioned element 계약을 갖는다는 보장이 없었다.
+- `bottom`은 `position: static`인 요소에는 실질적으로 작동하지 않기 때문에 전체화면 검색이 숫자 변경에도 움직이지 않는 현상이 발생할 수 있었다.
+- 또한 normal split / fullscreen에 서로 다른 임시 bottom 보정이 누적돼 모드별 계산이 갈라져 있었다.
+
+### 변경
+- 1100px 이상 Studio Black에서 builder가 보이는 모든 상태의 `.soridraw-studio-scroll-builder-masthead`를 검색 버튼의 `position: relative` 기준 컨테이너로 명시했다.
+- `.soridraw-studio-scroll-search-button`을 모든 builder 상태에서 `position: absolute !important`로 고정했다.
+- 일반 분할에서 사용자가 승인한 검색 위치를 단일 기준으로 사용:
+  - `right: 2px`
+  - `bottom: -9px`
+  - `top: auto`
+  - `transform/translate: none`
+- split / compact-pane split / builder-only fullscreen 모두 같은 선택자와 같은 좌표를 사용하도록 최종 규칙으로 통일했다.
+- 463~467차의 검색 위치 임시 보정은 파일에 기록으로 남지만 468차 최종 규칙이 우선해 더 이상 실제 배치 계산을 나누지 않는다.
+- 검색 클릭영역 34px, 실제 돋보기 24px 크기는 유지했다.
+
+### 사용자 실제 테스트
+1. 일반 분할모드에서 승인한 검색 버튼 위치가 그대로인지 확인.
+2. 오른쪽 pane을 접어 Sori Studio 분할 전체화면으로 전환했을 때 검색 버튼이 같은 하단 위치로 이동하는지 확인.
+3. 분할 ↔ 전체화면을 여러 번 반복해도 검색 위치가 변하지 않는지 확인.
+4. 분할바를 넓게/좁게 이동해도 검색 위치가 흔들리지 않는지 확인.
+5. 승인된 전체화면 Sori Studio 대문 위치와 크기가 변하지 않았는지 확인.
+
+## 469차 메모
+
+### 기준
+- 기준 ZIP: `SORIDRAW_468차_검색버튼_position계약통일_분할전체화면고정.zip`
+- 이번 차수는 **Sori Studio 분할 계열 검색 버튼이 첫 카드 아래로 가려지는 현상만** 수정한다.
+- 승인된 대문 위치/크기, 검색 아이콘의 체감 하단 위치, Music Note, Library, Classic, 모바일 일반 흐름은 변경하지 않는다.
+
+### 원인
+- 468차에서 34px 검색 클릭영역 전체를 `bottom: -9px`로 내리면서 클릭영역 하단 5px가 84px masthead host 밖으로 내려갔다.
+- 바로 다음에 그려지는 첫 메뉴 카드의 paint layer가 이 바깥쪽 영역을 덮으면서 검색 아이콘 일부가 카드 아래로 숨는 현상이 발생했다.
+- 즉 검색 좌표 자체는 적용됐지만 **클릭영역 박스가 다음 카드 영역으로 침범한 것이 원인**이었다.
+
+### 변경
+- 검색 버튼 34px 클릭영역은 masthead 안에서 끝나도록 `bottom: -4px`로 올렸다.
+- 실제 24px 돋보기 SVG만 버튼 내부에서 `top: 5px` 내려 468차에서 승인한 체감 하단 위치는 그대로 유지했다.
+- 결과적으로 클릭영역은 카드와 겹치지 않고, 보이는 검색 아이콘만 대문 하단 가까이에 위치한다.
+- 일반 분할 / compact-pane 분할 / builder-only 전체화면은 계속 같은 최종 규칙 하나를 사용한다.
+
+### 사용자 실제 테스트
+1. 일반 분할에서 검색 아이콘이 첫 카드 뒤로 숨지 않는지 확인.
+2. 오른쪽 pane을 접어 전체화면으로 전환해도 동일하게 검색 아이콘 전체가 보이는지 확인.
+3. 검색 아이콘의 체감 높이는 468차와 동일하게 낮게 유지되는지 확인.
+4. 분할 ↔ 전체화면 반복 전환 및 분할바 이동에도 위치가 흔들리지 않는지 확인.
+5. 승인된 Sori Studio 대문 위치/크기와 첫 카드 위치가 변하지 않았는지 확인.
+
+## 470차 메모
+- 기준: 469차.
+- Sori Studio 검색 버튼 위치를 일반 분할과 builder-only 전체화면으로 다시 분리했다.
+- 일반 분할/compact split은 사용자가 통과시킨 466차 검색 위치(`bottom:-9px`, 내부 SVG 추가 이동 없음)를 정확히 복구했다.
+- 전체화면은 검색 버튼의 containing block을 52px row가 아니라 84px masthead host로 변경했다.
+- 전체화면 검색 34px 클릭영역은 masthead 내부 `bottom:0`에 두고, 24px 돋보기만 버튼 하단에 맞춰 카드 뒤로 숨거나 사라지지 않게 했다.
+- 승인된 전체화면 Sori Studio 대문 크기/위치, 카드 위치, 분할 스크롤 구조, Music Note/Library/Classic은 변경하지 않았다.
+
+
+## 471차 메모
+- 기준: `SORIDRAW_470차_검색버튼_분할승인위치복구_전체화면독립고정.zip`.
+- 일반 분할모드 검색 버튼은 사용자 통과 상태이므로 변경하지 않았다.
+- builder-only 전체화면 검색 버튼만 기존 `bottom: 0`에서 `bottom: 6px`로 6px 상향했다.
+- 전체화면 검색의 84px masthead host 기준 absolute 구조는 그대로 유지해 카드 뒤 가림/사라짐 방지 구조를 보존했다.
+- Sori Studio 대문 크기/위치, 카드 위치, 분할바/스크롤 구조, Music Note, Library, Classic, 일반 모바일은 변경하지 않았다.
+
+### 사용자 실제 테스트
+1. 일반 분할모드 검색 버튼이 470차 통과 위치 그대로인지 확인.
+2. builder-only 전체화면 검색 버튼만 이전보다 약간 위로 올라왔는지 확인.
+3. 전체화면 검색 버튼이 사라지거나 카드 뒤로 숨지 않는지 확인.
+4. 분할 ↔ 전체화면 반복 전환 시 각 상태의 검색 위치가 유지되는지 확인.
+
+## 472차 메모
+- 기준: `SORIDRAW_471차_전체화면_검색버튼만_6px상향.zip`
+- 이번 차수는 Sori Studio의 이미 승인된 대문/검색 정렬을 기준으로 Music Note와 Suno Library만 동시에 맞췄다.
+- 대상 상태는 데스크톱 Studio Black의 ① 넓은 분할 result pane, ② pane mobile(좁은 분할), ③ result-only 전체화면이다.
+- 두 페이지 result masthead를 Sori Studio와 동일한 84px 박스 / 52px 제목행 / 28px 상단 / 4px 하단 배치로 통일했다.
+- Music Note / Library 제목 크기는 Sori Studio와 동일한 `clamp(2rem, 2.45vw, 2.65rem)`으로 통일하고, 일반/좁은 분할에서는 Studio와 같은 5px optical drop, result-only 전체화면에서는 fullscreen 기준선을 사용한다.
+- 포털 제목의 가로 기준을 실제 페이지 셸(max 1548px, split 12/10px, pane-mobile 12/12px gutter)과 동일하게 만들어 전체화면에서 제목만 왼쪽으로 튀던 현상을 제거했다. 제목/탭/검색/목록이 같은 세로 가이드에서 시작한다.
+- Music Note 새로고침과 Library 크레딧 바로가기도 Studio 검색과 같은 하단 액션 가이드에 맞췄다.
+- Sori Studio 자체, 분할바/스크롤 구조, 카드/탭/검색/목록의 기존 크기와 간격, Classic/다크·라이트 일반모드는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 473차 메모
+- 기준: 472차.
+- Music Note / Suno Library 대문을 Sori Studio 기준으로 다시 모드별 분리 계산했다.
+- 넓은 분할모드는 472차에서 맞은 제목/탭 위치를 유지하고, 우측 새로고침/크레딧 액션만 Studio 검색 가이드에 정렬했다.
+- 좁은 `data-pane-mode="mobile"`에서는 기존 컴팩트 제목 크기 `1.85rem`을 고정해 분할바 이동으로 글자 크기가 변하지 않게 하고, 제목과 우측 액션의 위치만 조정했다.
+- 결과 전체화면은 포털 대문을 실제 페이지 쉘과 같은 max-width 1548px + 좌우 24px 가이드로 맞춰 제목/액션과 탭·검색·목록의 가로 시작선을 통일했다.
+- 실제 1100px 미만 모바일/태블릿은 폰트 크기를 건드리지 않고 Sori Studio와 같은 28px/4px 대문 여백 배치와 4px 하단 흐름만 적용했다.
+- Sori Studio, 카드/탭/검색 크기, 분할 스크롤 구조, Firebase/Auth/Firestore/Functions는 변경하지 않았다.
+
+## 474차 메모
+- 473차의 단순 CSS 위치 보정 방식 대신, 분할 작업공간에서 Music Note / Suno Library 대문에 `soridraw-studio-scroll-result-masthead` 전용 구조 클래스를 부여했다.
+- Studio Black의 1100px 이상 작업공간에서는 Sori Studio와 동일한 84px masthead host + 52px 실제 제목행 구조를 사용한다.
+- 넓은 분할은 Sori Studio 분할 제목의 5px optical drop과 동일하게 맞추고, 좁은 pane-mobile은 기존 1.85rem 제목 크기를 그대로 고정한 채 위치만 동일 구조로 맞춘다.
+- 오른쪽 전체화면은 Sori Studio 전체화면과 같은 1500px 중앙 콘텐츠 가이드, 제목 baseline, 우측 액션 위치 계약을 사용한다.
+- Music Note 새로고침과 Library 크레딧은 Sori Studio 검색 버튼의 분할/전체화면 위치 계약을 각각 따라간다.
+- 실제 모바일/태블릿(<1100px)은 제목 font-size를 건드리지 않고 masthead 높이/상하 위치만 Sori Studio 리듬으로 맞춘다.
+- Sori Studio 자체, 분할바, 카드/목록, Firebase/Auth/Firestore/Functions는 변경하지 않았다.
+
+## 475차 메모
+- 기준: 474차.
+- 사용자 검증 결과 `넓은 분할`은 통과 상태라 해당 규칙은 수정하지 않았다.
+- 좁은 분할의 `data-pane-mode="mobile"`에서 Music Note / Suno Library 제목을 1.85rem으로 축소하던 474 규칙을 폐기하고, Sori Studio pane-mobile과 동일한 `clamp(2rem, 2.45vw, 2.65rem)` 크기와 5px split optical 위치를 사용하도록 수정했다.
+- 오른쪽 전체화면은 포털 대문이 실제 페이지 쉘의 가로 계약과 달라 좌측으로 쏠려 보이던 문제를 수정했다. 대문 행을 실제 페이지와 같은 `max-width:1548px + 좌우 24px` 구조로 맞춰 제목/우측 액션이 탭·검색·목록과 같은 1500px 콘텐츠 가이드를 사용한다.
+- 전체화면 대문은 84px 전체 높이를 유지하면서 상단/하단 패딩을 24px/8px로 재분배해 행 전체를 4px 위로 이동했다.
+- Music Note 새로고침과 Library 크레딧도 전체화면에서 동일한 24px 우측 가이드에 맞췄다.
+- Sori Studio, 넓은 분할, 분할바/스크롤 구조, 실제 1100px 미만 모바일/태블릿, Firebase/Auth/Firestore/Functions는 변경하지 않았다.
+
+
+## 476차 메모
+- Music Note / Suno Library의 Studio workspace 대문에서 legacy page-header 클래스를 제거해 위치 소유권을 전용 result masthead 하나로 분리.
+- 474/475의 중복 workspace masthead CSS를 제거하고 476 단일 계약으로 교체.
+- 넓은 분할은 승인 위치 유지, compact split은 제목 크기를 별도 축소하지 않으며 Sori Studio와 동일한 brand scale/84px masthead rhythm 사용.
+- result-only fullscreen은 기존 Studio fullscreen의 1500px pane child composition을 그대로 사용하고 내부 1548px/24px 이중 폭 계산을 제거.
+- 일반 Music Note/Library 페이지 헤더는 기존 legacy class를 유지해 분할 작업공간 외 디자인과 분리.
+
+## 477차 메모
+- 기준: 476차.
+- Music Note / Suno Library의 Studio Black **오른쪽 전체화면(result-only fullscreen)** 가로 정렬만 수정.
+- 476차에서 대문 위치 소유권은 단일 `soridraw-studio-result-masthead`로 정리됐지만, 전체화면 masthead 내부 여백이 2px로 남아 아래 탭/검색/목록의 1500px 중앙 구성보다 왼쪽에 붙던 문제를 수정.
+- 전체화면 masthead의 좌측 가이드를 `centered 1500px + 12px`, 우측 액션 가이드를 `centered 1500px + 10px`로 직접 계산하여 아래 콘텐츠와 같은 세로선에 정렬.
+- 넓은 분할, compact/mobile pane, 실제 모바일, Sori Studio는 변경하지 않음.
+
+
+## 478차 메모
+- 전체화면 Music Note / Library 대문의 좌측 쏠림 원인을 실제 CSS 소유권 기준으로 수정.
+- 334의 `result-pane > *` 1500px 직접 자식 캡과 361의 workspace-page 100% 재확장 때문에 대문 host와 본문이 서로 다른 가로 좌표계를 쓰던 충돌을 제거.
+- 전체화면에서만 masthead host를 100% scroll-shell 폭으로 풀고, 내부 masthead row를 본문과 동일한 1548px 중앙 shell + 12px/10px gutter로 통일.
+- 넓은 분할/모바일 분할/모바일 글자 크기/세로 위치는 변경하지 않음.
+
+
+## 479차 메모
+- 기준: 478차.
+- 범위: Studio Black의 Music Note / Suno Library `result-only fullscreen` masthead 가로 정렬만 미세조정. 넓은 분할/모바일형 분할/Sori Studio는 변경하지 않음.
+- 478차에서 masthead와 본문이 같은 1548px 좌표계로 움직이기 시작한 것을 확인한 뒤, 실제 스크린샷에서 제목 시작점이 본문(탭/검색)보다 약 24px 왼쪽, 우측 액션은 약 24px 바깥쪽인 차이를 보정.
+- fullscreen masthead row의 좌측 gutter를 12px→36px, 우측 gutter를 10px→34px로 변경. Music Note 새로고침과 Library 크레딧 액션의 right도 10px→34px로 맞춤.
+- 세로 위치, 제목 크기, 탭/검색/목록, 모바일형 pane, 넓은 분할 상태는 유지.

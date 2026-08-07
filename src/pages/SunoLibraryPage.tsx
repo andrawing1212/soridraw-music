@@ -5734,7 +5734,11 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0 }}
-      className="soridraw-workspace-ported-header soridraw-library-page-header flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 translate-y-2 md:translate-y-3"
+      className={`flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 ${
+        studioWorkspaceHeroHost
+          ? 'soridraw-studio-result-masthead soridraw-studio-result-masthead--library'
+          : 'soridraw-library-page-header soridraw-workspace-ported-header translate-y-2 md:translate-y-3'
+      }`}
     >
       <div className="flex items-start gap-4 min-w-0">
         {isSharedView && (
@@ -5746,7 +5750,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </button>
         )}
         <div className="min-w-0">
-          <div className="soridraw-page-title-hover relative inline-flex max-w-full">
+          <div className={`soridraw-page-title-hover relative inline-flex max-w-full${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
             <h1
               className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
               title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
@@ -5759,7 +5763,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </div>
         </div>
       </div>
-      <div className="flex shrink-0 gap-2 items-center self-center">
+      <div className={`flex shrink-0 gap-2 items-center self-center${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-actions' : ''}`}> 
         {!isSharedView && typeof remainingCredits === 'number' && (
           <button
             type="button"

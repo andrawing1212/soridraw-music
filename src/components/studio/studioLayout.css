@@ -10389,3 +10389,92 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   border: 0 !important;
   box-shadow: 0 8px 22px rgba(69, 59, 48, 0.20) !important;
 }
+
+/* 457 — Classic Light menu/dropdown and floating action surface cleanup.
+ * Scope is strictly Classic + Light. Remove the remaining dark rows from the
+ * Music Note more menu, lower only the parent menu surface slightly, and make
+ * the Studio floating action window / collapse arrow use the approved warm
+ * light palette. Classic Dark and Studio Black/split remain untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-more-menu-panel="true"] {
+  background: #D8D1C8 !important;
+  background-color: #D8D1C8 !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 14px 34px rgba(69, 59, 48, 0.16) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-more-menu-panel="true"] button {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #625B54 !important;
+  -webkit-text-fill-color: #625B54 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-more-menu-panel="true"] button:hover {
+  background: #CFC6BC !important;
+  background-color: #CFC6BC !important;
+  color: #2F2A26 !important;
+  -webkit-text-fill-color: #2F2A26 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-more-menu-panel="true"] button[class*="text-[#FF7A72]"] {
+  color: #A13C37 !important;
+  -webkit-text-fill-color: #A13C37 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-more-menu-panel="true"] button[class*="text-red-400"] {
+  color: #B83843 !important;
+  -webkit-text-fill-color: #B83843 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme [data-more-menu-panel="true"] button svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-row {
+  background: #DED8D0 !important;
+  background-color: #DED8D0 !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: 0 16px 40px rgba(69, 59, 48, 0.16) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-row .soridraw-action-collapse {
+  background: #CFC6BC !important;
+  background-color: #CFC6BC !important;
+  background-image: none !important;
+  color: #7B5B12 !important;
+  -webkit-text-fill-color: #7B5B12 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-row .soridraw-action-collapse:hover {
+  background: #C4B9AD !important;
+  background-color: #C4B9AD !important;
+  color: #5F450C !important;
+  -webkit-text-fill-color: #5F450C !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-row .soridraw-action-collapse svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}

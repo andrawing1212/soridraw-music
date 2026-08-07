@@ -2564,7 +2564,7 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
  * The isolated desktop now uses two absolute scroll panes inside one strict,
  * fixed-size boundary. Width changes can relayout each pane, but cannot change
  * the page, hero, rails, footer, or the other pane's track sizing. */
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
     display: block !important;
     position: relative !important;
@@ -2703,7 +2703,7 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
  * itself must not create a third vertical scrollbar at the far right. Scope the
  * lock to the mounted /studio frame and Studio Black only; Classic and every
  * other route keep their original document scrolling. */
-@media (min-width: 1600px) {
+@media (min-width: 1100px) {
   html.soridraw-studio-route-active[data-soridraw-theme="studio-black"],
   html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] body.soridraw-studio-route-active,
   html.soridraw-studio-route-active[data-soridraw-theme="studio-black"] body.soridraw-studio-route-active > #root,
@@ -10730,4 +10730,194 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   stroke: #8A5700 !important;
   stroke-width: 2.2 !important;
   opacity: 1 !important;
+}
+
+/* 461 — Put split mastheads inside the real pane scrollers.
+ * 460 used scrollTop thresholds plus root data flags to hide an external hero.
+ * Resizing the split could clamp/recalculate pane scrollTop around that threshold,
+ * so the masthead treatment appeared to switch on/off while dragging. The title
+ * rows now live as the first real children of the builder/result scroll panes.
+ * There is no threshold, no negative overlap, and no synthetic top padding:
+ * the pane itself begins exactly at the fixed 110px divider and the masthead
+ * simply scrolls away in normal document flow. PC and tablet >=1100px share
+ * this one model. Collapsed one-pane layouts, Classic and phone layouts keep
+ * their existing geometry. */
+.soridraw-studio-pane-masthead-host {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-main {
+    margin-top: 0 !important;
+    padding-top: 110px !important;
+    padding-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    min-height: 0 !important;
+    max-height: var(--soridraw-studio-isolated-height, calc(100dvh - 110px)) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    padding-top: 0 !important;
+    scroll-padding-top: 0 !important;
+    overscroll-behavior-y: contain !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-pane-masthead-host {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 84px !important;
+    min-height: 84px !important;
+    margin: 0 !important;
+    padding: 20px 0 12px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-builder-masthead {
+    position: relative !important;
+    display: flex !important;
+    width: 100% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: clamp(2rem, 2.45vw, 2.65rem) !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title > svg {
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-search-button {
+    position: absolute !important;
+    top: 50% !important;
+    right: 2px !important;
+    transform: translateY(-50%) !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    z-index: 2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-search-button > svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header {
+    position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 10px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host .soridraw-page-title-hover h1 {
+    font-size: clamp(2rem, 2.45vw, 2.65rem) !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-pane-masthead-host .soridraw-page-title-hover h1 {
+    font-size: 1.85rem !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host .soridraw-library-credit-button {
+    height: 32px !important;
+    min-height: 32px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 11px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-pane-masthead-host .soridraw-library-credit-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 9px !important;
+    font-size: 9px !important;
+  }
 }

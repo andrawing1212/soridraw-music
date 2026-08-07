@@ -24,7 +24,7 @@ const TABLET_MIN_PANE_PX = 430;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
-const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1600;
+const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
 type PaneMode = 'mobile' | 'desktop';
@@ -120,6 +120,7 @@ type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 
 type StudioSplitWorkspaceProps = {
   children: ReactNode;
+  builderMasthead?: ReactNode;
   viewMode?: 'split' | 'result-only' | 'hidden';
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
@@ -127,6 +128,7 @@ type StudioSplitWorkspaceProps = {
 
 export default function StudioSplitWorkspace({
   children,
+  builderMasthead,
   viewMode = 'split',
   workspaceView,
   workspaceRequestId = 0,
@@ -237,8 +239,11 @@ export default function StudioSplitWorkspace({
     root.style.removeProperty('--soridraw-studio-action-footer-offset');
     root.style.removeProperty('--soridraw-studio-result-left');
     root.style.removeProperty('--soridraw-studio-result-right');
+    root.style.removeProperty('--soridraw-studio-scroll-masthead-space');
     delete root.dataset.soridrawBuilderAtMinimum;
     delete root.dataset.soridrawResultAtMinimum;
+    delete root.dataset.soridrawBuilderMastheadScrolled;
+    delete root.dataset.soridrawResultMastheadScrolled;
   }, []);
 
   const readExternalControls = useCallback((force = false) => {
@@ -465,8 +470,17 @@ export default function StudioSplitWorkspace({
     const layout = layoutRef.current;
     if (!layout) return;
 
+    const root = document.documentElement;
     const shouldIsolate = isStudioBlack()
       && window.innerWidth >= WIDE_DESKTOP_ISOLATION_BREAKPOINT;
+
+    // 461: the split mastheads are now real children of their own pane scrollers.
+    // Clear every 460-era synthetic scroll flag/offset so divider movement can no
+    // longer toggle a second visual state while pane widths are being recomputed.
+    root.style.removeProperty('--soridraw-studio-scroll-masthead-space');
+    delete root.dataset.soridrawBuilderMastheadScrolled;
+    delete root.dataset.soridrawResultMastheadScrolled;
+
     if (!shouldIsolate) {
       delete layout.dataset.scrollIsolated;
       layout.style.removeProperty('--soridraw-studio-isolated-height');
@@ -1053,8 +1067,16 @@ export default function StudioSplitWorkspace({
   return (
     <>
       <div ref={layoutRef} data-workspace-view-mode={viewMode} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
-        <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>{panes[0] ?? null}</div>
-        <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>{panes[1] ?? null}</div>
+        <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
+          <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
+            {builderMasthead}
+          </div>
+          {panes[0] ?? null}
+        </div>
+        <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
+          <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
+          {panes[1] ?? null}
+        </div>
       </div>
       {viewMode !== 'hidden' && (typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(splitterControl, document.body) : splitterControl)}

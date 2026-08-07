@@ -703,15 +703,29 @@ export default function FavoritesPage({
 
   useEffect(() => {
     const syncStudioWorkspaceHeroHost = () => {
-      const nextHost = window.innerWidth >= 1100
+      const root = document.documentElement;
+      const usePaneMasthead = window.innerWidth >= 1100
+        && root.dataset.soridrawTheme === 'studio-black'
+        && root.dataset.soridrawBuilderCollapsed !== 'true'
+        && root.dataset.soridrawResultCollapsed !== 'true';
+      const paneHost = usePaneMasthead
+        ? document.getElementById('soridraw-studio-result-pane-masthead-host')
+        : null;
+      const legacyHost = window.innerWidth >= 1100
         ? document.getElementById('soridraw-studio-workspace-hero-host')
         : null;
-      setStudioWorkspaceHeroHost(nextHost);
+      setStudioWorkspaceHeroHost(paneHost || legacyHost);
     };
 
     syncStudioWorkspaceHeroHost();
     window.addEventListener('resize', syncStudioWorkspaceHeroHost);
-    return () => window.removeEventListener('resize', syncStudioWorkspaceHeroHost);
+    window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
+    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    return () => {
+      window.removeEventListener('resize', syncStudioWorkspaceHeroHost);
+      window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    };
   }, []);
 
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);

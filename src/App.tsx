@@ -14156,6 +14156,25 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   viewMode="split"
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
+                  builderMasthead={
+                    <div className="soridraw-studio-scroll-builder-masthead">
+                      <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
+                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
+                      </h1>
+                      {user && (
+                        <button
+                          type="button"
+                          onClick={openGlobalSearchModal}
+                          className="soridraw-studio-scroll-search-button flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                          aria-label="통합 검색"
+                          title="통합 검색"
+                        >
+                          <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
+                        </button>
+                      )}
+                    </div>
+                  }
                 >
                   <StudioBuilderPane>
                     {/* Selection Sections */}

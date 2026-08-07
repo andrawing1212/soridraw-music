@@ -3283,7 +3283,15 @@ function Navigation({
   // Collapse menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      // Profile triggers and their menus live outside the mobile navigation ref
+      // on desktop. Excluding both from the outside-click handler lets the same
+      // profile button toggle open on the first click and closed on the second.
+      if (target.closest('.soridraw-profile-trigger, .soridraw-profile-menu')) return;
+
+      if (menuRef.current && !menuRef.current.contains(target)) {
         setIsExpanded(false);
         setIsProfileOpen(false);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -3471,7 +3479,7 @@ function Navigation({
               <button
                 type="button"
                 onClick={() => setIsProfileOpen((prev) => !prev)}
-                className="flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
+                className="soridraw-profile-trigger flex h-11 max-w-[54px] items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-3 text-[14px] font-black text-white/75 transition-all hover:bg-white/[0.07] hover:text-white sm:max-w-[170px] sm:px-4"
               >
                 <img
                   src={headerIdentity.photoURL || 'https://picsum.photos/seed/user/100/100'}
@@ -3578,7 +3586,7 @@ function Navigation({
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
+                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
                     isProfileOpen && "bg-[#FFB400]/18"
                   )}
                   aria-label="계정 메뉴"
@@ -4091,6 +4099,27 @@ function App() {
     setStudioWorkspaceView(view);
     setStudioWorkspaceLayoutRequestId((current) => current + 1);
   }, []);
+
+  // Split mode is a separate workspace world from the classic dark/light layout.
+  // When the user leaves Studio Black for either classic color mode, always
+  // restore the normal Studio composition: the builder remains mounted above
+  // and the recent/generated result area is shown below. This only changes the
+  // visible workspace target; every Studio selection and draft state is kept.
+  useEffect(() => {
+    const handleStudioThemeChange = (event: Event) => {
+      if (location.pathname !== '/studio') return;
+
+      const nextMode = (event as CustomEvent<{ mode?: SoridrawDisplayMode }>).detail?.mode;
+      if (nextMode !== 'dark' && nextMode !== 'light') return;
+
+      selectStudioWorkspaceView('recent');
+    };
+
+    window.addEventListener('soridraw-theme-change', handleStudioThemeChange as EventListener);
+    return () => {
+      window.removeEventListener('soridraw-theme-change', handleStudioThemeChange as EventListener);
+    };
+  }, [location.pathname, selectStudioWorkspaceView]);
 
   const [isStudioLoaded, setIsStudioLoaded] = useState(location.pathname === '/studio');
   useEffect(() => {

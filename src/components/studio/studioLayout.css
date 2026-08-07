@@ -12093,3 +12093,40 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     right: 34px !important;
   }
 }
+
+/* 480 — Align Recent Songs result-only fullscreen with the approved split-pane vertical guide.
+ * Root cause: the legacy 420 fullscreen fallback kept the Studio hero rendered as an
+ * invisible structural spacer for non-MusicNote/Library result views. Because the hero
+ * still retained its responsive pt-20/md:pt-24 padding plus a 40px hero-row footprint,
+ * Recent Songs fullscreen started substantially lower than the same result content in
+ * split mode. Music Note / Library already moved to the real pane-masthead model in 462.
+ * Give Recent Songs the same ownership model: remove the legacy hidden hero completely,
+ * start main at the shared 110px pane divider, and let the existing 84px result-pane
+ * masthead host remain the only vertical header footprint. Split, builder fullscreen,
+ * Music Note, Library, mobile and Classic are intentionally untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="recent"]
+  .soridraw-studio-hero {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="recent"]
+  .soridraw-studio-main {
+    margin-top: 0 !important;
+    padding-top: 110px !important;
+    padding-bottom: 0 !important;
+  }
+}

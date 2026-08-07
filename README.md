@@ -827,3 +827,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 478차에서 masthead와 본문이 같은 1548px 좌표계로 움직이기 시작한 것을 확인한 뒤, 실제 스크린샷에서 제목 시작점이 본문(탭/검색)보다 약 24px 왼쪽, 우측 액션은 약 24px 바깥쪽인 차이를 보정.
 - fullscreen masthead row의 좌측 gutter를 12px→36px, 우측 gutter를 10px→34px로 변경. Music Note 새로고침과 Library 크레딧 액션의 right도 10px→34px로 맞춤.
 - 세로 위치, 제목 크기, 탭/검색/목록, 모바일형 pane, 넓은 분할 상태는 유지.
+
+## 480차 메모
+- 기준: `SORIDRAW_479차_전체화면_대문좌측24px안쪽_우측액션24px안쪽.zip`
+- 최근 생성곡 result-only 전체화면만 수정.
+- 원인: 420차 레거시 규칙이 최근 생성곡 전체화면에서 `soridraw-studio-hero`를 보이지 않게만 처리하고 실제 높이/상단 padding은 유지해, split보다 큰 빈 상단 영역을 만들고 있었음.
+- 수정: 최근 생성곡 전체화면에서는 레거시 hidden hero를 완전히 0으로 제거하고, split/Music Note/Library와 같은 `110px main start + 84px pane masthead host` 구조를 사용하도록 통일.
+- 분할모드, Sori Studio builder 전체화면, Music Note, Library, 모바일/태블릿 일반 흐름, Classic은 변경하지 않음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

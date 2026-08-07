@@ -578,3 +578,24 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 스크롤 시 Sori Studio 대문/검색 버튼과 Music Note·Library 대문이 해당 pane과 함께 사라지고, 카드·목록은 고정 실선(masthead divider)까지 올라와 공간을 사용합니다.
 - 태블릿에서 문서 전체가 상단 실선 위까지 넘어가던 동작을 제거하고 PC와 같은 상단 경계에서 각 pane만 스크롤되도록 통일했습니다.
 - 한쪽 pane 전체화면, 모바일, Classic 다크/라이트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
+## 461차 메모
+- 기준: `SORIDRAW_460차_분할모드_상단대문_스크롤영역확장_PC태블릿통일.zip`
+- 460차에서 사용한 `scrollTop > 6px` 감지 + `data-soridraw-*-masthead-scrolled` 토글 구조를 제거했습니다. 분할바 드래그 중 pane 폭이 바뀔 때 브라우저가 scrollTop을 보정하면서 대문 숨김 상태가 켜졌다 꺼지는 원인이었습니다.
+- Studio Black 분할모드(PC/태블릿 1100px 이상)에서는 Sori Studio 대문과 오른쪽 Music Note/Library 대문을 각 pane 스크롤러의 실제 첫 번째 콘텐츠로 배치했습니다.
+- 외부 hero를 숨겼다가 scrollTop 조건으로 다시 처리하는 방식, 음수 margin, 가상 top padding 보정을 제거했습니다. 이제 대문은 카드/목록과 동일한 실제 스크롤 흐름에 속하므로 스크롤하면 자연스럽게 위로 사라집니다.
+- 각 pane의 실제 시작 경계를 고정 masthead divider의 110px 위치에 맞췄습니다. 대문이 사라진 뒤 카드/목록은 해당 실선 바로 아래까지 정상적으로 올라갑니다.
+- Music Note/Library의 기존 hero portal은 분할 상태에서 오른쪽 pane 내부 masthead host를 사용하도록 변경하고, 한쪽 pane 전체화면/Classic 테마에서는 기존 외부 hero host로 자동 복귀하도록 유지했습니다.
+- Sori Studio 검색 버튼도 builder pane 내부 masthead에 함께 배치해 분할바 이동 시 별도 고정 좌표 계산에 의존하지 않도록 했습니다.
+- Classic 다크/라이트, 1099px 이하 모바일, 한쪽 pane 전체화면, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
+## 462차 메모
+- 기준: `SORIDRAW_461차_분할대문_실제pane스크롤편입_드래그토글제거.zip`
+- Studio Black의 대문 크기/위치를 461차 Sori Studio 분할 대문 기준으로 통일했다.
+- 공통 대문 규격: 84px 박스, 52px 제목행, 상단 20px/하단 12px, 제목 2rem, Sori Studio 번개 34px.
+- PC/태블릿 1100px 이상에서 builder-only 전체화면도 builder pane masthead를 그대로 사용한다.
+- Music Note/Library result-only 전체화면도 legacy hero가 아니라 실제 result pane masthead host를 계속 사용하도록 portal 조건을 변경했다.
+- 분할 pane이 compact/mobile mode로 바뀌어도 Music Note/Library 대문 글자 크기를 줄이지 않는다.
+- 1100px 미만 모바일/태블릿은 Sori Studio, Music Note, Library 모두 80px page-top + 동일 84px masthead flow block + 좌우 12px gutter를 사용한다.
+- 기존 Music Note 2px optical top 보정, Library 95px 모바일 top 보정, 모바일 title translate 등 오래된 개별 보정은 마지막 462 규칙에서 무효화한다.
+- Classic 다크/라이트와 Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

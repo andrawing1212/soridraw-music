@@ -704,9 +704,11 @@ export default function FavoritesPage({
   useEffect(() => {
     const syncStudioWorkspaceHeroHost = () => {
       const root = document.documentElement;
+      // 462: keep the active right-page masthead in the real result-pane
+      // scroller even when the builder is collapsed into result fullscreen.
+      // Split and one-pane result views now share one masthead owner/geometry.
       const usePaneMasthead = window.innerWidth >= 1100
         && root.dataset.soridrawTheme === 'studio-black'
-        && root.dataset.soridrawBuilderCollapsed !== 'true'
         && root.dataset.soridrawResultCollapsed !== 'true';
       const paneHost = usePaneMasthead
         ? document.getElementById('soridraw-studio-result-pane-masthead-host')

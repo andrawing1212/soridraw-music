@@ -17784,7 +17784,7 @@ function GenreCategorySectionComponent({
   const isExpandSummaryActive = isExpanded;
 
   return (
-    <div data-expand-section className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group">
+    <div data-expand-section className="soridraw-genre-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col h-full relative group">
       {onToggleExpand && (
         <button
           data-expanded={isExpanded ? 'true' : 'false'}
@@ -17957,7 +17957,7 @@ function GenreCategorySectionComponent({
             {(selectedGroup?.labelKo || selectedGroup?.label)} / {(selectedChild.labelKo || selectedChild.label)}
           </p>
         ) : (
-          <p className="text-xs text-[var(--text-secondary)]">
+          <p className="soridraw-genre-selection-tip text-xs text-[var(--text-secondary)]">
             대분류를 누른 뒤 팝업에서 세부 장르를 최대 2개까지 선택하세요.
           </p>
         )}

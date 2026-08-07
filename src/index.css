@@ -4624,3 +4624,158 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   background: #F3F0EA !important;
   background-color: #F3F0EA !important;
 }
+
+/* 450 — Classic Light contrast refinement.
+ * Keep the approved warm ivory direction from 449, but strengthen the visual
+ * hierarchy slightly. Scope remains Classic + Light only; dark mode and Studio
+ * Black/split mode are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --bg-secondary: #E9E5DF;
+  --card-bg: #E9E5DF;
+  --hover-bg: #E1DBD4;
+  --hover-bg-solid: #DCD5CD;
+  --button-bg: #F2EEE8;
+  --button-hover-bg: #E1DBD4;
+  --soridraw-panel-bg: #EEEAE4;
+  --soridraw-card-bg: #E9E5DF;
+}
+
+/* Main Studio menu surfaces: slightly darker than the page, while keyword
+ * controls stay a touch lighter than their section titles. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down {
+  --soridraw-studio-card-bg: #E8E3DC;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface::before,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-command-card textarea {
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-content button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]) {
+  background: #F2EEE8 !important;
+  background-color: #F2EEE8 !important;
+  color: #5F5850 !important;
+  -webkit-text-fill-color: #5F5850 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-content button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]):hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]):hover {
+  background: #E1DBD4 !important;
+  background-color: #E1DBD4 !important;
+}
+
+/* Pencil/edit controls should read as icons, not square buttons. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button {
+  color: #746E66 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button:hover {
+  color: #342F2A !important;
+}
+
+/* The vocal-character launcher looked more natural only during hover. Make
+ * that light neutral surface its steady state and keep hover from jumping. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher:is(:hover, :active, :focus, :focus-visible) {
+  background: #F8F5F0 !important;
+  background-color: #F8F5F0 !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Light modal cards use the same slightly deeper gray hierarchy. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151515]"], [class*="bg-[#171717]"], [class*="bg-[#171719]"], [class*="bg-[#181818]"], [class*="bg-[#1a1a1a]"], [class*="bg-[#1f1f1f]"], [class*="bg-[#202020]"]) {
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.storyboard-section-card, .storyboard-control-card),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\] {
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}
+
+/* Music Note / Library menus and result cards: slightly stronger contrast. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-responsive-color-filter, .soridraw-responsive-filter-button),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-song-card, .soridraw-library-workspace-group) {
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-workspace-header,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-workspace-group :where([class*="bg-white/"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-song-card :where([class*="bg-white/"]) {
+  background: #EEEAE4 !important;
+  background-color: #EEEAE4 !important;
+}
+
+/* Remove the remaining rectangular outline around the Music Note search area. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme :is(
+  .soridraw-responsive-search-slot,
+  .soridraw-responsive-search,
+  .soridraw-responsive-search-input
+) {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme .soridraw-responsive-search-slot,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme .soridraw-responsive-search {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme .soridraw-responsive-search-input {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}

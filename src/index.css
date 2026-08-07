@@ -4823,3 +4823,30 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   background: #E8E3DC !important;
   background-color: #E8E3DC !important;
 }
+
+
+/* 453 — Classic dark/light must render the same Studio geometry on first load
+ * and after an in-app theme switch. The classic world uses the normal Studio
+ * composition (builder above, recent results below), while Studio Black remains
+ * a separate split workspace. Keep the approved zero title-to-card inset and
+ * raised search button for both classic workspace labels so changing between
+ * create/recent cannot change the masthead geometry. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    bottom: 12px !important;
+  }
+}

@@ -4093,7 +4093,9 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
-  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>('create');
+  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
+    readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
+  );
   const [studioWorkspaceLayoutRequestId, setStudioWorkspaceLayoutRequestId] = useState(0);
   const selectStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
     setStudioWorkspaceView(view);

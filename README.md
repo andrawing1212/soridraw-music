@@ -935,3 +935,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 펼침/접힘, PC/태블릿 모두 기본 아이콘은 동일한 중립 회색, hover는 밝은 회색, 활성 아이콘은 흰색으로 고정합니다.
 - 접기/펼치기 아이콘도 같은 중립 팔레트를 사용하며 브라우저 기본 검정색으로 폴백하지 않게 했습니다.
 - 기존 64px 접힘 중앙축과 214px 펼침 구조는 유지합니다.
+
+## 503차 — 반응형 중복 철거 + 메뉴/대문 단일 소유권 정리
+
+- 기준: 502차.
+- 프레임 성능 실험은 중단한 상태를 유지하고, 이번 차수는 영상에서 확인된 UI 역전/중복/간격 문제의 구조 정리에만 집중했다.
+- Studio 좌/우 보조 rail의 접힘 상태 소유권을 사용자 토글 하나로 통일했다. 1600px PC↔태블릿 경계가 rail 상태를 강제로 바꾸거나 저장 상태를 다시 복원하지 않으므로, 브라우저를 줄이는데 중앙 workspace 폭이 갑자기 커지는 역방향 재배치를 제거했다. 1100px 미만에서는 기존 모바일 CSS가 rail을 숨기고, 다시 넓어지면 사용자가 마지막으로 선택한 펼침/접힘 상태가 그대로 돌아온다.
+- 좌측 rail은 펼침/접힘 모두 동일한 Lucide SVG DOM을 사용한다. 아이콘 18px, 중립 회색/hover/active 색, 접힘 64px의 x=32px 중앙축을 한 계약으로 고정했다. 1600px 이상에서만 프로필/화살표/토글 위치가 달라지던 301차 wide-only variant를 제거했다.
+- Sori Studio masthead의 과거 hero/portal/top-offset 체인(384/390/391~393/408~409/419~423)을 제거하고, desktop/tablet에서는 builder pane의 normal-flow masthead 하나만 보이도록 정리했다. 모바일은 기존 정상 hero를 유지한다.
+- Sori Studio 대문 크기 단계도 Music Note/Library와 같은 실제 영역폭 1080/680 기준을 추가해 PC → tablet → mobile 방향으로만 축소되도록 했다. 기존 builder 카드의 1120/1100/1074/760/700 반응형 기준은 변경하지 않았다.
+- Music Note/Library는 498차 실제 페이지 폭 기반 계약을 유지하고, 그 위에 남아 있던 viewport/pane 전용 search/header/tab/masthead portal 규칙을 제거했다. standalone과 split이 같은 실제 폭이면 같은 page mode를 사용한다.
+- Library는 masthead를 content stack 밖으로 이동해 Music Note와 같은 header ownership 구조로 맞췄다. 이전 stack gap이 대문 바로 아래에 별도 빈 띠를 만들던 구조를 제거했다.
+- PC↔태블릿 resize 중 Music Note/Library 목록이 회색 빈 카드처럼 잠깐 사라지던 원인이 될 수 있던 list/tablet `content-visibility:auto` 경로를 제거했다. 20개 단위 페이지 로딩과 split drag transition 중지는 유지한다.
+- 499차 split 최소폭 우선/pinned pane 동작, 498차 Music Note/Library 단일 실제폭 계약, 491차 Live Layout, Studio 상단 Music Note/Library/실험실 메뉴 제거는 유지한다.
+- Classic, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

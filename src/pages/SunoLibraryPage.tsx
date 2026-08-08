@@ -6118,11 +6118,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      <div className="soridraw-responsive-page-stack w-full">
-        
-        {/* Header Block */}
-        {libraryPageHeader}
+      {/* 503: Library uses the same header ownership as Music Note.
+          The masthead is outside the content stack, so stack gap can never
+          reopen a Library-only band under the title. */}
+      {libraryPageHeader}
 
+      <div className="soridraw-responsive-page-stack w-full">
         {/* Main Music Player relocated to GlobalPlayer */}
 
         <div className="soridraw-library-primary-controls">

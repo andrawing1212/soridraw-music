@@ -248,9 +248,11 @@ export default function StudioSplitWorkspace({
     for (const attribute of [
       'data-width-lte-1120',
       'data-width-lte-1100',
+      'data-width-lte-1080',
       'data-width-lte-1074',
       'data-width-lte-760',
       'data-width-lte-700',
+      'data-width-lte-680',
     ]) builderRef.current?.removeAttribute(attribute);
     for (const attribute of [
       'data-width-lte-1080',
@@ -573,9 +575,11 @@ export default function StudioSplitWorkspace({
     // making the browser re-evaluate the whole subtree on every frame.
     syncFlag('b1120', builder, 'data-width-lte-1120', builderWidth <= 1120);
     syncFlag('b1100', builder, 'data-width-lte-1100', builderWidth <= 1100);
+    syncFlag('b1080', builder, 'data-width-lte-1080', builderWidth <= 1080);
     syncFlag('b1074', builder, 'data-width-lte-1074', builderWidth <= 1074);
     syncFlag('b760', builder, 'data-width-lte-760', builderWidth <= 760);
     syncFlag('b700', builder, 'data-width-lte-700', builderWidth <= 700);
+    syncFlag('b680', builder, 'data-width-lte-680', builderWidth <= 680);
 
     syncFlag('r1080', result, 'data-width-lte-1080', resultWidth <= 1080);
     syncFlag('r820', result, 'data-width-lte-820', resultWidth <= 820);

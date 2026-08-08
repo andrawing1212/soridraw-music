@@ -336,7 +336,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '곡 만들기')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><PenTool /></span>
+              <PenTool className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>곡 만들기</span>
             </button>
             <button
@@ -347,7 +347,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '최근 생성곡')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><History /></span>
+              <History className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>최근 생성곡</span>
               <ChevronRight className="soridraw-studio-rail-item-chevron ml-auto" aria-hidden="true" />
             </button>
@@ -359,7 +359,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '뮤직노트')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><Music /></span>
+              <Music className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>뮤직노트</span>
               <ChevronRight className="soridraw-studio-rail-item-chevron ml-auto" aria-hidden="true" />
             </button>
@@ -371,7 +371,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '라이브러리')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><Library /></span>
+              <Library className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>라이브러리</span>
               <ChevronRight className="soridraw-studio-rail-item-chevron ml-auto" aria-hidden="true" />
             </button>
@@ -385,7 +385,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '통합 검색')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><Search /></span>
+              <Search className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>통합 검색</span>
             </button>
             <button
@@ -395,7 +395,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, 'API 설정')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><Settings /></span>
+              <Settings className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>API 설정</span>
             </button>
           </nav>
@@ -408,7 +408,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, 'Labs')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><FlaskConical /></span>
+              <FlaskConical className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>Labs</span>
             </button>
             <button
@@ -418,7 +418,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '알림')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><Bell /></span>
+              <Bell className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>알림</span>
             </button>
             <button
@@ -428,7 +428,7 @@ export default function StudioLeftRail({
               onMouseEnter={(event) => showRailTooltip(event.currentTarget, '더보기')}
               onMouseLeave={hideRailTooltip}
             >
-              <span className="soridraw-studio-rail-icon-slot" aria-hidden="true"><Ellipsis /></span>
+              <Ellipsis className="soridraw-studio-rail-primary-icon" aria-hidden="true" />
               <span>더보기</span>
             </button>
           </div>

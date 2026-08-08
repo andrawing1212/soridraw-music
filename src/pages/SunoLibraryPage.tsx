@@ -235,33 +235,30 @@ function AnimatedTrackPlayButton({
 
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
   const navigate = useNavigate();
-  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+  const [studioResultMastheadHost, setStudioResultMastheadHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
   useEffect(() => {
-    const syncStudioWorkspaceHeroHost = () => {
+    const syncStudioResultMastheadHost = () => {
       const root = document.documentElement;
-      // 462: keep the active right-page masthead in the real result-pane
-      // scroller even when the builder is collapsed into result fullscreen.
-      // Split and one-pane result views now share one masthead owner/geometry.
+      // 489: one desktop owner only. Music Note / Library mastheads live in
+      // the real result pane; the legacy external hero portal is no longer used.
       const usePaneMasthead = isStudioDesktopViewport
         && root.dataset.soridrawTheme === 'studio-black'
         && root.dataset.soridrawResultCollapsed !== 'true';
-      const paneHost = usePaneMasthead
-        ? document.getElementById('soridraw-studio-result-pane-masthead-host')
-        : null;
-      const legacyHost = isStudioDesktopViewport
-        ? document.getElementById('soridraw-studio-workspace-hero-host')
-        : null;
-      setStudioWorkspaceHeroHost(paneHost || legacyHost);
+      setStudioResultMastheadHost(
+        usePaneMasthead
+          ? document.getElementById('soridraw-studio-result-pane-masthead-host')
+          : null,
+      );
     };
 
-    syncStudioWorkspaceHeroHost();
-    window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
-    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    syncStudioResultMastheadHost();
+    window.addEventListener('soridraw-theme-change', syncStudioResultMastheadHost as EventListener);
+    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioResultMastheadHost as EventListener);
     return () => {
-      window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
-      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+      window.removeEventListener('soridraw-theme-change', syncStudioResultMastheadHost as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioResultMastheadHost as EventListener);
     };
   }, [isStudioDesktopViewport]);
 
@@ -5735,7 +5732,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0 }}
       className={`flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 ${
-        studioWorkspaceHeroHost
+        studioResultMastheadHost
           ? 'soridraw-studio-result-masthead soridraw-studio-result-masthead--library'
           : 'soridraw-library-page-header soridraw-workspace-ported-header translate-y-2 md:translate-y-3'
       }`}
@@ -5750,7 +5747,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </button>
         )}
         <div className="min-w-0">
-          <div className={`soridraw-page-title-hover relative inline-flex max-w-full${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
+          <div className={`soridraw-page-title-hover relative inline-flex max-w-full${studioResultMastheadHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
             <h1
               className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
               title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
@@ -5763,7 +5760,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </div>
         </div>
       </div>
-      <div className={`flex shrink-0 gap-2 items-center self-center${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-actions' : ''}`}> 
+      <div className={`flex shrink-0 gap-2 items-center self-center${studioResultMastheadHost ? ' soridraw-studio-result-masthead-actions' : ''}`}> 
         {!isSharedView && typeof remainingCredits === 'number' && (
           <button
             type="button"
@@ -6149,8 +6146,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       <div className="w-full space-y-3 md:space-y-5">
         
         {/* Header Block */}
-        {studioWorkspaceHeroHost
-          ? createPortal(libraryPageHeader, studioWorkspaceHeroHost)
+        {studioResultMastheadHost
+          ? createPortal(libraryPageHeader, studioResultMastheadHost)
           : libraryPageHeader}
 
         {/* Main Music Player relocated to GlobalPlayer */}

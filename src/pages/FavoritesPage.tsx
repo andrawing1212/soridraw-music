@@ -700,33 +700,30 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
-  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+  const [studioResultMastheadHost, setStudioResultMastheadHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
   useEffect(() => {
-    const syncStudioWorkspaceHeroHost = () => {
+    const syncStudioResultMastheadHost = () => {
       const root = document.documentElement;
-      // 462: keep the active right-page masthead in the real result-pane
-      // scroller even when the builder is collapsed into result fullscreen.
-      // Split and one-pane result views now share one masthead owner/geometry.
+      // 489: one desktop owner only. Music Note / Library mastheads live in
+      // the real result pane; the legacy external hero portal is no longer used.
       const usePaneMasthead = isStudioDesktopViewport
         && root.dataset.soridrawTheme === 'studio-black'
         && root.dataset.soridrawResultCollapsed !== 'true';
-      const paneHost = usePaneMasthead
-        ? document.getElementById('soridraw-studio-result-pane-masthead-host')
-        : null;
-      const legacyHost = isStudioDesktopViewport
-        ? document.getElementById('soridraw-studio-workspace-hero-host')
-        : null;
-      setStudioWorkspaceHeroHost(paneHost || legacyHost);
+      setStudioResultMastheadHost(
+        usePaneMasthead
+          ? document.getElementById('soridraw-studio-result-pane-masthead-host')
+          : null,
+      );
     };
 
-    syncStudioWorkspaceHeroHost();
-    window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
-    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    syncStudioResultMastheadHost();
+    window.addEventListener('soridraw-theme-change', syncStudioResultMastheadHost as EventListener);
+    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioResultMastheadHost as EventListener);
     return () => {
-      window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
-      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+      window.removeEventListener('soridraw-theme-change', syncStudioResultMastheadHost as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioResultMastheadHost as EventListener);
     };
   }, [isStudioDesktopViewport]);
 
@@ -5291,13 +5288,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       transition={{ duration: 0 }}
       className={cn(
         "flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3",
-        studioWorkspaceHeroHost
+        studioResultMastheadHost
           ? "soridraw-studio-result-masthead soridraw-studio-result-masthead--music-note"
           : "soridraw-musicnote-page-header soridraw-workspace-ported-header mb-4 md:mb-5 translate-y-2 md:translate-y-3"
       )}
     >
       <div className="min-w-0">
-        <div className={cn("soridraw-page-title-hover relative inline-flex max-w-full", studioWorkspaceHeroHost && "soridraw-studio-result-masthead-title")}> 
+        <div className={cn("soridraw-page-title-hover relative inline-flex max-w-full", studioResultMastheadHost && "soridraw-studio-result-masthead-title")}> 
           <h1
             className={cn("whitespace-nowrap text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
             title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
@@ -5397,8 +5394,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      {studioWorkspaceHeroHost
-        ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
+      {studioResultMastheadHost
+        ? createPortal(musicNotePageHeader, studioResultMastheadHost)
         : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (

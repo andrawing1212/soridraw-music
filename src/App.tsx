@@ -14170,11 +14170,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         <span>Sori <span className="text-[#FFB400]">Studio</span></span>
                       </h1>
                     </motion.div>
-                    <div
-                      id="soridraw-studio-workspace-hero-host"
-                      className="soridraw-studio-workspace-hero-host"
-                      aria-live="polite"
-                    />
                   </div>
                 </div>
               </header>

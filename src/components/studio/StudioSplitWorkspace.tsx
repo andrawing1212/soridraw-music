@@ -46,8 +46,6 @@ type ExternalSplitControls = {
   floatingActionBar: HTMLElement | null;
   collapsedActionButton: HTMLElement | null;
   liveKeywords: HTMLElement | null;
-  heroRow: HTMLElement | null;
-  workspaceHeroHost: HTMLElement | null;
 };
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
@@ -173,8 +171,6 @@ export default function StudioSplitWorkspace({
     floatingActionBar: null,
     collapsedActionButton: null,
     liveKeywords: null,
-    heroRow: null,
-    workspaceHeroHost: null,
   });
 
   const isStudioBlack = useCallback(() =>
@@ -261,15 +257,13 @@ export default function StudioSplitWorkspace({
       current.liveKeywords = document.querySelector<HTMLElement>(
         'body > .soridraw-live-keywords-fixed',
       );
-      current.heroRow = document.querySelector<HTMLElement>('.soridraw-studio-hero-row');
-      current.workspaceHeroHost = document.getElementById('soridraw-studio-workspace-hero-host');
       externalControlsReadyRef.current = true;
     }
     return current;
   }, []);
 
   const clearExternalMeasurements = useCallback(() => {
-    const { searchButton, floatingActionBar, collapsedActionButton, liveKeywords, heroRow } = externalControlsRef.current;
+    const { searchButton, floatingActionBar, collapsedActionButton, liveKeywords } = externalControlsRef.current;
     searchButton?.style.removeProperty('left');
     searchButton?.style.removeProperty('right');
     searchButton?.style.removeProperty('transform');
@@ -287,10 +281,6 @@ export default function StudioSplitWorkspace({
       liveKeywords.style.removeProperty('left');
       liveKeywords.style.removeProperty('right');
     }
-    // During drag the hero row owns a local live split width so its portaled
-    // Music Note / Library title follows the divider in the same frame. Once
-    // pointer-up commits the matching root variable, remove only this preview.
-    heroRow?.style.removeProperty('--soridraw-studio-builder-width');
     splitterRef.current?.style.removeProperty('left');
     splitterRef.current?.style.removeProperty('transform');
     builderCollapseToggleRef.current?.style.removeProperty('left');
@@ -306,17 +296,6 @@ export default function StudioSplitWorkspace({
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
     const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
-
-    // The page masthead is outside the split layout and therefore cannot inherit
-    // the builder pane's temporary inline width. Mirror the live builder width
-    // onto its own grid variable on every pointer frame. This keeps Music Note
-    // and Suno Library titles attached to the divider instead of snapping only
-    // after the root variable is committed on pointer-up.
-    controls.heroRow?.style.setProperty(
-      '--soridraw-studio-builder-width',
-      `${roundedBuilderWidth}px`,
-      'important',
-    );
 
     // The divider is a fixed body portal. Give it one coordinate owner only:
     // the exact viewport left position. The previous transform preview lost to
@@ -638,14 +617,6 @@ export default function StudioSplitWorkspace({
     if (!resultCollapsedRef.current && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
-    }
-
-    // The Library credit shortcut is portaled into the hero and sits outside the
-    // result pane. Copy the resolved pane mode to the host so its compact/mobile
-    // size changes at the same breakpoint as the content below it.
-    const workspaceHeroHost = readExternalControls().workspaceHeroHost;
-    if (workspaceHeroHost && workspaceHeroHost.dataset.paneMode !== nextResultMode) {
-      workspaceHeroHost.dataset.paneMode = nextResultMode;
     }
 
     const ariaBoundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;

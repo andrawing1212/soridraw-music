@@ -861,3 +861,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 생성 카드 높이와 하단 생성바 위치 측정도 연속 resize 중에는 중지하고 종료 후 한 번만 갱신합니다.
 - 487차에서 발생한 결과 pane blank/검은 공간 문제를 만들었던 live split variable/absolute geometry 교체는 적용하지 않았습니다.
 - Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
+## 489차 — Music Note / Library 대문 단일 소유권 + 중복 추적 제거
+- 기준: 488차.
+- Studio Black 1100px 이상에서 Music Note / Suno Library 대문의 포털 대상은 `result-pane-masthead-host` 하나만 사용한다. 예전 `workspace-hero-host` fallback을 제거했다.
+- App의 사용하지 않는 `soridraw-studio-workspace-hero-host` DOM을 제거했다.
+- `StudioSplitWorkspace`가 분할바를 움직이는 매 프레임마다 legacy heroRow에 builder width를 복사하던 작업과 legacy hero host에 pane mode를 복사하던 작업을 제거했다. 이제 result pane 자체의 폭/data-pane-mode가 유일한 기준이다.
+- 데스크톱/태블릿 result masthead 제목에서 viewport `vw` 기반 크기 계산을 제거하고 고정 brand scale(2.65rem)을 사용한다. 따라서 같은 result pane 폭이라면 브라우저 전체창 축소와 내부 분할바 축소가 서로 다른 대문 크기를 만들지 않는다.
+- 476 이후 실제로 사용되지 않던 472/473의 데스크톱 legacy page-header 규칙을 제거했다. 1100px 미만 normal-flow 모바일 규칙은 유지했다.
+- PC 1600px / 태블릿 1100~1599px / 모바일 <1100 외곽 전환 조건, builder 820px / result 680px pane 내부 전환 조건은 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+

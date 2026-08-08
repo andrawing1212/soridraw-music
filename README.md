@@ -851,3 +851,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 하단 생성 액션바는 window.resize 직접 측정 대신 anchor ResizeObserver + rAF로 합쳤다.
 - GlobalPlayer의 768/1320 breakpoint 상태는 공용 matchMedia를 사용하고 제목 폭 측정은 로컬 ResizeObserver로 제한했다.
 - 484차의 최근 생성곡 제목 위 갈색선 제거는 유지한다.
+
+## 487차 - 브라우저 창 + 내부 분할바 공통 리사이즈 성능 경로 정리
+- 기준: 486차.
+- UI 디자인/데이터/Firebase 구조 변경 없음.
+- 분할 pane geometry를 여러 inline width/left/flex-basis 쓰기에서 workspace 단일 CSS 변수로 통합.
+- 평상시에는 split percent를 CSS가 소유해 브라우저 창 resize 때 pane pixel width를 JS가 매 프레임 다시 쓰지 않도록 변경.
+- 내부 분할바 drag 중에만 동일 geometry 변수에 live pixel width를 적용하고 pointer-up 즉시 percent 경로로 복귀.
+- Studio workspace ResizeObserver는 contentRect.width 기반의 가벼운 width 경로를 사용하며, 매 프레임 left rail 추가 getBoundingClientRect 측정을 제거.
+- native resize 중 footer/Genre-card title 같은 강제 layout 측정을 지연하고 resize 종료 후 1회 동기화.
+- split drag/window resize 동안 동일한 performance class로 transition/animation/decorative paint를 일시 정지.
+- 1600px 이상에서만 적용되던 pane strict containment + offscreen content-visibility 최적화를 1100px 이상 tablet 구간까지 확대.
+- 기존 484 갈색 가로줄 제거와 486 공용 matchMedia 구조 유지.
+- 487 검증 포인트: (1) 브라우저 창 좌우 resize, (2) 내부 분할바 연속 drag를 각각 별도로 체감 확인. 둘 중 하나라도 여전히 심하게 끊기면 다음 차수에서 container-query/portal 추적 경로를 분리 프로파일링한다.

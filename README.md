@@ -950,3 +950,20 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 499차 split 최소폭 우선/pinned pane 동작, 498차 Music Note/Library 단일 실제폭 계약, 491차 Live Layout, Studio 상단 Music Note/Library/실험실 메뉴 제거는 유지한다.
 - Classic, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 504차 — 태블릿 양쪽 메뉴 접힘 상태 복구
+- 503에서 잘못 제거된 태블릿 shell의 양쪽 보조 메뉴 자동 접힘 규칙을 복구했다.
+- PC(>=1600)는 사용자가 선택한 펼침/접힘 상태를 유지한다.
+- 태블릿(1100~1599)은 좌/우 메뉴 모두 기존 collapsed 디자인 하나만 사용한다. 태블릿 전용 아이콘/중간 디자인은 추가하지 않는다.
+- 태블릿 진입이 PC의 localStorage 펼침/접힘 선택을 덮어쓰지 않으며, PC로 돌아오면 이전 PC 상태를 복원한다.
+- 모바일(<1100) 기존 숨김 구조와 split/content 반응형은 변경하지 않았다.
+
+
+## 505차 — PC/태블릿 양쪽 메뉴 디자인 완전 단일화
+- 기준: 504차.
+- 태블릿(1100~1599)은 양쪽 메뉴를 접힌 상태로 유지한다.
+- 태블릿 전용 시각 클래스(`is-tablet-shell`)를 제거했다. 즉 태블릿은 PC의 `is-left-rail-collapsed` / `is-right-rail-collapsed` 디자인을 그대로 사용한다.
+- `index.css`에 남아 있던 두 개의 `@media (min-width: 1280px)` Studio rail 디자인 소유권을 1100px부터 동일 적용하도록 정리했다. 이 두 블록 때문에 1280px 아래에서 폰트 크기, 간격, dashboard 레이아웃이 기본 스타일로 떨어져 PC와 다르게 보였다.
+- PC와 태블릿에서 같은 rail DOM, 같은 폰트 크기, 같은 간격, 같은 아이콘, 같은 dashboard 구성 규칙을 사용한다. 차이는 오직 상태뿐이다: PC는 사용자 선택, 태블릿은 접힘 고정.
+- 중앙 Studio / 분할바 / Music Note / Library / Firebase 저장 구조는 수정하지 않았다.

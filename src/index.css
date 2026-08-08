@@ -2747,7 +2747,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   border-color: #333333 !important;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1100px) {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
     display: block;
@@ -3442,7 +3442,7 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
   height: 22px !important;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1100px) {
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
     top: 66px;

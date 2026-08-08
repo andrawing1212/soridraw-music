@@ -9216,3 +9216,10 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-library-primary-controls {
   gap: 8px !important;
 }
+
+
+/* 505 — Auxiliary rail visual ownership contract.
+ * Rail typography/layout is now available from 1100px in index.css using the
+ * exact same PC rule set. Tablet changes only the collapsed STATE in React;
+ * there is no tablet-only visual class. Keep all visual state here keyed only
+ * by .is-left-rail-collapsed / .is-right-rail-collapsed. */

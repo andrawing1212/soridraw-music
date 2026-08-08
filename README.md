@@ -835,3 +835,19 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정: 최근 생성곡 전체화면에서는 레거시 hidden hero를 완전히 0으로 제거하고, split/Music Note/Library와 같은 `110px main start + 84px pane masthead host` 구조를 사용하도록 통일.
 - 분할모드, Sori Studio builder 전체화면, Music Note, Library, 모바일/태블릿 일반 흐름, Classic은 변경하지 않음.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 486차 - 반응형/리사이즈 처리 통합 및 성능 정리
+
+- 기준: 484차 (485차 폐기)
+- UI 디자인/Firestore/Auth/Functions/저장 구조 변경 없음.
+- PC/태블릿/모바일 외곽 모드는 1600 / 1100 경계를 유지한다.
+- breakpoint 전용 처리를 공용 matchMedia store로 이동해, 창을 1px씩 줄일 때 React 상태가 반복 갱신되지 않게 했다.
+- StudioPageFrame의 synthetic `window.resize` 재발행을 제거하고 전용 `soridraw-studio-frame-resize`만 유지했다.
+- StudioSplitWorkspace는 실제 workspace ResizeObserver를 단일 수평 리사이즈 소스로 사용하고, 같은 프레임의 중복 callback을 rAF 1회로 합쳤다. native resize는 세로 viewport 높이 변화에만 사용한다.
+- 전체창 수평 리사이즈 중 workspace 고정 높이를 매 프레임 재측정하던 forced-layout 경로를 제거했다.
+- Music Note / Library masthead portal host는 1100px breakpoint 변경과 pane/theme 이벤트에만 재선택한다.
+- 생성 카드 5개의 높이 측정은 각자 window.resize를 듣지 않고 ResizeObserver + 90ms settle 측정으로 변경했다.
+- 하단 생성 액션바는 window.resize 직접 측정 대신 anchor ResizeObserver + rAF로 합쳤다.
+- GlobalPlayer의 768/1320 breakpoint 상태는 공용 matchMedia를 사용하고 제목 폭 측정은 로컬 ResizeObserver로 제한했다.
+- 484차의 최근 생성곡 제목 위 갈색선 제거는 유지한다.

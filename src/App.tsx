@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
+import { useMediaQuery } from './lib/mediaQueryStore';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -968,31 +969,54 @@ function useStableContentHeight(
 ) {
   useLayoutEffect(() => {
     let frameId: number | null = null;
-    let timeoutId: number | null = null;
+    let settleTimerId: number | null = null;
+    let lastObservedWidth = -1;
+    let lastMeasuredHeight: number | null = null;
 
     const measure = () => {
+      frameId = null;
       const el = contentRef.current;
       if (!el) return;
       const nextHeight = el.scrollHeight || el.offsetHeight || 0;
-      if (nextHeight <= 0) return;
+      if (nextHeight <= 0 || lastMeasuredHeight === nextHeight) return;
+      lastMeasuredHeight = nextHeight;
       setHeight(nextHeight);
       onHeightChange?.(nextHeight);
     };
 
     const scheduleMeasure = () => {
-      if (frameId !== null) cancelAnimationFrame(frameId);
+      if (frameId !== null) return;
       frameId = requestAnimationFrame(measure);
     };
 
-    scheduleMeasure();
-    timeoutId = window.setTimeout(measure, 100);
+    const scheduleSettledMeasure = () => {
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId);
+      // Height animation does not need to chase every pixel while the browser
+      // edge is being dragged. Recalculate shortly after width activity settles.
+      settleTimerId = window.setTimeout(() => {
+        settleTimerId = null;
+        scheduleMeasure();
+      }, 90);
+    };
 
-    window.addEventListener('resize', scheduleMeasure);
+    scheduleMeasure();
+    scheduleSettledMeasure();
+
+    const element = contentRef.current;
+    const observer = element && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver((entries) => {
+          const width = entries[0]?.contentRect.width ?? element.getBoundingClientRect().width;
+          if (Math.abs(width - lastObservedWidth) < 0.5) return;
+          lastObservedWidth = width;
+          scheduleSettledMeasure();
+        })
+      : null;
+    if (observer && element) observer.observe(element);
 
     return () => {
+      observer?.disconnect();
       if (frameId !== null) cancelAnimationFrame(frameId);
-      if (timeoutId !== null) window.clearTimeout(timeoutId);
-      window.removeEventListener('resize', scheduleMeasure);
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
@@ -2224,33 +2248,45 @@ function SecondaryScrollControl() {
   const MAX_DRAG = 65;
 
   useEffect(() => {
-    const handleScroll = () => {
+    let visibilityFrame: number | null = null;
+    const updateVisibility = () => {
+      visibilityFrame = null;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
-      // Show if page is long enough, regardless of current scroll position
-      setIsVisible(scrollHeight > clientHeight * 1.2);
-      
-      // Show on scroll
+      setIsVisible((current) => {
+        const next = scrollHeight > clientHeight * 1.2;
+        return current === next ? current : next;
+      });
+    };
+    const scheduleVisibilityUpdate = () => {
+      if (visibilityFrame !== null) return;
+      visibilityFrame = window.requestAnimationFrame(updateVisibility);
+    };
+    const handleScroll = () => {
+      scheduleVisibilityUpdate();
       setIsActive(true);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
       activeTimerRef.current = setTimeout(() => setIsActive(false), 2000);
     };
 
     const checkModal = () => {
-      // Check if the lyrics modal is open (it has z-[100])
       const modal = document.querySelector('.z-\\[100\\]');
       setIsModalOpen(!!modal);
     };
 
+    const documentResizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleVisibilityUpdate)
+      : null;
+    documentResizeObserver?.observe(document.documentElement);
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll);
     const modalInterval = setInterval(checkModal, 500);
-    
-    handleScroll();
+
+    scheduleVisibilityUpdate();
     return () => {
+      documentResizeObserver?.disconnect();
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
       clearInterval(modalInterval);
+      if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
     };
   }, []);
@@ -3908,35 +3944,26 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
 };
 
 function App() {
+  const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
+  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
+  const isActionDragMobile = useMediaQuery('(max-width: 767px)');
+
   useEffect(() => {
     applyStoredSoridrawDisplayMode();
   }, []);
-  // Screen size detection for FHD / QHD Desktop monitors to preserve styles during browser zoom
+  // Screen type only changes when the desktop breakpoint changes; physical
+  // screen resolution itself is stable. Avoid running this on every resize tick.
   useEffect(() => {
-    const updateScreenType = () => {
-      if (typeof window !== 'undefined' && window.screen) {
-        const sw = window.screen.width;
-        const sh = window.screen.height;
-        const isDesktop = window.innerWidth >= 1024 || sw >= 1024;
-        
-        if (isDesktop) {
-          // If physical screen resolution is less than 2200x1200, it's categorized as FHD desktop.
-          // This keeps the FHD style even at 67% or 50% browser zoom!
-          if (sw < 2200 || sh < 1200) {
-            document.documentElement.setAttribute('data-screen-type', 'fhd-desktop');
-          } else {
-            document.documentElement.setAttribute('data-screen-type', 'qhd-desktop');
-          }
-        } else {
-          document.documentElement.removeAttribute('data-screen-type');
-        }
-      }
-    };
-    
-    updateScreenType();
-    window.addEventListener('resize', updateScreenType);
-    return () => window.removeEventListener('resize', updateScreenType);
-  }, []);
+    if (typeof window === 'undefined' || !window.screen) return;
+    const sw = window.screen.width;
+    const sh = window.screen.height;
+    const isDesktop = isDesktopViewport || sw >= 1024;
+    if (isDesktop) {
+      document.documentElement.setAttribute('data-screen-type', sw < 2200 || sh < 1200 ? 'fhd-desktop' : 'qhd-desktop');
+    } else {
+      document.documentElement.removeAttribute('data-screen-type');
+    }
+  }, [isDesktopViewport]);
 
   const getAvailableMusicApiLyricLanguages = (song: SongResult | null): LanguageCode[] => {
     return getGeneratedLyricLanguages(song);
@@ -6279,26 +6306,6 @@ function App() {
 
   const row1MaxHeight = useMemo(() => Math.max(genreHeight, styleHeight, soundHeight), [genreHeight, styleHeight, soundHeight]);
   const row2MaxHeight = useMemo(() => Math.max(moodHeight, themeHeight), [moodHeight, themeHeight]);
-  const [isStudioWideSelectionLayout, setIsStudioWideSelectionLayout] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.innerWidth >= 1024 && window.matchMedia('(orientation: landscape)').matches;
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const updateStudioSelectionLayout = () => {
-      setIsStudioWideSelectionLayout(window.innerWidth >= 1024 && window.matchMedia('(orientation: landscape)').matches);
-    };
-
-    updateStudioSelectionLayout();
-    window.addEventListener('resize', updateStudioSelectionLayout);
-    window.addEventListener('orientationchange', updateStudioSelectionLayout);
-    return () => {
-      window.removeEventListener('resize', updateStudioSelectionLayout);
-      window.removeEventListener('orientationchange', updateStudioSelectionLayout);
-    };
-  }, []);
 
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
@@ -6606,9 +6613,7 @@ function App() {
   const isSplitDraggingRef = useRef(false);
   const actionBarHeightRef = useRef(84);
   const actionBarPlacementRafRef = useRef<number | null>(null);
-  const [isActionDragMobile, setIsActionDragMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
-  );
+  const actionBarLayoutRafRef = useRef<number | null>(null);
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const vocalSectionTagOptions = useMemo(
     () => buildVocalSectionTagOptions(vocalMembers, vocalMode),
@@ -6855,40 +6860,45 @@ const toggleCycleVariantSelection = (
   }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      scheduleActionBarPlacement();
+    const handleScroll = () => scheduleActionBarPlacement();
+    const scheduleLayoutChange = () => {
+      if (actionBarLayoutRafRef.current !== null) return;
+      actionBarLayoutRafRef.current = window.requestAnimationFrame(() => {
+        actionBarLayoutRafRef.current = null;
+        syncActionBarLayoutMetrics();
+        scheduleActionBarPlacement();
+      });
     };
-    const handleLayoutChange = () => {
-      syncActionBarLayoutMetrics();
-      scheduleActionBarPlacement();
-    };
+
+    const anchor = actionButtonsAnchorRef.current;
+    const resizeObserver = anchor && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleLayoutChange)
+      : null;
+    if (resizeObserver && anchor) resizeObserver.observe(anchor);
 
     window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleLayoutChange);
-    window.addEventListener('soridraw-theme-change', handleLayoutChange as EventListener);
-    handleLayoutChange();
+    window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
+    window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
+    scheduleLayoutChange();
 
     return () => {
+      resizeObserver?.disconnect();
       if (actionBarPlacementRafRef.current !== null) {
         window.cancelAnimationFrame(actionBarPlacementRafRef.current);
         actionBarPlacementRafRef.current = null;
       }
+      if (actionBarLayoutRafRef.current !== null) {
+        window.cancelAnimationFrame(actionBarLayoutRafRef.current);
+        actionBarLayoutRafRef.current = null;
+      }
       window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleLayoutChange);
-      window.removeEventListener('soridraw-theme-change', handleLayoutChange as EventListener);
+      window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
+      window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
     };
   }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
-  useEffect(() => {
-    const updateActionDragMode = () => {
-      setIsActionDragMobile(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', updateActionDragMode);
-    updateActionDragMode();
-    return () => window.removeEventListener('resize', updateActionDragMode);
-  }, []);
 
   useEffect(() => {
     if (hoveredItem) {
@@ -17505,20 +17515,7 @@ interface SongPreviewPopupProps {
 }
 
 const SongPreviewPopup: React.FC<SongPreviewPopupProps> = ({ isOpen, onClose, details }) => {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 640;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 640);
-    };
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  const isMobile = useMediaQuery('(max-width: 639px)');
 
   const getPreviewKeywordTextClass = (id: string) => {
     if (id === 'genre') return 'text-[#FFC15A]';

@@ -159,12 +159,14 @@ export default function StudioSplitWorkspace({
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
+  const layoutRefreshFrameRef = useRef<number | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastActionControlPixelRef = useRef<number | null>(null);
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
+  const lastIsolationViewportHeightRef = useRef<number | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
@@ -486,6 +488,19 @@ export default function StudioSplitWorkspace({
       layout.style.removeProperty('--soridraw-studio-isolated-height');
       layout.style.removeProperty('height');
       lastIsolatedWorkspaceHeightRef.current = null;
+      lastIsolationViewportHeightRef.current = null;
+      return;
+    }
+
+    // A horizontal browser resize does not change the remaining vertical
+    // viewport height. Re-reading layout + computed style here on every width
+    // tick forces synchronous reflow across the whole Studio tree. Reuse the
+    // verified height until the actual viewport height changes.
+    if (
+      layout.dataset.scrollIsolated === 'true'
+      && lastIsolatedWorkspaceHeightRef.current !== null
+      && lastIsolationViewportHeightRef.current === window.innerHeight
+    ) {
       return;
     }
 
@@ -509,6 +524,7 @@ export default function StudioSplitWorkspace({
     );
 
     layout.dataset.scrollIsolated = 'true';
+    lastIsolationViewportHeightRef.current = window.innerHeight;
     if (lastIsolatedWorkspaceHeightRef.current !== nextHeight) {
       lastIsolatedWorkspaceHeightRef.current = nextHeight;
       layout.style.setProperty('--soridraw-studio-isolated-height', `${nextHeight}px`);
@@ -684,8 +700,16 @@ export default function StudioSplitWorkspace({
         : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
-    refreshSplitterFooterBoundary();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshSplitterFooterBoundary, refreshWorkspaceIsolation, syncCenterModalHostBounds]);
+    scheduleFooterBoundaryRefresh();
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
+
+  const scheduleLayoutMetricsRefresh = useCallback(() => {
+    if (layoutRefreshFrameRef.current !== null) return;
+    layoutRefreshFrameRef.current = window.requestAnimationFrame(() => {
+      layoutRefreshFrameRef.current = null;
+      refreshLayoutMetrics();
+    });
+  }, [refreshLayoutMetrics]);
 
   useLayoutEffect(() => {
     percentRef.current = percent;
@@ -797,18 +821,31 @@ export default function StudioSplitWorkspace({
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      // The pointer-frame path owns horizontal measurements during a drag.
-      // Footer geometry is synchronized once after pointer-up.
-      if (!draggingRef.current) refreshLayoutMetrics();
+      // Browser resize and rail/layout changes can produce several observer
+      // callbacks in the same frame. The Studio geometry owner commits at most
+      // once per animation frame.
+      if (!draggingRef.current) scheduleLayoutMetricsRefresh();
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
     if (footer) observer.observe(footer);
 
-    const themeObserver = new MutationObserver(refreshLayoutMetrics);
+    const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
-    window.addEventListener('resize', refreshLayoutMetrics);
-    window.addEventListener('soridraw-studio-frame-resize', refreshLayoutMetrics as EventListener);
+
+    // Width changes are already owned by the workspace ResizeObserver. Keep a
+    // tiny native listener only for vertical viewport changes, because the
+    // isolated workspace height must then be recalculated even if its current
+    // fixed-size box has not emitted a ResizeObserver callback yet.
+    let lastViewportHeight = window.innerHeight;
+    const handleViewportResize = () => {
+      if (window.innerHeight === lastViewportHeight) return;
+      lastViewportHeight = window.innerHeight;
+      scheduleLayoutMetricsRefresh();
+    };
+
+    window.addEventListener('resize', handleViewportResize, { passive: true });
+    window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
     window.addEventListener('scroll', syncCenterModalHostBounds, { passive: true });
     scheduleFooterBoundaryRefresh();
@@ -817,8 +854,8 @@ export default function StudioSplitWorkspace({
     return () => {
       observer.disconnect();
       themeObserver.disconnect();
-      window.removeEventListener('resize', refreshLayoutMetrics);
-      window.removeEventListener('soridraw-studio-frame-resize', refreshLayoutMetrics as EventListener);
+      window.removeEventListener('resize', handleViewportResize);
+      window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       window.removeEventListener('scroll', syncCenterModalHostBounds);
       if (dragFrameRef.current !== null) {
@@ -828,6 +865,10 @@ export default function StudioSplitWorkspace({
       if (footerFrameRef.current !== null) {
         window.cancelAnimationFrame(footerFrameRef.current);
         footerFrameRef.current = null;
+      }
+      if (layoutRefreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(layoutRefreshFrameRef.current);
+        layoutRefreshFrameRef.current = null;
       }
       if (draggingRef.current) {
         draggingRef.current = false;
@@ -840,6 +881,7 @@ export default function StudioSplitWorkspace({
         layoutRef.current.style.removeProperty('height');
       }
       lastIsolatedWorkspaceHeightRef.current = null;
+      lastIsolationViewportHeightRef.current = null;
       document.documentElement.classList.remove('soridraw-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
@@ -853,7 +895,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
+  }, [clearExternalMeasurements, clearRootMeasurements, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;

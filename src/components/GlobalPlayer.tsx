@@ -6,6 +6,7 @@ import {
   Volume2, VolumeX, ChevronDown, ChevronUp, Star, Music, X, MoreHorizontal, Info, Download, Share2, Trash2, FolderOutput
 } from 'lucide-react';
 import { useGlobalPlayer } from '../contexts/GlobalPlayerContext';
+import { useMediaQuery } from '../lib/mediaQueryStore';
 import { auth, db } from '../firebase';
 import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ensureDefaultPlaylists, getPlaylistsByType, addPlaylistItem } from '../services/playlistService';
@@ -18,14 +19,27 @@ function ScrollText({ text, className = '' }: { text: string; className?: string
   const [needsScroll, setNeedsScroll] = useState(false);
 
   useEffect(() => {
+    let frame: number | null = null;
     const checkScroll = () => {
+      frame = null;
       if (containerRef.current && textRef.current) {
-        setNeedsScroll(textRef.current.scrollWidth > containerRef.current.clientWidth);
+        const next = textRef.current.scrollWidth > containerRef.current.clientWidth;
+        setNeedsScroll((current) => current === next ? current : next);
       }
     };
-    checkScroll();
-    window.addEventListener('resize', checkScroll);
-    return () => window.removeEventListener('resize', checkScroll);
+    const schedule = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(checkScroll);
+    };
+    schedule();
+    const observer = containerRef.current && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(schedule)
+      : null;
+    if (observer && containerRef.current) observer.observe(containerRef.current);
+    return () => {
+      observer?.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [text]);
 
   return (
@@ -191,9 +205,9 @@ export default function GlobalPlayer() {
   const [showMenu, setShowMenu] = useState(false);
   const [showLyrics, setShowLyrics] = useState(false);
   const [localDetailsOpen, setLocalDetailsOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const isMobile = useMediaQuery('(max-width: 767px)');
   const COMPACT_MINI_PLAYER_BREAKPOINT = 1320;
-  const [isCompactPlayer, setIsCompactPlayer] = useState(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
+  const isCompactPlayer = useMediaQuery(`(max-width: ${COMPACT_MINI_PLAYER_BREAKPOINT - 1}px)`);
   const playerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const lyricScrollRef = useRef<HTMLDivElement>(null);
@@ -213,15 +227,6 @@ export default function GlobalPlayer() {
   const [isMiniPlayerDocked, setIsMiniPlayerDocked] = useState(false);
   const miniPlayerDragJustEndedRef = useRef(false);
   const miniPlayerDragResetTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-      setIsCompactPlayer(window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useEffect(() => {
     return () => {
@@ -422,14 +427,10 @@ export default function GlobalPlayer() {
   });
 
   useEffect(() => {
-    const handleResizeForPlayer = () => {
-      if (!isMobile && window.innerWidth < COMPACT_MINI_PLAYER_BREAKPOINT && mode === 'expanded') {
-        handleModeChange('collapsed');
-      }
-    };
-    window.addEventListener('resize', handleResizeForPlayer);
-    return () => window.removeEventListener('resize', handleResizeForPlayer);
-  }, [isMobile, mode]);
+    if (!isMobile && isCompactPlayer && mode === 'expanded') {
+      handleModeChange('collapsed');
+    }
+  }, [isCompactPlayer, isMobile, mode]);
 
   const handleExpandedDragStart = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (isMobile || mode !== 'expanded') return;

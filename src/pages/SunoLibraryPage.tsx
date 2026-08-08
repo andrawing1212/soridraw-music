@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { useMediaQuery } from '../lib/mediaQueryStore';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -235,6 +236,7 @@ function AnimatedTrackPlayButton({
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
   const navigate = useNavigate();
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+  const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
   useEffect(() => {
     const syncStudioWorkspaceHeroHost = () => {
@@ -242,28 +244,26 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       // 462: keep the active right-page masthead in the real result-pane
       // scroller even when the builder is collapsed into result fullscreen.
       // Split and one-pane result views now share one masthead owner/geometry.
-      const usePaneMasthead = window.innerWidth >= 1100
+      const usePaneMasthead = isStudioDesktopViewport
         && root.dataset.soridrawTheme === 'studio-black'
         && root.dataset.soridrawResultCollapsed !== 'true';
       const paneHost = usePaneMasthead
         ? document.getElementById('soridraw-studio-result-pane-masthead-host')
         : null;
-      const legacyHost = window.innerWidth >= 1100
+      const legacyHost = isStudioDesktopViewport
         ? document.getElementById('soridraw-studio-workspace-hero-host')
         : null;
       setStudioWorkspaceHeroHost(paneHost || legacyHost);
     };
 
     syncStudioWorkspaceHeroHost();
-    window.addEventListener('resize', syncStudioWorkspaceHeroHost);
     window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
     window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
     return () => {
-      window.removeEventListener('resize', syncStudioWorkspaceHeroHost);
       window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
       window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
     };
-  }, []);
+  }, [isStudioDesktopViewport]);
 
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

@@ -1,4 +1,5 @@
 import React, { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
+import { useMediaQuery } from '../../lib/mediaQueryStore';
 
 const LEFT_RAIL_STORAGE_KEY = 'soridraw_studio_black_left_rail_collapsed_v1';
 const RIGHT_RAIL_STORAGE_KEY = 'soridraw_studio_black_right_rail_collapsed_v1';
@@ -42,7 +43,9 @@ type StudioPageFrameProps = {
 };
 
 export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children }: StudioPageFrameProps) {
-  const [railViewport, setRailViewport] = useState<RailViewport>(getRailViewport);
+  const isMobileViewport = useMediaQuery('(max-width: 1099px)');
+  const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
+  const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);
 
@@ -64,32 +67,21 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   }, [workspaceView]);
 
   useEffect(() => {
-    let currentViewport = getRailViewport();
+    if (railViewport === 'compact') {
+      // Tablet/compact landscape always enters with both auxiliary rails in
+      // their space-saving state. This runs only when the 1600/1100 breakpoint
+      // is crossed, never for every pixel of native window resizing.
+      setIsLeftRailCollapsed(true);
+      setIsRightRailCollapsed(true);
+      return;
+    }
 
-    const syncViewport = () => {
-      const nextViewport = getRailViewport();
-      if (nextViewport === currentViewport) return;
-      currentViewport = nextViewport;
-      setRailViewport(nextViewport);
-
-      if (nextViewport === 'compact') {
-        // Tablet/compact landscape always enters with both auxiliary rails in
-        // their space-saving state. They remain independently expandable.
-        setIsLeftRailCollapsed(true);
-        setIsRightRailCollapsed(true);
-        return;
-      }
-
-      if (nextViewport === 'wide') {
-        // Compact-session choices do not overwrite the user's PC preference.
-        setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
-        setIsRightRailCollapsed(readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
-      }
-    };
-
-    window.addEventListener('resize', syncViewport);
-    return () => window.removeEventListener('resize', syncViewport);
-  }, []);
+    if (railViewport === 'wide') {
+      // Compact-session choices do not overwrite the user's PC preference.
+      setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
+      setIsRightRailCollapsed(readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
+    }
+  }, [railViewport]);
 
   useEffect(() => {
     if (railViewport !== 'wide') return;
@@ -103,8 +95,10 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
+      // Studio owns a dedicated layout signal. Do not synthesize a second
+      // native `resize` event here; doing so used to wake every global resize
+      // listener again whenever either rail changed.
       window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
-      window.dispatchEvent(new Event('resize'));
     });
     return () => window.cancelAnimationFrame(frame);
   }, [isLeftRailCollapsed, isRightRailCollapsed]);

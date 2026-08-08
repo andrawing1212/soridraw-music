@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
-import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
+import React, { useState, useEffect, useRef, useDeferredValue } from 'react';
+import { useMediaQuery } from '../lib/mediaQueryStore';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
@@ -699,13 +700,35 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
-  const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
+  const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
+  const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
-  useLayoutEffect(() => {
-    const root = musicNotePageRootRef.current;
-    if (!root) return;
-    return attachSoridrawResponsiveContract(root);
-  }, []);
+  useEffect(() => {
+    const syncStudioWorkspaceHeroHost = () => {
+      const root = document.documentElement;
+      // 462: keep the active right-page masthead in the real result-pane
+      // scroller even when the builder is collapsed into result fullscreen.
+      // Split and one-pane result views now share one masthead owner/geometry.
+      const usePaneMasthead = isStudioDesktopViewport
+        && root.dataset.soridrawTheme === 'studio-black'
+        && root.dataset.soridrawResultCollapsed !== 'true';
+      const paneHost = usePaneMasthead
+        ? document.getElementById('soridraw-studio-result-pane-masthead-host')
+        : null;
+      const legacyHost = isStudioDesktopViewport
+        ? document.getElementById('soridraw-studio-workspace-hero-host')
+        : null;
+      setStudioWorkspaceHeroHost(paneHost || legacyHost);
+    };
+
+    syncStudioWorkspaceHeroHost();
+    window.addEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
+    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    return () => {
+      window.removeEventListener('soridraw-theme-change', syncStudioWorkspaceHeroHost as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioWorkspaceHeroHost as EventListener);
+    };
+  }, [isStudioDesktopViewport]);
 
   const [sharedMusicNoteSongs, setSharedMusicNoteSongs] = useState<any[]>([]);
   const [isMusicNoteSharedView, setIsMusicNoteSharedView] = useState(false);
@@ -5266,12 +5289,17 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0 }}
-      className="soridraw-responsive-page-header soridraw-musicnote-page-header flex flex-row items-center flex-nowrap justify-between"
+      className={cn(
+        "flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3",
+        studioWorkspaceHeroHost
+          ? "soridraw-studio-result-masthead soridraw-studio-result-masthead--music-note"
+          : "soridraw-musicnote-page-header soridraw-workspace-ported-header mb-4 md:mb-5 translate-y-2 md:translate-y-3"
+      )}
     >
       <div className="min-w-0">
-        <div className="soridraw-page-title-hover relative inline-flex max-w-full"> 
+        <div className={cn("soridraw-page-title-hover relative inline-flex max-w-full", studioWorkspaceHeroHost && "soridraw-studio-result-masthead-title")}> 
           <h1
-            className={cn("soridraw-responsive-page-title whitespace-nowrap font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
+            className={cn("whitespace-nowrap text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
             title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
           >
             {isMusicNoteSharedView ? (
@@ -5315,9 +5343,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   return (
     <div 
-      ref={musicNotePageRootRef}
       className={cn(
-        "soridraw-responsive-page soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] pb-12 font-sans relative",
+        "soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
         isSelectionMode ? "select-none" : ""
       )}
       onClickCapture={(e) => {
@@ -5370,7 +5397,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         .favorite-mobile-title-strip:active { cursor: grabbing; }
         .favorite-mobile-title-strip::-webkit-scrollbar { display: none; }
       `}</style>
-      {musicNotePageHeader}
+      {studioWorkspaceHeroHost
+        ? createPortal(musicNotePageHeader, studioWorkspaceHeroHost)
+        : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (
       <div className="flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
@@ -5392,7 +5421,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               aria-pressed={musicNoteViewMode === tab.id}
               data-active={musicNoteViewMode === tab.id ? 'true' : 'false'}
               className={cn(
-                'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap py-2.5 rounded-xl font-bold truncate transition-all',
+                'soridraw-musicnote-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate transition-all',
                 musicNoteViewMode === tab.id
                   ? 'soridraw-musicnote-mode-tab--active bg-[#FF7A72]/78 text-white shadow-lg'
                   : 'text-white/60 hover:text-white'
@@ -5406,7 +5435,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       {!isMusicNoteSharedView && (
-      <div className="soridraw-responsive-primary-stack">
+      <div className="mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
@@ -5789,8 +5818,14 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
                     <div className="soridraw-musicnote-song-actions flex items-center gap-2 shrink-0">
                       {song.isLocked && (
-                        <span className="soridraw-musicnote-lock-indicator inline-flex h-10 w-10 items-center justify-center text-[#FF7A72]">
-                          <Lock className="soridraw-musicnote-lock-icon w-4 h-4" />
+                        <span className="hidden md:inline-flex h-10 w-10 items-center justify-center text-[#FF7A72]">
+                          <Lock className="w-4 h-4" />
+                        </span>
+                      )}
+
+                      {song.isLocked && (
+                        <span className="inline-flex h-10 w-10 items-center justify-center text-[#FF7A72] md:hidden">
+                          <Lock className="w-3.5 h-3.5" />
                         </span>
                       )}
 <div className="relative">

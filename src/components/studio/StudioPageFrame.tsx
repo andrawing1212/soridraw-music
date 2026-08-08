@@ -4,6 +4,15 @@ import { useMediaQuery } from '../../lib/mediaQueryStore';
 const LEFT_RAIL_STORAGE_KEY = 'soridraw_studio_black_left_rail_collapsed_v1';
 const RIGHT_RAIL_STORAGE_KEY = 'soridraw_studio_black_right_rail_collapsed_v1';
 
+type RailViewport = 'mobile' | 'compact' | 'wide';
+
+const getRailViewport = (): RailViewport => {
+  if (typeof window === 'undefined') return 'wide';
+  if (window.innerWidth < 1100) return 'mobile';
+  if (window.innerWidth < 1600) return 'compact';
+  return 'wide';
+};
+
 const readStoredRailState = (key: string, fallback: boolean) => {
   if (typeof window === 'undefined') return fallback;
   try {
@@ -14,6 +23,18 @@ const readStoredRailState = (key: string, fallback: boolean) => {
   }
 };
 
+const readInitialLeftRailState = () => (
+  getRailViewport() === 'compact'
+    ? true
+    : readStoredRailState(LEFT_RAIL_STORAGE_KEY, false)
+);
+
+const readInitialRightRailState = () => (
+  getRailViewport() === 'compact'
+    ? true
+    : readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false)
+);
+
 type StudioPageFrameProps = {
   workspaceView?: string;
   leftRail: ReactNode;
@@ -22,14 +43,11 @@ type StudioPageFrameProps = {
 };
 
 export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children }: StudioPageFrameProps) {
-  // 505: PC keeps the user's manual expanded/collapsed choices. Tablet only
-  // forces the SAME collapsed state used by PC; it does not add a tablet-only
-  // class or visual variant. Returning to PC restores the prior PC choices.
-  const isTabletShell = useMediaQuery('(min-width: 1100px) and (max-width: 1599px)');
-  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(() => readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
-  const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(() => readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
-  const effectiveLeftRailCollapsed = isTabletShell || isLeftRailCollapsed;
-  const effectiveRightRailCollapsed = isTabletShell || isRightRailCollapsed;
+  const isMobileViewport = useMediaQuery('(max-width: 1099px)');
+  const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
+  const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
+  const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
+  const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -49,13 +67,31 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   }, [workspaceView]);
 
   useEffect(() => {
+    if (railViewport === 'compact') {
+      // Tablet/compact landscape always enters with both auxiliary rails in
+      // their space-saving state. This runs only when the 1600/1100 breakpoint
+      // is crossed, never for every pixel of native window resizing.
+      setIsLeftRailCollapsed(true);
+      setIsRightRailCollapsed(true);
+      return;
+    }
+
+    if (railViewport === 'wide') {
+      // Compact-session choices do not overwrite the user's PC preference.
+      setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
+      setIsRightRailCollapsed(readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
+    }
+  }, [railViewport]);
+
+  useEffect(() => {
+    if (railViewport !== 'wide') return;
     try {
       window.localStorage.setItem(LEFT_RAIL_STORAGE_KEY, String(isLeftRailCollapsed));
       window.localStorage.setItem(RIGHT_RAIL_STORAGE_KEY, String(isRightRailCollapsed));
     } catch {
       // Local storage is optional. The current session still keeps the state.
     }
-  }, [isLeftRailCollapsed, isRightRailCollapsed]);
+  }, [isLeftRailCollapsed, isRightRailCollapsed, railViewport]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -65,11 +101,12 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
       window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [effectiveLeftRailCollapsed, effectiveRightRailCollapsed]);
+  }, [isLeftRailCollapsed, isRightRailCollapsed]);
 
   return (
     <div
-      className={`soridraw-studio-page-frame${effectiveLeftRailCollapsed ? ' is-left-rail-collapsed' : ''}${effectiveRightRailCollapsed ? ' is-right-rail-collapsed' : ''}`}
+      className={`soridraw-studio-page-frame${isLeftRailCollapsed ? ' is-left-rail-collapsed' : ''}${isRightRailCollapsed ? ' is-right-rail-collapsed' : ''}`}
+      data-rail-viewport={railViewport}
       data-workspace-view={workspaceView}
     >
       <div className="soridraw-studio-masthead-divider" aria-hidden="true" />
@@ -77,11 +114,10 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
       <button
         type="button"
         className="soridraw-studio-left-rail-collapse-toggle"
-        onClick={() => { if (!isTabletShell) setIsLeftRailCollapsed((current) => !current); }}
-        aria-label={effectiveLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
-        title={isTabletShell ? '태블릿에서는 왼쪽 메뉴가 접힌 상태로 고정됩니다' : (effectiveLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기')}
-        aria-expanded={!effectiveLeftRailCollapsed}
-        aria-disabled={isTabletShell}
+        onClick={() => setIsLeftRailCollapsed((current) => !current)}
+        aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+        title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+        aria-expanded={!isLeftRailCollapsed}
       >
         <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
       </button>
@@ -92,11 +128,10 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
       <button
         type="button"
         className="soridraw-studio-right-rail-collapse-toggle"
-        onClick={() => { if (!isTabletShell) setIsRightRailCollapsed((current) => !current); }}
-        aria-label={effectiveRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
-        title={isTabletShell ? '태블릿에서는 오른쪽 메뉴가 접힌 상태로 고정됩니다' : (effectiveRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기')}
-        aria-expanded={!effectiveRightRailCollapsed}
-        aria-disabled={isTabletShell}
+        onClick={() => setIsRightRailCollapsed((current) => !current)}
+        aria-label={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
+        title={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
+        aria-expanded={!isRightRailCollapsed}
       >
         <span className="soridraw-studio-panel-toggle-icon is-right" aria-hidden="true" />
       </button>

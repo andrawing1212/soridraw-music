@@ -862,108 +862,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 487차에서 발생한 결과 pane blank/검은 공간 문제를 만들었던 live split variable/absolute geometry 교체는 적용하지 않았습니다.
 - Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
 
-## 489차 — Music Note / Library 대문 단일 소유권 + 중복 추적 제거
-- 기준: 488차.
-- Studio Black 1100px 이상에서 Music Note / Suno Library 대문의 포털 대상은 `result-pane-masthead-host` 하나만 사용한다. 예전 `workspace-hero-host` fallback을 제거했다.
-- App의 사용하지 않는 `soridraw-studio-workspace-hero-host` DOM을 제거했다.
-- `StudioSplitWorkspace`가 분할바를 움직이는 매 프레임마다 legacy heroRow에 builder width를 복사하던 작업과 legacy hero host에 pane mode를 복사하던 작업을 제거했다. 이제 result pane 자체의 폭/data-pane-mode가 유일한 기준이다.
-- 데스크톱/태블릿 result masthead 제목에서 viewport `vw` 기반 크기 계산을 제거하고 고정 brand scale(2.65rem)을 사용한다. 따라서 같은 result pane 폭이라면 브라우저 전체창 축소와 내부 분할바 축소가 서로 다른 대문 크기를 만들지 않는다.
-- 476 이후 실제로 사용되지 않던 472/473의 데스크톱 legacy page-header 규칙을 제거했다. 1100px 미만 normal-flow 모바일 규칙은 유지했다.
-- PC 1600px / 태블릿 1100~1599px / 모바일 <1100 외곽 전환 조건, builder 820px / result 680px pane 내부 전환 조건은 변경하지 않았다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
-
-## 491차 — Live Layout 프레임 유지형 성능 경량화
-- 기준: 489차. 490차의 GPU 프리뷰/중간 프레임 생략 방식은 사용하지 않는다.
-- 분할바 드래그와 브라우저 창 리사이즈 모두 실제 pane 폭을 매 animation frame 계속 갱신한다. 중간 프레임을 고정하거나 pointer-up에서 한 번에 점프시키지 않는다.
-- Builder/Result의 큰 pane-level container query를 임계값 attribute 방식으로 전환했다. 1120/1100/1074/760/700, Result 1080/820/680, 선택 키워드 900/640, 액션바 681 기준은 실제 폭을 따라가되 attribute는 경계 통과 때만 바뀐다.
-- Studio 전체 pane의 container-type 소유권을 제거하고, 남은 container query는 개별 메뉴 summary 5개로 제한했다. 분할/창 리사이즈 시작 시 container-type 자체를 껐다 켜던 488 fast-path도 제거했다.
-- 큰 Builder/Result pane에 적용하던 drag 중 translateZ/will-change(width/left) 강제 GPU layer를 제거했다. 실제 layout은 유지하되 불필요한 대형 합성 레이어 생성을 막는다.
-- 브라우저 같은 PC/태블릿 band 내부 width resize는 ResizeObserver contentRect를 직접 사용해 workspace/rail getBoundingClientRect 재측정을 생략한다. 1600/1100 구조 경계나 rail 구조 변경 때만 full geometry refresh를 유지한다.
-- root CSS geometry 변수는 값이 실제로 바뀐 경우에만 기록하고, split drag용 portal inline style 정리도 실제 live style이 있었을 때만 실행한다.
-- Music Note/Library detail modal host는 JS resize/scroll style 쓰기 대신 fixed CSS inset:0 / 100vw / 100dvh가 직접 소유한다.
-- SecondaryScrollControl의 document ResizeObserver는 split drag/window resize 중 document scrollHeight 측정을 중지하고 조작 종료 후 1회 확인한다.
-- floating action bar와 live keyword portal은 layout containment를 추가해 자체 폭 변화가 바깥 레이아웃으로 퍼지지 않게 했다.
-- PC >=1600 / 태블릿 1100~1599 / 모바일 <1100, Builder 820 / Result 680 기준과 UI/Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
-- 상태: 코드 반영 완료 · 실사용 프레임 검증 전.
-
-## 498차 — Music Note / Suno Library 단일 반응형 계약
-
-- 기준: 497차(491 안정본 완전 롤백).
-- 프레임/브라우저 resize 성능 실험은 이번 차수에서 건드리지 않는다.
-- Music Note와 Suno Library의 반응형 기준을 `browser viewport`와 `Studio result pane`의 이중 판정에서 **페이지가 실제로 받은 폭 한 가지**로 통일했다.
-- `src/lib/contentResponsive.ts`가 페이지 루트 하나만 `ResizeObserver`로 관찰하고, 실제 폭이 680/820/1080 경계를 통과할 때만 `data-soridraw-responsive-*` 속성을 갱신한다. React는 픽셀 단위 resize에 재렌더되지 않는다.
-- 두 페이지의 데스크톱 masthead portal을 제거했다. 제목은 standalone / Studio split 어디서나 페이지 내부 같은 DOM과 같은 CSS 계약을 사용한다.
-- Studio split에서 Music Note/Library가 열렸을 때 기존 result masthead host가 두 번째 제목 공간을 만들지 않도록 workspace view를 DOM data attribute로 노출하고 해당 host를 비활성화한다.
-- 과거 split 전용/standalone mobile 전용으로 따로 존재하던 369/370/374/375/489 반응형 소유권을 제거하고 498 공통 규칙으로 이동했다.
-- 동일한 실제 폭이면 Music Note/Library의 탭, 검색/필터, 폴더, 목록 밀도와 모바일 compact 구성이 standalone과 split에서 동일하게 동작한다.
-- Studio Black `/studio` 상단 글로벌 내비게이션에서는 Music Note / Library / 실험실 항목을 숨긴다. WORKSPACE 전환은 좌측 Studio rail이 담당한다. 다른 경로의 글로벌 내비게이션은 그대로 유지한다.
-- Sori Studio builder 자체의 반응형 통합은 이번 차수 범위에 포함하지 않았다. Music Note/Library 구조 검증 후 같은 계약으로 이어간다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-
-## 499차 — 분할 최소폭 우선 + 브라우저 축소 폭 분배 안정화
-
-- 기준: 498차(Music Note / Suno Library 단일 반응형 계약).
-- 프레임 성능 실험은 건드리지 않고, 브라우저 리사이즈 시 split geometry의 폭 소유권만 정리했다.
-- 사용자가 분할바를 한쪽 최소 경계까지 이동한 경우 해당 pane은 더 이상 `% 비율`이 아니라 **그 순간의 실제 px 폭**을 우선 보존한다.
-- 예: Result/Music Note/Library가 우측 최소폭에 도달한 상태에서 브라우저를 줄이면 우측 pane 폭은 유지되고 Builder 쪽이 먼저 줄어든다. 반대쪽 최소폭도 같은 원칙으로 동작한다.
-- 브라우저 PC→태블릿 경계를 통과할 때 별도의 저장된 tablet split percent를 즉시 불러오지 않는다. 현재 보이는 split geometry를 그대로 이어 받아 shell 전환 때문에 분할선이 갑자기 점프하지 않게 했다.
-- 최소폭 고정은 사용자가 다시 분할바를 직접 움직이면 해제되며, 다시 최소 경계에서 놓았을 때만 새 px 기준으로 고정된다.
-- ResizeObserver가 native resize보다 먼저 오는 프레임도 최소폭 소유권을 즉시 포착해 첫 프레임에서 최소 pane이 한 번 찌그러지는 현상을 막는다.
-- 이 구조는 이미 모바일 구성으로 내려간 Result pane을 브라우저 resize마다 다시 축소/재반응시키지 않으므로, 불필요한 우측 responsive threshold 변경과 reflow도 줄인다.
-- Music Note/Library의 498차 실제폭 기반 반응형 계약, 내부 분할바 Live Layout, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
-## 500차 — 왼쪽 보조메뉴 2단계 단일화 + PC/태블릿 전환 플래시 제거
-
-- 기준: 499차.
-- 이번 차수는 왼쪽 보조메뉴만 우선 정리한다. 오른쪽 보조메뉴 디자인/폭 계약은 변경하지 않는다.
-- Studio Black 1100px 이상 왼쪽 rail의 시각 상태를 **펼침 214px / 접힘 64px 두 가지**로만 통일했다. PC와 태블릿이 같은 프로필, 메뉴, 아이콘, 간격, 토글 위치 계약을 사용한다.
-- 과거 310/312/313/405/406에서 태블릿 전용으로 덧붙였던 왼쪽 rail 보정 규칙과 1100~1279px bridge의 왼쪽 전용 분기를 제거했다. `studioLayout.css`는 11,727줄에서 11,302줄로 425줄 감소했다.
-- 1280px/1600px를 통과할 때 별도 왼쪽 메뉴 디자인이 끼어들지 않도록 PC용 rail 계약을 1100px 이상 공통으로 승격하고, 마지막 500차 계약이 두 상태의 기하를 명시적으로 소유한다.
-- Tablet -> PC 복귀 때 예전 compact 접힘 상태가 wide PC CSS로 한 프레임 먼저 그려진 뒤 저장된 PC 상태가 복원되던 플래시를 막기 위해 rail breakpoint 동기화를 `useEffect`에서 `useLayoutEffect`로 옮겼다.
-- 성능 연관성 확인: PC/태블릿 전환에서 좌 rail 214↔64px, 우 rail 292↔64px가 동시에 바뀌면 중앙 workspace 폭이 크게 변하고, 그 결과 split workspace와 Music Note/Library의 width observer들이 연쇄 재계산된다. 이번 차수는 왼쪽의 중복 단계와 후처리 paint를 줄였고, 오른쪽 rail은 다음 검증 대상으로 남긴다.
-- Music Note/Library 498차 실제폭 기반 반응형, 499차 pane 최소폭 우선 규칙, 내부 분할바 Live Layout은 유지한다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
-
-### 502차 — 좌측 메뉴 아이콘 색상/가시성 단일 기준 보정
-- 501차에서 아이콘을 wrapper span으로 통일했지만, 500차 접힘 규칙이 `rail-item > span` 전체를 숨겨 아이콘 wrapper까지 숨기는 충돌이 남아 있었습니다.
-- 접힘 상태에서 숨김 대상은 텍스트 span만으로 제한하고 `soridraw-studio-rail-icon-slot`은 항상 유지합니다.
-- 펼침/접힘, PC/태블릿 모두 기본 아이콘은 동일한 중립 회색, hover는 밝은 회색, 활성 아이콘은 흰색으로 고정합니다.
-- 접기/펼치기 아이콘도 같은 중립 팔레트를 사용하며 브라우저 기본 검정색으로 폴백하지 않게 했습니다.
-- 기존 64px 접힘 중앙축과 214px 펼침 구조는 유지합니다.
-
-## 503차 — 반응형 중복 철거 + 메뉴/대문 단일 소유권 정리
-
-- 기준: 502차.
-- 프레임 성능 실험은 중단한 상태를 유지하고, 이번 차수는 영상에서 확인된 UI 역전/중복/간격 문제의 구조 정리에만 집중했다.
-- Studio 좌/우 보조 rail의 접힘 상태 소유권을 사용자 토글 하나로 통일했다. 1600px PC↔태블릿 경계가 rail 상태를 강제로 바꾸거나 저장 상태를 다시 복원하지 않으므로, 브라우저를 줄이는데 중앙 workspace 폭이 갑자기 커지는 역방향 재배치를 제거했다. 1100px 미만에서는 기존 모바일 CSS가 rail을 숨기고, 다시 넓어지면 사용자가 마지막으로 선택한 펼침/접힘 상태가 그대로 돌아온다.
-- 좌측 rail은 펼침/접힘 모두 동일한 Lucide SVG DOM을 사용한다. 아이콘 18px, 중립 회색/hover/active 색, 접힘 64px의 x=32px 중앙축을 한 계약으로 고정했다. 1600px 이상에서만 프로필/화살표/토글 위치가 달라지던 301차 wide-only variant를 제거했다.
-- Sori Studio masthead의 과거 hero/portal/top-offset 체인(384/390/391~393/408~409/419~423)을 제거하고, desktop/tablet에서는 builder pane의 normal-flow masthead 하나만 보이도록 정리했다. 모바일은 기존 정상 hero를 유지한다.
-- Sori Studio 대문 크기 단계도 Music Note/Library와 같은 실제 영역폭 1080/680 기준을 추가해 PC → tablet → mobile 방향으로만 축소되도록 했다. 기존 builder 카드의 1120/1100/1074/760/700 반응형 기준은 변경하지 않았다.
-- Music Note/Library는 498차 실제 페이지 폭 기반 계약을 유지하고, 그 위에 남아 있던 viewport/pane 전용 search/header/tab/masthead portal 규칙을 제거했다. standalone과 split이 같은 실제 폭이면 같은 page mode를 사용한다.
-- Library는 masthead를 content stack 밖으로 이동해 Music Note와 같은 header ownership 구조로 맞췄다. 이전 stack gap이 대문 바로 아래에 별도 빈 띠를 만들던 구조를 제거했다.
-- PC↔태블릿 resize 중 Music Note/Library 목록이 회색 빈 카드처럼 잠깐 사라지던 원인이 될 수 있던 list/tablet `content-visibility:auto` 경로를 제거했다. 20개 단위 페이지 로딩과 split drag transition 중지는 유지한다.
-- 499차 split 최소폭 우선/pinned pane 동작, 498차 Music Note/Library 단일 실제폭 계약, 491차 Live Layout, Studio 상단 Music Note/Library/실험실 메뉴 제거는 유지한다.
-- Classic, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
-
-## 504차 — 태블릿 양쪽 메뉴 접힘 상태 복구
-- 503에서 잘못 제거된 태블릿 shell의 양쪽 보조 메뉴 자동 접힘 규칙을 복구했다.
-- PC(>=1600)는 사용자가 선택한 펼침/접힘 상태를 유지한다.
-- 태블릿(1100~1599)은 좌/우 메뉴 모두 기존 collapsed 디자인 하나만 사용한다. 태블릿 전용 아이콘/중간 디자인은 추가하지 않는다.
-- 태블릿 진입이 PC의 localStorage 펼침/접힘 선택을 덮어쓰지 않으며, PC로 돌아오면 이전 PC 상태를 복원한다.
-- 모바일(<1100) 기존 숨김 구조와 split/content 반응형은 변경하지 않았다.
-
-
-## 505차 — PC/태블릿 양쪽 메뉴 디자인 완전 단일화
-- 기준: 504차.
-- 태블릿(1100~1599)은 양쪽 메뉴를 접힌 상태로 유지한다.
-- 태블릿 전용 시각 클래스(`is-tablet-shell`)를 제거했다. 즉 태블릿은 PC의 `is-left-rail-collapsed` / `is-right-rail-collapsed` 디자인을 그대로 사용한다.
-- `index.css`에 남아 있던 두 개의 `@media (min-width: 1280px)` Studio rail 디자인 소유권을 1100px부터 동일 적용하도록 정리했다. 이 두 블록 때문에 1280px 아래에서 폰트 크기, 간격, dashboard 레이아웃이 기본 스타일로 떨어져 PC와 다르게 보였다.
-- PC와 태블릿에서 같은 rail DOM, 같은 폰트 크기, 같은 간격, 같은 아이콘, 같은 dashboard 구성 규칙을 사용한다. 차이는 오직 상태뿐이다: PC는 사용자 선택, 태블릿은 접힘 고정.
-- 중앙 Studio / 분할바 / Music Note / Library / Firebase 저장 구조는 수정하지 않았다.
+## 506차 — 488 기준 PC/태블릿 양쪽 메뉴 단일 디자인 1단계
+- 기준: `SORIDRAW_488차_PC태블릿모드보존_분할창리사이즈경량화(1).zip`.
+- 이번 차수는 좌우 보조 메뉴만 수정했다. `StudioPageFrame.tsx`, `StudioLeftRail.tsx`, `StudioRightRail.tsx`의 488 동작 로직/DOM은 그대로 보존했다.
+- 488의 상태 계약 유지: PC(>=1600)는 저장된 펼침/접힘 상태를 사용하고, 태블릿(1100~1599)에 진입하면 양쪽 메뉴가 접힘 상태로 시작한다. 태블릿에서도 좌우 펼치기/접기 버튼은 그대로 동작한다. 태블릿 조작은 PC 저장 상태를 덮어쓰지 않는다.
+- PC에서 사용하던 좌우 메뉴 시각 CSS를 1100px 이상 공통 계약으로 승격했다. 글자 크기, 아이콘, 프로필 행, 펼치기/접기 버튼, 메뉴 행, 우측 생성 상태/최근곡/크레딧 카드가 별도 태블릿 디자인으로 바뀌지 않도록 했다.
+- `index.css`의 두 Studio rail 기본 블록을 1280px 시작에서 1100px 시작으로 통일했다.
+- `studioLayout.css`에서 239/310-tablet/312/313-tablet/405/406/407 계열의 태블릿 전용 rail 재설계·보정 규칙을 제거했다. `data-rail-viewport="compact"`를 이용한 시각 CSS는 0개로 정리했다.
+- 488에서 정상 동작하던 builder 접힘 시 compact 상단 여백(76px)은 별도 규칙으로 보존했다. 중앙 분할 로직, 대문, Music Note, Library, 생성 기능, Firebase/Auth/Firestore/Functions/저장 구조는 건드리지 않았다.
+- 정적 검사: `index.css` / `studioLayout.css` tinycss2 파싱 오류 0. TypeScript 검사 결과는 488과 동일한 기존 오류 211줄이며 신규 오류가 없다.
+- 상태: 코드 반영 완료 · 실사용 검증 전. 다음 단계로 넘어가기 전에 PC/태블릿 양쪽 메뉴의 펼침/접힘 왕복과 디자인 동일성만 먼저 확인한다.

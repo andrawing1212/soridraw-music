@@ -928,9 +928,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
 
-### 501차 — 왼쪽 메뉴 아이콘 단일 기준 / 접힘 중앙축 정렬
-- 왼쪽 레일의 기본 메뉴 아이콘을 `soridraw-studio-rail-icon-slot` 하나로 통일했습니다.
-- 펼침/접힘/PC/태블릿에서 아이콘 컴포넌트와 18px SVG geometry를 그대로 유지하고, 접힐 때는 텍스트/보조 화살표만 숨깁니다.
-- 접힌 64px 레일의 토글, 프로필, 모든 메뉴 아이콘 중심을 x=32px 한 축으로 고정했습니다.
-- Tailwind `h-5 w-5`에 기대던 아이콘 크기 소유권을 제거해 breakpoint/상위 CSS에 따라 아이콘이 달라 보이는 경로를 차단했습니다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+### 502차 — 좌측 메뉴 아이콘 색상/가시성 단일 기준 보정
+- 501차에서 아이콘을 wrapper span으로 통일했지만, 500차 접힘 규칙이 `rail-item > span` 전체를 숨겨 아이콘 wrapper까지 숨기는 충돌이 남아 있었습니다.
+- 접힘 상태에서 숨김 대상은 텍스트 span만으로 제한하고 `soridraw-studio-rail-icon-slot`은 항상 유지합니다.
+- 펼침/접힘, PC/태블릿 모두 기본 아이콘은 동일한 중립 회색, hover는 밝은 회색, 활성 아이콘은 흰색으로 고정합니다.
+- 접기/펼치기 아이콘도 같은 중립 팔레트를 사용하며 브라우저 기본 검정색으로 폴백하지 않게 했습니다.
+- 기존 64px 접힘 중앙축과 214px 펼침 구조는 유지합니다.

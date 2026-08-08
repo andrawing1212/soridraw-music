@@ -11241,7 +11241,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame.is-left-rail-collapsed
   > .soridraw-studio-left-panel
-  :is(.soridraw-studio-rail-profile-copy, .soridraw-studio-rail-profile-chevron, .soridraw-studio-rail-label, .soridraw-studio-rail-item > span, .soridraw-studio-rail-item > svg.ml-auto) {
+  :is(.soridraw-studio-rail-profile-copy, .soridraw-studio-rail-profile-chevron, .soridraw-studio-rail-label, .soridraw-studio-rail-item > span:not(.soridraw-studio-rail-icon-slot), .soridraw-studio-rail-item > svg.ml-auto) {
     display: none !important;
   }
 
@@ -11311,6 +11311,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-left-panel .soridraw-studio-rail-icon-slot {
     display: inline-flex !important;
+    color: var(--sb-nav-muted, #acacb3) !important;
+    -webkit-text-fill-color: currentColor !important;
     flex: 0 0 20px !important;
     width: 20px !important;
     min-width: 20px !important;
@@ -11340,10 +11342,34 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     padding: 0 !important;
     transform: none !important;
     translate: none !important;
+    color: inherit !important;
     stroke: currentColor !important;
     stroke-width: 1.8 !important;
     fill: none !important;
     vector-effect: non-scaling-stroke;
+  }
+
+  /* 502: icon color is a single visual contract too. Never inherit the browser
+   * default/black color from a collapsed-state wrapper. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item
+  > .soridraw-studio-rail-icon-slot {
+    color: var(--sb-nav-muted, #acacb3) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item:not(:disabled):hover
+  > .soridraw-studio-rail-icon-slot,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item:not(:disabled):focus-visible
+  > .soridraw-studio-rail-icon-slot {
+    color: var(--sb-nav-hover, #f2f2f4) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel button.soridraw-studio-rail-item.is-active
+  > .soridraw-studio-rail-icon-slot {
+    color: var(--sb-nav-current, #ffffff) !important;
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
@@ -11455,5 +11481,28 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame.is-left-rail-collapsed
   > .soridraw-studio-left-panel .soridraw-studio-rail-item-chevron {
     display: none !important;
+  }
+}
+
+
+/* 502 — Left rail visual-state consistency fix.
+ * Expanded/collapsed share the same neutral icon palette and the collapse toggle
+ * is never allowed to fall back to the browser's black SVG color. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-rail-collapse-toggle {
+    color: var(--sb-nav-muted, #acacb3) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-rail-collapse-toggle > svg {
+    color: inherit !important;
+    stroke: currentColor !important;
+    fill: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-rail-collapse-toggle:is(:hover, :focus-visible) {
+    color: var(--sb-nav-hover, #f2f2f4) !important;
   }
 }

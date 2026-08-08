@@ -872,3 +872,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 488에서 정상 동작하던 builder 접힘 시 compact 상단 여백(76px)은 별도 규칙으로 보존했다. 중앙 분할 로직, 대문, Music Note, Library, 생성 기능, Firebase/Auth/Firestore/Functions/저장 구조는 건드리지 않았다.
 - 정적 검사: `index.css` / `studioLayout.css` tinycss2 파싱 오류 0. TypeScript 검사 결과는 488과 동일한 기존 오류 211줄이며 신규 오류가 없다.
 - 상태: 코드 반영 완료 · 실사용 검증 전. 다음 단계로 넘어가기 전에 PC/태블릿 양쪽 메뉴의 펼침/접힘 왕복과 디자인 동일성만 먼저 확인한다.
+
+
+## 507차 — 왼쪽 메뉴 펼침/접힘 전환 순간 레이아웃 깨짐 제거
+
+- 기준: 506차(488 기준 1단계)
+- 수정 범위: `src/index.css`만 기능 수정.
+- 원인: 왼쪽 메뉴 행에 `transition: 0.16s ease`가 걸려 있어 접힘 40px → 펼침 100% 전환 때 `width/padding/gap`까지 애니메이션되었다. 텍스트는 즉시 표시되지만 버튼 폭은 약 160ms 동안 좁은 상태를 지나가면서 글자가 세로로 쌓이는 순간 프레임이 발생했다.
+- 수정: 메뉴 행 transition을 `background-color / color / border-color`로만 제한. 펼침/접힘의 폭·패딩·간격은 애니메이션 없이 같은 프레임에 즉시 전환한다.
+- 보존: 488의 좌우 메뉴 상태 로직, 태블릿 진입 시 자동 접힘, 태블릿에서 수동 펼침/접힘, PC 상태 저장, 오른쪽 메뉴, 중앙 분할, 대문, Music Note/Library는 변경하지 않았다.

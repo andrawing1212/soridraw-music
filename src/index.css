@@ -2860,7 +2860,11 @@ body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
     font-size: 12px;
     font-weight: 850;
     text-align: left;
-    transition: 0.16s ease;
+    /* 507: keep hover/color polish, but never animate rail geometry.
+       The previous all-property transition interpolated the collapsed 40px row
+       into the expanded full-width row while its text was already visible,
+       causing the one-frame vertical text pile-up seen during PC/tablet return. */
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item + .soridraw-studio-rail-item {

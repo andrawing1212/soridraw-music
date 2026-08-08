@@ -897,3 +897,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모바일(<1100)은 동일 크기/row를 normal flow에서 사용하며 기존 승인 기준인 화면 상단 102px title guide를 유지(74px shell + 28px masthead padding).
 - Sori Studio / Music Note / Library의 반응형 Tailwind title/translate 보정을 제거해 JS/CSS pane 반응과 별도 breakpoint가 중복 개입하지 않게 정리.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 493차 — 브라우저 리사이즈 최종판정 + 모바일 대문 중복/분할 상단 침범 수정
+- 기준: 492차.
+- 브라우저 전체 창 resize는 `mediaQueryStore`가 마지막 확정 viewport 상태를 유지하고, native resize가 160ms 멈춘 뒤 PC/태블릿/모바일 breakpoint를 한 번만 publish한다.
+- `StudioSplitWorkspace`는 native resize 중 ResizeObserver 기반 pane geometry 갱신을 중단하고 resize-end에 한 번만 정확히 재측정한다. 내부 분할바 드래그는 491 Live Layout 그대로 실시간 유지한다.
+- resize 중 Studio frame 폭과 wide/compact/mobile 구조 소유권을 마지막 확정 상태로 고정해, 브라우저 edge 이동 중 PC↔태블릿↔모바일 구조가 연속 재조립되지 않게 했다.
+- 모바일(<1100)에서는 builder/result pane masthead host를 명시적으로 제거해 `Sori Studio` 대문 중복과 검색 아이콘 중복을 차단한다.
+- 데스크톱/태블릿 pane masthead host는 pane 상단 sticky owner로 고정해 기존 scrollTop/resize 뒤 대문이 fixed top navigation 쪽으로 침범하거나 잘리는 현상을 막는다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

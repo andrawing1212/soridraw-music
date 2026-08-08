@@ -11043,3 +11043,218 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     contain-intrinsic-size: auto 240px;
   }
 }
+
+/* 493 — Native window resize settles once; internal split stays live.
+ *
+ * Browser-window resizing and the Studio splitter are intentionally different
+ * interactions. The splitter keeps the 491 live-layout path. Native resizing
+ * holds the last settled Studio frame/profile while the OS window edge moves,
+ * then mediaQueryStore publishes the final viewport state once after 160ms
+ * idle. This prevents PC/tablet/mobile ownership from being recomputed for
+ * every intermediate browser pixel without reintroducing the 490 split-drag
+ * frame skipping.
+ *
+ * This block also fixes the 492 masthead regressions:
+ * - phone owns ONLY the normal-flow Sori Studio hero (no duplicate pane title)
+ * - desktop/tablet owns ONLY the pane mastheads
+ * - pane mastheads stay pinned to the top of their own scroller so preserved
+ *   pane scroll positions cannot push the wordmark under the fixed top nav. */
+
+/* Phone has exactly one Sori Studio masthead owner. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-builder-pane-masthead-host,
+    .soridraw-studio-result-pane-masthead-host
+  ) {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
+/* Desktop/tablet pane mastheads cannot drift into the fixed navigation when a
+ * pane retains an old scrollTop. Their host is the top edge of the pane. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(
+    .soridraw-studio-builder-pane-masthead-host,
+    .soridraw-studio-result-pane-masthead-host
+  ) {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 32 !important;
+    background: var(--sb-page) !important;
+    isolation: isolate !important;
+  }
+}
+
+/* Freeze the Studio frame at the last settled browser width. The OS viewport
+ * may keep changing around it, so the user sees cropping/extra outer space
+ * rather than dozens of intermediate responsive layouts. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-page-frame {
+  width: var(--soridraw-window-resize-lock-width, 100vw) !important;
+  min-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
+  max-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
+  transition: none !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-page-center {
+  transition: none !important;
+}
+
+/* Lock WIDE ownership even if the live OS viewport temporarily crosses 1600
+ * or 1100. Rail collapsed classes still own their 214/64 and 292/64 widths. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
+body #root .soridraw-app-root .soridraw-studio-page-frame {
+  --soridraw-studio-left-rail-width: 214px;
+  --soridraw-studio-right-rail-width: 292px;
+  display: grid !important;
+  grid-template-columns:
+    var(--soridraw-studio-left-rail-width)
+    minmax(0, 1fr)
+    var(--soridraw-studio-right-rail-width) !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
+body #root .soridraw-app-root .soridraw-studio-page-frame.is-left-rail-collapsed {
+  --soridraw-studio-left-rail-width: 64px !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
+body #root .soridraw-app-root .soridraw-studio-page-frame.is-right-rail-collapsed {
+  --soridraw-studio-right-rail-width: 64px !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
+body #root .soridraw-app-root .soridraw-studio-page-frame > .soridraw-studio-left-panel,
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
+body #root .soridraw-app-root .soridraw-studio-page-frame > .soridraw-studio-dashboard-panel {
+  display: block !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
+body #root .soridraw-app-root .soridraw-studio-page-frame > .soridraw-studio-page-center {
+  grid-column: 2 !important;
+  width: 100% !important;
+}
+
+/* COMPACT/tablet keeps the rail-free center canvas until resize settles. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="compact"]
+body #root .soridraw-app-root .soridraw-studio-page-frame {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="compact"]
+body #root .soridraw-app-root
+:is(.soridraw-studio-left-panel, .soridraw-studio-dashboard-panel) {
+  display: none !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="compact"]
+body #root .soridraw-app-root .soridraw-studio-page-center {
+  grid-column: 1 !important;
+  width: 100% !important;
+}
+
+/* WIDE + COMPACT both keep the pane-owned masthead model while resizing. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
+  [data-soridraw-resize-lock-profile="wide"],
+  [data-soridraw-resize-lock-profile="compact"]
+) body #root .soridraw-app-root .soridraw-studio-hero {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
+  [data-soridraw-resize-lock-profile="wide"],
+  [data-soridraw-resize-lock-profile="compact"]
+) body #root .soridraw-app-root
+:is(.soridraw-studio-builder-pane-masthead-host, .soridraw-studio-result-pane-masthead-host) {
+  display: block !important;
+  visibility: visible !important;
+  width: 100% !important;
+  height: var(--soridraw-masthead-box-height) !important;
+  min-height: var(--soridraw-masthead-box-height) !important;
+  max-height: none !important;
+  padding: var(--soridraw-masthead-pad-top) 0 var(--soridraw-masthead-pad-bottom) !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
+  [data-soridraw-resize-lock-profile="wide"],
+  [data-soridraw-resize-lock-profile="compact"]
+) body #root .soridraw-app-root .soridraw-studio-main {
+  padding-top: 110px !important;
+}
+
+/* MOBILE keeps normal-flow ownership even if the OS viewport is temporarily
+ * dragged above 1100 before release. This is also the duplicate-title guard. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
+body #root .soridraw-app-root .soridraw-studio-page-frame {
+  display: block !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
+body #root .soridraw-app-root
+:is(.soridraw-studio-left-panel, .soridraw-studio-dashboard-panel) {
+  display: none !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
+body #root .soridraw-app-root .soridraw-studio-hero {
+  display: block !important;
+  visibility: visible !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding-top: var(--soridraw-masthead-mobile-shell-top) !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
+body #root .soridraw-app-root
+:is(.soridraw-studio-builder-pane-masthead-host, .soridraw-studio-result-pane-masthead-host) {
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Split controls follow the settled profile too. They do not participate in
+ * native resize geometry; internal splitter dragging remains unchanged. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
+body > :is(
+  .soridraw-studio-splitter,
+  .soridraw-studio-builder-collapse-toggle,
+  .soridraw-studio-result-collapse-toggle
+) {
+  display: none !important;
+}

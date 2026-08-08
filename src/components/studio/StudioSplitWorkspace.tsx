@@ -843,7 +843,7 @@ export default function StudioSplitWorkspace({
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
-      if (draggingRef.current) return;
+      if (draggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
       const layout = layoutRef.current;
       if (!layout || !isStudioBlack()) {
         scheduleLayoutMetricsRefresh();
@@ -896,40 +896,22 @@ export default function StudioSplitWorkspace({
     const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
 
-    // Width changes are already owned by the workspace ResizeObserver. Keep a
-    // tiny native listener only for vertical viewport changes, because the
-    // isolated workspace height must then be recalculated even if its current
-    // fixed-size box has not emitted a ResizeObserver callback yet.
-    let lastViewportHeight = window.innerHeight;
-    let resizeEndTimer: number | null = null;
-    const handleViewportResize = () => {
-      const root = document.documentElement;
-      if (!root.classList.contains('soridraw-window-resizing')) {
-        root.classList.add('soridraw-window-resizing');
-        window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
-      }
-
-      if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
-
-      const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
-        lastViewportHeight = nextViewportHeight;
-        scheduleLayoutMetricsRefresh();
-      }
-
-      // Keep every intermediate pane frame live while the browser edge moves.
-      // The resize class only pauses nonessential animation/measurement work;
-      // responsive threshold attributes still switch exactly at their bounds.
-      resizeEndTimer = window.setTimeout(() => {
-        resizeEndTimer = null;
-        root.classList.remove('soridraw-window-resizing');
-        scheduleLayoutMetricsRefresh();
-        syncResultTitleHeight();
-        window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
-      }, 110);
+    // Native browser resizing is latched centrally by mediaQueryStore. While
+    // the window edge is held, keep the last settled Studio geometry exactly
+    // as-is. Internal splitter dragging remains fully live because it never
+    // enters this lifecycle. On resize-end, perform one precise geometry pass.
+    const handleWindowResizeStart = () => {
+      lastObservedWorkspaceWidthRef.current = metricsRef.current.width;
+    };
+    const handleWindowResizeEnd = () => {
+      lastObservedWorkspaceWidthRef.current = null;
+      scheduleLayoutMetricsRefresh();
+      syncResultTitleHeight();
+      scheduleFooterBoundaryRefresh();
     };
 
-    window.addEventListener('resize', handleViewportResize, { passive: true });
+    window.addEventListener('soridraw-window-resize-start', handleWindowResizeStart as EventListener);
+    window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
     window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
     scheduleFooterBoundaryRefresh();
@@ -937,9 +919,8 @@ export default function StudioSplitWorkspace({
     return () => {
       observer.disconnect();
       themeObserver.disconnect();
-      if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
-      document.documentElement.classList.remove('soridraw-window-resizing');
-      window.removeEventListener('resize', handleViewportResize);
+      window.removeEventListener('soridraw-window-resize-start', handleWindowResizeStart as EventListener);
+      window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
       window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       if (dragFrameRef.current !== null) {

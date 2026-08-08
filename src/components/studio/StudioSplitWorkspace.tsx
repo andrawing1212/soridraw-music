@@ -1165,6 +1165,30 @@ export default function StudioSplitWorkspace({
     }
   }, [viewMode, workspaceRequestId, workspaceView]);
 
+  const [renderPaneMastheads, setRenderPaneMastheads] = useState(() => (
+    typeof window === 'undefined' ? true : window.innerWidth >= TABLET_VIEWPORT_MIN
+  ));
+
+  useEffect(() => {
+    const syncPaneMastheadOwnership = () => {
+      setRenderPaneMastheads(window.innerWidth >= TABLET_VIEWPORT_MIN);
+    };
+
+    syncPaneMastheadOwnership();
+    window.addEventListener('soridraw-window-resize-end', syncPaneMastheadOwnership as EventListener);
+    return () => {
+      window.removeEventListener('soridraw-window-resize-end', syncPaneMastheadOwnership as EventListener);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    // 494: pane mastheads are normal-flow children again. When WORKSPACE content
+    // changes, start both independent scrollers from their real top edge instead
+    // of carrying a previous view's scrollTop into the new masthead.
+    if (builderRef.current) builderRef.current.scrollTop = 0;
+    if (resultRef.current) resultRef.current.scrollTop = 0;
+  }, [workspaceRequestId, workspaceView]);
+
   const renderedBounds = getSplitBounds(metricsRef.current.width);
 
   const centerModalHost = (
@@ -1192,13 +1216,17 @@ export default function StudioSplitWorkspace({
     <>
       <div ref={layoutRef} data-workspace-view-mode={viewMode} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
-          <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
-            {builderMasthead}
-          </div>
+          {renderPaneMastheads && (
+            <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
+              {builderMasthead}
+            </div>
+          )}
           {panes[0] ?? null}
         </div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
-          <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
+          {renderPaneMastheads && (
+            <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
+          )}
           {panes[1] ?? null}
         </div>
       </div>

@@ -906,3 +906,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모바일(<1100)에서는 builder/result pane masthead host를 명시적으로 제거해 `Sori Studio` 대문 중복과 검색 아이콘 중복을 차단한다.
 - 데스크톱/태블릿 pane masthead host는 pane 상단 sticky owner로 고정해 기존 scrollTop/resize 뒤 대문이 fixed top navigation 쪽으로 침범하거나 잘리는 현상을 막는다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 494차 — 분할 상단 대문 침범 / 모바일 중복 소유권 수정
+
+- 493의 브라우저 리사이즈 최종판정 구조와 491 Live Layout 분할바 실시간 구조는 유지한다.
+- 데스크톱/태블릿 pane masthead에 추가됐던 `position: sticky`를 제거하고 492의 normal-flow host 하나만 사용한다. 분할모드에서 Sori Studio / Music Note / Library 대문이 고정 상단 네비게이션 아래로 말려 들어가 잘리던 현상을 차단한다.
+- WORKSPACE 항목이 바뀔 때 builder/result 독립 스크롤을 실제 상단으로 되돌려 이전 화면의 `scrollTop`이 새 대문 위치를 밀어 올리지 않게 한다.
+- 모바일 `<1100px`에서는 pane masthead host 자체를 React에서 렌더하지 않는다. 모바일은 normal-flow Sori Studio hero 하나만 소유하므로 CSS 우선순위와 resize 타이밍에 관계없이 대문/검색 아이콘이 중복될 수 없다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 495차 — resize 종료 후 대문 상단 숨김 원인 제거
+- 494에서 resize 중에는 정상인데 마우스를 놓으면 대문이 위로 숨던 원인은 298/335/336/338/419의 고특이성 `padding-top`/숨은 hero spacer가 resize 종료 직후 다시 활성화되던 것이었다.
+- 해당 레거시 top-offset 소유권을 제거하고 492 단일 masthead 계약(PC/태블릿 main top 110px)을 collapsed/fullscreen/workspace-view에도 최종 소유자로 고정했다.
+- PC/태블릿 collapsed 상태에서 retired Studio hero spacer가 다시 살아나지 않게 차단했다.
+- 모바일에서는 pane masthead host를 CSS에서도 완전히 숨겨 Sori Studio 대문 중복을 이중 방지한다.
+- 브라우저 resize는 493의 settle-after-160ms 방식 유지, 내부 split divider는 491 live layout 유지.

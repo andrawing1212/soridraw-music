@@ -11852,18 +11852,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * through the stable 486 path. Full detail is restored once the gesture ends. */
 @media (min-width: 1100px) {
   html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
-  :is(
-    .soridraw-studio-builder-pane,
-    .soridraw-studio-result-pane,
-    .soridraw-studio-main .soridraw-menu-summary-box,
-    .soridraw-live-keywords-fixed,
-    .soridraw-studio-action-panel
-  ) {
-    container-type: normal !important;
-    container-name: none !important;
-  }
-
-  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace
   :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
   *,
@@ -11895,3 +11883,42 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     contain-intrinsic-size: auto 240px;
   }
 }
+
+/* 490 — Studio turbo engine.
+ * Responsive ownership is now split into two layers:
+ *   1) viewport/pane thresholds commit the real layout only at meaningful
+ *      boundaries or at the end of a gesture;
+ *   2) continuous splitter motion is compositor-only.
+ * This deliberately avoids width/left promotion of the two huge pane trees. */
+@media (min-width: 1100px) {
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    will-change: auto !important;
+    transform: none !important;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  :is(
+    .soridraw-studio-splitter,
+    .soridraw-studio-builder-collapse-toggle,
+    .soridraw-studio-result-collapse-toggle
+  ) {
+    will-change: transform !important;
+    backface-visibility: hidden;
+  }
+
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-resize-frozen="true"] {
+    overflow: hidden !important;
+    contain: layout paint style !important;
+  }
+
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-resize-frozen="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    contain: layout paint style !important;
+    overflow-anchor: none;
+  }
+}
+

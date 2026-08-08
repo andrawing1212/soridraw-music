@@ -1,5 +1,6 @@
 import React, { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 import { useMediaQuery } from '../../lib/mediaQueryStore';
+import { getStudioViewportMode, STUDIO_PC_MIN_PX, STUDIO_TABLET_MIN_PX } from '../../lib/studioResponsive';
 
 const LEFT_RAIL_STORAGE_KEY = 'soridraw_studio_black_left_rail_collapsed_v1';
 const RIGHT_RAIL_STORAGE_KEY = 'soridraw_studio_black_right_rail_collapsed_v1';
@@ -7,9 +8,9 @@ const RIGHT_RAIL_STORAGE_KEY = 'soridraw_studio_black_right_rail_collapsed_v1';
 type RailViewport = 'mobile' | 'compact' | 'wide';
 
 const getRailViewport = (): RailViewport => {
-  if (typeof window === 'undefined') return 'wide';
-  if (window.innerWidth < 1100) return 'mobile';
-  if (window.innerWidth < 1600) return 'compact';
+  const mode = getStudioViewportMode();
+  if (mode === 'mobile') return 'mobile';
+  if (mode === 'tablet') return 'compact';
   return 'wide';
 };
 
@@ -43,8 +44,8 @@ type StudioPageFrameProps = {
 };
 
 export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children }: StudioPageFrameProps) {
-  const isMobileViewport = useMediaQuery('(max-width: 1099px)');
-  const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
+  const isMobileViewport = useMediaQuery(`(max-width: ${STUDIO_TABLET_MIN_PX - 1}px)`);
+  const isWideViewport = useMediaQuery(`(min-width: ${STUDIO_PC_MIN_PX}px)`, true);
   const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);

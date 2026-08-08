@@ -873,3 +873,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
 
+
+## 490차 — Studio 하이브리드 터보 엔진 1단계
+- 기준: 489차.
+- 반응형 경계값의 단일 소유권을 `src/lib/studioResponsive.ts`로 이동했다. PC >=1600px / 태블릿 1100~1599px / 모바일 <1100px, Builder 820px / Result 680px 기준은 그대로 유지한다.
+- 내부 분할바는 연속 pointer frame에서 Builder/Result 실제 width/left를 더 이상 변경하지 않는다. 드래그 중에는 splitter와 좌우 pane 토글만 `translate3d()`로 compositor preview를 따라가고, pointer-up에서 실제 pane 폭/data-pane-mode/container layout을 한 번만 확정한다.
+- 분할바 매 프레임 실행되던 legacy 외부 컨트롤 DOM 검색/left/right/width 동기화 경로를 제거했다. 검색, 하단 생성바, live keywords 등은 확정된 root CSS 변수만 사용한다.
+- 브라우저 전체창 resize는 같은 viewport band 안에서 두 pane의 마지막 확정 pixel geometry를 잠시 고정한다. ResizeObserver의 per-pixel geometry commit을 차단하고, resize 종료 시 한 번만 실제 responsive layout을 다시 계산한다.
+- 1600px/1100px 경계를 넘을 때는 정상 PC/태블릿/모바일 전환을 보호하기 위해 중간에 한 번 실제 layout을 확정한 뒤 새 band에서 다시 freeze한다.
+- 488의 drag/resize 중 `container-type: normal` 강제 전환은 제거했다. 이 전환 자체가 drag 시작 시 대규모 스타일 변경을 만들 수 있어, 490에서는 기존 pane 스타일을 그대로 고정한다.
+- 대형 pane 전체에 `will-change: width/left`를 주는 방식은 중단하고, 실제 compositor로 움직이는 splitter/toggle 3개만 `will-change: transform`을 사용한다.
+- UI 색상/간격/대문 디자인, Music Note/Library 데이터, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 성능/조작성 검증 전.

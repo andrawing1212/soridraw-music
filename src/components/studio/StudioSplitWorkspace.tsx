@@ -8,14 +8,6 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  getStudioViewportMode,
-  STUDIO_BUILDER_COMPACT_PX,
-  STUDIO_PC_MIN_PX,
-  STUDIO_RESULT_COMPACT_PX,
-  STUDIO_TABLET_MIN_PX,
-  type StudioViewportMode,
-} from '../../lib/studioResponsive';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -24,13 +16,15 @@ const RESULT_COLLAPSED_STORAGE_KEY = 'soridraw_studio_black_result_collapsed_v1'
 const DEFAULT_PERCENT = 50;
 const MIN_PERCENT = 24;
 const MAX_PERCENT = 76;
+const TABLET_VIEWPORT_MIN = 1100;
+const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
 // Align the builder's mobile composition with the top-nav "라이브러리" label:
 // the split line reaches the first "라" at roughly an 820px builder width.
-const BUILDER_MOBILE_BREAKPOINT = STUDIO_BUILDER_COMPACT_PX;
-const RESULT_MOBILE_BREAKPOINT = STUDIO_RESULT_COMPACT_PX;
+const BUILDER_MOBILE_BREAKPOINT = 820;
+const RESULT_MOBILE_BREAKPOINT = 680;
 const PANE_MODE_HYSTERESIS = 16;
-const WIDE_DESKTOP_ISOLATION_BREAKPOINT = STUDIO_TABLET_MIN_PX;
+const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
 type PaneMode = 'mobile' | 'desktop';
@@ -47,12 +41,21 @@ type LayoutMetrics = {
   leftRailEdge: number;
 };
 
+type ExternalSplitControls = {
+  searchButton: HTMLElement | null;
+  floatingActionBar: HTMLElement | null;
+  collapsedActionButton: HTMLElement | null;
+  liveKeywords: HTMLElement | null;
+};
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
 
-const getSplitProfile = (): SplitProfile => (
-  getStudioViewportMode() === 'tablet' ? 'tablet' : 'wide'
-);
+const getSplitProfile = (): SplitProfile => {
+  if (typeof window === 'undefined') return 'wide';
+  return window.innerWidth >= TABLET_VIEWPORT_MIN && window.innerWidth <= TABLET_VIEWPORT_MAX
+    ? 'tablet'
+    : 'wide';
+};
 
 const getStorageKey = (profile: SplitProfile) => (
   profile === 'tablet' ? TABLET_STORAGE_KEY : STORAGE_KEY
@@ -134,7 +137,6 @@ export default function StudioSplitWorkspace({
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
   const draggingRef = useRef(false);
   const layoutRef = useRef<HTMLDivElement | null>(null);
-  const modalHostRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
   const splitterRef = useRef<HTMLButtonElement | null>(null);
@@ -150,7 +152,7 @@ export default function StudioSplitWorkspace({
     builder: 'desktop',
     result: 'desktop',
   });
-  const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, startBuilderPixel: 0, width: 1 });
+  const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
@@ -158,30 +160,23 @@ export default function StudioSplitWorkspace({
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
+  const lastActionControlPixelRef = useRef<number | null>(null);
+  const externalControlsReadyRef = useRef(false);
+  const hasLiveExternalMeasurementsRef = useRef(false);
+  const responsiveFlagsRef = useRef<Record<string, boolean | null>>({});
+  const lastObservedWorkspaceWidthRef = useRef<number | null>(null);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastIsolationViewportHeightRef = useRef<number | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
-  const windowResizingRef = useRef(false);
-  const windowResizeBandRef = useRef<StudioViewportMode>(getStudioViewportMode());
-  const windowResizeRefreezeFrameRef = useRef<number | null>(null);
-  const windowResizeFrozenRef = useRef(false);
+  const externalControlsRef = useRef<ExternalSplitControls>({
+    searchButton: null,
+    floatingActionBar: null,
+    collapsedActionButton: null,
+    liveKeywords: null,
+  });
 
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
-
-  const syncCenterModalHostBounds = useCallback(() => {
-    const host = modalHostRef.current;
-    if (!host || typeof window === 'undefined') return;
-
-    // Detail windows must behave like Studio-wide modals, not like content
-    // inside either split pane. Give the shared body portal the full viewport
-    // so its backdrop covers the navigation/rails and the panel can extend
-    // beyond the current builder/result boundaries.
-    host.style.left = '0px';
-    host.style.top = '0px';
-    host.style.width = `${Math.max(0, Math.round(window.innerWidth))}px`;
-    host.style.height = `${Math.max(0, Math.round(window.innerHeight))}px`;
-  }, []);
 
   const syncResultTitleHeight = useCallback(() => {
     // Width dragging already owns the pane geometry for this frame. Running a
@@ -235,103 +230,159 @@ export default function StudioSplitWorkspace({
     delete root.dataset.soridrawResultAtMinimum;
     delete root.dataset.soridrawBuilderMastheadScrolled;
     delete root.dataset.soridrawResultMastheadScrolled;
+    root.removeAttribute('data-soridraw-builder-actions-wide');
+    root.removeAttribute('data-soridraw-result-lte-900');
+    root.removeAttribute('data-soridraw-result-lte-640');
+    for (const attribute of [
+      'data-width-lte-1120',
+      'data-width-lte-1100',
+      'data-width-lte-1074',
+      'data-width-lte-760',
+      'data-width-lte-700',
+    ]) builderRef.current?.removeAttribute(attribute);
+    for (const attribute of [
+      'data-width-lte-1080',
+      'data-width-lte-820',
+      'data-width-lte-680',
+    ]) resultRef.current?.removeAttribute(attribute);
+    responsiveFlagsRef.current = {};
   }, []);
 
+  const readExternalControls = useCallback((force = false) => {
+    const current = externalControlsRef.current;
+    if (force || !externalControlsReadyRef.current) {
+      current.searchButton = document.querySelector<HTMLElement>('.soridraw-studio-hero-search-button');
+      current.floatingActionBar = document.querySelector<HTMLElement>(
+        'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
+      );
+      current.collapsedActionButton = document.querySelector<HTMLElement>(
+        'body > .soridraw-studio-action-collapsed',
+      );
+      current.liveKeywords = document.querySelector<HTMLElement>(
+        'body > .soridraw-live-keywords-fixed',
+      );
+      externalControlsReadyRef.current = true;
+    }
+    return current;
+  }, []);
 
   const clearExternalMeasurements = useCallback(() => {
-    // 490: portal controls no longer receive per-frame inline geometry. Their
-    // resting positions are owned by the committed root CSS variables. Clear
-    // only legacy inline values during a real layout commit/cleanup.
-    const searchButton = document.querySelector<HTMLElement>('.soridraw-studio-hero-search-button');
-    const floatingActionBar = document.querySelector<HTMLElement>(
-      'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
-    );
-    const collapsedActionButton = document.querySelector<HTMLElement>('body > .soridraw-studio-action-collapsed');
-    const liveKeywords = document.querySelector<HTMLElement>('body > .soridraw-live-keywords-fixed');
-
+    if (!hasLiveExternalMeasurementsRef.current && !externalControlsReadyRef.current) return;
+    const { searchButton, floatingActionBar, collapsedActionButton, liveKeywords } = externalControlsRef.current;
     searchButton?.style.removeProperty('left');
     searchButton?.style.removeProperty('right');
     searchButton?.style.removeProperty('transform');
     searchButton?.style.removeProperty('--soridraw-studio-search-x');
-    floatingActionBar?.style.removeProperty('left');
-    floatingActionBar?.style.removeProperty('width');
-    floatingActionBar?.style.removeProperty('--soridraw-studio-builder-width');
-    collapsedActionButton?.style.removeProperty('--soridraw-studio-builder-width');
-    collapsedActionButton?.style.removeProperty('--soridraw-studio-left-rail-edge');
-    liveKeywords?.style.removeProperty('left');
-    liveKeywords?.style.removeProperty('right');
+    if (floatingActionBar) {
+      floatingActionBar.style.removeProperty('left');
+      floatingActionBar.style.removeProperty('width');
+      floatingActionBar.style.removeProperty('--soridraw-studio-builder-width');
+    }
+    if (collapsedActionButton) {
+      collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
+      collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
+    }
+    if (liveKeywords) {
+      liveKeywords.style.removeProperty('left');
+      liveKeywords.style.removeProperty('right');
+    }
     splitterRef.current?.style.removeProperty('left');
     splitterRef.current?.style.removeProperty('transform');
     builderCollapseToggleRef.current?.style.removeProperty('left');
-    builderCollapseToggleRef.current?.style.removeProperty('transform');
     resultCollapseToggleRef.current?.style.removeProperty('left');
     resultCollapseToggleRef.current?.style.removeProperty('right');
-    resultCollapseToggleRef.current?.style.removeProperty('transform');
+    lastActionControlPixelRef.current = null;
+    externalControlsReadyRef.current = false;
+    hasLiveExternalMeasurementsRef.current = false;
   }, []);
 
-  const clearDragPreview = useCallback(() => {
-    splitterRef.current?.style.removeProperty('transform');
-    builderCollapseToggleRef.current?.style.removeProperty('transform');
-    resultCollapseToggleRef.current?.style.removeProperty('transform');
-  }, []);
+  const syncExternalMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
+    hasLiveExternalMeasurementsRef.current = true;
+    const { left, leftRailEdge } = metricsRef.current;
+    const controls = readExternalControls();
+    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
+    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
+    const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
 
-  const applyDragPreview = useCallback((deltaPixel: number) => {
-    const transform = `translate3d(${Math.round(deltaPixel)}px, 0, 0)`;
-    splitterRef.current?.style.setProperty('transform', transform, 'important');
-    if (!builderCollapsedRef.current) {
-      builderCollapseToggleRef.current?.style.setProperty('transform', transform, 'important');
-    }
-    if (!resultCollapsedRef.current) {
-      resultCollapseToggleRef.current?.style.setProperty('transform', transform, 'important');
-    }
-  }, []);
-
-  const clearWindowResizeFreeze = useCallback(() => {
-    if (windowResizeRefreezeFrameRef.current !== null) {
-      window.cancelAnimationFrame(windowResizeRefreezeFrameRef.current);
-      windowResizeRefreezeFrameRef.current = null;
-    }
-    const layout = layoutRef.current;
-    const result = resultRef.current;
-    if (layout) delete layout.dataset.resizeFrozen;
-    if (result) {
-      result.style.removeProperty('width');
-      result.style.removeProperty('right');
-    }
-    windowResizeFrozenRef.current = false;
-  }, []);
-
-  const beginWindowResizeFreeze = useCallback(() => {
-    const layout = layoutRef.current;
-    const builder = builderRef.current;
-    const result = resultRef.current;
-    if (
-      !layout || !builder || !result ||
-      !isStudioBlack() ||
-      getStudioViewportMode() === 'mobile' ||
-      builderCollapsedRef.current || resultCollapsedRef.current ||
-      layout.dataset.scrollIsolated !== 'true'
-    ) {
-      return;
+    // The divider is a fixed body portal. Give it one coordinate owner only:
+    // the exact viewport left position. The previous transform preview lost to
+    // an older higher-specificity `transform: none !important` rule, leaving
+    // the divider at x=0 and making it appear to have vanished.
+    if (splitterRef.current) {
+      splitterRef.current.style.removeProperty('transform');
+      splitterRef.current.style.setProperty(
+        'left',
+        `${Math.max(0, roundedSplitterLeft - 8)}px`,
+        'important',
+      );
     }
 
-    const builderRect = builder.getBoundingClientRect();
-    const resultRect = result.getBoundingClientRect();
-    if (builderRect.width <= 0 || resultRect.width <= 0) return;
+    // The pane collapse controls are body portals. During pointer drag the
+    // committed root CSS variable intentionally stays unchanged until pointer-up,
+    // so drive both controls from the same rounded live splitter coordinate.
+    // Keep the exact approved 9px edge gap used by the resting CSS; using the
+    // older -54/+20 offsets made the newly revealed buttons jump while the
+    // pointer remained held at either drag limit, then snap back on release.
+    if (builderCollapseToggleRef.current && !builderCollapsedRef.current) {
+      builderCollapseToggleRef.current.style.setProperty(
+        'left',
+        `${Math.max(0, roundedSplitterLeft - 43)}px`,
+        'important',
+      );
+    }
+    if (resultCollapseToggleRef.current && !resultCollapsedRef.current) {
+      resultCollapseToggleRef.current.style.removeProperty('right');
+      resultCollapseToggleRef.current.style.setProperty(
+        'left',
+        `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`,
+        'important',
+      );
+    }
+    if (controls.liveKeywords) {
+      controls.liveKeywords.style.setProperty(
+        'left',
+        `${Math.max(0, roundedSplitterLeft + 18)}px`,
+        'important',
+      );
+      controls.liveKeywords.style.setProperty(
+        'right',
+        `${Math.max(0, Math.round(workspaceRight))}px`,
+        'important',
+      );
+    }
+    if (controls.searchButton) {
+      // Search is absolutely positioned inside the same 1500px Studio shell as
+      // the split workspace. Track the builder boundary with `right` only.
+      // Never combine layout positioning with transform/transition: that made
+      // the button ease behind the divider and wander during fast drags.
+      controls.searchButton.style.removeProperty('left');
+      controls.searchButton.style.removeProperty('transform');
+      controls.searchButton.style.removeProperty('--soridraw-studio-search-x');
+      controls.searchButton.style.setProperty(
+        'right',
+        `${Math.max(26, Math.round(metricsRef.current.width - roundedBuilderWidth + 26))}px`,
+        'important',
+      );
+    }
 
-    // Native window resizing is the second turbo path. Keep the heavy pane
-    // trees at their last committed pixel sizes while the outer browser frame
-    // moves. The workspace clips the frozen surfaces, then one real responsive
-    // layout is committed when resizing settles (or when a viewport breakpoint
-    // is crossed). This removes per-pixel reflow from thousands of Studio nodes.
-    builder.style.setProperty('width', `${Math.round(builderRect.width)}px`, 'important');
-    result.style.setProperty('left', `${Math.round(builderRect.width)}px`, 'important');
-    result.style.setProperty('width', `${Math.round(resultRect.width)}px`, 'important');
-    result.style.setProperty('right', 'auto', 'important');
-    layout.dataset.resizeFrozen = 'true';
-    windowResizeFrozenRef.current = true;
-  }, [isStudioBlack]);
+    // The floating action bar lives in a body portal, so it does not inherit
+    // the builder pane width automatically. Keep its outer box and responsive
+    // controls on the exact same builder width in this animation frame. The
+    // previous wide-desktop early return froze the bar until pointer-up.
+    const actionControlPixel = roundedBuilderWidth;
+    if (lastActionControlPixelRef.current === actionControlPixel) return;
+    lastActionControlPixelRef.current = actionControlPixel;
 
+    if (controls.floatingActionBar) {
+      controls.floatingActionBar.style.setProperty('left', `${Math.max(0, Math.round(left))}px`, 'important');
+      controls.floatingActionBar.style.setProperty('width', `${actionControlPixel}px`, 'important');
+      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+    }
+    if (controls.collapsedActionButton) {
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
+    }
+  }, [readExternalControls]);
 
   const commitRootMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const root = document.documentElement;
@@ -343,20 +394,23 @@ export default function StudioSplitWorkspace({
       0,
       Math.round(window.innerWidth - (metricsRef.current.left + metricsRef.current.width)),
     );
+    const setIfChanged = (name: string, value: string) => {
+      if (root.style.getPropertyValue(name) !== value) root.style.setProperty(name, value);
+    };
 
-    // Pointer frames use integer pixel coordinates. Commit those same rounded
-    // coordinates after pointer-up so the divider and portal controls do not
-    // shift by a visible subpixel/one-pixel step when inline drag styles clear.
-    root.style.setProperty('--soridraw-studio-builder-left', `${roundedLeft}px`);
-    root.style.setProperty(
+    // Root variables feed only the body-level controls. Avoid re-writing the
+    // static values on every browser-width frame; only geometry that really
+    // changed reaches style recalculation.
+    setIfChanged('--soridraw-studio-builder-left', `${roundedLeft}px`);
+    setIfChanged(
       '--soridraw-studio-builder-right',
       `${Math.max(0, Math.round(window.innerWidth - (left + roundedBuilderWidth)))}px`,
     );
-    root.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
-    root.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
-    root.style.setProperty('--soridraw-studio-splitter-left', `${roundedSplitterLeft}px`);
-    root.style.setProperty('--soridraw-studio-result-left', `${roundedSplitterLeft + 18}px`);
-    root.style.setProperty('--soridraw-studio-result-right', `${roundedWorkspaceRight}px`);
+    setIfChanged('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
+    setIfChanged('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
+    setIfChanged('--soridraw-studio-splitter-left', `${roundedSplitterLeft}px`);
+    setIfChanged('--soridraw-studio-result-left', `${roundedSplitterLeft + 18}px`);
+    setIfChanged('--soridraw-studio-result-right', `${roundedWorkspaceRight}px`);
   }, []);
 
   const refreshSplitterFooterBoundary = useCallback(() => {
@@ -390,7 +444,7 @@ export default function StudioSplitWorkspace({
     const overlapValue = `${Math.min(maximumBottom, footerOverlap)}px`;
     setRootPropertyIfChanged(
       '--soridraw-studio-splitter-bottom',
-      window.innerWidth >= STUDIO_TABLET_MIN_PX ? overlapValue : null,
+      window.innerWidth >= 1100 ? overlapValue : null,
     );
     setRootPropertyIfChanged('--soridraw-studio-action-footer-offset', overlapValue);
   }, [isStudioBlack]);
@@ -481,6 +535,45 @@ export default function StudioSplitWorkspace({
     return width > breakpoint + PANE_MODE_HYSTERESIS ? 'desktop' : 'mobile';
   }, []);
 
+
+  const syncResponsiveThresholds = useCallback((builderWidth: number, resultWidth: number) => {
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!builder || !result || typeof document === 'undefined') return;
+
+    const root = document.documentElement;
+    const flags = responsiveFlagsRef.current;
+    const syncFlag = (
+      key: string,
+      element: HTMLElement,
+      attribute: string,
+      enabled: boolean,
+    ) => {
+      if (flags[key] === enabled) return;
+      flags[key] = enabled;
+      if (enabled) element.setAttribute(attribute, '');
+      else element.removeAttribute(attribute);
+    };
+
+    // Former pane-level @container rules are converted into threshold flags.
+    // These attributes change only when a real breakpoint is crossed, not for
+    // every pixel of a live drag, so responsive detail stays exact without
+    // making the browser re-evaluate the whole subtree on every frame.
+    syncFlag('b1120', builder, 'data-width-lte-1120', builderWidth <= 1120);
+    syncFlag('b1100', builder, 'data-width-lte-1100', builderWidth <= 1100);
+    syncFlag('b1074', builder, 'data-width-lte-1074', builderWidth <= 1074);
+    syncFlag('b760', builder, 'data-width-lte-760', builderWidth <= 760);
+    syncFlag('b700', builder, 'data-width-lte-700', builderWidth <= 700);
+
+    syncFlag('r1080', result, 'data-width-lte-1080', resultWidth <= 1080);
+    syncFlag('r820', result, 'data-width-lte-820', resultWidth <= 820);
+    syncFlag('r680', result, 'data-width-lte-680', resultWidth <= 680);
+
+    syncFlag('actionsWide', root, 'data-soridraw-builder-actions-wide', builderWidth >= 681);
+    syncFlag('result900', root, 'data-soridraw-result-lte-900', resultWidth <= 900);
+    syncFlag('result640', root, 'data-soridraw-result-lte-640', resultWidth <= 640);
+  }, []);
+
   /**
    * Apply the split directly to DOM/CSS variables.
    *
@@ -508,7 +601,7 @@ export default function StudioSplitWorkspace({
       return nextPercent;
     }
 
-    const { width } = metricsRef.current;
+    const { left, width } = metricsRef.current;
     const safeWidth = Math.max(width, 1);
     const builderWidth = builderCollapsedRef.current
       ? 0
@@ -516,6 +609,9 @@ export default function StudioSplitWorkspace({
         ? safeWidth
         : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
+    const splitterLeft = left + builderWidth;
+    syncResponsiveThresholds(builderWidth, resultWidth);
+
     const isIsolatedWorkspace = layout.dataset.scrollIsolated === 'true';
 
     // Wide desktop uses two absolutely positioned scroll panes inside a fixed
@@ -532,6 +628,7 @@ export default function StudioSplitWorkspace({
       result.style.removeProperty('left');
       builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
     }
+    if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
     const edgeTolerancePercent = (1.5 / safeWidth) * 100;
     const root = document.documentElement;
@@ -585,7 +682,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, resolvePaneMode]);
+  }, [clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, syncExternalMeasurements, syncResponsiveThresholds]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -596,14 +693,15 @@ export default function StudioSplitWorkspace({
 
     refreshWorkspaceIsolation();
     const rect = layout.getBoundingClientRect();
-    syncCenterModalHostBounds();
-    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
-    const leftRailRect = leftRail?.getBoundingClientRect();
     metricsRef.current = {
       left: rect.left,
       width: Math.max(rect.width, 1),
-      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+      // The center workspace starts exactly at the visible left-rail edge on
+      // wide PC and at x=0 when tablet rails are hidden. A second rail
+      // getBoundingClientRect() forced another synchronous layout read.
+      leftRailEdge: rect.left,
     };
+    lastObservedWorkspaceWidthRef.current = Math.max(rect.width, 1);
 
     const nextProfile = getSplitProfile();
     const profileChanged = splitProfileRef.current !== nextProfile;
@@ -625,7 +723,7 @@ export default function StudioSplitWorkspace({
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
     if (layoutRefreshFrameRef.current !== null) return;
@@ -671,7 +769,7 @@ export default function StudioSplitWorkspace({
       refreshLayoutMetrics();
       if (isBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
       if (isResultCollapsed && builderRef.current) builderRef.current.scrollTop = 0;
-      if (isBuilderCollapsed && window.innerWidth >= STUDIO_TABLET_MIN_PX && window.innerWidth < STUDIO_PC_MIN_PX) {
+      if (isBuilderCollapsed && window.innerWidth >= 1100 && window.innerWidth < 1600) {
         window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' });
       }
       window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', {
@@ -744,11 +842,52 @@ export default function StudioSplitWorkspace({
   }, [syncResultTitleHeight]);
 
   useEffect(() => {
-    const observer = new ResizeObserver(() => {
-      // During the 490 window-resize turbo path the pane trees are intentionally
-      // frozen. Ignore the observer storm until the gesture settles; otherwise
-      // the freeze would be defeated by the old per-pixel geometry commit.
-      if (!draggingRef.current && !windowResizingRef.current) scheduleLayoutMetricsRefresh();
+    const observer = new ResizeObserver((entries) => {
+      if (draggingRef.current) return;
+      const layout = layoutRef.current;
+      if (!layout || !isStudioBlack()) {
+        scheduleLayoutMetricsRefresh();
+        return;
+      }
+
+      const layoutEntry = entries.find((entry) => entry.target === layout);
+      if (!layoutEntry) {
+        // Footer resize only affects the divider bottom edge, not pane width.
+        scheduleFooterBoundaryRefresh();
+        return;
+      }
+
+      const nextWidth = Math.max(layoutEntry.contentRect.width, 1);
+      const nextProfile = getSplitProfile();
+
+      // Crossing PC/tablet/mobile ownership can move the workspace itself, so
+      // keep the verified full geometry refresh for those structural changes.
+      if (nextProfile !== splitProfileRef.current) {
+        scheduleLayoutMetricsRefresh();
+        return;
+      }
+
+      // Inside the same viewport band, browser resizing only changes the center
+      // workspace width. Use ResizeObserver's already-computed contentRect and
+      // avoid another getBoundingClientRect()/rail measurement on every frame.
+      if (
+        lastObservedWorkspaceWidthRef.current !== null
+        && Math.abs(lastObservedWorkspaceWidthRef.current - nextWidth) < 0.5
+      ) return;
+
+      lastObservedWorkspaceWidthRef.current = nextWidth;
+      metricsRef.current.width = nextWidth;
+      const appliedPercent = applyPercentToLayout(percentRef.current);
+      const builderWidth = builderCollapsedRef.current
+        ? 0
+        : resultCollapsedRef.current
+          ? nextWidth
+          : nextWidth * (appliedPercent / 100);
+      commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+
+      if (Math.abs(appliedPercent - percentRef.current) > 0.001) {
+        setPercent(appliedPercent);
+      }
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
@@ -757,85 +896,52 @@ export default function StudioSplitWorkspace({
     const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
 
+    // Width changes are already owned by the workspace ResizeObserver. Keep a
+    // tiny native listener only for vertical viewport changes, because the
+    // isolated workspace height must then be recalculated even if its current
+    // fixed-size box has not emitted a ResizeObserver callback yet.
+    let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
-
-    const commitWindowResize = () => {
-      clearWindowResizeFreeze();
-      windowResizingRef.current = false;
-      document.documentElement.classList.remove('soridraw-window-resizing');
-      refreshLayoutMetrics();
-      syncResultTitleHeight();
-      window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
-    };
-
-    const refreezeAfterBreakpoint = () => {
-      if (!windowResizingRef.current || getStudioViewportMode() === 'mobile') return;
-      if (windowResizeRefreezeFrameRef.current !== null) return;
-      windowResizeRefreezeFrameRef.current = window.requestAnimationFrame(() => {
-        windowResizeRefreezeFrameRef.current = null;
-        if (!windowResizingRef.current) return;
-        refreshLayoutMetrics();
-        beginWindowResizeFreeze();
-      });
-    };
-
     const handleViewportResize = () => {
       const root = document.documentElement;
-      const nextBand = getStudioViewportMode();
-
-      if (!windowResizingRef.current) {
-        windowResizingRef.current = true;
-        windowResizeBandRef.current = nextBand;
+      if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
-        beginWindowResizeFreeze();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
-      } else if (windowResizeBandRef.current !== nextBand) {
-        // PC/tablet/mobile boundaries remain exact. Crossing 1600 or 1100 gets
-        // one real layout commit, then the new band is frozen again. Normal
-        // movement inside a band performs no heavy pane reflow at all.
-        windowResizeBandRef.current = nextBand;
-        clearWindowResizeFreeze();
-        refreezeAfterBreakpoint();
-      } else if (!windowResizeFrozenRef.current && nextBand !== 'mobile') {
-        beginWindowResizeFreeze();
       }
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
+
+      const nextViewportHeight = window.innerHeight;
+      if (nextViewportHeight !== lastViewportHeight) {
+        lastViewportHeight = nextViewportHeight;
+        scheduleLayoutMetricsRefresh();
+      }
+
+      // Keep every intermediate pane frame live while the browser edge moves.
+      // The resize class only pauses nonessential animation/measurement work;
+      // responsive threshold attributes still switch exactly at their bounds.
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
-        commitWindowResize();
-      }, 120);
-    };
-
-    const handleFrameResize = () => {
-      if (!windowResizingRef.current) {
+        root.classList.remove('soridraw-window-resizing');
         scheduleLayoutMetricsRefresh();
-        return;
-      }
-      // Rail changes at the PC/tablet boundary are one of the few legitimate
-      // mid-gesture layout commits. Rebuild once, then re-enter the freeze.
-      clearWindowResizeFreeze();
-      refreezeAfterBreakpoint();
+        syncResultTitleHeight();
+        window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
+      }, 110);
     };
 
     window.addEventListener('resize', handleViewportResize, { passive: true });
-    window.addEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
+    window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
-    window.addEventListener('scroll', syncCenterModalHostBounds, { passive: true });
     scheduleFooterBoundaryRefresh();
-    syncCenterModalHostBounds();
 
     return () => {
       observer.disconnect();
       themeObserver.disconnect();
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
-      windowResizingRef.current = false;
-      clearWindowResizeFreeze();
       document.documentElement.classList.remove('soridraw-window-resizing');
       window.removeEventListener('resize', handleViewportResize);
-      window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
+      window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
-      window.removeEventListener('scroll', syncCenterModalHostBounds);
       if (dragFrameRef.current !== null) {
         window.cancelAnimationFrame(dragFrameRef.current);
         dragFrameRef.current = null;
@@ -861,7 +967,6 @@ export default function StudioSplitWorkspace({
       lastIsolatedWorkspaceHeightRef.current = null;
       lastIsolationViewportHeightRef.current = null;
       document.documentElement.classList.remove('soridraw-split-dragging');
-      clearDragPreview();
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       builderRef.current?.style.removeProperty('flex-basis');
@@ -873,20 +978,25 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawResultCollapsed;
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
+      document.documentElement.removeAttribute('data-soridraw-builder-actions-wide');
+      document.documentElement.removeAttribute('data-soridraw-result-lte-900');
+      document.documentElement.removeAttribute('data-soridraw-result-lte-640');
+      for (const attribute of [
+        'data-width-lte-1120',
+        'data-width-lte-1100',
+        'data-width-lte-1074',
+        'data-width-lte-760',
+        'data-width-lte-700',
+      ]) builderRef.current?.removeAttribute(attribute);
+      for (const attribute of [
+        'data-width-lte-1080',
+        'data-width-lte-820',
+        'data-width-lte-680',
+      ]) resultRef.current?.removeAttribute(attribute);
+      responsiveFlagsRef.current = {};
+      lastObservedWorkspaceWidthRef.current = null;
     };
-  }, [beginWindowResizeFreeze, clearDragPreview, clearExternalMeasurements, clearRootMeasurements, clearWindowResizeFreeze, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
-
-  const calculateDragTarget = useCallback((clientX: number) => {
-    const { startX, startPercent, width } = dragRef.current;
-    const safeWidth = Math.max(width, 1);
-    const deltaPercent = ((clientX - startX) / safeWidth) * 100;
-    const percent = clampToBounds(
-      startPercent + deltaPercent,
-      getSplitBounds(safeWidth),
-    );
-    const builderPixel = Math.round(safeWidth * (percent / 100));
-    return { safeWidth, percent, builderPixel };
-  }, []);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncResultTitleHeight]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
@@ -894,22 +1004,21 @@ export default function StudioSplitWorkspace({
     pendingClientXRef.current = null;
     if (clientX === null) return;
 
-    const { safeWidth, percent, builderPixel } = calculateDragTarget(clientX);
-    if (lastDragBuilderPixelRef.current === builderPixel) return;
-    lastDragBuilderPixelRef.current = builderPixel;
-    percentRef.current = (builderPixel / safeWidth) * 100;
-
-    // 490 turbo path: pointer frames never resize either heavy pane. Only the
-    // fixed splitter/collapse controls move on the compositor. The real pane
-    // widths, container queries and card grids commit once on pointer-up.
-    applyDragPreview(builderPixel - dragRef.current.startBuilderPixel);
-
-    const roundedPercent = Math.round(percent);
-    if (lastAriaPercentRef.current !== roundedPercent) {
-      lastAriaPercentRef.current = roundedPercent;
-      splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
-    }
-  }, [applyDragPreview, calculateDragTarget]);
+    const { startX, startPercent, width } = dragRef.current;
+    const safeWidth = Math.max(width, 1);
+    const deltaPercent = ((clientX - startX) / safeWidth) * 100;
+    const rawPercent = clampToBounds(
+      startPercent + deltaPercent,
+      getSplitBounds(safeWidth),
+    );
+    const rawBuilderPixel = safeWidth * (rawPercent / 100);
+    // Preserve one-pixel pointer fidelity. The former 2px quantization made a
+    // healthy frame rate still look like stepping on wide desktop screens.
+    const nextBuilderPixel = Math.round(rawBuilderPixel);
+    if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
+    lastDragBuilderPixelRef.current = nextBuilderPixel;
+    applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
+  }, [applyPercentToLayout]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -927,17 +1036,15 @@ export default function StudioSplitWorkspace({
       width: rect.width,
       leftRailEdge: metricsRef.current.leftRailEdge,
     };
-    const startBuilderPixel = Math.round(rect.width * (percentRef.current / 100));
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
       startPercent: percentRef.current,
-      startBuilderPixel,
       width: rect.width,
     };
     pendingClientXRef.current = null;
-    lastDragBuilderPixelRef.current = startBuilderPixel;
-    clearDragPreview();
+    lastDragBuilderPixelRef.current = null;
+    readExternalControls(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
@@ -960,14 +1067,12 @@ export default function StudioSplitWorkspace({
   const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.pointerId !== dragRef.current.pointerId) return;
 
+    pendingClientXRef.current = event.clientX;
     if (dragFrameRef.current !== null) {
       window.cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
     }
-    pendingClientXRef.current = null;
-    const target = calculateDragTarget(event.clientX);
-    const finalPercent = (target.builderPixel / target.safeWidth) * 100;
-    percentRef.current = finalPercent;
+    flushPendingPointer();
 
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
     document.body.style.removeProperty('cursor');
@@ -975,22 +1080,21 @@ export default function StudioSplitWorkspace({
     draggingRef.current = false;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
-    clearDragPreview();
     lastDragBuilderPixelRef.current = null;
-
-    // One real responsive commit after the compositor-only preview.
-    const committedPercent = applyPercentToLayout(finalPercent);
     const builderWidth = builderCollapsedRef.current
       ? 0
       : resultCollapsedRef.current
         ? metricsRef.current.width
-        : metricsRef.current.width * (committedPercent / 100);
+        : metricsRef.current.width * (percentRef.current / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
+    // Reconnect the result title to the final builder-card height after the
+    // drag has committed. This keeps the expensive cross-pane measurement out
+    // of pointer frames without changing the final layout.
     window.requestAnimationFrame(syncResultTitleHeight);
-    setPercent(committedPercent);
+    setPercent(percentRef.current);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -1083,7 +1187,7 @@ export default function StudioSplitWorkspace({
   const renderedBounds = getSplitBounds(metricsRef.current.width);
 
   const centerModalHost = (
-    <div id="soridraw-studio-center-modal-root" ref={modalHostRef} className="soridraw-studio-center-modal-host" />
+    <div id="soridraw-studio-center-modal-root" className="soridraw-studio-center-modal-host" />
   );
 
   const splitterControl = (

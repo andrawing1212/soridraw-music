@@ -57,15 +57,6 @@
   background: var(--sb-page) !important;
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane,
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane {
-  container-type: inline-size;
-}
-
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane {
-  container-name: soridraw-builder-pane;
-}
-
 :root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
   border-bottom: 1px solid var(--sb-divider) !important;
   background: var(--sb-page) !important;
@@ -176,7 +167,6 @@
     max-width: 100%;
     min-width: 0;
     overflow: hidden;
-    container-type: inline-size;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane {
@@ -770,12 +760,12 @@
 }
 
 /* When the PC pane narrows, header tools yield space to the menu title. */
-@container (max-width: 1120px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions {
+/* 491: former container query (max-width: 1120px); threshold is owned by the builder pane attribute. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1120] .soridraw-card-header-actions {
     gap: 4px !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions > button:has(> svg:only-child) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1120] .soridraw-card-header-actions > button:has(> svg:only-child) {
     width: 30px !important;
     min-width: 30px !important;
     height: 30px !important;
@@ -787,22 +777,22 @@
     justify-content: center !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions > button:has(> svg:only-child) > svg {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1120] .soridraw-card-header-actions > button:has(> svg:only-child) > svg {
     width: 14px !important;
     height: 14px !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header h3 {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1120] .soridraw-card-header h3 {
     font-size: 18px !important;
     gap: 6px !important;
     min-width: 0 !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header h3 > span:last-child {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1120] .soridraw-card-header h3 > span:last-child {
     font-size: 12px !important;
     margin-left: 4px !important;
   }
-}
+
 
 /* 185: explicit click feedback, tempo mobile fit, and result action colors. */
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active {
@@ -1706,26 +1696,26 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
   line-height: 1 !important;
 }
 
-@container (max-width: 1100px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-vocal-member-grid {
+/* 491: former container query (max-width: 1100px); threshold is owned by the builder pane attribute. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1100] .soridraw-vocal-member-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
-}
 
-@container (max-width: 1074px) {
+
+/* 491: former container query (max-width: 1074px); threshold is owned by the builder pane attribute. */
   /* 211: one compact-desktop threshold, aligned with the start of the top-nav '마' in the reference video. */
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1074] :is(
     [data-studio-menu="mood"],
     [data-studio-menu="theme"]
   ) .soridraw-category-keyword-grid {
     grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-menu-count {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1074] .soridraw-menu-count {
     display: none !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1074] :is(
     [data-studio-menu="mood"],
     [data-studio-menu="theme"]
   ) .soridraw-category-keyword-grid button .soridraw-menu-keyword-label {
@@ -1742,7 +1732,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
     text-overflow: ellipsis !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1074] :is(
     [data-studio-menu="genre"],
     [data-studio-menu="style"],
     [data-studio-menu="sound"]
@@ -1760,12 +1750,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
     text-overflow: ellipsis !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1074] :is(
     [data-studio-menu="genre"],
     [data-studio-menu="style"],
     [data-studio-menu="sound"]
   ) .soridraw-expand-content > .grid > button,
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-1074] :is(
     [data-studio-menu="genre"],
     [data-studio-menu="style"],
     [data-studio-menu="sound"]
@@ -1775,18 +1765,18 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
     min-width: 0 !important;
     padding-inline: 6px !important;
   }
-}
 
-@container (max-width: 760px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-vocal-member-heading {
+
+/* 491: former container query (max-width: 760px); threshold is owned by the builder pane attribute. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-760] .soridraw-vocal-member-heading {
     gap: 6px !important;
   }
 
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] button.soridraw-vocal-role-button {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-width-lte-760] button.soridraw-vocal-role-button {
     min-width: 32px !important;
     padding-inline: 6px !important;
   }
-}
+
 
 /* 213 — On desktop the search control belongs to the builder pane.
  * Keep the Classic builder/Sound-edge placement, lower the icon slightly,
@@ -2012,6 +2002,7 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
 
 html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
   position: fixed !important;
+  contain: layout style;
   inset: auto auto var(--soridraw-action-bottom-gap) var(--soridraw-action-fixed-left, 0px) !important;
   top: auto !important;
   right: auto !important;
@@ -2036,7 +2027,6 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .
   width: min(100%, 920px) !important;
   max-width: 920px !important;
   min-width: 0 !important;
-  container: studio-action-panel / inline-size;
 }
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
@@ -2164,23 +2154,23 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   justify-content: center !important;
 }
 
-@container studio-action-panel (min-width: 681px) {
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+/* 491: former action-panel container query; builder threshold changes only at 681px. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-actions-wide] .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
     display: block !important;
     white-space: nowrap !important;
   }
 
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-actions-wide] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
     flex: 0 1 auto !important;
     width: auto !important;
   }
 
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-actions-wide] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
     width: auto !important;
     min-width: 92px !important;
     padding-inline: 14px !important;
   }
-}
+
 
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
@@ -2370,19 +2360,19 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
 /* 231: At the compact card width used by the five-column Mood/Theme layout,
  * keep long selected summaries within three lines and always show two genre
  * selections as two explicit rows. */
-@container soridraw-builder-pane (max-width: 1074px) {
-  .soridraw-studio-main .soridraw-menu-summary-text--selected[data-summary-density="dense"] {
+/* 491: former container query soridraw-builder-pane (max-width: 1074px); builder threshold flag replaces pane container evaluation. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-menu-summary-text--selected[data-summary-density="dense"] {
     font-size: 10px !important;
     line-height: 1.06 !important;
     letter-spacing: -0.025em !important;
   }
 
-  .soridraw-studio-main .soridraw-cycle-summary-text[data-summary-density="dense"],
-  .soridraw-studio-main .soridraw-category-summary-text[data-summary-density="dense"] {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-cycle-summary-text[data-summary-density="dense"],
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-category-summary-text[data-summary-density="dense"] {
     max-height: 34px !important;
   }
 
-  .soridraw-studio-main .soridraw-category-summary-text[data-summary-density="dense"] {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-category-summary-text[data-summary-density="dense"] {
     display: block !important;
     white-space: normal !important;
     overflow-wrap: anywhere !important;
@@ -2390,7 +2380,7 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
     -webkit-line-clamp: unset !important;
   }
 
-  .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] {
     flex-direction: column !important;
     align-items: stretch !important;
     justify-content: center !important;
@@ -2401,36 +2391,36 @@ html[data-soridraw-theme="classic"] body > .soridraw-studio-action-bar--tracking
     line-height: 1.04 !important;
   }
 
-  .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] .soridraw-genre-summary-separator {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] .soridraw-genre-summary-separator {
     display: none !important;
   }
 
-  .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] .soridraw-genre-summary-item {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] .soridraw-genre-summary-item {
     width: 100% !important;
     min-width: 0 !important;
     justify-content: center !important;
     gap: 5px !important;
   }
 
-  .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] .soridraw-genre-summary-item-label {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-1074] .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] .soridraw-genre-summary-item-label {
     min-width: 0 !important;
     max-width: calc(100% - 42px) !important;
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: clip !important;
   }
-}
 
-@container soridraw-builder-pane (max-width: 700px) {
-  .soridraw-studio-main .soridraw-menu-summary-text--selected[data-summary-density="dense"] {
+
+/* 491: former container query soridraw-builder-pane (max-width: 700px); builder threshold flag replaces pane container evaluation. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-700] .soridraw-studio-main .soridraw-menu-summary-text--selected[data-summary-density="dense"] {
     font-size: 9.25px !important;
     line-height: 1.04 !important;
   }
 
-  .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-width-lte-700] .soridraw-studio-main .soridraw-genre-summary-items[data-item-count="2"] {
     font-size: 10.5px !important;
   }
-}
+
 
 /* 232: Style/Sound summaries scale continuously with their own card width.
  * The previous dense rule only changed at a builder-wide breakpoint, so the
@@ -2962,6 +2952,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 :root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-fixed {
   position: fixed !important;
+  contain: layout style;
   z-index: 64 !important;
   top: 58px !important;
   left: var(--soridraw-studio-result-left, 50vw) !important;
@@ -3122,8 +3113,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * split pane's mobile state on a wide desktop monitor. Size the contents from
  * the rail's own live width instead. This does not consume result-flow height. */
 :root[data-soridraw-theme="studio-black"] .soridraw-live-keywords-fixed {
-  container-type: inline-size;
-  container-name: soridraw-live-keywords;
   padding-top: 4px !important;
   padding-bottom: 6px !important;
 }
@@ -3133,37 +3122,37 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   max-height: 84px;
 }
 
-@container soridraw-live-keywords (max-width: 900px) {
-  .soridraw-live-keywords-row {
+/* 491: former container query soridraw-live-keywords (max-width: 900px); result-pane threshold flag replaces portal container evaluation. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-900] .soridraw-live-keywords-row {
     gap: 2px 8px;
     max-height: 86px;
   }
 
-  .soridraw-live-keyword {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-900] .soridraw-live-keyword {
     gap: 2px;
     font-size: 11.25px;
     line-height: 1.2;
     letter-spacing: -0.015em;
   }
 
-  .soridraw-live-keyword-remove {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-900] .soridraw-live-keyword-remove {
     width: 14px;
     height: 14px;
   }
 
-  .soridraw-live-keyword-remove svg {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-900] .soridraw-live-keyword-remove svg {
     width: 12px;
     height: 12px;
   }
-}
 
-@container soridraw-live-keywords (max-width: 640px) {
-  .soridraw-live-keywords-row {
+
+/* 491: former container query soridraw-live-keywords (max-width: 640px); result-pane threshold flag replaces portal container evaluation. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-640] .soridraw-live-keywords-row {
     gap: 1px 6px;
     max-height: 86px;
   }
 
-  .soridraw-live-keyword {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-640] .soridraw-live-keyword {
     gap: 1px;
     padding-block: 0;
     font-size: 10.5px;
@@ -3171,17 +3160,17 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     letter-spacing: -0.02em;
   }
 
-  .soridraw-live-keyword-remove {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-640] .soridraw-live-keyword-remove {
     width: 12px;
     height: 12px;
   }
 
-  .soridraw-live-keyword-remove svg {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-lte-640] .soridraw-live-keyword-remove svg {
     width: 10.5px;
     height: 10.5px;
     stroke-width: 2.2;
   }
-}
+
 
 /* 272: compact the shared top row and generated-title card without losing the
  * left/right height relationship.  The collapsed Genre/Style/Sound cards are
@@ -3270,17 +3259,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 
 
-@container (max-width: 380px) {
-  
+/* 491: removed empty legacy container query. */
 
-  
-
-  
-
-  
-
-  
-}
 
 /* 273: compact only the mobile generated-title text stack.  The card keeps
  * the measured left Genre-card height, but Genre -> title -> generated date
@@ -4438,20 +4418,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     content-visibility: auto;
     contain-intrinsic-size: auto 240px;
     contain: layout paint style;
-  }
-
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-builder-pane {
-    will-change: width;
-    transform: translateZ(0);
-  }
-
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-result-pane {
-    will-change: left;
-    transform: translateZ(0);
   }
 
   /* Width changes should not also run hundreds of transition/animation
@@ -6961,26 +6927,26 @@ h1.text-3xl.md\:text-5xl {
   max-width: min(100%, 680px) !important;
 }
 
-@container (max-width: 1080px) {
-  .soridraw-musicnote-song-keywords {
+/* 491: former container query (max-width: 1080px); result pane attribute replaces container evaluation. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-width-lte-1080] .soridraw-musicnote-song-keywords {
     width: min(100%, 520px) !important;
     max-width: min(100%, 520px) !important;
   }
-}
 
-@container (max-width: 820px) {
-  .soridraw-musicnote-song-keywords {
+
+/* 491: former container query (max-width: 820px); result pane attribute replaces container evaluation. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-width-lte-820] .soridraw-musicnote-song-keywords {
     width: min(100%, 360px) !important;
     max-width: min(100%, 360px) !important;
   }
-}
 
-@container (max-width: 680px) {
-  .soridraw-musicnote-song-keywords {
+
+/* 491: former container query (max-width: 680px); result pane attribute replaces container evaluation. */
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-pane[data-width-lte-680] .soridraw-musicnote-song-keywords {
     width: 100% !important;
     max-width: 100% !important;
   }
-}
+
 
 @media (max-width: 767px) {
   .soridraw-musicnote-page-shell {
@@ -7683,6 +7649,9 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
  * and size each panel from that shared area rather than from viewport vh units. */
 .soridraw-studio-center-modal-host {
   position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
   z-index: 340 !important;
   overflow: visible !important;
   pointer-events: none !important;
@@ -11844,12 +11813,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 488 — continuous-resize fast path without changing the verified geometry.
- * Viewport breakpoints still own PC / tablet / mobile. Pane data-mode still
- * owns the primary builder/result mobile composition. During a continuous
- * browser-edge resize or splitter drag, only expensive nested container-query
- * and decoration work is suspended; the pane widths themselves keep updating
- * through the stable 486 path. Full detail is restored once the gesture ends. */
+/* 491 — live-layout fast path.
+ * Viewport breakpoints still own PC / tablet / mobile and pane data-mode still
+ * owns the primary builder/result composition. Structural frames are never
+ * skipped. Expensive animations pause during a continuous gesture, while
+ * former pane-level container queries are now threshold attributes that change
+ * only when their real breakpoint is crossed. */
 @media (min-width: 1100px) {
   html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace
@@ -11883,42 +11852,3 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     contain-intrinsic-size: auto 240px;
   }
 }
-
-/* 490 — Studio turbo engine.
- * Responsive ownership is now split into two layers:
- *   1) viewport/pane thresholds commit the real layout only at meaningful
- *      boundaries or at the end of a gesture;
- *   2) continuous splitter motion is compositor-only.
- * This deliberately avoids width/left promotion of the two huge pane trees. */
-@media (min-width: 1100px) {
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    will-change: auto !important;
-    transform: none !important;
-  }
-
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  :is(
-    .soridraw-studio-splitter,
-    .soridraw-studio-builder-collapse-toggle,
-    .soridraw-studio-result-collapse-toggle
-  ) {
-    will-change: transform !important;
-    backface-visibility: hidden;
-  }
-
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-resize-frozen="true"] {
-    overflow: hidden !important;
-    contain: layout paint style !important;
-  }
-
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-resize-frozen="true"]
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    contain: layout paint style !important;
-    overflow-anchor: none;
-  }
-}
-

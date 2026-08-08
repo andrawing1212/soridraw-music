@@ -2273,9 +2273,15 @@ function SecondaryScrollControl() {
       });
     };
     const scheduleVisibilityUpdate = () => {
+      const root = document.documentElement;
+      if (
+        root.classList.contains('soridraw-split-dragging')
+        || root.classList.contains('soridraw-window-resizing')
+      ) return;
       if (visibilityFrame !== null) return;
       visibilityFrame = window.requestAnimationFrame(updateVisibility);
     };
+    const handleContinuousLayoutEnd = () => scheduleVisibilityUpdate();
     const handleScroll = () => {
       scheduleVisibilityUpdate();
       setIsActive(true);
@@ -2293,12 +2299,16 @@ function SecondaryScrollControl() {
       : null;
     documentResizeObserver?.observe(document.documentElement);
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('soridraw-split-drag-end', handleContinuousLayoutEnd as EventListener);
+    window.addEventListener('soridraw-window-resize-end', handleContinuousLayoutEnd as EventListener);
     const modalInterval = setInterval(checkModal, 500);
 
     scheduleVisibilityUpdate();
     return () => {
       documentResizeObserver?.disconnect();
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('soridraw-split-drag-end', handleContinuousLayoutEnd as EventListener);
+      window.removeEventListener('soridraw-window-resize-end', handleContinuousLayoutEnd as EventListener);
       clearInterval(modalInterval);
       if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);

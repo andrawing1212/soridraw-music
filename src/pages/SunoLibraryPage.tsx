@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
+import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -690,6 +691,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const selectedTrackCount = selectedTrackList.length;
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const root = libraryPageRootRef.current;
+    if (!root) return;
+    return attachSoridrawResponsiveContract(root);
+  }, []);
   const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -5780,7 +5787,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   return (
     <div
       ref={libraryPageRootRef}
-      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
+      className={`soridraw-responsive-content-page soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));

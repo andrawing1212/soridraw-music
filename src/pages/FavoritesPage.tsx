@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useDeferredValue } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
+import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
@@ -700,6 +701,13 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
+  const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const root = musicNotePageRootRef.current;
+    if (!root) return;
+    return attachSoridrawResponsiveContract(root);
+  }, []);
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
@@ -5343,8 +5351,9 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
   return (
     <div 
+      ref={musicNotePageRootRef}
       className={cn(
-        "soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
+        "soridraw-responsive-content-page soridraw-musicnote-theme soridraw-musicnote-page-shell mx-auto w-full max-w-[1548px] px-4 md:px-6 pt-24 pb-12 font-sans relative",
         isSelectionMode ? "select-none" : ""
       )}
       onClickCapture={(e) => {

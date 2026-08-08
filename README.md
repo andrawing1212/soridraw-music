@@ -881,3 +881,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 원인: 왼쪽 메뉴 행에 `transition: 0.16s ease`가 걸려 있어 접힘 40px → 펼침 100% 전환 때 `width/padding/gap`까지 애니메이션되었다. 텍스트는 즉시 표시되지만 버튼 폭은 약 160ms 동안 좁은 상태를 지나가면서 글자가 세로로 쌓이는 순간 프레임이 발생했다.
 - 수정: 메뉴 행 transition을 `background-color / color / border-color`로만 제한. 펼침/접힘의 폭·패딩·간격은 애니메이션 없이 같은 프레임에 즉시 전환한다.
 - 보존: 488의 좌우 메뉴 상태 로직, 태블릿 진입 시 자동 접힘, 태블릿에서 수동 펼침/접힘, PC 상태 저장, 오른쪽 메뉴, 중앙 분할, 대문, Music Note/Library는 변경하지 않았다.
+
+### 508차 — Music Note / Library dark·split content layout unification
+- Base: 507차.
+- Added `src/lib/contentResponsive.ts`: one real-width observer for Music Note / Library. It writes responsive attributes only when 1080 / 820 / 680 thresholds are crossed.
+- Music Note and Suno Library page roots now opt into `soridraw-responsive-content-page`.
+- Canonical visual reference is the existing Studio result-pane layout. Standalone dark pages and embedded split pages now use the same horizontal gutters, tab density, search/filter compact behavior, Music Note row density, Library text density, and compact credit-button geometry at the same real content width.
+- Compact mode is now based on actual page width <= 680px, not `browser <= 767px` versus `result-pane mobile` as two separate design triggers.
+- Masthead/portal ownership and Sori Studio/side rails/splitter are intentionally untouched in this step.
+- No Firebase/Auth/Firestore/Functions/storage schema changes.

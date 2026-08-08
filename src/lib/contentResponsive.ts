@@ -24,12 +24,11 @@ const setBooleanData = (element: HTMLElement, key: string, enabled: boolean) => 
 };
 
 /**
- * One width owner for responsive page content.
+ * Music Note / Library content responsive owner.
  *
- * The page responds to the real width it receives, regardless of whether it is
- * rendered as a standalone route or inside the Studio result pane. Attributes
- * are written only when a threshold changes, so normal pixel-by-pixel resizing
- * does not trigger React renders or repeated DOM attribute churn.
+ * The same real content width produces the same internal UI whether the page is
+ * rendered as a normal dark route or inside the Studio result pane. Attribute
+ * writes happen only when a threshold is crossed, not on every resize pixel.
  */
 export function attachSoridrawResponsiveContract(element: HTMLElement) {
   let last: ResponsiveSnapshot | null = null;
@@ -37,11 +36,13 @@ export function attachSoridrawResponsiveContract(element: HTMLElement) {
   const applyWidth = (width: number) => {
     if (!Number.isFinite(width) || width <= 0) return;
     const next = readSnapshot(width);
-    if (last
-      && last.mode === next.mode
-      && last.lte1080 === next.lte1080
-      && last.lte820 === next.lte820
-      && last.lte680 === next.lte680) return;
+    if (
+      last &&
+      last.mode === next.mode &&
+      last.lte1080 === next.lte1080 &&
+      last.lte820 === next.lte820 &&
+      last.lte680 === next.lte680
+    ) return;
 
     element.dataset.soridrawResponsiveMode = next.mode;
     setBooleanData(element, 'soridrawWidthLte1080', next.lte1080);

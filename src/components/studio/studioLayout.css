@@ -11029,3 +11029,413 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     contain-intrinsic-size: auto 240px;
   }
 }
+
+/* 508 — Music Note / Library one real-width content contract.
+ * Canonical visual reference: the already-approved Studio result-pane UI.
+ * Dark standalone pages no longer use viewport-only compact spacing while the
+ * split page uses pane-only spacing. The page root measures its real width and
+ * both rendering contexts receive the same gutters, controls and list density.
+ * Masthead ownership/portal geometry is intentionally untouched in this step. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page {
+  box-sizing: border-box !important;
+  padding-left: 12px !important;
+  padding-right: 10px !important;
+}
+
+/* Tabs use one size system from real content width, not browser md classes. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  width: 100% !important;
+  max-width: 480px !important;
+  align-items: stretch !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 40px !important;
+  padding: 10px 20px !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="tablet"]
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  font-size: 12px !important;
+}
+
+/* Wide/tablet controls use the same split-pane control geometry. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-top-controls {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-height: 46px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-search-slot {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 120px !important;
+  min-height: 46px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-search {
+  width: 100% !important;
+  min-height: 46px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-search-input {
+  width: 100% !important;
+  padding-left: 48px !important;
+  padding-right: 16px !important;
+  color: var(--text-primary) !important;
+  caret-color: currentColor !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-search-placeholder {
+  display: flex !important;
+  padding-left: 48px !important;
+  padding-right: 16px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-filter-button {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-filter-label, .soridraw-filter-chevron) {
+  display: inline !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-responsive-color-filter {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-color-reset-button {
+  width: auto !important;
+  min-width: 0 !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-color-reset-text { display: inline !important; }
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+.soridraw-color-reset-icon { display: none !important; }
+
+/* Music Note list density: same real width => same row/chip geometry. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-row {
+  padding: 12px 14px !important;
+  gap: 10px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page .soridraw-musicnote-song-keywords {
+  flex: 1 1 auto !important;
+  width: min(100%, 680px) !important;
+  max-width: min(100%, 680px) !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-width-lte1080="true"] .soridraw-musicnote-song-keywords {
+  width: min(100%, 520px) !important;
+  max-width: min(100%, 520px) !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-width-lte820="true"] .soridraw-musicnote-song-keywords {
+  width: min(100%, 360px) !important;
+  max-width: min(100%, 360px) !important;
+}
+
+/* Library wide/tablet typography follows the split-pane version explicitly. */
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page .soridraw-library-item-title {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 3px !important;
+  white-space: normal !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page .soridraw-library-item-genre {
+  margin-right: 0 !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page .soridraw-library-item-name {
+  font-size: 15px !important;
+  line-height: 1.12 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page .soridraw-library-workspace-meta {
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+}
+
+/* Compact/mobile <= 680px: copy the Studio result-pane compact design exactly.
+ * This replaces the old split-pane-vs-viewport 767px disagreement. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] {
+  padding-left: 7px !important;
+  padding-right: 6px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs) {
+  max-width: 100% !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  padding: 10px 7px !important;
+  font-size: 10.5px !important;
+  line-height: 1.1 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-folder-heading, .soridraw-library-folder-heading) {
+  font-size: 9.5px !important;
+  letter-spacing: 0.04em !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-folder-button, .soridraw-library-folder-button) {
+  padding: 6px 9px !important;
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-folder-add, .soridraw-library-folder-add) {
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-top-controls {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-search-slot {
+  flex: 0 0 42px !important;
+  width: 42px !important;
+  min-width: 42px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-search-slot:focus-within {
+  flex: 1 1 150px !important;
+  width: auto !important;
+  min-width: 118px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-search-input {
+  padding-left: 40px !important;
+  padding-right: 2px !important;
+  color: transparent !important;
+  caret-color: transparent !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-search-slot:focus-within .soridraw-responsive-search-input {
+  padding-right: 9px !important;
+  color: var(--text-primary) !important;
+  caret-color: currentColor !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-search-placeholder { display: none !important; }
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-search-slot:focus-within .soridraw-responsive-search-placeholder {
+  display: flex !important;
+  padding-left: 40px !important;
+  padding-right: 8px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-filter-button {
+  width: 42px !important;
+  min-width: 42px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  gap: 0 !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-filter-label, .soridraw-filter-chevron) { display: none !important; }
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-responsive-color-filter {
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-color-reset-button {
+  width: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-color-reset-text { display: none !important; }
+
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-color-reset-icon { display: block !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-hero-sync {
+  width: 36px !important;
+  height: 36px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-credit-button {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+  border-radius: 12px !important;
+  gap: 4px !important;
+  font-size: 10px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-song-row {
+  padding: 10px 8px !important;
+  gap: 7px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-song-genre { font-size: 10px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-song-date { font-size: 8px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-song-title { font-size: 11.5px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-song-keywords {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-musicnote-keyword-chip {
+  height: 18px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+  font-size: 8px !important;
+  border-radius: 5px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-mode-tab {
+  font-size: 10.5px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-workspace-meta {
+  font-size: 9.5px !important;
+  gap: 5px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-item-title {
+  gap: 2px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-item-genre {
+  font-size: 10px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-item-name {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: auto !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 11.5px !important;
+  line-height: 1.08 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-workspace-track-row {
+  gap: 8px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-workspace-track-row span[class*="text-[10px]"],
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-workspace-track-row span[class*="text-xs"] {
+  font-size: 8.5px !important;
+}

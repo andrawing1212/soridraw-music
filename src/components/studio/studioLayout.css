@@ -161,7 +161,7 @@
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace {
     display: grid;
-    grid-template-columns: minmax(0, var(--soridraw-studio-live-builder-width, var(--soridraw-studio-builder-px, var(--soridraw-studio-builder-percent, 50%)))) minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--soridraw-studio-builder-px, var(--soridraw-studio-builder-percent, 50%))) minmax(0, 1fr);
     position: relative;
     width: 100%;
     max-width: 100%;
@@ -2598,12 +2598,12 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-builder-pane {
     left: 0 !important;
     right: auto !important;
-    width: var(--soridraw-studio-live-builder-width, var(--soridraw-studio-builder-percent, var(--soridraw-studio-builder-width, 50%))) !important;
+    width: var(--soridraw-studio-builder-width, 50%) !important;
     padding-bottom: 112px !important;
   }
 
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-split-workspace[data-scroll-isolated="true"] > .soridraw-studio-result-pane {
-    left: var(--soridraw-studio-live-builder-width, var(--soridraw-studio-builder-percent, var(--soridraw-studio-builder-width, 50%))) !important;
+    left: var(--soridraw-studio-builder-width, 50%) !important;
     right: 0 !important;
     width: auto !important;
     padding-bottom: 28px !important;
@@ -2964,7 +2964,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   position: fixed !important;
   z-index: 64 !important;
   top: 58px !important;
-  left: calc(var(--soridraw-studio-splitter-left, 50vw) + 18px) !important;
+  left: var(--soridraw-studio-result-left, 50vw) !important;
   right: var(--soridraw-studio-result-right, 0px) !important;
   height: 96px !important;
   min-height: 96px !important;
@@ -4403,12 +4403,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 309/487: live split-content performance pass.
- * Keep the verified divider path unchanged. The optimization is limited to the
- * two heavy pane trees: isolate their layout/paint work, skip off-screen cards,
- * and suspend decorative animation/transition work only while dragging.
- * 487 extends the same isolation to tablet/compact Studio widths (>=1100px). */
-@media (min-width: 1100px) {
+/* 309: live split-content performance pass.
+ * Keep the verified 307 divider path unchanged. The optimization is limited to
+ * the two heavy pane trees: isolate their layout/paint work, skip off-screen
+ * cards, and suspend decorative animation/transition work only while dragging.
+ * Classic and sub-1600 layouts remain untouched. */
+@media (min-width: 1600px) {
   :root[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-builder-pane,
@@ -4440,14 +4440,14 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     contain: layout paint style;
   }
 
-  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-builder-pane {
     will-change: width;
     transform: translateZ(0);
   }
 
-  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-result-pane {
     will-change: left;
@@ -4457,25 +4457,20 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   /* Width changes should not also run hundreds of transition/animation
    * calculations inside both panes. The final visual state is restored
    * immediately when pointer-up removes the drag class. */
-  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
   *,
-  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
   *::before,
-  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
   *::after {
     transition: none !important;
     animation-play-state: paused !important;
-    box-shadow: none !important;
-    text-shadow: none !important;
-    filter: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
   }
 }
 
@@ -12134,13 +12129,54 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-
-/* 487: while the browser edge is actively being dragged, pane hit-testing is
- * suspended. Splitter dragging already disables pane hit-testing via `.is-dragging`. */
+/* 488 — continuous-resize fast path without changing the verified geometry.
+ * Viewport breakpoints still own PC / tablet / mobile. Pane data-mode still
+ * owns the primary builder/result mobile composition. During a continuous
+ * browser-edge resize or splitter drag, only expensive nested container-query
+ * and decoration work is suspended; the pane widths themselves keep updating
+ * through the stable 486 path. Full detail is restored once the gesture ends. */
 @media (min-width: 1100px) {
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    pointer-events: none !important;
-    user-select: none !important;
+  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  :is(
+    .soridraw-studio-builder-pane,
+    .soridraw-studio-result-pane,
+    .soridraw-studio-main .soridraw-menu-summary-box,
+    .soridraw-live-keywords-fixed,
+    .soridraw-studio-action-panel
+  ) {
+    container-type: normal !important;
+    container-name: none !important;
+  }
+
+  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *,
+  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *::before,
+  html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *::after {
+    transition: none !important;
+    animation-play-state: paused !important;
+  }
+
+}
+
+/* Tablet keeps the exact 486 rail/split geometry. Only off-screen sections
+ * are allowed to skip rendering work, so crossing 1600/1100 cannot blank or
+ * reposition either pane. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-builder-pane
+  .soridraw-studio-menu-card,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-result-content
+  > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 240px;
   }
 }

@@ -852,15 +852,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - GlobalPlayer의 768/1320 breakpoint 상태는 공용 matchMedia를 사용하고 제목 폭 측정은 로컬 ResizeObserver로 제한했다.
 - 484차의 최근 생성곡 제목 위 갈색선 제거는 유지한다.
 
-## 487차 - 브라우저 창 + 내부 분할바 공통 리사이즈 성능 경로 정리
-- 기준: 486차.
-- UI 디자인/데이터/Firebase 구조 변경 없음.
-- 분할 pane geometry를 여러 inline width/left/flex-basis 쓰기에서 workspace 단일 CSS 변수로 통합.
-- 평상시에는 split percent를 CSS가 소유해 브라우저 창 resize 때 pane pixel width를 JS가 매 프레임 다시 쓰지 않도록 변경.
-- 내부 분할바 drag 중에만 동일 geometry 변수에 live pixel width를 적용하고 pointer-up 즉시 percent 경로로 복귀.
-- Studio workspace ResizeObserver는 contentRect.width 기반의 가벼운 width 경로를 사용하며, 매 프레임 left rail 추가 getBoundingClientRect 측정을 제거.
-- native resize 중 footer/Genre-card title 같은 강제 layout 측정을 지연하고 resize 종료 후 1회 동기화.
-- split drag/window resize 동안 동일한 performance class로 transition/animation/decorative paint를 일시 정지.
-- 1600px 이상에서만 적용되던 pane strict containment + offscreen content-visibility 최적화를 1100px 이상 tablet 구간까지 확대.
-- 기존 484 갈색 가로줄 제거와 486 공용 matchMedia 구조 유지.
-- 487 검증 포인트: (1) 브라우저 창 좌우 resize, (2) 내부 분할바 연속 drag를 각각 별도로 체감 확인. 둘 중 하나라도 여전히 심하게 끊기면 다음 차수에서 container-query/portal 추적 경로를 분리 프로파일링한다.
+## 488차 — PC/태블릿/모바일 조건 보존 + 연속 리사이즈 경량화
+- 기준은 486차입니다. 487차의 split geometry 변경과 tablet 확장 isolation은 가져오지 않았습니다.
+- viewport 조건은 기존 그대로 유지합니다: 1600px 이상 PC, 1100~1599px 태블릿/compact, 1100px 미만 모바일.
+- 태블릿에서는 기존 bridge CSS가 좌우 보조 rail을 숨기고 중앙 split workspace가 전체 폭을 사용합니다.
+- 내부 분할바는 viewport 모드와 분리되어 builder/result의 실제 pane 폭만 변경하고, 각 pane의 `data-pane-mode`가 기존 820px/680px 기준으로 독립 반응합니다.
+- 창 크기 조절 또는 분할바 드래그 중에는 pane geometry를 바꾸지 않고, 무거운 nested container query와 transition/animation 계산만 일시 중지합니다. 조작 종료 후 한 번만 전체 responsive detail을 복구합니다.
+- 생성 카드 높이와 하단 생성바 위치 측정도 연속 resize 중에는 중지하고 종료 후 한 번만 갱신합니다.
+- 487차에서 발생한 결과 pane blank/검은 공간 문제를 만들었던 live split variable/absolute geometry 교체는 적용하지 않았습니다.
+- Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.

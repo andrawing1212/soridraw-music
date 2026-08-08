@@ -998,16 +998,16 @@ function useStableContentHeight(
     const scheduleSettledMeasure = () => {
       if (isContinuousResize()) return;
       if (settleTimerId !== null) window.clearTimeout(settleTimerId);
-      // Height animation does not need to chase every pixel while either the
-      // browser edge or the Studio divider is being dragged. Recalculate once
-      // the size gesture has ended.
+      // Expanded-card height is a settled-layout concern. The split divider and
+      // native browser edge must stay on the lightweight width path instead of
+      // re-reading scrollHeight for several cards on every intermediate frame.
       settleTimerId = window.setTimeout(() => {
         settleTimerId = null;
         scheduleMeasure();
       }, 90);
     };
 
-    const handleResizeInteractionEnd = () => scheduleSettledMeasure();
+    const handleContinuousResizeEnd = () => scheduleSettledMeasure();
 
     scheduleMeasure();
     scheduleSettledMeasure();
@@ -1022,13 +1022,13 @@ function useStableContentHeight(
         })
       : null;
     if (observer && element) observer.observe(element);
-    window.addEventListener('soridraw-split-drag-end', handleResizeInteractionEnd as EventListener);
-    window.addEventListener('soridraw-window-resize-end', handleResizeInteractionEnd as EventListener);
+    window.addEventListener('soridraw-split-drag-end', handleContinuousResizeEnd as EventListener);
+    window.addEventListener('soridraw-window-resize-end', handleContinuousResizeEnd as EventListener);
 
     return () => {
       observer?.disconnect();
-      window.removeEventListener('soridraw-split-drag-end', handleResizeInteractionEnd as EventListener);
-      window.removeEventListener('soridraw-window-resize-end', handleResizeInteractionEnd as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', handleContinuousResizeEnd as EventListener);
+      window.removeEventListener('soridraw-window-resize-end', handleContinuousResizeEnd as EventListener);
       if (frameId !== null) cancelAnimationFrame(frameId);
       if (settleTimerId !== null) window.clearTimeout(settleTimerId);
     };
@@ -6884,13 +6884,14 @@ const toggleCycleVariantSelection = (
         scheduleActionBarPlacement();
       });
     };
-    const handleWindowResizeEnd = () => scheduleLayoutChange();
 
     const anchor = actionButtonsAnchorRef.current;
     const resizeObserver = anchor && typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(scheduleLayoutChange)
       : null;
     if (resizeObserver && anchor) resizeObserver.observe(anchor);
+
+    const handleWindowResizeEnd = () => scheduleLayoutChange();
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);

@@ -1,0 +1,67 @@
+export type SoridrawResponsiveMode = 'mobile' | 'tablet' | 'pc';
+
+const MOBILE_MAX = 680;
+const TABLET_MAX = 1080;
+const MID_COMPACT_MAX = 820;
+
+type ResponsiveSnapshot = {
+  mode: SoridrawResponsiveMode;
+  lte1080: boolean;
+  lte820: boolean;
+  lte680: boolean;
+};
+
+const readSnapshot = (width: number): ResponsiveSnapshot => ({
+  mode: width <= MOBILE_MAX ? 'mobile' : width <= TABLET_MAX ? 'tablet' : 'pc',
+  lte1080: width <= TABLET_MAX,
+  lte820: width <= MID_COMPACT_MAX,
+  lte680: width <= MOBILE_MAX,
+});
+
+const setBooleanData = (element: HTMLElement, key: string, enabled: boolean) => {
+  if (enabled) element.dataset[key] = 'true';
+  else delete element.dataset[key];
+};
+
+/**
+ * One width owner for responsive page content.
+ *
+ * The page responds to the real width it receives, regardless of whether it is
+ * rendered as a standalone route or inside the Studio result pane. Attributes
+ * are written only when a threshold changes, so normal pixel-by-pixel resizing
+ * does not trigger React renders or repeated DOM attribute churn.
+ */
+export function attachSoridrawResponsiveContract(element: HTMLElement) {
+  let last: ResponsiveSnapshot | null = null;
+
+  const applyWidth = (width: number) => {
+    if (!Number.isFinite(width) || width <= 0) return;
+    const next = readSnapshot(width);
+    if (last
+      && last.mode === next.mode
+      && last.lte1080 === next.lte1080
+      && last.lte820 === next.lte820
+      && last.lte680 === next.lte680) return;
+
+    element.dataset.soridrawResponsiveMode = next.mode;
+    setBooleanData(element, 'soridrawWidthLte1080', next.lte1080);
+    setBooleanData(element, 'soridrawWidthLte820', next.lte820);
+    setBooleanData(element, 'soridrawWidthLte680', next.lte680);
+    last = next;
+  };
+
+  applyWidth(element.getBoundingClientRect().width);
+
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) applyWidth(entry.contentRect.width);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }
+
+  const handleResize = () => applyWidth(element.getBoundingClientRect().width);
+  window.addEventListener('resize', handleResize, { passive: true });
+  return () => window.removeEventListener('resize', handleResize);
+}

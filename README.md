@@ -887,3 +887,17 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - floating action bar와 live keyword portal은 layout containment를 추가해 자체 폭 변화가 바깥 레이아웃으로 퍼지지 않게 했다.
 - PC >=1600 / 태블릿 1100~1599 / 모바일 <1100, Builder 820 / Result 680 기준과 UI/Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 상태: 코드 반영 완료 · 실사용 프레임 검증 전.
+
+## 498차 — Music Note / Suno Library 단일 반응형 계약
+
+- 기준: 497차(491 안정본 완전 롤백).
+- 프레임/브라우저 resize 성능 실험은 이번 차수에서 건드리지 않는다.
+- Music Note와 Suno Library의 반응형 기준을 `browser viewport`와 `Studio result pane`의 이중 판정에서 **페이지가 실제로 받은 폭 한 가지**로 통일했다.
+- `src/lib/contentResponsive.ts`가 페이지 루트 하나만 `ResizeObserver`로 관찰하고, 실제 폭이 680/820/1080 경계를 통과할 때만 `data-soridraw-responsive-*` 속성을 갱신한다. React는 픽셀 단위 resize에 재렌더되지 않는다.
+- 두 페이지의 데스크톱 masthead portal을 제거했다. 제목은 standalone / Studio split 어디서나 페이지 내부 같은 DOM과 같은 CSS 계약을 사용한다.
+- Studio split에서 Music Note/Library가 열렸을 때 기존 result masthead host가 두 번째 제목 공간을 만들지 않도록 workspace view를 DOM data attribute로 노출하고 해당 host를 비활성화한다.
+- 과거 split 전용/standalone mobile 전용으로 따로 존재하던 369/370/374/375/489 반응형 소유권을 제거하고 498 공통 규칙으로 이동했다.
+- 동일한 실제 폭이면 Music Note/Library의 탭, 검색/필터, 폴더, 목록 밀도와 모바일 compact 구성이 standalone과 split에서 동일하게 동작한다.
+- Studio Black `/studio` 상단 글로벌 내비게이션에서는 Music Note / Library / 실험실 항목을 숨긴다. WORKSPACE 전환은 좌측 Studio rail이 담당한다. 다른 경로의 글로벌 내비게이션은 그대로 유지한다.
+- Sori Studio builder 자체의 반응형 통합은 이번 차수 범위에 포함하지 않았다. Music Note/Library 구조 검증 후 같은 계약으로 이어간다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

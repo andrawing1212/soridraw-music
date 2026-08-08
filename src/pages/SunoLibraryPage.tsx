@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef, useDeferredValue } from 'react';
-import { useMediaQuery } from '../lib/mediaQueryStore';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
+import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -176,7 +175,7 @@ function AnimatedTrackPlayButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`relative w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-full overflow-hidden flex items-center justify-center transition-all border border-black/20 ${
+      className={`soridraw-library-track-play-button relative shrink-0 rounded-full overflow-hidden flex items-center justify-center transition-all border border-black/20 ${
         unavailable
           ? 'opacity-50 cursor-not-allowed text-white/20'
           : isNowPlaying
@@ -220,12 +219,12 @@ function AnimatedTrackPlayButton({
             </span>
           </span>
         ) : (
-          <Play className="w-5 h-5 md:w-6 md:h-6 fill-white ml-0.5" />
+          <Play className="soridraw-library-track-play-icon fill-white ml-0.5" />
         )}
       </div>
 
       {durationLabel && (
-        <span className="absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-[9px] md:text-[10px] font-bold leading-none text-white shadow-sm border border-black/20 tabular-nums">
+        <span className="soridraw-library-track-duration absolute right-0.5 bottom-0.5 z-10 rounded-full bg-black/70 px-1.5 py-0.5 font-bold leading-none text-white shadow-sm border border-black/20 tabular-nums">
           {durationLabel}
         </span>
       )}
@@ -235,32 +234,6 @@ function AnimatedTrackPlayButton({
 
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
   const navigate = useNavigate();
-  const [studioResultMastheadHost, setStudioResultMastheadHost] = useState<HTMLElement | null>(null);
-  const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
-
-  useEffect(() => {
-    const syncStudioResultMastheadHost = () => {
-      const root = document.documentElement;
-      // 489: one desktop owner only. Music Note / Library mastheads live in
-      // the real result pane; the legacy external hero portal is no longer used.
-      const usePaneMasthead = isStudioDesktopViewport
-        && root.dataset.soridrawTheme === 'studio-black'
-        && root.dataset.soridrawResultCollapsed !== 'true';
-      setStudioResultMastheadHost(
-        usePaneMasthead
-          ? document.getElementById('soridraw-studio-result-pane-masthead-host')
-          : null,
-      );
-    };
-
-    syncStudioResultMastheadHost();
-    window.addEventListener('soridraw-theme-change', syncStudioResultMastheadHost as EventListener);
-    window.addEventListener('soridraw-studio-pane-collapse-change', syncStudioResultMastheadHost as EventListener);
-    return () => {
-      window.removeEventListener('soridraw-theme-change', syncStudioResultMastheadHost as EventListener);
-      window.removeEventListener('soridraw-studio-pane-collapse-change', syncStudioResultMastheadHost as EventListener);
-    };
-  }, [isStudioDesktopViewport]);
 
   const [tracks, setTracks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -687,6 +660,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   const selectedTrackCount = selectedTrackList.length;
   const isLibraryTrashMode = filter === 'trash' && libraryViewMode === 'workspace';
   const libraryPageRootRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const root = libraryPageRootRef.current;
+    if (!root) return;
+    return attachSoridrawResponsiveContract(root);
+  }, []);
   const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const libraryCardClickStartPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -5430,7 +5409,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             onClick={() => setLibraryViewMode('workspace')}
             aria-pressed={libraryViewMode === 'workspace'}
             data-active={libraryViewMode === 'workspace' ? 'true' : 'false'}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'workspace' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap py-2.5 rounded-xl font-bold truncate ${libraryViewMode === 'workspace' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             뮤직 스페이스
           </button>
@@ -5446,7 +5425,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'playlist' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap py-2.5 rounded-xl font-bold truncate ${libraryViewMode === 'playlist' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             마이 리스트
           </button>
@@ -5462,7 +5441,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                 }
               }
             }}
-            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap px-2 md:px-5 py-2.5 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm truncate ${libraryViewMode === 'sharedPlaylist' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
+            className={`soridraw-library-mode-tab min-w-0 whitespace-nowrap py-2.5 rounded-xl font-bold truncate ${libraryViewMode === 'sharedPlaylist' ? 'soridraw-library-mode-tab--active bg-[#A98BFF]/78 text-white shadow-lg' : 'text-white/60 hover:text-white'}`}
           >
             공유 리스트
           </button>
@@ -5731,11 +5710,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0 }}
-      className={`flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 ${
-        studioResultMastheadHost
-          ? 'soridraw-studio-result-masthead soridraw-studio-result-masthead--library'
-          : 'soridraw-library-page-header soridraw-workspace-ported-header translate-y-2 md:translate-y-3'
-      }`}
+      className="soridraw-responsive-page-header soridraw-library-page-header flex flex-row items-center flex-nowrap justify-between"
     >
       <div className="flex items-start gap-4 min-w-0">
         {isSharedView && (
@@ -5747,9 +5722,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </button>
         )}
         <div className="min-w-0">
-          <div className={`soridraw-page-title-hover relative inline-flex max-w-full${studioResultMastheadHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
+          <div className="soridraw-page-title-hover relative inline-flex max-w-full"> 
             <h1
-              className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
+              className={`soridraw-responsive-page-title font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
               title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
             >
               {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#A98BFF]">Library</span></>}
@@ -5760,7 +5735,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </div>
         </div>
       </div>
-      <div className={`flex shrink-0 gap-2 items-center self-center${studioResultMastheadHost ? ' soridraw-studio-result-masthead-actions' : ''}`}> 
+      <div className="soridraw-responsive-page-actions flex shrink-0 gap-2 items-center self-center"> 
         {!isSharedView && typeof remainingCredits === 'number' && (
           <button
             type="button"
@@ -5777,7 +5752,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   return (
     <div
       ref={libraryPageRootRef}
-      className={`soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] px-4 md:px-6 pt-18 md:pt-24 pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
+      className={`soridraw-responsive-page soridraw-library-theme mx-auto w-full max-w-[1548px] min-h-screen overflow-x-hidden bg-[var(--bg-primary)] pb-32 text-[var(--text-primary)] relative ${multiSelectMode ? 'select-none' : ''}`}
       onClickCapture={(e) => {
         const target = e.target as HTMLElement;
         const isSelectionActionTarget = Boolean(target.closest('[data-selection-action-bar="true"], [data-more-menu-panel="true"]'));
@@ -6143,16 +6118,14 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         )}
       </AnimatePresence>
 
-      <div className="w-full space-y-3 md:space-y-5">
+      <div className="soridraw-responsive-page-stack w-full">
         
         {/* Header Block */}
-        {studioResultMastheadHost
-          ? createPortal(libraryPageHeader, studioResultMastheadHost)
-          : libraryPageHeader}
+        {libraryPageHeader}
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
-        <div className="soridraw-library-primary-controls space-y-2 md:space-y-3">
+        <div className="soridraw-library-primary-controls">
           {renderLibraryModeTabs()}
 
           {renderLibraryTopControls()}

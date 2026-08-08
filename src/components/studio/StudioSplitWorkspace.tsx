@@ -1209,7 +1209,7 @@ export default function StudioSplitWorkspace({
 
   return (
     <>
-      <div ref={layoutRef} data-workspace-view-mode={viewMode} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
+      <div ref={layoutRef} data-workspace-view-mode={viewMode} data-workspace-view={workspaceView || ''} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}

@@ -3335,7 +3335,11 @@ function Navigation({
     { key: 'lab', path: '/lab', label: '실험실', icon: FlaskConical },
     { key: 'myPage', path: '/my-page', label: '마이페이지', icon: UserIcon },
   ];
-  const topNavItems = allTopNavItems.filter((item) => canShowMenu(item.key));
+  const isStudioSplitNavigation = displayMode === 'studio-black' && location.pathname === '/studio';
+  const topNavItems = allTopNavItems.filter((item) => (
+    canShowMenu(item.key)
+    && !(isStudioSplitNavigation && (item.key === 'musicNote' || item.key === 'library' || item.key === 'lab'))
+  ));
   const preferredLandingPath = menuVisibility.home
     ? '/'
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');

@@ -14171,10 +14171,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <motion.div
                       initial={false}
                       animate={{ opacity: 1, y: 0 }}
-                      className="soridraw-studio-masthead flex flex-col items-start mt-4 md:mt-10"
+                      className="soridraw-studio-masthead soridraw-unified-masthead-row flex flex-col items-start"
                     >
                       <h1 
-                        className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                        className="soridraw-studio-title soridraw-unified-masthead-title inline-flex items-center justify-start gap-2.5 font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
                       >
                         <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
                         <span>Sori <span className="text-[#FFB400]">Studio</span></span>
@@ -14192,7 +14192,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
-                      <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
+                      <h1 className="soridraw-studio-title soridraw-unified-masthead-title inline-flex items-center justify-start gap-2.5 font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
                         <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
                         <span>Sori <span className="text-[#FFB400]">Studio</span></span>
                       </h1>

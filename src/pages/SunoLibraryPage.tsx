@@ -5733,8 +5733,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       transition={{ duration: 0 }}
       className={`flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3 ${
         studioResultMastheadHost
-          ? 'soridraw-studio-result-masthead soridraw-studio-result-masthead--library'
-          : 'soridraw-library-page-header soridraw-workspace-ported-header translate-y-2 md:translate-y-3'
+          ? 'soridraw-studio-result-masthead soridraw-studio-result-masthead--library soridraw-unified-masthead-row'
+          : 'soridraw-library-page-header soridraw-workspace-ported-header soridraw-unified-masthead-row'
       }`}
     >
       <div className="flex items-start gap-4 min-w-0">
@@ -5747,9 +5747,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           </button>
         )}
         <div className="min-w-0">
-          <div className={`soridraw-page-title-hover relative inline-flex max-w-full${studioResultMastheadHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
+          <div className={`soridraw-page-title-hover soridraw-unified-masthead-title relative inline-flex max-w-full${studioResultMastheadHost ? ' soridraw-studio-result-masthead-title' : ''}`}> 
             <h1
-              className={`text-3xl md:text-5xl font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
+              className={`whitespace-nowrap font-black leading-none tracking-tight text-white ${isSharedView ? 'font-sans' : 'font-display'}`}
               title={isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
             >
               {isSharedView ? '공유 라이브러리' : <>Suno <span className="text-[#A98BFF]">Library</span></>}

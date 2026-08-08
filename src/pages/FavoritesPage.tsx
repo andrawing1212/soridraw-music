@@ -5290,13 +5290,13 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         "flex flex-row items-center flex-nowrap justify-between gap-2 md:gap-3",
         studioResultMastheadHost
           ? "soridraw-studio-result-masthead soridraw-studio-result-masthead--music-note"
-          : "soridraw-musicnote-page-header soridraw-workspace-ported-header mb-4 md:mb-5 translate-y-2 md:translate-y-3"
+          : "soridraw-musicnote-page-header soridraw-workspace-ported-header soridraw-unified-masthead-row"
       )}
     >
       <div className="min-w-0">
-        <div className={cn("soridraw-page-title-hover relative inline-flex max-w-full", studioResultMastheadHost && "soridraw-studio-result-masthead-title")}> 
+        <div className={cn("soridraw-page-title-hover soridraw-unified-masthead-title relative inline-flex max-w-full", studioResultMastheadHost && "soridraw-studio-result-masthead-title")}> 
           <h1
-            className={cn("whitespace-nowrap text-3xl md:text-5xl font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
+            className={cn("whitespace-nowrap font-black leading-none tracking-tight text-white", isMusicNoteSharedView ? "font-sans" : "font-display")}
             title={isMusicNoteSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : '저장한 곡을 편집하고, 다음 곡에 적용합니다.'}
           >
             {isMusicNoteSharedView ? (

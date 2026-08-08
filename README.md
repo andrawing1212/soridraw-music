@@ -887,3 +887,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - floating action bar와 live keyword portal은 layout containment를 추가해 자체 폭 변화가 바깥 레이아웃으로 퍼지지 않게 했다.
 - PC >=1600 / 태블릿 1100~1599 / 모바일 <1100, Builder 820 / Result 680 기준과 UI/Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 상태: 코드 반영 완료 · 실사용 프레임 검증 전.
+
+### 492차 — Studio Black 대문 단일 규칙화
+- 기준: 491차 Live Layout 성능 경량화 유지.
+- Sori Studio / Music Note / Library 대문의 크기·위치 규칙을 하나의 masthead contract로 통합.
+- 461~478 사이에 누적된 split/fullscreen/mobile 보정 CSS 체인을 제거하고 단일 규칙으로 교체.
+- 대문 글자 크기에서 `clamp()`, `vw`, `md:text-*` 의존 제거. Studio Black에서는 PC/태블릿/모바일 모두 동일한 2.65rem 브랜드 크기 사용.
+- PC/태블릿(>=1100)은 실제 pane masthead host만 사용하고, split/fullscreen 여부와 무관하게 84px 박스 + 52px row + 28px/4px 수직 여백을 공유.
+- 모바일(<1100)은 동일 크기/row를 normal flow에서 사용하며 기존 승인 기준인 화면 상단 102px title guide를 유지(74px shell + 28px masthead padding).
+- Sori Studio / Music Note / Library의 반응형 Tailwind title/translate 보정을 제거해 JS/CSS pane 반응과 별도 breakpoint가 중복 개입하지 않게 정리.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

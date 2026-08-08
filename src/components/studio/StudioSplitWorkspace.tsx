@@ -41,6 +41,11 @@ type LayoutMetrics = {
   leftRailEdge: number;
 };
 
+type PinnedPaneWidth = {
+  side: 'builder' | 'result';
+  widthPx: number;
+} | null;
+
 type ExternalSplitControls = {
   searchButton: HTMLElement | null;
   floatingActionBar: HTMLElement | null;
@@ -165,6 +170,13 @@ export default function StudioSplitWorkspace({
   const hasLiveExternalMeasurementsRef = useRef(false);
   const responsiveFlagsRef = useRef<Record<string, boolean | null>>({});
   const lastObservedWorkspaceWidthRef = useRef<number | null>(null);
+  const lastPaneWidthsRef = useRef({ builder: 0, result: 0 });
+  // When the user parks one pane at the splitter's minimum edge, keep that
+  // pane's real pixel width stable while the browser viewport changes. The
+  // opposite pane absorbs the viewport delta until the shell breakpoint takes
+  // ownership. This avoids shrinking an already-minimum mobile pane simply
+  // because the old percentage happened to be preserved.
+  const pinnedPaneWidthRef = useRef<PinnedPaneWidth>(null);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastIsolationViewportHeightRef = useRef<number | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
@@ -609,6 +621,7 @@ export default function StudioSplitWorkspace({
         ? safeWidth
         : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
+    lastPaneWidthsRef.current = { builder: builderWidth, result: resultWidth };
     const splitterLeft = left + builderWidth;
     syncResponsiveThresholds(builderWidth, resultWidth);
 
@@ -705,9 +718,21 @@ export default function StudioSplitWorkspace({
 
     const nextProfile = getSplitProfile();
     const profileChanged = splitProfileRef.current !== nextProfile;
-    const requestedPercent = profileChanged
-      ? readStored(nextProfile)
-      : percentRef.current;
+    if (typeof window !== 'undefined' && window.innerWidth < TABLET_VIEWPORT_MIN) {
+      pinnedPaneWidthRef.current = null;
+    }
+    const pinnedPane = pinnedPaneWidthRef.current;
+
+    // Do not swap to an unrelated saved tablet/desktop percentage while the
+    // same workspace is physically resizing. Carry the current split geometry
+    // across the shell boundary. If one pane was pinned at its minimum edge,
+    // preserve that pane's pixel width first; otherwise preserve the live ratio.
+    let requestedPercent = percentRef.current;
+    if (pinnedPane && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+      requestedPercent = pinnedPane.side === 'builder'
+        ? (pinnedPane.widthPx / metricsRef.current.width) * 100
+        : ((metricsRef.current.width - pinnedPane.widthPx) / metricsRef.current.width) * 100;
+    }
 
     if (profileChanged) splitProfileRef.current = nextProfile;
 
@@ -742,6 +767,7 @@ export default function StudioSplitWorkspace({
   useLayoutEffect(() => {
     builderCollapsedRef.current = isBuilderCollapsed;
     resultCollapsedRef.current = isResultCollapsed;
+    if (isBuilderCollapsed || isResultCollapsed) pinnedPaneWidthRef.current = null;
     const root = document.documentElement;
     if (isBuilderCollapsed) root.dataset.soridrawBuilderCollapsed = 'true';
     else delete root.dataset.soridrawBuilderCollapsed;
@@ -858,6 +884,20 @@ export default function StudioSplitWorkspace({
       }
 
       const nextWidth = Math.max(layoutEntry.contentRect.width, 1);
+
+      // ResizeObserver can fire before the native window.resize callback on a
+      // given frame. Capture edge ownership here too so the first browser
+      // resize frame cannot squeeze an already-minimum pane by one ratio step.
+      if (window.innerWidth >= TABLET_VIEWPORT_MIN && !pinnedPaneWidthRef.current && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+        const root = document.documentElement;
+        const { builder, result } = lastPaneWidthsRef.current;
+        if (root.dataset.soridrawResultAtMinimum === 'true' && result > 0) {
+          pinnedPaneWidthRef.current = { side: 'result', widthPx: result };
+        } else if (root.dataset.soridrawBuilderAtMinimum === 'true' && builder > 0) {
+          pinnedPaneWidthRef.current = { side: 'builder', widthPx: builder };
+        }
+      }
+
       const nextProfile = getSplitProfile();
 
       // Crossing PC/tablet/mobile ownership can move the workspace itself, so
@@ -877,7 +917,21 @@ export default function StudioSplitWorkspace({
 
       lastObservedWorkspaceWidthRef.current = nextWidth;
       metricsRef.current.width = nextWidth;
-      const appliedPercent = applyPercentToLayout(percentRef.current);
+
+      // Percentage preservation is correct only while both panes are freely
+      // resizable. If the user has parked a pane at the minimum split edge,
+      // preserve that pane's pixel width and let the opposite pane absorb the
+      // browser-width delta. This keeps a minimum mobile Result pane visually
+      // stable instead of squeezing it smaller on every viewport frame.
+      const pinnedPane = pinnedPaneWidthRef.current;
+      let requestedPercent = percentRef.current;
+      if (pinnedPane && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+        requestedPercent = pinnedPane.side === 'builder'
+          ? (pinnedPane.widthPx / nextWidth) * 100
+          : ((nextWidth - pinnedPane.widthPx) / nextWidth) * 100;
+      }
+
+      const appliedPercent = applyPercentToLayout(requestedPercent);
       const builderWidth = builderCollapsedRef.current
         ? 0
         : resultCollapsedRef.current
@@ -906,6 +960,20 @@ export default function StudioSplitWorkspace({
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
+
+        // A split parked at its minimum edge owns a pixel floor, not a ratio.
+        // Capture that ownership before the first resize frame so the opposite
+        // pane takes the browser-width change. Keep the pin across resize
+        // sessions until the user moves the splitter away from the edge.
+        if (window.innerWidth >= TABLET_VIEWPORT_MIN && !pinnedPaneWidthRef.current && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+          const { builder, result } = lastPaneWidthsRef.current;
+          if (root.dataset.soridrawResultAtMinimum === 'true' && result > 0) {
+            pinnedPaneWidthRef.current = { side: 'result', widthPx: result };
+          } else if (root.dataset.soridrawBuilderAtMinimum === 'true' && builder > 0) {
+            pinnedPaneWidthRef.current = { side: 'builder', widthPx: builder };
+          }
+        }
+
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
 
@@ -995,6 +1063,8 @@ export default function StudioSplitWorkspace({
       ]) resultRef.current?.removeAttribute(attribute);
       responsiveFlagsRef.current = {};
       lastObservedWorkspaceWidthRef.current = null;
+      lastPaneWidthsRef.current = { builder: 0, result: 0 };
+      pinnedPaneWidthRef.current = null;
     };
   }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncResultTitleHeight]);
 
@@ -1044,6 +1114,9 @@ export default function StudioSplitWorkspace({
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
+    // Direct splitter input takes ownership back from the browser-resize pin.
+    // finishDrag() will establish a new pin only if the user ends at an edge.
+    pinnedPaneWidthRef.current = null;
     readExternalControls(true);
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'ew-resize';
@@ -1086,6 +1159,16 @@ export default function StudioSplitWorkspace({
       : resultCollapsedRef.current
         ? metricsRef.current.width
         : metricsRef.current.width * (percentRef.current / 100);
+    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
+    const bounds = getSplitBounds(metricsRef.current.width);
+    const edgeTolerancePercent = (1.5 / Math.max(metricsRef.current.width, 1)) * 100;
+    if (!builderCollapsedRef.current && !resultCollapsedRef.current && percentRef.current <= bounds.min + edgeTolerancePercent) {
+      pinnedPaneWidthRef.current = { side: 'builder', widthPx: builderWidth };
+    } else if (!builderCollapsedRef.current && !resultCollapsedRef.current && percentRef.current >= bounds.max - edgeTolerancePercent) {
+      pinnedPaneWidthRef.current = { side: 'result', widthPx: resultWidth };
+    } else {
+      pinnedPaneWidthRef.current = null;
+    }
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
@@ -1105,6 +1188,16 @@ export default function StudioSplitWorkspace({
       percentRef.current + (event.key === 'ArrowRight' ? 2 : -2),
     );
     const builderWidth = metricsRef.current.width * (nextPercent / 100);
+    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
+    const bounds = getSplitBounds(metricsRef.current.width);
+    const edgeTolerancePercent = (1.5 / Math.max(metricsRef.current.width, 1)) * 100;
+    if (nextPercent <= bounds.min + edgeTolerancePercent) {
+      pinnedPaneWidthRef.current = { side: 'builder', widthPx: builderWidth };
+    } else if (nextPercent >= bounds.max - edgeTolerancePercent) {
+      pinnedPaneWidthRef.current = { side: 'result', widthPx: resultWidth };
+    } else {
+      pinnedPaneWidthRef.current = null;
+    }
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     setPercent(nextPercent);

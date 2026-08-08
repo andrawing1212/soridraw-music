@@ -901,3 +901,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Studio Black `/studio` 상단 글로벌 내비게이션에서는 Music Note / Library / 실험실 항목을 숨긴다. WORKSPACE 전환은 좌측 Studio rail이 담당한다. 다른 경로의 글로벌 내비게이션은 그대로 유지한다.
 - Sori Studio builder 자체의 반응형 통합은 이번 차수 범위에 포함하지 않았다. Music Note/Library 구조 검증 후 같은 계약으로 이어간다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 499차 — 분할 최소폭 우선 + 브라우저 축소 폭 분배 안정화
+
+- 기준: 498차(Music Note / Suno Library 단일 반응형 계약).
+- 프레임 성능 실험은 건드리지 않고, 브라우저 리사이즈 시 split geometry의 폭 소유권만 정리했다.
+- 사용자가 분할바를 한쪽 최소 경계까지 이동한 경우 해당 pane은 더 이상 `% 비율`이 아니라 **그 순간의 실제 px 폭**을 우선 보존한다.
+- 예: Result/Music Note/Library가 우측 최소폭에 도달한 상태에서 브라우저를 줄이면 우측 pane 폭은 유지되고 Builder 쪽이 먼저 줄어든다. 반대쪽 최소폭도 같은 원칙으로 동작한다.
+- 브라우저 PC→태블릿 경계를 통과할 때 별도의 저장된 tablet split percent를 즉시 불러오지 않는다. 현재 보이는 split geometry를 그대로 이어 받아 shell 전환 때문에 분할선이 갑자기 점프하지 않게 했다.
+- 최소폭 고정은 사용자가 다시 분할바를 직접 움직이면 해제되며, 다시 최소 경계에서 놓았을 때만 새 px 기준으로 고정된다.
+- ResizeObserver가 native resize보다 먼저 오는 프레임도 최소폭 소유권을 즉시 포착해 첫 프레임에서 최소 pane이 한 번 찌그러지는 현상을 막는다.
+- 이 구조는 이미 모바일 구성으로 내려간 Result pane을 브라우저 resize마다 다시 축소/재반응시키지 않으므로, 불필요한 우측 responsive threshold 변경과 reflow도 줄인다.
+- Music Note/Library의 498차 실제폭 기반 반응형 계약, 내부 분할바 Live Layout, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

@@ -2928,7 +2928,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-result-content {
   padding-top: 0 !important;
   margin-top: -1px !important;
-  border-top: 1px solid rgba(143, 117, 72, 0.34) !important;
   box-shadow: none !important;
 }
 
@@ -2942,7 +2941,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-result-content {
   padding-top: 0 !important;
   margin-top: -1px !important;
-  border-top: 1px solid rgba(143, 117, 72, 0.34) !important;
   box-shadow: none !important;
 }
 

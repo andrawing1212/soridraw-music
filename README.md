@@ -921,3 +921,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - PC/태블릿 collapsed 상태에서 retired Studio hero spacer가 다시 살아나지 않게 차단했다.
 - 모바일에서는 pane masthead host를 CSS에서도 완전히 숨겨 Sori Studio 대문 중복을 이중 방지한다.
 - 브라우저 resize는 493의 settle-after-160ms 방식 유지, 내부 split divider는 491 live layout 유지.
+
+## 496차 — 브라우저 리사이즈 화면 잠금 + 저비용 소프트 베일
+- 기준: 495차.
+- 내부 분할바는 491 Live Layout을 그대로 유지한다. 분할바 드래그 중간 프레임은 생략하지 않는다.
+- 브라우저/OS 창 크기 조절은 마지막 확정 앱 폭을 `soridraw-app-root` 전체에 잠가, StudioPageFrame 바깥의 헤더/부모 percentage width까지 매 픽셀 재배치되던 경로를 줄였다.
+- 창 크기 조절 중에는 앱 포인터/hover 반응을 막고 transition/animation을 일시 정지한다. Studio 카드/결과/액션 영역의 shadow/filter/backdrop 효과도 잠시 끈다.
+- 실제 `blur()`/`backdrop-filter: blur()`는 사용하지 않는다. 전체 화면 blur는 큰 표면을 매 프레임 다시 샘플링해 오히려 GPU/paint 비용을 키울 수 있어서, opacity 기반의 반투명 soft veil로 흐릿하고 어두운 전환 인상만 만든다.
+- resize가 160ms 멈추면 최종 viewport를 한 번만 판정하고 실제 레이아웃을 갱신한다. 그 한 번의 최종 reflow 동안 veil을 유지한 뒤 140ms 동안 compositor opacity로 부드럽게 사라진다.
+- StudioLeftRail 프로필/툴팁, Studio 설명 툴팁, 보컬 톤 팝업은 native resize 이벤트를 매 픽셀 듣지 않고 resize-start 또는 resize-end 커스텀 이벤트에서 한 번만 처리한다.
+- GlobalPlayer 제목 overflow ResizeObserver도 native resize 중 측정을 중지하고 resize-end에 한 번만 재측정한다.
+- PC >=1600 / 태블릿 1100~1599 / 모바일 <1100, Builder 820 / Result 680 기준과 Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 리사이즈 검증 전.

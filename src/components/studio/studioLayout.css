@@ -11162,3 +11162,92 @@ body > :is(
   }
 }
 
+
+/* 496 — native browser resize veil + full Studio frame freeze.
+ *
+ * Goal: do not fake speed by skipping internal split frames. Internal divider
+ * dragging remains 491 Live Layout. Native OS/browser-window resizing is a
+ * different interaction: keep the last settled app width, pause expensive
+ * visual work, show one lightweight compositor veil, then commit the final
+ * responsive layout once and fade the veil away.
+ *
+ * Deliberately NO `filter: blur()` / `backdrop-filter: blur()` is used here.
+ * A full-viewport blur forces repeated large-surface sampling while the OS is
+ * resizing the viewport and can make the exact stutter we are trying to hide
+ * worse. The translucent soft veil gives the intended softened/dimmed feedback
+ * using only opacity compositing. */
+html[data-soridraw-theme="studio-black"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 998;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  background:
+    radial-gradient(120% 90% at 50% 38%, rgba(24, 24, 28, 0.10), rgba(5, 5, 7, 0.30)),
+    rgba(8, 8, 10, 0.16);
+  box-shadow: inset 0 0 110px rgba(0, 0, 0, 0.18);
+  will-change: opacity;
+  transition:
+    opacity 140ms ease-out,
+    visibility 0s linear 140ms;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body::after {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 45ms ease-out,
+    visibility 0s linear 0s;
+}
+
+html.soridraw-window-resize-revealing[data-soridraw-theme="studio-black"] body::after {
+  opacity: 0;
+  visibility: visible;
+  transition:
+    opacity 140ms ease-out,
+    visibility 0s linear 140ms;
+}
+
+/* Freeze the whole application width, not only StudioPageFrame. 493 locked the
+ * pane shell but ancestors and sibling UI could still receive a new percentage
+ * width on every native resize event. Locking the app root removes that second
+ * width cascade. The live viewport simply crops or exposes outer background
+ * until resize-end performs the one real layout pass. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body {
+  overflow-x: hidden !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root {
+  width: var(--soridraw-window-resize-lock-width, 100vw) !important;
+  min-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
+  max-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  transition: none !important;
+}
+
+/* One class toggle pauses paint-heavy decoration for the duration of the OS
+ * gesture. It is restored underneath the reveal veil after final layout, so
+ * the user sees a deliberate soft transition rather than shadow/filter churn. */
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root *,
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root *::before,
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root *::after {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+
+html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root
+:is(
+  .soridraw-studio-menu-card,
+  .soridraw-studio-result-content > *,
+  .soridraw-studio-action-bar--tracking,
+  .soridraw-studio-live-keywords-portal,
+  .soridraw-studio-page-frame
+) {
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

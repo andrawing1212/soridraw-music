@@ -12,11 +12,14 @@ type MediaQueryEntry = {
 
 const mediaQueryEntries = new Map<string, MediaQueryEntry>();
 const WINDOW_RESIZE_SETTLE_MS = 160;
+const WINDOW_RESIZE_REVEAL_MS = 140;
 
 let nativeResizeActive = false;
 let nativeResizeTimer: number | null = null;
 let settledViewportWidth = typeof window === 'undefined' ? 1600 : window.innerWidth;
+let settledViewportHeight = typeof window === 'undefined' ? 900 : window.innerHeight;
 let resizeLifecycleInstalled = false;
+let resizeRevealTimer: number | null = null;
 
 const getViewportProfile = (width: number) => {
   if (width < 1100) return 'mobile';
@@ -42,17 +45,28 @@ const finishNativeResize = () => {
   nativeResizeTimer = null;
   nativeResizeActive = false;
   settledViewportWidth = window.innerWidth;
+  settledViewportHeight = window.innerHeight;
 
   const root = document.documentElement;
   root.classList.remove('soridraw-window-resizing');
+  root.classList.add('soridraw-window-resize-revealing');
   delete root.dataset.soridrawResizeLockProfile;
   root.style.removeProperty('--soridraw-window-resize-lock-width');
+  root.style.removeProperty('--soridraw-window-resize-lock-height');
 
   // Breakpoint subscribers now receive only the final viewport state. This is
   // intentionally synchronous so Studio performs one structural pass after a
-  // native window resize rather than one pass per intermediate pixel.
+  // native window resize rather than one pass per intermediate pixel. The
+  // lightweight resize veil stays visible while this one final layout pass is
+  // committed, then fades out on the compositor.
   flushSettledMediaQueries();
   window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
+
+  if (resizeRevealTimer !== null) window.clearTimeout(resizeRevealTimer);
+  resizeRevealTimer = window.setTimeout(() => {
+    resizeRevealTimer = null;
+    root.classList.remove('soridraw-window-resize-revealing');
+  }, WINDOW_RESIZE_REVEAL_MS);
 };
 
 const beginOrContinueNativeResize = () => {
@@ -61,9 +75,15 @@ const beginOrContinueNativeResize = () => {
 
   if (!nativeResizeActive) {
     nativeResizeActive = true;
+    if (resizeRevealTimer !== null) {
+      window.clearTimeout(resizeRevealTimer);
+      resizeRevealTimer = null;
+    }
+    root.classList.remove('soridraw-window-resize-revealing');
     root.classList.add('soridraw-window-resizing');
     root.dataset.soridrawResizeLockProfile = getViewportProfile(settledViewportWidth);
     root.style.setProperty('--soridraw-window-resize-lock-width', `${Math.max(settledViewportWidth, 1)}px`);
+    root.style.setProperty('--soridraw-window-resize-lock-height', `${Math.max(settledViewportHeight, 1)}px`);
     window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
   }
 
@@ -75,6 +95,7 @@ const ensureResizeLifecycle = () => {
   if (resizeLifecycleInstalled || typeof window === 'undefined') return;
   resizeLifecycleInstalled = true;
   settledViewportWidth = window.innerWidth;
+  settledViewportHeight = window.innerHeight;
   window.addEventListener('resize', beginOrContinueNativeResize, { passive: true });
 };
 

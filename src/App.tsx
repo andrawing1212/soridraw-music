@@ -6943,11 +6943,11 @@ const toggleCycleVariantSelection = (
   useEffect(() => {
     if (!hoveredItem) return;
     const refreshPlacement = () => setHoveredItemPlacement(resolveStudioDescriptionPlacement());
-    window.addEventListener('resize', refreshPlacement);
+    window.addEventListener('soridraw-window-resize-end', refreshPlacement as EventListener);
     window.addEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
     window.addEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
     return () => {
-      window.removeEventListener('resize', refreshPlacement);
+      window.removeEventListener('soridraw-window-resize-end', refreshPlacement as EventListener);
       window.removeEventListener('soridraw-studio-frame-resize', refreshPlacement as EventListener);
       window.removeEventListener('soridraw-split-drag-end', refreshPlacement as EventListener);
     };
@@ -7065,7 +7065,7 @@ const toggleCycleVariantSelection = (
 
     const observer = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {
-          if (isSplitDraggingRef.current) return;
+          if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
           syncActionBarLayoutMetrics();
           scheduleActionBarPlacement();
         })
@@ -7075,7 +7075,7 @@ const toggleCycleVariantSelection = (
     const actionBar = actionButtonsBarRef.current;
     const builderPane = anchor?.closest('.soridraw-studio-builder-pane');
     const handleBuilderPaneScroll = () => {
-      if (isSplitDraggingRef.current) return;
+      if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
       scheduleActionBarPlacement();
     };
 
@@ -23141,14 +23141,14 @@ function VocalControlComponent({
     const handleWindowChange = () => updateMemberTonePopupPos();
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('soridraw-window-resize-end', handleWindowChange as EventListener);
     window.addEventListener('scroll', handleWindowChange, true);
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('touchstart', handlePointerDown);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('soridraw-window-resize-end', handleWindowChange as EventListener);
       window.removeEventListener('scroll', handleWindowChange, true);
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('touchstart', handlePointerDown);

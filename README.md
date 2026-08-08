@@ -927,3 +927,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note/Library 498차 실제폭 기반 반응형, 499차 pane 최소폭 우선 규칙, 내부 분할바 Live Layout은 유지한다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+### 501차 — 왼쪽 메뉴 아이콘 단일 기준 / 접힘 중앙축 정렬
+- 왼쪽 레일의 기본 메뉴 아이콘을 `soridraw-studio-rail-icon-slot` 하나로 통일했습니다.
+- 펼침/접힘/PC/태블릿에서 아이콘 컴포넌트와 18px SVG geometry를 그대로 유지하고, 접힐 때는 텍스트/보조 화살표만 숨깁니다.
+- 접힌 64px 레일의 토글, 프로필, 모든 메뉴 아이콘 중심을 x=32px 한 축으로 고정했습니다.
+- Tailwind `h-5 w-5`에 기대던 아이콘 크기 소유권을 제거해 breakpoint/상위 CSS에 따라 아이콘이 달라 보이는 경로를 차단했습니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

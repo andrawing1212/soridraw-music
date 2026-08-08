@@ -11300,3 +11300,160 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     box-shadow: none !important;
   }
 }
+
+/* 501 — Left rail icon single-source contract.
+ * The same SVG instance/geometry is used in expanded and collapsed rails.
+ * Only copy/chevrons are hidden on collapse; primary icons never swap, resize,
+ * translate or inherit breakpoint-specific utility sizing. The collapsed rail
+ * has one exact horizontal axis at 32px across toggle, profile and every menu
+ * icon. Studio Black desktop/tablet only; mobile navigation is untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel .soridraw-studio-rail-icon-slot {
+    display: inline-flex !important;
+    flex: 0 0 20px !important;
+    width: 20px !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    height: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel .soridraw-studio-rail-icon-slot > svg {
+    display: block !important;
+    flex: 0 0 18px !important;
+    width: 18px !important;
+    min-width: 18px !important;
+    max-width: 18px !important;
+    height: 18px !important;
+    min-height: 18px !important;
+    max-height: 18px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.8 !important;
+    fill: none !important;
+    vector-effect: non-scaling-stroke;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-left-panel .soridraw-studio-rail-item-chevron {
+    display: block !important;
+    flex: 0 0 14px !important;
+    width: 14px !important;
+    height: 14px !important;
+    margin-left: auto !important;
+    transform: none !important;
+  }
+
+  /* Collapsed rail: one 64px column, one x=32px center line. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel .soridraw-studio-left-panel-inner {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    align-items: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel :is(
+    .soridraw-studio-rail-nav,
+    .soridraw-studio-rail-bottom-actions
+  ) {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    align-items: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel button.soridraw-studio-rail-item {
+    position: relative !important;
+    display: flex !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel button.soridraw-studio-rail-item
+  > .soridraw-studio-rail-icon-slot {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    margin: 0 !important;
+    transform: translate(-50%, -50%) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel .soridraw-studio-rail-profile {
+    width: 64px !important;
+    min-width: 64px !important;
+    max-width: 64px !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    justify-content: center !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel .soridraw-studio-rail-profile-avatar {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    transform: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  .soridraw-studio-left-rail-collapse-toggle {
+    left: 15px !important;
+    right: auto !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    margin: 0 !important;
+    transform: none !important;
+  }
+
+  /* Collapse changes visibility only; primary icon geometry stays identical. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel .soridraw-studio-rail-item > span:not(.soridraw-studio-rail-icon-slot),
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame.is-left-rail-collapsed
+  > .soridraw-studio-left-panel .soridraw-studio-rail-item-chevron {
+    display: none !important;
+  }
+}

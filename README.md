@@ -914,3 +914,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 이 구조는 이미 모바일 구성으로 내려간 Result pane을 브라우저 resize마다 다시 축소/재반응시키지 않으므로, 불필요한 우측 responsive threshold 변경과 reflow도 줄인다.
 - Music Note/Library의 498차 실제폭 기반 반응형 계약, 내부 분할바 Live Layout, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 500차 — 왼쪽 보조메뉴 2단계 단일화 + PC/태블릿 전환 플래시 제거
+
+- 기준: 499차.
+- 이번 차수는 왼쪽 보조메뉴만 우선 정리한다. 오른쪽 보조메뉴 디자인/폭 계약은 변경하지 않는다.
+- Studio Black 1100px 이상 왼쪽 rail의 시각 상태를 **펼침 214px / 접힘 64px 두 가지**로만 통일했다. PC와 태블릿이 같은 프로필, 메뉴, 아이콘, 간격, 토글 위치 계약을 사용한다.
+- 과거 310/312/313/405/406에서 태블릿 전용으로 덧붙였던 왼쪽 rail 보정 규칙과 1100~1279px bridge의 왼쪽 전용 분기를 제거했다. `studioLayout.css`는 11,727줄에서 11,302줄로 425줄 감소했다.
+- 1280px/1600px를 통과할 때 별도 왼쪽 메뉴 디자인이 끼어들지 않도록 PC용 rail 계약을 1100px 이상 공통으로 승격하고, 마지막 500차 계약이 두 상태의 기하를 명시적으로 소유한다.
+- Tablet -> PC 복귀 때 예전 compact 접힘 상태가 wide PC CSS로 한 프레임 먼저 그려진 뒤 저장된 PC 상태가 복원되던 플래시를 막기 위해 rail breakpoint 동기화를 `useEffect`에서 `useLayoutEffect`로 옮겼다.
+- 성능 연관성 확인: PC/태블릿 전환에서 좌 rail 214↔64px, 우 rail 292↔64px가 동시에 바뀌면 중앙 workspace 폭이 크게 변하고, 그 결과 split workspace와 Music Note/Library의 width observer들이 연쇄 재계산된다. 이번 차수는 왼쪽의 중복 단계와 후처리 paint를 줄였고, 오른쪽 rail은 다음 검증 대상으로 남긴다.
+- Music Note/Library 498차 실제폭 기반 반응형, 499차 pane 최소폭 우선 규칙, 내부 분할바 Live Layout은 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

@@ -66,11 +66,11 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
     document.documentElement.dataset.soridrawStudioWorkspaceView = workspaceView;
   }, [workspaceView]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (railViewport === 'compact') {
-      // Tablet/compact landscape always enters with both auxiliary rails in
-      // their space-saving state. This runs only when the 1600/1100 breakpoint
-      // is crossed, never for every pixel of native window resizing.
+      // Apply the compact entry state before paint. Previously this ran in a
+      // normal effect, so tablet -> PC could briefly paint the old collapsed
+      // rail with wide-PC geometry before the stored PC state was restored.
       setIsLeftRailCollapsed(true);
       setIsRightRailCollapsed(true);
       return;
@@ -78,6 +78,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
 
     if (railViewport === 'wide') {
       // Compact-session choices do not overwrite the user's PC preference.
+      // Layout effect keeps the breakpoint hand-off visually atomic.
       setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
       setIsRightRailCollapsed(readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
     }

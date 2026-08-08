@@ -28,7 +28,6 @@ function ScrollText({ text, className = '' }: { text: string; className?: string
       }
     };
     const schedule = () => {
-      if (document.documentElement.classList.contains('soridraw-window-resizing')) return;
       if (frame !== null) return;
       frame = window.requestAnimationFrame(checkScroll);
     };
@@ -37,10 +36,8 @@ function ScrollText({ text, className = '' }: { text: string; className?: string
       ? new ResizeObserver(schedule)
       : null;
     if (observer && containerRef.current) observer.observe(containerRef.current);
-    window.addEventListener('soridraw-window-resize-end', schedule as EventListener);
     return () => {
       observer?.disconnect();
-      window.removeEventListener('soridraw-window-resize-end', schedule as EventListener);
       if (frame !== null) window.cancelAnimationFrame(frame);
     };
   }, [text]);

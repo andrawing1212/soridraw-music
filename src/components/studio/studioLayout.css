@@ -3477,7 +3477,9 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     display: none !important;
   }
 
-  /* 495: vertical masthead spacing is owned by the 492 single masthead contract. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-main {
+    padding-top: 18px !important;
+  }
 
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] .soridraw-studio-split-workspace {
     grid-template-columns: 0 minmax(0, 1fr) !important;
@@ -3997,6 +3999,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 @media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
   body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 76px !important;
     padding-bottom: 0 !important;
   }
 
@@ -4675,7 +4678,10 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
   /* When the builder is folded, the hero disappears. Reserve the fixed top-nav
    * height plus 18px so the result title starts below it instead of being clipped. */
-  /* 495: removed legacy 76px result-only top offset. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 76px !important;
+  }
 }
 
 @media (min-width: 1100px) and (max-width: 1599px) {
@@ -6036,9 +6042,19 @@ button:not(:disabled):is([class*="bg-[#A98BFF]"], [class*="bg-emerald"], [class*
  * content width, and keep only the result scrollbar on the center/right edge
  * immediately before the recent-songs rail. Wide Split Mode only. */
 @media (min-width: 1600px) {
-  /* 495: collapsed result no longer revives the retired desktop hero spacer. */
+  /* Keep exactly the same vertical header footprint as the builder fullscreen,
+   * but leave it visually empty while the builder is collapsed. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-hero {
+    display: block !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
 
-  /* 495: removed legacy 24px result-only top offset. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  .soridraw-studio-main {
+    padding-top: 24px !important;
+  }
 
   /* Use the same outer composition width as the builder fullscreen. The pane
    * remains the full scroll shell, so its scrollbar does not move inward. */
@@ -6128,6 +6144,7 @@ button:not(:disabled):is([class*="bg-[#A98BFF]"], [class*="bg-emerald"], [class*
    * Match the normal builder main top padding exactly. */
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
   body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 24px !important;
     padding-bottom: 0 !important;
   }
 
@@ -6208,7 +6225,10 @@ button:not(:disabled):is([class*="bg-[#A98BFF]"], [class*="bg-emerald"], [class*
  * Keep the reserved empty hero slot, approved card width and scrollbar edge,
  * but trim the remaining result-only top gap by 12px. Wide Split Mode only. */
 @media (min-width: 1600px) {
-  /* 495: removed legacy 18px result-only top offset. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-top: 18px !important;
+  }
 
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
@@ -9455,10 +9475,74 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   color: rgba(255, 255, 255, 0.52) !important;
 }
 
-/* 495 — Removed obsolete 419 hero-portal ownership.
- * Music Note / Library mastheads moved into the real result pane in 489, so
- * reviving the shared Studio hero here only reintroduced a second vertical
- * coordinate system after browser-resize settle. */
+/* 419 — Keep the active Music Note / Suno Library masthead visible when the
+ * builder pane is collapsed into result-only fullscreen. The legacy one-pane
+ * rules hid the complete Studio hero (`display:none` below 1600px and
+ * `visibility:hidden` at 1600px+), but the workspace title now lives inside
+ * that hero through a portal. Show the shared hero only for these two workspace
+ * views, hide the unused Sori Studio masthead/search, and let the right header
+ * own the full hero row. Remove the old result-only main top padding so the
+ * category/search/list stack stays on the same vertical guide as split mode. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero {
+    display: block !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero-row {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero .soridraw-studio-masthead,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-workspace-hero-host {
+    display: block !important;
+    visibility: visible !important;
+    grid-column: 2 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    pointer-events: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+}
 
 /* 420 — Unify the desktop workspace top guide with the approved Music Note /
  * Suno Library result-only view. Split mode was one full 64px step lower because
@@ -9489,7 +9573,35 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     padding-top: 0 !important;
   }
 
-  /* 495: removed obsolete collapsed hidden-hero spacer from 420. */
+  /* Music Note / Library fullscreen keeps its visible portaled title from 419.
+   * Recent/generated fullscreen receives the same structural title-row height,
+   * but the unused hero content stays invisible. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-hero {
+    display: block !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-hero-row {
+    min-height: 40px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-hero-row > .soridraw-studio-masthead,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:not([data-workspace-view="music-note"]):not([data-workspace-view="library"])
+  .soridraw-studio-workspace-hero-host {
+    display: none !important;
+  }
 }
 
 /* 422 — Remove the real 64px split/builder-only top spacer.
@@ -10587,68 +10699,263 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   opacity: 1 !important;
 }
 
-/* 492 — Single masthead contract for Sori Studio / Music Note / Library.
- * Replaces the stacked 461–478 correction chain with one geometry owner.
- * Brand size never depends on viewport width, pane width, split percentage, or
- * fullscreen state. PC -> tablet keeps the same masthead geometry. Phone mode
- * keeps the same brand scale and uses the approved 102px visible top guide.
- * The only responsive responsibility left here is structural ownership:
- * >=1100 uses the real pane masthead hosts; <1100 uses normal page flow. */
-html[data-soridraw-theme="studio-black"] {
-  --soridraw-masthead-box-height: 84px;
-  --soridraw-masthead-row-height: 52px;
-  --soridraw-masthead-pad-top: 28px;
-  --soridraw-masthead-pad-bottom: 4px;
-  --soridraw-masthead-title-size: 2.65rem;
-  --soridraw-masthead-icon-size: 34px;
-  --soridraw-masthead-inline: 12px;
-  --soridraw-masthead-mobile-shell-top: 74px;
+/* 461 — Put split mastheads inside the real pane scrollers.
+ * 460 used scrollTop thresholds plus root data flags to hide an external hero.
+ * Resizing the split could clamp/recalculate pane scrollTop around that threshold,
+ * so the masthead treatment appeared to switch on/off while dragging. The title
+ * rows now live as the first real children of the builder/result scroll panes.
+ * There is no threshold, no negative overlap, and no synthetic top padding:
+ * the pane itself begins exactly at the fixed 110px divider and the masthead
+ * simply scrolls away in normal document flow. PC and tablet >=1100px share
+ * this one model. Collapsed one-pane layouts, Classic and phone layouts keep
+ * their existing geometry. */
+.soridraw-studio-pane-masthead-host {
+  display: none;
 }
 
-/* One immutable brand scale. No clamp(), vw, md:text-* or pane-mode font rule. */
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-:is(
-  .soridraw-studio-title.soridraw-unified-masthead-title,
-  .soridraw-unified-masthead-title > h1,
-  .soridraw-unified-masthead-title h1
-) {
-  font-size: var(--soridraw-masthead-title-size) !important;
-  line-height: 1.04 !important;
-  white-space: nowrap !important;
-  margin: 0 !important;
-  transform: none !important;
-  translate: none !important;
-}
-
-html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-title.soridraw-unified-masthead-title > svg {
-  width: var(--soridraw-masthead-icon-size) !important;
-  height: var(--soridraw-masthead-icon-size) !important;
-  flex: 0 0 var(--soridraw-masthead-icon-size) !important;
-}
-
-/* Desktop + tablet: the pane is the only masthead owner. */
 @media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero {
     display: none !important;
-    visibility: hidden !important;
-    width: 0 !important;
     height: 0 !important;
     min-height: 0 !important;
     max-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
-    pointer-events: none !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-main {
+    margin-top: 0 !important;
+    padding-top: 110px !important;
+    padding-bottom: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    min-height: 0 !important;
+    max-height: var(--soridraw-studio-isolated-height, calc(100dvh - 110px)) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    padding-top: 0 !important;
+    scroll-padding-top: 0 !important;
+    overscroll-behavior-y: contain !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-pane-masthead-host {
+    display: block !important;
+    position: relative !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 84px !important;
+    min-height: 84px !important;
+    margin: 0 !important;
+    padding: 20px 0 12px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-builder-masthead {
+    position: relative !important;
+    display: flex !important;
+    width: 100% !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: clamp(2rem, 2.45vw, 2.65rem) !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title > svg {
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-search-button {
+    position: absolute !important;
+    top: 50% !important;
+    right: 2px !important;
+    transform: translateY(-50%) !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    z-index: 2 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-scroll-search-button > svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header {
+    position: static !important;
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 52px !important;
+    min-height: 52px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 10px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-page-title-hover h1 {
+    font-size: clamp(2rem, 2.45vw, 2.65rem) !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-page-title-hover h1 {
+    font-size: 1.85rem !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-library-credit-button {
+    height: 32px !important;
+    min-height: 32px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 11px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-library-credit-button {
+    height: 28px !important;
+    min-height: 28px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 9px !important;
+    font-size: 9px !important;
+  }
+}
+
+/* 462 — One masthead geometry for Studio Black split / one-pane / mobile.
+ * The approved reference is the 461 Sori Studio split masthead: 84px flow box,
+ * 52px title row, 20px top / 12px bottom breathing room, 32px wordmark and a
+ * 34px Studio bolt/search scale. Earlier revisions let mobile, result-only
+ * fullscreen and the two portaled workspace pages each keep their own legacy
+ * top padding / translate / font-size rules, so the title jumped in size and
+ * position whenever the pane changed mode. Keep Classic completely untouched.
+ */
+html[data-soridraw-theme="studio-black"] {
+  --soridraw-masthead-box-height: 84px;
+  --soridraw-masthead-row-height: 52px;
+  --soridraw-masthead-pad-top: 20px;
+  --soridraw-masthead-pad-bottom: 12px;
+  --soridraw-masthead-title-size: 2rem;
+  --soridraw-masthead-icon-size: 34px;
+}
+
+/* The visible brand typography is identical wherever Studio Black renders it. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-title,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-page-header, .soridraw-library-page-header)
+.soridraw-page-title-hover h1 {
+  font-size: var(--soridraw-masthead-title-size) !important;
+  line-height: 1.04 !important;
+  white-space: nowrap !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-title > svg {
+  width: var(--soridraw-masthead-icon-size) !important;
+  height: var(--soridraw-masthead-icon-size) !important;
+  flex: 0 0 var(--soridraw-masthead-icon-size) !important;
+}
+
+/* Desktop/tablet >=1100: keep the real 461 pane-scroller masthead when a pane
+ * expands to one-pane fullscreen as well. Do not revive the legacy hero portal. */
+@media (min-width: 1100px) {
+  /* Builder visible: split and builder-only fullscreen both use builder host. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-hero,
+  /* Result-only Music Note / Library fullscreen uses result host. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-hero {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root .soridraw-studio-main,
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
   .soridraw-studio-main {
     margin-top: 0 !important;
     padding-top: 110px !important;
   }
 
+  /* Surviving panes own their own header in both split and one-pane states. */
   html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
   body #root .soridraw-app-root .soridraw-studio-builder-pane-masthead-host,
   html[data-soridraw-theme="studio-black"]:not([data-soridraw-result-collapsed="true"])
@@ -10667,11 +10974,620 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 
   html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
-  body #root .soridraw-app-root
-  .soridraw-studio-scroll-builder-masthead,
+  body #root .soridraw-app-root .soridraw-studio-scroll-builder-masthead,
   html[data-soridraw-theme="studio-black"]:not([data-soridraw-result-collapsed="true"])
   body #root .soridraw-app-root
-  .soridraw-studio-result-pane-masthead-host > .soridraw-studio-result-masthead {
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header {
+    position: relative !important;
+    inset: auto !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: var(--soridraw-masthead-row-height) !important;
+    min-height: var(--soridraw-masthead-row-height) !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+    gap: 10px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  /* Remove the compact-pane title shrink: pane width changes layout below the
+   * masthead, not the brand identity itself. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-page-title-hover h1 {
+    font-size: var(--soridraw-masthead-title-size) !important;
+  }
+
+  /* One-pane builder/result panes still use the same 110px fixed divider start
+   * and the same isolated viewport height as normal split mode. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
+    max-height: var(--soridraw-studio-isolated-height, calc(100dvh - 110px)) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    padding-top: 0 !important;
+    scroll-padding-top: 0 !important;
+  }
+}
+
+/* Phone + tablet below 1100: reproduce the same 84/52/20/12 masthead block in
+ * normal flow. All three pages start from the same real 80px page-top guide and
+ * use the same 12px outer gutter. No title-only translate/top corrections. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero {
+    padding-top: 80px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero > .soridraw-studio-shell {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero-row {
+    display: block !important;
+    width: 100% !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    height: var(--soridraw-masthead-box-height) !important;
+    margin: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-masthead {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: var(--soridraw-masthead-box-height) !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    margin: 0 !important;
+    padding: var(--soridraw-masthead-pad-top) 0 var(--soridraw-masthead-pad-bottom) !important;
+    box-sizing: border-box !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-title {
+    display: inline-flex !important;
+    align-items: center !important;
+    height: var(--soridraw-masthead-row-height) !important;
+    min-height: var(--soridraw-masthead-row-height) !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-page-shell, .soridraw-library-theme) {
+    padding-top: 80px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-shell .soridraw-musicnote-page-header,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-page-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    height: var(--soridraw-masthead-box-height) !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    margin: 0 !important;
+    padding: var(--soridraw-masthead-pad-top) 2px var(--soridraw-masthead-pad-bottom) !important;
+    gap: 10px !important;
+    box-sizing: border-box !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-page-title-hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-page-title-hover {
+    position: relative !important;
+    top: auto !important;
+    margin: 0 !important;
+  }
+
+  /* Keep Studio's search glyph centered on the same 52px row used by the title,
+   * instead of the older negative-bottom mobile offset. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    top: calc(var(--soridraw-masthead-pad-top) + 9px) !important;
+    bottom: auto !important;
+    right: 12px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+}
+
+/* 463 — Tune only the Sori Studio split-pane masthead position.
+ * Keep the 462 wordmark/search sizes and the 461 real pane-scroller structure.
+ * The approved reference is the builder pane itself: in desktop split, compact
+ * (pane mobile) split, and builder-only fullscreen, move the visible masthead
+ * row lower inside the same 84px box so the title sits closer to the first card.
+ * The search control follows the same row and sits a few pixels lower, matching
+ * the requested near-card placement. Music Note / Library and Classic stay
+ * untouched in this pass. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host {
+    height: var(--soridraw-masthead-box-height) !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    padding-top: 28px !important;
+    padding-bottom: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead {
+    height: var(--soridraw-masthead-row-height) !important;
+    min-height: var(--soridraw-masthead-row-height) !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+  }
+
+  /* Keep the approved 34px button / 24px glyph. Only lower its center slightly
+   * so the magnifier visually hugs the first-card edge like the reference. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    top: calc(50% + 4px) !important;
+    transform: translateY(-50%) !important;
+  }
+
+  /* Fullscreen builder uses the exact same pane masthead/content owner as the
+   * widest split state. Do not revive the legacy external hero or add another
+   * fullscreen-only offset. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host {
+    position: relative !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 464 — Lock Sori Studio split and builder-only fullscreen to one masthead reference.
+ * In 461 the normal split state still owned a higher-specificity clamp() title rule,
+ * while one-pane fullscreen fell through to the lower 462 2rem rule. That made the
+ * same Sori Studio wordmark visibly smaller after collapsing the result pane.
+ * Use one final builder-owned rule for every >=1100px Studio Black builder state.
+ * Also stop centering the search control inside the 52px row: bottom-align the same
+ * 34px control to the masthead host so normal split and fullscreen both place it
+ * immediately above the first card. Music Note / Library and Classic are untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title {
+    font-size: clamp(2rem, 2.45vw, 2.65rem) !important;
+    line-height: 1.04 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title > svg {
+    width: 34px !important;
+    height: 34px !important;
+    flex: 0 0 34px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    top: auto !important;
+    bottom: -2px !important;
+    transform: none !important;
+    translate: none !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button > svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+}
+
+/* 465 — Use the approved builder-only fullscreen masthead bottom as the Sori Studio reference.
+ * Keep every existing wordmark / bolt / search size untouched. Only normalize the vertical
+ * placement: the 84px masthead keeps a 52px title row whose bottom sits 4px above the box
+ * bottom in split, compact-pane and real mobile layouts. The visible search glyph is lowered
+ * to the same masthead bottom guide, instead of floating higher inside the row. Music Note,
+ * Library and Classic themes are intentionally untouched in this pass. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host {
+    height: var(--soridraw-masthead-box-height) !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    padding-top: 28px !important;
+    padding-bottom: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead {
+    height: var(--soridraw-masthead-row-height) !important;
+    min-height: var(--soridraw-masthead-row-height) !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+    align-items: center !important;
+  }
+
+  /* The button is chrome-free, so align the visible 24px magnifier rather than the
+   * invisible 34px hit box. 5px of internal breathing room + the host's 4px bottom
+   * allowance puts the glyph bottom exactly on the masthead box bottom guide. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    top: auto !important;
+    bottom: -9px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+}
+
+@media (max-width: 1099px) {
+  /* Mobile/tablet keeps its approved title/search sizes. Re-distribute only the
+   * existing 84px masthead space so its lower edge matches the fullscreen reference. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-masthead {
+    height: var(--soridraw-masthead-box-height) !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    padding-top: 28px !important;
+    padding-bottom: 4px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero .soridraw-studio-title {
+    height: var(--soridraw-masthead-row-height) !important;
+    min-height: var(--soridraw-masthead-row-height) !important;
+    margin: 0 !important;
+    padding: 0 2px !important;
+  }
+
+  /* The hero search is positioned against the same 84px shell. Lower the invisible
+   * 34px hit box by 5px so the visible 24px glyph ends on the masthead bottom guide. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    top: auto !important;
+    bottom: -5px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+}
+
+/* 466 — Re-anchor Sori Studio using the two user-approved references only.
+ * Approved reference A: the search position in normal split mode (keep it as-is).
+ * Approved reference B: the masthead position in builder-only fullscreen (keep it as-is).
+ * Therefore, only (1) lower the split/compact-pane wordmark to the fullscreen
+ * masthead baseline and (2) lower the fullscreen search glyph to the normal-split
+ * card gap. No Music Note / Library / Classic / mobile-flow rules are changed here. */
+@media (min-width: 1100px) {
+  /* Normal split (including compact pane): keep the approved split search exactly,
+   * but lower only the wordmark by 5px so its visible baseline matches fullscreen. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title {
+    position: relative !important;
+    top: 5px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    top: auto !important;
+    bottom: -9px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+
+  /* Builder-only fullscreen: preserve the approved fullscreen masthead exactly.
+   * Move only the search 8px lower so its visible magnifier-to-card gap matches
+   * the approved normal-split search position. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead .soridraw-studio-title {
+    position: relative !important;
+    top: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    top: auto !important;
+    bottom: -29px !important;
+    transform: none !important;
+    translate: none !important;
+  }
+}
+
+/* 468 — Give the pane search one real positioning owner in every desktop Studio Black builder state.
+ * 467 changed `bottom`, but builder-only fullscreen was not guaranteed to keep the same
+ * positioned-button contract as normal split, so the offset could be ignored. The approved
+ * normal-split search position is the single reference. Make the masthead row the containing
+ * block and force the same absolute/right/bottom geometry for split, compact-pane split and
+ * builder-only fullscreen. This intentionally supersedes the temporary 463–467 search offsets. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead {
+    position: relative !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    position: absolute !important;
+    top: auto !important;
+    right: 2px !important;
+    bottom: -9px !important;
+    left: auto !important;
+    inset: auto 2px -9px auto !important;
+    transform: none !important;
+    translate: none !important;
+    margin: 0 !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    z-index: 3 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button > svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+}
+
+/* 469 — Keep the approved low search glyph without letting its 34px hit box enter the first card.
+ * 468 positioned the whole 34px button at bottom:-9px. That placed 5px of the actual button box
+ * below the 84px masthead host, where the following menu-card paint layer could cover it.
+ * Keep the button box fully inside the masthead (bottom:-4px = exact host bottom), then lower only
+ * the visible 24px magnifier by 5px inside that hit box. The glyph therefore stays at the same
+ * approved visual baseline while its clickable box no longer overlaps the card. Split, compact
+ * split and builder-only fullscreen continue to share this one positioning contract. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    position: absolute !important;
+    top: auto !important;
+    right: 2px !important;
+    bottom: -4px !important;
+    left: auto !important;
+    inset: auto 2px -4px auto !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 4 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button > svg {
+    position: relative !important;
+    top: 5px !important;
+    transform: none !important;
+  }
+}
+
+/* 470 — Separate the approved split search contract from builder-only fullscreen.
+ * 468/469 tried to force both states through one absolute-position rule. That changed
+ * the already-approved split search and could clip the fullscreen button inside the
+ * scroll pane. Restore the approved 466 split geometry exactly, then give fullscreen
+ * its own safe containing block: the 84px masthead host. The fullscreen hit box stays
+ * fully inside that host while the visible 24px magnifier is bottom-aligned to the
+ * masthead edge. Sori Studio masthead typography/position, Music Note, Library and
+ * Classic are untouched. */
+@media (min-width: 1100px) {
+  /* Normal split / compact split: restore the user-approved 466 search position. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead {
+    position: relative !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    position: absolute !important;
+    top: auto !important;
+    right: 2px !important;
+    bottom: -9px !important;
+    left: auto !important;
+    inset: auto 2px -9px auto !important;
+    transform: none !important;
+    translate: none !important;
+    margin: 0 !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 4 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button > svg {
+    position: static !important;
+    top: auto !important;
+    transform: none !important;
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  /* Builder-only fullscreen: host owns positioning so the search cannot disappear
+   * behind the first card or be clipped by the scrolling row. The title row remains
+   * in normal flow, preserving the fullscreen masthead that was already approved. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host {
+    position: relative !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-builder-masthead {
+    position: static !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button {
+    position: absolute !important;
+    top: auto !important;
+    right: 2px !important;
+    bottom: 6px !important;
+    left: auto !important;
+    inset: auto 2px 6px auto !important;
+    transform: none !important;
+    translate: none !important;
+    margin: 0 !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    padding: 0 !important;
+    z-index: 6 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-builder-pane-masthead-host
+  .soridraw-studio-scroll-search-button > svg {
+    position: static !important;
+    top: auto !important;
+    transform: none !important;
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 24px !important;
+  }
+}
+
+/* 489 — Desktop Music Note / Library mastheads no longer use the legacy
+ * page-header portal rules from 472/473. Their only desktop owner is the real
+ * result-pane masthead contract below. Keep only the <1100 normal-flow rules. */
+@media (max-width: 1099px) {
+  /* Actual phone/tablet normal flow: match Sori Studio's 28px/4px masthead distribution.
+   * Intentionally do not set font-size here: the current mobile title size is protected. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-shell .soridraw-musicnote-page-header,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-page-header {
+    height: var(--soridraw-masthead-box-height) !important;
+    min-height: var(--soridraw-masthead-box-height) !important;
+    padding-top: 28px !important;
+    padding-bottom: 4px !important;
+    margin-top: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-page-header, .soridraw-library-page-header)
+  .soridraw-page-title-hover {
+    position: relative !important;
+    top: 0 !important;
+    margin: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-musicnote-theme > .soridraw-workspace-ported-header,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-library-theme > .soridraw-workspace-ported-header {
+    margin-bottom: 4px !important;
+  }
+}
+
+/* 476 — Give Music Note / Library the same single-owner masthead model as Sori Studio.
+ * Workspace mastheads no longer carry the legacy page-header classes, so 472/473 and older
+ * page-specific translate/font rules cannot participate. This block is the only geometry owner
+ * for the result-pane masthead. Pane width may change the content layout below it, but never the
+ * brand size. The title uses one fixed desktop/tablet scale, so browser resizing and
+ * splitter resizing cannot produce different brand sizes. Wide split keeps the approved position; compact split keeps the exact
+ * same title size and vertical rhythm; result-only fullscreen mirrors the approved Sori Studio
+ * fullscreen composition by letting the pane's existing 1500px fullscreen owner size the host
+ * and keeping this row at 100% with the same 2px inner gutter used by Studio. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host {
+    display: block !important;
+    position: relative !important;
+    height: 84px !important;
+    min-height: 84px !important;
+    margin: 0 !important;
+    padding: 28px 0 4px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
     position: relative !important;
     inset: auto !important;
     display: flex !important;
@@ -10681,10 +11597,10 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     justify-content: flex-start !important;
     width: 100% !important;
     max-width: none !important;
-    height: var(--soridraw-masthead-row-height) !important;
-    min-height: var(--soridraw-masthead-row-height) !important;
+    height: 52px !important;
+    min-height: 52px !important;
     margin: 0 !important;
-    padding: 0 var(--soridraw-masthead-inline) !important;
+    padding: 0 10px 0 12px !important;
     gap: 10px !important;
     box-sizing: border-box !important;
     transform: none !important;
@@ -10692,166 +11608,171 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     overflow: visible !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(
-    .soridraw-studio-scroll-builder-masthead .soridraw-studio-title,
-    .soridraw-studio-result-masthead .soridraw-studio-result-masthead-title,
-    .soridraw-studio-result-masthead .soridraw-page-title-hover
-  ) {
+  /* One brand scale in every result-pane width, exactly like Sori Studio. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-title {
     position: relative !important;
-    top: 0 !important;
-    left: auto !important;
-    right: auto !important;
+    top: 5px !important;
     margin: 0 !important;
     transform: none !important;
     translate: none !important;
   }
 
-  /* Same control baseline in split, compact/tablet and one-pane fullscreen. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-scroll-search-button,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-title h1 {
+    font-size: 2.65rem !important;
+    line-height: 1.04 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Compact split changes only the horizontal gutter. It does NOT own a smaller title. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-masthead {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Music Note refresh and Library credit share the same pane-owned action baseline. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
     position: absolute !important;
     top: auto !important;
-    right: var(--soridraw-masthead-inline) !important;
+    right: 10px !important;
     bottom: 4px !important;
-    left: auto !important;
-    transform: none !important;
-    translate: none !important;
-    margin: 0 !important;
-    z-index: 6 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-scroll-search-button,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
     width: 34px !important;
     min-width: 34px !important;
     max-width: 34px !important;
     height: 34px !important;
     min-height: 34px !important;
     max-height: 34px !important;
-    padding: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-scroll-search-button > svg {
-    position: static !important;
-    width: 24px !important;
-    height: 24px !important;
+    margin: 0 !important;
     transform: none !important;
+    translate: none !important;
+    z-index: 4 !important;
   }
 
-  /* Remove the old result-only 1548px secondary masthead coordinate system. */
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    position: absolute !important;
+    top: auto !important;
+    right: 10px !important;
+    bottom: 4px !important;
+    margin: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 4 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-studio-result-masthead :is(.soridraw-musicnote-hero-sync, .soridraw-studio-result-masthead-actions) {
+    right: 12px !important;
+  }
+
+  /* Result-only fullscreen mirrors Sori Studio fullscreen: the existing pane > * rule owns the
+   * centered 1500px host. Do not apply a second 1548px/24px composition inside it. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-title {
+    top: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
+    position: absolute !important;
+    top: auto !important;
+    right: 2px !important;
+    bottom: 6px !important;
+    width: 34px !important;
+    min-width: 34px !important;
+    max-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    margin: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 6 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    position: absolute !important;
+    top: auto !important;
+    right: 2px !important;
+    bottom: 6px !important;
+    margin: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    z-index: 6 !important;
+  }
+}
+
+/* 478 — Fullscreen result masthead uses the exact same outer composition owner as the page body.
+ * Root cause of 477 not moving the title: the generic 334 fullscreen rule capped every direct
+ * result-pane child (including the masthead host) at 1500px, while 361 later re-expanded the
+ * workspace page itself to 100%. Music Note / Library then center their own max-w-[1548px] page
+ * shell inside that full-width workspace page. The masthead and controls were therefore centered
+ * from two different coordinate systems. Padding the 1500px masthead in 477 could never make those
+ * owners identical. In result-only fullscreen, release ONLY the masthead host from the generic
+ * 1500px direct-child cap, then give its row the exact same 1548px centered shell, then align the visible title/action inset to the body guides.
+ * 479 keeps that owner and moves only the fullscreen title/action guides 24px inward. Split and compact panes stay intact. */
+@media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
   body #root .soridraw-app-root
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-result-pane
-  > .soridraw-studio-result-pane-masthead-host,
-  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
-  body #root .soridraw-app-root
-  .soridraw-studio-result-pane-masthead-host > .soridraw-studio-result-masthead {
+  > .soridraw-studio-result-pane-masthead-host {
     width: 100% !important;
     max-width: none !important;
     margin-left: 0 !important;
     margin-right: 0 !important;
     box-sizing: border-box !important;
   }
-}
 
-/* Phone: same title size and same masthead box. Only the shell owner changes
- * from pane-scroller to normal flow. 74 + 28 = the approved 102px title guide. */
-@media (max-width: 1099px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero {
-    display: block !important;
-    visibility: visible !important;
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
     width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    margin: 0 !important;
-    padding: var(--soridraw-masthead-mobile-shell-top) 0 0 !important;
-    overflow: visible !important;
-    pointer-events: auto !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero > .soridraw-studio-shell {
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero-row {
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero .soridraw-studio-masthead,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(.soridraw-musicnote-page-header, .soridraw-library-page-header) {
-    position: relative !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
-    width: 100% !important;
-    height: var(--soridraw-masthead-box-height) !important;
-    min-height: var(--soridraw-masthead-box-height) !important;
-    margin: 0 !important;
-    padding: var(--soridraw-masthead-pad-top) var(--soridraw-masthead-inline) var(--soridraw-masthead-pad-bottom) !important;
-    gap: 10px !important;
-    box-sizing: border-box !important;
-    transform: none !important;
-    translate: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(.soridraw-musicnote-page-shell, .soridraw-library-theme) {
-    padding-top: var(--soridraw-masthead-mobile-shell-top) !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(.soridraw-musicnote-page-header, .soridraw-library-page-header)
-  .soridraw-page-title-hover {
-    position: relative !important;
-    top: 0 !important;
-    margin: 0 !important;
-    transform: none !important;
-    translate: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
-    position: absolute !important;
-    top: 37px !important;
-    right: var(--soridraw-masthead-inline) !important;
-    bottom: auto !important;
-    width: 34px !important;
-    height: 34px !important;
-    transform: none !important;
-    translate: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(.soridraw-musicnote-page-header .soridraw-musicnote-hero-sync,
-      .soridraw-library-page-header .soridraw-library-credit-button) {
+    max-width: 1548px !important;
     margin-left: auto !important;
-    margin-right: var(--soridraw-masthead-inline) !important;
-    transform: none !important;
-    translate: none !important;
+    margin-right: auto !important;
+    padding-left: 36px !important;
+    padding-right: 34px !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
+    right: 34px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    right: 34px !important;
   }
 }
 
@@ -10930,324 +11851,4 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     content-visibility: auto;
     contain-intrinsic-size: auto 240px;
   }
-}
-
-/* 493 — Native window resize settles once; internal split stays live.
- *
- * Browser-window resizing and the Studio splitter are intentionally different
- * interactions. The splitter keeps the 491 live-layout path. Native resizing
- * holds the last settled Studio frame/profile while the OS window edge moves,
- * then mediaQueryStore publishes the final viewport state once after 160ms
- * idle. This prevents PC/tablet/mobile ownership from being recomputed for
- * every intermediate browser pixel without reintroducing the 490 split-drag
- * frame skipping.
- *
- * This block also fixes the 492 masthead regressions:
- * - phone owns ONLY the normal-flow Sori Studio hero (no duplicate pane title)
- * - desktop/tablet owns ONLY the pane mastheads
- * - pane mastheads stay pinned to the top of their own scroller so preserved
- *   pane scroll positions cannot push the wordmark under the fixed top nav. */
-
-/* 494 — pane mastheads stay in real layout flow.
- * 493 pinned the host with position:sticky inside the isolated scroll pane. In
- * split mode that sticky coordinate could resolve against the pane's clipped
- * paint box and slide the wordmark underneath the fixed top navigation. The
- * pane is already the masthead owner, so no second positioning system is
- * needed: keep the 492 host geometry and reset scrollTop on workspace changes. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(
-    .soridraw-studio-builder-pane-masthead-host,
-    .soridraw-studio-result-pane-masthead-host
-  ) {
-    position: relative !important;
-    top: auto !important;
-    z-index: auto !important;
-    background: transparent !important;
-    isolation: auto !important;
-  }
-}
-
-/* Freeze the Studio frame at the last settled browser width. The OS viewport
- * may keep changing around it, so the user sees cropping/extra outer space
- * rather than dozens of intermediate responsive layouts. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-page-frame {
-  width: var(--soridraw-window-resize-lock-width, 100vw) !important;
-  min-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
-  max-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
-  transition: none !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-page-center {
-  transition: none !important;
-}
-
-/* Lock WIDE ownership even if the live OS viewport temporarily crosses 1600
- * or 1100. Rail collapsed classes still own their 214/64 and 292/64 widths. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
-body #root .soridraw-app-root .soridraw-studio-page-frame {
-  --soridraw-studio-left-rail-width: 214px;
-  --soridraw-studio-right-rail-width: 292px;
-  display: grid !important;
-  grid-template-columns:
-    var(--soridraw-studio-left-rail-width)
-    minmax(0, 1fr)
-    var(--soridraw-studio-right-rail-width) !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
-body #root .soridraw-app-root .soridraw-studio-page-frame.is-left-rail-collapsed {
-  --soridraw-studio-left-rail-width: 64px !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
-body #root .soridraw-app-root .soridraw-studio-page-frame.is-right-rail-collapsed {
-  --soridraw-studio-right-rail-width: 64px !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
-body #root .soridraw-app-root .soridraw-studio-page-frame > .soridraw-studio-left-panel,
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
-body #root .soridraw-app-root .soridraw-studio-page-frame > .soridraw-studio-dashboard-panel {
-  display: block !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="wide"]
-body #root .soridraw-app-root .soridraw-studio-page-frame > .soridraw-studio-page-center {
-  grid-column: 2 !important;
-  width: 100% !important;
-}
-
-/* COMPACT/tablet keeps the rail-free center canvas until resize settles. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="compact"]
-body #root .soridraw-app-root .soridraw-studio-page-frame {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="compact"]
-body #root .soridraw-app-root
-:is(.soridraw-studio-left-panel, .soridraw-studio-dashboard-panel) {
-  display: none !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="compact"]
-body #root .soridraw-app-root .soridraw-studio-page-center {
-  grid-column: 1 !important;
-  width: 100% !important;
-}
-
-/* WIDE + COMPACT both keep the pane-owned masthead model while resizing. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
-  [data-soridraw-resize-lock-profile="wide"],
-  [data-soridraw-resize-lock-profile="compact"]
-) body #root .soridraw-app-root .soridraw-studio-hero {
-  display: none !important;
-  visibility: hidden !important;
-  width: 0 !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  max-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  pointer-events: none !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
-  [data-soridraw-resize-lock-profile="wide"],
-  [data-soridraw-resize-lock-profile="compact"]
-) body #root .soridraw-app-root
-:is(.soridraw-studio-builder-pane-masthead-host, .soridraw-studio-result-pane-masthead-host) {
-  display: block !important;
-  visibility: visible !important;
-  width: 100% !important;
-  height: var(--soridraw-masthead-box-height) !important;
-  min-height: var(--soridraw-masthead-box-height) !important;
-  max-height: none !important;
-  padding: var(--soridraw-masthead-pad-top) 0 var(--soridraw-masthead-pad-bottom) !important;
-  overflow: visible !important;
-  pointer-events: auto !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
-  [data-soridraw-resize-lock-profile="wide"],
-  [data-soridraw-resize-lock-profile="compact"]
-) body #root .soridraw-app-root .soridraw-studio-main {
-  padding-top: 110px !important;
-}
-
-/* MOBILE keeps normal-flow ownership even if the OS viewport is temporarily
- * dragged above 1100 before release. This is also the duplicate-title guard. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
-body #root .soridraw-app-root .soridraw-studio-page-frame {
-  display: block !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
-body #root .soridraw-app-root
-:is(.soridraw-studio-left-panel, .soridraw-studio-dashboard-panel) {
-  display: none !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
-body #root .soridraw-app-root .soridraw-studio-hero {
-  display: block !important;
-  visibility: visible !important;
-  width: 100% !important;
-  height: auto !important;
-  min-height: 0 !important;
-  max-height: none !important;
-  padding-top: var(--soridraw-masthead-mobile-shell-top) !important;
-  overflow: visible !important;
-  pointer-events: auto !important;
-}
-
-/* Split controls follow the settled profile too. They do not participate in
- * native resize geometry; internal splitter dragging remains unchanged. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"][data-soridraw-resize-lock-profile="mobile"]
-body > :is(
-  .soridraw-studio-splitter,
-  .soridraw-studio-builder-collapse-toggle,
-  .soridraw-studio-result-collapse-toggle
-) {
-  display: none !important;
-}
-
-/* 495 — Settled masthead ownership is identical to the resize-preview state.
- * Root cause of the post-release jump: historical one-pane rules carried
- * higher-specificity top offsets / hero spacers. While native resize was active,
- * 493 temporarily hid those rules, so the masthead looked correct. Releasing
- * the mouse removed the resize class and the legacy geometry won again.
- *
- * One final high-specificity owner now applies to the real StudioPageFrame tree:
- * desktop/tablet always use the pane mastheads at the same 110px main guide,
- * regardless of split/fullscreen/workspace view. The retired outer hero has no
- * desktop layout footprint. Mobile owns only the normal-flow outer hero. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame > .soridraw-studio-page-center > .soridraw-studio-main {
-    margin-top: 0 !important;
-    padding-top: 110px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame > .soridraw-studio-page-center > .soridraw-studio-hero {
-    display: none !important;
-    visibility: hidden !important;
-    width: 0 !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    max-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    pointer-events: none !important;
-  }
-}
-
-@media (max-width: 1099px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  :is(.soridraw-studio-builder-pane-masthead-host, .soridraw-studio-result-pane-masthead-host) {
-    display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    min-height: 0 !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: hidden !important;
-    pointer-events: none !important;
-  }
-}
-
-
-/* 496 — native browser resize veil + full Studio frame freeze.
- *
- * Goal: do not fake speed by skipping internal split frames. Internal divider
- * dragging remains 491 Live Layout. Native OS/browser-window resizing is a
- * different interaction: keep the last settled app width, pause expensive
- * visual work, show one lightweight compositor veil, then commit the final
- * responsive layout once and fade the veil away.
- *
- * Deliberately NO `filter: blur()` / `backdrop-filter: blur()` is used here.
- * A full-viewport blur forces repeated large-surface sampling while the OS is
- * resizing the viewport and can make the exact stutter we are trying to hide
- * worse. The translucent soft veil gives the intended softened/dimmed feedback
- * using only opacity compositing. */
-html[data-soridraw-theme="studio-black"] body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 998;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  background:
-    radial-gradient(120% 90% at 50% 38%, rgba(24, 24, 28, 0.10), rgba(5, 5, 7, 0.30)),
-    rgba(8, 8, 10, 0.16);
-  box-shadow: inset 0 0 110px rgba(0, 0, 0, 0.18);
-  will-change: opacity;
-  transition:
-    opacity 140ms ease-out,
-    visibility 0s linear 140ms;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body::after {
-  opacity: 1;
-  visibility: visible;
-  transition:
-    opacity 45ms ease-out,
-    visibility 0s linear 0s;
-}
-
-html.soridraw-window-resize-revealing[data-soridraw-theme="studio-black"] body::after {
-  opacity: 0;
-  visibility: visible;
-  transition:
-    opacity 140ms ease-out,
-    visibility 0s linear 140ms;
-}
-
-/* Freeze the whole application width, not only StudioPageFrame. 493 locked the
- * pane shell but ancestors and sibling UI could still receive a new percentage
- * width on every native resize event. Locking the app root removes that second
- * width cascade. The live viewport simply crops or exposes outer background
- * until resize-end performs the one real layout pass. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body {
-  overflow-x: hidden !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root {
-  width: var(--soridraw-window-resize-lock-width, 100vw) !important;
-  min-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
-  max-width: var(--soridraw-window-resize-lock-width, 100vw) !important;
-  pointer-events: none !important;
-  user-select: none !important;
-  transition: none !important;
-}
-
-/* One class toggle pauses paint-heavy decoration for the duration of the OS
- * gesture. It is restored underneath the reveal veil after final layout, so
- * the user sees a deliberate soft transition rather than shadow/filter churn. */
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root *,
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root *::before,
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root *::after {
-  transition: none !important;
-  animation-play-state: paused !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"] body #root > .soridraw-app-root
-:is(
-  .soridraw-studio-menu-card,
-  .soridraw-studio-result-content > *,
-  .soridraw-studio-action-bar--tracking,
-  .soridraw-studio-live-keywords-portal,
-  .soridraw-studio-page-frame
-) {
-  box-shadow: none !important;
-  filter: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
 }

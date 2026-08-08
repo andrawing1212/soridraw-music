@@ -156,14 +156,14 @@ export default function StudioLeftRail({
 
     document.addEventListener('mousedown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('soridraw-window-resize-start', handleViewportChange as EventListener);
+    window.addEventListener('resize', handleViewportChange);
     window.addEventListener('scroll', handleViewportChange, true);
     window.addEventListener('soridraw-studio-frame-resize', handleViewportChange as EventListener);
 
     return () => {
       document.removeEventListener('mousedown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('soridraw-window-resize-start', handleViewportChange as EventListener);
+      window.removeEventListener('resize', handleViewportChange);
       window.removeEventListener('scroll', handleViewportChange, true);
       window.removeEventListener('soridraw-studio-frame-resize', handleViewportChange as EventListener);
     };
@@ -173,12 +173,12 @@ export default function StudioLeftRail({
     if (!railTooltip) return;
 
     const hideTooltip = () => setRailTooltip(null);
-    window.addEventListener('soridraw-window-resize-start', hideTooltip as EventListener);
+    window.addEventListener('resize', hideTooltip);
     window.addEventListener('scroll', hideTooltip, true);
     window.addEventListener('soridraw-studio-frame-resize', hideTooltip as EventListener);
 
     return () => {
-      window.removeEventListener('soridraw-window-resize-start', hideTooltip as EventListener);
+      window.removeEventListener('resize', hideTooltip);
       window.removeEventListener('scroll', hideTooltip, true);
       window.removeEventListener('soridraw-studio-frame-resize', hideTooltip as EventListener);
     };

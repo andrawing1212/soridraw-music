@@ -6589,20 +6589,6 @@ h1.text-3xl.md\:text-5xl {
   max-width: min(100%, 680px) !important;
 }
 
-@container (max-width: 1080px) {
-  .soridraw-musicnote-song-keywords {
-    width: min(100%, 520px) !important;
-    max-width: min(100%, 520px) !important;
-  }
-}
-
-@container (max-width: 820px) {
-  .soridraw-musicnote-song-keywords {
-    width: min(100%, 360px) !important;
-    max-width: min(100%, 360px) !important;
-  }
-}
-
 @container (max-width: 680px) {
   .soridraw-musicnote-song-keywords {
     width: 100% !important;
@@ -11168,18 +11154,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   max-width: min(100%, 680px) !important;
 }
 
-:root body #root .soridraw-app-root
-.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-width-lte1080="true"] .soridraw-musicnote-song-keywords {
-  width: min(100%, 520px) !important;
-  max-width: min(100%, 520px) !important;
-}
-
-:root body #root .soridraw-app-root
-.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-width-lte820="true"] .soridraw-musicnote-song-keywords {
-  width: min(100%, 360px) !important;
-  max-width: min(100%, 360px) !important;
-}
-
 /* Library wide/tablet typography follows the split-pane version explicitly. */
 :root body #root .soridraw-app-root
 .soridraw-library-theme.soridraw-responsive-content-page .soridraw-library-item-title {
@@ -11438,4 +11412,207 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :root body #root .soridraw-app-root
 .soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] .soridraw-library-workspace-track-row span[class*="text-xs"] {
   font-size: 8.5px !important;
+}
+
+
+/* 513: Music Note / Library list geometry has exactly two density states.
+ * Non-mobile (PC + tablet) and mobile are owned only by the page's stable
+ * border-box responsive mode. Split-pane data-pane-mode/hysteresis and old
+ * 820px keyword/container steps are intentionally not allowed to restyle the
+ * song list. This keeps standalone dark and split mode on the same transition. */
+
+/* Music Note — PC/tablet list geometry. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-row {
+  padding: 12px 14px !important;
+  gap: 10px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-media {
+  width: 48px !important;
+  height: 60px !important;
+  border-radius: 12px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-media > svg {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-copy {
+  padding-left: 4px !important;
+  padding-right: 4px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-meta {
+  gap: 8px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-genre { font-size: 13px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-date { font-size: 10px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-title {
+  margin-top: 4px !important;
+  font-size: 15px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-creator { font-size: 10px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-keywords {
+  width: min(100%, 680px) !important;
+  max-width: min(100%, 680px) !important;
+  height: 20px !important;
+  gap: 4px !important;
+  padding-right: 8px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-keyword-chip {
+  height: 20px !important;
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+  font-size: 9px !important;
+  border-radius: 6px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-actions { gap: 8px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-actions > span,
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-musicnote-song-actions > div > button {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* Music Note — mobile list geometry. This wins even while the split parent is
+ * still inside its 16px pane-mode hysteresis band. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-media {
+  width: 40px !important;
+  height: 50px !important;
+  border-radius: 10px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-media > svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-copy {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-meta { gap: 5px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-creator { font-size: 8px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-keywords {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 18px !important;
+  gap: 3px !important;
+  padding-right: 3px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-actions { gap: 2px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-actions > span,
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-actions > div > button {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* Library — PC/tablet list geometry. */
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-library-workspace-meta {
+  font-size: 11px !important;
+  line-height: 1.15 !important;
+  gap: 8px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-library-item-title { gap: 3px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-library-item-genre { font-size: 13px !important; }
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-library-item-name {
+  width: max-content !important;
+  max-width: none !important;
+  min-width: max-content !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: 15px !important;
+  line-height: 1.12 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page:not([data-soridraw-responsive-mode="mobile"])
+.soridraw-library-workspace-track-row {
+  gap: 16px !important;
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+/* Library — mobile list geometry, owned by the same 680px page mode in both
+ * standalone and split layouts. */
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-track-row {
+  gap: 8px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
 }

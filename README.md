@@ -918,3 +918,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note / Library에 남아 있던 `max-width: 767px` 모바일 보정은 `max-width: 680px`, 짝이 되는 `min-width: 768px` 보정은 `min-width: 681px`로 맞췄다.
 - 따라서 일반모드에서도 분할 pane과 동일하게 `태블릿 -> 모바일`이 680px 경계 하나에서 전환되며, 681~767px의 짧은 혼합 단계가 생기지 않는다.
 - Sori Studio, 좌/우 레일, 분할바, Firebase/Auth/Firestore/Functions 및 저장 구조는 변경하지 않았다.
+
+
+### 513차 — Music Note / Library 목록 중간형 제거
+- 기준: 512차.
+- 대상은 Music Note / Library의 곡 목록 반응형만이다. Studio 본체, 좌우 rail, splitter, 대문 구조는 변경하지 않았다.
+- 508에서 남아 있던 Music Note 820px/1080px 키워드 폭 중간 단계와 해당 data attribute 기록을 제거했다. 목록은 이제 `비모바일(PC+태블릿)` / `모바일(<=680px)` 두 밀도만 사용한다.
+- split 결과 pane의 `data-pane-mode`는 Studio 자체의 16px hysteresis를 계속 유지하지만, Music Note / Library 목록 디자인에는 더 이상 개입하지 못하게 최종 목록 규격을 page의 `data-soridraw-responsive-mode` 하나로 고정했다.
+- 따라서 일반 다크와 분할모드 모두 목록은 680px에서 한 번만 모바일 규격으로 전환하며, 중간에 media/text/actions/keyword/track-gap이 별도로 한 번 더 바뀌는 짧은 혼합형을 제거했다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

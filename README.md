@@ -897,3 +897,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 1024~1099px 구간에서 데스크톱 메뉴가 억지로 유지되어 메뉴/외부앱/프로필이 겹치던 현상을 제거했다.
 - 1100px 미만에서는 모바일 아이콘 바, 1100px 이상에서는 데스크톱 상단 메뉴를 사용한다.
 - Music Note/Library 콘텐츠 반응형 계약, Studio 좌우 메뉴, 분할바, Firebase/저장 구조는 변경하지 않았다.
+
+
+## 510차 — 모바일→태블릿 전환점 상단 내비게이션 오판정 수정
+- 기준: 509차
+- 수정: `src/App.tsx`
+- 원인: 전체 쉘 기준은 PC >=1600 / Tablet 1100~1599 / Mobile <1100인데, 509차에서 전체 PC 상단 내비게이션을 1100px부터 표시해 태블릿 진입 순간 폭이 부족한 PC 메뉴가 켜졌다. 외부 앱 버튼/프로필/메뉴가 겹치고 Music Note/Library 상단 레이아웃이 순간적으로 튀었다.
+- 수정: 전체 PC 상단 내비게이션은 1600px 이상에서만 표시. 1600px 미만(모바일+태블릿)은 기존 아이콘형 compact 상단바를 유지한다.
+- 범위: Music Note/Library 전환 구간의 공통 상단바만 수정. 페이지 내부 반응형, Studio, 좌우 rail, split, Firebase/저장 구조는 미수정.

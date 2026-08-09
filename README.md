@@ -912,3 +912,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `src/lib/contentResponsive.ts`의 반응형 판정 폭을 `ResizeObserverEntry.contentRect.width`(content-box)에서 `getBoundingClientRect().width`(border-box)로 변경.
 - 508에서 모바일/태블릿 모드별 페이지 좌우 padding이 달라지면서 content-box 폭 자체가 바뀌어, 680px 경계 부근에서 `tablet → mobile → tablet` 판정이 반복되던 피드백 루프를 제거.
 - Music Note / Library가 공유하는 반응형 유틸만 수정했으며 상단바, Studio, 분할바, Firebase/저장 구조는 변경하지 않음.
+
+### 512차 — Music Note / Library 일반모드 창 크기 전환을 분할모드 기준과 동일화
+- 511차의 실제 폭 기반 responsive contract(모바일 <=680 / 태블릿 681~1080 / PC >1080)를 일반 다크 화면의 레거시 viewport 보정에도 동일하게 적용했다.
+- Music Note / Library에 남아 있던 `max-width: 767px` 모바일 보정은 `max-width: 680px`, 짝이 되는 `min-width: 768px` 보정은 `min-width: 681px`로 맞췄다.
+- 따라서 일반모드에서도 분할 pane과 동일하게 `태블릿 -> 모바일`이 680px 경계 하나에서 전환되며, 681~767px의 짧은 혼합 단계가 생기지 않는다.
+- Sori Studio, 좌/우 레일, 분할바, Firebase/Auth/Firestore/Functions 및 저장 구조는 변경하지 않았다.

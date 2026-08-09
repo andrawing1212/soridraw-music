@@ -890,3 +890,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Compact mode is now based on actual page width <= 680px, not `browser <= 767px` versus `result-pane mobile` as two separate design triggers.
 - Masthead/portal ownership and Sori Studio/side rails/splitter are intentionally untouched in this step.
 - No Firebase/Auth/Firestore/Functions/storage schema changes.
+
+### 509차 — 1100px 직전 상단 내비게이션 겹침 수정
+- 기준: 508차.
+- 전역 상단 내비게이션 전환 기준을 Tailwind `lg`(1024px)에서 SORIDRAW 외곽 반응형 기준인 1100px로 일치시켰다.
+- 1024~1099px 구간에서 데스크톱 메뉴가 억지로 유지되어 메뉴/외부앱/프로필이 겹치던 현상을 제거했다.
+- 1100px 미만에서는 모바일 아이콘 바, 1100px 이상에서는 데스크톱 상단 메뉴를 사용한다.
+- Music Note/Library 콘텐츠 반응형 계약, Studio 좌우 메뉴, 분할바, Firebase/저장 구조는 변경하지 않았다.

@@ -3411,7 +3411,7 @@ function Navigation({
     <>
       {/* Top Navigation */}
       <div
-        className="soridraw-top-navigation absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl lg:flex"
+        className="soridraw-top-navigation absolute left-0 z-[60] hidden w-full items-center justify-between gap-3 border-b border-white/10 bg-[#101010]/92 px-5 py-3.5 shadow-[0_10px_34px_rgba(0,0,0,0.28)] backdrop-blur-xl min-[1100px]:flex"
       >
         <button
           type="button"
@@ -3597,7 +3597,7 @@ function Navigation({
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl lg:hidden"
+        className="soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl min-[1100px]:hidden"
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">

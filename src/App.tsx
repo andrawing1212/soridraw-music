@@ -6346,6 +6346,7 @@ function App() {
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
   const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(true);
+  const isActionButtonsCollapsedRef = useRef(true);
   // A horizontal swipe can begin on top of the generate button itself. Browsers
   // still synthesize a click after pointerup when the pointer finishes inside
   // that button, so keep a short gesture-consumed window that blocks the
@@ -6360,6 +6361,10 @@ function App() {
     event.preventDefault();
     event.stopPropagation();
   };
+
+  useEffect(() => {
+    isActionButtonsCollapsedRef.current = isActionButtonsCollapsed;
+  }, [isActionButtonsCollapsed]);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);
@@ -6662,6 +6667,10 @@ function App() {
   const isActionsFloatingRef = useRef(true);
   const isSplitDraggingRef = useRef(false);
   const actionBarHeightRef = useRef(84);
+  // Docking used to be tuned around the compact pre-524 action row. The visual
+  // row is intentionally larger now, but its larger height must not postpone the
+  // moment when the bar returns to its real in-flow slot below the command card.
+  const ACTION_BAR_DOCKING_HEIGHT_CAP = 94;
   const actionBarPlacementRafRef = useRef<number | null>(null);
   const actionBarLayoutRafRef = useRef<number | null>(null);
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
@@ -6833,13 +6842,63 @@ const toggleCycleVariantSelection = (
     root.style.setProperty('--soridraw-action-fixed-left', `${anchorRect.left}px`);
     root.style.setProperty('--soridraw-action-fixed-width', `${anchorRect.width}px`);
 
-    const nextHeight = Math.ceil(actionBar?.offsetHeight || actionBarHeightRef.current || 84);
-    if (nextHeight > 0) actionBarHeightRef.current = nextHeight;
-    const inlinePaddingAlreadyIncluded = actionBar?.dataset.soridrawPlacement === 'inline';
+    // Measure the visible row, not the outer tracking wrapper. The inline copy
+    // has 12px top padding while the floating copy does not; storing wrapper
+    // height made the cached height change simply because ownership changed,
+    // so the larger 524 bar could bounce around the floating/inline threshold.
+    const actionRow = actionBar?.querySelector<HTMLElement>('.soridraw-studio-action-row');
+    const measuredRowHeight = Math.ceil(actionRow?.getBoundingClientRect().height || 0);
+    if (measuredRowHeight > 0) actionBarHeightRef.current = measuredRowHeight;
+
+    // The real slot always reserves the same geometry regardless of whether the
+    // visible row is currently portaled or already inline.
     anchor.style.setProperty(
       '--soridraw-action-anchor-height',
-      `${Math.ceil(actionBarHeightRef.current + (inlinePaddingAlreadyIncluded ? 0 : 12))}px`,
+      `${Math.ceil(actionBarHeightRef.current + 12)}px`,
     );
+  }, []);
+
+  const clearCollapsedActionDock = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    delete root.dataset.soridrawActionCollapsedDocked;
+    root.style.removeProperty('--soridraw-action-collapsed-docked-top');
+  }, []);
+
+  const syncCollapsedActionDockPosition = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    if (root.dataset.soridrawActionCollapsedDocked !== 'true') return;
+    const anchor = actionButtonsAnchorRef.current;
+    if (!anchor) return;
+    const anchorRect = anchor.getBoundingClientRect();
+    // Inline expanded rows start 12px below the anchor. Keep the collapsed tab
+    // on that same visual row instead of jumping back to the viewport bottom.
+    root.style.setProperty(
+      '--soridraw-action-collapsed-docked-top',
+      `${Math.round(anchorRect.top + 12)}px`,
+    );
+  }, []);
+
+  const collapseActionButtons = useCallback(() => {
+    if (typeof document !== 'undefined') {
+      const root = document.documentElement;
+      const shouldRemainDocked = root.dataset.soridrawTheme === 'studio-black'
+        && !isActionsFloatingRef.current;
+      if (shouldRemainDocked) {
+        root.dataset.soridrawActionCollapsedDocked = 'true';
+        syncCollapsedActionDockPosition();
+      } else {
+        clearCollapsedActionDock();
+      }
+    }
+    isActionButtonsCollapsedRef.current = true;
+    setIsActionButtonsCollapsed(true);
+  }, [clearCollapsedActionDock, syncCollapsedActionDockPosition]);
+
+  const expandActionButtons = useCallback(() => {
+    isActionButtonsCollapsedRef.current = false;
+    setIsActionButtonsCollapsed(false);
   }, []);
 
   const updateActionBarPlacement = useCallback(() => {
@@ -6849,6 +6908,7 @@ const toggleCycleVariantSelection = (
 
     const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
     if (!isStudioBlack) {
+      clearCollapsedActionDock();
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       anchor.style.removeProperty('--soridraw-action-anchor-height');
@@ -6859,9 +6919,18 @@ const toggleCycleVariantSelection = (
       return;
     }
 
+    // A docked collapsed tab belongs to the real command slot. Keep following
+    // that slot while scrolling, but do not reclassify floating/inline ownership
+    // until the user expands it again.
+    if (isActionButtonsCollapsedRef.current) {
+      syncCollapsedActionDockPosition();
+      return;
+    }
+
     const rect = anchor.getBoundingClientRect();
     const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
-    const dockLine = window.innerHeight - actionBarHeightRef.current - viewportBottomGap;
+    const dockingHeight = Math.min(actionBarHeightRef.current, ACTION_BAR_DOCKING_HEIGHT_CAP);
+    const dockLine = window.innerHeight - dockingHeight - viewportBottomGap;
     const naturalPanelTop = rect.top + 12;
     const wasFloating = isActionsFloatingRef.current;
 
@@ -6876,7 +6945,7 @@ const toggleCycleVariantSelection = (
       isActionsFloatingRef.current = nextIsFloating;
       setIsActionsFloating(nextIsFloating);
     }
-  }, []);
+  }, [clearCollapsedActionDock, syncCollapsedActionDockPosition]);
 
   const scheduleActionBarPlacement = useCallback(() => {
     if (actionBarPlacementRafRef.current !== null) return;
@@ -7069,6 +7138,14 @@ const toggleCycleVariantSelection = (
     document.documentElement.dataset.soridrawActionOwner = studioActionOwner;
   }, [studioActionOwner]);
 
+  useLayoutEffect(() => {
+    if (studioActionOwner === 'collapsed') return;
+    // Keep the dock marker through the zero-duration collapsed exit so the tab
+    // cannot flash back to its fixed-bottom position while expanding.
+    const frame = window.requestAnimationFrame(() => clearCollapsedActionDock());
+    return () => window.cancelAnimationFrame(frame);
+  }, [clearCollapsedActionDock, studioActionOwner]);
+
   useEffect(() => {
     if (studioActionOwner === 'floating') return;
     setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
@@ -7076,6 +7153,8 @@ const toggleCycleVariantSelection = (
 
   useEffect(() => () => {
     delete document.documentElement.dataset.soridrawActionOwner;
+    delete document.documentElement.dataset.soridrawActionCollapsedDocked;
+    document.documentElement.style.removeProperty('--soridraw-action-collapsed-docked-top');
   }, []);
 
   useLayoutEffect(() => {
@@ -13565,7 +13644,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         if (!isActionSwipeCollapseMode) return;
         blockActionSwipeTrailingClick();
         if (info.offset.x < -70 || info.velocity.x < -520) {
-          setIsActionButtonsCollapsed(true);
+          collapseActionButtons();
         }
       }}
       onClickCapture={handleActionSwipeClickCapture}
@@ -13575,7 +13654,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       {!isActionSwipeCollapseMode && (
         <motion.button
           type="button"
-          onClick={() => setIsActionButtonsCollapsed(true)}
+          onClick={collapseActionButtons}
           onMouseEnter={() => {}}
           onMouseLeave={() => {}}
           className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
@@ -15107,10 +15186,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onDragEnd={(_, info) => {
                       if (!isActionSwipeCollapseMode) return;
                       if (info.offset.x > 34 || info.velocity.x > 360) {
-                        setIsActionButtonsCollapsed(false);
+                        expandActionButtons();
                       }
                     }}
-                    onClick={() => setIsActionButtonsCollapsed(false)}
+                    onClick={expandActionButtons}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"

@@ -11835,3 +11835,49 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     height: 20px !important;
   }
 }
+
+/* 525 — When the expanded Studio Black action row has already docked into its
+ * real command slot, collapsing it must preserve that same vertical slot.
+ * The collapsed control remains a body portal for the approved left-edge crop,
+ * but App.tsx publishes the live anchor top so it no longer jumps back to the
+ * generic viewport-bottom floating position. */
+html[data-soridraw-theme="studio-black"][data-soridraw-action-collapsed-docked="true"]
+  body > .soridraw-studio-action-collapsed {
+  top: var(--soridraw-action-collapsed-docked-top, auto) !important;
+  bottom: auto !important;
+}
+
+/* 526 — Music Note / Suno Library split tabs: keep the Studio Black shell,
+ * but restore the selected child as a visibly inset button like Classic Dark.
+ * The 430~431 paint layer intentionally expanded active/hovered edge tabs to
+ * the parent's full 46px shell. Keep the 46px Studio Black parent and 40px
+ * child geometry, but stop the colored child surface from escaping the 3px/4px
+ * parent padding. Selected text remains the existing #101010. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab)::before {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  border-radius: 12px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):first-child:is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+)::before,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs)
+> :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):last-child:is(
+  :hover,
+  [aria-pressed="true"],
+  [data-active="true"]
+)::before {
+  left: 0 !important;
+  right: 0 !important;
+  border-radius: 12px !important;
+}

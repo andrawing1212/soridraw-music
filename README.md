@@ -1029,3 +1029,20 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Studio 본문, 분할바, Builder mobile 판정, 520~523의 드래그 안정화/스와이프/오클릭 차단 로직은 변경하지 않았습니다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+### 525차 — 생성바 확대 후 도킹 위치/접기 위치 안정화
+- 524에서 생성바를 크게 만든 뒤 floating/inline 전환 때 외곽 wrapper 높이를 캐시하면서, inline 전용 12px 상단 padding까지 높이에 섞여 도킹 판정이 흔들리던 구조를 수정했습니다.
+- 생성바 높이 측정 기준을 실제 `.soridraw-studio-action-row` 높이 하나로 통일하고, inline anchor는 항상 `실제 row 높이 + 12px`만 예약합니다.
+- 커진 시각 높이가 기존 도킹 타이밍까지 밀어내지 않도록 도킹 판정용 높이는 기존 compact 동작 범위(최대 94px)로 분리했습니다. 따라서 화면 최하단에서는 다시 명령창 바로 아래의 실제 in-flow 자리로 들어갑니다.
+- 이미 inline으로 들어간 상태에서 접으면 collapsed 탭이 viewport 하단으로 재배치되지 않고 같은 명령창 아래 세로 위치를 유지합니다. 스크롤 중에도 실제 anchor 위치를 따라갑니다.
+- 520~524에서 완료한 분할바 드래그 좌표 안정화, builder-mobile 3버튼 전환, 스와이프 접기/오클릭 차단, 확대된 생성바 비율은 유지합니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+### 526차 — 분할 Music Note / Suno Library 상단 탭 선택버튼 inset 복구
+- 기준: 525차.
+- Studio Black 분할모드의 Music Note / Suno Library 3분할 상단 탭에서 선택된 첫/마지막 버튼이 부모 46px 쉘 끝까지 확장되어 부모와 한 덩어리처럼 보이던 상태를 수정했습니다.
+- 분할모드의 부모 쉘 높이/색상/전체 폭/라운드 디자인은 그대로 유지하고, 내부 하위 버튼의 40px 높이와 부모의 3px 세로·4px 가로 여백이 실제로 보이도록 선택/hover 페인트 레이어를 자식 버튼 안쪽으로 되돌렸습니다.
+- 노트 스페이스/뮤직 스페이스처럼 첫 번째 탭이 선택되어도 좌측 부모 끝까지 색이 붙지 않고, Classic Dark처럼 살짝 작은 독립 버튼으로 보입니다.
+- Music Note 선택색 #FF7A72, Library 선택색 #A98BFF, 선택 텍스트 #101010(검정)은 그대로 유지합니다.
+- 일반 Dark/Light 테마, 탭 동작, 반응형 판정, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

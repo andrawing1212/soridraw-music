@@ -905,3 +905,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 원인: 전체 쉘 기준은 PC >=1600 / Tablet 1100~1599 / Mobile <1100인데, 509차에서 전체 PC 상단 내비게이션을 1100px부터 표시해 태블릿 진입 순간 폭이 부족한 PC 메뉴가 켜졌다. 외부 앱 버튼/프로필/메뉴가 겹치고 Music Note/Library 상단 레이아웃이 순간적으로 튀었다.
 - 수정: 전체 PC 상단 내비게이션은 1600px 이상에서만 표시. 1600px 미만(모바일+태블릿)은 기존 아이콘형 compact 상단바를 유지한다.
 - 범위: Music Note/Library 전환 구간의 공통 상단바만 수정. 페이지 내부 반응형, Studio, 좌우 rail, split, Firebase/저장 구조는 미수정.
+
+
+## 511차 — Music Note / Library 모바일↔태블릿 판정 루프 제거
+- 기준: 510차.
+- `src/lib/contentResponsive.ts`의 반응형 판정 폭을 `ResizeObserverEntry.contentRect.width`(content-box)에서 `getBoundingClientRect().width`(border-box)로 변경.
+- 508에서 모바일/태블릿 모드별 페이지 좌우 padding이 달라지면서 content-box 폭 자체가 바뀌어, 680px 경계 부근에서 `tablet → mobile → tablet` 판정이 반복되던 피드백 루프를 제거.
+- Music Note / Library가 공유하는 반응형 유틸만 수정했으며 상단바, Studio, 분할바, Firebase/저장 구조는 변경하지 않음.

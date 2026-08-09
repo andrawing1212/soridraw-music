@@ -51,18 +51,33 @@ export function attachSoridrawResponsiveContract(element: HTMLElement) {
     last = next;
   };
 
-  applyWidth(element.getBoundingClientRect().width);
+  const readStableBorderWidth = () => element.getBoundingClientRect().width;
+
+  applyWidth(readStableBorderWidth());
 
   if (typeof ResizeObserver !== 'undefined') {
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) applyWidth(entry.contentRect.width);
+    const observer = new ResizeObserver(() => {
+      // IMPORTANT: responsive mode itself changes the page padding.
+      // ResizeObserverEntry.contentRect is the content-box width, so using it
+      // here creates a feedback loop near the mobile/tablet threshold:
+      // tablet padding -> smaller contentRect -> mobile -> smaller padding ->
+      // larger contentRect -> tablet -> ...
+      // Measure the border-box instead so visual padding changes never alter
+      // the width that owns the responsive decision.
+      applyWidth(readStableBorderWidth());
     });
-    observer.observe(element);
+
+    try {
+      observer.observe(element, { box: 'border-box' });
+    } catch {
+      // Older browsers can still use the default observer because the callback
+      // reads getBoundingClientRect(), not the unstable contentRect width.
+      observer.observe(element);
+    }
     return () => observer.disconnect();
   }
 
-  const handleResize = () => applyWidth(element.getBoundingClientRect().width);
+  const handleResize = () => applyWidth(readStableBorderWidth());
   window.addEventListener('resize', handleResize, { passive: true });
   return () => window.removeEventListener('resize', handleResize);
 }

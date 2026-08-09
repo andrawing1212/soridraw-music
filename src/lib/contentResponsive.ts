@@ -1,6 +1,6 @@
 export type SoridrawResponsiveMode = 'mobile' | 'tablet' | 'pc';
 
-const MOBILE_MAX = 640;
+const MOBILE_MAX = 660;
 const TABLET_MAX = 1080;
 type ResponsiveSnapshot = {
   mode: SoridrawResponsiveMode;

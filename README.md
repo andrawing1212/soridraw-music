@@ -935,3 +935,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 분할모드에서 Music Note / Library를 띄운 경우 result pane의 전환 기준도 640px 계열로 맞추고, 이 두 화면에 한해서 16px pane-mode hysteresis를 사용하지 않는다. 따라서 페이지 자체 판정과 부모 pane 판정이 서로 다른 순간에 바뀌는 짧은 혼합 상태를 만들지 않는다.
 - 생성 결과 등 다른 result pane 화면은 기존 680px + 16px hysteresis를 그대로 유지한다.
 - Studio 본체, 좌우 메뉴, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+
+## 515차 — 모바일 전환 지연 재조정 + 전체 버튼 세로깨짐 제거
+- 514차의 640px 지연은 과도해서 실제 사용 구간에서 모바일 전환 전에 일반/태블릿 UI만 눌렸고, 색상 필터의 `전체` 텍스트가 세로로 접히는 잘못된 중간 상태가 생겼습니다.
+- Music Note / Library의 공통 모바일 전환 기준을 680px 원래 기준보다 조금 늦은 660px로 재조정했습니다.
+- 일반모드와 분할모드 모두 같은 660px 기준을 사용하며, 분할 결과 pane의 모드 판정도 661px 경계/무히스테리시스로 동기화됩니다.
+- 모바일 전환 전에는 색상 필터와 `전체` 버튼이 줄어들거나 줄바꿈되지 않도록 고정했습니다.
+- 660px 이하가 되는 순간 검색/필터/색상 전체 버튼/목록 밀도가 함께 모바일 디자인으로 전환됩니다.
+- Studio 본체, 좌우 메뉴, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.

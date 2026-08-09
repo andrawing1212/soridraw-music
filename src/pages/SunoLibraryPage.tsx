@@ -5775,7 +5775,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           <button
             type="button"
             onClick={handleCreditShortcutClick}
-            className="soridraw-library-credit-button flex h-12 items-center justify-center gap-2 px-4 rounded-2xl border border-[#A98BFF]/22 bg-[#A98BFF]/12 text-xs font-bold text-[#D8CCFF] transition-all hover:bg-[#A98BFF]/18 active:scale-[0.98]"
+            className="soridraw-library-credit-button flex h-9 items-center justify-center gap-1 px-2.5 rounded-xl bg-[#A98BFF]/12 text-[10px] leading-none font-bold text-[#D8CCFF] whitespace-nowrap transition-all hover:bg-[#A98BFF]/18 active:scale-[0.98]"
           >
             남은 크레딧 {remainingCredits.toLocaleString()}
           </button>

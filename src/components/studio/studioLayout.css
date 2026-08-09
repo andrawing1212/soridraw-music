@@ -7244,11 +7244,11 @@ h1.text-3xl.md\:text-5xl {
 
 @media (max-width: 660px) {
   .soridraw-library-theme .soridraw-library-credit-button {
-    height: 34px !important;
-    min-height: 34px !important;
-    padding-left: 9px !important;
-    padding-right: 9px !important;
-    border-radius: 11px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 12px !important;
     gap: 4px !important;
     font-size: 10px !important;
     line-height: 1 !important;
@@ -7636,8 +7636,15 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-workspace-hero-host
   .soridraw-library-credit-button {
-    height: 40px !important;
-    min-height: 40px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
   }
 
   /* The header is now owned by the hero. Remove the obsolete 96px page-top
@@ -7682,11 +7689,11 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     .soridraw-studio-workspace-hero-host,
     .soridraw-library-theme
   ) .soridraw-library-credit-button {
-    height: 32px !important;
-    min-height: 32px !important;
+    height: 36px !important;
+    min-height: 36px !important;
     padding-left: 10px !important;
     padding-right: 10px !important;
-    border-radius: 11px !important;
+    border-radius: 12px !important;
     gap: 4px !important;
     font-size: 10px !important;
     line-height: 1 !important;
@@ -7698,25 +7705,28 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-workspace-hero-host[data-pane-mode="mobile"]
   .soridraw-library-credit-button {
-    height: 28px !important;
-    min-height: 28px !important;
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-    border-radius: 9px !important;
-    font-size: 9px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 12px !important;
+    font-size: 10px !important;
+    gap: 4px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
   }
 }
 
 @media (max-width: 660px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-library-theme .soridraw-library-credit-button {
-    height: 28px !important;
-    min-height: 28px !important;
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-    border-radius: 9px !important;
-    gap: 3px !important;
-    font-size: 9px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 12px !important;
+    gap: 4px !important;
+    font-size: 10px !important;
     line-height: 1 !important;
     white-space: nowrap !important;
   }
@@ -8240,7 +8250,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-library-list-start-divider {
-  --soridraw-list-start-gap: 12px;
+  --soridraw-list-start-gap: 21px;
 }
 
 @media (max-width: 660px) {
@@ -8251,9 +8261,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-library-list-start-divider {
-    --soridraw-list-start-gap: 8px;
+    --soridraw-list-start-gap: 13px;
   }
 }
+
+/* 516 — Library uses the same search-to-first-track divider midpoint as Music Note.
+ * Only the painted line position is shared; Library track spacing itself is unchanged. */
 
 /* 416 — Brighten the Music Note / Suno Library search fields with the same
  * cool-neutral gray family used by the surrounding Studio Black controls.
@@ -9731,11 +9744,11 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   html[data-soridraw-theme="studio-black"]:not([data-soridraw-builder-collapsed="true"]):not([data-soridraw-result-collapsed="true"])
   body #root .soridraw-app-root
   .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-library-credit-button {
-    height: 32px !important;
-    min-height: 32px !important;
+    height: 36px !important;
+    min-height: 36px !important;
     padding-left: 10px !important;
     padding-right: 10px !important;
-    border-radius: 11px !important;
+    border-radius: 12px !important;
     gap: 4px !important;
     font-size: 10px !important;
     line-height: 1 !important;
@@ -9746,12 +9759,15 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   body #root .soridraw-app-root
   .soridraw-studio-result-pane[data-pane-mode="mobile"]
   .soridraw-studio-result-pane-masthead-host > .soridraw-workspace-ported-header .soridraw-library-credit-button {
-    height: 28px !important;
-    min-height: 28px !important;
-    padding-left: 8px !important;
-    padding-right: 8px !important;
-    border-radius: 9px !important;
-    font-size: 9px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    border-radius: 12px !important;
+    font-size: 10px !important;
+    gap: 4px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
   }
 }
 

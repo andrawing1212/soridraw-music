@@ -944,3 +944,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모바일 전환 전에는 색상 필터와 `전체` 버튼이 줄어들거나 줄바꿈되지 않도록 고정했습니다.
 - 660px 이하가 되는 순간 검색/필터/색상 전체 버튼/목록 밀도가 함께 모바일 디자인으로 전환됩니다.
 - Studio 본체, 좌우 메뉴, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
+
+## 516차 - Library credit size + list divider alignment
+- Suno Library `남은 크레딧` 버튼은 PC/태블릿/모바일/분할모드에서 모두 모바일 기준 36px 높이, 10px 좌우 여백, 12px 라운드, 10px 텍스트로 통일했습니다.
+- Library의 검색창과 첫 곡 사이 가로선은 Music Note와 같은 시각적 중앙 위치를 사용하도록 조정했습니다. 목록/카드 간격 자체는 변경하지 않았습니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

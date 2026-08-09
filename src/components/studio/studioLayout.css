@@ -520,6 +520,31 @@
   grid-row: auto !important;
 }
 
+/* 519 — collapsed keyword-card height follows the builder pane itself.
+ * The old App.tsx fallback used window.innerWidth, so a narrow split pane inside
+ * a desktop browser could retain desktop height until a later React render. */
+.soridraw-expand-content {
+  --soridraw-expand-collapsed-height: 96px;
+}
+
+@media (max-width: 767px) {
+  .soridraw-expand-content {
+    --soridraw-expand-collapsed-height: 48px;
+  }
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-expand-content {
+  --soridraw-expand-collapsed-height: 96px;
+  min-height: 96px !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-expand-content {
+  --soridraw-expand-collapsed-height: 48px;
+  min-height: 48px !important;
+}
+
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-studio-menu-card {
   overflow: hidden !important;
   isolation: isolate;
@@ -2183,35 +2208,74 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
 }
 
 @media (min-width: 1100px) {
+  /* 517 — Divider drag must move/resize the action bar box only.
+   * Do not continuously scale its internal height/font/icon/radius on every
+   * builder-width pixel. That produced the visible "breathing/morphing" lower
+   * Generate area while the split divider was moving. Keep one stable visual
+   * density and let only the available horizontal width track the builder. */
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-    --soridraw-action-control-height: clamp(58px, calc(var(--soridraw-studio-builder-width, 920px) * 0.078), 76px);
+    --soridraw-action-control-height: 60px;
     --soridraw-action-bottom-gap: 28px;
-    --soridraw-action-row-gap: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0105), 10px);
-    --soridraw-action-row-padding: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0085), 9px);
+    --soridraw-action-row-gap: 7px;
+    --soridraw-action-row-padding: 7px;
     padding-inline: 0 !important;
   }
 
+  /* 518 — The split divider may resize the floating bar's outer tracking box,
+   * but the visible command panel must keep a stable gutter from both pane
+   * edges. Without this gutter, once the builder became narrower than the
+   * 920px panel max-width the panel expanded to 100% and visually glued itself
+   * to the divider while dragging. */
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    box-sizing: border-box !important;
+    padding-inline: 18px !important;
+  }
+
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
-    border-radius: clamp(15px, calc(var(--soridraw-studio-builder-width, 920px) * 0.02), 19px) !important;
+    border-radius: 16px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
     display: flex !important;
-    flex: 0 0 clamp(38px, calc(var(--soridraw-studio-builder-width, 920px) * 0.05), 46px) !important;
-    width: clamp(38px, calc(var(--soridraw-studio-builder-width, 920px) * 0.05), 46px) !important;
-    min-width: clamp(38px, calc(var(--soridraw-studio-builder-width, 920px) * 0.05), 46px) !important;
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+  }
+
+  /* 518 — On a desktop/tablet split workspace the lower Generate row has one
+   * desktop composition. Its former 681px container query independently hid
+   * labels and narrowed the side controls while the divider was moving, so the
+   * row looked as if it had switched to the mobile Generate UI even though the
+   * app itself was still in split desktop/tablet mode. Keep that composition
+   * independent from the divider width; actual app mobile (<1100px) keeps the
+   * existing compact rules. */
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: block !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 1 auto !important;
+    width: auto !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
-    border-radius: clamp(10px, calc(var(--soridraw-studio-builder-width, 920px) * 0.013), 12px) !important;
+    width: auto !important;
+    min-width: 92px !important;
+    padding-inline: 14px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    border-radius: 11px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
-    padding-inline: clamp(9px, calc(var(--soridraw-studio-builder-width, 920px) * 0.02), 18px) !important;
-    border-radius: clamp(10px, calc(var(--soridraw-studio-builder-width, 920px) * 0.013), 12px) !important;
-    gap: clamp(6px, calc(var(--soridraw-studio-builder-width, 920px) * 0.01), 10px) !important;
-    font-size: clamp(17px, calc(var(--soridraw-studio-builder-width, 920px) * 0.0245), 23px) !important;
+    padding-inline: 10px !important;
+    border-radius: 11px !important;
+    gap: 7px !important;
+    font-size: 18px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(
@@ -2220,8 +2284,8 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
     .soridraw-action-random > button,
     .soridraw-action-reset > button
   ) > svg {
-    width: clamp(17px, calc(var(--soridraw-studio-builder-width, 920px) * 0.023), 22px) !important;
-    height: clamp(17px, calc(var(--soridraw-studio-builder-width, 920px) * 0.023), 22px) !important;
+    width: 18px !important;
+    height: 18px !important;
     flex: 0 0 auto !important;
   }
 
@@ -10980,20 +11044,18 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 488 — continuous-resize fast path without changing the verified geometry.
- * Viewport breakpoints still own PC / tablet / mobile. Pane data-mode still
- * owns the primary builder/result mobile composition. During a continuous
- * browser-edge resize or splitter drag, only expensive nested container-query
- * and decoration work is suspended; the pane widths themselves keep updating
- * through the stable 486 path. Full detail is restored once the gesture ends. */
+/* 519 — continuous-resize fast path without a temporary "PC/default" UI.
+ * 488 disabled the builder pane, result pane and Generate panel containers while
+ * the divider was held. Their @container rules therefore disappeared during the
+ * gesture and returned on pointer-up, which is exactly the visible
+ * "drag = PC-looking / release = width-correct" snap. Keep the three structural
+ * responsive containers live. We still suspend only secondary summary/live-keyword
+ * container work plus transitions/animations, so the rAF split path remains light. */
 @media (min-width: 1100px) {
   html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
   :is(
-    .soridraw-studio-builder-pane,
-    .soridraw-studio-result-pane,
     .soridraw-studio-main .soridraw-menu-summary-box,
-    .soridraw-live-keywords-fixed,
-    .soridraw-studio-action-panel
+    .soridraw-live-keywords-fixed
   ) {
     container-type: normal !important;
     container-name: none !important;

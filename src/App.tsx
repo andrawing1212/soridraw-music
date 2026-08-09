@@ -19239,7 +19239,9 @@ function CategorySectionComponent({
         <div
           className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px] transition-[max-height,opacity] duration-300 ease-out"
           style={{
-            maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, window.innerWidth < 768 ? 48 : 96) : (window.innerWidth < 768 ? 48 : 96),
+            maxHeight: isExpanded
+              ? resolveExpandedHeight(forcedHeight, contentHeight, 96)
+              : 'var(--soridraw-expand-collapsed-height, 96px)',
             opacity: 1
           }}
         >

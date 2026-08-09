@@ -950,3 +950,30 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Suno Library `남은 크레딧` 버튼은 PC/태블릿/모바일/분할모드에서 모두 모바일 기준 36px 높이, 10px 좌우 여백, 12px 라운드, 10px 텍스트로 통일했습니다.
 - Library의 검색창과 첫 곡 사이 가로선은 Music Note와 같은 시각적 중앙 위치를 사용하도록 조정했습니다. 목록/카드 간격 자체는 변경하지 않았습니다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 517차 — 분할바 이동 중 하단 생성영역 연속 변형 제거
+- 기준: 516차.
+- 영상에서 분할바를 움직일 때 하단 `생성하기` 영역의 높이, 글자, 아이콘, 내부 간격, 라운드가 builder 폭에 비례해 매 픽셀 계속 커졌다/작아졌다 하는 현상을 확인했습니다.
+- 원인은 `studioLayout.css`의 Studio Black 하단 action bar가 `--soridraw-studio-builder-width`를 이용해 control-height / gap / padding / radius / font-size / icon-size를 모두 연속 `clamp(calc(...))`로 계산하던 구조였습니다.
+- 수정: 분할바 이동 중에는 action bar의 **위치와 사용 가능한 가로폭만** builder pane을 실시간 추적하고, 내부 세로 밀도는 60px 높이 / 18px 글자 / 18px 아이콘 / 7px 간격 / 11~16px radius로 고정했습니다.
+- 681px 기준의 기존 compact/label 전환, action bar floating/inline owner 구조, 접기 기능, 생성 기능, 분할바 자체 동작은 유지했습니다.
+- 변경 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 518차 — 분할바 이동 시 하단 생성바 분할선 밀착 / 모바일형 오전환 제거
+- 기준: 517차
+- Studio Black 분할모드의 하단 생성하기 영역만 수정.
+- 분할바 드래그 중 floating action bar가 builder 전체폭을 그대로 채우면서 분할선에 붙어 보이던 현상을 막기 위해 PC/태블릿(>=1100px)에서 좌우 18px 고정 여백을 유지.
+- 하단 생성바가 자체 681px container query 때문에 분할바 이동 중 `무작위/전체초기화` 라벨을 숨기고 모바일형처럼 변하던 이중 반응형을 차단.
+- PC/태블릿 분할모드에서는 생성바 내부 구성을 한 가지 desktop 형태로 유지하고, 실제 앱 모바일(<1100px) 규칙은 그대로 유지.
+- 분할바 위치/폭 계산, Studio 본문 pane 반응형, 생성 기능, Firebase/저장 구조는 변경하지 않음.
+
+
+## 519차 - 분할 드래그 실시간 반응형 / 생성바 좌표 소유권 정리
+- 기준: 518차
+- 분할바를 잡는 동안 builder/result/action panel의 container-type을 끄던 488 최적화 범위를 축소했다. 이제 핵심 pane 반응형은 드래그 중에도 실제 pane 폭을 즉시 따른다.
+- 하단 생성하기 floating bar는 드래그 중 DOM inline left/width와 CSS root 변수가 경쟁하지 않도록, `--soridraw-action-fixed-left/width` 한 좌표 경로로 통일했다.
+- Studio Black의 접힌 키워드 카드 높이는 브라우저 `window.innerWidth`가 아니라 builder pane의 `data-pane-mode`를 따른다.
+- 분할 rAF 직접 이동, floating/inline 소유권 전환 지연, 결과 타이틀의 무거운 높이 재측정 지연은 유지해 성능 보호 범위를 남겼다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

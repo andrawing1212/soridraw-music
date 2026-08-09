@@ -389,8 +389,17 @@ export default function StudioSplitWorkspace({
     lastActionControlPixelRef.current = actionControlPixel;
 
     if (controls.floatingActionBar) {
-      controls.floatingActionBar.style.setProperty('left', `${Math.max(0, Math.round(left))}px`, 'important');
-      controls.floatingActionBar.style.setProperty('width', `${actionControlPixel}px`, 'important');
+      // 519: The floating Generate row must have one horizontal coordinate owner.
+      // Publish the live split geometry through the same root variables used by
+      // the resting CSS instead of fighting that CSS with per-node left/width
+      // inline overrides during pointer drag. App.tsx keeps floating/inline
+      // ownership frozen for performance; only the cheap horizontal variables
+      // move every animation frame.
+      const rootStyle = document.documentElement.style;
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${Math.max(0, Math.round(left))}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-width', `${actionControlPixel}px`);
+      controls.floatingActionBar.style.removeProperty('left');
+      controls.floatingActionBar.style.removeProperty('width');
       controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
     }
     if (controls.collapsedActionButton) {

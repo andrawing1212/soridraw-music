@@ -1017,3 +1017,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 왼쪽 스와이프가 접기 임계값에 도달하면 접기만 실행되고, 손을 놓은 위치가 생성하기 버튼 내부여도 생성하기가 실행되지 않는다. 임계값에 못 미친 드래그도 버튼 클릭으로 오인하지 않는다.
 - 수정 파일: `src/App.tsx`, `README.md`. CSS / 분할바 좌표 / Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 524차 — 분할 생성바 Dark/Light 비율감 통일
+- 기준: 523차.
+- 사용자 비교 영상에서 Classic Dark/Light 생성바는 모바일 약 69px, PC 약 90px 높이의 통통한 비율인데 Studio Black 분할 생성바는 모바일/PC 모두 60px로 강제되어 납작해 보이는 차이를 확인했습니다.
+- Studio Black의 색상/분할 배치/드래그 좌표/스와이프 동작은 유지하고, 생성바의 **시각 치수만** Classic 기준으로 맞췄습니다.
+- PC형: control 90px, 글자 34px, 아이콘 24px, row gap 12px, padding 10px, radius 24px, 접기 폭 48px, 좌우 라벨 버튼은 Classic처럼 내용폭 + 24px 좌우 padding을 사용합니다.
+- Builder mobile형: control 69px, 글자 25px, 아이콘 20px, row gap/padding 8px, radius 24px로 맞추고, floating 바 좌우 gutter를 18px→8px로 줄여 Dark/Light 모바일처럼 좌우를 더 꽉 채운 확대감으로 조정했습니다.
+- visible action panel max-width도 Classic의 max-w-4xl과 같은 896px로 맞췄습니다.
+- Studio 본문, 분할바, Builder mobile 판정, 520~523의 드래그 안정화/스와이프/오클릭 차단 로직은 변경하지 않았습니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

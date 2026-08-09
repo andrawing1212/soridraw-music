@@ -2023,9 +2023,10 @@ html[data-soridraw-theme="studio-black"]:is(
  * Inline: rendered inside the real command slot, so card-height changes and the
  * copyright/footer always move it through normal document flow. */
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-  --soridraw-action-control-height: 60px;
-  --soridraw-action-row-gap: 7px;
-  --soridraw-action-row-padding: 7px;
+  /* 524 — Match Classic mobile visual density while keeping Studio Black colors/layout. */
+  --soridraw-action-control-height: 69px;
+  --soridraw-action-row-gap: 8px;
+  --soridraw-action-row-padding: 8px;
   --soridraw-action-bottom-gap: 20px;
   margin: 0 !important;
   justify-content: center !important;
@@ -2058,8 +2059,8 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-anchor-expanded
 }
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel {
-  width: min(100%, 920px) !important;
-  max-width: 920px !important;
+  width: min(100%, 896px) !important;
+  max-width: 896px !important;
   min-width: 0 !important;
   container: studio-action-panel / inline-size;
 }
@@ -2072,14 +2073,16 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .
   min-width: 0 !important;
   gap: var(--soridraw-action-row-gap) !important;
   padding: var(--soridraw-action-row-padding) !important;
-  border-radius: 16px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 24px !important;
   overflow: hidden !important;
 }
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-collapse {
-  flex: 0 0 40px !important;
-  width: 40px !important;
-  min-width: 40px !important;
+  flex: 0 0 48px !important;
+  width: 48px !important;
+  min-width: 48px !important;
 }
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-generate {
@@ -2091,9 +2094,9 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
   display: block !important;
-  flex: 0 0 42px !important;
-  width: 42px !important;
-  min-width: 0 !important;
+  flex: 0 0 56px !important;
+  width: 56px !important;
+  min-width: 56px !important;
 }
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button,
@@ -2112,9 +2115,9 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
   width: 100% !important;
   padding-inline: 10px !important;
-  border-radius: 11px !important;
-  gap: 7px !important;
-  font-size: 18px !important;
+  border-radius: 16px !important;
+  gap: 8px !important;
+  font-size: 25px !important;
   line-height: 1 !important;
   white-space: nowrap !important;
 }
@@ -2202,8 +2205,8 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
     width: auto !important;
-    min-width: 92px !important;
-    padding-inline: 14px !important;
+    min-width: 0 !important;
+    padding-inline: 24px !important;
   }
 }
 
@@ -2214,10 +2217,11 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
    * Generate area while the split divider was moving. Keep one stable visual
    * density and let only the available horizontal width track the builder. */
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-    --soridraw-action-control-height: 60px;
+    /* 524 — Classic desktop proportions: taller controls, larger type/icons and roomier row. */
+    --soridraw-action-control-height: 90px;
     --soridraw-action-bottom-gap: 28px;
-    --soridraw-action-row-gap: 7px;
-    --soridraw-action-row-padding: 7px;
+    --soridraw-action-row-gap: 12px;
+    --soridraw-action-row-padding: 10px;
     padding-inline: 0 !important;
   }
 
@@ -2232,15 +2236,15 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
-    border-radius: 16px !important;
+    border-radius: 24px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
     display: flex !important;
-    flex: 0 0 40px !important;
-    width: 40px !important;
-    min-width: 40px !important;
+    flex: 0 0 48px !important;
+    width: 48px !important;
+    min-width: 48px !important;
   }
 
   /* 518 — On a desktop/tablet split workspace the lower Generate row has one
@@ -2263,19 +2267,19 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
     width: auto !important;
-    min-width: 92px !important;
-    padding-inline: 14px !important;
+    min-width: 0 !important;
+    padding-inline: 24px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
-    border-radius: 11px !important;
+    border-radius: 16px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
     padding-inline: 10px !important;
-    border-radius: 11px !important;
-    gap: 7px !important;
-    font-size: 18px !important;
+    border-radius: 16px !important;
+    gap: 12px !important;
+    font-size: 34px !important;
   }
 
   html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(
@@ -2284,8 +2288,8 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
     .soridraw-action-random > button,
     .soridraw-action-reset > button
   ) > svg {
-    width: 18px !important;
-    height: 18px !important;
+    width: 24px !important;
+    height: 24px !important;
     flex: 0 0 auto !important;
   }
 
@@ -11782,5 +11786,52 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     > .soridraw-studio-action-row
     > button.soridraw-action-collapse:first-child {
     display: none !important;
+  }
+}
+
+
+/* 524 — Studio Black action bar visual proportions now mirror Classic/Dark/Light.
+ * Keep the split workspace mechanics/colors independent, but make the visible
+ * command bar use the same roomy geometry. Builder-mobile must also override the
+ * >=1100 desktop density because it is a mobile *pane state* inside a desktop
+ * viewport. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking {
+    --soridraw-action-control-height: 69px;
+    --soridraw-action-row-gap: 8px;
+    --soridraw-action-row-padding: 8px;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking
+    :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    border-radius: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    border-radius: 16px !important;
+    gap: 8px !important;
+    font-size: 25px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking
+    :is(.soridraw-action-generate-button, .soridraw-action-random > button, .soridraw-action-reset > button) > svg {
+    width: 20px !important;
+    height: 20px !important;
   }
 }

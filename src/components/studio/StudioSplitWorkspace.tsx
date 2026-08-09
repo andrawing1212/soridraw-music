@@ -23,6 +23,7 @@ const TABLET_MIN_PANE_PX = 430;
 // the split line reaches the first "라" at roughly an 820px builder width.
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
+const CONTENT_RESULT_MOBILE_BREAKPOINT = 641;
 const PANE_MODE_HYSTERESIS = 16;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
@@ -537,13 +538,14 @@ export default function StudioSplitWorkspace({
     width: number,
     breakpoint: number,
     currentMode: PaneMode,
+    hysteresis = PANE_MODE_HYSTERESIS,
   ): PaneMode => {
     const hasCommittedMode = pane.dataset.paneMode === 'mobile' || pane.dataset.paneMode === 'desktop';
     if (!hasCommittedMode) return width < breakpoint ? 'mobile' : 'desktop';
     if (currentMode === 'desktop') {
-      return width < breakpoint - PANE_MODE_HYSTERESIS ? 'mobile' : 'desktop';
+      return width < breakpoint - hysteresis ? 'mobile' : 'desktop';
     }
-    return width > breakpoint + PANE_MODE_HYSTERESIS ? 'desktop' : 'mobile';
+    return width > breakpoint + hysteresis ? 'desktop' : 'mobile';
   }, []);
 
   /**
@@ -622,13 +624,15 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           modeRef.current.builder,
         );
+    const usesUnifiedContentBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(
           result,
           resultWidth,
-          RESULT_MOBILE_BREAKPOINT,
+          usesUnifiedContentBreakpoint ? CONTENT_RESULT_MOBILE_BREAKPOINT : RESULT_MOBILE_BREAKPOINT,
           modeRef.current.result,
+          usesUnifiedContentBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
         );
 
     if (!builderCollapsedRef.current && (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
@@ -661,7 +665,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, syncExternalMeasurements]);
+  }, [clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, syncExternalMeasurements, workspaceView]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;

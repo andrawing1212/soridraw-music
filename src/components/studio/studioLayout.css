@@ -6335,7 +6335,7 @@ h1.text-3xl.md\:text-5xl {
   line-height: 1.05 !important;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   :is(.soridraw-musicnote-theme, .soridraw-library-theme)
   h1.text-3xl.md\:text-5xl {
@@ -6589,14 +6589,14 @@ h1.text-3xl.md\:text-5xl {
   max-width: min(100%, 680px) !important;
 }
 
-@container (max-width: 680px) {
+@container (max-width: 640px) {
   .soridraw-musicnote-song-keywords {
     width: 100% !important;
     max-width: 100% !important;
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   .soridraw-musicnote-page-shell {
     padding-left: 8px !important;
     padding-right: 8px !important;
@@ -6837,7 +6837,7 @@ h1.text-3xl.md\:text-5xl {
 }
 
 /* The same compact controls are used by the standalone mobile pages. */
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   :is(.soridraw-musicnote-theme, .soridraw-library-theme)
   .soridraw-responsive-top-controls {
     flex-direction: row !important;
@@ -7036,7 +7036,7 @@ h1.text-3xl.md\:text-5xl {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   .soridraw-library-workspace-meta {
     font-size: 8px !important;
     gap: 5px !important;
@@ -7111,7 +7111,7 @@ h1.text-3xl.md\:text-5xl {
   line-height: 1.15 !important;
 }
 
-@media (min-width: 681px) {
+@media (min-width: 641px) {
   .soridraw-library-item-genre {
     font-size: 13px !important;
   }
@@ -7148,7 +7148,7 @@ h1.text-3xl.md\:text-5xl {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   .soridraw-library-mode-tab {
     font-size: 11px !important;
   }
@@ -7209,7 +7209,7 @@ h1.text-3xl.md\:text-5xl {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   :is(.soridraw-musicnote-theme, .soridraw-library-theme)
   :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
     min-height: 40px !important;
@@ -7242,7 +7242,7 @@ h1.text-3xl.md\:text-5xl {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   .soridraw-library-theme .soridraw-library-credit-button {
     height: 34px !important;
     min-height: 34px !important;
@@ -7509,7 +7509,7 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   :is(.soridraw-musicnote-theme, .soridraw-library-theme)
   .soridraw-responsive-search-icon {
     left: 50% !important;
@@ -7676,7 +7676,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * The live masthead width itself is written by StudioSplitWorkspace on each rAF
  * pointer frame; this CSS only consumes the same grid variable and sizes the
  * button without adding borders or moving the search/list controls. */
-@media (min-width: 681px) {
+@media (min-width: 641px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   :is(
     .soridraw-studio-workspace-hero-host,
@@ -7707,7 +7707,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-library-theme .soridraw-library-credit-button {
     height: 28px !important;
@@ -7814,7 +7814,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-library-theme .soridraw-library-workspace-meta {
     font-size: 10px !important;
@@ -7864,7 +7864,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   margin-left: auto !important;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-musicnote-page-header {
     gap: 8px !important;
@@ -8192,7 +8192,7 @@ button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
  * Keep the approved tab height, width, colors and spacing unchanged; enlarge
  * only the labels for Music Note and Suno Library when the page is rendered as
  * a phone layout or when the right split pane switches to its mobile mode. */
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   :is(.soridraw-musicnote-theme, .soridraw-library-theme)
   :is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
@@ -8243,7 +8243,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   --soridraw-list-start-gap: 12px;
 }
 
-@media (max-width: 680px) {
+@media (max-width: 640px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-musicnote-list-start-divider {
     --soridraw-list-start-gap: 13px;
@@ -11182,7 +11182,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   line-height: 1.15 !important;
 }
 
-/* Compact/mobile <= 680px: copy the Studio result-pane compact design exactly.
+/* Compact/mobile <= 640px: copy the Studio result-pane compact design exactly.
  * This replaces the old split-pane-vs-viewport 767px disagreement. */
 :root body #root .soridraw-app-root
 :is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"] {
@@ -11605,7 +11605,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   padding-bottom: 12px !important;
 }
 
-/* Library — mobile list geometry, owned by the same 680px page mode in both
+/* Library — mobile list geometry, owned by the same 640px page mode in both
  * standalone and split layouts. */
 :root body #root .soridraw-app-root
 .soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]

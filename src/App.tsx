@@ -6850,6 +6850,14 @@ const toggleCycleVariantSelection = (
     const measuredRowHeight = Math.ceil(actionRow?.getBoundingClientRect().height || 0);
     if (measuredRowHeight > 0) actionBarHeightRef.current = measuredRowHeight;
 
+    // Keep the natural command slot and the docked collapsed control on one
+    // geometry source. This prevents collapse/expand from changing the scroll
+    // range or using a taller fixed control than the row that actually fits.
+    root.style.setProperty(
+      '--soridraw-action-collapsed-docked-height',
+      `${Math.min(actionBarHeightRef.current, 92)}px`,
+    );
+
     // The real slot always reserves the same geometry regardless of whether the
     // visible row is currently portaled or already inline.
     anchor.style.setProperty(
@@ -6919,27 +6927,50 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    // A docked collapsed tab belongs to the real command slot. Keep following
-    // that slot while scrolling, but do not reclassify floating/inline ownership
-    // until the user expands it again.
-    if (isActionButtonsCollapsedRef.current) {
-      syncCollapsedActionDockPosition();
-      return;
+    const rect = anchor.getBoundingClientRect();
+    const wasFloating = isActionsFloatingRef.current;
+    const builderPane = anchor.closest<HTMLElement>('.soridraw-studio-builder-pane');
+    const isolatedSplitWorkspace = builderPane?.closest<HTMLElement>(
+      '.soridraw-studio-split-workspace[data-scroll-isolated="true"]',
+    );
+
+    // 531 — Split Mode uses a zero/variable-height anchor depending on whether
+    // the action row is floating or docked. Judging by rect.bottom therefore made
+    // the decision depend on the current state itself: collapse could remove the
+    // slot, expansion could add it back, and the threshold moved underneath us.
+    // Use the anchor TOP plus the known natural row height instead. The top never
+    // changes when the slot reserves/releases height, so floating/docked becomes
+    // one stable rule for expanded and collapsed states alike.
+    let nextIsFloating: boolean;
+    if (builderPane && isolatedSplitWorkspace) {
+      const builderRect = builderPane.getBoundingClientRect();
+      const naturalSlotHeight = Math.ceil(actionBarHeightRef.current + 12);
+      const naturalSlotBottom = rect.top + naturalSlotHeight;
+      const dockHysteresis = wasFloating ? 0 : 2;
+      nextIsFloating = naturalSlotBottom > builderRect.bottom + dockHysteresis;
+    } else {
+      const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
+      const dockingHeight = Math.min(actionBarHeightRef.current, ACTION_BAR_DOCKING_HEIGHT_CAP);
+      const dockLine = window.innerHeight - dockingHeight - viewportBottomGap;
+      const naturalPanelTop = rect.top + 12;
+      nextIsFloating = wasFloating
+        ? naturalPanelTop > dockLine
+        : naturalPanelTop > dockLine + 2;
     }
 
-    const rect = anchor.getBoundingClientRect();
-    const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
-    const dockingHeight = Math.min(actionBarHeightRef.current, ACTION_BAR_DOCKING_HEIGHT_CAP);
-    const dockLine = window.innerHeight - dockingHeight - viewportBottomGap;
-    const naturalPanelTop = rect.top + 12;
-    const wasFloating = isActionsFloatingRef.current;
-
-    // Only switch between the fixed floating copy and the real inline copy.
-    // The inline copy lives inside the builder flow, so card-height changes and
-    // the footer can never leave it at a stale document coordinate.
-    const nextIsFloating = wasFloating
-      ? naturalPanelTop > dockLine
-      : naturalPanelTop > dockLine + 2;
+    // Collapsed and expanded controls now share the same live placement state.
+    // While collapsed, scrolling must still be allowed to move the control from
+    // floating to its real command slot (and back); otherwise expanding uses a
+    // stale placement and looks "locked" above the command card.
+    if (isActionButtonsCollapsedRef.current) {
+      const root = document.documentElement;
+      if (nextIsFloating) {
+        clearCollapsedActionDock();
+      } else {
+        root.dataset.soridrawActionCollapsedDocked = 'true';
+        syncCollapsedActionDockPosition();
+      }
+    }
 
     if (wasFloating !== nextIsFloating) {
       isActionsFloatingRef.current = nextIsFloating;
@@ -7020,6 +7051,7 @@ const toggleCycleVariantSelection = (
       window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-docked-height');
     };
   }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
@@ -7158,8 +7190,11 @@ const toggleCycleVariantSelection = (
   }, []);
 
   useLayoutEffect(() => {
-    if (isActionButtonsCollapsed || !shouldShowActionButtons) return;
+    if (!shouldShowActionButtons) return;
 
+    // Placement must stay live even while the control is collapsed. The action
+    // row ref is absent then, but syncActionBarLayoutMetrics safely reuses the
+    // last measured row height and refreshes the anchor geometry.
     syncActionBarLayoutMetrics();
     updateActionBarPlacement();
 
@@ -15146,7 +15181,13 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             ref={actionButtonsAnchorRef}
             className={cn(
               "relative",
-              shouldShowActionButtons && !isActionButtonsCollapsed
+              // 530 — If a Split Generate row is collapsed after it has docked
+              // below the command card, keep the same reserved slot. Removing
+              // the anchor height at the exact bottom of the isolated builder
+              // changed scrollHeight, clamped scrollTop, and pulled the collapsed
+              // tab upward toward the command card. Floating collapses still use
+              // zero anchor height, so normal screen space is not wasted.
+              shouldShowActionButtons && (!isActionButtonsCollapsed || !isActionsFloating)
                 ? "soridraw-studio-action-anchor-expanded"
                 : "h-0"
             )}

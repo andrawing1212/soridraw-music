@@ -1053,3 +1053,22 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 내부 하위 버튼 및 active/hover 페인트 라운드만 12px → 14px로 조정해 Classic Dark의 더 둥근 인상에 맞춤.
 - 선택 색상과 선택 텍스트 검정색은 그대로 유지.
 - 일반 Dark/Light, 생성바, 분할바, Firebase/저장 구조는 변경하지 않음.
+
+## 530차 - 분할 생성바 하단 도킹/접기 위치 안정화
+- 기준: 529차.
+- 분할모드의 Builder는 독립 스크롤 영역이므로, 생성바 도킹 판정을 브라우저 viewport 하단이 아니라 Builder 안의 실제 생성바 자리(anchor)가 완전히 보이는지로 판단하도록 변경했다.
+- 최하단에서 실제 자리가 보이면 floating 생성바가 명령창 아래의 inline 자리로 내려간다.
+- 그 자리에서 접을 때 anchor 높이를 제거하지 않도록 하여 독립 스크롤의 scrollHeight/scrollTop이 갑자기 바뀌면서 접힌 생성바가 위로 튀는 현상을 막았다.
+- 전체화면/Classic의 기존 viewport 기반 생성바 판정은 유지했다.
+- 뮤직노트/라이브러리 및 Firebase/저장 구조는 변경하지 않았다.
+
+## 531차 - 분할 생성바 접힘/펼침 도킹 규칙 단일화
+- 기준: 530차.
+- 원인: 접힌 상태에서는 `updateActionBarPlacement()`가 조기 종료되어 Builder를 스크롤해도 floating/inline 판정이 갱신되지 않았고, 다시 펼칠 때 과거 상태를 그대로 사용해 명령창 아래 자리로 내려가지 않는 잠김 현상이 있었다.
+- 분할모드 도킹 판정을 현재 anchor 높이(`rect.bottom`)가 아니라 `anchor top + 실제 생성바 자연 높이`로 변경했다. 접힘/펼침 때문에 anchor 예약 높이가 바뀌어도 판정 기준 자체가 움직이지 않는다.
+- 접힌 상태에서도 Builder 스크롤에 따라 floating ↔ docked 판정을 계속 갱신한다. 따라서 접은 채 최하단으로 내려가도 실제 자리가 보이면 docked 상태가 되고, 그 상태에서 펼치면 같은 명령창 아래 자리에서 바로 펼쳐진다.
+- docked 접힌 버튼의 높이를 실제 생성바 행 높이 이하로 제한하여 최하단에서 버튼 하단이 Builder/footer 아래로 살짝 가려지던 현상을 방지했다.
+- docked 상태에서는 접힘/펼침 모두 동일한 anchor 예약 높이를 유지해 스크롤 가능한 아래 영역이 상태마다 달라지지 않도록 했다.
+- 전체화면/Classic의 기존 viewport 기반 판정, 분할바 드래그 좌표 안정화, 모바일 3버튼/스와이프 동작은 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

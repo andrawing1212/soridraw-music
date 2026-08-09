@@ -11643,4 +11643,11 @@ html[data-soridraw-theme="studio-black"][data-soridraw-action-collapsed-docked="
   body > .soridraw-studio-action-collapsed {
   top: var(--soridraw-action-collapsed-docked-top, auto) !important;
   bottom: auto !important;
+  /* 531 — A docked collapsed control must fit inside the exact row geometry
+   * that was proven visible before docking. The generic floating tab can be
+   * taller (up to 92px), which made its lower edge slip under the builder/footer
+   * when it was positioned at the inline row top. */
+  height: var(--soridraw-action-collapsed-docked-height, 84px) !important;
+  min-height: var(--soridraw-action-collapsed-docked-height, 84px) !important;
+  max-height: var(--soridraw-action-collapsed-docked-height, 84px) !important;
 }

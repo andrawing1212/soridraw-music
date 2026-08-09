@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -390,25 +391,27 @@ export default function StudioSplitWorkspace({
     // controls on the exact same builder width in this animation frame. The
     // previous wide-desktop early return froze the bar until pointer-up.
     const actionInsets = actionAnchorInsetsRef.current ?? { left: 0, right: 0 };
-    const actionLeft = Math.max(0, Math.round(left + actionInsets.left));
-    const actionControlPixel = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
-    const actionGeometryKey = `${actionLeft}:${actionControlPixel}`;
+    const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
+    const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
+    const actionGutter = getStudioActionFloatingGutter(
+      window.innerWidth,
+      document.documentElement.dataset.soridrawBuilderMode,
+    );
+    const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
+    const actionGeometryKey = `${actionGeometry.left}:${actionGeometry.width}`;
     if (lastActionControlPixelRef.current === actionGeometryKey) return;
     lastActionControlPixelRef.current = actionGeometryKey;
 
     if (controls.floatingActionBar) {
-      // 520: Match the floating Generate row to the real in-flow action anchor,
-      // not to the whole builder pane. The builder has its own horizontal
-      // padding/gutter, so using the raw pane width made the first drag frame
-      // jump outward and then snap back to the anchor on pointer-up. Capture
-      // that anchor inset once at pointer-down and keep the exact same visual
-      // track with cheap arithmetic on every rAF drag frame.
+      // 532: App.tsx and the split rAF fast path share one geometry helper.
+      // Above the visible panel's max width, only its center moves; the action
+      // row itself no longer relayouts on every wide-divider pixel.
       const rootStyle = document.documentElement.style;
-      rootStyle.setProperty('--soridraw-action-fixed-left', `${actionLeft}px`);
-      rootStyle.setProperty('--soridraw-action-fixed-width', `${actionControlPixel}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
       controls.floatingActionBar.style.removeProperty('left');
       controls.floatingActionBar.style.removeProperty('width');
-      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${anchorWidth}px`);
     }
     if (controls.collapsedActionButton) {
       controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
@@ -1018,9 +1021,18 @@ export default function StudioSplitWorkspace({
       // Seed the exact current resting coordinates before any pointer movement.
       // The first rAF frame therefore starts from pixel-identical geometry.
       const rootStyle = document.documentElement.style;
-      rootStyle.setProperty('--soridraw-action-fixed-left', `${Math.round(actionAnchorRect.left)}px`);
-      rootStyle.setProperty('--soridraw-action-fixed-width', `${Math.round(actionAnchorRect.width)}px`);
-      lastActionControlPixelRef.current = `${Math.round(actionAnchorRect.left)}:${Math.round(actionAnchorRect.width)}`;
+      const actionGutter = getStudioActionFloatingGutter(
+        window.innerWidth,
+        document.documentElement.dataset.soridrawBuilderMode,
+      );
+      const restingActionGeometry = resolveStudioActionFloatingGeometry(
+        actionAnchorRect.left,
+        actionAnchorRect.width,
+        actionGutter,
+      );
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      lastActionControlPixelRef.current = `${restingActionGeometry.left}:${restingActionGeometry.width}`;
     } else {
       actionAnchorInsetsRef.current = null;
       lastActionControlPixelRef.current = null;

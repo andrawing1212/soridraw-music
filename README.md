@@ -1072,3 +1072,17 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 전체화면/Classic의 기존 viewport 기반 판정, 분할바 드래그 좌표 안정화, 모바일 3버튼/스와이프 동작은 변경하지 않았다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 532차 — 생성바 공통 도킹 규칙 + 분할 드래그 확장상태 경량화
+- 기준: 531차.
+- 접힘/펼침마다 서로 다른 세로 위치/스크롤 규칙을 사용하던 구조를 제거하고, Studio Black 전체화면/분할 PC/Tablet/Builder-mobile 모두 `floating / inline` 한 가지 배치 상태만 사용하도록 정리했다.
+- Studio Black에서는 생성바가 보이는 동안 실제 명령창 아래 action anchor가 항상 동일한 높이를 예약한다. 따라서 접힌 상태와 펼친 상태의 최하단 스크롤 범위가 동일하고, 접기/펼치기는 위치가 아니라 외형만 바뀐다.
+- 도킹 판정은 공통 anchor의 실제 `rect.bottom`과 현재 표시 영역 하단을 비교하는 한 규칙으로 통일했다. 분할모드는 Builder 하단, 전체화면은 viewport 하단을 사용한다.
+- 접힌 버튼도 별도 `collapsed-docked` 상태/저장 top을 사용하지 않고 `data-soridraw-placement="floating|inline"`을 그대로 공유한다. 명령창 아래에서 접거나 펼쳐도 같은 row top을 사용한다.
+- 생성바의 row/slot 높이를 JS 측정값이 아니라 CSS 공통 변수(`control + padding`, `row + 12px`)로 정의해 상태 전환 시 높이 캐시가 달라지는 원인을 제거했다.
+- 신규 `src/lib/studioActionBarGeometry.ts`에 floating 생성바의 left/width 계산을 공통화하여 App의 평상시 배치와 SplitWorkspace의 rAF 드래그 배치가 같은 수식을 사용한다.
+- 확장 생성바 드래그 성능: action panel의 중복 `@container studio-action-panel` 판정을 제거하고 Builder mode/viewport 한 규칙으로 반응형을 소유하게 했다. 98% 불투명한 Studio Black 생성바의 불필요한 backdrop blur도 제거했다.
+- 896px 패널 최대폭보다 넓은 Builder에서는 portal tracking box 자체를 `896px + gutter`까지만 유지하고 중앙만 이동시켜, 분할바 매 픽셀마다 큰 생성바 내부 전체가 재레이아웃되는 범위를 줄였다. 좁은 Builder에서는 기존처럼 실제 폭을 따라간다.
+- 520~529에서 통과/개선된 분할바 좌표 안정화, Builder-mobile 3버튼, 스와이프 접기, 스와이프 후 오클릭 차단, Music Note/Library UI는 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

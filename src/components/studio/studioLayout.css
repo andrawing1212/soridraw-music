@@ -1993,8 +1993,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-action-anchor-expanded {
   position: relative !important;
   width: 100% !important;
-  height: var(--soridraw-action-anchor-height, 100px) !important;
-  min-height: var(--soridraw-action-anchor-height, 100px) !important;
+  height: var(--soridraw-action-slot-height, 97px) !important;
+  min-height: var(--soridraw-action-slot-height, 97px) !important;
   overflow: visible !important;
   transition: none !important;
 }
@@ -2022,12 +2022,21 @@ html[data-soridraw-theme="studio-black"]:is(
  * Floating: fixed to the exact builder-command width.
  * Inline: rendered inside the real command slot, so card-height changes and the
  * copyright/footer always move it through normal document flow. */
-html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-  /* 524 — Match Classic mobile visual density while keeping Studio Black colors/layout. */
+html[data-soridraw-theme="studio-black"] {
+  /* 532 — one shared geometry contract for the Studio Black action bar. */
   --soridraw-action-control-height: 69px;
   --soridraw-action-row-gap: 8px;
   --soridraw-action-row-padding: 8px;
   --soridraw-action-bottom-gap: 20px;
+  --soridraw-action-row-height: calc(
+    var(--soridraw-action-control-height)
+    + var(--soridraw-action-row-padding)
+    + var(--soridraw-action-row-padding)
+  );
+  --soridraw-action-slot-height: calc(var(--soridraw-action-row-height) + 12px);
+}
+
+html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
   margin: 0 !important;
   justify-content: center !important;
   z-index: 140 !important;
@@ -2062,11 +2071,15 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .
   width: min(100%, 896px) !important;
   max-width: 896px !important;
   min-width: 0 !important;
-  container: studio-action-panel / inline-size;
+  contain: layout style;
 }
 
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
   display: flex !important;
+  /* 532 — the surface is already 98% opaque; backdrop blur only forces a large
+   * repaint while the divider moves and has no meaningful visual contribution. */
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   grid-template-columns: none !important;
   align-items: stretch !important;
   width: 100% !important;
@@ -2192,23 +2205,11 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   justify-content: center !important;
 }
 
-@container studio-action-panel (min-width: 681px) {
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
-    display: block !important;
-    white-space: nowrap !important;
-  }
+/* 532 — action-bar responsive composition is owned by the shared
+ * builder-mode / viewport contract below, not by a second container-query
+ * breakpoint. Removing the duplicate query avoids re-running an action-panel
+ * layout query on every split-divider pixel. */
 
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
-    flex: 0 1 auto !important;
-    width: auto !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
-    width: auto !important;
-    min-width: 0 !important;
-    padding-inline: 24px !important;
-  }
-}
 
 @media (min-width: 1100px) {
   /* 517 — Divider drag must move/resize the action bar box only.
@@ -2216,12 +2217,14 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
    * builder-width pixel. That produced the visible "breathing/morphing" lower
    * Generate area while the split divider was moving. Keep one stable visual
    * density and let only the available horizontal width track the builder. */
-  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
-    /* 524 — Classic desktop proportions: taller controls, larger type/icons and roomier row. */
+  html[data-soridraw-theme="studio-black"] {
     --soridraw-action-control-height: 90px;
     --soridraw-action-bottom-gap: 28px;
     --soridraw-action-row-gap: 12px;
     --soridraw-action-row-padding: 10px;
+  }
+
+  html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
     padding-inline: 0 !important;
   }
 
@@ -11594,8 +11597,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * >=1100 desktop density because it is a mobile *pane state* inside a desktop
  * viewport. */
 @media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
-    .soridraw-studio-action-bar--tracking {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"] {
     --soridraw-action-control-height: 69px;
     --soridraw-action-row-gap: 8px;
     --soridraw-action-row-padding: 8px;
@@ -11634,20 +11636,15 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 525 — When the expanded Studio Black action row has already docked into its
- * real command slot, collapsing it must preserve that same vertical slot.
- * The collapsed control remains a body portal for the approved left-edge crop,
- * but App.tsx publishes the live anchor top so it no longer jumps back to the
- * generic viewport-bottom floating position. */
-html[data-soridraw-theme="studio-black"][data-soridraw-action-collapsed-docked="true"]
-  body > .soridraw-studio-action-collapsed {
-  top: var(--soridraw-action-collapsed-docked-top, auto) !important;
+/* 532 — collapsed and expanded controls share the same docked row.
+ * `data-soridraw-placement` is the only vertical-placement state; collapsing
+ * changes the control's appearance, not its scroll range or remembered top. */
+html[data-soridraw-theme="studio-black"]
+  body > .soridraw-studio-action-collapsed[data-soridraw-placement="inline"] {
+  top: var(--soridraw-action-docked-top, auto) !important;
   bottom: auto !important;
-  /* 531 — A docked collapsed control must fit inside the exact row geometry
-   * that was proven visible before docking. The generic floating tab can be
-   * taller (up to 92px), which made its lower edge slip under the builder/footer
-   * when it was positioned at the inline row top. */
-  height: var(--soridraw-action-collapsed-docked-height, 84px) !important;
-  min-height: var(--soridraw-action-collapsed-docked-height, 84px) !important;
-  max-height: var(--soridraw-action-collapsed-docked-height, 84px) !important;
+  height: min(var(--soridraw-action-row-height, 85px), 100px) !important;
+  min-height: min(var(--soridraw-action-row-height, 85px), 100px) !important;
+  max-height: min(var(--soridraw-action-row-height, 85px), 100px) !important;
 }
+

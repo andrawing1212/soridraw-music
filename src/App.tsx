@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useMediaQuery } from './lib/mediaQueryStore';
+import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -3962,6 +3963,7 @@ function App() {
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
+  const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
 
   useEffect(() => {
     applyStoredSoridrawDisplayMode();
@@ -3971,9 +3973,10 @@ function App() {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
     const syncBuilderActionMode = () => {
+      const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
+      setIsStudioBlackActionMode(isStudioBlack);
       setIsSplitBuilderActionMobile(
-        root.dataset.soridrawTheme === 'studio-black'
-        && root.dataset.soridrawBuilderMode === 'mobile',
+        isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
       );
     };
 
@@ -6666,11 +6669,6 @@ function App() {
   const [isActionsFloating, setIsActionsFloating] = useState(true);
   const isActionsFloatingRef = useRef(true);
   const isSplitDraggingRef = useRef(false);
-  const actionBarHeightRef = useRef(84);
-  // Docking used to be tuned around the compact pre-524 action row. The visual
-  // row is intentionally larger now, but its larger height must not postpone the
-  // moment when the bar returns to its real in-flow slot below the command card.
-  const ACTION_BAR_DOCKING_HEIGHT_CAP = 94;
   const actionBarPlacementRafRef = useRef<number | null>(null);
   const actionBarLayoutRafRef = useRef<number | null>(null);
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
@@ -6834,75 +6832,26 @@ const toggleCycleVariantSelection = (
   const syncActionBarLayoutMetrics = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
     const anchor = actionButtonsAnchorRef.current;
-    const actionBar = actionButtonsBarRef.current;
     if (!anchor) return;
 
     const anchorRect = anchor.getBoundingClientRect();
     const root = document.documentElement;
-    root.style.setProperty('--soridraw-action-fixed-left', `${anchorRect.left}px`);
-    root.style.setProperty('--soridraw-action-fixed-width', `${anchorRect.width}px`);
+    const gutter = getStudioActionFloatingGutter(window.innerWidth, root.dataset.soridrawBuilderMode);
+    const floatingGeometry = resolveStudioActionFloatingGeometry(anchorRect.left, anchorRect.width, gutter);
 
-    // Measure the visible row, not the outer tracking wrapper. The inline copy
-    // has 12px top padding while the floating copy does not; storing wrapper
-    // height made the cached height change simply because ownership changed,
-    // so the larger 524 bar could bounce around the floating/inline threshold.
-    const actionRow = actionBar?.querySelector<HTMLElement>('.soridraw-studio-action-row');
-    const measuredRowHeight = Math.ceil(actionRow?.getBoundingClientRect().height || 0);
-    if (measuredRowHeight > 0) actionBarHeightRef.current = measuredRowHeight;
-
-    // Keep the natural command slot and the docked collapsed control on one
-    // geometry source. This prevents collapse/expand from changing the scroll
-    // range or using a taller fixed control than the row that actually fits.
-    root.style.setProperty(
-      '--soridraw-action-collapsed-docked-height',
-      `${Math.min(actionBarHeightRef.current, 92)}px`,
-    );
-
-    // The real slot always reserves the same geometry regardless of whether the
-    // visible row is currently portaled or already inline.
-    anchor.style.setProperty(
-      '--soridraw-action-anchor-height',
-      `${Math.ceil(actionBarHeightRef.current + 12)}px`,
-    );
-  }, []);
-
-  const clearCollapsedActionDock = useCallback(() => {
-    if (typeof document === 'undefined') return;
-    const root = document.documentElement;
-    delete root.dataset.soridrawActionCollapsedDocked;
-    root.style.removeProperty('--soridraw-action-collapsed-docked-top');
-  }, []);
-
-  const syncCollapsedActionDockPosition = useCallback(() => {
-    if (typeof document === 'undefined') return;
-    const root = document.documentElement;
-    if (root.dataset.soridrawActionCollapsedDocked !== 'true') return;
-    const anchor = actionButtonsAnchorRef.current;
-    if (!anchor) return;
-    const anchorRect = anchor.getBoundingClientRect();
-    // Inline expanded rows start 12px below the anchor. Keep the collapsed tab
-    // on that same visual row instead of jumping back to the viewport bottom.
-    root.style.setProperty(
-      '--soridraw-action-collapsed-docked-top',
-      `${Math.round(anchorRect.top + 12)}px`,
-    );
+    // 532 — one geometry source for every expanded/collapsed Studio Black state.
+    // The portal bar and the docked slot now derive from the same real command
+    // anchor, so collapse/expand can only change appearance, never scroll range
+    // or vertical ownership.
+    root.style.setProperty('--soridraw-action-fixed-left', `${floatingGeometry.left}px`);
+    root.style.setProperty('--soridraw-action-fixed-width', `${floatingGeometry.width}px`);
+    root.style.setProperty('--soridraw-action-docked-top', `${Math.round(anchorRect.top + 12)}px`);
   }, []);
 
   const collapseActionButtons = useCallback(() => {
-    if (typeof document !== 'undefined') {
-      const root = document.documentElement;
-      const shouldRemainDocked = root.dataset.soridrawTheme === 'studio-black'
-        && !isActionsFloatingRef.current;
-      if (shouldRemainDocked) {
-        root.dataset.soridrawActionCollapsedDocked = 'true';
-        syncCollapsedActionDockPosition();
-      } else {
-        clearCollapsedActionDock();
-      }
-    }
     isActionButtonsCollapsedRef.current = true;
     setIsActionButtonsCollapsed(true);
-  }, [clearCollapsedActionDock, syncCollapsedActionDockPosition]);
+  }, []);
 
   const expandActionButtons = useCallback(() => {
     isActionButtonsCollapsedRef.current = false;
@@ -6914,12 +6863,12 @@ const toggleCycleVariantSelection = (
     const anchor = actionButtonsAnchorRef.current;
     if (!anchor) return;
 
-    const isStudioBlack = document.documentElement.dataset.soridrawTheme === 'studio-black';
+    const root = document.documentElement;
+    const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
     if (!isStudioBlack) {
-      clearCollapsedActionDock();
-      document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
-      document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
-      anchor.style.removeProperty('--soridraw-action-anchor-height');
+      root.style.removeProperty('--soridraw-action-fixed-left');
+      root.style.removeProperty('--soridraw-action-fixed-width');
+      root.style.removeProperty('--soridraw-action-docked-top');
       if (!isActionsFloatingRef.current) {
         isActionsFloatingRef.current = true;
         setIsActionsFloating(true);
@@ -6934,49 +6883,21 @@ const toggleCycleVariantSelection = (
       '.soridraw-studio-split-workspace[data-scroll-isolated="true"]',
     );
 
-    // 531 — Split Mode uses a zero/variable-height anchor depending on whether
-    // the action row is floating or docked. Judging by rect.bottom therefore made
-    // the decision depend on the current state itself: collapse could remove the
-    // slot, expansion could add it back, and the threshold moved underneath us.
-    // Use the anchor TOP plus the known natural row height instead. The top never
-    // changes when the slot reserves/releases height, so floating/docked becomes
-    // one stable rule for expanded and collapsed states alike.
-    let nextIsFloating: boolean;
-    if (builderPane && isolatedSplitWorkspace) {
-      const builderRect = builderPane.getBoundingClientRect();
-      const naturalSlotHeight = Math.ceil(actionBarHeightRef.current + 12);
-      const naturalSlotBottom = rect.top + naturalSlotHeight;
-      const dockHysteresis = wasFloating ? 0 : 2;
-      nextIsFloating = naturalSlotBottom > builderRect.bottom + dockHysteresis;
-    } else {
-      const viewportBottomGap = window.innerWidth >= 1100 ? 28 : 20;
-      const dockingHeight = Math.min(actionBarHeightRef.current, ACTION_BAR_DOCKING_HEIGHT_CAP);
-      const dockLine = window.innerHeight - dockingHeight - viewportBottomGap;
-      const naturalPanelTop = rect.top + 12;
-      nextIsFloating = wasFloating
-        ? naturalPanelTop > dockLine
-        : naturalPanelTop > dockLine + 2;
-    }
-
-    // Collapsed and expanded controls now share the same live placement state.
-    // While collapsed, scrolling must still be allowed to move the control from
-    // floating to its real command slot (and back); otherwise expanding uses a
-    // stale placement and looks "locked" above the command card.
-    if (isActionButtonsCollapsedRef.current) {
-      const root = document.documentElement;
-      if (nextIsFloating) {
-        clearCollapsedActionDock();
-      } else {
-        root.dataset.soridrawActionCollapsedDocked = 'true';
-        syncCollapsedActionDockPosition();
-      }
-    }
+    // 532 — collapsed and expanded states use the exact same reserved slot and
+    // the exact same bottom boundary. This removes the old state-dependent
+    // "locks" where collapsed could scroll farther than expanded or reopening
+    // could restore a stale floating decision.
+    const availableBottom = builderPane && isolatedSplitWorkspace
+      ? builderPane.getBoundingClientRect().bottom
+      : window.innerHeight - (window.innerWidth >= 1100 ? 28 : 20);
+    const hysteresis = wasFloating ? 0 : 2;
+    const nextIsFloating = rect.bottom > availableBottom + hysteresis;
 
     if (wasFloating !== nextIsFloating) {
       isActionsFloatingRef.current = nextIsFloating;
       setIsActionsFloating(nextIsFloating);
     }
-  }, [clearCollapsedActionDock, syncCollapsedActionDockPosition]);
+  }, []);
 
   const scheduleActionBarPlacement = useCallback(() => {
     if (actionBarPlacementRafRef.current !== null) return;
@@ -7051,7 +6972,7 @@ const toggleCycleVariantSelection = (
       window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
-      document.documentElement.style.removeProperty('--soridraw-action-collapsed-docked-height');
+      document.documentElement.style.removeProperty('--soridraw-action-docked-top');
     };
   }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
@@ -7170,14 +7091,6 @@ const toggleCycleVariantSelection = (
     document.documentElement.dataset.soridrawActionOwner = studioActionOwner;
   }, [studioActionOwner]);
 
-  useLayoutEffect(() => {
-    if (studioActionOwner === 'collapsed') return;
-    // Keep the dock marker through the zero-duration collapsed exit so the tab
-    // cannot flash back to its fixed-bottom position while expanding.
-    const frame = window.requestAnimationFrame(() => clearCollapsedActionDock());
-    return () => window.cancelAnimationFrame(frame);
-  }, [clearCollapsedActionDock, studioActionOwner]);
-
   useEffect(() => {
     if (studioActionOwner === 'floating') return;
     setHoveredItemState((current) => (isActionButtonHintItem(current) ? null : current));
@@ -7185,16 +7098,15 @@ const toggleCycleVariantSelection = (
 
   useEffect(() => () => {
     delete document.documentElement.dataset.soridrawActionOwner;
-    delete document.documentElement.dataset.soridrawActionCollapsedDocked;
-    document.documentElement.style.removeProperty('--soridraw-action-collapsed-docked-top');
+    document.documentElement.style.removeProperty('--soridraw-action-docked-top');
   }, []);
 
   useLayoutEffect(() => {
     if (!shouldShowActionButtons) return;
 
-    // Placement must stay live even while the control is collapsed. The action
-    // row ref is absent then, but syncActionBarLayoutMetrics safely reuses the
-    // last measured row height and refreshes the anchor geometry.
+    // Placement stays live in collapsed and expanded states. Studio Black now
+    // uses CSS-owned row/slot geometry, so this pass only refreshes the shared
+    // anchor coordinates and floating/inline decision.
     syncActionBarLayoutMetrics();
     updateActionBarPlacement();
 
@@ -7232,6 +7144,7 @@ const toggleCycleVariantSelection = (
   }, [
     isActionButtonsCollapsed,
     isActionsFloating,
+    isStudioBlackActionMode,
     shouldShowActionButtons,
     scheduleActionBarPlacement,
     syncActionBarLayoutMetrics,
@@ -15181,13 +15094,10 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             ref={actionButtonsAnchorRef}
             className={cn(
               "relative",
-              // 530 — If a Split Generate row is collapsed after it has docked
-              // below the command card, keep the same reserved slot. Removing
-              // the anchor height at the exact bottom of the isolated builder
-              // changed scrollHeight, clamped scrollTop, and pulled the collapsed
-              // tab upward toward the command card. Floating collapses still use
-              // zero anchor height, so normal screen space is not wasted.
-              shouldShowActionButtons && (!isActionButtonsCollapsed || !isActionsFloating)
+              // 532 — Studio Black always reserves one canonical action slot.
+              // Expanded/collapsed and floating/inline states therefore share the
+              // same bottom scroll range; only the visible control changes.
+              shouldShowActionButtons && (isStudioBlackActionMode || (!isActionButtonsCollapsed && !isActionsFloating))
                 ? "soridraw-studio-action-anchor-expanded"
                 : "h-0"
             )}
@@ -15234,6 +15144,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
+                    data-soridraw-placement={isActionsFloating ? 'floating' : 'inline'}
                     className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFB400] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
                     <span className="soridraw-studio-action-collapsed-arrow relative flex h-9 w-9 items-center justify-center">

@@ -1038,11 +1038,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 520~524에서 완료한 분할바 드래그 좌표 안정화, builder-mobile 3버튼 전환, 스와이프 접기/오클릭 차단, 확대된 생성바 비율은 유지합니다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 
-### 526차 — 분할 Music Note / Suno Library 상단 탭 선택버튼 inset 복구
-- 기준: 525차.
-- Studio Black 분할모드의 Music Note / Suno Library 3분할 상단 탭에서 선택된 첫/마지막 버튼이 부모 46px 쉘 끝까지 확장되어 부모와 한 덩어리처럼 보이던 상태를 수정했습니다.
-- 분할모드의 부모 쉘 높이/색상/전체 폭/라운드 디자인은 그대로 유지하고, 내부 하위 버튼의 40px 높이와 부모의 3px 세로·4px 가로 여백이 실제로 보이도록 선택/hover 페인트 레이어를 자식 버튼 안쪽으로 되돌렸습니다.
-- 노트 스페이스/뮤직 스페이스처럼 첫 번째 탭이 선택되어도 좌측 부모 끝까지 색이 붙지 않고, Classic Dark처럼 살짝 작은 독립 버튼으로 보입니다.
-- Music Note 선택색 #FF7A72, Library 선택색 #A98BFF, 선택 텍스트 #101010(검정)은 그대로 유지합니다.
-- 일반 Dark/Light 테마, 탭 동작, 반응형 판정, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다. 배포 없음.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
+### 528차 — 분할 Music Note / Suno Library 선택탭 인셋 규칙 정리
+- 기준: 525차 (526/527의 실패한 후속 덮어쓰기는 폐기)
+- 426~431에 누적되어 있던 선택탭 full-fill 확장 규칙을 하나의 canonical rule로 교체.
+- 부모 46px / 내부 버튼 40px / 상하 3px·좌우 4px inset.
+- 선택/hover 표면은 부모 가장자리까지 확장하지 않음.
+- Music Note coral, Library purple, 선택 텍스트 검정 유지.
+
+
+## 529차 — 분할 Music Note / Library 탭 라운드 미세 조정
+- 기준: 528차
+- 범위: Studio Black 분할모드의 Music Note / Suno Library 3단 탭만 수정.
+- 부모 탭 바의 46px 높이, 16px 라운드, 3px/4px 인셋은 그대로 유지.
+- 내부 하위 버튼 및 active/hover 페인트 라운드만 12px → 14px로 조정해 Classic Dark의 더 둥근 인상에 맞춤.
+- 선택 색상과 선택 텍스트 검정색은 그대로 유지.
+- 일반 Dark/Light, 생성바, 분할바, Firebase/저장 구조는 변경하지 않음.

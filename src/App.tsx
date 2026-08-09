@@ -3961,10 +3961,32 @@ function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
+  const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
 
   useEffect(() => {
     applyStoredSoridrawDisplayMode();
   }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    const syncBuilderActionMode = () => {
+      setIsSplitBuilderActionMobile(
+        root.dataset.soridrawTheme === 'studio-black'
+        && root.dataset.soridrawBuilderMode === 'mobile',
+      );
+    };
+
+    syncBuilderActionMode();
+    const observer = new MutationObserver(syncBuilderActionMode);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const isActionSwipeCollapseMode = isActionDragMobile || isSplitBuilderActionMobile;
   // Screen type only changes when the desktop breakpoint changes; physical
   // screen resolution itself is stable. Avoid running this on every resize tick.
   useEffect(() => {
@@ -6324,6 +6346,20 @@ function App() {
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
   const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(true);
+  // A horizontal swipe can begin on top of the generate button itself. Browsers
+  // still synthesize a click after pointerup when the pointer finishes inside
+  // that button, so keep a short gesture-consumed window that blocks the
+  // trailing click for every theme that uses the shared swipe action row.
+  const actionSwipeClickBlockUntilRef = useRef(0);
+  const blockActionSwipeTrailingClick = (durationMs = 520) => {
+    actionSwipeClickBlockUntilRef.current = Date.now() + durationMs;
+  };
+  const handleActionSwipeClickCapture = (event: React.MouseEvent<HTMLElement>) => {
+    if (!isActionSwipeCollapseMode) return;
+    if (Date.now() > actionSwipeClickBlockUntilRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);
@@ -13515,28 +13551,39 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       </div>
     )}
     <motion.div
-      drag={isActionDragMobile ? "x" : false}
-      dragConstraints={isActionDragMobile ? { left: 0, right: 0 } : undefined}
+      drag={isActionSwipeCollapseMode ? "x" : false}
+      dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 0 } : undefined}
       dragElastic={0.16}
+      onDragStart={() => {
+        if (!isActionSwipeCollapseMode) return;
+        // Mark the gesture before pointerup so a button underneath the swipe
+        // cannot receive the browser's trailing click. A normal tap/click never
+        // enters onDragStart, so ordinary generation clicks are unaffected.
+        blockActionSwipeTrailingClick(1500);
+      }}
       onDragEnd={(_, info) => {
-        if (!isActionDragMobile) return;
+        if (!isActionSwipeCollapseMode) return;
+        blockActionSwipeTrailingClick();
         if (info.offset.x < -70 || info.velocity.x < -520) {
           setIsActionButtonsCollapsed(true);
         }
       }}
+      onClickCapture={handleActionSwipeClickCapture}
       style={{ transformOrigin: 'center bottom' }}
       className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
     >
-      <motion.button
-              type="button"
-        onClick={() => setIsActionButtonsCollapsed(true)}
-        onMouseEnter={() => {}}
-        onMouseLeave={() => {}}
-        className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
-        aria-label="생성 버튼 접기"
-      >
-        <ArrowLeft className="w-5 h-5" />
-      </motion.button>
+      {!isActionSwipeCollapseMode && (
+        <motion.button
+          type="button"
+          onClick={() => setIsActionButtonsCollapsed(true)}
+          onMouseEnter={() => {}}
+          onMouseLeave={() => {}}
+          className="soridraw-action-collapse hidden md:flex self-stretch w-12 shrink-0 rounded-l-[18px] rounded-r-xl bg-white/[0.025] border-0 border-r border-white/10 text-[#FFB400] hover:bg-white/[0.045] hover:text-[#FFB400] transition-all shadow-none items-center justify-center opacity-100"
+          aria-label="생성 버튼 접기"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </motion.button>
+      )}
       {renderActionButtonsContent(placement)}
     </motion.div>
   </div>
@@ -15054,11 +15101,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         repeatDelay: 0.18,
                       },
                     }}
-                    drag={isActionDragMobile ? "x" : false}
-                    dragConstraints={isActionDragMobile ? { left: 0, right: 92 } : undefined}
+                    drag={isActionSwipeCollapseMode ? "x" : false}
+                    dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 92 } : undefined}
                     dragElastic={0.12}
                     onDragEnd={(_, info) => {
-                      if (!isActionDragMobile) return;
+                      if (!isActionSwipeCollapseMode) return;
                       if (info.offset.x > 34 || info.velocity.x > 360) {
                         setIsActionButtonsCollapsed(false);
                       }

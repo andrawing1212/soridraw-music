@@ -11719,3 +11719,68 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-color-reset-text {
   white-space: nowrap !important;
 }
+
+/* 521 — Split Generate bar follows the builder pane mode, not viewport width.
+ * 520 stabilised the bar's geometry, but 518 intentionally forced one desktop
+ * composition for every >=1100px split workspace. That prevented the lower
+ * controls from becoming the compact three-button mobile composition when the
+ * builder itself crossed its existing mobile breakpoint. The builder mode is
+ * now mirrored to <html> by StudioSplitWorkspace; switch the portal bar only
+ * when that same mode changes. This is an instant two-state swap — no per-pixel
+ * scaling and no extra intermediate layout. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking .soridraw-action-collapse {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 0 56px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    padding-inline: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    min-width: 0 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* 522 — Builder-mobile split action bar uses the same gesture-first composition
+ * as the real mobile bar. An older 518 selector has higher specificity and
+ * forced the desktop collapse arrow back on even after 521 switched the bar to
+ * the compact three-button layout. Keep this exact selector later in cascade so
+ * the arrow is absent as soon as the builder mode flips, before React's gesture
+ * state rerender catches up. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+    .soridraw-studio-action-bar--tracking
+    .soridraw-studio-action-panel
+    > .soridraw-studio-action-row
+    > button.soridraw-action-collapse:first-child {
+    display: none !important;
+  }
+}

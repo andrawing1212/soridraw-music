@@ -977,3 +977,43 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Studio Black의 접힌 키워드 카드 높이는 브라우저 `window.innerWidth`가 아니라 builder pane의 `data-pane-mode`를 따른다.
 - 분할 rAF 직접 이동, floating/inline 소유권 전환 지연, 결과 타이틀의 무거운 높이 재측정 지연은 유지해 성능 보호 범위를 남겼다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 520차 - 분할 클릭/드래그 시작 시 생성바 첫 프레임 점프 제거
+- 기준: 519차.
+- 영상에서 분할바를 누른 직후 생성바가 한 번 흔들린 뒤 드래그 폭을 따라가는 현상을 재분석했다.
+- 원인은 휴지 상태에서 App.tsx가 실제 `.soridraw-studio-action-anchor-expanded`의 viewport rect로 floating 생성바를 배치하지만, 드래그 fast path는 builder pane 전체 rect를 그대로 `--soridraw-action-fixed-left/width`에 넣어 서로 다른 가로 기준을 사용하던 것이었다.
+- pointer-down 시 실제 action anchor와 builder pane 사이의 좌/우 inset을 1회 측정해 저장하고, 드래그 중에는 `builderWidth - insetLeft - insetRight`와 `builderLeft + insetLeft`만 rAF 산술로 갱신하도록 변경했다.
+- 드래그 시작 전 현재 anchor rect를 root 변수에 먼저 seed해 첫 rAF 프레임이 휴지 상태와 픽셀 단위로 동일한 좌표에서 시작하게 했다.
+- 매 pointer frame에 getBoundingClientRect를 추가하지 않았으므로 기존 rAF 성능 경로는 유지한다.
+- 수정 파일: `src/components/studio/StudioSplitWorkspace.tsx`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 521차 — 분할 생성바 Builder 모바일모드 연동
+- 520의 드래그 좌표/첫 프레임 안정화는 그대로 유지합니다.
+- 분할 Builder의 기존 `desktop/mobile` 판정을 body portal 생성바에도 동일 프레임으로 전달합니다.
+- Builder가 mobile 판정이 되면 생성바는 별도 viewport 판정 없이 즉시 모바일형 3버튼 구성(무작위 아이콘 / 생성하기 / 초기화 아이콘)으로 전환됩니다.
+- Builder가 desktop으로 돌아오면 기존 PC형(접기 + 라벨 포함) 구성으로 복귀합니다.
+- 전환은 두 상태만 사용하며 폭에 비례한 연속 축소/중간형은 추가하지 않습니다.
+
+## 522차 — 분할 Builder 모바일 생성바 스와이프 접기 통일
+- 기준: 521차.
+- 521에서 안정화된 분할바 드래그 좌표/첫 프레임/Builder mobile 3버튼 전환은 그대로 유지한다.
+- 분할모드에서 Builder가 `mobile` 판정일 때는 생성바의 별도 `<-` 접기 버튼을 렌더링하지 않는다. 실제 모바일 생성바와 같은 3버튼 형태만 유지한다.
+- 실제 모바일에서 이미 사용하던 생성바 좌측 스와이프 접기 제스처를 분할 Builder mobile 상태에도 그대로 재사용한다. 왼쪽으로 충분히 드래그하면 생성바가 접힌 탭 상태로 전환된다.
+- 접힌 탭도 같은 조건에서 오른쪽 스와이프로 다시 펼칠 수 있고, 기존 클릭 펼치기도 유지한다.
+- Builder `desktop` 상태에서는 기존 PC형 `<-` 접기 버튼과 클릭 접기 방식을 그대로 유지한다.
+- pane 폭의 매 픽셀마다 React 상태를 갱신하지 않고 `<html data-soridraw-builder-mode>`가 실제 breakpoint를 넘을 때만 MutationObserver로 제스처 모드를 전환한다.
+- 수정 파일: `src/App.tsx`, `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 523차 — 생성바 스와이프 후 생성하기 오클릭 차단
+- 기준: 522차.
+- 실제 모바일 / 일반 테마 / Studio Black 분할 Builder mobile이 공통으로 사용하는 생성바 스와이프에서, 생성하기 버튼 위에서 좌측 드래그를 시작하고 포인터를 다시 생성하기 버튼 안에서 놓으면 브라우저가 pointerup 뒤 `click`을 합성해 생성 모달까지 실행하던 문제를 수정했다.
+- 공통 `soridraw-studio-action-row`에서 Framer Motion의 `onDragStart` 시점부터 제스처를 소비한 것으로 표시하고, 드래그 종료 직후 발생하는 후행 click을 capture 단계에서 `preventDefault + stopPropagation`으로 차단한다.
+- 정상적인 단순 클릭은 `onDragStart`가 발생하지 않으므로 기존 생성하기 / 무작위 / 초기화 클릭 동작은 그대로 유지한다.
+- 왼쪽 스와이프가 접기 임계값에 도달하면 접기만 실행되고, 손을 놓은 위치가 생성하기 버튼 내부여도 생성하기가 실행되지 않는다. 임계값에 못 미친 드래그도 버튼 클릭으로 오인하지 않는다.
+- 수정 파일: `src/App.tsx`, `README.md`. CSS / 분할바 좌표 / Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

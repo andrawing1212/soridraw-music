@@ -45,6 +45,7 @@ type LayoutMetrics = {
 type ExternalSplitControls = {
   searchButton: HTMLElement | null;
   floatingActionBar: HTMLElement | null;
+  actionAnchor: HTMLElement | null;
   collapsedActionButton: HTMLElement | null;
   liveKeywords: HTMLElement | null;
   heroRow: HTMLElement | null;
@@ -164,7 +165,8 @@ export default function StudioSplitWorkspace({
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
-  const lastActionControlPixelRef = useRef<number | null>(null);
+  const lastActionControlPixelRef = useRef<string | null>(null);
+  const actionAnchorInsetsRef = useRef<{ left: number; right: number } | null>(null);
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastIsolationViewportHeightRef = useRef<number | null>(null);
@@ -172,6 +174,7 @@ export default function StudioSplitWorkspace({
   const externalControlsRef = useRef<ExternalSplitControls>({
     searchButton: null,
     floatingActionBar: null,
+    actionAnchor: null,
     collapsedActionButton: null,
     liveKeywords: null,
     heroRow: null,
@@ -256,6 +259,7 @@ export default function StudioSplitWorkspace({
       current.floatingActionBar = document.querySelector<HTMLElement>(
         'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
       );
+      current.actionAnchor = document.querySelector<HTMLElement>('.soridraw-studio-action-anchor-expanded');
       current.collapsedActionButton = document.querySelector<HTMLElement>(
         'body > .soridraw-studio-action-collapsed',
       );
@@ -298,6 +302,7 @@ export default function StudioSplitWorkspace({
     resultCollapseToggleRef.current?.style.removeProperty('left');
     resultCollapseToggleRef.current?.style.removeProperty('right');
     lastActionControlPixelRef.current = null;
+    actionAnchorInsetsRef.current = null;
     externalControlsReadyRef.current = false;
   }, []);
 
@@ -384,26 +389,29 @@ export default function StudioSplitWorkspace({
     // the builder pane width automatically. Keep its outer box and responsive
     // controls on the exact same builder width in this animation frame. The
     // previous wide-desktop early return froze the bar until pointer-up.
-    const actionControlPixel = roundedBuilderWidth;
-    if (lastActionControlPixelRef.current === actionControlPixel) return;
-    lastActionControlPixelRef.current = actionControlPixel;
+    const actionInsets = actionAnchorInsetsRef.current ?? { left: 0, right: 0 };
+    const actionLeft = Math.max(0, Math.round(left + actionInsets.left));
+    const actionControlPixel = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
+    const actionGeometryKey = `${actionLeft}:${actionControlPixel}`;
+    if (lastActionControlPixelRef.current === actionGeometryKey) return;
+    lastActionControlPixelRef.current = actionGeometryKey;
 
     if (controls.floatingActionBar) {
-      // 519: The floating Generate row must have one horizontal coordinate owner.
-      // Publish the live split geometry through the same root variables used by
-      // the resting CSS instead of fighting that CSS with per-node left/width
-      // inline overrides during pointer drag. App.tsx keeps floating/inline
-      // ownership frozen for performance; only the cheap horizontal variables
-      // move every animation frame.
+      // 520: Match the floating Generate row to the real in-flow action anchor,
+      // not to the whole builder pane. The builder has its own horizontal
+      // padding/gutter, so using the raw pane width made the first drag frame
+      // jump outward and then snap back to the anchor on pointer-up. Capture
+      // that anchor inset once at pointer-down and keep the exact same visual
+      // track with cheap arithmetic on every rAF drag frame.
       const rootStyle = document.documentElement.style;
-      rootStyle.setProperty('--soridraw-action-fixed-left', `${Math.max(0, Math.round(left))}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${actionLeft}px`);
       rootStyle.setProperty('--soridraw-action-fixed-width', `${actionControlPixel}px`);
       controls.floatingActionBar.style.removeProperty('left');
       controls.floatingActionBar.style.removeProperty('width');
       controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
     }
     if (controls.collapsedActionButton) {
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${actionControlPixel}px`);
+      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
       controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
     }
   }, [readExternalControls]);
@@ -651,6 +659,19 @@ export default function StudioSplitWorkspace({
     if (!resultCollapsedRef.current && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
+    }
+
+    // 521 — The floating Generate bar is portaled directly under <body>, so it
+    // cannot inherit the builder pane's data-pane-mode. Mirror the already
+    // resolved builder mode onto <html> in the same layout frame. This gives
+    // the action bar the exact same desktop/mobile state as the builder while
+    // the divider is being dragged, without adding a second width observer or
+    // a viewport-based breakpoint.
+    if (root.dataset.soridrawBuilderMode !== nextBuilderMode) {
+      root.dataset.soridrawBuilderMode = nextBuilderMode;
+    }
+    if (root.dataset.soridrawResultMode !== nextResultMode) {
+      root.dataset.soridrawResultMode = nextResultMode;
     }
 
     // The Library credit shortcut is portaled into the hero and sits outside the
@@ -981,7 +1002,30 @@ export default function StudioSplitWorkspace({
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
-    readExternalControls(true);
+
+    // 520: Freeze the *relationship* between the in-flow action anchor and the
+    // builder pane before the drag class is applied. App.tsx normally positions
+    // the floating row from this anchor rect; the drag fast path must use the
+    // same geometry or the bar visibly jumps as soon as the pointer starts.
+    const controls = readExternalControls(true);
+    const builderRect = builderRef.current?.getBoundingClientRect();
+    const actionAnchorRect = controls.actionAnchor?.getBoundingClientRect();
+    if (builderRect && actionAnchorRect && builderRect.width > 0 && actionAnchorRect.width > 0) {
+      actionAnchorInsetsRef.current = {
+        left: Math.max(0, actionAnchorRect.left - builderRect.left),
+        right: Math.max(0, builderRect.right - actionAnchorRect.right),
+      };
+      // Seed the exact current resting coordinates before any pointer movement.
+      // The first rAF frame therefore starts from pixel-identical geometry.
+      const rootStyle = document.documentElement.style;
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${Math.round(actionAnchorRect.left)}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-width', `${Math.round(actionAnchorRect.width)}px`);
+      lastActionControlPixelRef.current = `${Math.round(actionAnchorRect.left)}:${Math.round(actionAnchorRect.width)}`;
+    } else {
+      actionAnchorInsetsRef.current = null;
+      lastActionControlPixelRef.current = null;
+    }
+
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';

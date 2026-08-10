@@ -65,6 +65,19 @@ type PairHandRow = {
   commitGapMax: number;
   commitCoverage: number;
   inputToCommitP95: number;
+  pointerGapP95: number;
+  pointerGapMax: number;
+  commitPerPointer: number;
+  layoutAckRate: number;
+  layoutAckGapP95: number;
+  layoutAckGapMax: number;
+  layoutAckToWriteP95: number;
+  layoutAckToWriteMax: number;
+  layoutAckErrorAvg: number;
+  layoutAckErrorMax: number;
+  layoutAckPerCommit: number;
+  paneModeSwitches: number;
+  contentModeSwitches: number;
 };
 
 const PERF_PAIR_BASELINE_STORAGE_KEY = 'soridraw_perf_pair_baseline_603_v1';
@@ -406,7 +419,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '604 · 602 stable runtime + paired real-hand drag synchrony diagnostics',
+    buildProfile: '605 · 602 stable runtime + real-hand layout-ack/response-switch diagnostics',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -776,6 +789,19 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       commitGapMax: next.commitGapMaxMs,
       commitCoverage: next.commitCoveragePct,
       inputToCommitP95: next.inputToCommitP95Ms,
+      pointerGapP95: next.pointerGapP95Ms,
+      pointerGapMax: next.pointerGapMaxMs,
+      commitPerPointer: next.commitPerPointerPct,
+      layoutAckRate: next.layoutAckRate,
+      layoutAckGapP95: next.layoutAckGapP95Ms,
+      layoutAckGapMax: next.layoutAckGapMaxMs,
+      layoutAckToWriteP95: next.layoutAckToWriteP95Ms,
+      layoutAckToWriteMax: next.layoutAckToWriteMaxMs,
+      layoutAckErrorAvg: next.layoutAckWidthErrorAvgPx,
+      layoutAckErrorMax: next.layoutAckWidthErrorMaxPx,
+      layoutAckPerCommit: next.layoutAckPerCommitPct,
+      paneModeSwitches: next.paneModeSwitchCount,
+      contentModeSwitches: next.contentModeSwitchCount,
     };
   };
 
@@ -799,10 +825,17 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       const music = rows.find((row) => row.workspace === 'music-note');
       const library = rows.find((row) => row.workspace === 'library');
       if (music && library) {
-        const musicBehind = music.commitRate < library.commitRate * 0.85 || music.commitGapP95 > library.commitGapP95 * 1.2 || music.p95 > library.p95 * 1.2;
-        setBenchmarkMessage(musicBehind
-          ? '실손 비교 완료 · 뮤직노트가 라이브러리보다 실제 폭 반영 주기/긴 프레임에서 뒤처집니다. 다음 수정은 이 차이만 제거합니다.'
-          : '실손 비교 완료 · 두 화면의 실제 폭 반영 주기는 비슷합니다. 남은 체감 차이는 렌더/레이아웃 동기 비용을 우선 확인합니다.');
+        const musicAckBehind =
+          music.layoutAckGapP95 > library.layoutAckGapP95 * 1.2
+          || music.layoutAckToWriteP95 > library.layoutAckToWriteP95 * 1.2
+          || music.layoutAckErrorMax > Math.max(2, library.layoutAckErrorMax * 1.5);
+        const responsiveConflict =
+          music.paneModeSwitches + music.contentModeSwitches > library.paneModeSwitches + library.contentModeSwitches + 2;
+        setBenchmarkMessage(musicAckBehind
+          ? '실손 비교 완료 · 뮤직노트는 DOM 쓰기는 빠르지만 실제 pane 레이아웃 확인 주기가 라이브러리보다 뒤처집니다. 다음 수정은 이 동기 지연만 제거합니다.'
+          : responsiveConflict
+            ? '실손 비교 완료 · 뮤직노트에서 반응형 모드 전환이 더 자주 발생합니다. Tablet/콘텐츠 판정 충돌을 먼저 분리합니다.'
+            : '실손 비교 완료 · pane 레이아웃 확인은 유사합니다. 남은 체감 차이는 외부 UI/콘텐츠가 같은 프레임에 따라오는지 다음 단계에서 좁힙니다.');
       }
     } catch (error) {
       setBenchmarkMessage(`실손 비교 중단 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
@@ -935,7 +968,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           `browserRenderPerSec=${(browserRender / durationSeconds).toFixed(1)}ms/s loaf=${current.loafCount}/${current.loafTotalMs}ms blocking=${current.loafBlockingTotalMs}ms`,
           `forcedStyleLayout=${current.forcedStyleLayoutTotalMs}ms max=${current.forcedStyleLayoutMaxMs}ms`,
           `flush=${current.flushAvgMs}/${current.flushMaxMs}ms apply=${current.applyAvgMs}/${current.applyMaxMs}ms contentCommit/divider=${current.contentCommitCount}/${current.dividerOnlyCount}`,
-          `hand pointerRate=${current.pointerEventRate}/s samples=${current.pointerSampleRate}/s distance=${current.pointerDistancePx}px commitRate=${current.commitRate}/s commitGapAvg/P95/max=${current.commitGapAvgMs}/${current.commitGapP95Ms}/${current.commitGapMaxMs}ms coverage=${current.commitCoveragePct}% inputToCommitP95/max=${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
+          `hand pointerRate=${current.pointerEventRate}/s samples=${current.pointerSampleRate}/s distance=${current.pointerDistancePx}px pointerGapP95/max=${current.pointerGapP95Ms}/${current.pointerGapMaxMs}ms commitRate=${current.commitRate}/s commitPerPointer=${current.commitPerPointerPct}% commitGapAvg/P95/max=${current.commitGapAvgMs}/${current.commitGapP95Ms}/${current.commitGapMaxMs}ms coverage=${current.commitCoveragePct}% inputToCommitP95/max=${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
+          `layoutAck rate=${current.layoutAckRate}/s ackPerCommit=${current.layoutAckPerCommitPct}% gapAvg/P95/max=${current.layoutAckGapAvgMs}/${current.layoutAckGapP95Ms}/${current.layoutAckGapMaxMs}ms writeToAckP95/max=${current.layoutAckToWriteP95Ms}/${current.layoutAckToWriteMaxMs}ms widthErrorAvg/max=${current.layoutAckWidthErrorAvgPx}/${current.layoutAckWidthErrorMaxPx}px responsiveSwitch pane/content=${current.paneModeSwitchCount}/${current.contentModeSwitchCount}`,
           `DOM total=${current.domNodes} builder=${current.builderNodes} result=${current.resultNodes} heapMB=${current.heapMb ?? '-'}`,
           `regions musicNoteControls=${current.regionNodes.musicNoteControls} musicNoteList=${current.regionNodes.musicNoteList} libraryControls=${current.regionNodes.libraryControls} libraryList=${current.regionNodes.libraryList} externalStudioUi=${current.regionNodes.externalStudioUi} other=${current.regionNodes.other}`,
         );
@@ -964,7 +998,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       if (handPairRows.length) {
         lines.push('', '[MUSIC NOTE / LIBRARY REAL HAND DRAG]');
         handPairRows.forEach((row) => {
-          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms pointerRate=${row.pointerEventRate}/s samples=${row.pointerSampleRate}/s commitRate=${row.commitRate}/s commitGapP95/max=${row.commitGapP95}/${row.commitGapMax}ms coverage=${row.commitCoverage}% inputToCommitP95=${row.inputToCommitP95}ms render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s`);
+          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms pointerRate=${row.pointerEventRate}/s samples=${row.pointerSampleRate}/s pointerGapP95/max=${row.pointerGapP95}/${row.pointerGapMax}ms commitRate=${row.commitRate}/s commitPerPointer=${row.commitPerPointer}% commitGapP95/max=${row.commitGapP95}/${row.commitGapMax}ms coverage=${row.commitCoverage}% inputToCommitP95=${row.inputToCommitP95}ms layoutAck=${row.layoutAckRate}/s ackPerCommit=${row.layoutAckPerCommit}% ackGapP95/max=${row.layoutAckGapP95}/${row.layoutAckGapMax}ms writeToAckP95/max=${row.layoutAckToWriteP95}/${row.layoutAckToWriteMax}ms widthErrorAvg/max=${row.layoutAckErrorAvg}/${row.layoutAckErrorMax}px responsiveSwitch=${row.paneModeSwitches}/${row.contentModeSwitches} render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s`);
         });
       }
       lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
@@ -1045,8 +1079,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   <b>{row.workspace === 'music-note' ? '뮤직노트 손' : '라이브러리 손'}</b>
                   <i>{row.layoutMode === 'direct' ? 'direct' : 'css-var'}</i>
                   <strong>반영 {row.commitRate}/s</strong>
-                  <em>gap P95 {row.commitGapP95}ms</em>
-                  <small>입력 {row.pointerEventRate}/s · sample {row.pointerSampleRate}/s · FPS {row.fps} · P95 {row.p95}ms · coverage {row.commitCoverage}%</small>
+                  <em>gap P95 {row.commitGapP95}ms · layout ack {row.layoutAckRate}/s</em>
+                  <small>입력 {row.pointerEventRate}/s · commit {row.commitRate}/s · ack P95 {row.layoutAckGapP95}ms · write→ack {row.layoutAckToWriteP95}ms · 전환 {row.paneModeSwitches}/{row.contentModeSwitches}</small>
                 </span>
               ))}
             </div>
@@ -1091,6 +1125,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     <span>손 입력 / sample</span><b>{displayResult.pointerEventRate}/s · {displayResult.pointerSampleRate}/s</b>
                     <span>손 실제 폭 반영률</span><b>{displayResult.commitRate}/s · coverage {displayResult.commitCoveragePct}%</b>
                     <span>반영 gap 평균/P95/최대</span><b>{displayResult.commitGapAvgMs}/{displayResult.commitGapP95Ms}/{displayResult.commitGapMaxMs}ms</b>
+                    <span>실제 pane layout 확인</span><b>{displayResult.layoutAckRate}/s · {displayResult.layoutAckPerCommitPct}%</b>
+                    <span>layout ack P95 / write→ack</span><b>{displayResult.layoutAckGapP95Ms} / {displayResult.layoutAckToWriteP95Ms}ms</b>
+                    <span>폭 오차 평균/최대</span><b>{displayResult.layoutAckWidthErrorAvgPx}/{displayResult.layoutAckWidthErrorMaxPx}px</b>
+                    <span>반응형 전환 pane/content</span><b>{displayResult.paneModeSwitchCount}/{displayResult.contentModeSwitchCount}</b>
                     <span>입력→반영 P95/최대</span><b>{displayResult.inputToCommitP95Ms}/{displayResult.inputToCommitMaxMs}ms</b>
                     <span>apply 평균/최대</span><b>{displayResult.applyAvgMs}/{displayResult.applyMaxMs}ms</b>
                     <span>DOM 전체</span><b>{displayResult.domNodes.toLocaleString()}</b>

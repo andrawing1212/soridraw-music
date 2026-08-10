@@ -1,3 +1,13 @@
+## 605 - Real-hand layout acknowledgement + responsive conflict diagnostics
+
+- Keep the **604/602 runtime behavior unchanged**. This step measures why Music Note can report high rAF FPS while still feeling as if the content is being pulled from behind.
+- During a real divider drag, attach one temporary `ResizeObserver` to the two pane boxes. It consumes the observer-provided border-box sizes only; there are **no drag-time geometry reads** and no forced-layout measurement loop.
+- Compare geometry writes with browser layout acknowledgement: acknowledgement rate, gap average/P95/max, write→ack latency, acknowledged-width error, and acknowledgement-per-commit ratio.
+- Record pointer gap P95/max and commit-per-pointer efficiency so human input cadence is separated from rendering cadence.
+- Count actual pane-mode and content-responsive-mode transitions while dragging. This directly tests whether PC/Tablet/content breakpoints are repeatedly fighting the Lite V2 geometry path.
+- The existing Music Note ↔ Library real-hand comparison includes all new metrics in the full report. Recent Songs and normal runtime layout/design are untouched. No Firebase/Auth/Firestore/Functions/storage schema changes.
+
+
 ## 604 - Music Note / Library real-hand drag synchrony diagnostics
 
 - Keep the **603/602 runtime geometry unchanged** so the diagnostic does not contaminate the current hand feel: Music Note remains direct geometry; Library/Recent/Create remain the 590 CSS-variable path.

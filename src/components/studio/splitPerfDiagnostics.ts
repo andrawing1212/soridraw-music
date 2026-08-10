@@ -59,6 +59,10 @@ export type SplitPerfResult = {
   pointerSampleCount: number;
   pointerSampleRate: number;
   pointerDistancePx: number;
+  pointerGapAvgMs: number;
+  pointerGapP95Ms: number;
+  pointerGapMaxMs: number;
+  commitPerPointerPct: number;
   commitRate: number;
   commitGapAvgMs: number;
   commitGapP95Ms: number;
@@ -67,6 +71,19 @@ export type SplitPerfResult = {
   inputToCommitAvgMs: number;
   inputToCommitP95Ms: number;
   inputToCommitMaxMs: number;
+  layoutAckCount: number;
+  layoutAckRate: number;
+  layoutAckGapAvgMs: number;
+  layoutAckGapP95Ms: number;
+  layoutAckGapMaxMs: number;
+  layoutAckToWriteAvgMs: number;
+  layoutAckToWriteP95Ms: number;
+  layoutAckToWriteMaxMs: number;
+  layoutAckWidthErrorAvgPx: number;
+  layoutAckWidthErrorMaxPx: number;
+  layoutAckPerCommitPct: number;
+  paneModeSwitchCount: number;
+  contentModeSwitchCount: number;
   hotspots: SplitPerfHotspot[];
   flushCount: number;
   flushAvgMs: number;
@@ -126,6 +143,15 @@ type ActiveDrag = {
   commitTimes: number[];
   inputToCommitLatencies: number[];
   lastPointerAt: number | null;
+  geometryWriteCount: number;
+  lastGeometryWriteAt: number | null;
+  expectedBuilderWidth: number | null;
+  expectedResultWidth: number | null;
+  layoutAckTimes: number[];
+  layoutAckLatencies: number[];
+  layoutAckWidthErrors: number[];
+  paneModeSwitchCount: number;
+  contentModeSwitchCount: number;
   hotspots: Map<string, HotspotAccumulator>;
   domNodes: number;
   builderNodes: number;
@@ -444,6 +470,15 @@ export const beginSplitPerfDrag = ({
     commitTimes: [],
     inputToCommitLatencies: [],
     lastPointerAt: null,
+    geometryWriteCount: 0,
+    lastGeometryWriteAt: null,
+    expectedBuilderWidth: null,
+    expectedResultWidth: null,
+    layoutAckTimes: [],
+    layoutAckLatencies: [],
+    layoutAckWidthErrors: [],
+    paneModeSwitchCount: 0,
+    contentModeSwitchCount: 0,
     hotspots: new Map(),
     // Count once before dragging so diagnostics do not add DOM traversal inside the hot path.
     domNodes,
@@ -465,6 +500,30 @@ export const recordSplitPerfPointer = (clientX: number, coalescedCount = 1) => {
   active.pointerXs.push(clientX);
   active.pointerSampleCount += Math.max(1, Math.round(coalescedCount || 1));
   active.lastPointerAt = timestamp;
+};
+
+export const recordSplitPerfGeometryWrite = (builderWidth: number, resultWidth: number) => {
+  if (!enabled || !active) return;
+  active.geometryWriteCount += 1;
+  active.lastGeometryWriteAt = now();
+  active.expectedBuilderWidth = Number.isFinite(builderWidth) ? builderWidth : null;
+  active.expectedResultWidth = Number.isFinite(resultWidth) ? resultWidth : null;
+};
+
+export const recordSplitPerfLayoutAck = (builderWidth: number, resultWidth: number) => {
+  if (!enabled || !active || active.lastGeometryWriteAt === null) return;
+  const timestamp = now();
+  active.layoutAckTimes.push(timestamp);
+  active.layoutAckLatencies.push(Math.max(0, timestamp - active.lastGeometryWriteAt));
+  const builderError = active.expectedBuilderWidth === null ? 0 : Math.abs(builderWidth - active.expectedBuilderWidth);
+  const resultError = active.expectedResultWidth === null ? 0 : Math.abs(resultWidth - active.expectedResultWidth);
+  active.layoutAckWidthErrors.push(Math.max(builderError, resultError));
+};
+
+export const recordSplitPerfResponsiveSwitch = (kind: 'pane' | 'content') => {
+  if (!enabled || !active) return;
+  if (kind === 'pane') active.paneModeSwitchCount += 1;
+  else active.contentModeSwitchCount += 1;
 };
 
 export const recordSplitPerfFlush = (durationMs: number, contentCommitted: boolean) => {
@@ -506,6 +565,8 @@ export const finishSplitPerfDrag = () => {
   for (let index = 1; index < active.pointerEventTimes.length; index += 1) pointerGaps.push(active.pointerEventTimes[index] - active.pointerEventTimes[index - 1]);
   const commitGaps: number[] = [];
   for (let index = 1; index < active.commitTimes.length; index += 1) commitGaps.push(active.commitTimes[index] - active.commitTimes[index - 1]);
+  const layoutAckGaps: number[] = [];
+  for (let index = 1; index < active.layoutAckTimes.length; index += 1) layoutAckGaps.push(active.layoutAckTimes[index] - active.layoutAckTimes[index - 1]);
   let pointerDistancePx = 0;
   for (let index = 1; index < active.pointerXs.length; index += 1) pointerDistancePx += Math.abs(active.pointerXs[index] - active.pointerXs[index - 1]);
 
@@ -556,6 +617,10 @@ export const finishSplitPerfDrag = () => {
     pointerSampleCount: active.pointerSampleCount,
     pointerSampleRate: round((active.pointerSampleCount * 1000) / durationMs, 1),
     pointerDistancePx: round(pointerDistancePx, 0),
+    pointerGapAvgMs: round(mean(pointerGaps), 2),
+    pointerGapP95Ms: round(percentile(pointerGaps, 0.95), 2),
+    pointerGapMaxMs: round(max(pointerGaps), 2),
+    commitPerPointerPct: round((active.contentCommitCount / Math.max(1, active.pointerEventTimes.length)) * 100, 1),
     commitRate: round((active.contentCommitCount * 1000) / durationMs, 1),
     commitGapAvgMs: round(mean(commitGaps), 2),
     commitGapP95Ms: round(percentile(commitGaps, 0.95), 2),
@@ -564,6 +629,19 @@ export const finishSplitPerfDrag = () => {
     inputToCommitAvgMs: round(mean(active.inputToCommitLatencies), 2),
     inputToCommitP95Ms: round(percentile(active.inputToCommitLatencies, 0.95), 2),
     inputToCommitMaxMs: round(max(active.inputToCommitLatencies), 2),
+    layoutAckCount: active.layoutAckTimes.length,
+    layoutAckRate: round((active.layoutAckTimes.length * 1000) / durationMs, 1),
+    layoutAckGapAvgMs: round(mean(layoutAckGaps), 2),
+    layoutAckGapP95Ms: round(percentile(layoutAckGaps, 0.95), 2),
+    layoutAckGapMaxMs: round(max(layoutAckGaps), 2),
+    layoutAckToWriteAvgMs: round(mean(active.layoutAckLatencies), 2),
+    layoutAckToWriteP95Ms: round(percentile(active.layoutAckLatencies, 0.95), 2),
+    layoutAckToWriteMaxMs: round(max(active.layoutAckLatencies), 2),
+    layoutAckWidthErrorAvgPx: round(mean(active.layoutAckWidthErrors), 2),
+    layoutAckWidthErrorMaxPx: round(max(active.layoutAckWidthErrors), 2),
+    layoutAckPerCommitPct: round((active.layoutAckTimes.length / Math.max(1, active.geometryWriteCount)) * 100, 1),
+    paneModeSwitchCount: active.paneModeSwitchCount,
+    contentModeSwitchCount: active.contentModeSwitchCount,
     hotspots: hotspotRows,
     flushCount: active.flushTimes.length,
     flushAvgMs: round(mean(active.flushTimes), 3),
@@ -613,7 +691,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 603 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 605 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),
@@ -644,6 +722,10 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
     pointerSampleCount: Math.round(number('pointerSampleCount', 0)),
     pointerSampleRate: number('pointerSampleRate', 1),
     pointerDistancePx: number('pointerDistancePx', 0),
+    pointerGapAvgMs: number('pointerGapAvgMs', 2),
+    pointerGapP95Ms: number('pointerGapP95Ms', 2),
+    pointerGapMaxMs: number('pointerGapMaxMs', 2),
+    commitPerPointerPct: number('commitPerPointerPct', 1),
     commitRate: number('commitRate', 1),
     commitGapAvgMs: number('commitGapAvgMs', 2),
     commitGapP95Ms: number('commitGapP95Ms', 2),
@@ -652,6 +734,19 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
     inputToCommitAvgMs: number('inputToCommitAvgMs', 2),
     inputToCommitP95Ms: number('inputToCommitP95Ms', 2),
     inputToCommitMaxMs: number('inputToCommitMaxMs', 2),
+    layoutAckCount: Math.round(number('layoutAckCount', 0)),
+    layoutAckRate: number('layoutAckRate', 1),
+    layoutAckGapAvgMs: number('layoutAckGapAvgMs', 2),
+    layoutAckGapP95Ms: number('layoutAckGapP95Ms', 2),
+    layoutAckGapMaxMs: number('layoutAckGapMaxMs', 2),
+    layoutAckToWriteAvgMs: number('layoutAckToWriteAvgMs', 2),
+    layoutAckToWriteP95Ms: number('layoutAckToWriteP95Ms', 2),
+    layoutAckToWriteMaxMs: number('layoutAckToWriteMaxMs', 2),
+    layoutAckWidthErrorAvgPx: number('layoutAckWidthErrorAvgPx', 2),
+    layoutAckWidthErrorMaxPx: number('layoutAckWidthErrorMaxPx', 2),
+    layoutAckPerCommitPct: number('layoutAckPerCommitPct', 1),
+    paneModeSwitchCount: Math.round(number('paneModeSwitchCount', 0)),
+    contentModeSwitchCount: Math.round(number('contentModeSwitchCount', 0)),
     hotspots: aggregateHotspots(results),
     flushCount: Math.round(number('flushCount', 0)),
     flushAvgMs: number('flushAvgMs', 3),

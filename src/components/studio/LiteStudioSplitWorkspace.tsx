@@ -19,7 +19,10 @@ import {
   publishSplitPerfBenchmarkSummary,
   recordSplitPerfApply,
   recordSplitPerfFlush,
+  recordSplitPerfGeometryWrite,
+  recordSplitPerfLayoutAck,
   recordSplitPerfPointer,
+  recordSplitPerfResponsiveSwitch,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
 } from './splitPerfDiagnostics';
@@ -204,6 +207,8 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkFrameRef = useRef<number | null>(null);
   const benchmarkTimerRef = useRef<number | null>(null);
   const benchmarkRunningRef = useRef(false);
+  const layoutAckObserverRef = useRef<ResizeObserver | null>(null);
+  const layoutAckObservedRef = useRef<{ builder: number; result: number }>({ builder: 0, result: 0 });
   const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutMode);
   const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutMode);
 
@@ -390,10 +395,16 @@ export default function LiteStudioSplitWorkspace({
     const resultMode = readContentResponsiveMode(safeResultWidth);
 
     if (force || contentResponsiveModeRef.current.builder !== builderMode) {
+      if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
+        recordSplitPerfResponsiveSwitch('content');
+      }
       contentResponsiveModeRef.current.builder = builderMode;
       builder.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeBuilderWidth } }));
     }
     if (force || contentResponsiveModeRef.current.result !== resultMode) {
+      if (!force && contentResponsiveModeRef.current.result !== null && contentResponsiveModeRef.current.result !== resultMode) {
+        recordSplitPerfResponsiveSwitch('content');
+      }
       contentResponsiveModeRef.current.result = resultMode;
       result.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeResultWidth } }));
     }
@@ -421,11 +432,13 @@ export default function LiteStudioSplitWorkspace({
     );
 
     if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
+      if (builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
       document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
     }
     if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
+      if (result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
       document.documentElement.dataset.soridrawResultMode = nextResultMode;
@@ -574,6 +587,7 @@ export default function LiteStudioSplitWorkspace({
     const splitterLeft = metricsRef.current.left + builderWidth;
 
     writeLiveSplitGeometry(builderWidth, resultWidth);
+    if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
@@ -687,6 +701,41 @@ export default function LiteStudioSplitWorkspace({
     frameRef.current = window.requestAnimationFrame(flushPointer);
   }, [flushPointer]);
 
+  const startLayoutAckObserver = useCallback((builderWidth: number, resultWidth: number) => {
+    layoutAckObserverRef.current?.disconnect();
+    layoutAckObserverRef.current = null;
+    layoutAckObservedRef.current = { builder: builderWidth, result: resultWidth };
+    if (typeof ResizeObserver === 'undefined') return;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!builder || !result) return;
+
+    const observer = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const borderSize = entry.borderBoxSize?.[0]?.inlineSize;
+        const width = Number.isFinite(borderSize) ? Number(borderSize) : entry.contentRect.width;
+        if (entry.target === builder && Number.isFinite(width)) {
+          layoutAckObservedRef.current.builder = width;
+          changed = true;
+        } else if (entry.target === result && Number.isFinite(width)) {
+          layoutAckObservedRef.current.result = width;
+          changed = true;
+        }
+      }
+      if (changed) {
+        recordSplitPerfLayoutAck(
+          layoutAckObservedRef.current.builder,
+          layoutAckObservedRef.current.result,
+        );
+      }
+    });
+
+    observer.observe(builder, { box: 'border-box' });
+    observer.observe(result, { box: 'border-box' });
+    layoutAckObserverRef.current = observer;
+  }, []);
+
   const finishDrag = useCallback((event?: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current) return;
     if (event && event.pointerId !== pointerIdRef.current) return;
@@ -710,6 +759,8 @@ export default function LiteStudioSplitWorkspace({
     clearLiveExternalGeometry();
     readExternalControls();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
+    layoutAckObserverRef.current?.disconnect();
+    layoutAckObserverRef.current = null;
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
@@ -730,6 +781,7 @@ export default function LiteStudioSplitWorkspace({
     };
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
+    const resultRect = resultRef.current?.getBoundingClientRect();
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {
@@ -748,11 +800,12 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · manual drag · runtime geometry + hand-cadence diagnostics (604)',
+      engine: 'Lite V2 · manual drag · runtime geometry + layout-ack synchrony diagnostics (605)',
       builder: builderRef.current,
       result: resultRef.current,
       layoutMode: runtimeLayoutModeRef.current,
     });
+    startLayoutAckObserver(builderRect?.width || 0, resultRect?.width || 0);
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
@@ -780,6 +833,11 @@ export default function LiteStudioSplitWorkspace({
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(next)); } catch { /* optional */ }
   };
+
+  useEffect(() => () => {
+    layoutAckObserverRef.current?.disconnect();
+    layoutAckObserverRef.current = null;
+  }, []);
 
   useLayoutEffect(() => {
     runtimeLayoutModeRef.current = runtimeLayoutMode;
@@ -1049,7 +1107,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 603 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 605 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,

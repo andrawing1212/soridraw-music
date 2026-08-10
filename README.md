@@ -1468,3 +1468,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 관리자 PERF에 `영역 스캔`을 추가했다. 기준 → 현재 리스트 전체 OFF → 왼쪽 pane 전체 OFF → 오른쪽 pane 전체 OFF → 좌우 콘텐츠 전체 OFF를 동일 자동 벤치마크 조건으로 측정한다.
 - 영역 스캔은 진단 중에만 `content-visibility`/`contain`으로 대상 렌더를 임시 제외하고 끝나면 즉시 원래 디자인으로 복구한다. 실제 앱 디자인/레이아웃 코드는 변경하지 않았다.
 - 관리자 `품질·성능 진단 도구`에 자동 벤치마크 / 렌더 A/B / 영역 이진 스캔 항목을 보이게 정리했다. 향후 품질 테스트 도구도 같은 관리자 영역에 누적한다.
+
+
+## 585차 — Music Note / Library 페이지 영역 단위 렌더 격리
+- 기준: 584차 영역 이진 스캔 결과.
+- Music Note와 Library의 상단 컨트롤, 리스트 루트, 라이브러리 그룹을 Lite V2 드래그 동안만 독립 layout/style boundary로 분리했다.
+- 카드/행 leaf는 기존 576 격리를 공통 marker로 정리했다.
+- size containment나 상시 layout freeze는 사용하지 않아 승인된 디자인, 줄바꿈, 카드 높이, PC/Tablet/Mobile 실시간 반응을 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

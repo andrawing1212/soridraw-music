@@ -760,3 +760,35 @@
     contain: strict !important;
   }
 }
+
+
+/* 585 — drag-only page-region layout isolation.
+ * 584's binary scan showed that both the Music Note/Library top controls and
+ * their list trees contribute materially to split reflow cost. Keep the
+ * approved design and fully-live responsive layout, but make those stable
+ * regions independent layout/style boundaries only while Lite V2 is dragging.
+ * No size/paint containment is used here: height, wrapping, overflow and
+ * popover visuals stay owned by the existing page design. */
+@media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(
+    .soridraw-musicnote-region-top,
+    .soridraw-library-region-top,
+    .soridraw-perf-layout-region-list
+  ) {
+    contain: layout style;
+  }
+
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-perf-layout-region-group {
+    contain: layout style;
+  }
+
+  /* Leaf rows already receive the 576 native isolation. The explicit marker
+   * lets Music Note and Library share one stable rule without broad descendant
+   * matching; active menu rows remain excluded from paint containment. */
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-perf-layout-region-item:not(.soridraw-list-perf-item--active) {
+    contain: layout style paint;
+  }
+}

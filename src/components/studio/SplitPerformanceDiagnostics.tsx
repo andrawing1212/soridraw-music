@@ -90,6 +90,8 @@ type PerfEnvironmentSnapshot = {
   fontStatus: string;
   fontCount: number | null;
   assetMode: 'prod-bundle' | 'dev-modules' | 'unknown';
+  buildProfile: string;
+  cssMinifyMode: string;
 };
 
 const roundKb = (bytes: number) => Number((bytes / 1024).toFixed(1));
@@ -180,6 +182,8 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
+    buildProfile: '587 · PROD CSS minify A/B',
+    cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'OFF (진단)' : 'DEV · 비적용',
   };
 };
 
@@ -389,7 +393,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     try {
       const snapshot = await collectPerfEnvironmentSnapshot();
       setEnvironment(snapshot);
-      setBenchmarkMessage(`환경 진단 완료 · ${snapshot.prod ? 'PROD' : 'DEV'} / ${snapshot.assetMode} / idle ${snapshot.idleHz ?? '-'}Hz`);
+      setBenchmarkMessage(`환경 진단 완료 · ${snapshot.prod ? 'PROD' : 'DEV'} / ${snapshot.assetMode} / CSS minify ${snapshot.cssMinifyMode} / idle ${snapshot.idleHz ?? '-'}Hz`);
     } catch (error) {
       setBenchmarkMessage(`환경 진단 실패 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     } finally {
@@ -403,6 +407,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       `SORIDRAW PERF ENV ${new Date(environment.createdAt).toISOString()}`,
       `host=${environment.host}`,
       `mode=${environment.mode} prod=${environment.prod} assetMode=${environment.assetMode}`,
+      `buildProfile=${environment.buildProfile} cssMinify=${environment.cssMinifyMode}`,
       `viewport=${environment.viewport} DPR=${environment.dpr} idleHz=${environment.idleHz ?? '-'}`,
       `CPU=${environment.hardwareConcurrency ?? '-'} memoryGB=${environment.deviceMemoryGb ?? '-'}`,
       `SW controller=${environment.swController} registrations=${environment.swRegistrations} cacheNames=${environment.cacheNames ?? '-'}`,
@@ -498,6 +503,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                       <summary>실행 환경 — DEV/PROD 차이 진단</summary>
                       <div className="soridraw-split-perf-env-strip">
                         <span><i>Build</i><b>{environment.prod ? 'PROD' : 'DEV'} · {environment.assetMode}</b></span>
+                        <span><i>Build Test</i><b>{environment.buildProfile}</b></span>
+                        <span><i>CSS minify</i><b>{environment.cssMinifyMode}</b></span>
                         <span><i>Idle Hz</i><b>{environment.idleHz ?? '-'}Hz</b></span>
                         <span><i>SW / Cache</i><b>{environment.swController ? 'CTRL' : '없음'} · {environment.swRegistrations}/{environment.cacheNames ?? '-'}</b></span>
                         <span><i>JS</i><b>{environment.scriptCount}개 · {environment.scriptDecodedKb}KB</b></span>
@@ -573,7 +580,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">586: 동일 DOM 자동 벤치마크/렌더·영역 A/B에 실행 환경 진단을 추가했습니다. DEV/PROD 번들, idle rAF Hz, SW/Cache, JS/CSS 규모를 같은 패널에서 비교하며 관리자 도구로 계속 보관합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">587: PROD 전용 CSS minify OFF A/B 빌드입니다. DEV는 기존과 동일하고, 테스트앱(PROD)만 CSS 축소를 끈 상태로 동일 자동 벤치마크를 비교해 production CSS 출력이 렌더 병목에 영향을 주는지 분리합니다.</p>
             </>
           )}
         </div>

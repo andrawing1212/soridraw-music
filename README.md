@@ -1485,3 +1485,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `진단서 복사`로 같은 정보를 텍스트로 복사할 수 있다.
 - 이 기능은 관리자 `품질·성능 진단 도구`에 영구 보관하며 일반 사용자에게는 노출하지 않는다.
 - 앱 디자인/분할 동작/Firebase 데이터 구조는 변경하지 않았다.
+
+
+## 587차 — PROD CSS minify OFF A/B 진단
+- 586차를 기준으로 production 전용 CSS 축소를 `build.cssMinify: false`로 잠시 비활성화했다.
+- 목적은 AI Studio DEV와 Vercel PROD가 idle Hz는 동일한데 분할 Layout/Paint에서 큰 차이가 나는 원인이 production CSS 축소 출력인지 단일 변수로 검증하는 것이다.
+- JS minification, Lite V2 분할 엔진, Music Note/Library 디자인과 585 렌더 격리는 그대로 유지한다.
+- 환경 진단에 `587 · PROD CSS minify A/B`와 실제 적용 상태를 표시한다. DEV에서는 비적용, PROD에서만 OFF(진단)로 표시된다.
+- 테스트는 Music Note 동일 화면에서 자동 테스트 3세트 중앙값을 실행하고, 586/585의 PROD 기준과 FPS/P95/렌더 비JS·초를 비교한다.
+- 결과가 없거나 악화되면 이 build 옵션은 다음 차수에서 즉시 원복하고 JS minify/번들 경로를 다음 후보로 검증한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

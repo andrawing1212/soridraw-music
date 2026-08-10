@@ -22,6 +22,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // 587 diagnostic: keep production CSS semantics identical but skip CSS minification
+    // so we can isolate whether the PROD-only split-render slowdown is tied to
+    // the minified CSS output. JS minification remains unchanged.
+    cssMinify: false,
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {

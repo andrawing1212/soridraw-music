@@ -54,6 +54,19 @@ export type SplitPerfResult = {
   slowEventMaxMs: number;
   inputDelayAvgMs: number;
   inputDelayMaxMs: number;
+  pointerEventCount: number;
+  pointerEventRate: number;
+  pointerSampleCount: number;
+  pointerSampleRate: number;
+  pointerDistancePx: number;
+  commitRate: number;
+  commitGapAvgMs: number;
+  commitGapP95Ms: number;
+  commitGapMaxMs: number;
+  commitCoveragePct: number;
+  inputToCommitAvgMs: number;
+  inputToCommitP95Ms: number;
+  inputToCommitMaxMs: number;
   hotspots: SplitPerfHotspot[];
   flushCount: number;
   flushAvgMs: number;
@@ -107,6 +120,12 @@ type ActiveDrag = {
   forcedStyleLayoutDurations: number[];
   slowEventDurations: number[];
   inputDelays: number[];
+  pointerEventTimes: number[];
+  pointerXs: number[];
+  pointerSampleCount: number;
+  commitTimes: number[];
+  inputToCommitLatencies: number[];
+  lastPointerAt: number | null;
   hotspots: Map<string, HotspotAccumulator>;
   domNodes: number;
   builderNodes: number;
@@ -419,6 +438,12 @@ export const beginSplitPerfDrag = ({
     forcedStyleLayoutDurations: [],
     slowEventDurations: [],
     inputDelays: [],
+    pointerEventTimes: [],
+    pointerXs: [],
+    pointerSampleCount: 0,
+    commitTimes: [],
+    inputToCommitLatencies: [],
+    lastPointerAt: null,
     hotspots: new Map(),
     // Count once before dragging so diagnostics do not add DOM traversal inside the hot path.
     domNodes,
@@ -433,11 +458,26 @@ export const beginSplitPerfDrag = ({
   runRafProbe();
 };
 
+export const recordSplitPerfPointer = (clientX: number, coalescedCount = 1) => {
+  if (!enabled || !active) return;
+  const timestamp = now();
+  active.pointerEventTimes.push(timestamp);
+  active.pointerXs.push(clientX);
+  active.pointerSampleCount += Math.max(1, Math.round(coalescedCount || 1));
+  active.lastPointerAt = timestamp;
+};
+
 export const recordSplitPerfFlush = (durationMs: number, contentCommitted: boolean) => {
   if (!enabled || !active) return;
   active.flushTimes.push(durationMs);
-  if (contentCommitted) active.contentCommitCount += 1;
-  else active.dividerOnlyCount += 1;
+  if (contentCommitted) {
+    active.contentCommitCount += 1;
+    const timestamp = now();
+    active.commitTimes.push(timestamp);
+    if (active.lastPointerAt !== null) active.inputToCommitLatencies.push(Math.max(0, timestamp - active.lastPointerAt));
+  } else {
+    active.dividerOnlyCount += 1;
+  }
 };
 
 export const recordSplitPerfApply = (sample: SplitPerfApplySample) => {
@@ -462,6 +502,13 @@ export const finishSplitPerfDrag = () => {
   const misc = active.applySamples.map((sample) => sample.miscMs);
   const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
   const heapMb = memory?.usedJSHeapSize ? memory.usedJSHeapSize / 1024 / 1024 : null;
+  const pointerGaps: number[] = [];
+  for (let index = 1; index < active.pointerEventTimes.length; index += 1) pointerGaps.push(active.pointerEventTimes[index] - active.pointerEventTimes[index - 1]);
+  const commitGaps: number[] = [];
+  for (let index = 1; index < active.commitTimes.length; index += 1) commitGaps.push(active.commitTimes[index] - active.commitTimes[index - 1]);
+  let pointerDistancePx = 0;
+  for (let index = 1; index < active.pointerXs.length; index += 1) pointerDistancePx += Math.abs(active.pointerXs[index] - active.pointerXs[index - 1]);
+
   const hotspotRows: SplitPerfHotspot[] = Array.from(active.hotspots.entries())
     .map(([label, value]) => ({
       label,
@@ -504,6 +551,19 @@ export const finishSplitPerfDrag = () => {
     slowEventMaxMs: round(max(active.slowEventDurations), 1),
     inputDelayAvgMs: round(mean(active.inputDelays), 2),
     inputDelayMaxMs: round(max(active.inputDelays), 2),
+    pointerEventCount: active.pointerEventTimes.length,
+    pointerEventRate: round((active.pointerEventTimes.length * 1000) / durationMs, 1),
+    pointerSampleCount: active.pointerSampleCount,
+    pointerSampleRate: round((active.pointerSampleCount * 1000) / durationMs, 1),
+    pointerDistancePx: round(pointerDistancePx, 0),
+    commitRate: round((active.contentCommitCount * 1000) / durationMs, 1),
+    commitGapAvgMs: round(mean(commitGaps), 2),
+    commitGapP95Ms: round(percentile(commitGaps, 0.95), 2),
+    commitGapMaxMs: round(max(commitGaps), 2),
+    commitCoveragePct: round((active.contentCommitCount / Math.max(1, active.frameTimes.length - 1)) * 100, 1),
+    inputToCommitAvgMs: round(mean(active.inputToCommitLatencies), 2),
+    inputToCommitP95Ms: round(percentile(active.inputToCommitLatencies, 0.95), 2),
+    inputToCommitMaxMs: round(max(active.inputToCommitLatencies), 2),
     hotspots: hotspotRows,
     flushCount: active.flushTimes.length,
     flushAvgMs: round(mean(active.flushTimes), 3),
@@ -579,6 +639,19 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
     slowEventMaxMs: number('slowEventMaxMs', 1),
     inputDelayAvgMs: number('inputDelayAvgMs', 2),
     inputDelayMaxMs: number('inputDelayMaxMs', 2),
+    pointerEventCount: Math.round(number('pointerEventCount', 0)),
+    pointerEventRate: number('pointerEventRate', 1),
+    pointerSampleCount: Math.round(number('pointerSampleCount', 0)),
+    pointerSampleRate: number('pointerSampleRate', 1),
+    pointerDistancePx: number('pointerDistancePx', 0),
+    commitRate: number('commitRate', 1),
+    commitGapAvgMs: number('commitGapAvgMs', 2),
+    commitGapP95Ms: number('commitGapP95Ms', 2),
+    commitGapMaxMs: number('commitGapMaxMs', 2),
+    commitCoveragePct: number('commitCoveragePct', 1),
+    inputToCommitAvgMs: number('inputToCommitAvgMs', 2),
+    inputToCommitP95Ms: number('inputToCommitP95Ms', 2),
+    inputToCommitMaxMs: number('inputToCommitMaxMs', 2),
     hotspots: aggregateHotspots(results),
     flushCount: Math.round(number('flushCount', 0)),
     flushAvgMs: number('flushAvgMs', 3),

@@ -50,6 +50,23 @@ type PairBenchmarkRow = {
   layoutMode: 'css-var' | 'direct' | null;
 };
 
+type PairHandRow = {
+  workspace: PairWorkspace;
+  result: SplitPerfResult;
+  fps: number;
+  p95: number;
+  renderPerSecond: number;
+  longTaskPerSecond: number;
+  layoutMode: 'css-var' | 'direct' | null;
+  pointerEventRate: number;
+  pointerSampleRate: number;
+  commitRate: number;
+  commitGapP95: number;
+  commitGapMax: number;
+  commitCoverage: number;
+  inputToCommitP95: number;
+};
+
 const PERF_PAIR_BASELINE_STORAGE_KEY = 'soridraw_perf_pair_baseline_603_v1';
 
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
@@ -389,7 +406,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '603 · 602 stable runtime + Music Note/Library paired regression guard',
+    buildProfile: '604 · 602 stable runtime + paired real-hand drag synchrony diagnostics',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -415,6 +432,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
 
   const [pairRunning, setPairRunning] = useState(false);
   const [pairRows, setPairRows] = useState<PairBenchmarkRow[]>([]);
+  const [handPairRunning, setHandPairRunning] = useState(false);
+  const [handPairRows, setHandPairRows] = useState<PairHandRow[]>([]);
   const [pairBaseline, setPairBaseline] = useState<PairBenchmarkRow[]>(() => {
     try {
       const raw = window.localStorage.getItem(PERF_PAIR_BASELINE_STORAGE_KEY);
@@ -708,6 +727,93 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     }
   };
 
+  const waitForManualDragResult = (workspace: PairWorkspace) => new Promise<SplitPerfResult>((resolve, reject) => {
+    const startedAt = Date.now();
+    let settled = false;
+    let timeoutId = 0;
+    const cleanup = () => {
+      unsubscribe();
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+    const finishResolve = (next: SplitPerfResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(next);
+    };
+    const finishReject = (message: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(message));
+    };
+    const unsubscribe = subscribeSplitPerfResult((next) => {
+      if (!next || next.createdAt < startedAt || next.workspaceView !== workspace) return;
+      if (next.benchmarkSurface !== null) return;
+      if (next.durationMs < 1200 || next.pointerEventCount < 10 || next.pointerDistancePx < 120) {
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 너무 짧습니다. 분할바를 4~6초 계속 좌우로 움직인 뒤 놓아주세요.`);
+        return;
+      }
+      finishResolve(next);
+    });
+    timeoutId = window.setTimeout(() => finishReject('실사용 드래그 입력 대기 시간 초과'), 65000);
+  });
+
+  const toHandPairRow = (workspace: PairWorkspace, next: SplitPerfResult): PairHandRow => {
+    const durationSeconds = Math.max(0.001, next.durationMs / 1000);
+    return {
+      workspace,
+      result: next,
+      fps: next.estimatedFps,
+      p95: next.p95FrameMs,
+      renderPerSecond: getBrowserRenderPerSecond(next),
+      longTaskPerSecond: Number((next.longTaskTotalMs / durationSeconds).toFixed(1)),
+      layoutMode: next.layoutMode,
+      pointerEventRate: next.pointerEventRate,
+      pointerSampleRate: next.pointerSampleRate,
+      commitRate: next.commitRate,
+      commitGapP95: next.commitGapP95Ms,
+      commitGapMax: next.commitGapMaxMs,
+      commitCoverage: next.commitCoveragePct,
+      inputToCommitP95: next.inputToCommitP95Ms,
+    };
+  };
+
+  const runHandPairBenchmark = async () => {
+    if (!ensureBenchmarkReady() || handPairRunning || pairRunning || benchmarkRunning || probeRunningRef.current) return;
+    const originalWorkspace = getCurrentStudioWorkspace();
+    setHandPairRunning(true);
+    setHandPairRows([]);
+    try {
+      const rows: PairHandRow[] = [];
+      for (const workspace of ['music-note', 'library'] as PairWorkspace[]) {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: workspace } }));
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
+        await waitForWorkspaceReady(workspace);
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 분할바를 4~6초 동안 계속 좌우로 실제 드래그한 뒤 놓아주세요.`);
+        const measured = await waitForManualDragResult(workspace);
+        rows.push(toHandPairRow(workspace, measured));
+        setHandPairRows([...rows]);
+        await new Promise((resolve) => window.setTimeout(resolve, 420));
+      }
+      const music = rows.find((row) => row.workspace === 'music-note');
+      const library = rows.find((row) => row.workspace === 'library');
+      if (music && library) {
+        const musicBehind = music.commitRate < library.commitRate * 0.85 || music.commitGapP95 > library.commitGapP95 * 1.2 || music.p95 > library.p95 * 1.2;
+        setBenchmarkMessage(musicBehind
+          ? '실손 비교 완료 · 뮤직노트가 라이브러리보다 실제 폭 반영 주기/긴 프레임에서 뒤처집니다. 다음 수정은 이 차이만 제거합니다.'
+          : '실손 비교 완료 · 두 화면의 실제 폭 반영 주기는 비슷합니다. 남은 체감 차이는 렌더/레이아웃 동기 비용을 우선 확인합니다.');
+      }
+    } catch (error) {
+      setBenchmarkMessage(`실손 비교 중단 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    } finally {
+      if (originalWorkspace === 'music-note' || originalWorkspace === 'library' || originalWorkspace === 'recent' || originalWorkspace === 'create') {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: originalWorkspace } }));
+      }
+      setHandPairRunning(false);
+    }
+  };
+
   const runBenchmark = () => {
     if (!ensureBenchmarkReady()) return;
     setPerfProbeProfile('baseline');
@@ -829,6 +935,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           `browserRenderPerSec=${(browserRender / durationSeconds).toFixed(1)}ms/s loaf=${current.loafCount}/${current.loafTotalMs}ms blocking=${current.loafBlockingTotalMs}ms`,
           `forcedStyleLayout=${current.forcedStyleLayoutTotalMs}ms max=${current.forcedStyleLayoutMaxMs}ms`,
           `flush=${current.flushAvgMs}/${current.flushMaxMs}ms apply=${current.applyAvgMs}/${current.applyMaxMs}ms contentCommit/divider=${current.contentCommitCount}/${current.dividerOnlyCount}`,
+          `hand pointerRate=${current.pointerEventRate}/s samples=${current.pointerSampleRate}/s distance=${current.pointerDistancePx}px commitRate=${current.commitRate}/s commitGapAvg/P95/max=${current.commitGapAvgMs}/${current.commitGapP95Ms}/${current.commitGapMaxMs}ms coverage=${current.commitCoveragePct}% inputToCommitP95/max=${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
           `DOM total=${current.domNodes} builder=${current.builderNodes} result=${current.resultNodes} heapMB=${current.heapMb ?? '-'}`,
           `regions musicNoteControls=${current.regionNodes.musicNoteControls} musicNoteList=${current.regionNodes.musicNoteList} libraryControls=${current.regionNodes.libraryControls} libraryList=${current.regionNodes.libraryList} externalStudioUi=${current.regionNodes.externalStudioUi} other=${current.regionNodes.other}`,
         );
@@ -852,6 +959,12 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           const fpsDelta = base ? Number((((row.fps - base.fps) / Math.max(0.1, base.fps)) * 100).toFixed(1)) : null;
           const p95Delta = base ? Number((((row.p95 - base.p95) / Math.max(0.1, base.p95)) * 100).toFixed(1)) : null;
           lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s${fpsDelta === null ? '' : ` baselineFpsDelta=${fpsDelta}% baselineP95Delta=${p95Delta}%`}`);
+        });
+      }
+      if (handPairRows.length) {
+        lines.push('', '[MUSIC NOTE / LIBRARY REAL HAND DRAG]');
+        handPairRows.forEach((row) => {
+          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms pointerRate=${row.pointerEventRate}/s samples=${row.pointerSampleRate}/s commitRate=${row.commitRate}/s commitGapP95/max=${row.commitGapP95}/${row.commitGapMax}ms coverage=${row.commitCoverage}% inputToCommitP95=${row.inputToCommitP95}ms render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s`);
         });
       }
       lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
@@ -880,11 +993,14 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       {!collapsed && (
         <div className="soridraw-split-perf-body">
           <div className="soridraw-split-perf-benchmark-row">
-            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || !enabled}>
+            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || handPairRunning || !enabled}>
               {benchmarkRunning && !probeRunning ? '자동 테스트 중…' : '자동 테스트'}
             </button>
-            <button type="button" className="is-secondary" onClick={runPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || !enabled}>
               {pairRunning ? '2화면 비교 중…' : '뮤직노트↔라이브러리 비교'}
+            </button>
+            <button type="button" className="is-secondary" onClick={runHandPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || !enabled}>
+              {handPairRunning ? '실손 비교 중…' : '실손 드래그 비교'}
             </button>
             <button type="button" className="is-secondary" onClick={() => runProbeScan('render')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'render' ? '렌더 스캔 중…' : '렌더 스캔'}
@@ -901,7 +1017,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 실제 화면 런타임 좌표 모드 · 1400×900 · 동일 DOM 3세트 · 2화면 회귀 보호 · 좌표 A/B는 명시 비교</span>
+            <span>자동: 1400×900 동일조건 · 실손: 실제 마우스 입력률/폭 반영률/긴 프레임을 뮤직노트↔라이브러리로 직접 비교</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {pairRows.length > 0 && (
@@ -920,6 +1036,19 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </span>
                 );
               })}
+            </div>
+          )}
+          {handPairRows.length > 0 && (
+            <div className="soridraw-split-perf-pair" aria-label="뮤직노트 라이브러리 실손 드래그 비교">
+              {handPairRows.map((row) => (
+                <span key={`hand-${row.workspace}`}>
+                  <b>{row.workspace === 'music-note' ? '뮤직노트 손' : '라이브러리 손'}</b>
+                  <i>{row.layoutMode === 'direct' ? 'direct' : 'css-var'}</i>
+                  <strong>반영 {row.commitRate}/s</strong>
+                  <em>gap P95 {row.commitGapP95}ms</em>
+                  <small>입력 {row.pointerEventRate}/s · sample {row.pointerSampleRate}/s · FPS {row.fps} · P95 {row.p95}ms · coverage {row.commitCoverage}%</small>
+                </span>
+              ))}
             </div>
           )}
           {!displayResult ? (
@@ -959,6 +1088,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     <span>입력 지연 평균/최대</span><b>{displayResult.eventTimingSupported ? `${displayResult.inputDelayAvgMs}/${displayResult.inputDelayMaxMs}ms` : '-'}</b>
                     <span>JS flush 평균/최대</span><b>{displayResult.flushAvgMs}/{displayResult.flushMaxMs}ms</b>
                     <span>실제 폭 반영 / 선만</span><b>{displayResult.contentCommitCount} / {displayResult.dividerOnlyCount}</b>
+                    <span>손 입력 / sample</span><b>{displayResult.pointerEventRate}/s · {displayResult.pointerSampleRate}/s</b>
+                    <span>손 실제 폭 반영률</span><b>{displayResult.commitRate}/s · coverage {displayResult.commitCoveragePct}%</b>
+                    <span>반영 gap 평균/P95/최대</span><b>{displayResult.commitGapAvgMs}/{displayResult.commitGapP95Ms}/{displayResult.commitGapMaxMs}ms</b>
+                    <span>입력→반영 P95/최대</span><b>{displayResult.inputToCommitP95Ms}/{displayResult.inputToCommitMaxMs}ms</b>
                     <span>apply 평균/최대</span><b>{displayResult.applyAvgMs}/{displayResult.applyMaxMs}ms</b>
                     <span>DOM 전체</span><b>{displayResult.domNodes.toLocaleString()}</b>
                     <span>좌/우 DOM</span><b>{displayResult.builderNodes.toLocaleString()} / {displayResult.resultNodes.toLocaleString()}</b>

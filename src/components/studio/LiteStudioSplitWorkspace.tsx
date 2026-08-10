@@ -19,6 +19,7 @@ import {
   publishSplitPerfBenchmarkSummary,
   recordSplitPerfApply,
   recordSplitPerfFlush,
+  recordSplitPerfPointer,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
 } from './splitPerfDiagnostics';
@@ -747,9 +748,10 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · minimal external writes + native leaf isolation (578)',
+      engine: 'Lite V2 · manual drag · runtime geometry + hand-cadence diagnostics (604)',
       builder: builderRef.current,
       result: resultRef.current,
+      layoutMode: runtimeLayoutModeRef.current,
     });
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -762,6 +764,10 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+    let coalescedCount = 1;
+    try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
+    recordSplitPerfPointer(event.clientX, coalescedCount);
     schedulePointer(event.clientX);
   };
 

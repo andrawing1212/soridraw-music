@@ -1,3 +1,12 @@
+## 604 - Music Note / Library real-hand drag synchrony diagnostics
+
+- Keep the **603/602 runtime geometry unchanged** so the diagnostic does not contaminate the current hand feel: Music Note remains direct geometry; Library/Recent/Create remain the 590 CSS-variable path.
+- Add a paired **real-hand drag** workflow for Music Note and Library. The tool switches to each workspace in turn and waits for one 4–6 second manual divider drag, then restores the original workspace.
+- Record the factors that actually determine perceived drag smoothness without adding layout reads in the hot path: pointer event rate, coalesced sample rate, real pane-width commit rate, commit-gap average/P95/max, commit coverage per rAF, pointer-to-commit delay, frame P95/max, Long Tasks and browser render cost.
+- Manual drag results are included in the comprehensive copied report as `[MUSIC NOTE / LIBRARY REAL HAND DRAG]` so automatic FPS and real-hand cadence can no longer be confused.
+- Normal runtime layout/design and Recent Songs are untouched. No Firebase/Auth/Firestore/Functions/storage schema changes.
+
+
 ## 603 - Music Note / Library paired regression guard
 
 - Keep the **602 runtime unchanged**: Recent/Library/Create use the 590 CSS-variable path, Music Note uses direct pane geometry.

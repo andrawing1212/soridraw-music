@@ -294,9 +294,9 @@ export default function AdminAppSettingsPage() {
                 <Gauge className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-base font-black text-[var(--text-primary)]">분할 성능 진단 도구</h3>
+                <h3 className="text-base font-black text-[var(--text-primary)]">품질·성능 진단 도구</h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  관리자 전용 PERF 패널과 자동 분할 벤치마크를 표시합니다. 이 설정은 현재 브라우저에 저장되며 필요할 때 언제든 다시 켤 수 있습니다.
+                  관리자 전용 PERF 패널, 자동 분할 벤치마크, 렌더 병목 A/B 스캔을 표시합니다. 품질 검증용 도구는 제거하지 않고 이 영역에 계속 모아 필요할 때 다시 사용할 수 있게 유지합니다.
                 </p>
               </div>
             </div>
@@ -314,7 +314,7 @@ export default function AdminAppSettingsPage() {
                   : 'bg-black/25 text-[var(--text-secondary)] hover:bg-white/[0.06] hover:text-[var(--text-primary)]'
               }`}
             >
-              PERF {perfToolsVisible ? '표시' : '숨김'}
+              진단 {perfToolsVisible ? '표시' : '숨김'}
             </button>
           </div>
         </div>

@@ -916,7 +916,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 582 · set ${setIndex + 1}/3 · attempt ${attemptCount} · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
+            engine: `Lite V2 · auto benchmark 583 · set ${setIndex + 1}/3 · attempt ${attemptCount} · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
             builder,
             result,
           });

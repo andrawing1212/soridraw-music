@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getLastSplitPerfBenchmarkSummary,
   getLastSplitPerfResult,
   isSplitPerfDiagnosticsEnabled,
+  publishSplitPerfBenchmarkSummary,
   readSplitPerfToolVisibility,
   setSplitPerfDiagnosticsEnabled,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
@@ -16,6 +17,36 @@ import {
 
 const format = (value: number | null, suffix = '') => value === null ? '-' : `${value}${suffix}`;
 
+type PerfProbeProfileId = 'baseline' | 'effects-off' | 'media-off' | 'list-paint-off' | 'container-off';
+type PerfProbeRow = {
+  id: PerfProbeProfileId;
+  label: string;
+  summary: SplitPerfBenchmarkSummary;
+  fps: number;
+  p95: number;
+  renderPerSecond: number;
+};
+
+const PERF_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'effects-off', label: '효과 OFF' },
+  { id: 'media-off', label: '이미지 OFF' },
+  { id: 'list-paint-off', label: '리스트 Paint OFF' },
+  { id: 'container-off', label: 'Container Query OFF' },
+];
+
+const setPerfProbeProfile = (profile: PerfProbeProfileId) => {
+  const root = document.documentElement;
+  if (profile === 'baseline') delete root.dataset.soridrawPerfProbe;
+  else root.dataset.soridrawPerfProbe = profile;
+};
+
+const getBrowserRenderPerSecond = (result: SplitPerfResult) => {
+  const durationSeconds = Math.max(0.001, result.durationMs / 1000);
+  const browserRender = result.hotspots.find((item) => item.label.startsWith('브라우저 렌더/레이아웃/페인트'))?.totalMs || 0;
+  return Number((browserRender / durationSeconds).toFixed(1));
+};
+
 export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdmin?: boolean }) {
   const [visible, setVisible] = useState(readSplitPerfToolVisibility());
   const [enabled, setEnabled] = useState(isSplitPerfDiagnosticsEnabled());
@@ -24,9 +55,38 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [collapsed, setCollapsed] = useState(false);
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkMessage, setBenchmarkMessage] = useState('');
+  const [probeRunning, setProbeRunning] = useState(false);
+  const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
+
+  const probeRunningRef = useRef(false);
+  const probeIndexRef = useRef(0);
+  const probeHandledSummaryAtRef = useRef(0);
+  const probeRowsRef = useRef<PerfProbeRow[]>([]);
+  const probeBaselineRef = useRef<SplitPerfBenchmarkSummary | null>(null);
+  const probeStartTimerRef = useRef<number | null>(null);
 
   useEffect(() => subscribeSplitPerfResult(setResult), []);
   useEffect(() => subscribeSplitPerfBenchmarkSummary(setBenchmarkSummary), []);
+
+  const stopProbe = (restoreBaseline = true) => {
+    probeRunningRef.current = false;
+    setProbeRunning(false);
+    setPerfProbeProfile('baseline');
+    if (probeStartTimerRef.current !== null) {
+      window.clearTimeout(probeStartTimerRef.current);
+      probeStartTimerRef.current = null;
+    }
+    if (restoreBaseline && probeBaselineRef.current) {
+      const baseline = probeBaselineRef.current;
+      window.setTimeout(() => publishSplitPerfBenchmarkSummary(baseline.sets), 0);
+    }
+  };
+
+  useEffect(() => () => {
+    probeRunningRef.current = false;
+    setPerfProbeProfile('baseline');
+    if (probeStartTimerRef.current !== null) window.clearTimeout(probeStartTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const handleVisibility = (event: Event) => {
@@ -34,6 +94,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       const next = typeof detail?.enabled === 'boolean' ? detail.enabled : readSplitPerfToolVisibility();
       setVisible(next);
       if (!next) {
+        stopProbe(false);
         setSplitPerfDiagnosticsEnabled(false);
         setEnabled(false);
         setBenchmarkRunning(false);
@@ -51,11 +112,53 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       const detail = (event as CustomEvent<{ state?: 'running' | 'done' | 'error'; message?: string }>).detail;
       if (detail?.state === 'running') setBenchmarkRunning(true);
       if (detail?.state === 'done' || detail?.state === 'error') setBenchmarkRunning(false);
-      if (detail?.message) setBenchmarkMessage(detail.message);
+      if (detail?.message && !probeRunningRef.current) setBenchmarkMessage(detail.message);
+      if (detail?.state === 'error' && probeRunningRef.current) {
+        stopProbe(true);
+        setBenchmarkMessage(`병목 스캔 중단 · ${detail.message || '자동 테스트 오류'}`);
+      }
     };
     window.addEventListener(SPLIT_PERF_BENCHMARK_STATUS_EVENT, handleBenchmarkStatus as EventListener);
     return () => window.removeEventListener(SPLIT_PERF_BENCHMARK_STATUS_EVENT, handleBenchmarkStatus as EventListener);
   }, []);
+
+  useEffect(() => {
+    if (!benchmarkSummary || !probeRunningRef.current) return;
+    if (benchmarkSummary.createdAt === probeHandledSummaryAtRef.current) return;
+    probeHandledSummaryAtRef.current = benchmarkSummary.createdAt;
+
+    const profile = PERF_PROBE_PROFILES[probeIndexRef.current];
+    if (!profile) return;
+    const median = benchmarkSummary.median;
+    const row: PerfProbeRow = {
+      id: profile.id,
+      label: profile.label,
+      summary: benchmarkSummary,
+      fps: median.estimatedFps,
+      p95: median.p95FrameMs,
+      renderPerSecond: getBrowserRenderPerSecond(median),
+    };
+    probeRowsRef.current = [...probeRowsRef.current, row];
+    setProbeRows(probeRowsRef.current);
+    if (profile.id === 'baseline') probeBaselineRef.current = benchmarkSummary;
+
+    const nextIndex = probeIndexRef.current + 1;
+    if (nextIndex >= PERF_PROBE_PROFILES.length) {
+      stopProbe(true);
+      setBenchmarkMessage('병목 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
+      return;
+    }
+
+    probeIndexRef.current = nextIndex;
+    const nextProfile = PERF_PROBE_PROFILES[nextIndex];
+    setPerfProbeProfile(nextProfile.id);
+    setBenchmarkMessage(`병목 스캔 ${nextIndex + 1}/${PERF_PROBE_PROFILES.length} · ${nextProfile.label}`);
+    probeStartTimerRef.current = window.setTimeout(() => {
+      probeStartTimerRef.current = null;
+      if (!probeRunningRef.current) return;
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
+    }, 420);
+  }, [benchmarkSummary]);
 
   useEffect(() => {
     if (!isAdmin || !visible) {
@@ -89,23 +192,47 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     };
   }, [displayResult]);
 
+  const probeBaselineRender = probeRows.find((row) => row.id === 'baseline')?.renderPerSecond ?? null;
+
   const toggleEnabled = () => {
     const next = !enabled;
+    if (!next) stopProbe(true);
     setSplitPerfDiagnosticsEnabled(next);
     setEnabled(next);
   };
 
-  const runBenchmark = () => {
+  const ensureBenchmarkReady = () => {
     if (!enabled) {
       setSplitPerfDiagnosticsEnabled(true);
       setEnabled(true);
     }
     if (window.location.pathname !== '/studio') {
       setBenchmarkMessage('스튜디오의 분할 화면에서 자동 테스트를 실행하세요.');
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const runBenchmark = () => {
+    if (!ensureBenchmarkReady()) return;
+    setPerfProbeProfile('baseline');
     setBenchmarkRunning(true);
     setBenchmarkMessage('워밍업 후 같은 조건을 3세트 측정해 중앙값으로 판정합니다.');
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
+  };
+
+  const runProbeScan = () => {
+    if (!ensureBenchmarkReady()) return;
+    if (benchmarkRunning || probeRunningRef.current) return;
+    probeRowsRef.current = [];
+    probeBaselineRef.current = null;
+    probeIndexRef.current = 0;
+    probeHandledSummaryAtRef.current = 0;
+    setProbeRows([]);
+    probeRunningRef.current = true;
+    setProbeRunning(true);
+    setPerfProbeProfile(PERF_PROBE_PROFILES[0].id);
+    setBenchmarkMessage(`병목 스캔 1/${PERF_PROBE_PROFILES.length} · ${PERF_PROBE_PROFILES[0].label} · 약 1분`);
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
   };
 
@@ -117,7 +244,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         <button type="button" onClick={toggleEnabled} className={enabled ? 'is-on' : ''}>
           PERF {enabled ? 'ON' : 'OFF'}
         </button>
-        <strong>{verdict}</strong>
+        <strong>{probeRunning ? '병목 스캔 중' : verdict}</strong>
         <button type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? '진단 펼치기' : '진단 접기'}>
           {collapsed ? '＋' : '－'}
         </button>
@@ -125,10 +252,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       {!collapsed && (
         <div className="soridraw-split-perf-body">
           <div className="soridraw-split-perf-benchmark-row">
-            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || !enabled}>
-              {benchmarkRunning ? '자동 테스트 중…' : '자동 테스트'}
+            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {benchmarkRunning && !probeRunning ? '자동 테스트 중…' : '자동 테스트'}
             </button>
-            <span>32% ↔ 68% · 워밍업 1회 · 3세트 중앙값</span>
+            <button type="button" className="is-secondary" onClick={runProbeScan} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning ? '병목 스캔 중…' : '병목 스캔'}
+            </button>
+            <span>자동: 3세트 중앙값 · 스캔: 기준/효과/이미지/리스트 Paint/Container Query</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -175,6 +305,27 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                 </section>
 
                 <section className="soridraw-split-perf-column is-detail-column">
+                  {probeRows.length > 0 && (
+                    <details open>
+                      <summary>병목 A/B — 기준 대비 렌더 비용</summary>
+                      <div className="soridraw-split-perf-probe-grid">
+                        {probeRows.map((row) => {
+                          const delta = probeBaselineRender && row.id !== 'baseline'
+                            ? Number((((row.renderPerSecond - probeBaselineRender) / probeBaselineRender) * 100).toFixed(1))
+                            : 0;
+                          return (
+                            <div className="soridraw-split-perf-probe-row" key={row.id}>
+                              <span>{row.label}</span>
+                              <b>{row.renderPerSecond}ms/s</b>
+                              <i className={delta < 0 ? 'is-better' : delta > 0 ? 'is-worse' : ''}>{row.id === 'baseline' ? '기준' : `${delta > 0 ? '+' : ''}${delta}%`}</i>
+                              <em>{row.fps}fps · P95 {row.p95}ms</em>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  )}
+
                   <details open>
                     <summary>영역 부담 — DOM 규모</summary>
                     <div className="soridraw-split-perf-grid is-detail">
@@ -215,7 +366,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">582: 자동 벤치마크는 동일 화면·동일 리스트 DOM 조건의 유효 세트만 3회 모아 중앙값을 계산합니다. 조건이 달라지면 해당 세트는 자동 폐기 후 재측정합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">583: 일반 자동 테스트는 동일 DOM 3세트 중앙값을 유지합니다. 병목 스캔은 진단 중에만 시각 요소를 하나씩 임시 제외해 렌더 비용 차이를 비교하며, 완료 즉시 원래 디자인으로 복구합니다.</p>
             </>
           )}
         </div>

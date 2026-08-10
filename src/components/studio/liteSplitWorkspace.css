@@ -632,3 +632,100 @@
     column-gap: 7px;
   }
 }
+
+/* 583 — admin-only render bottleneck A/B probe.
+ * These overrides exist only while the PERF bottleneck scan is running.
+ * They intentionally change diagnostic rendering for a few seconds, then the
+ * dataset is removed and the approved Studio design is restored unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-perf-probe="effects-off"]
+  .soridraw-lite-studio-split-workspace
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  html[data-soridraw-perf-probe="media-off"]
+  .soridraw-lite-studio-split-workspace
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme)
+  :is(img, video, canvas, picture) {
+    visibility: hidden !important;
+  }
+
+  html[data-soridraw-perf-probe="list-paint-off"]
+  .soridraw-lite-studio-split-workspace
+  :is(
+    .soridraw-musicnote-song-card,
+    .soridraw-library-playlist-row,
+    .soridraw-library-workspace-track-row
+  ) {
+    visibility: hidden !important;
+  }
+
+  html[data-soridraw-perf-probe="container-off"]
+  .soridraw-lite-studio-split-workspace
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    container-type: normal !important;
+    container-name: none !important;
+  }
+}
+
+.soridraw-split-perf-benchmark-row button.is-secondary {
+  background: #323235;
+  color: #ffb400;
+}
+
+.soridraw-split-perf-probe-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+  margin-top: 6px;
+}
+
+.soridraw-split-perf-probe-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 1px 6px;
+  align-items: baseline;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.025);
+}
+
+.soridraw-split-perf-probe-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #b7b7bb;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.soridraw-split-perf-probe-row b {
+  color: #f1f1f3;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.soridraw-split-perf-probe-row i {
+  color: #929297;
+  font-size: 9px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.soridraw-split-perf-probe-row i.is-better { color: #72d9a1; }
+.soridraw-split-perf-probe-row i.is-worse { color: #ff8e84; }
+
+.soridraw-split-perf-probe-row em {
+  grid-column: 1 / -1;
+  color: #7f7f84;
+  font-size: 8px;
+  font-style: normal;
+  white-space: nowrap;
+}

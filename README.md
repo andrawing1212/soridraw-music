@@ -1462,3 +1462,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 최대 7회 시도 안에 유효 3세트를 확보하지 못하면 결과를 억지로 정상 판정하지 않고 오류 상태로 종료한다.
 - PERF 패널은 세로 누적 대신 좌우 2열 배치로 변경해 한 번의 스크린샷에 핵심 수치·영역 DOM·병목 TOP·Lite V2 내부 단계를 함께 담기 쉽게 했다.
 - 일반 앱 디자인/분할 동작/Firebase 저장 구조는 변경하지 않았다.
+
+
+## 583차 — 관리자 렌더 병목 A/B 스캔
+- 582차 동일 DOM 3세트 중앙값 자동 벤치마크를 유지했다.
+- PERF 패널에 `병목 스캔`을 추가해 기준 / 시각 효과 OFF / 이미지 Paint OFF / 리스트 Paint OFF / Container Query OFF를 같은 자동 조건으로 순차 측정한다.
+- 각 진단 프로필은 관리자 테스트 중에만 일시 적용되고 완료/중단 즉시 원래 디자인으로 복구한다.
+- 병목 스캔 결과는 기준 대비 렌더 비JS ms/s 증감률, FPS, P95를 한 화면의 2열 표로 보여준다.
+- 관리자 앱 설정의 기존 PERF 항목을 `품질·성능 진단 도구`로 정리해 앞으로 품질 검증 도구를 이 영역에 누적 관리할 수 있게 했다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

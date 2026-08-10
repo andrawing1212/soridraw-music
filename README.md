@@ -1579,3 +1579,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 브라우저가 PointerRawUpdate를 지원하지 않으면 테스트를 시작하지 않고 안내 메시지를 표시한다.
 - Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 
+
+
+## 595차 — 이벤트 rAF vs 연속 rAF 실사용 추적 A/B
+
+- 기준: `594차 PointerMove vs PointerRawUpdate 입력 샘플링 A/B`.
+- 594차 결과에서 PointerMove/PointerRawUpdate 모두 브라우저 프레임은 100fps 이상이었지만 실제 pane geometry commit은 약 34~37회/s 수준으로 남아, 자동 벤치마크보다 손 드래그가 계단식으로 느껴지는 잔여 문제를 별도 진단 대상으로 잡았다.
+- 관리자 PERF에 `연속 rAF A/B`를 추가했다. 1회차는 현재 방식인 `pointermove → 이벤트마다 rAF 1회 예약`, 2회차는 같은 PointerMove 입력을 쓰되 드래그 시작부터 종료까지 display rAF 루프가 최신 좌표를 계속 추적하는 방식이다.
+- 연속 rAF 모드는 이벤트 사이 구간에서 최신 좌표를 2~3 프레임 안에 따라가도록 짧게 보간한다. 입력이 42ms 이상 새로 오지 않으면 즉시 최신 좌표로 스냅해 불필요한 지연 누적을 막는다.
+- `recordSplitPerfPointerCommit`은 연속 rAF의 실제 visual commit도 별도로 셀 수 있게 확장했다. 새 입력이 없던 보간 commit은 화면 반영률에는 포함하지만 input→commit latency에는 섞지 않는다.
+- 종합 진단서에 `[CONTINUOUS RAF POINTER A/B]`가 추가되어 실사용 FPS/P95, 실제 화면반영 commit rate/P95, 입력→반영 지연, >50ms 프레임, Long Task를 비교한다.
+- 이 연속 rAF 방식은 아직 진단 모드에서만 사용하며 일반 사용자는 기존 591 런타임을 유지한다. A/B 종료 후 자동으로 기존 React PointerMove 방식으로 복구한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

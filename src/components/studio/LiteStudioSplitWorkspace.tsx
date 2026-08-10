@@ -48,7 +48,7 @@ const CONTENT_TABLET_MAX = 1080;
 const BENCHMARK_SURFACE_WIDTH = 1400;
 const BENCHMARK_SURFACE_HEIGHT = 900;
 type BenchmarkLayoutMode = 'css-var' | 'direct';
-type PointerInputMode = 'react' | 'native' | 'raw';
+type PointerInputMode = 'react' | 'native' | 'raw' | 'continuous';
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -183,6 +183,10 @@ export default function LiteStudioSplitWorkspace({
   const pointerIdRef = useRef(-1);
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
+  const continuousFrameRef = useRef<number | null>(null);
+  const continuousTargetXRef = useRef<number | null>(null);
+  const continuousVisualXRef = useRef<number | null>(null);
+  const continuousLastInputAtRef = useRef(0);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
@@ -668,18 +672,15 @@ export default function LiteStudioSplitWorkspace({
     });
   }, [refreshMetrics]);
 
-  const flushPointer = useCallback(() => {
+  const commitPointerClientX = useCallback((clientX: number, allowSyntheticCommit = false) => {
     const perfStart = isSplitPerfDragActive() ? performance.now() : 0;
-    frameRef.current = null;
-    const clientX = pendingClientXRef.current;
-    pendingClientXRef.current = null;
-    if (clientX === null || !draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return;
+    if (!draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return false;
     const width = Math.max(1, metricsRef.current.width);
     const bounds = getSplitBounds(width);
     const minPx = width * (bounds.min / 100);
     const maxPx = width * (bounds.max / 100);
     const nextPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
-    if (lastPixelRef.current === nextPixel) return;
+    if (lastPixelRef.current === nextPixel) return false;
     lastPixelRef.current = nextPixel;
 
     const nextPercent = (nextPixel / width) * 100;
@@ -688,9 +689,18 @@ export default function LiteStudioSplitWorkspace({
     // the same rAF. This keeps the approved live boundary while avoiding a
     // custom-property invalidation wave through the entire pane subtree.
     applyPercent(nextPercent, true);
-    recordSplitPerfPointerCommit(performance.now());
+    recordSplitPerfPointerCommit(performance.now(), allowSyntheticCommit);
     if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
+    return true;
   }, [applyPercent]);
+
+  const flushPointer = useCallback(() => {
+    frameRef.current = null;
+    const clientX = pendingClientXRef.current;
+    pendingClientXRef.current = null;
+    if (clientX === null) return;
+    commitPointerClientX(clientX, false);
+  }, [commitPointerClientX]);
 
   const schedulePointer = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -698,14 +708,46 @@ export default function LiteStudioSplitWorkspace({
     frameRef.current = window.requestAnimationFrame(flushPointer);
   }, [flushPointer]);
 
-  const readCoalescedCount = useCallback((event: PointerEvent) => {
+  const continuousPointerTick = useCallback(function continuousTick(timestamp: number) {
+    continuousFrameRef.current = null;
+    if (!draggingRef.current || pointerInputModeRef.current !== 'continuous') return;
+
+    const targetX = continuousTargetXRef.current;
+    if (targetX !== null) {
+      const currentX = continuousVisualXRef.current ?? targetX;
+      const delta = targetX - currentX;
+      let nextX = targetX;
+      if (Math.abs(delta) > 0.45) {
+        // Keep the visual boundary moving on display frames even when Chrome
+        // delivers pointermove in coarse/coalesced batches. 0.72 catches up in
+        // roughly 2-3 164 Hz frames while staying close to the latest pointer.
+        const staleInput = timestamp - continuousLastInputAtRef.current > 42;
+        nextX = staleInput ? targetX : currentX + (delta * 0.72);
+        if (Math.abs(targetX - nextX) < 0.6) nextX = targetX;
+      }
+      continuousVisualXRef.current = nextX;
+      commitPointerClientX(nextX, true);
+    }
+
+    continuousFrameRef.current = window.requestAnimationFrame(continuousTick);
+  }, [commitPointerClientX]);
+
+  const startContinuousPointerLoop = useCallback(() => {
+    if (continuousFrameRef.current !== null) window.cancelAnimationFrame(continuousFrameRef.current);
+    continuousFrameRef.current = window.requestAnimationFrame(continuousPointerTick);
+  }, [continuousPointerTick]);
+
+  const readCoalescedPointer = useCallback((event: PointerEvent) => {
     try {
-      const coalesced = event.getCoalescedEvents?.();
-      return Math.max(1, coalesced?.length || 1);
+      const coalesced = event.getCoalescedEvents?.() || [];
+      const latest = coalesced.length ? coalesced[coalesced.length - 1] : event;
+      return { count: Math.max(1, coalesced.length || 1), clientX: latest.clientX };
     } catch {
-      return 1;
+      return { count: 1, clientX: event.clientX };
     }
   }, []);
+
+  const readCoalescedCount = useCallback((event: PointerEvent) => readCoalescedPointer(event).count, [readCoalescedPointer]);
 
   const handleNativePointerMove = useCallback((event: PointerEvent) => {
     if (pointerInputModeRef.current !== 'native' || !draggingRef.current || event.pointerId !== pointerIdRef.current) return;
@@ -725,11 +767,23 @@ export default function LiteStudioSplitWorkspace({
     if (!draggingRef.current) return;
     if (event && event.pointerId !== pointerIdRef.current) return;
     if (event) pendingClientXRef.current = event.clientX;
+    if (continuousFrameRef.current !== null) {
+      window.cancelAnimationFrame(continuousFrameRef.current);
+      continuousFrameRef.current = null;
+    }
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     }
-    flushPointer();
+    if (pointerInputModeRef.current === 'continuous') {
+      const finalX = event?.clientX ?? continuousTargetXRef.current;
+      if (finalX !== null && finalX !== undefined) commitPointerClientX(finalX, true);
+      pendingClientXRef.current = null;
+    } else {
+      flushPointer();
+    }
+    continuousTargetXRef.current = null;
+    continuousVisualXRef.current = null;
     draggingRef.current = false;
     splitterRef.current?.removeEventListener('pointermove', handleNativePointerMove);
     window.removeEventListener('pointerrawupdate', handleRawPointerUpdate as EventListener);
@@ -749,7 +803,7 @@ export default function LiteStudioSplitWorkspace({
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, handleNativePointerMove, handleRawPointerUpdate, readExternalControls, restoreDragViewportAnchors]);
+  }, [clearLiveExternalGeometry, commitPointerClientX, commitRootMeasurements, connectTopCardObserver, flushPointer, handleNativePointerMove, handleRawPointerUpdate, readExternalControls, restoreDragViewportAnchors]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -784,7 +838,7 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: `Lite V2 · direct geometry + ${pointerInputModeRef.current} pointer input (594)`,
+      engine: `Lite V2 · direct geometry + ${pointerInputModeRef.current} pointer input (595)`,
       builder: builderRef.current,
       result: resultRef.current,
       inputMode: pointerInputModeRef.current,
@@ -795,6 +849,11 @@ export default function LiteStudioSplitWorkspace({
       event.currentTarget.addEventListener('pointermove', handleNativePointerMove, { passive: true });
     } else if (pointerInputModeRef.current === 'raw') {
       window.addEventListener('pointerrawupdate', handleRawPointerUpdate as EventListener, { passive: true });
+    } else if (pointerInputModeRef.current === 'continuous') {
+      continuousTargetXRef.current = event.clientX;
+      continuousVisualXRef.current = event.clientX;
+      continuousLastInputAtRef.current = performance.now();
+      startContinuousPointerLoop();
     }
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-lite-split-dragging');
@@ -804,9 +863,19 @@ export default function LiteStudioSplitWorkspace({
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (pointerInputModeRef.current !== 'react' || !draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    const mode = pointerInputModeRef.current;
+    if (mode !== 'react' && mode !== 'continuous') return;
     const nativeEvent = event.nativeEvent;
-    recordSplitPerfPointerInput('react', performance.now(), readCoalescedCount(nativeEvent), event.clientX);
+    const receivedAt = performance.now();
+    const coalesced = readCoalescedPointer(nativeEvent);
+    if (mode === 'continuous') {
+      recordSplitPerfPointerInput('continuous', receivedAt, coalesced.count, coalesced.clientX);
+      continuousTargetXRef.current = coalesced.clientX;
+      continuousLastInputAtRef.current = receivedAt;
+      return;
+    }
+    recordSplitPerfPointerInput('react', receivedAt, coalesced.count, event.clientX);
     schedulePointer(event.clientX);
   };
 
@@ -1076,7 +1145,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 592 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 595 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1192,6 +1261,7 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+      if (continuousFrameRef.current !== null) window.cancelAnimationFrame(continuousFrameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
       document.body.style.removeProperty('cursor');
@@ -1233,7 +1303,7 @@ export default function LiteStudioSplitWorkspace({
   useEffect(() => {
     const handleInputMode = (event: Event) => {
       const detail = (event as CustomEvent<{ mode?: PointerInputMode }>).detail;
-      const next: PointerInputMode = detail?.mode === 'native' ? 'native' : detail?.mode === 'raw' ? 'raw' : 'react';
+      const next: PointerInputMode = detail?.mode === 'native' ? 'native' : detail?.mode === 'raw' ? 'raw' : detail?.mode === 'continuous' ? 'continuous' : 'react';
       if (draggingRef.current) return;
       pointerInputModeRef.current = next;
       setPointerInputMode(next);
@@ -1266,7 +1336,7 @@ export default function LiteStudioSplitWorkspace({
       aria-valuemax={MAX_PERCENT}
       aria-valuenow={Math.round(percentRef.current)}
       onPointerDown={handlePointerDown}
-      onPointerMove={pointerInputMode === 'react' ? handlePointerMove : undefined}
+      onPointerMove={pointerInputMode === 'react' || pointerInputMode === 'continuous' ? handlePointerMove : undefined}
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       onKeyDown={handleKeyDown}

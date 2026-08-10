@@ -296,7 +296,7 @@ export default function AdminAppSettingsPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-black text-[var(--text-primary)]">품질·성능 진단 도구</h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 뮤직노트 정밀/렌더/영역/좌표 A/B, 실제 마우스 입력 A/B, 입력 샘플링 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없습니다. 591차의 직접 pane 좌표 실런타임은 유지하며, 593차 React↔Native 실사용 입력 A/B도 보존합니다. 594차 입력 샘플링 A/B는 실제 손 드래그에서 PointerMove와 PointerRawUpdate를 비교하고, 멈춘 구간을 제외한 이동 중 입력률·원시 샘플률·화면 반영률을 기록한 뒤 기존 React 입력으로 자동 복구합니다.
+                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 뮤직노트 정밀/렌더/영역/좌표 A/B, 실제 마우스 입력 A/B, 입력 샘플링 A/B, 연속 rAF A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없습니다. 591차의 직접 pane 좌표 실런타임은 유지합니다. 595차 연속 rAF A/B는 같은 PointerMove 입력을 사용한 채 기존 이벤트 예약형 rAF와 화면 프레임 연속 추적형 rAF를 실제 손 드래그로 비교하고, 테스트 종료 후 기존 입력 방식으로 자동 복구합니다.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-[var(--text-secondary)]">
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">자동 벤치마크</span>

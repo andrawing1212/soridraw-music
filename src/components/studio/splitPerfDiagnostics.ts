@@ -75,7 +75,7 @@ export type SplitPerfResult = {
   benchmarkSurface: string | null;
   benchmarkSurfacePass: boolean | null;
   layoutMode: 'css-var' | 'direct' | null;
-  inputMode: 'react' | 'native' | 'raw' | 'auto' | null;
+  inputMode: 'react' | 'native' | 'raw' | 'continuous' | 'auto' | null;
   pointerEventCount: number;
   pointerCoalescedCount: number;
   pointerEventsPerSecond: number;
@@ -133,7 +133,7 @@ type ActiveDrag = {
   benchmarkSurface: string | null;
   benchmarkSurfacePass: boolean | null;
   layoutMode: 'css-var' | 'direct' | null;
-  inputMode: 'react' | 'native' | 'raw' | 'auto' | null;
+  inputMode: 'react' | 'native' | 'raw' | 'continuous' | 'auto' | null;
   pointerEventTimes: number[];
   pointerClientXs: number[];
   pointerCoalescedCounts: number[];
@@ -425,7 +425,7 @@ export const beginSplitPerfDrag = ({
   benchmarkSurface?: string | null;
   benchmarkSurfacePass?: boolean | null;
   layoutMode?: 'css-var' | 'direct' | null;
-  inputMode?: 'react' | 'native' | 'raw' | 'auto' | null;
+  inputMode?: 'react' | 'native' | 'raw' | 'continuous' | 'auto' | null;
 }) => {
   if (!enabled || typeof window === 'undefined' || typeof document === 'undefined') return;
   if (active?.rafId !== null && active?.rafId !== undefined) window.cancelAnimationFrame(active.rafId);
@@ -474,7 +474,7 @@ export const beginSplitPerfDrag = ({
 };
 
 export const recordSplitPerfPointerInput = (
-  inputMode: 'react' | 'native' | 'raw',
+  inputMode: 'react' | 'native' | 'raw' | 'continuous',
   receivedAt: number,
   coalescedCount = 1,
   clientX = Number.NaN,
@@ -491,13 +491,17 @@ export const recordSplitPerfPointerInput = (
   active.lastPointerInputAt = timestamp;
 };
 
-export const recordSplitPerfPointerCommit = (committedAt: number) => {
-  if (!enabled || !active || active.pointerPendingBatch <= 0) return;
+export const recordSplitPerfPointerCommit = (committedAt: number, allowWithoutPendingInput = false) => {
+  if (!enabled || !active) return;
+  const hadPendingInput = active.pointerPendingBatch > 0;
+  if (!hadPendingInput && !allowWithoutPendingInput) return;
   const timestamp = Number.isFinite(committedAt) ? committedAt : now();
-  active.pointerBatches.push(active.pointerPendingBatch);
+  active.pointerBatches.push(hadPendingInput ? active.pointerPendingBatch : 0);
   active.pointerPendingBatch = 0;
   active.pointerCommitTimes.push(timestamp);
-  if (active.lastPointerInputAt !== null) {
+  // Synthetic/interpolated continuous-rAF commits are still visual commits, but
+  // only fresh pointer input should contribute to input→commit latency.
+  if (hadPendingInput && active.lastPointerInputAt !== null) {
     active.inputToCommitLatencies.push(Math.max(0, timestamp - active.lastPointerInputAt));
   }
 };

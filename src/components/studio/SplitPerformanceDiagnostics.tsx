@@ -54,6 +54,11 @@ type SamplingInputRow = {
   result: SplitPerfResult;
 };
 
+type ContinuousInputRow = {
+  mode: 'event' | 'continuous';
+  result: SplitPerfResult;
+};
+
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
   { id: 'effects-off', label: '효과 OFF' },
@@ -405,7 +410,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '594 · pointermove vs pointerrawupdate sampling A/B + movement-only metrics',
+    buildProfile: '595 · event-rAF vs continuous-rAF pointer follow A/B',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -433,6 +438,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [manualInputRows, setManualInputRows] = useState<ManualInputRow[]>([]);
   const [samplingInputRunning, setSamplingInputRunning] = useState(false);
   const [samplingInputRows, setSamplingInputRows] = useState<SamplingInputRow[]>([]);
+  const [continuousInputRunning, setContinuousInputRunning] = useState(false);
+  const [continuousInputRows, setContinuousInputRows] = useState<ContinuousInputRow[]>([]);
 
   const probeRunningRef = useRef(false);
   const probeProfilesRef = useRef(PERF_RENDER_PROBE_PROFILES);
@@ -447,6 +454,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const samplingInputRunningRef = useRef(false);
   const samplingInputPhaseRef = useRef<'react' | 'raw'>('react');
   const samplingInputHandledAtRef = useRef(0);
+  const continuousInputRunningRef = useRef(false);
+  const continuousInputPhaseRef = useRef<'react' | 'continuous'>('react');
+  const continuousInputHandledAtRef = useRef(0);
 
   useEffect(() => subscribeSplitPerfResult(setResult), []);
   useEffect(() => subscribeSplitPerfBenchmarkSummary(setBenchmarkSummary), []);
@@ -501,9 +511,39 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     }
 
     samplingInputRunningRef.current = false;
+    continuousInputRunningRef.current = false;
     setSamplingInputRunning(false);
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
     setBenchmarkMessage('입력 샘플링 A/B 완료 · 멈춘 구간을 제외한 실제 이동 중 입력률/샘플률/화면 반영률을 기록했습니다.');
+  }, [result]);
+
+
+  useEffect(() => {
+    if (!result || !continuousInputRunningRef.current) return;
+    if (result.createdAt === continuousInputHandledAtRef.current || result.benchmarkSurface !== null) return;
+    if (result.workspaceView !== 'music-note') return;
+    const expectedMode = continuousInputPhaseRef.current;
+    if (result.inputMode !== expectedMode) return;
+    if (result.durationMs < 1800) {
+      continuousInputHandledAtRef.current = result.createdAt;
+      setBenchmarkMessage(`${expectedMode === 'react' ? '현재 이벤트 rAF' : '연속 rAF'} 기록이 너무 짧습니다 · 분할바를 3~5초 정도 계속 움직인 뒤 놓으세요.`);
+      return;
+    }
+
+    continuousInputHandledAtRef.current = result.createdAt;
+    const rowMode: ContinuousInputRow['mode'] = expectedMode === 'continuous' ? 'continuous' : 'event';
+    setContinuousInputRows((current) => [...current.filter((row) => row.mode !== rowMode), { mode: rowMode, result }]);
+    if (expectedMode === 'react') {
+      continuousInputPhaseRef.current = 'continuous';
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'continuous' } }));
+      setBenchmarkMessage('연속 rAF A/B 2/2 · 연속 rAF 추적 방식입니다. 같은 느낌과 속도로 분할바를 3~5초 계속 움직인 뒤 놓으세요.');
+      return;
+    }
+
+    continuousInputRunningRef.current = false;
+    setContinuousInputRunning(false);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('연속 rAF A/B 완료 · 실제 손 드래그의 화면 반영률과 P95를 비교했습니다.');
   }, [result]);
 
   const stopProbe = (restoreBaseline = true) => {
@@ -524,6 +564,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     probeRunningRef.current = false;
     manualInputRunningRef.current = false;
     samplingInputRunningRef.current = false;
+    continuousInputRunningRef.current = false;
     setPerfProbeProfile('baseline');
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
     if (probeStartTimerRef.current !== null) window.clearTimeout(probeStartTimerRef.current);
@@ -676,7 +717,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
 
   const runManualInputAB = () => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
     if (!document.querySelector('.soridraw-musicnote-page-shell')) {
       setBenchmarkMessage('실사용 입력 A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
       return;
@@ -692,7 +733,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
 
   const runSamplingInputAB = () => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
     if (!document.querySelector('.soridraw-musicnote-page-shell')) {
       setBenchmarkMessage('입력 샘플링 A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
       return;
@@ -710,9 +751,25 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setBenchmarkMessage('입력 샘플링 A/B 1/2 · PointerMove입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
   };
 
+  const runContinuousInputAB = () => {
+    if (!ensureBenchmarkReady()) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
+    if (!document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage('연속 rAF A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
+      return;
+    }
+    continuousInputRunningRef.current = true;
+    continuousInputPhaseRef.current = 'react';
+    continuousInputHandledAtRef.current = 0;
+    setContinuousInputRows([]);
+    setContinuousInputRunning(true);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('연속 rAF A/B 1/2 · 현재 이벤트 기반 rAF입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
+  };
+
   const runProbeScan = (kind: 'render' | 'area' | 'layout' | 'musicnote') => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
     if (kind === 'musicnote' && !document.querySelector('.soridraw-musicnote-page-shell')) {
       setBenchmarkMessage('뮤직노트 정밀 스캔은 뮤직노트가 열린 분할 화면에서 실행하세요.');
       return;
@@ -870,6 +927,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         ...(samplingInputRows.length
           ? samplingInputRows.map(({ mode, result: row }) => `mode=${mode === 'move' ? 'pointermove' : 'pointerrawupdate'} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} totalRate=${row.pointerEventsPerSecond}/s activeDuration=${row.pointerActiveDurationMs}ms activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s pauseGaps=${row.pointerPauseGapCount} commitCount=${row.pointerCommitCount} commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms inputToCommitP95/max=${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
           : ['미측정 · 입력 샘플링 A/B를 실행하세요.']),
+        '',
+        '[CONTINUOUS RAF POINTER A/B]',
+        ...(continuousInputRows.length
+          ? continuousInputRows.map(({ mode, result: row }) => `mode=${mode === 'event' ? 'event-rAF' : 'continuous-rAF'} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s commitCount=${row.pointerCommitCount} commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms inputToCommitP95/max=${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms over50=${row.over50ms} longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
+          : ['미측정 · 연속 rAF A/B를 실행하세요.']),
       );
       await navigator.clipboard.writeText(lines.join('\n'));
       setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
@@ -911,11 +973,14 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'musicnote' ? '뮤직노트 정밀 중…' : '뮤직노트 정밀'}
             </button>
-            <button type="button" className="is-secondary" onClick={runManualInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runManualInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
               {manualInputRunning ? `실사용 입력 ${manualInputRows.length + 1}/2` : '실사용 입력 A/B'}
             </button>
-            <button type="button" className="is-secondary" onClick={runSamplingInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runSamplingInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
               {samplingInputRunning ? `입력 샘플링 ${samplingInputRows.length + 1}/2` : '입력 샘플링 A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={runContinuousInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
+              {continuousInputRunning ? `연속 rAF ${continuousInputRows.length + 1}/2` : '연속 rAF A/B'}
             </button>
             <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
@@ -923,7 +988,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 고정 표면 · 실사용 입력: React→Native · 입력 샘플링: PointerMove→PointerRawUpdate · 환경: DEV/PROD·idle Hz</span>
+            <span>자동: 1400×900 고정 · 입력 샘플링: Move→Raw · 연속 rAF: 이벤트→연속 추적 · 환경: DEV/PROD·idle Hz</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -1057,6 +1122,22 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                             <b>{row.estimatedFps}fps · P95 {row.p95FrameMs}ms</b>
                             <i>이동중 event/sample {row.pointerActiveEventsPerSecond}/{row.pointerActiveSamplesPerSecond}/s</i>
                             <em>화면반영 {row.pointerCommitsPerSecond}/s · commit P95 {row.pointerCommitIntervalP95Ms}ms · pause gap {row.pointerPauseGapCount}</em>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  {continuousInputRows.length > 0 && (
+                    <details open>
+                      <summary>연속 rAF A/B — 이벤트 예약 vs 화면 프레임 추적</summary>
+                      <div className="soridraw-split-perf-probe-grid">
+                        {continuousInputRows.map(({ mode, result: row }) => (
+                          <div className="soridraw-split-perf-probe-row" key={mode}>
+                            <span>{mode === 'event' ? '현재 이벤트 rAF' : '연속 rAF 추적'}</span>
+                            <b>{row.estimatedFps}fps · P95 {row.p95FrameMs}ms</b>
+                            <i>화면반영 {row.pointerCommitsPerSecond}/s · commit P95 {row.pointerCommitIntervalP95Ms}ms</i>
+                            <em>입력→반영 P95 {row.inputToCommitP95Ms}ms · &gt;50ms {row.over50ms}회</em>
                           </div>
                         ))}
                       </div>

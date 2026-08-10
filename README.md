@@ -1540,3 +1540,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 실제 태블릿 분할도 `>=1100px`이면 PC와 같은 576 leaf `content-visibility + contain: layout style paint`, 585 page-region `contain: layout style` 최적화를 함께 받는다.
 - 동시에 1100~1599px에서는 별도 tablet split profile과 최소 pane 430px 계약이 적용되고, 좁은 pane에서 660/661/820px responsive threshold를 더 자주 통과한다.
 - 따라서 직접 좌표 승격으로 공용 CSS-variable invalidation 비용은 줄어들지만, 태블릿 기기에서만 남는 느려짐은 `drag-only isolation`과 좁은 pane responsive mode crossing을 분리 A/B해야 한다. 일반 동작은 아직 임의 변경하지 않는다.
+
+## 592차 — 뮤직노트 잔여 병목 정밀 A/B
+
+- 기준: 591차 직접 pane 좌표 실런타임 적용본.
+- 591에서 공용 분할 엔진의 핵심 병목은 제거했고, PROD Music Note가 약 85fps까지 회복했지만 육안 끊김이 남아 있어 Music Note 내부 렌더 원인을 독립 변수로 더 좁힌다.
+- 관리자 PERF에 `뮤직노트 정밀` 스캔을 추가했다. Music Note가 열린 분할 화면에서만 실행된다.
+- 동일 1400×900 고정 표면·동일 DOM·3세트 중앙값 조건으로 다음을 각각 독립 A/B한다.
+  - 전환효과 전체 OFF: Music Note 하위 transition/animation이 남은 끊김에 미치는 영향.
+  - 카드 내부 Paint OFF: 카드 geometry/layout은 유지하고 내부 paint만 생략해 row paint 비용을 분리.
+  - 오프스크린 최적화 OFF: Music Note leaf의 content-visibility:auto만 해제해 현재 offscreen skipping의 효과/역효과를 판정.
+  - 영역 contain OFF: 585 page-region containment만 해제해 부모 영역 격리 비용을 분리.
+  - 반응형 판정 고정: benchmark 시작 폭에서 Music Note responsive contract를 1회 seed한 뒤 mode notification을 고정해 breakpoint restyle 비용을 분리.
+- 모든 A/B 시각 변경은 진단 동안만 `data-soridraw-perf-probe`로 적용되고 종료 즉시 원복한다. Library/Recent/일반 Studio 런타임에는 적용하지 않는다.
+- 종합 진단서에 `[MUSICNOTE RESIDUAL A/B]` 결과를 추가했다.
+- 591의 직접 pane 좌표 실런타임, 1400×900 자동 벤치, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

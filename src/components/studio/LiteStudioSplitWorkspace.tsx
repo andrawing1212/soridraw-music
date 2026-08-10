@@ -173,6 +173,7 @@ export default function LiteStudioSplitWorkspace({
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
+  const contentResponsiveFreezeSeededRef = useRef(false);
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(-1);
   const pendingClientXRef = useRef<number | null>(null);
@@ -372,6 +373,14 @@ export default function LiteStudioSplitWorkspace({
     const result = resultRef.current;
     if (!builder || !result) return;
 
+    // 592 diagnostic-only: seed the Music Note responsive contract once at the
+    // benchmark start width, then freeze further mode notifications while the
+    // divider sweeps. This isolates breakpoint-driven page restyling from the
+    // geometry/render cost without changing normal runtime behavior.
+    const freezeMusicNoteResponsive = workspaceView === 'music-note'
+      && document.documentElement.dataset.soridrawPerfProbe === 'musicnote-responsive-freeze';
+    if (freezeMusicNoteResponsive && contentResponsiveFreezeSeededRef.current && !force) return;
+
     // 569: Music Note / Library already have a responsive contract that can
     // consume the split engine's known pane width directly. Do not let those
     // pages create their own ResizeObserver + getBoundingClientRect loop while
@@ -391,7 +400,9 @@ export default function LiteStudioSplitWorkspace({
       contentResponsiveModeRef.current.result = resultMode;
       result.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeResultWidth } }));
     }
-  }, []);
+    if (freezeMusicNoteResponsive) contentResponsiveFreezeSeededRef.current = true;
+    else contentResponsiveFreezeSeededRef.current = false;
+  }, [workspaceView]);
 
   const syncPaneModes = useCallback((builderWidth: number, resultWidth: number) => {
     const builder = builderRef.current;
@@ -879,6 +890,7 @@ export default function LiteStudioSplitWorkspace({
       captureDragViewportAnchors();
       draggingRef.current = true;
       benchmarkRunningRef.current = true;
+      contentResponsiveFreezeSeededRef.current = false;
       pointerIdRef.current = -1;
       pendingClientXRef.current = null;
       lastPixelRef.current = null;
@@ -911,6 +923,7 @@ export default function LiteStudioSplitWorkspace({
           benchmarkTimerRef.current = null;
         }
         finishDrag();
+        contentResponsiveFreezeSeededRef.current = false;
         restoreOriginalState();
         if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
         emitBenchmarkStatus('done', `자동 테스트 완료 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'} · 3세트 중앙값`);
@@ -1005,6 +1018,7 @@ export default function LiteStudioSplitWorkspace({
           benchmarkTimerRef.current = null;
         }
         finishDrag();
+        contentResponsiveFreezeSeededRef.current = false;
         restoreOriginalState();
         if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
         emitBenchmarkStatus('error', message);
@@ -1022,7 +1036,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 591 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 592 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,

@@ -28,7 +28,12 @@ type PerfProbeProfileId =
   | 'area-result-off'
   | 'area-both-off'
   | 'layout-css-var'
-  | 'layout-direct';
+  | 'layout-direct'
+  | 'musicnote-transition-off'
+  | 'musicnote-row-paint-off'
+  | 'musicnote-content-visibility-off'
+  | 'musicnote-region-contain-off'
+  | 'musicnote-responsive-freeze';
 type PerfProbeRow = {
   id: PerfProbeProfileId;
   label: string;
@@ -59,11 +64,23 @@ const PERF_AREA_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }>
   { id: 'area-both-off', label: '좌우 콘텐츠 전체 OFF' },
 ];
 
+const PERF_MUSICNOTE_RESIDUAL_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'musicnote-transition-off', label: '전환효과 전체 OFF' },
+  { id: 'musicnote-row-paint-off', label: '카드 내부 Paint OFF' },
+  { id: 'musicnote-content-visibility-off', label: '오프스크린 최적화 OFF' },
+  { id: 'musicnote-region-contain-off', label: '영역 contain OFF' },
+  { id: 'musicnote-responsive-freeze', label: '반응형 판정 고정' },
+];
+
 const setPerfProbeProfile = (profile: PerfProbeProfileId) => {
   const root = document.documentElement;
   if (profile === 'baseline' || profile === 'layout-css-var' || profile === 'layout-direct') delete root.dataset.soridrawPerfProbe;
   else root.dataset.soridrawPerfProbe = profile;
 };
+
+const getPerfProbeLayoutMode = (profile: PerfProbeProfileId): 'css-var' | 'direct' =>
+  profile === 'layout-css-var' ? 'css-var' : 'direct';
 
 const getBrowserRenderPerSecond = (result: SplitPerfResult) => {
   const durationSeconds = Math.max(0.001, result.durationMs / 1000);
@@ -375,7 +392,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '591 · direct pane geometry runtime + fixed benchmark A/B',
+    buildProfile: '592 · Music Note residual bottleneck A/B + direct runtime',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -391,11 +408,12 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkMessage, setBenchmarkMessage] = useState('');
   const [probeRunning, setProbeRunning] = useState(false);
-  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout'>('render');
+  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout' | 'musicnote'>('render');
   const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
   const [renderProbeRows, setRenderProbeRows] = useState<PerfProbeRow[]>([]);
   const [areaProbeRows, setAreaProbeRows] = useState<PerfProbeRow[]>([]);
   const [layoutProbeRows, setLayoutProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNoteProbeRows, setMusicNoteProbeRows] = useState<PerfProbeRow[]>([]);
   const [environment, setEnvironment] = useState<PerfEnvironmentSnapshot | null>(null);
   const [environmentRunning, setEnvironmentRunning] = useState(false);
 
@@ -486,7 +504,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setProbeRows(nextRows);
     if (probeKind === 'render') setRenderProbeRows(nextRows);
     else if (probeKind === 'area') setAreaProbeRows(nextRows);
-    else setLayoutProbeRows(nextRows);
+    else if (probeKind === 'layout') setLayoutProbeRows(nextRows);
+    else setMusicNoteProbeRows(nextRows);
     if (probeIndexRef.current === 0) probeBaselineRef.current = benchmarkSummary;
 
     const nextIndex = probeIndexRef.current + 1;
@@ -496,18 +515,20 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         ? '영역 스캔 완료 · 렌더 비용이 크게 떨어지는 영역이 실제 병목 후보입니다.'
         : probeKind === 'layout'
           ? '좌표 A/B 완료 · 같은 1400×900 표면에서 CSS 변수와 직접 좌표를 비교했습니다.'
-          : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
+          : probeKind === 'musicnote'
+            ? '뮤직노트 정밀 스캔 완료 · 끊김을 가장 크게 줄인 항목만 실제 최적화 후보로 사용합니다.'
+            : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
       return;
     }
 
     probeIndexRef.current = nextIndex;
     const nextProfile = profiles[nextIndex];
     setPerfProbeProfile(nextProfile.id);
-    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
+    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
     probeStartTimerRef.current = window.setTimeout(() => {
       probeStartTimerRef.current = null;
       if (!probeRunningRef.current) return;
-      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: nextProfile.id === 'layout-direct' ? 'direct' : 'css-var' } }));
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: getPerfProbeLayoutMode(nextProfile.id) } }));
     }, 420);
   }, [benchmarkSummary, probeKind]);
 
@@ -572,10 +593,20 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
   };
 
-  const runProbeScan = (kind: 'render' | 'area' | 'layout') => {
+  const runProbeScan = (kind: 'render' | 'area' | 'layout' | 'musicnote') => {
     if (!ensureBenchmarkReady()) return;
     if (benchmarkRunning || probeRunningRef.current) return;
-    const profiles = kind === 'area' ? PERF_AREA_PROBE_PROFILES : kind === 'layout' ? PERF_LAYOUT_PROBE_PROFILES : PERF_RENDER_PROBE_PROFILES;
+    if (kind === 'musicnote' && !document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage('뮤직노트 정밀 스캔은 뮤직노트가 열린 분할 화면에서 실행하세요.');
+      return;
+    }
+    const profiles = kind === 'area'
+      ? PERF_AREA_PROBE_PROFILES
+      : kind === 'layout'
+        ? PERF_LAYOUT_PROBE_PROFILES
+        : kind === 'musicnote'
+          ? PERF_MUSICNOTE_RESIDUAL_PROFILES
+          : PERF_RENDER_PROBE_PROFILES;
     probeProfilesRef.current = profiles;
     probeRowsRef.current = [];
     probeBaselineRef.current = null;
@@ -585,12 +616,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setProbeRows([]);
     if (kind === 'render') setRenderProbeRows([]);
     else if (kind === 'area') setAreaProbeRows([]);
-    else setLayoutProbeRows([]);
+    else if (kind === 'layout') setLayoutProbeRows([]);
+    else setMusicNoteProbeRows([]);
     probeRunningRef.current = true;
     setProbeRunning(true);
     setPerfProbeProfile(profiles[0].id);
-    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
-    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: profiles[0].id === 'layout-direct' ? 'direct' : 'css-var' } }));
+    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : kind === 'musicnote' ? '뮤직노트 정밀' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: getPerfProbeLayoutMode(profiles[0].id) } }));
   };
 
   const runEnvironmentDiagnostics = async () => {
@@ -701,7 +733,16 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       } else {
         lines.push('미측정 · 자동 테스트를 먼저 실행하세요.');
       }
-      lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
+      lines.push(
+        '',
+        ...formatProbeLines('RENDER A/B', renderProbeRows),
+        '',
+        ...formatProbeLines('AREA A/B', areaProbeRows),
+        '',
+        ...formatProbeLines('LAYOUT A/B', layoutProbeRows),
+        '',
+        ...formatProbeLines('MUSICNOTE RESIDUAL A/B', musicNoteProbeRows),
+      );
       await navigator.clipboard.writeText(lines.join('\n'));
       setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
     } catch (error) {
@@ -719,7 +760,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         <button type="button" onClick={toggleEnabled} className={enabled ? 'is-on' : ''}>
           PERF {enabled ? 'ON' : 'OFF'}
         </button>
-        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : '렌더'} 스캔 중` : verdict}</strong>
+        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : '렌더'} 스캔 중` : verdict}</strong>
         <button type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? '진단 펼치기' : '진단 접기'}>
           {collapsed ? '＋' : '－'}
         </button>
@@ -739,13 +780,16 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={() => runProbeScan('layout')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'layout' ? '좌표 A/B 중…' : '좌표 A/B'}
             </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote' ? '뮤직노트 정밀 중…' : '뮤직노트 정밀'}
+            </button>
             <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
             </button>
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 고정 표면 · 동일 DOM 3세트 · 렌더/영역/좌표 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
+            <span>자동: 1400×900 고정 표면 · 동일 DOM 3세트 · 뮤직노트 정밀/렌더/영역/좌표 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -821,7 +865,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   )}
                   {probeRows.length > 0 && (
                     <details open>
-                      <summary>{probeKind === 'area' ? '영역 이진 A/B — 기준 대비 렌더 비용' : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
+                      <summary>{probeKind === 'area'
+                        ? '영역 이진 A/B — 기준 대비 렌더 비용'
+                        : probeKind === 'layout'
+                          ? '좌표 A/B — 기준 대비 렌더 비용'
+                          : probeKind === 'musicnote'
+                            ? '뮤직노트 잔여 병목 A/B — 기준 대비 렌더 비용'
+                            : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
                       <div className="soridraw-split-perf-probe-grid">
                         {probeRows.map((row) => {
                           const delta = probeBaselineRender && row.id !== 'baseline'
@@ -880,7 +930,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">589: JS/CSS minify를 모두 정상 복구했습니다. 환경 진단/종합 진단서는 DEV·PROD의 실제 computed style 비용 속성 개수, 핵심 pane·Music Note·Library 대상 스타일, stylesheet 적용 순서를 함께 기록해 production cascade 차이를 직접 비교합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">592: 591의 직접 pane 좌표 실런타임은 유지합니다. 뮤직노트 정밀 스캔은 전환효과, 카드 내부 Paint, content-visibility, 페이지 영역 contain, 반응형 모드 갱신을 각각 독립 A/B로 재서 육안 끊김의 잔여 원인만 좁힙니다. 진단 중에만 시각 옵션을 바꾸고 종료 즉시 원복합니다.</p>
             </>
           )}
         </div>

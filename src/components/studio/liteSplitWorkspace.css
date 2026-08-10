@@ -873,3 +873,53 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* 592 — Music Note residual bottleneck A/B. Admin diagnostic only.
+ * Each profile changes one rendering dimension for a few benchmark seconds and
+ * is removed immediately after the scan. The normal Music Note/Library design
+ * and the 591 direct-pane runtime remain untouched outside diagnostics. */
+@media (min-width: 1100px) {
+  html[data-soridraw-perf-probe="musicnote-transition-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-theme,
+  html[data-soridraw-perf-probe="musicnote-transition-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-theme * {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Paint-only probe: keep each card's geometry/layout tree, but skip painting
+   * its inner visible content. This separates row paint from row reflow cost. */
+  html[data-soridraw-perf-probe="musicnote-row-paint-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-row > * {
+    visibility: hidden !important;
+  }
+
+  /* Test whether native off-screen skipping itself is helping or hurting.
+   * Explicit leaf containment from the normal runtime remains in place. */
+  html[data-soridraw-perf-probe="musicnote-content-visibility-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active) {
+    content-visibility: visible !important;
+    contain-intrinsic-size: none !important;
+  }
+
+  /* Test only the 585 parent/page-region boundaries. Leaf card isolation stays
+   * active so this does not collapse into the off-screen/card experiment. */
+  html[data-soridraw-perf-probe="musicnote-region-contain-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(
+    .soridraw-musicnote-region-top,
+    .soridraw-musicnote-list-start-divider,
+    .soridraw-musicnote-theme .soridraw-perf-layout-region-group
+  ) {
+    contain: none !important;
+  }
+}
+
+/* Keep the expanded admin tool compact even with the 592 precision button. */
+.soridraw-split-perf-benchmark-row {
+  flex-wrap: wrap;
+}

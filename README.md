@@ -1591,3 +1591,21 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 종합 진단서에 `[CONTINUOUS RAF POINTER A/B]`가 추가되어 실사용 FPS/P95, 실제 화면반영 commit rate/P95, 입력→반영 지연, >50ms 프레임, Long Task를 비교한다.
 - 이 연속 rAF 방식은 아직 진단 모드에서만 사용하며 일반 사용자는 기존 591 런타임을 유지한다. A/B 종료 후 자동으로 기존 React PointerMove 방식으로 복구한다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 596차 — 뮤직노트 카드 내부 리플로우 이진 A/B
+
+- 기준: `595차 이벤트 rAF vs 연속 rAF 실사용 추적 A/B`.
+- 595차 결과에서 연속 rAF는 실제 pane commit rate를 높였지만 P95와 브라우저 렌더 비용을 악화시켜 기본 런타임 후보에서 제외했다. 591차의 event-rAF + 직접 pane 좌표 런타임은 그대로 유지한다.
+- 관리자 PERF에 `카드 내부 분해` 자동 스캔을 추가했다. 뮤직노트가 열린 분할 화면에서만 실행되며 1400×900 고정 표면, direct geometry, 동일 3세트 중앙값 조건을 사용한다.
+- 카드 내부를 다음 독립 프로필로 분해한다.
+  - 가로 스크롤 컨테이너 OFF: 제목/키워드의 `overflow-x:auto`만 `hidden`으로 바꿔 폭 변경 때 scroll-container 재계산 비용을 분리한다.
+  - 미디어·색상 영역 OFF: 고정 flex 슬롯은 유지하고 보이는 paint만 숨겨 leading media 비용을 분리한다.
+  - 텍스트 본문 전체 OFF: `.soridraw-musicnote-song-copy`의 하위 렌더를 건너뛰어 variable-width text subtree 리플로우 비용을 측정한다.
+  - 장르·날짜·제목 OFF: 텍스트 상단 절반만 분리한다.
+  - 작성자·키워드 OFF: 텍스트 하단 절반만 분리한다.
+  - 우측 액션 영역 OFF: 액션 열의 flex footprint는 유지하고 paint를 숨긴다.
+- FavoritesPage의 기존 카드 레이아웃에는 진단용 식별 클래스 `soridraw-musicnote-song-secondary`만 추가했다. 일반 디자인·간격·동작은 바꾸지 않는다.
+- 모든 시각 실험은 `data-soridraw-perf-probe`가 활성화된 자동 진단 중에만 적용되고 종료 즉시 baseline으로 복구한다.
+- 종합 진단서에 `[MUSICNOTE CARD INTERNAL A/B]` 섹션을 추가했다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

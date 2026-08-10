@@ -923,3 +923,57 @@
 .soridraw-split-perf-benchmark-row {
   flex-wrap: wrap;
 }
+
+/* 596 — Music Note card-internal reflow binary A/B. Admin diagnostic only.
+ * These profiles isolate one card subtree at a time while the fixed 1400×900
+ * direct-geometry benchmark runs. They are removed immediately after the scan.
+ * No normal-user visual or interaction contract is changed. */
+@media (min-width: 1100px) {
+  /* Two horizontal overflow containers exist inside every Music Note card.
+   * Keep content/geometry, but remove scroll-container bookkeeping during drag. */
+  html[data-soridraw-perf-probe="musicnote-card-scroll-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords) {
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+  }
+
+  /* Fixed-size leading media + color control. Hide paint while preserving their
+   * flex slots so the text column receives the same available width. */
+  html[data-soridraw-perf-probe="musicnote-card-media-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(.soridraw-musicnote-song-media, [data-favorite-color-control="true"]) {
+    visibility: hidden !important;
+  }
+
+  /* Skip the complete variable-width text subtree. The outer flex item remains,
+   * while its descendants no longer participate in repeated width reflow. */
+  html[data-soridraw-perf-probe="musicnote-card-copy-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    content-visibility: hidden !important;
+    contain: layout style paint !important;
+  }
+
+  /* Split the text column into top metadata/title and bottom creator/keywords. */
+  html[data-soridraw-perf-probe="musicnote-card-primary-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(.soridraw-musicnote-song-meta, .soridraw-musicnote-song-title) {
+    content-visibility: hidden !important;
+    contain: layout style paint !important;
+  }
+
+  html[data-soridraw-perf-probe="musicnote-card-secondary-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-secondary {
+    content-visibility: hidden !important;
+    contain: layout style paint !important;
+  }
+
+  /* Preserve the action column's flex footprint, but skip its visible paint. */
+  html[data-soridraw-perf-probe="musicnote-card-actions-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-actions {
+    visibility: hidden !important;
+  }
+}

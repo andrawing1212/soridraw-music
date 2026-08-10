@@ -5805,7 +5805,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         </span>
                       </div>
 
-                      <div className="mt-1.5 flex min-w-0 items-center gap-2">
+                      <div className="soridraw-musicnote-song-secondary mt-1.5 flex min-w-0 items-center gap-2">
                         {musicNoteListCreator && (
                           <span className="soridraw-musicnote-song-creator shrink-0 whitespace-nowrap text-[9px] font-bold leading-none text-[#FFC1BC]/90 md:text-[10px] select-none cursor-default">
                             {musicNoteListCreator}

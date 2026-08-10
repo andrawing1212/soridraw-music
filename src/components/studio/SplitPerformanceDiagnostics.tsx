@@ -8,6 +8,7 @@ import {
   setSplitPerfDiagnosticsEnabled,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
+  SPLIT_PERF_INPUT_MODE_EVENT,
   SPLIT_PERF_TOOL_VISIBILITY_EVENT,
   subscribeSplitPerfBenchmarkSummary,
   subscribeSplitPerfResult,
@@ -28,7 +29,32 @@ type PerfProbeProfileId =
   | 'area-result-off'
   | 'area-both-off'
   | 'layout-css-var'
-  | 'layout-direct';
+  | 'layout-direct'
+  | 'musicnote-transition-off'
+  | 'musicnote-row-paint-off'
+  | 'musicnote-content-visibility-off'
+  | 'musicnote-region-contain-off'
+  | 'musicnote-responsive-freeze'
+  | 'musicnote-card-scroll-off'
+  | 'musicnote-card-media-off'
+  | 'musicnote-card-copy-off'
+  | 'musicnote-card-primary-off'
+  | 'musicnote-card-secondary-off'
+  | 'musicnote-card-actions-off'
+  | 'musicnote-text-contain-layout'
+  | 'musicnote-text-contain-inline'
+  | 'musicnote-text-parent-grid'
+  | 'musicnote-text-rows-grid'
+  | 'musicnote-text-row-contain'
+  | 'musicnote-text-grid-contain'
+  | 'musicnote-paint-copy-hidden'
+  | 'musicnote-paint-content-hidden'
+  | 'musicnote-paint-glyphs-off'
+  | 'musicnote-paint-keyword-chips-off'
+  | 'musicnote-paint-title-meta-off'
+  | 'musicnote-text-step-4'
+  | 'musicnote-text-step-8'
+  | 'musicnote-text-step-12';
 type PerfProbeRow = {
   id: PerfProbeProfileId;
   label: string;
@@ -36,6 +62,21 @@ type PerfProbeRow = {
   fps: number;
   p95: number;
   renderPerSecond: number;
+};
+
+type ManualInputRow = {
+  mode: 'react' | 'native';
+  result: SplitPerfResult;
+};
+
+type SamplingInputRow = {
+  mode: 'move' | 'raw';
+  result: SplitPerfResult;
+};
+
+type ContinuousInputRow = {
+  mode: 'event' | 'continuous';
+  result: SplitPerfResult;
 };
 
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
@@ -59,11 +100,59 @@ const PERF_AREA_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }>
   { id: 'area-both-off', label: '좌우 콘텐츠 전체 OFF' },
 ];
 
+const PERF_MUSICNOTE_RESIDUAL_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'musicnote-transition-off', label: '전환효과 전체 OFF' },
+  { id: 'musicnote-row-paint-off', label: '카드 내부 Paint OFF' },
+  { id: 'musicnote-content-visibility-off', label: '오프스크린 최적화 OFF' },
+  { id: 'musicnote-region-contain-off', label: '영역 contain OFF' },
+  { id: 'musicnote-responsive-freeze', label: '반응형 판정 고정' },
+];
+
+const PERF_MUSICNOTE_CARD_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'musicnote-card-scroll-off', label: '가로 스크롤 컨테이너 OFF' },
+  { id: 'musicnote-card-media-off', label: '미디어·색상 영역 OFF' },
+  { id: 'musicnote-card-copy-off', label: '텍스트 본문 전체 OFF' },
+  { id: 'musicnote-card-primary-off', label: '장르·날짜·제목 OFF' },
+  { id: 'musicnote-card-secondary-off', label: '작성자·키워드 OFF' },
+  { id: 'musicnote-card-actions-off', label: '우측 액션 영역 OFF' },
+];
+
+const PERF_MUSICNOTE_TEXT_LAYOUT_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'musicnote-text-contain-layout', label: '텍스트 부모 layout/style 격리' },
+  { id: 'musicnote-text-contain-inline', label: '텍스트 부모 inline-size 격리' },
+  { id: 'musicnote-text-parent-grid', label: '텍스트 부모 Grid 전환' },
+  { id: 'musicnote-text-rows-grid', label: '상·하단 행 Grid 전환' },
+  { id: 'musicnote-text-row-contain', label: '텍스트 3행 개별 격리' },
+  { id: 'musicnote-text-grid-contain', label: 'Grid + inline-size 격리' },
+];
+
+const PERF_MUSICNOTE_TEXT_PAINT_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'musicnote-paint-copy-hidden', label: '텍스트 본문 visibility:hidden' },
+  { id: 'musicnote-paint-content-hidden', label: '텍스트 본문 content-visibility:hidden' },
+  { id: 'musicnote-paint-glyphs-off', label: '글자 Paint만 OFF' },
+  { id: 'musicnote-paint-keyword-chips-off', label: '키워드 칩 Paint만 OFF' },
+  { id: 'musicnote-paint-title-meta-off', label: '제목·메타 Paint만 OFF' },
+];
+
+const PERF_MUSICNOTE_TEXT_REFLOW_BUDGET_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준 · 매 픽셀 재배치' },
+  { id: 'musicnote-text-step-4', label: '텍스트 재배치 4px 단위' },
+  { id: 'musicnote-text-step-8', label: '텍스트 재배치 8px 단위' },
+  { id: 'musicnote-text-step-12', label: '텍스트 재배치 12px 단위' },
+];
+
 const setPerfProbeProfile = (profile: PerfProbeProfileId) => {
   const root = document.documentElement;
   if (profile === 'baseline' || profile === 'layout-css-var' || profile === 'layout-direct') delete root.dataset.soridrawPerfProbe;
   else root.dataset.soridrawPerfProbe = profile;
 };
+
+const getPerfProbeLayoutMode = (profile: PerfProbeProfileId): 'css-var' | 'direct' =>
+  profile === 'layout-css-var' ? 'css-var' : 'direct';
 
 const getBrowserRenderPerSecond = (result: SplitPerfResult) => {
   const durationSeconds = Math.max(0.001, result.durationMs / 1000);
@@ -133,6 +222,7 @@ type PerfEnvironmentSnapshot = {
   viewport: string;
   dpr: number;
   idleHz: number | null;
+  pointerRawUpdateSupported: boolean;
   hardwareConcurrency: number | null;
   deviceMemoryGb: number | null;
   connection: string;
@@ -249,6 +339,9 @@ const collectComputedStyleDiagnostics = (): PerfComputedStyleDiagnostics => {
     { label: 'musicnote-top', selector: '.soridraw-musicnote-region-top' },
     { label: 'musicnote-list', selector: '.soridraw-musicnote-list-start-divider' },
     { label: 'musicnote-card', selector: '.soridraw-musicnote-song-card' },
+    { label: 'musicnote-copy', selector: '.soridraw-musicnote-song-copy' },
+    { label: 'musicnote-copy-layout', selector: '.soridraw-musicnote-song-copy-layout' },
+    { label: 'musicnote-secondary', selector: '.soridraw-musicnote-song-secondary' },
     { label: 'library-page', selector: '.soridraw-library-theme' },
     { label: 'library-top', selector: '.soridraw-library-region-top' },
     { label: 'library-list', selector: '.soridraw-library-list-start-divider' },
@@ -359,6 +452,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     viewport: `${window.innerWidth}×${window.innerHeight}`,
     dpr: Number(window.devicePixelRatio.toFixed(2)),
     idleHz: await estimateIdleRefreshHz(),
+    pointerRawUpdateSupported: ('onpointerrawupdate' in window || 'onpointerrawupdate' in document.documentElement),
     hardwareConcurrency: Number.isFinite(nav.hardwareConcurrency) ? nav.hardwareConcurrency : null,
     deviceMemoryGb: Number.isFinite(nav.deviceMemory) ? nav.deviceMemory! : null,
     connection: connectionLabel,
@@ -375,7 +469,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '591 · direct pane geometry runtime + fixed benchmark A/B',
+    buildProfile: '600 · Music Note staggered 4px text reflow runtime + diagnostics',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -391,13 +485,24 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkMessage, setBenchmarkMessage] = useState('');
   const [probeRunning, setProbeRunning] = useState(false);
-  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout'>('render');
+  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout' | 'musicnote' | 'musicnote-card' | 'musicnote-text' | 'musicnote-paint' | 'musicnote-reflow'>('render');
   const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
   const [renderProbeRows, setRenderProbeRows] = useState<PerfProbeRow[]>([]);
   const [areaProbeRows, setAreaProbeRows] = useState<PerfProbeRow[]>([]);
   const [layoutProbeRows, setLayoutProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNoteProbeRows, setMusicNoteProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNoteCardProbeRows, setMusicNoteCardProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNoteTextProbeRows, setMusicNoteTextProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNotePaintProbeRows, setMusicNotePaintProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNoteReflowProbeRows, setMusicNoteReflowProbeRows] = useState<PerfProbeRow[]>([]);
   const [environment, setEnvironment] = useState<PerfEnvironmentSnapshot | null>(null);
   const [environmentRunning, setEnvironmentRunning] = useState(false);
+  const [manualInputRunning, setManualInputRunning] = useState(false);
+  const [manualInputRows, setManualInputRows] = useState<ManualInputRow[]>([]);
+  const [samplingInputRunning, setSamplingInputRunning] = useState(false);
+  const [samplingInputRows, setSamplingInputRows] = useState<SamplingInputRow[]>([]);
+  const [continuousInputRunning, setContinuousInputRunning] = useState(false);
+  const [continuousInputRows, setContinuousInputRows] = useState<ContinuousInputRow[]>([]);
 
   const probeRunningRef = useRef(false);
   const probeProfilesRef = useRef(PERF_RENDER_PROBE_PROFILES);
@@ -406,9 +511,103 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const probeRowsRef = useRef<PerfProbeRow[]>([]);
   const probeBaselineRef = useRef<SplitPerfBenchmarkSummary | null>(null);
   const probeStartTimerRef = useRef<number | null>(null);
+  const manualInputRunningRef = useRef(false);
+  const manualInputPhaseRef = useRef<'react' | 'native'>('react');
+  const manualInputHandledAtRef = useRef(0);
+  const samplingInputRunningRef = useRef(false);
+  const samplingInputPhaseRef = useRef<'react' | 'raw'>('react');
+  const samplingInputHandledAtRef = useRef(0);
+  const continuousInputRunningRef = useRef(false);
+  const continuousInputPhaseRef = useRef<'react' | 'continuous'>('react');
+  const continuousInputHandledAtRef = useRef(0);
 
   useEffect(() => subscribeSplitPerfResult(setResult), []);
   useEffect(() => subscribeSplitPerfBenchmarkSummary(setBenchmarkSummary), []);
+
+  useEffect(() => {
+    if (!result || !manualInputRunningRef.current) return;
+    if (result.createdAt === manualInputHandledAtRef.current || result.benchmarkSurface !== null) return;
+    if (result.workspaceView !== 'music-note') return;
+    const expectedMode = manualInputPhaseRef.current;
+    if (result.inputMode !== expectedMode) return;
+    if (result.durationMs < 1800) {
+      manualInputHandledAtRef.current = result.createdAt;
+      setBenchmarkMessage(`${expectedMode === 'react' ? 'React' : 'Native'} 입력 기록이 너무 짧습니다 · 분할바를 3~5초 정도 계속 움직인 뒤 놓으세요.`);
+      return;
+    }
+
+    manualInputHandledAtRef.current = result.createdAt;
+    setManualInputRows((current) => [...current.filter((row) => row.mode !== expectedMode), { mode: expectedMode, result }]);
+    if (expectedMode === 'react') {
+      manualInputPhaseRef.current = 'native';
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'native' } }));
+      setBenchmarkMessage('실사용 입력 A/B 2/2 · Native 입력입니다. 같은 느낌으로 분할바를 3~5초 계속 움직인 뒤 놓으세요.');
+      return;
+    }
+
+    manualInputRunningRef.current = false;
+    setManualInputRunning(false);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('실사용 입력 A/B 완료 · 실제 마우스 입력 경로의 React vs Native 차이를 기록했습니다.');
+  }, [result]);
+
+  useEffect(() => {
+    if (!result || !samplingInputRunningRef.current) return;
+    if (result.createdAt === samplingInputHandledAtRef.current || result.benchmarkSurface !== null) return;
+    if (result.workspaceView !== 'music-note') return;
+    const expectedMode = samplingInputPhaseRef.current;
+    if (result.inputMode !== expectedMode) return;
+    if (result.durationMs < 1800) {
+      samplingInputHandledAtRef.current = result.createdAt;
+      setBenchmarkMessage(`${expectedMode === 'react' ? 'PointerMove' : 'PointerRawUpdate'} 기록이 너무 짧습니다 · 분할바를 3~5초 정도 계속 움직인 뒤 놓으세요.`);
+      return;
+    }
+
+    samplingInputHandledAtRef.current = result.createdAt;
+    const rowMode: SamplingInputRow['mode'] = expectedMode === 'raw' ? 'raw' : 'move';
+    setSamplingInputRows((current) => [...current.filter((row) => row.mode !== rowMode), { mode: rowMode, result }]);
+    if (expectedMode === 'react') {
+      samplingInputPhaseRef.current = 'raw';
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'raw' } }));
+      setBenchmarkMessage('입력 샘플링 A/B 2/2 · PointerRawUpdate입니다. 같은 느낌과 속도로 분할바를 3~5초 계속 움직인 뒤 놓으세요.');
+      return;
+    }
+
+    samplingInputRunningRef.current = false;
+    continuousInputRunningRef.current = false;
+    setSamplingInputRunning(false);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('입력 샘플링 A/B 완료 · 멈춘 구간을 제외한 실제 이동 중 입력률/샘플률/화면 반영률을 기록했습니다.');
+  }, [result]);
+
+
+  useEffect(() => {
+    if (!result || !continuousInputRunningRef.current) return;
+    if (result.createdAt === continuousInputHandledAtRef.current || result.benchmarkSurface !== null) return;
+    if (result.workspaceView !== 'music-note') return;
+    const expectedMode = continuousInputPhaseRef.current;
+    if (result.inputMode !== expectedMode) return;
+    if (result.durationMs < 1800) {
+      continuousInputHandledAtRef.current = result.createdAt;
+      setBenchmarkMessage(`${expectedMode === 'react' ? '현재 이벤트 rAF' : '연속 rAF'} 기록이 너무 짧습니다 · 분할바를 3~5초 정도 계속 움직인 뒤 놓으세요.`);
+      return;
+    }
+
+    continuousInputHandledAtRef.current = result.createdAt;
+    const rowMode: ContinuousInputRow['mode'] = expectedMode === 'continuous' ? 'continuous' : 'event';
+    setContinuousInputRows((current) => [...current.filter((row) => row.mode !== rowMode), { mode: rowMode, result }]);
+    if (expectedMode === 'react') {
+      continuousInputPhaseRef.current = 'continuous';
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'continuous' } }));
+      setBenchmarkMessage('연속 rAF A/B 2/2 · 연속 rAF 추적 방식입니다. 같은 느낌과 속도로 분할바를 3~5초 계속 움직인 뒤 놓으세요.');
+      return;
+    }
+
+    continuousInputRunningRef.current = false;
+    setContinuousInputRunning(false);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('연속 rAF A/B 완료 · 실제 손 드래그의 화면 반영률과 P95를 비교했습니다.');
+  }, [result]);
 
   const stopProbe = (restoreBaseline = true) => {
     probeRunningRef.current = false;
@@ -426,7 +625,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
 
   useEffect(() => () => {
     probeRunningRef.current = false;
+    manualInputRunningRef.current = false;
+    samplingInputRunningRef.current = false;
+    continuousInputRunningRef.current = false;
     setPerfProbeProfile('baseline');
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
     if (probeStartTimerRef.current !== null) window.clearTimeout(probeStartTimerRef.current);
   }, []);
 
@@ -486,7 +689,12 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setProbeRows(nextRows);
     if (probeKind === 'render') setRenderProbeRows(nextRows);
     else if (probeKind === 'area') setAreaProbeRows(nextRows);
-    else setLayoutProbeRows(nextRows);
+    else if (probeKind === 'layout') setLayoutProbeRows(nextRows);
+    else if (probeKind === 'musicnote') setMusicNoteProbeRows(nextRows);
+    else if (probeKind === 'musicnote-card') setMusicNoteCardProbeRows(nextRows);
+    else if (probeKind === 'musicnote-text') setMusicNoteTextProbeRows(nextRows);
+    else if (probeKind === 'musicnote-paint') setMusicNotePaintProbeRows(nextRows);
+    else setMusicNoteReflowProbeRows(nextRows);
     if (probeIndexRef.current === 0) probeBaselineRef.current = benchmarkSummary;
 
     const nextIndex = probeIndexRef.current + 1;
@@ -496,18 +704,28 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         ? '영역 스캔 완료 · 렌더 비용이 크게 떨어지는 영역이 실제 병목 후보입니다.'
         : probeKind === 'layout'
           ? '좌표 A/B 완료 · 같은 1400×900 표면에서 CSS 변수와 직접 좌표를 비교했습니다.'
-          : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
+          : probeKind === 'musicnote'
+            ? '뮤직노트 정밀 스캔 완료 · 끊김을 가장 크게 줄인 항목만 실제 최적화 후보로 사용합니다.'
+            : probeKind === 'musicnote-card'
+              ? '카드 내부 분해 완료 · 폭 변경 때 비용을 가장 크게 줄인 카드 하위 영역을 실제 최적화 후보로 사용합니다.'
+              : probeKind === 'musicnote-text'
+                ? '텍스트 구조 A/B 완료 · 디자인을 숨기지 않고 부모 레이아웃/contain 구조만 비교했습니다.'
+                : probeKind === 'musicnote-paint'
+                  ? '텍스트 Layout/Paint A/B 완료 · 자리와 배치를 유지한 Paint 제거와 Layout+Paint 제거를 분리 비교했습니다.'
+                  : probeKind === 'musicnote-reflow'
+                    ? '텍스트 재배치 주기 A/B 완료 · 분할바/카드 외형은 실시간 유지하고 텍스트 내부 폭 계산만 4/8/12px 단위로 비교했습니다.'
+                    : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
       return;
     }
 
     probeIndexRef.current = nextIndex;
     const nextProfile = profiles[nextIndex];
     setPerfProbeProfile(nextProfile.id);
-    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
+    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : probeKind === 'musicnote-card' ? '카드 내부 분해' : probeKind === 'musicnote-text' ? '텍스트 구조 A/B' : probeKind === 'musicnote-paint' ? 'Layout/Paint A/B' : probeKind === 'musicnote-reflow' ? '텍스트 재배치 A/B' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
     probeStartTimerRef.current = window.setTimeout(() => {
       probeStartTimerRef.current = null;
       if (!probeRunningRef.current) return;
-      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: nextProfile.id === 'layout-direct' ? 'direct' : 'css-var' } }));
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: getPerfProbeLayoutMode(nextProfile.id) } }));
     }, 420);
   }, [benchmarkSummary, probeKind]);
 
@@ -572,10 +790,80 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
   };
 
-  const runProbeScan = (kind: 'render' | 'area' | 'layout') => {
+  const runManualInputAB = () => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current) return;
-    const profiles = kind === 'area' ? PERF_AREA_PROBE_PROFILES : kind === 'layout' ? PERF_LAYOUT_PROBE_PROFILES : PERF_RENDER_PROBE_PROFILES;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
+    if (!document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage('실사용 입력 A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
+      return;
+    }
+    manualInputRunningRef.current = true;
+    manualInputPhaseRef.current = 'react';
+    manualInputHandledAtRef.current = 0;
+    setManualInputRows([]);
+    setManualInputRunning(true);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('실사용 입력 A/B 1/2 · 현재 React 입력입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
+  };
+
+  const runSamplingInputAB = () => {
+    if (!ensureBenchmarkReady()) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
+    if (!document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage('입력 샘플링 A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
+      return;
+    }
+    if (!('onpointerrawupdate' in window || 'onpointerrawupdate' in document.documentElement)) {
+      setBenchmarkMessage('이 브라우저는 PointerRawUpdate를 지원하지 않습니다. Chrome/Edge 최신 버전에서 테스트하세요.');
+      return;
+    }
+    samplingInputRunningRef.current = true;
+    samplingInputPhaseRef.current = 'react';
+    samplingInputHandledAtRef.current = 0;
+    setSamplingInputRows([]);
+    setSamplingInputRunning(true);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('입력 샘플링 A/B 1/2 · PointerMove입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
+  };
+
+  const runContinuousInputAB = () => {
+    if (!ensureBenchmarkReady()) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
+    if (!document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage('연속 rAF A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
+      return;
+    }
+    continuousInputRunningRef.current = true;
+    continuousInputPhaseRef.current = 'react';
+    continuousInputHandledAtRef.current = 0;
+    setContinuousInputRows([]);
+    setContinuousInputRunning(true);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('연속 rAF A/B 1/2 · 현재 이벤트 기반 rAF입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
+  };
+
+  const runProbeScan = (kind: 'render' | 'area' | 'layout' | 'musicnote' | 'musicnote-card' | 'musicnote-text' | 'musicnote-paint' | 'musicnote-reflow') => {
+    if (!ensureBenchmarkReady()) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
+    if ((kind === 'musicnote' || kind === 'musicnote-card' || kind === 'musicnote-text' || kind === 'musicnote-paint' || kind === 'musicnote-reflow') && !document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage(`${kind === 'musicnote-card' ? '카드 내부 분해' : kind === 'musicnote-text' ? '텍스트 구조 A/B' : kind === 'musicnote-paint' ? 'Layout/Paint A/B' : kind === 'musicnote-reflow' ? '텍스트 재배치 A/B' : '뮤직노트 정밀 스캔'}은 뮤직노트가 열린 분할 화면에서 실행하세요.`);
+      return;
+    }
+    const profiles = kind === 'area'
+      ? PERF_AREA_PROBE_PROFILES
+      : kind === 'layout'
+        ? PERF_LAYOUT_PROBE_PROFILES
+        : kind === 'musicnote'
+          ? PERF_MUSICNOTE_RESIDUAL_PROFILES
+          : kind === 'musicnote-card'
+            ? PERF_MUSICNOTE_CARD_PROFILES
+            : kind === 'musicnote-text'
+              ? PERF_MUSICNOTE_TEXT_LAYOUT_PROFILES
+              : kind === 'musicnote-paint'
+                ? PERF_MUSICNOTE_TEXT_PAINT_PROFILES
+                : kind === 'musicnote-reflow'
+                  ? PERF_MUSICNOTE_TEXT_REFLOW_BUDGET_PROFILES
+                  : PERF_RENDER_PROBE_PROFILES;
     probeProfilesRef.current = profiles;
     probeRowsRef.current = [];
     probeBaselineRef.current = null;
@@ -585,12 +873,17 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setProbeRows([]);
     if (kind === 'render') setRenderProbeRows([]);
     else if (kind === 'area') setAreaProbeRows([]);
-    else setLayoutProbeRows([]);
+    else if (kind === 'layout') setLayoutProbeRows([]);
+    else if (kind === 'musicnote') setMusicNoteProbeRows([]);
+    else if (kind === 'musicnote-card') setMusicNoteCardProbeRows([]);
+    else if (kind === 'musicnote-text') setMusicNoteTextProbeRows([]);
+    else if (kind === 'musicnote-paint') setMusicNotePaintProbeRows([]);
+    else setMusicNoteReflowProbeRows([]);
     probeRunningRef.current = true;
     setProbeRunning(true);
     setPerfProbeProfile(profiles[0].id);
-    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
-    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: profiles[0].id === 'layout-direct' ? 'direct' : 'css-var' } }));
+    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : kind === 'musicnote' ? '뮤직노트 정밀' : kind === 'musicnote-card' ? '카드 내부 분해' : kind === 'musicnote-text' ? '텍스트 구조 A/B' : kind === 'musicnote-paint' ? 'Layout/Paint A/B' : kind === 'musicnote-reflow' ? '텍스트 재배치 A/B' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: getPerfProbeLayoutMode(profiles[0].id) } }));
   };
 
   const runEnvironmentDiagnostics = async () => {
@@ -615,7 +908,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       `host=${snapshot.host}`,
       `mode=${snapshot.mode} prod=${snapshot.prod} assetMode=${snapshot.assetMode}`,
       `buildProfile=${snapshot.buildProfile} jsMinify=${snapshot.jsMinifyMode} cssMinify=${snapshot.cssMinifyMode}`,
-      `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'}`,
+      `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'} pointerRawUpdate=${snapshot.pointerRawUpdateSupported}`,
       `CPU=${snapshot.hardwareConcurrency ?? '-'} memoryGB=${snapshot.deviceMemoryGb ?? '-'}`,
       `SW controller=${snapshot.swController} registrations=${snapshot.swRegistrations} cacheNames=${snapshot.cacheNames ?? '-'}`,
       `JS local=${snapshot.scriptCount} transferKB=${snapshot.scriptTransferKb} decodedKB=${snapshot.scriptDecodedKb}`,
@@ -685,6 +978,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           `browserRenderPerSec=${(browserRender / durationSeconds).toFixed(1)}ms/s loaf=${current.loafCount}/${current.loafTotalMs}ms blocking=${current.loafBlockingTotalMs}ms`,
           `forcedStyleLayout=${current.forcedStyleLayoutTotalMs}ms max=${current.forcedStyleLayoutMaxMs}ms`,
           `flush=${current.flushAvgMs}/${current.flushMaxMs}ms apply=${current.applyAvgMs}/${current.applyMaxMs}ms contentCommit/divider=${current.contentCommitCount}/${current.dividerOnlyCount}`,
+          `pointerMode=${current.inputMode ?? '-'} events=${current.pointerEventCount} rate=${current.pointerEventsPerSecond}/s coalesced=${current.pointerCoalescedCount} intervalAvg/P95=${current.pointerIntervalAvgMs}/${current.pointerIntervalP95Ms}ms activeDuration=${current.pointerActiveDurationMs}ms activeEventRate=${current.pointerActiveEventsPerSecond}/s activeSampleRate=${current.pointerActiveSamplesPerSecond}/s pauseGaps=${current.pointerPauseGapCount} commitRate=${current.pointerCommitsPerSecond}/s commitP95=${current.pointerCommitIntervalP95Ms}ms batchAvg/max=${current.pointerBatchAvg}/${current.pointerBatchMax} inputToCommitAvg/P95/max=${current.inputToCommitAvgMs}/${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
           `DOM total=${current.domNodes} builder=${current.builderNodes} result=${current.resultNodes} heapMB=${current.heapMb ?? '-'}`,
           `regions musicNoteControls=${current.regionNodes.musicNoteControls} musicNoteList=${current.regionNodes.musicNoteList} libraryControls=${current.regionNodes.libraryControls} libraryList=${current.regionNodes.libraryList} externalStudioUi=${current.regionNodes.externalStudioUi} other=${current.regionNodes.other}`,
         );
@@ -701,7 +995,39 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       } else {
         lines.push('미측정 · 자동 테스트를 먼저 실행하세요.');
       }
-      lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
+      lines.push(
+        '',
+        ...formatProbeLines('RENDER A/B', renderProbeRows),
+        '',
+        ...formatProbeLines('AREA A/B', areaProbeRows),
+        '',
+        ...formatProbeLines('LAYOUT A/B', layoutProbeRows),
+        '',
+        ...formatProbeLines('MUSICNOTE RESIDUAL A/B', musicNoteProbeRows),
+        '',
+        ...formatProbeLines('MUSICNOTE CARD INTERNAL A/B', musicNoteCardProbeRows),
+        '',
+        ...formatProbeLines('MUSICNOTE TEXT LAYOUT A/B', musicNoteTextProbeRows),
+        '',
+        ...formatProbeLines('MUSICNOTE TEXT LAYOUT VS PAINT A/B', musicNotePaintProbeRows),
+        '',
+        ...formatProbeLines('MUSICNOTE TEXT REFLOW BUDGET A/B', musicNoteReflowProbeRows),
+        '',
+        '[REAL POINTER INPUT A/B]',
+        ...(manualInputRows.length
+          ? manualInputRows.map(({ mode, result: row }) => `mode=${mode} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} rate=${row.pointerEventsPerSecond}/s activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms coalesced=${row.pointerCoalescedCount} intervalAvg/P95=${row.pointerIntervalAvgMs}/${row.pointerIntervalP95Ms}ms batchAvg/max=${row.pointerBatchAvg}/${row.pointerBatchMax} inputToCommitAvg/P95/max=${row.inputToCommitAvgMs}/${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
+          : ['미측정 · 실사용 입력 A/B를 실행하세요.']),
+        '',
+        '[POINTER SAMPLING A/B]',
+        ...(samplingInputRows.length
+          ? samplingInputRows.map(({ mode, result: row }) => `mode=${mode === 'move' ? 'pointermove' : 'pointerrawupdate'} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} totalRate=${row.pointerEventsPerSecond}/s activeDuration=${row.pointerActiveDurationMs}ms activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s pauseGaps=${row.pointerPauseGapCount} commitCount=${row.pointerCommitCount} commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms inputToCommitP95/max=${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
+          : ['미측정 · 입력 샘플링 A/B를 실행하세요.']),
+        '',
+        '[CONTINUOUS RAF POINTER A/B]',
+        ...(continuousInputRows.length
+          ? continuousInputRows.map(({ mode, result: row }) => `mode=${mode === 'event' ? 'event-rAF' : 'continuous-rAF'} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s commitCount=${row.pointerCommitCount} commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms inputToCommitP95/max=${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms over50=${row.over50ms} longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
+          : ['미측정 · 연속 rAF A/B를 실행하세요.']),
+      );
       await navigator.clipboard.writeText(lines.join('\n'));
       setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
     } catch (error) {
@@ -719,7 +1045,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         <button type="button" onClick={toggleEnabled} className={enabled ? 'is-on' : ''}>
           PERF {enabled ? 'ON' : 'OFF'}
         </button>
-        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : '렌더'} 스캔 중` : verdict}</strong>
+        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : probeKind === 'musicnote-card' ? '카드 내부' : probeKind === 'musicnote-text' ? '텍스트 구조' : probeKind === 'musicnote-paint' ? 'Layout/Paint' : probeKind === 'musicnote-reflow' ? '텍스트 재배치' : '렌더'} 스캔 중` : verdict}</strong>
         <button type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? '진단 펼치기' : '진단 접기'}>
           {collapsed ? '＋' : '－'}
         </button>
@@ -739,13 +1065,37 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={() => runProbeScan('layout')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'layout' ? '좌표 A/B 중…' : '좌표 A/B'}
             </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote' ? '뮤직노트 정밀 중…' : '뮤직노트 정밀'}
+            </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote-card')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote-card' ? '카드 내부 분해 중…' : '카드 내부 분해'}
+            </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote-text')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote-text' ? '텍스트 구조 A/B 중…' : '텍스트 구조 A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote-paint')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote-paint' ? 'Layout/Paint A/B 중…' : 'Layout/Paint A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote-reflow')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote-reflow' ? '텍스트 재배치 A/B 중…' : '텍스트 재배치 A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={runManualInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
+              {manualInputRunning ? `실사용 입력 ${manualInputRows.length + 1}/2` : '실사용 입력 A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={runSamplingInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
+              {samplingInputRunning ? `입력 샘플링 ${samplingInputRows.length + 1}/2` : '입력 샘플링 A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={runContinuousInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
+              {continuousInputRunning ? `연속 rAF ${continuousInputRows.length + 1}/2` : '연속 rAF A/B'}
+            </button>
             <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
             </button>
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 고정 표면 · 동일 DOM 3세트 · 렌더/영역/좌표 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
+            <span>자동: 1400×900 고정 · 실제런타임: 텍스트 4px/4그룹 분산 · 진단: 4/8/12px · 입력: Move/Raw/rAF</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -783,6 +1133,12 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     <span>강제 Style/Layout</span><b>{displayResult.loafSupported ? `${displayResult.forcedStyleLayoutTotalMs} / max ${displayResult.forcedStyleLayoutMaxMs}ms` : '-'}</b>
                     <span>느린 입력 이벤트</span><b>{displayResult.eventTimingSupported ? `${displayResult.slowEventCount}회 · max ${displayResult.slowEventMaxMs}ms` : '미지원'}</b>
                     <span>입력 지연 평균/최대</span><b>{displayResult.eventTimingSupported ? `${displayResult.inputDelayAvgMs}/${displayResult.inputDelayMaxMs}ms` : '-'}</b>
+                    <span>실마우스 입력률</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerEventsPerSecond}/s · ${displayResult.inputMode ?? '-'}` : '-'}</b>
+                    <span>이동중 이벤트/샘플률</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerActiveEventsPerSecond}/s · ${displayResult.pointerActiveSamplesPerSecond}/s` : '-'}</b>
+                    <span>이동중 화면반영률</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerCommitsPerSecond}/s · P95 ${displayResult.pointerCommitIntervalP95Ms}ms` : '-'}</b>
+                    <span>정지구간 제외/감지</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerActiveDurationMs}ms · gap ${displayResult.pointerPauseGapCount}` : '-'}</b>
+                    <span>입력 묶음 평균/최대</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerBatchAvg}/${displayResult.pointerBatchMax}` : '-'}</b>
+                    <span>입력→반영 P95/최대</span><b>{displayResult.pointerEventCount ? `${displayResult.inputToCommitP95Ms}/${displayResult.inputToCommitMaxMs}ms` : '-'}</b>
                     <span>JS flush 평균/최대</span><b>{displayResult.flushAvgMs}/{displayResult.flushMaxMs}ms</b>
                     <span>실제 폭 반영 / 선만</span><b>{displayResult.contentCommitCount} / {displayResult.dividerOnlyCount}</b>
                     <span>apply 평균/최대</span><b>{displayResult.applyAvgMs}/{displayResult.applyMaxMs}ms</b>
@@ -802,6 +1158,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                         <span><i>JS minify</i><b>{environment.jsMinifyMode}</b></span>
                         <span><i>CSS minify</i><b>{environment.cssMinifyMode}</b></span>
                         <span><i>Idle Hz</i><b>{environment.idleHz ?? '-'}Hz</b></span>
+                        <span><i>PointerRaw</i><b>{environment.pointerRawUpdateSupported ? '지원' : '미지원'}</b></span>
                         <span><i>SW / Cache</i><b>{environment.swController ? 'CTRL' : '없음'} · {environment.swRegistrations}/{environment.cacheNames ?? '-'}</b></span>
                         <span><i>JS</i><b>{environment.scriptCount}개 · {environment.scriptDecodedKb}KB</b></span>
                         <span><i>CSS</i><b>{environment.cssCount}개 · rules {environment.cssRules ?? '-'}</b></span>
@@ -821,7 +1178,21 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   )}
                   {probeRows.length > 0 && (
                     <details open>
-                      <summary>{probeKind === 'area' ? '영역 이진 A/B — 기준 대비 렌더 비용' : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
+                      <summary>{probeKind === 'area'
+                        ? '영역 이진 A/B — 기준 대비 렌더 비용'
+                        : probeKind === 'layout'
+                          ? '좌표 A/B — 기준 대비 렌더 비용'
+                          : probeKind === 'musicnote'
+                            ? '뮤직노트 잔여 병목 A/B — 기준 대비 렌더 비용'
+                            : probeKind === 'musicnote-card'
+                              ? '뮤직노트 카드 내부 A/B — 기준 대비 렌더 비용'
+                              : probeKind === 'musicnote-text'
+                                ? '뮤직노트 텍스트 구조 A/B — 기준 대비 렌더 비용'
+                                : probeKind === 'musicnote-paint'
+                                  ? '뮤직노트 텍스트 Layout/Paint A/B — 기준 대비 렌더 비용'
+                                  : probeKind === 'musicnote-reflow'
+                                    ? '뮤직노트 텍스트 재배치 주기 A/B — 기준 대비 렌더 비용'
+                                    : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
                       <div className="soridraw-split-perf-probe-grid">
                         {probeRows.map((row) => {
                           const delta = probeBaselineRender && row.id !== 'baseline'
@@ -836,6 +1207,54 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                             </div>
                           );
                         })}
+                      </div>
+                    </details>
+                  )}
+
+                  {manualInputRows.length > 0 && (
+                    <details open>
+                      <summary>실사용 Pointer A/B — 실제 마우스 입력 경로</summary>
+                      <div className="soridraw-split-perf-probe-grid">
+                        {manualInputRows.map(({ mode, result: row }) => (
+                          <div className="soridraw-split-perf-probe-row" key={mode}>
+                            <span>{mode === 'react' ? 'React onPointerMove' : 'Native PointerEvent'}</span>
+                            <b>{row.estimatedFps}fps · P95 {row.p95FrameMs}ms</b>
+                            <i>{row.pointerEventsPerSecond}/s · batch {row.pointerBatchAvg}/{row.pointerBatchMax}</i>
+                            <em>입력→반영 P95 {row.inputToCommitP95Ms}ms · max {row.inputToCommitMaxMs}ms</em>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  {samplingInputRows.length > 0 && (
+                    <details open>
+                      <summary>입력 샘플링 A/B — PointerMove vs PointerRawUpdate</summary>
+                      <div className="soridraw-split-perf-probe-grid">
+                        {samplingInputRows.map(({ mode, result: row }) => (
+                          <div className="soridraw-split-perf-probe-row" key={mode}>
+                            <span>{mode === 'move' ? 'PointerMove' : 'PointerRawUpdate'}</span>
+                            <b>{row.estimatedFps}fps · P95 {row.p95FrameMs}ms</b>
+                            <i>이동중 event/sample {row.pointerActiveEventsPerSecond}/{row.pointerActiveSamplesPerSecond}/s</i>
+                            <em>화면반영 {row.pointerCommitsPerSecond}/s · commit P95 {row.pointerCommitIntervalP95Ms}ms · pause gap {row.pointerPauseGapCount}</em>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
+                  {continuousInputRows.length > 0 && (
+                    <details open>
+                      <summary>연속 rAF A/B — 이벤트 예약 vs 화면 프레임 추적</summary>
+                      <div className="soridraw-split-perf-probe-grid">
+                        {continuousInputRows.map(({ mode, result: row }) => (
+                          <div className="soridraw-split-perf-probe-row" key={mode}>
+                            <span>{mode === 'event' ? '현재 이벤트 rAF' : '연속 rAF 추적'}</span>
+                            <b>{row.estimatedFps}fps · P95 {row.p95FrameMs}ms</b>
+                            <i>화면반영 {row.pointerCommitsPerSecond}/s · commit P95 {row.pointerCommitIntervalP95Ms}ms</i>
+                            <em>입력→반영 P95 {row.inputToCommitP95Ms}ms · &gt;50ms {row.over50ms}회</em>
+                          </div>
+                        ))}
                       </div>
                     </details>
                   )}
@@ -880,7 +1299,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">589: JS/CSS minify를 모두 정상 복구했습니다. 환경 진단/종합 진단서는 DEV·PROD의 실제 computed style 비용 속성 개수, 핵심 pane·Music Note·Library 대상 스타일, stylesheet 적용 순서를 함께 기록해 production cascade 차이를 직접 비교합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">599: 591 직접 pane 좌표 런타임은 유지합니다. 598에서 Paint가 아니라 텍스트 내부 Layout 재계산이 병목으로 확인되어, 분할바·카드 외형은 매 프레임 그대로 움직이고 카드 중앙 텍스트 내부 폭 계산만 4/8/12px 단위로 줄여 비교합니다. 진단 종료 즉시 정확한 원래 폭으로 복구합니다.</p>
             </>
           )}
         </div>

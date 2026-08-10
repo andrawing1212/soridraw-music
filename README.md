@@ -1441,3 +1441,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 측정 결과에 측정 시간, 50ms 초과 비율, Long Task ms/s, 브라우저 비JS 렌더 ms/s를 추가했다.
 - 관리자 > 앱 설정에 `분할 성능 진단 도구` 표시/숨김 토글을 추가했다. 로컬 브라우저 설정으로 저장하며 일반 사용자에게 PERF 패널은 표시하지 않는다.
 - Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않았다.
+
+
+## 580차 메모
+- 579 자동 벤치마크에서 4초 측정 구간과 겹치던 App 최상위 3.6초 명령창 placeholder 갱신을 성능 병목 후보로 분리했다.
+- placeholder 순환 타이머는 이제 `/studio`의 `create` 화면에서만 존재하며, Music Note/Library/Recent에서는 타이머 자체를 만들지 않는다.
+- Lite V2 분할 드래그 중에는 create 화면에서도 placeholder 상태 갱신을 건너뛰어 분할 hot path에 상위 React commit이 끼어들지 않게 했다.
+- 관리자 PERF 토글/자동 벤치마크는 유지한다. UI 디자인/Firebase 저장 구조는 변경하지 않았다.

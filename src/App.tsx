@@ -7219,11 +7219,20 @@ const toggleCycleVariantSelection = (
   const [commandPlaceholderIndex, setCommandPlaceholderIndex] = useState(0);
 
   useEffect(() => {
+    // 580: this placeholder belongs only to the create workspace. Previously
+    // the top-level App state advanced every 3.6s even while Music Note or
+    // Library was active. Because App owns the routed Studio tree, that tiny
+    // cosmetic tick could schedule a large React commit in the middle of a
+    // split drag/benchmark. Keep the exact create-screen behavior, but do not
+    // run the timer when the command input is not actually on screen.
+    if (location.pathname !== '/studio' || studioWorkspaceView !== 'create') return;
+
     const timer = window.setInterval(() => {
+      if (document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       setCommandPlaceholderIndex((prev) => (prev + 1) % commandPlaceholderExamples.length);
     }, 3600);
     return () => window.clearInterval(timer);
-  }, [commandPlaceholderExamples.length]);
+  }, [commandPlaceholderExamples.length, location.pathname, studioWorkspaceView]);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
   const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [englishMixRatio, setEnglishMixRatio] = useState(10);

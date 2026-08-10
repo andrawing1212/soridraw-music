@@ -1648,3 +1648,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 진단 중 바깥 `.soridraw-musicnote-song-copy`는 실제 카드 폭을 계속 따라가고 `overflow:hidden`으로 내부 포맷팅 박스를 클립한다. 텍스트 내부 폭만 bucket 경계에서 갱신하며, 드래그 종료 즉시 inline width를 제거해 정확한 최종 폭/원래 디자인으로 복구한다.
 - 591 직접 pane 좌표 런타임, Library, Recent, Classic, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않았다.
 - 이 단계는 진단 전용이며 4/8/12px 중 어떤 값을 실제 기본 런타임에 적용할지는 Vercel PROD 결과와 육안 확인 후 결정한다.
+
+
+## 600차 — 뮤직노트 텍스트 재배치 실제 런타임 적용
+- 599차에서 렌더 비용 약 37~40% 감소가 확인된 텍스트 재배치 예산을 진단 전용에서 실제 런타임으로 승격했습니다.
+- 단순 4px 버킷에서 모든 카드가 동시에 재배치되며 P95가 튀던 문제를 피하기 위해 카드들을 4개 위상으로 나눠 1px씩 엇갈리게 재배치합니다.
+- 분할바/카드 외형은 기존 591 직접 좌표 방식으로 매 프레임 실시간 이동합니다. 텍스트 내부만 최대 3px의 임시 폭 차이를 허용하며 드래그 종료 즉시 inline width를 제거해 정확한 최종 레이아웃을 복구합니다.
+- 기존 관리자 성능 진단 도구와 4/8/12px A/B는 유지합니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

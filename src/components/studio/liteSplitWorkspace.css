@@ -1124,6 +1124,29 @@
   display: contents;
 }
 
+
+/* 600 — actual Music Note runtime optimization (not diagnostic).
+ * 599 proved that reducing text-width reflow removes ~40% of browser render
+ * work, but updating every card on the same bucket boundary created visible
+ * P95 spikes. The runtime now keeps the card shell/divider live while the text
+ * formatting box is updated in four staggered 1px phases (4px cycle total).
+ * The temporary width lag is at most 3px and is removed immediately on drag end. */
+@media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace[data-workspace-view="music-note"][data-musicnote-text-runtime="stagger-4px"].is-dragging
+  .soridraw-musicnote-song-copy {
+    overflow: hidden !important;
+  }
+
+  .soridraw-lite-studio-split-workspace[data-workspace-view="music-note"][data-musicnote-text-runtime="stagger-4px"].is-dragging
+  .soridraw-musicnote-song-copy-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    align-self: flex-start !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+}
+
 /* 599 — Music Note text reflow budget A/B. Admin diagnostic only.
  * The outer copy flex item continues to follow the real card width every frame.
  * The inner text formatting box is clipped by that outer item and only receives

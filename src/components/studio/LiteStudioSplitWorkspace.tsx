@@ -52,12 +52,21 @@ type BenchmarkLayoutMode = 'css-var' | 'direct';
 type PointerInputMode = 'react' | 'native' | 'raw' | 'continuous';
 type MusicNoteTextReflowStep = 0 | 4 | 8 | 12;
 
+const MUSICNOTE_RUNTIME_REFLOW_STEP: MusicNoteTextReflowStep = 4;
+const MUSICNOTE_RUNTIME_REFLOW_GROUPS = 4;
+
+type MusicNoteTextReflowLayoutEntry = {
+  element: HTMLElement;
+  phase: number;
+  lastBucket: number | null;
+};
+
 type MusicNoteTextReflowBudgetState = {
   profile: string;
   step: MusicNoteTextReflowStep;
   pane: 'builder' | 'result' | null;
-  lastBucketWidth: number | null;
-  layouts: HTMLElement[];
+  staggerGroups: number;
+  layouts: MusicNoteTextReflowLayoutEntry[];
 };
 
 const readMusicNoteTextReflowStep = (): MusicNoteTextReflowStep => {
@@ -235,36 +244,47 @@ export default function LiteStudioSplitWorkspace({
     profile: '',
     step: 0,
     pane: null,
-    lastBucketWidth: null,
+    staggerGroups: 1,
     layouts: [],
   });
 
   const resetMusicNoteTextReflowBudget = useCallback(() => {
     const state = musicNoteTextReflowBudgetRef.current;
-    for (const layout of state.layouts) layout.style.removeProperty('width');
+    for (const entry of state.layouts) entry.element.style.removeProperty('width');
+    layoutRef.current?.removeAttribute('data-musicnote-text-runtime');
     musicNoteTextReflowBudgetRef.current = {
       profile: '',
       step: 0,
       pane: null,
-      lastBucketWidth: null,
+      staggerGroups: 1,
       layouts: [],
     };
   }, []);
 
   const syncMusicNoteTextReflowBudget = useCallback((builderWidth: number, resultWidth: number) => {
-    if (!isSplitPerfDiagnosticsEnabled()) {
-      if (musicNoteTextReflowBudgetRef.current.layouts.length) resetMusicNoteTextReflowBudget();
-      return;
-    }
-    const step = readMusicNoteTextReflowStep();
-    const profile = document.documentElement.dataset.soridrawPerfProbe || '';
+    const diagnosticStep = isSplitPerfDiagnosticsEnabled() ? readMusicNoteTextReflowStep() : 0;
+    const runtimeEnabled = workspaceView === 'music-note' && draggingRef.current;
+    const step: MusicNoteTextReflowStep = diagnosticStep || (runtimeEnabled ? MUSICNOTE_RUNTIME_REFLOW_STEP : 0);
+    const profile = diagnosticStep
+      ? (document.documentElement.dataset.soridrawPerfProbe || `diagnostic-step-${diagnosticStep}`)
+      : runtimeEnabled
+        ? 'runtime-600-stagger-4px'
+        : '';
+    const staggerGroups = diagnosticStep ? 1 : runtimeEnabled ? MUSICNOTE_RUNTIME_REFLOW_GROUPS : 1;
+
     if (!step) {
       if (musicNoteTextReflowBudgetRef.current.layouts.length) resetMusicNoteTextReflowBudget();
       return;
     }
 
     let state = musicNoteTextReflowBudgetRef.current;
-    if (state.profile !== profile || state.step !== step || !state.pane || !state.layouts.length) {
+    if (
+      state.profile !== profile
+      || state.step !== step
+      || state.staggerGroups !== staggerGroups
+      || !state.pane
+      || !state.layouts.length
+    ) {
       const page = document.querySelector<HTMLElement>('.soridraw-musicnote-page-shell');
       if (!page) {
         if (state.layouts.length) resetMusicNoteTextReflowBudget();
@@ -272,28 +292,39 @@ export default function LiteStudioSplitWorkspace({
       }
       const pane: 'builder' | 'result' = page.closest('.soridraw-lite-studio-builder-pane') ? 'builder' : 'result';
       resetMusicNoteTextReflowBudget();
-      const layouts = Array.from(document.querySelectorAll<HTMLElement>('.soridraw-musicnote-song-copy-layout'));
-      state = { profile, step, pane, lastBucketWidth: null, layouts };
+      const elements = Array.from(document.querySelectorAll<HTMLElement>('.soridraw-musicnote-song-copy-layout'));
+      const layouts = elements.map((element, index) => ({
+        element,
+        phase: staggerGroups > 1 ? index % staggerGroups : 0,
+        lastBucket: null,
+      }));
+      state = { profile, step, pane, staggerGroups, layouts };
       musicNoteTextReflowBudgetRef.current = state;
+      if (runtimeEnabled && !diagnosticStep) layoutRef.current?.setAttribute('data-musicnote-text-runtime', 'stagger-4px');
     }
 
     const paneWidth = state.pane === 'builder' ? builderWidth : resultWidth;
-    const bucketWidth = Math.round(paneWidth / step) * step;
-    if (state.lastBucketWidth === bucketWidth) return;
-    state.lastBucketWidth = bucketWidth;
+    const phaseStride = state.staggerGroups > 1 ? state.step / state.staggerGroups : 0;
 
-    // 599 diagnostic: the outer flex item keeps tracking the real pane every
-    // frame. Only the inner text formatting box receives a new width when the
-    // pane crosses the selected pixel bucket. Reading clientWidth here is
-    // intentional: it pays the text-layout cost at the bucket boundary instead
-    // of every 1px pane change, while the outer card/divider remain fully live.
-    for (const inner of state.layouts) {
+    // 600 runtime: keep the divider/card shell truly live, but distribute the
+    // expensive Music Note text formatting work across four 1px-offset phases.
+    // Each card still receives its exact current outer width when its phase is
+    // due, so the approved layout is never permanently approximated. The max
+    // temporary text-width lag is 3px, and pointer-up removes every inline width
+    // immediately. Diagnostic 4/8/12px profiles intentionally keep their old
+    // all-at-once behavior for historical comparison.
+    for (const entry of state.layouts) {
+      const phaseOffset = entry.phase * phaseStride;
+      const bucket = Math.floor((paneWidth + phaseOffset) / state.step);
+      if (entry.lastBucket === bucket) continue;
+      entry.lastBucket = bucket;
+      const inner = entry.element;
       const outer = inner.parentElement as HTMLElement | null;
       if (!outer || !outer.isConnected) continue;
       const width = outer.clientWidth;
       if (width > 0) inner.style.setProperty('width', `${width}px`, 'important');
     }
-  }, [resetMusicNoteTextReflowBudget]);
+  }, [resetMusicNoteTextReflowBudget, workspaceView]);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -923,7 +954,7 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: `Lite V2 · direct geometry + ${pointerInputModeRef.current} pointer input (599)`,
+      engine: `Lite V2 · direct geometry + staggered Music Note text reflow + ${pointerInputModeRef.current} pointer input (600)`,
       builder: builderRef.current,
       result: resultRef.current,
       inputMode: pointerInputModeRef.current,
@@ -1473,6 +1504,7 @@ export default function LiteStudioSplitWorkspace({
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio-direct"
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        data-workspace-view={workspaceView}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
         } as React.CSSProperties}

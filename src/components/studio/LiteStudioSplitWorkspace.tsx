@@ -42,6 +42,9 @@ const PANE_MODE_HYSTERESIS = 16;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
+const BENCHMARK_SURFACE_WIDTH = 1400;
+const BENCHMARK_SURFACE_HEIGHT = 900;
+type BenchmarkLayoutMode = 'css-var' | 'direct';
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -196,6 +199,7 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkFrameRef = useRef<number | null>(null);
   const benchmarkTimerRef = useRef<number | null>(null);
   const benchmarkRunningRef = useRef(false);
+  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -507,6 +511,45 @@ export default function LiteStudioSplitWorkspace({
     actionInsetsRef.current = null;
   }, []);
 
+  const clearDirectBenchmarkGeometry = useCallback(() => {
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    const splitter = splitterRef.current;
+    builder?.style.removeProperty('width');
+    builder?.style.removeProperty('left');
+    builder?.style.removeProperty('right');
+    result?.style.removeProperty('width');
+    result?.style.removeProperty('left');
+    result?.style.removeProperty('right');
+    splitter?.style.removeProperty('left');
+    layoutRef.current?.removeAttribute('data-benchmark-layout-mode');
+  }, []);
+
+  const writeLiveSplitGeometry = useCallback((builderWidth: number, resultWidth: number) => {
+    const layout = layoutRef.current;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    const splitter = splitterRef.current;
+    if (!layout || !builder || !result) return;
+
+    if (benchmarkLayoutModeRef.current === 'direct') {
+      layout.dataset.benchmarkLayoutMode = 'direct';
+      // Diagnostic-only path: avoid mutating the inherited split custom property.
+      // The same visible geometry is written directly to the three owners.
+      builder.style.setProperty('left', '0px', 'important');
+      builder.style.setProperty('right', 'auto', 'important');
+      builder.style.setProperty('width', `${builderWidth}px`, 'important');
+      result.style.setProperty('left', `${builderWidth}px`, 'important');
+      result.style.setProperty('right', '0px', 'important');
+      result.style.setProperty('width', `${resultWidth}px`, 'important');
+      splitter?.style.setProperty('left', `${Math.max(0, builderWidth - 8)}px`, 'important');
+      return;
+    }
+
+    if (layout.dataset.benchmarkLayoutMode === 'direct') clearDirectBenchmarkGeometry();
+    layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+  }, [clearDirectBenchmarkGeometry]);
+
   const applyPercent = useCallback((rawPercent: number, live = false) => {
     const layout = layoutRef.current;
     const builder = builderRef.current;
@@ -523,7 +566,7 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
-    layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+    writeLiveSplitGeometry(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
@@ -568,7 +611,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -731,7 +774,9 @@ export default function LiteStudioSplitWorkspace({
       window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_STATUS_EVENT, { detail: { state, message } }));
     };
 
-    const handleBenchmarkRequest = () => {
+    const handleBenchmarkRequest = (requestEvent: Event) => {
+      const requestDetail = (requestEvent as CustomEvent<{ layoutMode?: BenchmarkLayoutMode }>).detail;
+      const requestedLayoutMode: BenchmarkLayoutMode = requestDetail?.layoutMode === 'direct' ? 'direct' : 'css-var';
       if (benchmarkRunningRef.current || draggingRef.current) {
         emitBenchmarkStatus('error', '이미 분할 테스트가 진행 중입니다.');
         return;
@@ -749,9 +794,49 @@ export default function LiteStudioSplitWorkspace({
         return;
       }
 
+      const benchmarkSurface = `${BENCHMARK_SURFACE_WIDTH}×${BENCHMARK_SURFACE_HEIGHT}`;
+      const savedSurfaceStyles = ['width', 'min-width', 'max-width', 'height', 'min-height', 'max-height', '--soridraw-studio-isolated-height'].map((property) => ({
+        property,
+        value: layout.style.getPropertyValue(property),
+        priority: layout.style.getPropertyPriority(property),
+      }));
+      const originalBuilderScrollTop = builder.scrollTop;
+      const originalResultScrollTop = result.scrollTop;
+      const originalBenchmarkSurfaceFlag = layout.dataset.perfBenchmarkSurface;
+
+      const restoreBenchmarkSurface = () => {
+        benchmarkLayoutModeRef.current = 'css-var';
+        clearDirectBenchmarkGeometry();
+        for (const saved of savedSurfaceStyles) {
+          if (saved.value) layout.style.setProperty(saved.property, saved.value, saved.priority);
+          else layout.style.removeProperty(saved.property);
+        }
+        if (originalBenchmarkSurfaceFlag === undefined) delete layout.dataset.perfBenchmarkSurface;
+        else layout.dataset.perfBenchmarkSurface = originalBenchmarkSurfaceFlag;
+        builder.scrollTop = originalBuilderScrollTop;
+        result.scrollTop = originalResultScrollTop;
+      };
+
+      // 590: benchmark geometry is fully owned by the tool. DEV/PROD can have
+      // different browser/window sizes, but the measured split surface is always
+      // exactly the same and the user's original geometry is restored afterward.
+      layout.dataset.perfBenchmarkSurface = 'true';
+      layout.style.setProperty('width', `${BENCHMARK_SURFACE_WIDTH}px`, 'important');
+      layout.style.setProperty('min-width', `${BENCHMARK_SURFACE_WIDTH}px`, 'important');
+      layout.style.setProperty('max-width', `${BENCHMARK_SURFACE_WIDTH}px`, 'important');
+      layout.style.setProperty('height', `${BENCHMARK_SURFACE_HEIGHT}px`, 'important');
+      layout.style.setProperty('min-height', `${BENCHMARK_SURFACE_HEIGHT}px`, 'important');
+      layout.style.setProperty('max-height', `${BENCHMARK_SURFACE_HEIGHT}px`, 'important');
+      layout.style.setProperty('--soridraw-studio-isolated-height', `${BENCHMARK_SURFACE_HEIGHT}px`);
+      builder.scrollTop = 0;
+      result.scrollTop = 0;
+      benchmarkLayoutModeRef.current = requestedLayoutMode;
+
       const rect = layout.getBoundingClientRect();
-      if (rect.width <= 0) {
-        emitBenchmarkStatus('error', '분할 영역의 폭을 측정할 수 없습니다.');
+      const surfacePass = Math.abs(rect.width - BENCHMARK_SURFACE_WIDTH) <= 1 && Math.abs(rect.height - BENCHMARK_SURFACE_HEIGHT) <= 1;
+      if (!surfacePass) {
+        restoreBenchmarkSurface();
+        emitBenchmarkStatus('error', `벤치마크 표면 고정 실패 · 실제 ${Math.round(rect.width)}×${Math.round(rect.height)}px`);
         return;
       }
 
@@ -779,7 +864,8 @@ export default function LiteStudioSplitWorkspace({
       const lowPercent = clampToBounds(32, bounds);
       const highPercent = clampToBounds(68, bounds);
       if (highPercent - lowPercent < 8) {
-        emitBenchmarkStatus('error', '현재 화면 폭에서는 자동 벤치마크 이동 폭이 너무 좁습니다.');
+        restoreBenchmarkSurface();
+        emitBenchmarkStatus('error', '고정 벤치마크 표면에서 이동 폭이 너무 좁습니다.');
         return;
       }
 
@@ -797,8 +883,17 @@ export default function LiteStudioSplitWorkspace({
       document.body.style.userSelect = 'none';
       window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
 
-      const restoreOriginalPercent = () => {
-        applyPercent(originalPercent, false);
+      const restoreOriginalState = () => {
+        percentRef.current = originalPercent;
+        restoreBenchmarkSurface();
+        // Restore the real workspace geometry immediately so the diagnostic
+        // never leaves a one-frame visual jump after the fixed surface closes.
+        const restoredRect = layout.getBoundingClientRect();
+        if (restoredRect.width > 0) {
+          metricsRef.current = { ...metricsRef.current, left: restoredRect.left, width: restoredRect.width };
+          const restoredBuilderWidth = Math.round(restoredRect.width * (originalPercent / 100));
+          writeLiveSplitGeometry(restoredBuilderWidth, Math.max(0, restoredRect.width - restoredBuilderWidth));
+        }
         try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(originalPercent)); } catch { /* optional */ }
         window.requestAnimationFrame(refreshMetrics);
       };
@@ -811,9 +906,9 @@ export default function LiteStudioSplitWorkspace({
           benchmarkTimerRef.current = null;
         }
         finishDrag();
-        restoreOriginalPercent();
+        restoreOriginalState();
         if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
-        emitBenchmarkStatus('done', `자동 테스트 완료 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}% · 3세트 중앙값`);
+        emitBenchmarkStatus('done', `자동 테스트 완료 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'} · 3세트 중앙값`);
       };
 
       const runLegs = (
@@ -873,6 +968,12 @@ export default function LiteStudioSplitWorkspace({
           return { valid: false, reason: `${workspaceView === 'music-note' ? '뮤직노트' : '라이브러리'} 리스트 DOM 0` };
         }
         if (measured.resultNodes <= 0) return { valid: false, reason: '우측 패널 DOM 0' };
+        if (measured.benchmarkSurface !== benchmarkSurface || measured.benchmarkSurfacePass !== true) {
+          return { valid: false, reason: `벤치마크 표면 불일치(${measured.benchmarkSurface || '없음'})` };
+        }
+        if (measured.layoutMode !== requestedLayoutMode) {
+          return { valid: false, reason: `좌표 모드 불일치(${measured.layoutMode || '없음'})` };
+        }
 
         if (!fingerprint) {
           fingerprint = { targetNodes, resultNodes: measured.resultNodes, viewport: measured.viewport };
@@ -899,7 +1000,7 @@ export default function LiteStudioSplitWorkspace({
           benchmarkTimerRef.current = null;
         }
         finishDrag();
-        restoreOriginalPercent();
+        restoreOriginalState();
         if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
         emitBenchmarkStatus('error', message);
       };
@@ -916,11 +1017,14 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 583 · set ${setIndex + 1}/3 · attempt ${attemptCount} · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
+            engine: `Lite V2 · auto benchmark 590 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
+            benchmarkSurface,
+            benchmarkSurfacePass: surfacePass,
+            layoutMode: requestedLayoutMode,
           });
-          emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · 동일 DOM 검증 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
+          emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}`);
           runLegs(4, 1000, true, () => {
             finishSplitPerfDrag();
             const measured = getLastSplitPerfResult();
@@ -944,7 +1048,7 @@ export default function LiteStudioSplitWorkspace({
         }, 180);
       };
 
-      emitBenchmarkStatus('running', `워밍업 중 · 동일 화면/DOM 조건 검증 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
+      emitBenchmarkStatus('running', `워밍업 · ${benchmarkSurface} PASS · 동일 DOM · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}`);
       runLegs(2, 650, false, () => runMeasurementSet(0));
     };
 
@@ -961,7 +1065,7 @@ export default function LiteStudioSplitWorkspace({
       }
       benchmarkRunningRef.current = false;
     };
-  }, [applyPercent, captureDragViewportAnchors, finishDrag, readExternalControls, refreshMetrics, viewMode, workspaceView]);
+  }, [applyPercent, captureDragViewportAnchors, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, viewMode, workspaceView, writeLiveSplitGeometry]);
 
   useLayoutEffect(() => {
     builderCollapsedRef.current = isBuilderCollapsed;

@@ -26,7 +26,9 @@ type PerfProbeProfileId =
   | 'area-list-off'
   | 'area-builder-off'
   | 'area-result-off'
-  | 'area-both-off';
+  | 'area-both-off'
+  | 'layout-css-var'
+  | 'layout-direct';
 type PerfProbeRow = {
   id: PerfProbeProfileId;
   label: string;
@@ -44,6 +46,11 @@ const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string 
   { id: 'container-off', label: 'Container Query OFF' },
 ];
 
+const PERF_LAYOUT_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'layout-css-var', label: 'CSS 변수 좌표' },
+  { id: 'layout-direct', label: '직접 pane 좌표' },
+];
+
 const PERF_AREA_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
   { id: 'area-list-off', label: '현재 리스트 전체 OFF' },
@@ -54,7 +61,7 @@ const PERF_AREA_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }>
 
 const setPerfProbeProfile = (profile: PerfProbeProfileId) => {
   const root = document.documentElement;
-  if (profile === 'baseline') delete root.dataset.soridrawPerfProbe;
+  if (profile === 'baseline' || profile === 'layout-css-var' || profile === 'layout-direct') delete root.dataset.soridrawPerfProbe;
   else root.dataset.soridrawPerfProbe = profile;
 };
 
@@ -368,7 +375,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '589 · DEV/PROD computed-style cascade',
+    buildProfile: '590 · fixed benchmark surface + layout A/B',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -384,10 +391,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkMessage, setBenchmarkMessage] = useState('');
   const [probeRunning, setProbeRunning] = useState(false);
-  const [probeKind, setProbeKind] = useState<'render' | 'area'>('render');
+  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout'>('render');
   const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
   const [renderProbeRows, setRenderProbeRows] = useState<PerfProbeRow[]>([]);
   const [areaProbeRows, setAreaProbeRows] = useState<PerfProbeRow[]>([]);
+  const [layoutProbeRows, setLayoutProbeRows] = useState<PerfProbeRow[]>([]);
   const [environment, setEnvironment] = useState<PerfEnvironmentSnapshot | null>(null);
   const [environmentRunning, setEnvironmentRunning] = useState(false);
 
@@ -477,26 +485,29 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     probeRowsRef.current = nextRows;
     setProbeRows(nextRows);
     if (probeKind === 'render') setRenderProbeRows(nextRows);
-    else setAreaProbeRows(nextRows);
-    if (profile.id === 'baseline') probeBaselineRef.current = benchmarkSummary;
+    else if (probeKind === 'area') setAreaProbeRows(nextRows);
+    else setLayoutProbeRows(nextRows);
+    if (probeIndexRef.current === 0) probeBaselineRef.current = benchmarkSummary;
 
     const nextIndex = probeIndexRef.current + 1;
     if (nextIndex >= profiles.length) {
       stopProbe(true);
       setBenchmarkMessage(probeKind === 'area'
         ? '영역 스캔 완료 · 렌더 비용이 크게 떨어지는 영역이 실제 병목 후보입니다.'
-        : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
+        : probeKind === 'layout'
+          ? '좌표 A/B 완료 · 같은 1400×900 표면에서 CSS 변수와 직접 좌표를 비교했습니다.'
+          : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
       return;
     }
 
     probeIndexRef.current = nextIndex;
     const nextProfile = profiles[nextIndex];
     setPerfProbeProfile(nextProfile.id);
-    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
+    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
     probeStartTimerRef.current = window.setTimeout(() => {
       probeStartTimerRef.current = null;
       if (!probeRunningRef.current) return;
-      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: nextProfile.id === 'layout-direct' ? 'direct' : 'css-var' } }));
     }, 420);
   }, [benchmarkSummary, probeKind]);
 
@@ -561,10 +572,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
   };
 
-  const runProbeScan = (kind: 'render' | 'area') => {
+  const runProbeScan = (kind: 'render' | 'area' | 'layout') => {
     if (!ensureBenchmarkReady()) return;
     if (benchmarkRunning || probeRunningRef.current) return;
-    const profiles = kind === 'area' ? PERF_AREA_PROBE_PROFILES : PERF_RENDER_PROBE_PROFILES;
+    const profiles = kind === 'area' ? PERF_AREA_PROBE_PROFILES : kind === 'layout' ? PERF_LAYOUT_PROBE_PROFILES : PERF_RENDER_PROBE_PROFILES;
     probeProfilesRef.current = profiles;
     probeRowsRef.current = [];
     probeBaselineRef.current = null;
@@ -573,12 +584,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setProbeKind(kind);
     setProbeRows([]);
     if (kind === 'render') setRenderProbeRows([]);
-    else setAreaProbeRows([]);
+    else if (kind === 'area') setAreaProbeRows([]);
+    else setLayoutProbeRows([]);
     probeRunningRef.current = true;
     setProbeRunning(true);
     setPerfProbeProfile(profiles[0].id);
-    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label} · 약 1분`);
-    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
+    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: profiles[0].id === 'layout-direct' ? 'direct' : 'css-var' } }));
   };
 
   const runEnvironmentDiagnostics = async () => {
@@ -667,6 +679,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         const browserRender = current.hotspots.find((item) => item.label.startsWith('브라우저 렌더/레이아웃/페인트'))?.totalMs || 0;
         lines.push(
           `workspace=${current.workspaceView} duration=${(current.durationMs / 1000).toFixed(2)}s fps=${current.estimatedFps} avg=${current.avgFrameMs}ms p95=${current.p95FrameMs}ms max=${current.maxFrameMs}ms`,
+          `benchmarkSurface=${current.benchmarkSurface ?? '-'} pass=${current.benchmarkSurfacePass ?? '-'} layoutMode=${current.layoutMode ?? '-'}`, 
           `over20/34/50=${current.over20ms}/${current.over34ms}/${current.over50ms} over50Ratio=${((current.over50ms / frameSamples) * 100).toFixed(1)}%`,
           `longTask=${current.longTaskCount}/${current.longTaskTotalMs}ms longTaskPerSec=${(current.longTaskTotalMs / durationSeconds).toFixed(1)}ms/s`,
           `browserRenderPerSec=${(browserRender / durationSeconds).toFixed(1)}ms/s loaf=${current.loafCount}/${current.loafTotalMs}ms blocking=${current.loafBlockingTotalMs}ms`,
@@ -688,7 +701,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       } else {
         lines.push('미측정 · 자동 테스트를 먼저 실행하세요.');
       }
-      lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows));
+      lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
       await navigator.clipboard.writeText(lines.join('\n'));
       setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
     } catch (error) {
@@ -706,7 +719,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         <button type="button" onClick={toggleEnabled} className={enabled ? 'is-on' : ''}>
           PERF {enabled ? 'ON' : 'OFF'}
         </button>
-        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : '렌더'} 스캔 중` : verdict}</strong>
+        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : '렌더'} 스캔 중` : verdict}</strong>
         <button type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? '진단 펼치기' : '진단 접기'}>
           {collapsed ? '＋' : '－'}
         </button>
@@ -723,13 +736,16 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={() => runProbeScan('area')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'area' ? '영역 스캔 중…' : '영역 스캔'}
             </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('layout')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'layout' ? '좌표 A/B 중…' : '좌표 A/B'}
+            </button>
             <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
             </button>
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 동일 DOM 3세트 · 렌더/영역 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
+            <span>자동: 1400×900 고정 표면 · 동일 DOM 3세트 · 렌더/영역/좌표 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -742,6 +758,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     <span>{displayResult.host}</span>
                     <span>{displayResult.workspaceView}</span>
                     <span>{displayResult.viewport} · DPR {displayResult.dpr}</span>
+                    {displayResult.benchmarkSurface && <span>Benchmark Surface {displayResult.benchmarkSurface} · {displayResult.benchmarkSurfacePass ? 'PASS' : 'FAIL'} · {displayResult.layoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}</span>}
                   </div>
                   {benchmarkSummary && (
                     <div className="soridraw-split-perf-set-strip">

@@ -296,12 +296,14 @@ export default function AdminAppSettingsPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-black text-[var(--text-primary)]">품질·성능 진단 도구</h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 렌더/영역 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관하며 앞으로 추가되는 검증 도구도 삭제하지 않고 다시 사용할 수 있게 유지합니다. 589차부터는 production에서 실제 적용되는 computed style·container/contain·효과·transition 수와 stylesheet 적용 순서까지 진단합니다.
+                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 렌더/영역/좌표 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 590차부터 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없고, CSS 변수 좌표와 직접 pane 좌표 방식도 같은 조건에서 비교할 수 있습니다.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-[var(--text-secondary)]">
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">자동 벤치마크</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">렌더 A/B</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">영역 이진 스캔</span>
+                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">좌표 A/B</span>
+                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">1400×900 고정 표면</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">실행 환경·CSS cascade</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">종합 진단서</span>
                 </div>

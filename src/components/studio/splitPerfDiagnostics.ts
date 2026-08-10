@@ -72,6 +72,9 @@ export type SplitPerfResult = {
   resultNodes: number;
   regionNodes: SplitPerfRegionNodes;
   heapMb: number | null;
+  benchmarkSurface: string | null;
+  benchmarkSurfacePass: boolean | null;
+  layoutMode: 'css-var' | 'direct' | null;
   createdAt: number;
 };
 
@@ -109,6 +112,9 @@ type ActiveDrag = {
   builderNodes: number;
   resultNodes: number;
   regionNodes: SplitPerfRegionNodes;
+  benchmarkSurface: string | null;
+  benchmarkSurfacePass: boolean | null;
+  layoutMode: 'css-var' | 'direct' | null;
   rafId: number | null;
 };
 
@@ -378,11 +384,17 @@ export const beginSplitPerfDrag = ({
   engine,
   builder,
   result,
+  benchmarkSurface = null,
+  benchmarkSurfacePass = null,
+  layoutMode = null,
 }: {
   workspaceView?: string;
   engine: string;
   builder: HTMLElement | null;
   result: HTMLElement | null;
+  benchmarkSurface?: string | null;
+  benchmarkSurfacePass?: boolean | null;
+  layoutMode?: 'css-var' | 'direct' | null;
 }) => {
   if (!enabled || typeof window === 'undefined' || typeof document === 'undefined') return;
   if (active?.rafId !== null && active?.rafId !== undefined) window.cancelAnimationFrame(active.rafId);
@@ -412,6 +424,9 @@ export const beginSplitPerfDrag = ({
     builderNodes: builder ? builder.getElementsByTagName('*').length : 0,
     resultNodes: result ? result.getElementsByTagName('*').length : 0,
     regionNodes,
+    benchmarkSurface,
+    benchmarkSurfacePass,
+    layoutMode,
     rafId: null,
   };
   runRafProbe();
@@ -506,6 +521,9 @@ export const finishSplitPerfDrag = () => {
     resultNodes: active.resultNodes,
     regionNodes: active.regionNodes,
     heapMb: heapMb === null ? null : round(heapMb, 1),
+    benchmarkSurface: active.benchmarkSurface,
+    benchmarkSurfacePass: active.benchmarkSurfacePass,
+    layoutMode: active.layoutMode,
     createdAt: Date.now(),
   };
 
@@ -534,7 +552,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 582 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 590 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),

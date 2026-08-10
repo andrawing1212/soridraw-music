@@ -1513,3 +1513,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 환경 패널은 캡처 높이가 과도하게 늘지 않도록 computed-style 요약을 3열로 표시한다.
 - 실제 Studio/Music Note/Library 디자인 및 분할 동작은 변경하지 않았다.
 - Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음.
+
+
+## 590차 — 고정 벤치마크 표면 + 좌표 A/B
+- 자동 분할 벤치마크가 사용자의 브라우저 창 크기와 무관하게 내부 workspace를 1400×900으로 고정한 뒤 측정한다.
+- 좌/우 pane 스크롤은 테스트 시작 시 0으로 맞추고 테스트 종료 후 원래 스크롤, workspace 크기, 분할 비율을 복구한다.
+- 측정 결과에 `Benchmark Surface 1400×900 PASS/FAIL`을 기록하고, 표면 고정 실패 세트는 무효 처리한다.
+- 관리자 PERF에 `좌표 A/B`를 추가했다. 동일한 1400×900/3세트 조건에서 기존 부모 CSS custom property 방식과 builder/result/divider 직접 좌표 적용 방식을 비교한다.
+- 직접 좌표 방식은 진단 중에만 활성화되며 일반 Studio 동작과 디자인은 기존 CSS 변수 방식을 유지한다.
+- 관리자 품질·성능 진단 도구 설명에도 고정 표면과 좌표 A/B를 정리했다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

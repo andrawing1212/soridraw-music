@@ -11750,3 +11750,78 @@ html[data-soridraw-theme="studio-black"] {
     padding-bottom: 136px !important;
   }
 }
+
+/* 561: split-drag performance surgery.
+ * The divider existed long before the recent scroll fixes, so this pass targets
+ * the older hot path itself: keep pointer frames write-only, let the browser
+ * own scroll anchoring, avoid promoting two giant scrolling panes to compositor
+ * layers, skip off-screen card work on every desktop/tablet split, and remove
+ * expensive decorative paint while the divider is held. Final resting visuals
+ * return immediately on pointer-up. Studio Black only. */
+@media (min-width: 1100px) {
+  /* 253 disabled scroll anchoring globally for expandable-card behavior. During
+   * divider drag no card can be clicked (pointer-events are already suspended),
+   * so native anchoring is safe and replaces the old JS rect-read correction. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    overflow-anchor: auto !important;
+  }
+
+  /* `will-change: width/left` cannot make layout-size changes composited, while
+   * translateZ(0) promotes the entire tall pane into a very large GPU surface.
+   * Do not create those giant layers during drag. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    will-change: auto !important;
+    transform: none !important;
+  }
+
+  /* The 309 off-screen containment pass used to start only at 1600px. The
+   * exact same isolated split architecture is active from 1100px, so apply the
+   * optimization to tablet/compact desktop too. */
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane
+  > *,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-builder-pane .soridraw-studio-menu-card,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-result-content
+  > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 240px;
+    contain: layout paint style;
+  }
+
+  /* While the pointer is held, geometry responsiveness matters; decorative
+   * animation, blur/filter and layered shadows do not. Removing them here cuts
+   * paint/composite work without changing the resting design or hit behavior. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *::before,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}

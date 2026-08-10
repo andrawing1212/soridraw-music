@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { FlaskConical, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
+import { FlaskConical, Gauge, Heart, Home, Library, Loader2, ShieldAlert, SlidersHorizontal, User as UserIcon, Zap } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { db } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
+import { readSplitPerfToolVisibility, writeSplitPerfToolVisibility } from '../components/studio/splitPerfDiagnostics';
 import {
   DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
   getNavigationFirestorePayload,
@@ -84,6 +85,7 @@ export default function AdminAppSettingsPage() {
   const [isClicheLoading, setIsClicheLoading] = useState(true);
   const [isSavingCliche, setIsSavingCliche] = useState(false);
   const [clicheMessage, setClicheMessage] = useState('');
+  const [perfToolsVisible, setPerfToolsVisible] = useState(() => readSplitPerfToolVisibility());
 
   const hasUnsavedNavigationChanges = useMemo(
     () => JSON.stringify(savedSettings) !== JSON.stringify(draftSettings),
@@ -281,6 +283,38 @@ export default function AdminAppSettingsPage() {
             >
               {isSavingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               설정 적용
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-[var(--bg-secondary)] p-5 shadow-sm md:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-[#BBA8CA]">
+                <Gauge className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-black text-[var(--text-primary)]">분할 성능 진단 도구</h3>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
+                  관리자 전용 PERF 패널과 자동 분할 벤치마크를 표시합니다. 이 설정은 현재 브라우저에 저장되며 필요할 때 언제든 다시 켤 수 있습니다.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-pressed={perfToolsVisible}
+              onClick={() => {
+                const next = !perfToolsVisible;
+                setPerfToolsVisible(next);
+                writeSplitPerfToolVisibility(next);
+              }}
+              className={`inline-flex min-w-[118px] items-center justify-center rounded-2xl px-5 py-3 text-sm font-black transition-[background-color,color,opacity] ${
+                perfToolsVisible
+                  ? 'bg-[#BBA8CA] text-[#1b161d]'
+                  : 'bg-black/25 text-[var(--text-secondary)] hover:bg-white/[0.06] hover:text-[var(--text-primary)]'
+              }`}
+            >
+              PERF {perfToolsVisible ? '표시' : '숨김'}
             </button>
           </div>
         </div>

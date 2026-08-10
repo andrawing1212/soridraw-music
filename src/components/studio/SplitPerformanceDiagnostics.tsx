@@ -2,26 +2,84 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   getLastSplitPerfResult,
   isSplitPerfDiagnosticsEnabled,
+  readSplitPerfToolVisibility,
   setSplitPerfDiagnosticsEnabled,
+  SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
+  SPLIT_PERF_BENCHMARK_STATUS_EVENT,
+  SPLIT_PERF_TOOL_VISIBILITY_EVENT,
   subscribeSplitPerfResult,
   type SplitPerfResult,
 } from './splitPerfDiagnostics';
 
 const format = (value: number | null, suffix = '') => value === null ? '-' : `${value}${suffix}`;
 
-export default function SplitPerformanceDiagnostics() {
+export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdmin?: boolean }) {
+  const [visible, setVisible] = useState(readSplitPerfToolVisibility());
   const [enabled, setEnabled] = useState(isSplitPerfDiagnosticsEnabled());
   const [result, setResult] = useState<SplitPerfResult | null>(getLastSplitPerfResult());
   const [collapsed, setCollapsed] = useState(false);
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+  const [benchmarkMessage, setBenchmarkMessage] = useState('');
 
   useEffect(() => subscribeSplitPerfResult(setResult), []);
 
+  useEffect(() => {
+    const handleVisibility = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
+      const next = typeof detail?.enabled === 'boolean' ? detail.enabled : readSplitPerfToolVisibility();
+      setVisible(next);
+      if (!next) {
+        setSplitPerfDiagnosticsEnabled(false);
+        setEnabled(false);
+        setBenchmarkRunning(false);
+      } else {
+        setSplitPerfDiagnosticsEnabled(true);
+        setEnabled(true);
+      }
+    };
+    window.addEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleVisibility as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleVisibility as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const handleBenchmarkStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ state?: 'running' | 'done' | 'error'; message?: string }>).detail;
+      if (detail?.state === 'running') setBenchmarkRunning(true);
+      if (detail?.state === 'done' || detail?.state === 'error') setBenchmarkRunning(false);
+      if (detail?.message) setBenchmarkMessage(detail.message);
+    };
+    window.addEventListener(SPLIT_PERF_BENCHMARK_STATUS_EVENT, handleBenchmarkStatus as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_BENCHMARK_STATUS_EVENT, handleBenchmarkStatus as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (!isAdmin || !visible) {
+      setSplitPerfDiagnosticsEnabled(false);
+      setEnabled(false);
+      return;
+    }
+    setSplitPerfDiagnosticsEnabled(true);
+    setEnabled(true);
+  }, [isAdmin, visible]);
+
   const verdict = useMemo(() => {
-    if (!result) return '분할바를 3~5초 왕복하세요';
+    if (!result) return '자동 테스트 권장';
     if (result.estimatedFps >= 55 && result.p95FrameMs <= 20) return '매우 양호';
     if (result.estimatedFps >= 45 && result.p95FrameMs <= 28) return '양호';
     if (result.longTaskCount > 0 || result.p95FrameMs >= 34) return '병목 있음';
     return '추가 최적화 필요';
+  }, [result]);
+
+  const derived = useMemo(() => {
+    if (!result) return null;
+    const frameSamples = Math.max(1, result.rafFrames - 1);
+    const durationSeconds = Math.max(0.001, result.durationMs / 1000);
+    const browserRender = result.hotspots.find((item) => item.label.startsWith('브라우저 렌더/레이아웃/페인트'))?.totalMs || 0;
+    return {
+      over50Ratio: Number(((result.over50ms / frameSamples) * 100).toFixed(1)),
+      longTaskPerSecond: Number((result.longTaskTotalMs / durationSeconds).toFixed(1)),
+      browserRenderPerSecond: Number((browserRender / durationSeconds).toFixed(1)),
+    };
   }, [result]);
 
   const toggleEnabled = () => {
@@ -29,6 +87,22 @@ export default function SplitPerformanceDiagnostics() {
     setSplitPerfDiagnosticsEnabled(next);
     setEnabled(next);
   };
+
+  const runBenchmark = () => {
+    if (!enabled) {
+      setSplitPerfDiagnosticsEnabled(true);
+      setEnabled(true);
+    }
+    if (window.location.pathname !== '/studio') {
+      setBenchmarkMessage('스튜디오의 분할 화면에서 자동 테스트를 실행하세요.');
+      return;
+    }
+    setBenchmarkRunning(true);
+    setBenchmarkMessage('워밍업 후 동일 거리·동일 시간으로 자동 측정합니다.');
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
+  };
+
+  if (!isAdmin || !visible) return null;
 
   return (
     <aside className={`soridraw-split-perf-panel${collapsed ? ' is-collapsed' : ''}`} aria-label="분할 성능 진단">
@@ -43,8 +117,15 @@ export default function SplitPerformanceDiagnostics() {
       </div>
       {!collapsed && (
         <div className="soridraw-split-perf-body">
+          <div className="soridraw-split-perf-benchmark-row">
+            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || !enabled}>
+              {benchmarkRunning ? '자동 테스트 중…' : '자동 테스트'}
+            </button>
+            <span>32% ↔ 68% · 워밍업 1회 · 측정 2왕복</span>
+          </div>
+          {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!result ? (
-            <p>같은 화면·같은 창 크기로 분할바를 빠르게 3~5초 왕복하면 결과가 표시됩니다.</p>
+            <p>자동 테스트를 누르면 사람 손 오차 없이 같은 거리와 같은 시간으로 분할 성능을 측정합니다.</p>
           ) : (
             <>
               <div className="soridraw-split-perf-source">
@@ -53,11 +134,15 @@ export default function SplitPerformanceDiagnostics() {
                 <span>{result.viewport} · DPR {result.dpr}</span>
               </div>
               <div className="soridraw-split-perf-grid">
+                <span>측정 시간</span><b>{(result.durationMs / 1000).toFixed(2)}s</b>
                 <span>추정 FPS</span><b>{result.estimatedFps}</b>
                 <span>평균 프레임</span><b>{result.avgFrameMs}ms</b>
                 <span>P95 / 최악</span><b>{result.p95FrameMs} / {result.maxFrameMs}ms</b>
                 <span>&gt;20 / &gt;34 / &gt;50ms</span><b>{result.over20ms} / {result.over34ms} / {result.over50ms}</b>
+                <span>&gt;50ms 비율</span><b>{derived?.over50Ratio ?? 0}%</b>
                 <span>Long Task</span><b>{result.longTaskCount}회 · {result.longTaskTotalMs}ms</b>
+                <span>Long Task /초</span><b>{derived?.longTaskPerSecond ?? 0}ms/s</b>
+                <span>렌더 비JS /초</span><b>{derived?.browserRenderPerSecond ?? 0}ms/s</b>
                 <span>LoAF</span><b>{result.loafSupported ? `${result.loafCount}회 · ${result.loafTotalMs}ms` : '미지원'}</b>
                 <span>LoAF blocking</span><b>{result.loafSupported ? `${result.loafBlockingTotalMs}ms` : '-'}</b>
                 <span>강제 Style/Layout</span><b>{result.loafSupported ? `${result.forcedStyleLayoutTotalMs} / max ${result.forcedStyleLayoutMaxMs}ms` : '-'}</b>
@@ -97,7 +182,7 @@ export default function SplitPerformanceDiagnostics() {
                   <span>dataset/ARIA</span><b>{result.miscAvgMs}ms</b>
                 </div>
               </details>
-              <p className="soridraw-split-perf-note">576: 573 실시간 경계를 유지한 채 React DOM 교체/전체 카드 스캔 없이 Music Note/Library의 leaf 카드만 브라우저 native isolation으로 분리했습니다. 같은 동작 후 PERF와 체감을 비교하세요.</p>
+              <p className="soridraw-split-perf-note">579: 관리자 앱 설정에서 PERF 도구를 언제든 표시/숨김할 수 있고, 자동 벤치마크는 32↔68% 동일 조건으로 워밍업 후 2왕복을 측정합니다.</p>
             </>
           )}
         </div>

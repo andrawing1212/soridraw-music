@@ -1433,3 +1433,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Lite V2는 `html.soridraw-lite-split-dragging` + workspace `.is-dragging`만 사용하고, 생성바/검색버튼/heartbeat/실제 leaf 카드처럼 필요한 대상만 정확히 지정한다.
 - `useStableContentHeight`는 새 Lite drag marker도 continuous resize로 인식해 드래그 중 높이 재측정이 다시 살아나지 않도록 유지했다.
 - 목표: pointer-down 시 전역 style matching 비용과 배포 환경의 큰 MessagePort/forced-layout spike를 줄이는 1단계 실험.
+
+## 579차 메모
+- 분할 성능 검증을 사람 손 드래그가 아닌 반복 가능한 자동 벤치마크로 표준화했다.
+- PERF 패널의 `자동 테스트`는 기본 32%↔68% 범위를 사용하고, 현재 화면의 안전 범위에 맞춰 자동 보정한다.
+- 워밍업 1왕복(측정 제외) 후 1초/leg 고정 속도로 2왕복을 측정한다. 테스트 후 기존 분할 비율로 복구한다.
+- 측정 결과에 측정 시간, 50ms 초과 비율, Long Task ms/s, 브라우저 비JS 렌더 ms/s를 추가했다.
+- 관리자 > 앱 설정에 `분할 성능 진단 도구` 표시/숨김 토글을 추가했다. 로컬 브라우저 설정으로 저장하며 일반 사용자에게 PERF 패널은 표시하지 않는다.
+- Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않았다.

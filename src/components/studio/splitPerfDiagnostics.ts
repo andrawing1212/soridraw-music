@@ -96,7 +96,28 @@ type ActiveDrag = {
 
 type Listener = (result: SplitPerfResult | null) => void;
 
-let enabled = true; // Temporary diagnostic build. Collection only runs while dragging.
+export const SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY = 'soridraw_admin_split_perf_tools_enabled_v1';
+export const SPLIT_PERF_TOOL_VISIBILITY_EVENT = 'soridraw:split-perf-tool-visibility';
+export const SPLIT_PERF_BENCHMARK_REQUEST_EVENT = 'soridraw:split-perf-benchmark-request';
+export const SPLIT_PERF_BENCHMARK_STATUS_EVENT = 'soridraw:split-perf-benchmark-status';
+
+export const readSplitPerfToolVisibility = () => {
+  if (typeof window === 'undefined') return true;
+  try {
+    const stored = window.localStorage.getItem(SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY);
+    return stored === null ? true : stored === 'true';
+  } catch {
+    return true;
+  }
+};
+
+export const writeSplitPerfToolVisibility = (next: boolean) => {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY, String(next)); } catch { /* optional */ }
+  window.dispatchEvent(new CustomEvent(SPLIT_PERF_TOOL_VISIBILITY_EVENT, { detail: { enabled: next } }));
+};
+
+let enabled = true; // Collection only runs while the admin diagnostic tool is enabled.
 let active: ActiveDrag | null = null;
 let lastResult: SplitPerfResult | null = null;
 const listeners = new Set<Listener>();

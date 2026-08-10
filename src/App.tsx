@@ -14325,7 +14325,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         clearSunoLibrarySignal={clearSunoLibrarySignal}
       />
 
-      <SplitPerformanceDiagnostics />
+      <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
 
       <Routes>
         <Route path="/" element={

@@ -17,7 +17,16 @@ import {
 
 const format = (value: number | null, suffix = '') => value === null ? '-' : `${value}${suffix}`;
 
-type PerfProbeProfileId = 'baseline' | 'effects-off' | 'media-off' | 'list-paint-off' | 'container-off';
+type PerfProbeProfileId =
+  | 'baseline'
+  | 'effects-off'
+  | 'media-off'
+  | 'list-paint-off'
+  | 'container-off'
+  | 'area-list-off'
+  | 'area-builder-off'
+  | 'area-result-off'
+  | 'area-both-off';
 type PerfProbeRow = {
   id: PerfProbeProfileId;
   label: string;
@@ -27,12 +36,20 @@ type PerfProbeRow = {
   renderPerSecond: number;
 };
 
-const PERF_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
   { id: 'effects-off', label: '효과 OFF' },
   { id: 'media-off', label: '이미지 OFF' },
   { id: 'list-paint-off', label: '리스트 Paint OFF' },
   { id: 'container-off', label: 'Container Query OFF' },
+];
+
+const PERF_AREA_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준' },
+  { id: 'area-list-off', label: '현재 리스트 전체 OFF' },
+  { id: 'area-builder-off', label: '왼쪽 pane 전체 OFF' },
+  { id: 'area-result-off', label: '오른쪽 pane 전체 OFF' },
+  { id: 'area-both-off', label: '좌우 콘텐츠 전체 OFF' },
 ];
 
 const setPerfProbeProfile = (profile: PerfProbeProfileId) => {
@@ -56,9 +73,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkMessage, setBenchmarkMessage] = useState('');
   const [probeRunning, setProbeRunning] = useState(false);
+  const [probeKind, setProbeKind] = useState<'render' | 'area'>('render');
   const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
 
   const probeRunningRef = useRef(false);
+  const probeProfilesRef = useRef(PERF_RENDER_PROBE_PROFILES);
   const probeIndexRef = useRef(0);
   const probeHandledSummaryAtRef = useRef(0);
   const probeRowsRef = useRef<PerfProbeRow[]>([]);
@@ -127,7 +146,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     if (benchmarkSummary.createdAt === probeHandledSummaryAtRef.current) return;
     probeHandledSummaryAtRef.current = benchmarkSummary.createdAt;
 
-    const profile = PERF_PROBE_PROFILES[probeIndexRef.current];
+    const profiles = probeProfilesRef.current;
+    const profile = profiles[probeIndexRef.current];
     if (!profile) return;
     const median = benchmarkSummary.median;
     const row: PerfProbeRow = {
@@ -143,22 +163,24 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     if (profile.id === 'baseline') probeBaselineRef.current = benchmarkSummary;
 
     const nextIndex = probeIndexRef.current + 1;
-    if (nextIndex >= PERF_PROBE_PROFILES.length) {
+    if (nextIndex >= profiles.length) {
       stopProbe(true);
-      setBenchmarkMessage('병목 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
+      setBenchmarkMessage(probeKind === 'area'
+        ? '영역 스캔 완료 · 렌더 비용이 크게 떨어지는 영역이 실제 병목 후보입니다.'
+        : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
       return;
     }
 
     probeIndexRef.current = nextIndex;
-    const nextProfile = PERF_PROBE_PROFILES[nextIndex];
+    const nextProfile = profiles[nextIndex];
     setPerfProbeProfile(nextProfile.id);
-    setBenchmarkMessage(`병목 스캔 ${nextIndex + 1}/${PERF_PROBE_PROFILES.length} · ${nextProfile.label}`);
+    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
     probeStartTimerRef.current = window.setTimeout(() => {
       probeStartTimerRef.current = null;
       if (!probeRunningRef.current) return;
       window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
     }, 420);
-  }, [benchmarkSummary]);
+  }, [benchmarkSummary, probeKind]);
 
   useEffect(() => {
     if (!isAdmin || !visible) {
@@ -221,18 +243,21 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
   };
 
-  const runProbeScan = () => {
+  const runProbeScan = (kind: 'render' | 'area') => {
     if (!ensureBenchmarkReady()) return;
     if (benchmarkRunning || probeRunningRef.current) return;
+    const profiles = kind === 'area' ? PERF_AREA_PROBE_PROFILES : PERF_RENDER_PROBE_PROFILES;
+    probeProfilesRef.current = profiles;
     probeRowsRef.current = [];
     probeBaselineRef.current = null;
     probeIndexRef.current = 0;
     probeHandledSummaryAtRef.current = 0;
+    setProbeKind(kind);
     setProbeRows([]);
     probeRunningRef.current = true;
     setProbeRunning(true);
-    setPerfProbeProfile(PERF_PROBE_PROFILES[0].id);
-    setBenchmarkMessage(`병목 스캔 1/${PERF_PROBE_PROFILES.length} · ${PERF_PROBE_PROFILES[0].label} · 약 1분`);
+    setPerfProbeProfile(profiles[0].id);
+    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label} · 약 1분`);
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
   };
 
@@ -244,7 +269,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         <button type="button" onClick={toggleEnabled} className={enabled ? 'is-on' : ''}>
           PERF {enabled ? 'ON' : 'OFF'}
         </button>
-        <strong>{probeRunning ? '병목 스캔 중' : verdict}</strong>
+        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : '렌더'} 스캔 중` : verdict}</strong>
         <button type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? '진단 펼치기' : '진단 접기'}>
           {collapsed ? '＋' : '－'}
         </button>
@@ -255,10 +280,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || !enabled}>
               {benchmarkRunning && !probeRunning ? '자동 테스트 중…' : '자동 테스트'}
             </button>
-            <button type="button" className="is-secondary" onClick={runProbeScan} disabled={benchmarkRunning || probeRunning || !enabled}>
-              {probeRunning ? '병목 스캔 중…' : '병목 스캔'}
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('render')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'render' ? '렌더 스캔 중…' : '렌더 스캔'}
             </button>
-            <span>자동: 3세트 중앙값 · 스캔: 기준/효과/이미지/리스트 Paint/Container Query</span>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('area')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'area' ? '영역 스캔 중…' : '영역 스캔'}
+            </button>
+            <span>자동: 동일 DOM 3세트 중앙값 · 렌더: 효과/이미지/Paint/CQ · 영역: 리스트/좌/우/전체</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -307,7 +335,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                 <section className="soridraw-split-perf-column is-detail-column">
                   {probeRows.length > 0 && (
                     <details open>
-                      <summary>병목 A/B — 기준 대비 렌더 비용</summary>
+                      <summary>{probeKind === 'area' ? '영역 이진 A/B — 기준 대비 렌더 비용' : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
                       <div className="soridraw-split-perf-probe-grid">
                         {probeRows.map((row) => {
                           const delta = probeBaselineRender && row.id !== 'baseline'
@@ -366,7 +394,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">583: 일반 자동 테스트는 동일 DOM 3세트 중앙값을 유지합니다. 병목 스캔은 진단 중에만 시각 요소를 하나씩 임시 제외해 렌더 비용 차이를 비교하며, 완료 즉시 원래 디자인으로 복구합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">584: 자동 테스트는 동일 DOM 3세트 중앙값을 유지합니다. 렌더/영역 스캔은 진단 중에만 대상을 임시 제외하고 완료 즉시 원래 디자인으로 복구합니다. 관리자 품질·성능 진단 도구에서 언제든 다시 켤 수 있습니다.</p>
             </>
           )}
         </div>

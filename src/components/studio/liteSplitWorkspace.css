@@ -729,3 +729,34 @@
   font-style: normal;
   white-space: nowrap;
 }
+
+
+/* 584 — binary region isolation scan. Diagnostic-only.
+ * Keep the actual split boundary moving while skipping whole content regions.
+ * This separates list/page rendering cost from the split/pane shell itself. */
+@media (min-width: 1100px) {
+  html[data-soridraw-perf-probe="area-list-off"]
+  .soridraw-lite-studio-split-workspace
+  :is(.soridraw-musicnote-list-start-divider, .soridraw-library-list-start-divider) {
+    content-visibility: hidden !important;
+    visibility: hidden !important;
+    contain: strict !important;
+  }
+
+  html[data-soridraw-perf-probe="area-builder-off"]
+  .soridraw-lite-studio-split-workspace
+  > .soridraw-studio-builder-pane
+  > :not(.soridraw-studio-pane-masthead-host),
+  html[data-soridraw-perf-probe="area-result-off"]
+  .soridraw-lite-studio-split-workspace
+  > .soridraw-studio-result-pane
+  > :not(.soridraw-studio-pane-masthead-host),
+  html[data-soridraw-perf-probe="area-both-off"]
+  .soridraw-lite-studio-split-workspace
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
+  > :not(.soridraw-studio-pane-masthead-host) {
+    content-visibility: hidden !important;
+    visibility: hidden !important;
+    contain: strict !important;
+  }
+}

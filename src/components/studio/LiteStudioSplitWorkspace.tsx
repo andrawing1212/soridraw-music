@@ -199,7 +199,7 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkFrameRef = useRef<number | null>(null);
   const benchmarkTimerRef = useRef<number | null>(null);
   const benchmarkRunningRef = useRef(false);
-  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
+  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('direct');
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -534,8 +534,8 @@ export default function LiteStudioSplitWorkspace({
 
     if (benchmarkLayoutModeRef.current === 'direct') {
       layout.dataset.benchmarkLayoutMode = 'direct';
-      // Diagnostic-only path: avoid mutating the inherited split custom property.
-      // The same visible geometry is written directly to the three owners.
+      // 591 runtime path: avoid mutating the inherited split custom property.
+      // The same visible geometry is written directly to the three owners only.
       builder.style.setProperty('left', '0px', 'important');
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
@@ -666,10 +666,10 @@ export default function LiteStudioSplitWorkspace({
     lastPixelRef.current = nextPixel;
 
     const nextPercent = (nextPixel / width) * 100;
-    // 573: one real boundary again. The divider and both panes are owned by the
-    // same single local width write on every rAF frame. Smoothness now comes
-    // from reducing the amount of off-screen content the browser must reflow,
-    // not from letting a fake 60fps divider run ahead of 30fps content.
+    // 591: one real boundary, but no inherited split-width mutation. The
+    // builder/result/divider owners receive their own direct pixel geometry in
+    // the same rAF. This keeps the approved live boundary while avoiding a
+    // custom-property invalidation wave through the entire pane subtree.
     applyPercent(nextPercent, true);
     if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
   }, [applyPercent]);
@@ -776,7 +776,7 @@ export default function LiteStudioSplitWorkspace({
 
     const handleBenchmarkRequest = (requestEvent: Event) => {
       const requestDetail = (requestEvent as CustomEvent<{ layoutMode?: BenchmarkLayoutMode }>).detail;
-      const requestedLayoutMode: BenchmarkLayoutMode = requestDetail?.layoutMode === 'direct' ? 'direct' : 'css-var';
+      const requestedLayoutMode: BenchmarkLayoutMode = requestDetail?.layoutMode === 'css-var' ? 'css-var' : 'direct';
       if (benchmarkRunningRef.current || draggingRef.current) {
         emitBenchmarkStatus('error', '이미 분할 테스트가 진행 중입니다.');
         return;
@@ -805,7 +805,7 @@ export default function LiteStudioSplitWorkspace({
       const originalBenchmarkSurfaceFlag = layout.dataset.perfBenchmarkSurface;
 
       const restoreBenchmarkSurface = () => {
-        benchmarkLayoutModeRef.current = 'css-var';
+        benchmarkLayoutModeRef.current = 'direct';
         clearDirectBenchmarkGeometry();
         for (const saved of savedSurfaceStyles) {
           if (saved.value) layout.style.setProperty(saved.property, saved.value, saved.priority);
@@ -831,6 +831,11 @@ export default function LiteStudioSplitWorkspace({
       builder.scrollTop = 0;
       result.scrollTop = 0;
       benchmarkLayoutModeRef.current = requestedLayoutMode;
+      // 591: direct element geometry is now the real Lite V2 runtime path.
+      // The legacy CSS-variable path is retained only for admin A/B diagnosis.
+      // When an A/B run explicitly requests CSS-variable mode, remove the
+      // runtime inline geometry first so the inherited variable owns the panes.
+      if (requestedLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
 
       const rect = layout.getBoundingClientRect();
       const surfacePass = Math.abs(rect.width - BENCHMARK_SURFACE_WIDTH) <= 1 && Math.abs(rect.height - BENCHMARK_SURFACE_HEIGHT) <= 1;
@@ -1017,7 +1022,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 590 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 591 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1244,7 +1249,7 @@ export default function LiteStudioSplitWorkspace({
       <div
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
-        data-split-engine="lite-v2-studio"
+        data-split-engine="lite-v2-studio-direct"
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,

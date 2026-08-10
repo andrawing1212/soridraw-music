@@ -216,3 +216,146 @@
     right: calc(var(--soridraw-studio-result-right, 0px) + 12px) !important;
   }
 }
+
+
+/* 570 — Strong live-resize fast path.
+ * The Studio Lite divider gets its own compositor transform. Heavy pane widths
+ * are committed by JS at ~30fps while this line/hit-area still tracks the
+ * pointer every animation frame. Final geometry is identical on pointer-up. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-splitter[data-compositor-ready="true"],
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:hover,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:active,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:focus,
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:focus-visible {
+    left: 0 !important;
+    transform: translate3d(var(--soridraw-lite-divider-x, 0px), 0, 0) !important;
+    will-change: transform;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * 571 — temporary split-performance diagnostics.
+ * Collection is idle outside an active drag and the panel only re-renders
+ * after pointer-up, so it does not participate in the resize hot path.
+ * -------------------------------------------------------------------------- */
+.soridraw-split-perf-panel {
+  position: fixed;
+  z-index: 260;
+  right: 16px;
+  bottom: 16px;
+  width: min(356px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(20, 20, 21, .96);
+  color: #f1f1f2;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .34);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.soridraw-split-perf-panel.is-collapsed {
+  width: auto;
+}
+
+.soridraw-split-perf-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 8px;
+  background: #242426;
+}
+
+.soridraw-split-perf-head strong {
+  flex: 1;
+  min-width: 0;
+  color: #d8d8da;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.soridraw-split-perf-head button {
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 8px;
+  background: #2c2c2e;
+  color: #a8a8aa;
+  padding: 6px 8px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+
+.soridraw-split-perf-head button.is-on {
+  color: #ffb400;
+}
+
+.soridraw-split-perf-body {
+  padding: 10px 12px 12px;
+}
+
+.soridraw-split-perf-body p {
+  margin: 0;
+  color: #aaaacd;
+}
+
+.soridraw-split-perf-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-bottom: 9px;
+  color: #99999d;
+}
+
+.soridraw-split-perf-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  align-items: baseline;
+}
+
+.soridraw-split-perf-grid span {
+  color: #a5a5a9;
+}
+
+.soridraw-split-perf-grid b {
+  color: #f2f2f3;
+  font-weight: 800;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.soridraw-split-perf-panel details {
+  margin-top: 9px;
+}
+
+.soridraw-split-perf-panel summary {
+  color: #b8b8bb;
+  cursor: pointer;
+  user-select: none;
+}
+
+.soridraw-split-perf-grid.is-detail {
+  margin-top: 7px;
+}
+
+.soridraw-split-perf-note {
+  margin-top: 10px !important;
+  color: #77777d !important;
+}
+
+@media (max-width: 1099px) {
+  .soridraw-split-perf-panel {
+    display: none;
+  }
+}

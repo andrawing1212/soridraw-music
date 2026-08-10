@@ -1390,3 +1390,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note/Library는 분할 중 자체 ResizeObserver + getBoundingClientRect 경로를 만들지 않고 Lite V2가 이미 계산한 pane width를 직접 받는다.
 - `soridraw-lite-pane-width`는 PC/tablet/mobile responsive 경계를 실제로 넘을 때만 전달한다. 안정된 초기/리사이즈 커밋에서는 1회 강제 동기화한다.
 - 디자인/CSS/분할선/스크롤/저장 구조는 변경하지 않았다.
+
+## 571차 — 분할 성능 진단 빌드
+- Lite V2 분할 동작 자체는 570차와 동일하게 유지하고, 성능 측정 코드만 추가했다.
+- 분할 드래그 중 별도 React 렌더는 하지 않는다. rAF 타임스탬프와 Long Task, JS hot-path 시간만 ref/메모리에 수집하고 pointer-up 뒤 패널을 갱신한다.
+- 진단 패널 표시: 추정 FPS, 평균/P95/최악 frame gap, 20/34/50ms 초과 프레임, Long Task, split flush/apply 시간, 콘텐츠 실제 폭 반영 횟수, DOM node 수, JS heap.
+- AI Studio 프리뷰와 Vercel 테스트앱에서 같은 창 크기·같은 페이지·같은 3~5초 왕복 드래그 후 패널을 캡처해 비교한다.
+- 임시 진단 UI이며 Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않는다.

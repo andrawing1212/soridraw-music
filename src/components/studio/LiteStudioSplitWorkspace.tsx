@@ -10,6 +10,13 @@ import React, {
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
 import './liteSplitWorkspace.css';
+import {
+  beginSplitPerfDrag,
+  finishSplitPerfDrag,
+  isSplitPerfDragActive,
+  recordSplitPerfApply,
+  recordSplitPerfFlush,
+} from './splitPerfDiagnostics';
 
 const WIDE_STORAGE_KEY = 'soridraw_lite_studio_split_percent_v2';
 const TABLET_STORAGE_KEY = 'soridraw_lite_studio_tablet_split_percent_v2';
@@ -30,6 +37,10 @@ const PANE_MODE_HYSTERESIS = 16;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
+// 570: the divider itself follows the pointer every animation frame, while
+// expensive pane reflow is capped at ~30fps. This keeps the interaction live
+// but cuts heavy Music Note / Library layout work roughly in half.
+const LIVE_LAYOUT_INTERVAL_MS = 32;
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -146,6 +157,7 @@ export default function LiteStudioSplitWorkspace({
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
+  const lastLiveLayoutAtRef = useRef(0);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastViewportHeightRef = useRef<number | null>(null);
@@ -230,6 +242,17 @@ export default function LiteStudioSplitWorkspace({
     host.style.top = '0px';
     host.style.width = `${Math.max(0, Math.round(window.innerWidth))}px`;
     host.style.height = `${Math.max(0, Math.round(window.innerHeight))}px`;
+  }, []);
+
+  const syncDividerVisual = useCallback((builderWidth: number) => {
+    const splitter = splitterRef.current;
+    if (!splitter) return;
+    // The hit-area/divider is the only thing that must follow the pointer at
+    // display refresh rate. Move it on its own compositor layer; do not wake
+    // either large pane just to keep the line under the cursor.
+    const translateX = Math.max(-8, Math.round(builderWidth) - 8);
+    splitter.style.setProperty('--soridraw-lite-divider-x', `${translateX}px`);
+    if (splitter.dataset.compositorReady !== 'true') splitter.dataset.compositorReady = 'true';
   }, []);
 
   const refreshIsolationHeight = useCallback(() => {
@@ -387,6 +410,8 @@ export default function LiteStudioSplitWorkspace({
     const result = resultRef.current;
     if (!layout || !builder || !result) return percentRef.current;
 
+    const perfEnabled = isSplitPerfDragActive();
+    const perfStart = perfEnabled ? performance.now() : 0;
     const bounds = getSplitBounds(metricsRef.current.width);
     const nextPercent = clampToBounds(rawPercent, bounds);
     percentRef.current = nextPercent;
@@ -395,15 +420,19 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
+    syncDividerVisual(builderWidth);
     layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
     // 568: keep the Lite V2 divider inside the workspace, exactly like the
     // original Music Note/Library performance probe. The divider position is
     // therefore owned by the same single workspace write instead of a body
     // portal/fixed viewport coordinate.
     layout.style.setProperty('--soridraw-lite-split-percent', `${builderWidth}px`);
+    const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
+    const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live) syncExternalGeometry(builderWidth, splitterLeft);
+    const perfAfterExternal = perfEnabled ? performance.now() : 0;
 
     const root = document.documentElement;
     const edgeTolerancePercent = (1.5 / safeWidth) * 100;
@@ -431,8 +460,18 @@ export default function LiteStudioSplitWorkspace({
       lastAriaPercentRef.current = roundedPercent;
       splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
     }
+    if (perfEnabled) {
+      const perfEnd = performance.now();
+      recordSplitPerfApply({
+        totalMs: perfEnd - perfStart,
+        layoutWriteMs: perfAfterLayoutWrite - perfStart,
+        responsiveMs: perfAfterResponsive - perfAfterLayoutWrite,
+        externalMs: perfAfterExternal - perfAfterResponsive,
+        miscMs: perfEnd - perfAfterExternal,
+      });
+    }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, syncDividerVisual, syncExternalGeometry, syncPaneModes]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -473,6 +512,7 @@ export default function LiteStudioSplitWorkspace({
   }, [refreshMetrics]);
 
   const flushPointer = useCallback(() => {
+    const perfStart = isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
@@ -484,8 +524,24 @@ export default function LiteStudioSplitWorkspace({
     const nextPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
     if (lastPixelRef.current === nextPixel) return;
     lastPixelRef.current = nextPixel;
-    applyPercent((nextPixel / width) * 100, true);
-  }, [applyPercent]);
+
+    const nextPercent = (nextPixel / width) * 100;
+    // 570 strong fast path: keep the visible divider at full rAF speed, but
+    // do not force both large panes (and all of their responsive descendants)
+    // to reflow every display frame. The content still resizes continuously at
+    // ~30fps, so there is no release-only jump.
+    percentRef.current = nextPercent;
+    syncDividerVisual(nextPixel);
+
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let contentCommitted = false;
+    if (lastLiveLayoutAtRef.current === 0 || now - lastLiveLayoutAtRef.current >= LIVE_LAYOUT_INTERVAL_MS) {
+      lastLiveLayoutAtRef.current = now;
+      applyPercent(nextPercent, true);
+      contentCommitted = true;
+    }
+    if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, contentCommitted);
+  }, [applyPercent, syncDividerVisual]);
 
   const schedulePointer = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -502,6 +558,10 @@ export default function LiteStudioSplitWorkspace({
       frameRef.current = null;
     }
     flushPointer();
+    // Always commit the exact pointer position before ending the drag. The
+    // throttled live layout may be one short interval behind the visual line.
+    applyPercent(percentRef.current, true);
+    lastLiveLayoutAtRef.current = 0;
 
     draggingRef.current = false;
     pointerIdRef.current = -1;
@@ -516,9 +576,10 @@ export default function LiteStudioSplitWorkspace({
     clearLiveExternalGeometry();
     readExternalControls();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
+    finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls]);
+  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -550,7 +611,14 @@ export default function LiteStudioSplitWorkspace({
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
+    beginSplitPerfDrag({
+      workspaceView,
+      engine: 'Lite V2 · 60fps divider / ~30fps content (570)',
+      builder: builderRef.current,
+      result: resultRef.current,
+    });
     lastPixelRef.current = null;
+    lastLiveLayoutAtRef.current = 0;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');

@@ -81,6 +81,7 @@ import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
+import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
 import StudioSplitEngineWorkspace, { type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
@@ -14322,6 +14323,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
         clearSunoLibrarySignal={clearSunoLibrarySignal}
       />
+
+      <SplitPerformanceDiagnostics />
 
       <Routes>
         <Route path="/" element={

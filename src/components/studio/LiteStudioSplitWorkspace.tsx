@@ -16,7 +16,6 @@ import {
   isSplitPerfDragActive,
   recordSplitPerfApply,
   recordSplitPerfFlush,
-  recordSplitPerfLiveDomSnapshot,
 } from './splitPerfDiagnostics';
 
 const WIDE_STORAGE_KEY = 'soridraw_lite_studio_split_percent_v2';
@@ -154,7 +153,6 @@ export default function LiteStudioSplitWorkspace({
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
-  const perfLiveDomCapturedRef = useRef(false);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastViewportHeightRef = useRef<number | null>(null);
@@ -174,6 +172,19 @@ export default function LiteStudioSplitWorkspace({
   const frozenDragItemsRef = useRef<HTMLElement[]>([]);
   const dragRenderAnchorsRef = useRef<Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }>>([]);
   const dragRenderRestoreFrameRef = useRef<number | null>(null);
+  const frozenPaneLayoutRef = useRef<{
+    active: boolean;
+    builderPaddingX: number;
+    resultPaddingX: number;
+    builderContentWidth: number;
+    resultContentWidth: number;
+  }>({
+    active: false,
+    builderPaddingX: 0,
+    resultPaddingX: 0,
+    builderContentWidth: 0,
+    resultContentWidth: 0,
+  });
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -244,6 +255,76 @@ export default function LiteStudioSplitWorkspace({
     host.style.height = `${Math.max(0, Math.round(window.innerHeight))}px`;
   }, []);
 
+
+  const setFrozenPaneContentWidth = useCallback((pane: HTMLElement | null, width: number) => {
+    if (!pane || !Number.isFinite(width)) return;
+    const safeWidth = Math.max(1, Math.round(width));
+    pane.style.setProperty('--soridraw-lite-frozen-content-width', `${safeWidth}px`);
+  }, []);
+
+  const beginPaneLayoutFreeze = useCallback((builderPaneWidth: number, resultPaneWidth: number) => {
+    const layout = layoutRef.current;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!layout || !builder || !result) return;
+
+    // Measure padding once before enabling the freeze. During pointermove there
+    // are no descendant geometry reads: only the outer pane boundary changes.
+    const builderStyle = window.getComputedStyle(builder);
+    const resultStyle = window.getComputedStyle(result);
+    const builderPaddingX = (Number.parseFloat(builderStyle.paddingLeft) || 0) + (Number.parseFloat(builderStyle.paddingRight) || 0);
+    const resultPaddingX = (Number.parseFloat(resultStyle.paddingLeft) || 0) + (Number.parseFloat(resultStyle.paddingRight) || 0);
+    const builderContentWidth = Math.max(1, builderPaneWidth - builderPaddingX);
+    const resultContentWidth = Math.max(1, resultPaneWidth - resultPaddingX);
+
+    frozenPaneLayoutRef.current = {
+      active: true,
+      builderPaddingX,
+      resultPaddingX,
+      builderContentWidth,
+      resultContentWidth,
+    };
+    setFrozenPaneContentWidth(builder, builderContentWidth);
+    setFrozenPaneContentWidth(result, resultContentWidth);
+    builder.dataset.liteLayoutFrozen = 'true';
+    result.dataset.liteLayoutFrozen = 'true';
+    layout.dataset.liteLayoutFrozen = 'true';
+  }, [setFrozenPaneContentWidth]);
+
+  const refreshFrozenPaneLayoutAtBoundary = useCallback((builderPaneWidth: number, resultPaneWidth: number, refreshBuilder: boolean, refreshResult: boolean) => {
+    const frozen = frozenPaneLayoutRef.current;
+    if (!frozen.active) return;
+    if (refreshBuilder) {
+      const nextWidth = Math.max(1, builderPaneWidth - frozen.builderPaddingX);
+      if (Math.abs(nextWidth - frozen.builderContentWidth) > 0.5) {
+        frozen.builderContentWidth = nextWidth;
+        setFrozenPaneContentWidth(builderRef.current, nextWidth);
+      }
+    }
+    if (refreshResult) {
+      const nextWidth = Math.max(1, resultPaneWidth - frozen.resultPaddingX);
+      if (Math.abs(nextWidth - frozen.resultContentWidth) > 0.5) {
+        frozen.resultContentWidth = nextWidth;
+        setFrozenPaneContentWidth(resultRef.current, nextWidth);
+      }
+    }
+  }, [setFrozenPaneContentWidth]);
+
+  const releasePaneLayoutFreeze = useCallback(() => {
+    const layout = layoutRef.current;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (builder) {
+      delete builder.dataset.liteLayoutFrozen;
+      builder.style.removeProperty('--soridraw-lite-frozen-content-width');
+    }
+    if (result) {
+      delete result.dataset.liteLayoutFrozen;
+      result.style.removeProperty('--soridraw-lite-frozen-content-width');
+    }
+    if (layout) delete layout.dataset.liteLayoutFrozen;
+    frozenPaneLayoutRef.current.active = false;
+  }, []);
 
   const restoreDragRenderBudget = useCallback((preserveAnchor = true) => {
     const frozen = frozenDragItemsRef.current;
@@ -506,8 +587,29 @@ export default function LiteStudioSplitWorkspace({
 
     layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
+    const beforeBuilderPaneMode = modeRef.current.builder;
+    const beforeResultPaneMode = modeRef.current.result;
+    const beforeBuilderContentMode = contentResponsiveModeRef.current.builder;
+    const beforeResultContentMode = contentResponsiveModeRef.current.result;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
+    if (draggingRef.current && frozenPaneLayoutRef.current.active) {
+      const builderBoundaryChanged = beforeBuilderPaneMode !== modeRef.current.builder
+        || beforeBuilderContentMode !== contentResponsiveModeRef.current.builder;
+      const resultBoundaryChanged = beforeResultPaneMode !== modeRef.current.result
+        || beforeResultContentMode !== contentResponsiveModeRef.current.result;
+      if (builderBoundaryChanged || resultBoundaryChanged) {
+        // Keep the expensive descendants frozen between responsive thresholds.
+        // When a real PC/tablet/mobile boundary is crossed, refresh that pane
+        // once so the approved responsive design still switches at the right spot.
+        refreshFrozenPaneLayoutAtBoundary(
+          builderWidth,
+          resultWidth,
+          builderBoundaryChanged,
+          resultBoundaryChanged,
+        );
+      }
+    }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live) syncExternalGeometry(builderWidth, splitterLeft);
     const perfAfterExternal = perfEnabled ? performance.now() : 0;
@@ -549,7 +651,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, refreshFrozenPaneLayoutAtBoundary, syncExternalGeometry, syncPaneModes]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -604,10 +706,6 @@ export default function LiteStudioSplitWorkspace({
     lastPixelRef.current = nextPixel;
 
     const nextPercent = (nextPixel / width) * 100;
-    if (!perfLiveDomCapturedRef.current) {
-      perfLiveDomCapturedRef.current = true;
-      recordSplitPerfLiveDomSnapshot(builderRef.current, resultRef.current);
-    }
     // 573: one real boundary again. The divider and both panes are owned by the
     // same single local width write on every rAF frame. Smoothness now comes
     // from reducing the amount of off-screen content the browser must reflow,
@@ -637,6 +735,10 @@ export default function LiteStudioSplitWorkspace({
     document.documentElement.classList.remove('soridraw-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
+    // Release the fixed descendant layout only after the outer pane reaches its
+    // exact final width. The existing visible-row anchor then corrects any one-
+    // time height change caused by the final responsive reflow.
+    releasePaneLayoutFreeze();
     restoreDragRenderBudget(true);
 
     const safeWidth = Math.max(1, metricsRef.current.width);
@@ -648,7 +750,7 @@ export default function LiteStudioSplitWorkspace({
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragRenderBudget]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, releasePaneLayoutFreeze, restoreDragRenderBudget]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -665,6 +767,7 @@ export default function LiteStudioSplitWorkspace({
     };
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
+    const resultRect = resultRef.current?.getBoundingClientRect();
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {
@@ -677,22 +780,20 @@ export default function LiteStudioSplitWorkspace({
 
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
-    // 574: let heavy list pages capture their visible React window before the
-    // first resize frame. The event is synchronous and happens only once per
-    // drag; pages restore the full list on soridraw-split-drag-end.
-    window.dispatchEvent(new CustomEvent('soridraw-split-drag-prepare'));
     applyDragRenderBudget();
+    if (builderRect && resultRect) {
+      beginPaneLayoutFreeze(builderRect.width, resultRect.width);
+    }
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · unified rAF + React drag windowing (574)',
+      engine: 'Lite V2 · unified rAF + frozen inner layout + clip (575)',
       builder: builderRef.current,
       result: resultRef.current,
     });
     lastPixelRef.current = null;
-    perfLiveDomCapturedRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');
@@ -785,6 +886,7 @@ export default function LiteStudioSplitWorkspace({
       document.documentElement.classList.remove('soridraw-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
+      releasePaneLayoutFreeze();
       restoreDragRenderBudget(false);
       if (dragRenderRestoreFrameRef.current !== null) {
         window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
@@ -806,7 +908,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, restoreDragRenderBudget, scheduleMetricsRefresh]);
+  }, [clearLiveExternalGeometry, refreshMetrics, releasePaneLayoutFreeze, restoreDragRenderBudget, scheduleMetricsRefresh]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

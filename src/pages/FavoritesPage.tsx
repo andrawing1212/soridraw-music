@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
-import { useSplitDragVirtualWindow } from '../lib/splitDragVirtualWindow';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
@@ -703,11 +702,6 @@ export default function FavoritesPage({
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
   const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
-  const splitDragWindow = useSplitDragVirtualWindow({
-    selector: '[data-soridraw-virtual-key^="music-note:"]',
-    keyAttribute: 'data-soridraw-virtual-key',
-    overscan: 360,
-  });
 
   useLayoutEffect(() => {
     const root = musicNotePageRootRef.current;
@@ -5603,18 +5597,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         <div className="soridraw-musicnote-list-start-divider mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
           <div className="space-y-2 md:space-y-3" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
-              const virtualKey = `music-note:${song.id}`;
-              if (!splitDragWindow.shouldRender(virtualKey)) {
-                return (
-                  <div
-                    key={song.id}
-                    data-soridraw-virtual-placeholder={virtualKey}
-                    className="soridraw-split-virtual-placeholder"
-                    style={{ height: `${splitDragWindow.getPlaceholderHeight(virtualKey, 84)}px` }}
-                    aria-hidden="true"
-                  />
-                );
-              }
               const isSelected = selectedSongIds.includes(song.id);
               const colorHex = getFavoriteColorHex(song.id, song);
               const isBulkMenu = isSelectionMode && selectedSongIds.length > 0;
@@ -5692,7 +5674,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
 
                     setSelectedSong(song);
                   }}
-                  data-soridraw-virtual-key={virtualKey}
                   className={cn(
                     "soridraw-musicnote-song-card soridraw-list-perf-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
                     (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "soridraw-list-perf-item--active z-[220]" : "z-0",

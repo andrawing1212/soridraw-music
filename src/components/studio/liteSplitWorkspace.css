@@ -263,6 +263,41 @@
 }
 
 /* --------------------------------------------------------------------------
+ * 575 — frozen inner layout + live outer clipping.
+ * The approved pane boundary still follows the pointer on every rAF frame.
+ * Only the expensive direct content boxes keep their last committed inline
+ * width between responsive thresholds, so their descendant flex/grid/text
+ * layout does not rebuild for every 1px divider move. The pane itself remains
+ * the clipping/scroll owner, therefore the visible divider is always the real
+ * left/right boundary rather than a compositor-only ghost line.
+ * -------------------------------------------------------------------------- */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-pane[data-lite-layout-frozen="true"] {
+    overflow-x: hidden !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-pane[data-lite-layout-frozen="true"] > * {
+    box-sizing: border-box !important;
+    width: var(--soridraw-lite-frozen-content-width) !important;
+    min-width: var(--soridraw-lite-frozen-content-width) !important;
+    max-width: var(--soridraw-lite-frozen-content-width) !important;
+    transition: none !important;
+  }
+
+  /* Do not freeze the modal portal itself; it is sized against the viewport by
+   * the shared Studio modal host and must remain independent of pane clipping. */
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-pane[data-lite-layout-frozen="true"]
+  > .soridraw-studio-center-modal-host {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
  * 571 — temporary split-performance diagnostics.
  * Collection is idle outside an active drag and the panel only re-renders
  * after pointer-up, so it does not participate in the resize hot path.
@@ -427,24 +462,4 @@
   color: rgba(255,180,0,.82);
   font-size: 10px;
   font-style: normal;
-}
-
-/* --------------------------------------------------------------------------
- * 574 — React drag-window placeholders.
- * Heavy Music Note / Library rows outside the pane viewport are not mounted
- * during an active split drag. These exact-height shells preserve scroll
- * geometry and spacing without painting any substitute UI.
- * -------------------------------------------------------------------------- */
-@media (min-width: 1100px) {
-  .soridraw-split-virtual-placeholder {
-    display: block;
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-    contain: strict;
-    content-visibility: hidden;
-    overflow: hidden;
-    pointer-events: none;
-    visibility: hidden;
-  }
 }

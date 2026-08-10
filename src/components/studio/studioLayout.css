@@ -11720,3 +11720,12 @@ html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-co
     padding-bottom: 118px !important;
   }
 }
+
+/* 555 — Give the Studio Black Generate control a 200px lower breathing space
+ * at every responsive ratio. Keep the shared expanded/collapsed Y-axis contract
+ * intact: only the one common visual-bottom baseline changes, so PC/tablet/
+ * builder-mobile/real-mobile do not drift apart and no new runtime geometry
+ * calculation is introduced. */
+html[data-soridraw-theme="studio-black"] {
+  --soridraw-action-visual-bottom-gap: 200px;
+}

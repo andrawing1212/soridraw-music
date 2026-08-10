@@ -1306,3 +1306,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 생성바 위치/크기, 분할바/스크롤 로직, 보컬/가사 레이아웃, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+### 555차 — 생성바 하단 공통 여백 200px
+- 기준: 554차
+- Studio Black 생성바의 화면 하단 시각 여백을 모든 비율에서 200px로 통일.
+- 펼침/접힘이 같은 Y축 기준을 쓰는 기존 구조는 유지하고 공통 baseline 값만 변경.
+- PC / Tablet / Builder Mobile / 실제 Mobile 모두 동일 적용.
+- 명령창↔생성바용 93px(모바일) / 118px(비모바일) reserve 값과 분할/스크롤 로직은 변경하지 않음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

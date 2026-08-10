@@ -1577,3 +1577,17 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Only Music Note while the result content is in the published `tablet` responsive mode keeps the 606 drag-time deferral, because that is the state where the user observed a clear smoothness improvement.
 - Lite V2 now publishes its already-computed builder/result content responsive mode and active workspace on root data attributes. No extra DOM measurement, ResizeObserver, or per-frame React state was added.
 - Goal of 607 is stability, not another performance experiment: preserve the good Tablet Music Note behavior, restore other workspaces from the 606 regression, and keep PC Music Note on one synchronized App/control path before any later optimization.
+
+## 608차 — PC/Tablet 좌표 엔진 소유권 안정화
+- 607 실사용에서 확인된 대칭 증상을 기준으로 페이지별 좌표 엔진 분기를 제거했다.
+  - Tablet: Music Note(direct)는 부드럽고 다른 화면(css-var)은 버벅임.
+  - PC: 다른 화면(css-var)은 부드럽고 Music Note(direct)만 버벅임.
+- 결론: 성능 경로를 페이지가 아니라 **결과 pane의 실제 responsive mode**가 소유해야 한다.
+- 일반 손 드래그 런타임:
+  - result `pc` (>1080px): 590의 `css-var` 경로.
+  - result `tablet/mobile` (<=1080px): `direct` pane geometry 경로.
+- 모드 선택은 기존 rAF 안에서 ref로만 수행하며 React state/observer/DOM read를 새로 추가하지 않는다.
+- PC↔Tablet 경계를 넘을 때 direct inline geometry와 CSS-var geometry는 같은 동기 작업 안에서 전환되어 서로 동시에 경쟁하지 않는다. 엔진 전환에는 16px 히스테리시스를 둬 1080px 근처에서 좌우로 흔들 때 두 엔진이 반복 교대하지 않게 했다.
+- 606/607에서 추가했던 App-level drag sync 억제는 제거하고 605의 원래 즉시 동기화로 복구했다. 즉 다른 화면의 App 동작을 희생시키지 않는다.
+- 관리자 PERF 진단/명시적 layout A/B override는 그대로 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

@@ -3999,41 +3999,21 @@ function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
-
-    // 607 — 606 proved that suppressing this App-level mirror helps Music
-    // Note while its result content is in tablet mode, but applying the same
-    // suppression to Library/Recent/Create made those workspaces feel worse.
-    // Restore the original immediate synchronization everywhere, and retain
-    // the drag-time deferral only for the one state that improved in real-hand
-    // testing: Music Note + tablet. PC Music Note also synchronizes immediately
-    // again so pane geometry and App-owned controls cannot drift apart.
-    const syncBuilderActionMode = (forceBuilderSync = false) => {
+    const syncBuilderActionMode = () => {
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
-      setIsStudioBlackActionMode((current) => current === isStudioBlack ? current : isStudioBlack);
-
-      const shouldDeferMusicNoteTabletSync = !forceBuilderSync
-        && root.classList.contains('soridraw-lite-split-dragging')
-        && root.dataset.soridrawLiteWorkspace === 'music-note'
-        && root.dataset.soridrawResultContentMode === 'tablet';
-      if (shouldDeferMusicNoteTabletSync) return;
-
-      const nextBuilderActionMobile = isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile';
-      setIsSplitBuilderActionMobile((current) => current === nextBuilderActionMobile ? current : nextBuilderActionMobile);
+      setIsStudioBlackActionMode(isStudioBlack);
+      setIsSplitBuilderActionMobile(
+        isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
+      );
     };
 
-    const handleSplitDragEnd = () => syncBuilderActionMode(true);
-
-    syncBuilderActionMode(true);
-    const observer = new MutationObserver(() => syncBuilderActionMode(false));
+    syncBuilderActionMode();
+    const observer = new MutationObserver(syncBuilderActionMode);
     observer.observe(root, {
       attributes: true,
       attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
     });
-    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd);
-    };
+    return () => observer.disconnect();
   }, []);
 
   const isActionSwipeCollapseMode = isActionDragMobile || isSplitBuilderActionMobile;

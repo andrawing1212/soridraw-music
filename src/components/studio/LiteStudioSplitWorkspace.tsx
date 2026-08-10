@@ -145,6 +145,24 @@ const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
   width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
 );
 
+// 608 stability rule from real-hand A/B: PC keeps the coherent 590 CSS-variable
+// path; compact result-pane modes use direct local pane geometry. This removes
+// the former page identity split (Music Note=direct, everything else=css-var)
+// that produced the exact opposite good/bad behavior between PC and tablet.
+const resolveRuntimeLayoutMode = (
+  currentMode: BenchmarkLayoutMode,
+  resultWidth: number,
+): BenchmarkLayoutMode => {
+  const safeWidth = Math.max(1, resultWidth);
+  // Do not let the geometry owner ping-pong while the pointer hovers around the
+  // 1080px PC/tablet boundary. The visual responsive contract still changes at
+  // its exact breakpoint; only the low-level geometry engine gets a 16px hold.
+  if (currentMode === 'css-var') {
+    return safeWidth < CONTENT_TABLET_MAX - PANE_MODE_HYSTERESIS ? 'direct' : 'css-var';
+  }
+  return safeWidth > CONTENT_TABLET_MAX + PANE_MODE_HYSTERESIS ? 'css-var' : 'direct';
+};
+
 export type LiteStudioSplitWorkspaceProps = {
   children: ReactNode;
   builderMasthead?: ReactNode;
@@ -160,10 +178,13 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
 }: LiteStudioSplitWorkspaceProps) {
-  // 602: keep the fast 590 runtime for Recent/Library/Create and use the
-  // direct pane geometry only where the 590 A/B proved it helps: Music Note.
-  // This prevents one workspace experiment from changing every Lite V2 screen.
-  const runtimeLayoutMode: BenchmarkLayoutMode = workspaceView === 'music-note' ? 'direct' : 'css-var';
+  // 608: real-hand testing exposed a diagonal pattern that page-based engine
+  // ownership could not explain away: direct geometry was the smoother path
+  // whenever the result pane was in tablet density, while CSS-variable geometry
+  // was the smoother path in PC density. The same pattern held across pages in
+  // opposite directions. Runtime ownership therefore follows the result pane's
+  // responsive mode, not Music Note/Library/Recent identity. No React state is
+  // involved; the active path is selected inside the existing rAF geometry write.
   const panes = Children.toArray(children);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -209,8 +230,8 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkRunningRef = useRef(false);
   const layoutAckObserverRef = useRef<ResizeObserver | null>(null);
   const layoutAckObservedRef = useRef<{ builder: number; result: number }>({ builder: 0, result: 0 });
-  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutMode);
-  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutMode);
+  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
+  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -559,11 +580,12 @@ export default function LiteStudioSplitWorkspace({
     const splitter = splitterRef.current;
     if (!layout || !builder || !result) return;
 
+    layout.dataset.liteRuntimeLayout = benchmarkLayoutModeRef.current;
     if (benchmarkLayoutModeRef.current === 'direct') {
       layout.dataset.benchmarkLayoutMode = 'direct';
-      // Direct path is runtime-owned only by Music Note in 602, or used
-      // temporarily by the admin A/B benchmark. Other workspaces keep the
-      // original 590 CSS-variable geometry path.
+      // 608: direct geometry is the compact (tablet/mobile result pane)
+      // runtime path, or an explicit admin A/B override. PC density keeps the
+      // 590 CSS-variable path. Page identity no longer chooses the engine.
       builder.style.setProperty('left', '0px', 'important');
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
@@ -593,6 +615,17 @@ export default function LiteStudioSplitWorkspace({
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
+
+    // 608: choose one geometry owner from the *current result-pane mode*.
+    // During explicit admin coordinate A/B, the benchmark owns the path; during
+    // normal hand drag this is a ref-only switch and never causes a React render.
+    if (!benchmarkRunningRef.current) {
+      const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(runtimeLayoutModeRef.current, resultWidth);
+      if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
+        runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
+        benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
+      }
+    }
 
     writeLiveSplitGeometry(builderWidth, resultWidth);
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
@@ -808,7 +841,7 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · manual drag · 607 scoped Music Note tablet App-sync suppression + layout-ack diagnostics',
+      engine: `Lite V2 · manual drag · 608 responsive-owned geometry (${runtimeLayoutModeRef.current}) + layout-ack diagnostics`,
       builder: builderRef.current,
       result: resultRef.current,
       layoutMode: runtimeLayoutModeRef.current,
@@ -857,17 +890,14 @@ export default function LiteStudioSplitWorkspace({
   }, [workspaceView]);
 
   useLayoutEffect(() => {
-    runtimeLayoutModeRef.current = runtimeLayoutMode;
     if (benchmarkRunningRef.current) return;
 
-    benchmarkLayoutModeRef.current = runtimeLayoutMode;
-    if (runtimeLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
-
-    // Re-apply the current split once after a workspace switch so stale inline
-    // direct geometry can never leak from Music Note into Recent/Library/Create.
+    // 608: workspace changes no longer change the geometry engine. Recompute the
+    // current result width once and let applyPercent select PC(css-var) versus
+    // compact(direct), clearing any stale inline geometry synchronously if needed.
     const frame = window.requestAnimationFrame(() => refreshMetrics());
     return () => window.cancelAnimationFrame(frame);
-  }, [clearDirectBenchmarkGeometry, refreshMetrics, runtimeLayoutMode]);
+  }, [refreshMetrics, workspaceView]);
 
   useEffect(() => {
     const emitBenchmarkStatus = (state: 'running' | 'done' | 'error', message: string) => {
@@ -1124,7 +1154,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 607 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 608 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1355,7 +1385,7 @@ export default function LiteStudioSplitWorkspace({
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio"
-        data-lite-runtime-layout={runtimeLayoutMode}
+        data-lite-runtime-layout="responsive"
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,

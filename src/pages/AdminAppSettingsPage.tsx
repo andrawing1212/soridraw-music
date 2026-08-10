@@ -296,16 +296,10 @@ export default function AdminAppSettingsPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-black text-[var(--text-primary)]">품질·성능 진단 도구</h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 뮤직노트 정밀/카드 내부/텍스트 구조/Layout·Paint/텍스트 재배치/렌더/영역/좌표 A/B, 실제 마우스 입력 A/B, 입력 샘플링 A/B, 연속 rAF A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없습니다. 591차의 직접 pane 좌표 실런타임은 유지합니다. 600차부터는 599차에서 확인된 중앙 텍스트 Layout 병목 개선을 실제 뮤직노트 런타임에 적용합니다. 분할바와 카드 외형은 매 프레임 그대로 움직이고, 텍스트 내부 재배치만 4px 주기를 카드 4그룹으로 1px씩 분산해 순간 부하를 낮춥니다. 드래그 종료 즉시 모든 임시 폭을 제거해 승인된 최종 레이아웃으로 정확히 복구합니다. 기존 4/8/12px A/B 도구는 비교용으로 계속 보관합니다.
+                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 렌더/영역/좌표 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 590차부터 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없습니다. 591차부터 실제 Lite V2 드래그는 직접 pane 좌표 방식을 기본으로 사용하고, 기존 CSS 변수 좌표 방식은 관리자 A/B 비교용으로만 유지합니다.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-[var(--text-secondary)]">
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">자동 벤치마크</span>
-                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">뮤직노트 정밀 A/B</span>
-                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">카드 내부 분해 A/B</span>
-                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">텍스트 구조 A/B</span>
-                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">Layout/Paint A/B</span>
-                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">텍스트 재배치 A/B</span>
-                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">실사용 Pointer A/B</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">렌더 A/B</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">영역 이진 스캔</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">좌표 A/B</span>

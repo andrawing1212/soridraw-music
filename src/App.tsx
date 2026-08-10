@@ -16840,7 +16840,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
               (user || auth.currentUser) ? (
                 <StudioPageFrame
-                  workspaceView="music-note-rail-test"
+                  workspaceView="music-note-library-split-test"
                   lockViewport={false}
                   leftRail={
                     <StudioLeftRail
@@ -16896,23 +16896,34 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     />
                   }
                 >
-                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                    <HistoryRouteWrapper
-                      isFavoritesLoading={isFavoritesLoading}
-                      hasMoreFavorites={hasMoreFavorites}
-                      isLoadingMoreFavorites={isLoadingMoreFavorites}
-                      loadMoreFavorites={loadMoreFavorites}
-                      searchFavoritesOnServer={searchFavoritesOnServer}
-                      refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-                      toggleFavorite={toggleFavorite}
-                      updateFavorite={updateFavorite}
-                      clearAllFavorites={clearAllFavorites}
-                      unlockAllFavorites={unlockAllFavorites}
-                      lockAllFavorites={lockAllFavorites}
-                      user={user || auth.currentUser}
-                      handleLogin={handleLogin}
-                    />
-                  </Suspense>
+                  <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
+                    <StudioSplitWorkspace viewMode="split" workspaceView="music-note">
+                      <StudioBuilderPane>
+                        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                          <HistoryRouteWrapper
+                            isFavoritesLoading={isFavoritesLoading}
+                            hasMoreFavorites={hasMoreFavorites}
+                            isLoadingMoreFavorites={isLoadingMoreFavorites}
+                            loadMoreFavorites={loadMoreFavorites}
+                            searchFavoritesOnServer={searchFavoritesOnServer}
+                            refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                            toggleFavorite={toggleFavorite}
+                            updateFavorite={updateFavorite}
+                            clearAllFavorites={clearAllFavorites}
+                            unlockAllFavorites={unlockAllFavorites}
+                            lockAllFavorites={lockAllFavorites}
+                            user={user || auth.currentUser}
+                            handleLogin={handleLogin}
+                          />
+                        </Suspense>
+                      </StudioBuilderPane>
+                      <StudioResultPane>
+                        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                          <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+                        </Suspense>
+                      </StudioResultPane>
+                    </StudioSplitWorkspace>
+                  </main>
                 </StudioPageFrame>
               ) : (
                 <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>

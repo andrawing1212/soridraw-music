@@ -1334,3 +1334,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `StudioPageFrame`에 `lockViewport` 옵션을 추가. Studio는 기존 기본값(`true`)을 유지하고, 뮤직노트 테스트 셸은 `false`로 사용하여 기존 뮤직노트 문서 스크롤/레이아웃을 보존함.
 - 뮤직노트 본문 디자인/검색/필터/곡 카드/모달/데이터 로직은 변경하지 않음.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 563차 메모
+- /history 로그인 화면을 뮤직노트(좌) + 라이브러리(우) 1:1 분할 테스트 레이아웃으로 전환했다.
+- Studio 좌/우 레일은 유지하고 중앙만 StudioSplitWorkspace로 감쌌다.
+- 비로그인 note 공유 라우트와 /suno-library 단독 페이지는 그대로 유지했다.

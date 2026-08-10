@@ -97,7 +97,7 @@ export default function SplitPerformanceDiagnostics() {
                   <span>dataset/ARIA</span><b>{result.miscAvgMs}ms</b>
                 </div>
               </details>
-              <p className="soridraw-split-perf-note">572: AI Studio와 테스트앱에서 같은 동작을 한 뒤 전체 패널과 ‘병목 TOP’을 각각 캡처하세요.</p>
+              <p className="soridraw-split-perf-note">573: 분할선과 실제 패널 경계를 다시 하나로 합쳤습니다. AI Studio/테스트앱에서 같은 동작 후 PERF와 병목 TOP을 비교하세요.</p>
             </>
           )}
         </div>

@@ -37,10 +37,6 @@ const PANE_MODE_HYSTERESIS = 16;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
-// 570: the divider itself follows the pointer every animation frame, while
-// expensive pane reflow is capped at ~30fps. This keeps the interaction live
-// but cuts heavy Music Note / Library layout work roughly in half.
-const LIVE_LAYOUT_INTERVAL_MS = 32;
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -157,7 +153,6 @@ export default function LiteStudioSplitWorkspace({
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
-  const lastLiveLayoutAtRef = useRef(0);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastViewportHeightRef = useRef<number | null>(null);
@@ -174,6 +169,9 @@ export default function LiteStudioSplitWorkspace({
     heroRow: null,
     workspaceHeroHost: null,
   });
+  const frozenDragItemsRef = useRef<HTMLElement[]>([]);
+  const dragRenderAnchorsRef = useRef<Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }>>([]);
+  const dragRenderRestoreFrameRef = useRef<number | null>(null);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -244,16 +242,100 @@ export default function LiteStudioSplitWorkspace({
     host.style.height = `${Math.max(0, Math.round(window.innerHeight))}px`;
   }, []);
 
-  const syncDividerVisual = useCallback((builderWidth: number) => {
-    const splitter = splitterRef.current;
-    if (!splitter) return;
-    // The hit-area/divider is the only thing that must follow the pointer at
-    // display refresh rate. Move it on its own compositor layer; do not wake
-    // either large pane just to keep the line under the cursor.
-    const translateX = Math.max(-8, Math.round(builderWidth) - 8);
-    splitter.style.setProperty('--soridraw-lite-divider-x', `${translateX}px`);
-    if (splitter.dataset.compositorReady !== 'true') splitter.dataset.compositorReady = 'true';
+
+  const restoreDragRenderBudget = useCallback((preserveAnchor = true) => {
+    const frozen = frozenDragItemsRef.current;
+    frozenDragItemsRef.current = [];
+    for (const element of frozen) {
+      element.classList.remove('soridraw-split-drag-frozen');
+      element.style.removeProperty('--soridraw-drag-frozen-height');
+    }
+
+    if (dragRenderRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
+      dragRenderRestoreFrameRef.current = null;
+    }
+
+    const anchors = dragRenderAnchorsRef.current;
+    dragRenderAnchorsRef.current = [];
+    if (!preserveAnchor || anchors.length === 0) return;
+
+    // Releasing the frozen off-screen shells can change their natural height at
+    // the final pane width. Restore the first visible row to the same viewport
+    // offset once, after layout settles, so the user never sees a vertical jump.
+    dragRenderRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      dragRenderRestoreFrameRef.current = null;
+      for (const anchor of anchors) {
+        if (!anchor.element.isConnected || !anchor.pane.isConnected) continue;
+        const paneRect = anchor.pane.getBoundingClientRect();
+        const nextOffset = anchor.element.getBoundingClientRect().top - paneRect.top;
+        const delta = nextOffset - anchor.viewportOffset;
+        if (Math.abs(delta) > 0.5) anchor.pane.scrollTop += delta;
+      }
+    });
   }, []);
+
+  const applyDragRenderBudget = useCallback(() => {
+    restoreDragRenderBudget(false);
+    const panesToBudget = [builderRef.current, resultRef.current].filter(Boolean) as HTMLElement[];
+    const frozen: HTMLElement[] = [];
+    const anchors: Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }> = [];
+    const overscan = 260;
+
+    const freezeElement = (element: HTMLElement, height: number) => {
+      if (!Number.isFinite(height) || height <= 0) return;
+      element.style.setProperty('--soridraw-drag-frozen-height', `${Math.ceil(height)}px`);
+      element.classList.add('soridraw-split-drag-frozen');
+      frozen.push(element);
+    };
+
+    for (const pane of panesToBudget) {
+      const paneRect = pane.getBoundingClientRect();
+      const viewportTop = paneRect.top;
+      const viewportBottom = paneRect.bottom;
+
+      const anchorCandidates = Array.from(pane.querySelectorAll<HTMLElement>(
+        '.soridraw-musicnote-song-card, .soridraw-library-playlist-row, .soridraw-library-workspace-track-row, .soridraw-studio-menu-card, .soridraw-result-title-card, .soridraw-result-keywords-card, .soridraw-result-prompt-card'
+      ));
+      let anchorElement: HTMLElement | null = null;
+      let anchorOffset = 0;
+      for (const element of anchorCandidates) {
+        const rect = element.getBoundingClientRect();
+        if (rect.bottom > viewportTop + 1 && rect.top < viewportBottom - 1) {
+          anchorElement = element;
+          anchorOffset = rect.top - paneRect.top;
+          break;
+        }
+      }
+      if (anchorElement) anchors.push({ pane, element: anchorElement, viewportOffset: anchorOffset });
+
+      // Freeze complete Library groups first. If a group is far outside the
+      // scroll viewport, its entire descendant tree becomes a fixed-size shell.
+      const groups = Array.from(pane.querySelectorAll<HTMLElement>('.soridraw-library-workspace-group'));
+      for (const group of groups) {
+        if (group.classList.contains('soridraw-list-perf-item--active')) continue;
+        const rect = group.getBoundingClientRect();
+        if (rect.bottom < viewportTop - overscan || rect.top > viewportBottom + overscan) {
+          freezeElement(group, rect.height);
+        }
+      }
+
+      const candidates = Array.from(pane.querySelectorAll<HTMLElement>(
+        '.soridraw-musicnote-song-card, .soridraw-library-playlist-row, .soridraw-library-workspace-track-row, .soridraw-studio-menu-card, .soridraw-studio-result-content > *'
+      ));
+      for (const element of candidates) {
+        if (element.classList.contains('soridraw-list-perf-item--active')) continue;
+        if (element.closest('.soridraw-split-drag-frozen')) continue;
+        const rect = element.getBoundingClientRect();
+        if (rect.bottom < viewportTop - overscan || rect.top > viewportBottom + overscan) {
+          freezeElement(element, rect.height);
+        }
+      }
+    }
+
+    frozenDragItemsRef.current = frozen;
+    dragRenderAnchorsRef.current = anchors;
+  }, [restoreDragRenderBudget]);
 
   const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
@@ -420,13 +502,7 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
-    syncDividerVisual(builderWidth);
     layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
-    // 568: keep the Lite V2 divider inside the workspace, exactly like the
-    // original Music Note/Library performance probe. The divider position is
-    // therefore owned by the same single workspace write instead of a body
-    // portal/fixed viewport coordinate.
-    layout.style.setProperty('--soridraw-lite-split-percent', `${builderWidth}px`);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
@@ -471,7 +547,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, syncDividerVisual, syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -526,22 +602,13 @@ export default function LiteStudioSplitWorkspace({
     lastPixelRef.current = nextPixel;
 
     const nextPercent = (nextPixel / width) * 100;
-    // 570 strong fast path: keep the visible divider at full rAF speed, but
-    // do not force both large panes (and all of their responsive descendants)
-    // to reflow every display frame. The content still resizes continuously at
-    // ~30fps, so there is no release-only jump.
-    percentRef.current = nextPercent;
-    syncDividerVisual(nextPixel);
-
-    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    let contentCommitted = false;
-    if (lastLiveLayoutAtRef.current === 0 || now - lastLiveLayoutAtRef.current >= LIVE_LAYOUT_INTERVAL_MS) {
-      lastLiveLayoutAtRef.current = now;
-      applyPercent(nextPercent, true);
-      contentCommitted = true;
-    }
-    if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, contentCommitted);
-  }, [applyPercent, syncDividerVisual]);
+    // 573: one real boundary again. The divider and both panes are owned by the
+    // same single local width write on every rAF frame. Smoothness now comes
+    // from reducing the amount of off-screen content the browser must reflow,
+    // not from letting a fake 60fps divider run ahead of 30fps content.
+    applyPercent(nextPercent, true);
+    if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
+  }, [applyPercent]);
 
   const schedulePointer = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -558,17 +625,13 @@ export default function LiteStudioSplitWorkspace({
       frameRef.current = null;
     }
     flushPointer();
-    // Always commit the exact pointer position before ending the drag. The
-    // throttled live layout may be one short interval behind the visual line.
-    applyPercent(percentRef.current, true);
-    lastLiveLayoutAtRef.current = 0;
-
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
+    restoreDragRenderBudget(true);
 
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (percentRef.current / 100));
@@ -579,7 +642,7 @@ export default function LiteStudioSplitWorkspace({
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragRenderBudget]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -608,17 +671,17 @@ export default function LiteStudioSplitWorkspace({
 
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
+    applyDragRenderBudget();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · 60fps divider / ~30fps content (570)',
+      engine: 'Lite V2 · unified rAF + offscreen render budget (573)',
       builder: builderRef.current,
       result: resultRef.current,
     });
     lastPixelRef.current = null;
-    lastLiveLayoutAtRef.current = 0;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');
@@ -711,6 +774,11 @@ export default function LiteStudioSplitWorkspace({
       document.documentElement.classList.remove('soridraw-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
+      restoreDragRenderBudget(false);
+      if (dragRenderRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
+        dragRenderRestoreFrameRef.current = null;
+      }
       clearLiveExternalGeometry();
       const root = document.documentElement;
       delete root.dataset.soridrawBuilderMode;
@@ -727,7 +795,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh]);
+  }, [clearLiveExternalGeometry, refreshMetrics, restoreDragRenderBudget, scheduleMetricsRefresh]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);
@@ -818,7 +886,6 @@ export default function LiteStudioSplitWorkspace({
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
-          '--soridraw-lite-split-percent': `${percentRef.current}%`,
         } as React.CSSProperties}
       >
         <div

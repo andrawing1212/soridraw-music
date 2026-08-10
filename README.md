@@ -1405,3 +1405,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Event Timing이 지원되면 느린 입력 이벤트와 input delay도 함께 표시한다.
 - JS로 귀속되지 않은 LoAF 시간은 `브라우저 렌더/레이아웃/페인트(비JS)`로 따로 집계해, 엔진 JS와 브라우저 리플로우 비용을 구분한다.
 - 이번 차수는 진단 정확도를 위한 버전이라 570/571의 분할 동작, 30fps 콘텐츠 커밋, 디자인에는 손대지 않았다. 성능 원인이 확인된 뒤 실제 최적화를 적용한다.
+
+
+## 573차 메모 — 단일 60fps 경계 + 오프스크린 렌더 예산
+- 570차의 `60fps 분할선 + 약 30fps 콘텐츠` 이중 이동을 제거했다. Lite V2 분할선과 실제 좌/우 pane 폭은 다시 하나의 로컬 `--soridraw-studio-builder-width` 값으로 같은 rAF 프레임에서 움직인다.
+- 분할 드래그 시작 시 각 pane의 현재 스크롤 viewport를 한 번만 측정하고, 260px overscan 밖의 Music Note 곡 카드 / Library playlist row / Library workspace group·track / Studio menu·result 블록을 현재 높이 그대로 `content-visibility:hidden + contain:strict` shell로 임시 고정한다. 화면에 보이는 요소는 건드리지 않는다.
+- 드래그 종료 시 shell을 모두 해제하고 첫 visible row의 viewport offset을 1회 복원하여 off-screen 자연 높이 재계산 때문에 세로 위치가 튀지 않게 했다.
+- Library workspace group이 화면에 걸쳐 있을 때도 먼 track row가 매 폭 변경마다 재배치되지 않도록 track row 단위 `content-visibility:auto` containment를 추가했다.
+- 분할 중 React state 갱신, 반복 DOM 측정, 별도 compositor divider는 추가하지 않았다. 진단 패널은 유지한다.
+- 목적은 디자인을 바꾸는 것이 아니라 실제 분할 때 브라우저가 다시 계산/페인트해야 하는 off-screen DOM 양을 줄이는 것이다.

@@ -218,24 +218,47 @@
 }
 
 
-/* 570 — Strong live-resize fast path.
- * The Studio Lite divider gets its own compositor transform. Heavy pane widths
- * are committed by JS at ~30fps while this line/hit-area still tracks the
- * pointer every animation frame. Final geometry is identical on pointer-up. */
+/* 573 — one real 60fps boundary + off-screen render budget.
+ * Studio Lite uses the same local builder-width variable for the flex pane and
+ * the divider. There is no compositor-only ghost line and no 30fps content
+ * throttle. During an active drag, only rows well outside each pane scroller
+ * are replaced by exact-height render shells; visible UI remains untouched. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-splitter[data-compositor-ready="true"],
+  .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter,
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:hover,
+  .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter:hover,
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:active,
+  .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter:active,
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:focus,
+  .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter:focus,
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-splitter[data-compositor-ready="true"]:focus-visible {
-    left: 0 !important;
-    transform: translate3d(var(--soridraw-lite-divider-x, 0px), 0, 0) !important;
-    will-change: transform;
+  .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter:focus-visible {
+    left: calc(var(--soridraw-studio-builder-width, 50%) - 8px) !important;
+    transform: none !important;
+    will-change: auto !important;
+  }
+
+  html.soridraw-split-dragging .soridraw-split-drag-frozen {
+    box-sizing: border-box !important;
+    height: var(--soridraw-drag-frozen-height) !important;
+    min-height: var(--soridraw-drag-frozen-height) !important;
+    max-height: var(--soridraw-drag-frozen-height) !important;
+    content-visibility: hidden !important;
+    contain: strict !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+
+  /* Library workspace groups can be partially visible while many child rows
+   * remain far below the pane viewport. Give those leaf rows their own paint/
+   * layout boundary so a visible group does not wake every track on each width. */
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  .soridraw-library-workspace-track-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 76px;
+    contain: layout style paint;
   }
 }
 

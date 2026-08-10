@@ -1626,3 +1626,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 환경 진단의 computed-style 대상에 `musicnote-copy`, `musicnote-secondary`를 추가해 실제 적용된 display/contain 상태를 함께 확인할 수 있게 했다.
 - 종합 진단서에 `[MUSICNOTE TEXT LAYOUT A/B]` 섹션을 추가했다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 598차 — 뮤직노트 텍스트 Layout vs Paint A/B 진단
+
+- 기준: 597차 `뮤직노트 텍스트 부모 레이아웃/contain A/B`.
+- 591차 직접 pane 좌표 실런타임과 기존 디자인/반응형/데이터 구조는 그대로 유지한다.
+- 관리자 PERF에 `Layout/Paint A/B`를 추가했다.
+- 동일한 1400×900 자동 벤치마크에서 다음을 순차 비교한다: 기준, 텍스트 본문 `visibility:hidden`(레이아웃 유지·Paint 제거), 텍스트 본문 `content-visibility:hidden`(내부 Layout+Paint 스킵), 글자 glyph Paint만 OFF, 키워드 칩 Paint만 OFF, 제목·메타 Paint만 OFF.
+- 모든 변경은 진단 중에만 `data-soridraw-perf-probe`로 임시 적용되고 종료 즉시 원복된다. 일반 사용자 화면에는 적용되지 않는다.
+- 목적: 596에서 확인된 `텍스트 본문 전체 OFF`의 큰 개선이 텍스트 레이아웃 계산 때문인지 실제 glyph/chip Paint 때문인지 분리해, 다음 실제 최적화 방향을 한 가지로 확정한다.

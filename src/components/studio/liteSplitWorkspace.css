@@ -1063,3 +1063,57 @@
     align-items: center !important;
   }
 }
+
+/* 598 — Music Note text Layout vs Paint A/B. Admin diagnostic only.
+ * 596 showed that removing the complete text copy cuts most resize cost, while
+ * 597 showed that contain/grid restructuring does not. These probes separate
+ * paint-only suppression from layout+paint suppression while preserving the
+ * card footprint and the 591 direct-pane runtime. */
+@media (min-width: 1100px) {
+  /* Paint-only: visibility keeps the copy box and all descendant layout boxes
+   * in normal layout, but skips their visual paint. */
+  html[data-soridraw-perf-probe="musicnote-paint-copy-hidden"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    visibility: hidden !important;
+  }
+
+  /* Layout + paint skip for the descendants. The flex item itself still keeps
+   * its parent footprint, so this can be compared against visibility:hidden. */
+  html[data-soridraw-perf-probe="musicnote-paint-content-hidden"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    content-visibility: hidden !important;
+    contain: layout style paint !important;
+  }
+
+  /* Keep backgrounds, chip boxes and geometry, but make text glyphs
+   * transparent. This isolates glyph raster/paint from box/layout work. */
+  html[data-soridraw-perf-probe="musicnote-paint-glyphs-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy,
+  html[data-soridraw-perf-probe="musicnote-paint-glyphs-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy * {
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+    text-shadow: none !important;
+    text-decoration-color: transparent !important;
+  }
+
+  /* Preserve keyword chip dimensions and strip layout, suppress only chip
+   * painting. */
+  html[data-soridraw-perf-probe="musicnote-paint-keyword-chips-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-keyword-chip {
+    visibility: hidden !important;
+  }
+
+  /* Preserve meta/title footprint and their width calculations, skip only
+   * their visible paint. */
+  html[data-soridraw-perf-probe="musicnote-paint-title-meta-off"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(.soridraw-musicnote-song-meta, .soridraw-musicnote-song-title) {
+    visibility: hidden !important;
+  }
+}

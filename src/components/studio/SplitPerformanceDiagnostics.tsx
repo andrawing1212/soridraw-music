@@ -65,6 +65,58 @@ const getBrowserRenderPerSecond = (result: SplitPerfResult) => {
 };
 
 
+type PerfStyleCostCounts = {
+  scanned: number;
+  contain: number;
+  layoutContain: number;
+  paintContain: number;
+  contentVisibility: number;
+  containerType: number;
+  transform: number;
+  filter: number;
+  backdropFilter: number;
+  boxShadow: number;
+  transition: number;
+  willChange: number;
+  fixed: number;
+  sticky: number;
+  overflowClipOrScroll: number;
+};
+
+type PerfStyleTargetSnapshot = {
+  label: string;
+  selector: string;
+  found: boolean;
+  width: number | null;
+  height: number | null;
+  display: string;
+  position: string;
+  overflow: string;
+  contain: string;
+  contentVisibility: string;
+  containerType: string;
+  containerName: string;
+  transform: string;
+  filter: string;
+  backdropFilter: string;
+  boxShadow: string;
+  transition: string;
+  willChange: string;
+};
+
+type PerfStylesheetSnapshot = {
+  index: number;
+  source: string;
+  local: boolean;
+  rules: number | null;
+};
+
+type PerfComputedStyleDiagnostics = {
+  costs: PerfStyleCostCounts;
+  targets: PerfStyleTargetSnapshot[];
+  stylesheets: PerfStylesheetSnapshot[];
+};
+
 type PerfEnvironmentSnapshot = {
   createdAt: number;
   mode: string;
@@ -93,6 +145,7 @@ type PerfEnvironmentSnapshot = {
   buildProfile: string;
   cssMinifyMode: string;
   jsMinifyMode: string;
+  computedStyles: PerfComputedStyleDiagnostics;
 };
 
 const roundKb = (bytes: number) => Number((bytes / 1024).toFixed(1));
@@ -121,6 +174,138 @@ const estimateIdleRefreshHz = async () => new Promise<number | null>((resolve) =
   };
   requestAnimationFrame(tick);
 });
+
+const compactStyleValue = (value: string, maxLength = 64) => {
+  const clean = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '-';
+  return clean.length <= maxLength ? clean : `${clean.slice(0, maxLength - 1)}…`;
+};
+
+const hasNonZeroTransition = (style: CSSStyleDeclaration) => {
+  const durations = String(style.transitionDuration || '')
+    .split(',')
+    .map((value) => Number.parseFloat(value) || 0);
+  const delays = String(style.transitionDelay || '')
+    .split(',')
+    .map((value) => Number.parseFloat(value) || 0);
+  return durations.some((value) => value > 0) || delays.some((value) => value > 0);
+};
+
+const collectComputedStyleDiagnostics = (): PerfComputedStyleDiagnostics => {
+  const workspace = document.querySelector('.soridraw-lite-studio-split-workspace');
+  const nodes = workspace ? [workspace, ...Array.from(workspace.querySelectorAll('*'))] : [];
+  const costs: PerfStyleCostCounts = {
+    scanned: nodes.length,
+    contain: 0,
+    layoutContain: 0,
+    paintContain: 0,
+    contentVisibility: 0,
+    containerType: 0,
+    transform: 0,
+    filter: 0,
+    backdropFilter: 0,
+    boxShadow: 0,
+    transition: 0,
+    willChange: 0,
+    fixed: 0,
+    sticky: 0,
+    overflowClipOrScroll: 0,
+  };
+
+  for (const node of nodes) {
+    const style = getComputedStyle(node);
+    const contain = String(style.contain || 'none');
+    const backdrop = String((style as CSSStyleDeclaration & { backdropFilter?: string }).backdropFilter || 'none');
+    if (contain !== 'none') costs.contain += 1;
+    if (/layout|strict|content/.test(contain)) costs.layoutContain += 1;
+    if (/paint|strict|content/.test(contain)) costs.paintContain += 1;
+    if (String(style.contentVisibility || 'visible') !== 'visible') costs.contentVisibility += 1;
+    if (String(style.containerType || 'normal') !== 'normal') costs.containerType += 1;
+    if (String(style.transform || 'none') !== 'none') costs.transform += 1;
+    if (String(style.filter || 'none') !== 'none') costs.filter += 1;
+    if (backdrop !== 'none') costs.backdropFilter += 1;
+    if (String(style.boxShadow || 'none') !== 'none') costs.boxShadow += 1;
+    if (hasNonZeroTransition(style)) costs.transition += 1;
+    if (String(style.willChange || 'auto') !== 'auto') costs.willChange += 1;
+    if (style.position === 'fixed') costs.fixed += 1;
+    if (style.position === 'sticky') costs.sticky += 1;
+    if ([style.overflowX, style.overflowY].some((value) => ['auto', 'scroll', 'hidden', 'clip'].includes(value))) {
+      costs.overflowClipOrScroll += 1;
+    }
+  }
+
+  const targetConfigs: Array<{ label: string; selector: string }> = [
+    { label: 'workspace', selector: '.soridraw-lite-studio-split-workspace' },
+    { label: 'builder-pane', selector: '.soridraw-lite-studio-split-workspace > .soridraw-studio-builder-pane' },
+    { label: 'result-pane', selector: '.soridraw-lite-studio-split-workspace > .soridraw-studio-result-pane' },
+    { label: 'musicnote-page', selector: '.soridraw-musicnote-page-shell' },
+    { label: 'musicnote-top', selector: '.soridraw-musicnote-region-top' },
+    { label: 'musicnote-list', selector: '.soridraw-musicnote-list-start-divider' },
+    { label: 'musicnote-card', selector: '.soridraw-musicnote-song-card' },
+    { label: 'library-page', selector: '.soridraw-library-theme' },
+    { label: 'library-top', selector: '.soridraw-library-region-top' },
+    { label: 'library-list', selector: '.soridraw-library-list-start-divider' },
+    { label: 'library-row', selector: '.soridraw-library-playlist-row, .soridraw-library-workspace-track-row' },
+  ];
+  const targets: PerfStyleTargetSnapshot[] = targetConfigs.map(({ label, selector }): PerfStyleTargetSnapshot => {
+    const element = document.querySelector(selector) as HTMLElement | null;
+    if (!element) {
+      return {
+        label, selector, found: false, width: null, height: null,
+        display: '-', position: '-', overflow: '-', contain: '-', contentVisibility: '-',
+        containerType: '-', containerName: '-', transform: '-', filter: '-', backdropFilter: '-',
+        boxShadow: '-', transition: '-', willChange: '-',
+      };
+    }
+    const style = getComputedStyle(element);
+    const backdrop = String((style as CSSStyleDeclaration & { backdropFilter?: string }).backdropFilter || 'none');
+    return {
+      label,
+      selector,
+      found: true,
+      width: element.offsetWidth,
+      height: element.offsetHeight,
+      display: compactStyleValue(style.display),
+      position: compactStyleValue(style.position),
+      overflow: `${compactStyleValue(style.overflowX, 24)}/${compactStyleValue(style.overflowY, 24)}`,
+      contain: compactStyleValue(style.contain),
+      contentVisibility: compactStyleValue(style.contentVisibility),
+      containerType: compactStyleValue(style.containerType),
+      containerName: compactStyleValue(style.containerName),
+      transform: compactStyleValue(style.transform),
+      filter: compactStyleValue(style.filter),
+      backdropFilter: compactStyleValue(backdrop),
+      boxShadow: compactStyleValue(style.boxShadow),
+      transition: hasNonZeroTransition(style)
+        ? compactStyleValue(`${style.transitionProperty} ${style.transitionDuration}`, 72)
+        : 'none',
+      willChange: compactStyleValue(style.willChange),
+    };
+  });
+
+  const stylesheets: PerfStylesheetSnapshot[] = Array.from(document.styleSheets).map((sheet, index) => {
+    const owner = sheet.ownerNode as HTMLElement | null;
+    const devId = owner?.getAttribute?.('data-vite-dev-id');
+    let source = sheet.href || devId || `[inline:${owner?.tagName?.toLowerCase() || 'style'}]`;
+    try {
+      if (sheet.href) {
+        const url = new URL(sheet.href, location.href);
+        source = url.origin === location.origin ? `${url.pathname}${url.search}` : url.href;
+      } else if (devId) {
+        source = `dev:${devId.split('/').slice(-3).join('/')}`;
+      }
+    } catch { /* diagnostics only */ }
+    let rules: number | null = null;
+    try { rules = sheet.cssRules?.length ?? 0; } catch { rules = null; }
+    let local = true;
+    if (sheet.href) {
+      try { local = new URL(sheet.href, location.href).origin === location.origin; } catch { local = false; }
+    }
+    return { index, source, local, rules };
+  });
+
+  return { costs, targets, stylesheets };
+};
 
 const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot> => {
   const nav = navigator as Navigator & {
@@ -183,9 +368,10 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '588 · PROD JS minify A/B',
+    buildProfile: '589 · DEV/PROD computed-style cascade',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
-    jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'OFF (진단)' : 'DEV · 비적용',
+    jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
+    computedStyles: collectComputedStyleDiagnostics(),
   };
 };
 
@@ -398,11 +584,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const runEnvironmentDiagnostics = async () => {
     if (environmentRunning) return;
     setEnvironmentRunning(true);
-    setBenchmarkMessage('실행 환경 진단 중 · idle rAF 주사율과 번들/PWA 상태를 확인합니다.');
+    setBenchmarkMessage('실행 환경 진단 중 · idle Hz + PROD/DEV computed style/cascade를 비교할 준비를 합니다.');
     try {
       const snapshot = await collectPerfEnvironmentSnapshot();
       setEnvironment(snapshot);
-      setBenchmarkMessage(`환경 진단 완료 · ${snapshot.prod ? 'PROD' : 'DEV'} / ${snapshot.assetMode} / JS minify ${snapshot.jsMinifyMode} / CSS ${snapshot.cssMinifyMode} / idle ${snapshot.idleHz ?? '-'}Hz`);
+      setBenchmarkMessage(`환경 진단 완료 · ${snapshot.prod ? 'PROD' : 'DEV'} / ${snapshot.assetMode} / style ${snapshot.computedStyles.costs.scanned} nodes / idle ${snapshot.idleHz ?? '-'}Hz`);
     } catch (error) {
       setBenchmarkMessage(`환경 진단 실패 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     } finally {
@@ -410,18 +596,32 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     }
   };
 
-  const buildEnvironmentReportLines = (snapshot: PerfEnvironmentSnapshot) => [
-    `SORIDRAW PERF ENV ${new Date(snapshot.createdAt).toISOString()}`,
-    `host=${snapshot.host}`,
-    `mode=${snapshot.mode} prod=${snapshot.prod} assetMode=${snapshot.assetMode}`,
-    `buildProfile=${snapshot.buildProfile} jsMinify=${snapshot.jsMinifyMode} cssMinify=${snapshot.cssMinifyMode}`,
-    `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'}`,
-    `CPU=${snapshot.hardwareConcurrency ?? '-'} memoryGB=${snapshot.deviceMemoryGb ?? '-'}`,
-    `SW controller=${snapshot.swController} registrations=${snapshot.swRegistrations} cacheNames=${snapshot.cacheNames ?? '-'}`,
-    `JS local=${snapshot.scriptCount} transferKB=${snapshot.scriptTransferKb} decodedKB=${snapshot.scriptDecodedKb}`,
-    `CSS=${snapshot.cssCount} transferKB=${snapshot.cssTransferKb} rules=${snapshot.cssRules ?? '-'}`,
-    `fonts=${snapshot.fontStatus}/${snapshot.fontCount ?? '-'} connection=${snapshot.connection} saveData=${snapshot.saveData ?? '-'}`,
-  ];
+  const buildEnvironmentReportLines = (snapshot: PerfEnvironmentSnapshot) => {
+    const style = snapshot.computedStyles;
+    return [
+      `SORIDRAW PERF ENV ${new Date(snapshot.createdAt).toISOString()}`,
+      `host=${snapshot.host}`,
+      `mode=${snapshot.mode} prod=${snapshot.prod} assetMode=${snapshot.assetMode}`,
+      `buildProfile=${snapshot.buildProfile} jsMinify=${snapshot.jsMinifyMode} cssMinify=${snapshot.cssMinifyMode}`,
+      `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'}`,
+      `CPU=${snapshot.hardwareConcurrency ?? '-'} memoryGB=${snapshot.deviceMemoryGb ?? '-'}`,
+      `SW controller=${snapshot.swController} registrations=${snapshot.swRegistrations} cacheNames=${snapshot.cacheNames ?? '-'}`,
+      `JS local=${snapshot.scriptCount} transferKB=${snapshot.scriptTransferKb} decodedKB=${snapshot.scriptDecodedKb}`,
+      `CSS=${snapshot.cssCount} transferKB=${snapshot.cssTransferKb} rules=${snapshot.cssRules ?? '-'}`,
+      `fonts=${snapshot.fontStatus}/${snapshot.fontCount ?? '-'} connection=${snapshot.connection} saveData=${snapshot.saveData ?? '-'}`,
+      '',
+      '[COMPUTED STYLE COST COUNTS]',
+      `scanned=${style.costs.scanned} contain=${style.costs.contain} layoutContain=${style.costs.layoutContain} paintContain=${style.costs.paintContain} contentVisibility=${style.costs.contentVisibility} containerType=${style.costs.containerType}`,
+      `transform=${style.costs.transform} filter=${style.costs.filter} backdropFilter=${style.costs.backdropFilter} boxShadow=${style.costs.boxShadow} transition=${style.costs.transition} willChange=${style.costs.willChange}`,
+      `fixed=${style.costs.fixed} sticky=${style.costs.sticky} overflowClipOrScroll=${style.costs.overflowClipOrScroll}`,
+      '[COMPUTED STYLE TARGETS]',
+      ...style.targets.map((target) => target.found
+        ? `${target.label} ${target.width}x${target.height} display=${target.display} pos=${target.position} overflow=${target.overflow} contain=${target.contain} contentVis=${target.contentVisibility} container=${target.containerType}/${target.containerName} transform=${target.transform} filter=${target.filter} backdrop=${target.backdropFilter} shadow=${target.boxShadow} transition=${target.transition} willChange=${target.willChange}`
+        : `${target.label} NOT_FOUND selector=${target.selector}`),
+      '[STYLESHEET ORDER]',
+      ...style.stylesheets.map((sheet) => `#${sheet.index} local=${sheet.local} rules=${sheet.rules ?? '-'} source=${sheet.source}`),
+    ];
+  };
 
   const copyEnvironmentReport = async () => {
     if (!environment) return;
@@ -529,7 +729,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 동일 DOM 3세트 · 렌더/영역 A/B · 환경: DEV/PROD·번들·PWA·idle Hz</span>
+            <span>자동: 동일 DOM 3세트 · 렌더/영역 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -591,6 +791,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                         <span><i>CPU / RAM</i><b>{environment.hardwareConcurrency ?? '-'}T · {environment.deviceMemoryGb ?? '-'}GB</b></span>
                         <span><i>Viewport</i><b>{environment.viewport} · DPR {environment.dpr}</b></span>
                         <span><i>Network</i><b>{environment.connection}</b></span>
+                        <span><i>Style scan</i><b>{environment.computedStyles.costs.scanned} nodes</b></span>
+                        <span><i>Contain / CQ</i><b>{environment.computedStyles.costs.contain} / {environment.computedStyles.costs.containerType}</b></span>
+                        <span><i>FX / transition</i><b>{environment.computedStyles.costs.filter + environment.computedStyles.costs.backdropFilter + environment.computedStyles.costs.boxShadow} / {environment.computedStyles.costs.transition}</b></span>
+                        <span><i>Stylesheets</i><b>{environment.computedStyles.stylesheets.length}장</b></span>
                       </div>
                       <div className="soridraw-split-perf-env-actions">
                         <span>{environment.host}</span>
@@ -659,7 +863,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">588: 587에서 CSS minify는 정상으로 복구하고, 테스트앱(PROD)의 JS minify만 OFF한 단일 변수 A/B 빌드입니다. 종합 진단서 복사는 환경 + 자동 벤치마크 + 저장된 렌더/영역 A/B 결과를 한 번에 텍스트로 복사합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">589: JS/CSS minify를 모두 정상 복구했습니다. 환경 진단/종합 진단서는 DEV·PROD의 실제 computed style 비용 속성 개수, 핵심 pane·Music Note·Library 대상 스타일, stylesheet 적용 순서를 함께 기록해 production cascade 차이를 직접 비교합니다.</p>
             </>
           )}
         </div>

@@ -1503,3 +1503,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - PERF 환경 진단에 JS minify / CSS minify 상태를 각각 표시한다.
 - `종합 진단서 복사`를 추가해 최신 환경 정보, 자동 테스트 3세트 중앙값, DOM/병목 TOP/Lite V2 내부 단계와 저장된 렌더·영역 A/B 결과를 텍스트 한 번으로 복사할 수 있게 했다.
 - 기존 관리자 품질·성능 진단 도구는 유지하며 일반 사용자에게는 노출하지 않는다.
+
+## 589차 — DEV/PROD computed style · CSS cascade 진단
+- 587/588에서 CSS minify 및 JS minify 단일 변수 A/B가 PROD 분할 병목의 주원인이 아님을 확인해 production minify 설정을 정상값으로 모두 복구했다.
+- 관리자 PERF `환경 진단`과 `종합 진단서`가 Lite V2 workspace 내부 실제 computed style을 DEV/PROD에서 동일하게 집계한다.
+- 집계 항목: contain/layout/paint containment, content-visibility, container-type, transform/filter/backdrop-filter/box-shadow, transition, will-change, fixed/sticky, overflow 관련 요소 수.
+- 핵심 target(workspace, 좌/우 pane, Music Note page/top/list/card, Library page/top/list/row)의 실제 적용된 크기/overflow/contain/container/transform/filter/shadow/transition/will-change 값을 진단서에 기록한다.
+- document.styleSheets의 적용 순서, local 여부, 읽을 수 있는 rule 수, source를 진단서에 기록해 DEV dev-module CSS와 PROD bundle CSS의 cascade 차이를 비교할 수 있게 했다.
+- 환경 패널은 캡처 높이가 과도하게 늘지 않도록 computed-style 요약을 3열로 표시한다.
+- 실제 Studio/Music Note/Library 디자인 및 분할 동작은 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음.

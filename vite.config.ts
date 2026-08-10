@@ -22,11 +22,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    // 588 diagnostic: restore normal CSS minification and isolate the next
-    // production-only variable by disabling JS minification only.
-    // This keeps the bundled production execution path while testing whether
-    // minified JS output contributes to the split-render slowdown.
-    minify: false,
+    // 589: restore the normal production build after the isolated minify A/B
+    // checks. The next diagnostic compares the computed/cascaded styles that
+    // the browser actually applies in DEV vs PROD without changing output.
+    minify: true,
     cssMinify: true,
     chunkSizeWarningLimit: 1500,
     rollupOptions: {

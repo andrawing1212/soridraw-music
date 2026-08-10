@@ -1414,3 +1414,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Library workspace group이 화면에 걸쳐 있을 때도 먼 track row가 매 폭 변경마다 재배치되지 않도록 track row 단위 `content-visibility:auto` containment를 추가했다.
 - 분할 중 React state 갱신, 반복 DOM 측정, 별도 compositor divider는 추가하지 않았다. 진단 패널은 유지한다.
 - 목적은 디자인을 바꾸는 것이 아니라 실제 분할 때 브라우저가 다시 계산/페인트해야 하는 off-screen DOM 양을 줄이는 것이다.
+
+## 574차 — Lite V2 드래그 중 React 실제 윈도잉
+- 573차의 단일 실제 경계(rAF마다 pane + divider 동기)는 유지한다.
+- Music Note와 Suno Library는 Lite V2 분할 드래그 직전 현재 pane viewport를 1회 측정한다.
+- 화면 안 + 360px overscan 항목만 실제 React 카드/행 DOM을 유지한다.
+- 화면 밖 Music Note 곡 카드, Library workspace group/track row, playlist row는 드래그 동안 exact-height placeholder로 렌더링한다.
+- pointer-up 즉시 전체 실제 DOM을 복구한다. placeholder는 기존 높이를 유지하므로 스크롤 길이/위치/디자인을 바꾸지 않는다.
+- 드래그 중 observer/listener/React state 업데이트를 추가하지 않는다. 상태 변경은 prepare 1회 + end 1회뿐이다.
+- 573의 off-screen CSS render budget은 Studio builder 및 비가상화 영역의 보조 안전망으로 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

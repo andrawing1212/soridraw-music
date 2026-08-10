@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
+import { useSplitDragVirtualWindow } from '../lib/splitDragVirtualWindow';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -236,6 +237,11 @@ function AnimatedTrackPlayButton({
 
 export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = {}) {
   const navigate = useNavigate();
+  const splitDragWindow = useSplitDragVirtualWindow({
+    selector: '[data-soridraw-library-virtual-key]',
+    keyAttribute: 'data-soridraw-library-virtual-key',
+    overscan: 360,
+  });
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');
 
@@ -6198,6 +6204,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         ) : (
           <div className="soridraw-library-list-start-divider !mt-2 md:!mt-3 pt-0 space-y-2 md:space-y-3" data-selection-keep="true">
             {displayedWorkspaceTracks.map((group) => {
+              const groupVirtualKey = `library-group:${group.id}`;
+              if (!splitDragWindow.shouldRender(groupVirtualKey)) {
+                return (
+                  <div
+                    key={group.id}
+                    data-soridraw-library-virtual-placeholder={groupVirtualKey}
+                    className="soridraw-split-virtual-placeholder"
+                    style={{ height: `${splitDragWindow.getPlaceholderHeight(groupVirtualKey, 164)}px` }}
+                    aria-hidden="true"
+                  />
+                );
+              }
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
                 .map((item: any, idx: number) => ({ item, idx }))
@@ -6207,6 +6225,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               return (
                 <div
                   key={group.id}
+                  data-soridraw-library-virtual-key={groupVirtualKey}
                   className={`soridraw-library-workspace-group soridraw-list-perf-item bg-[#151515] rounded-2xl ${activeColorMenu?.startsWith(`workspace-${group.id}-`) ? 'soridraw-list-perf-item--active' : ''}`}
                 >
                   {/* Group Header */}
@@ -6242,6 +6261,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   {/* Tracks List */}
                   <div className="soridraw-library-workspace-tracks">
                     {items.map(({ item, idx }: { item: any; idx: number }) => {
+                      const rowVirtualKey = `library-track:${group.id}:${idx}`;
+                      if (!splitDragWindow.shouldRender(rowVirtualKey)) {
+                        return (
+                          <div
+                            key={`${group.id}-${idx}`}
+                            data-soridraw-library-virtual-placeholder={rowVirtualKey}
+                            className="soridraw-split-virtual-placeholder"
+                            style={{ height: `${splitDragWindow.getPlaceholderHeight(rowVirtualKey, 76)}px` }}
+                            aria-hidden="true"
+                          />
+                        );
+                      }
                       const audioUrl = getAudioUrl(item, group);
                       const duration = getDuration(item, group);
                       const hasValidDuration = duration !== null;
@@ -6258,6 +6289,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                       return (
                         <div 
                           key={`${group.id}-${idx}`} 
+                          data-soridraw-library-virtual-key={rowVirtualKey}
                           data-selection-keep="true"
                           className={`soridraw-library-workspace-track-row group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
@@ -6675,6 +6707,18 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return (
                     <>
                       {displayedItems.map((item, index) => {
+                  const playlistVirtualKey = `library-playlist:${item.id}`;
+                  if (!splitDragWindow.shouldRender(playlistVirtualKey)) {
+                    return (
+                      <div
+                        key={item.id}
+                        data-soridraw-library-virtual-placeholder={playlistVirtualKey}
+                        className="soridraw-split-virtual-placeholder"
+                        style={{ height: `${splitDragWindow.getPlaceholderHeight(playlistVirtualKey, 76)}px` }}
+                        aria-hidden="true"
+                      />
+                    );
+                  }
                   const isActive = isCurrentPlaylistItem(item);
                   const isShared = item.sourceType === 'shared_track';
                   const sourceTrackForPlaylist = !isShared
@@ -6694,6 +6738,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                   return (
                     <div 
                       key={item.id} 
+                      data-soridraw-library-virtual-key={playlistVirtualKey}
                       onMouseDown={(event) => {
                         handleLibraryDragSelectStart(event, selection);
                         handleLibraryCardLongPressStart(event, selection);

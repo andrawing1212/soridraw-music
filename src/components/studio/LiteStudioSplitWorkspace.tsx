@@ -16,6 +16,7 @@ import {
   isSplitPerfDragActive,
   recordSplitPerfApply,
   recordSplitPerfFlush,
+  recordSplitPerfLiveDomSnapshot,
 } from './splitPerfDiagnostics';
 
 const WIDE_STORAGE_KEY = 'soridraw_lite_studio_split_percent_v2';
@@ -153,6 +154,7 @@ export default function LiteStudioSplitWorkspace({
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
+  const perfLiveDomCapturedRef = useRef(false);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastViewportHeightRef = useRef<number | null>(null);
@@ -602,6 +604,10 @@ export default function LiteStudioSplitWorkspace({
     lastPixelRef.current = nextPixel;
 
     const nextPercent = (nextPixel / width) * 100;
+    if (!perfLiveDomCapturedRef.current) {
+      perfLiveDomCapturedRef.current = true;
+      recordSplitPerfLiveDomSnapshot(builderRef.current, resultRef.current);
+    }
     // 573: one real boundary again. The divider and both panes are owned by the
     // same single local width write on every rAF frame. Smoothness now comes
     // from reducing the amount of off-screen content the browser must reflow,
@@ -671,17 +677,22 @@ export default function LiteStudioSplitWorkspace({
 
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
+    // 574: let heavy list pages capture their visible React window before the
+    // first resize frame. The event is synchronous and happens only once per
+    // drag; pages restore the full list on soridraw-split-drag-end.
+    window.dispatchEvent(new CustomEvent('soridraw-split-drag-prepare'));
     applyDragRenderBudget();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · unified rAF + offscreen render budget (573)',
+      engine: 'Lite V2 · unified rAF + React drag windowing (574)',
       builder: builderRef.current,
       result: resultRef.current,
     });
     lastPixelRef.current = null;
+    perfLiveDomCapturedRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-split-dragging');

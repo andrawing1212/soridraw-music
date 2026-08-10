@@ -61,6 +61,9 @@ export type SplitPerfResult = {
   domNodes: number;
   builderNodes: number;
   resultNodes: number;
+  liveDomNodes: number;
+  liveBuilderNodes: number;
+  liveResultNodes: number;
   heapMb: number | null;
   createdAt: number;
 };
@@ -91,6 +94,9 @@ type ActiveDrag = {
   domNodes: number;
   builderNodes: number;
   resultNodes: number;
+  liveDomNodes: number;
+  liveBuilderNodes: number;
+  liveResultNodes: number;
   rafId: number | null;
 };
 
@@ -299,6 +305,9 @@ export const beginSplitPerfDrag = ({
     domNodes: document.getElementsByTagName('*').length,
     builderNodes: builder ? builder.getElementsByTagName('*').length : 0,
     resultNodes: result ? result.getElementsByTagName('*').length : 0,
+    liveDomNodes: 0,
+    liveBuilderNodes: 0,
+    liveResultNodes: 0,
     rafId: null,
   };
   runRafProbe();
@@ -309,6 +318,15 @@ export const recordSplitPerfFlush = (durationMs: number, contentCommitted: boole
   active.flushTimes.push(durationMs);
   if (contentCommitted) active.contentCommitCount += 1;
   else active.dividerOnlyCount += 1;
+};
+
+
+export const recordSplitPerfLiveDomSnapshot = (builder: HTMLElement | null, result: HTMLElement | null) => {
+  if (!enabled || !active || typeof document === 'undefined') return;
+  if (active.liveDomNodes > 0) return;
+  active.liveDomNodes = document.getElementsByTagName('*').length;
+  active.liveBuilderNodes = builder ? builder.getElementsByTagName('*').length : 0;
+  active.liveResultNodes = result ? result.getElementsByTagName('*').length : 0;
 };
 
 export const recordSplitPerfApply = (sample: SplitPerfApplySample) => {
@@ -391,6 +409,9 @@ export const finishSplitPerfDrag = () => {
     domNodes: active.domNodes,
     builderNodes: active.builderNodes,
     resultNodes: active.resultNodes,
+    liveDomNodes: active.liveDomNodes || active.domNodes,
+    liveBuilderNodes: active.liveBuilderNodes || active.builderNodes,
+    liveResultNodes: active.liveResultNodes || active.resultNodes,
     heapMb: heapMb === null ? null : round(heapMb, 1),
     createdAt: Date.now(),
   };

@@ -66,8 +66,9 @@ export default function SplitPerformanceDiagnostics() {
                 <span>JS flush 평균/최대</span><b>{result.flushAvgMs}/{result.flushMaxMs}ms</b>
                 <span>실제 폭 반영 / 선만</span><b>{result.contentCommitCount} / {result.dividerOnlyCount}</b>
                 <span>apply 평균/최대</span><b>{result.applyAvgMs}/{result.applyMaxMs}ms</b>
-                <span>DOM 전체</span><b>{result.domNodes.toLocaleString()}</b>
-                <span>좌/우 DOM</span><b>{result.builderNodes.toLocaleString()} / {result.resultNodes.toLocaleString()}</b>
+                <span>DOM 시작 → 드래그</span><b>{result.domNodes.toLocaleString()} → {result.liveDomNodes.toLocaleString()}</b>
+                <span>좌/우 DOM 시작</span><b>{result.builderNodes.toLocaleString()} / {result.resultNodes.toLocaleString()}</b>
+                <span>좌/우 DOM 드래그</span><b>{result.liveBuilderNodes.toLocaleString()} / {result.liveResultNodes.toLocaleString()}</b>
                 <span>JS Heap</span><b>{format(result.heapMb, 'MB')}</b>
               </div>
 
@@ -97,7 +98,7 @@ export default function SplitPerformanceDiagnostics() {
                   <span>dataset/ARIA</span><b>{result.miscAvgMs}ms</b>
                 </div>
               </details>
-              <p className="soridraw-split-perf-note">573: 분할선과 실제 패널 경계를 다시 하나로 합쳤습니다. AI Studio/테스트앱에서 같은 동작 후 PERF와 병목 TOP을 비교하세요.</p>
+              <p className="soridraw-split-perf-note">574: 단일 실제 경계를 유지한 채 Music Note/Library의 화면 밖 React 카드 DOM을 드래그 동안 실제 placeholder로 윈도잉합니다. DOM 시작→드래그 수치도 함께 비교하세요.</p>
             </>
           )}
         </div>

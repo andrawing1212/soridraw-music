@@ -295,7 +295,6 @@ export default function LiteStudioSplitWorkspace({
     const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
     const workspaceRight = Math.max(0, Math.round(window.innerWidth - (left + width)));
 
-    splitterRef.current?.style.setProperty('--soridraw-lite-studio-splitter-left', `${roundedSplitterLeft}px`);
     builderToggleRef.current?.style.setProperty('--soridraw-lite-studio-builder-toggle-left', `${Math.max(0, roundedSplitterLeft - 43)}px`);
     resultToggleRef.current?.style.setProperty('--soridraw-lite-studio-result-toggle-left', `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`);
 
@@ -361,6 +360,11 @@ export default function LiteStudioSplitWorkspace({
     const splitterLeft = metricsRef.current.left + builderWidth;
 
     layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+    // 568: keep the Lite V2 divider inside the workspace, exactly like the
+    // original Music Note/Library performance probe. The divider position is
+    // therefore owned by the same single workspace write instead of a body
+    // portal/fixed viewport coordinate.
+    layout.style.setProperty('--soridraw-lite-split-percent', `${builderWidth}px`);
     syncPaneModes(builderWidth, resultWidth);
     if (live) syncExternalGeometry(builderWidth, splitterLeft);
 
@@ -647,7 +651,7 @@ export default function LiteStudioSplitWorkspace({
     <button
       ref={splitterRef}
       type="button"
-      className="soridraw-studio-splitter soridraw-lite-studio-splitter"
+      className="soridraw-lite-splitter soridraw-lite-studio-splitter"
       aria-label="곡 만들기와 생성 결과 영역 너비 조절"
       aria-valuemin={MIN_PERCENT}
       aria-valuemax={MAX_PERCENT}
@@ -705,7 +709,10 @@ export default function LiteStudioSplitWorkspace({
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio"
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
-        style={{ '--soridraw-studio-builder-width': `${percentRef.current}%` } as React.CSSProperties}
+        style={{
+          '--soridraw-studio-builder-width': `${percentRef.current}%`,
+          '--soridraw-lite-split-percent': `${percentRef.current}%`,
+        } as React.CSSProperties}
       >
         <div
           id="soridraw-studio-builder-pane"
@@ -729,9 +736,9 @@ export default function LiteStudioSplitWorkspace({
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
           {panes[1] ?? null}
         </div>
+        {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed ? splitter : null}
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
-      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>

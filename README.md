@@ -1370,3 +1370,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - /history는 562차처럼 정상 뮤직노트 단독 화면 + 좌우 레일 구조로 복구했다.
 - /studio는 Lite Studio 분할 엔진 V2가 기본이며, 기존 StudioSplitWorkspace는 비교용 `기존 방식` 전환으로 유지한다.
 - 뮤직노트 테스트용 LiteSplitWorkspace 런타임 import/helper를 App.tsx에서 제거해 일반 뮤직노트 화면에 분할 엔진이 개입하지 않도록 했다.
+
+
+## 567차 메모
+- Lite V2 엔진은 566차에도 적용되어 있었지만 Studio용 splitter가 legacy `.soridraw-studio-splitter` 클래스를 함께 사용해 누적된 기존 CSS 디자인을 다시 상속하던 문제를 수정했다.
+- Studio Lite V2 splitter에서 legacy splitter 클래스를 제거하고, 564차 Music Note/Library 테스트에서 검증한 `.soridraw-lite-splitter` 디자인을 그대로 사용한다.
+- Studio에서 필요한 viewport fixed 위치만 별도 override하며, normal/hover/active/focus 모두 1px 전체 높이를 고정해 클릭 시 선 길이가 변하지 않는다.
+- 분할 엔진 동작/비율/반응형/데이터/Firebase 구조는 변경하지 않았다.
+
+
+## 568차 메모
+- 567에서 클래스만 Lite V2로 바꿨지만 Studio용 splitter를 body portal/fixed 좌표로 계속 렌더링해 564 테스트와 실제 선의 구조/길이가 달랐던 문제를 수정했다.
+- Lite V2 splitter를 Studio workspace 내부 absolute divider로 되돌려 564 뮤직노트/라이브러리 테스트와 동일한 렌더링 방식으로 통일했다.
+- splitter 위치는 workspace의 단일 `--soridraw-lite-split-percent` write가 소유하며, 클릭/드래그 상태에서도 base Lite V2 선 길이/두께가 유지된다.

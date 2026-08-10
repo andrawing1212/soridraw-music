@@ -190,32 +190,11 @@
     --soridraw-studio-builder-width: 50%;
   }
 
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:hover,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:active,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus-visible {
-    left: calc(var(--soridraw-lite-studio-splitter-left, var(--soridraw-studio-splitter-left, 50vw)) - 8px) !important;
-    top: 58px !important;
-    bottom: 0 !important;
-    height: auto !important;
-    min-height: 0 !important;
-    transform: none !important;
-    scale: 1 !important;
-    translate: none !important;
-    will-change: auto !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter > span,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:hover > span,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:active > span,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus > span,
-  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus-visible > span {
-    width: 1px !important;
-    height: 100% !important;
-    min-height: 100% !important;
-    transform: none !important;
-    scale: 1 !important;
+  /* 568: do not portal/fix the Lite V2 divider in Studio. It now lives inside
+   * `.soridraw-lite-studio-split-workspace`, so the exact base Lite V2 divider
+   * skin/height/interaction rules above are used with no Studio override. */
+  html[data-soridraw-theme="studio-black"] .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter {
+    z-index: 70;
   }
 
   html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle.soridraw-lite-studio-builder-toggle {

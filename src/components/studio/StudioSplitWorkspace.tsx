@@ -166,8 +166,17 @@ export default function StudioSplitWorkspace({
   const builderModeAnchorFrameRef = useRef<number | null>(null);
   const builderModeScrollAnchorRef = useRef<{
     targetMode: PaneMode;
-    edge: 'top' | 'bottom' | 'progress';
+    edge: 'top' | 'bottom' | 'content' | 'progress';
     progress: number;
+    element?: HTMLElement;
+    elementRatio?: number;
+    viewportOffset?: number;
+  } | null>(null);
+  const builderDragScrollAnchorRef = useRef<{
+    edge: 'top' | 'bottom' | 'content';
+    element?: HTMLElement;
+    elementRatio?: number;
+    viewportOffset?: number;
   } | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
@@ -576,39 +585,164 @@ export default function StudioSplitWorkspace({
     return width > breakpoint + hysteresis ? 'desktop' : 'mobile';
   }, []);
 
-  // 538 — Collapsed Generate control: preserve the builder's relative viewport
-  // position across both desktop <-> mobile transitions. Bottom-gap anchoring
-  // was directional, so repeated breakpoint crossings accumulated downward
-  // drift. Exact top stays top, exact bottom stays bottom, and middle positions
-  // keep the same normalized scroll progress. Capture/restore only runs when
-  // the pane mode actually changes, never on ordinary drag frames.
+  // 545 — Desktop/mobile mode changes reflow the builder from multi-column cards
+  // to a single column. A normalized scroll percentage cannot preserve what the
+  // user is actually looking at because every card changes height by a different
+  // amount. Preserve exact top/bottom edges, but in the middle pin the currently
+  // visible content itself to the same visual line in the pane. This runs only at
+  // the breakpoint crossing, never on ordinary divider frames.
+  const captureBuilderContentAnchor = useCallback((builder: HTMLElement) => {
+    const builderRect = builder.getBoundingClientRect();
+    const viewportOffset = Math.max(0, Math.min(builder.clientHeight, builder.clientHeight * 0.5));
+    const focusY = builderRect.top + viewportOffset;
+    const candidates = Array.from(
+      builder.querySelectorAll<HTMLElement>(
+        '[data-soridraw-scroll-anchor], [data-studio-menu], .soridraw-studio-menu-card',
+      ),
+    ).filter((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.height > 1
+        && rect.width > 1
+        && rect.bottom > builderRect.top
+        && rect.top < builderRect.bottom;
+    });
+
+    if (candidates.length === 0) return null;
+
+    let bestElement: HTMLElement | null = null;
+    let bestRect: DOMRect | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const element of candidates) {
+      const rect = element.getBoundingClientRect();
+      const containsFocus = rect.top <= focusY && rect.bottom >= focusY;
+      const distance = containsFocus
+        ? 0
+        : Math.min(Math.abs(focusY - rect.top), Math.abs(focusY - rect.bottom));
+      // When nested candidates cover the same focus line, prefer the smaller,
+      // more specific element (for example the lyrics cue row over the whole
+      // lyrics card).
+      const specificityPenalty = containsFocus ? Math.min(rect.height, 2000) / 10000 : 0;
+      const score = distance + specificityPenalty;
+      if (score < bestScore) {
+        bestScore = score;
+        bestElement = element;
+        bestRect = rect;
+      }
+    }
+
+    if (!bestElement || !bestRect) return null;
+    const elementRatio = bestRect.height > 1
+      ? Math.max(0, Math.min(1, (focusY - bestRect.top) / bestRect.height))
+      : 0;
+    return { element: bestElement, elementRatio, viewportOffset };
+  }, []);
+
+  const restoreBuilderModeScrollAnchor = useCallback(() => {
+    const builder = builderRef.current;
+    const anchor = builderModeScrollAnchorRef.current;
+    if (!builder || !anchor || builder.dataset.paneMode !== anchor.targetMode) return;
+
+    const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
+    let targetScrollTop = builder.scrollTop;
+
+    if (anchor.edge === 'top') {
+      targetScrollTop = 0;
+    } else if (anchor.edge === 'bottom') {
+      targetScrollTop = maxScrollTop;
+    } else if (anchor.edge === 'content' && anchor.element && builder.contains(anchor.element)) {
+      const builderRect = builder.getBoundingClientRect();
+      const elementRect = anchor.element.getBoundingClientRect();
+      const elementRatio = Math.max(0, Math.min(1, anchor.elementRatio ?? 0));
+      const viewportOffset = Math.max(0, Math.min(builder.clientHeight, anchor.viewportOffset ?? builder.clientHeight * 0.5));
+      const anchoredPointY = elementRect.top + (elementRect.height * elementRatio);
+      const desiredPointY = builderRect.top + viewportOffset;
+      targetScrollTop = builder.scrollTop + (anchoredPointY - desiredPointY);
+    } else {
+      targetScrollTop = maxScrollTop * anchor.progress;
+    }
+
+    targetScrollTop = Math.max(0, Math.min(maxScrollTop, targetScrollTop));
+    if (Math.abs(builder.scrollTop - targetScrollTop) > 0.5) {
+      builder.scrollTop = targetScrollTop;
+    }
+  }, []);
+
   const scheduleBuilderModeScrollAnchorRestore = useCallback(() => {
     if (builderModeAnchorFrameRef.current !== null) {
       window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
     }
     builderModeAnchorFrameRef.current = window.requestAnimationFrame(() => {
       builderModeAnchorFrameRef.current = null;
-      const builder = builderRef.current;
-      const anchor = builderModeScrollAnchorRef.current;
-      if (!builder || !anchor || builder.dataset.paneMode !== anchor.targetMode) return;
-      const collapsedActionButton = readExternalControls().collapsedActionButton;
-      if (!collapsedActionButton?.isConnected) {
-        builderModeScrollAnchorRef.current = null;
-        return;
-      }
-
-      const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
-      const targetScrollTop = anchor.edge === 'top'
-        ? 0
-        : anchor.edge === 'bottom'
-          ? maxScrollTop
-          : Math.max(0, Math.min(maxScrollTop, maxScrollTop * anchor.progress));
-      if (Math.abs(builder.scrollTop - targetScrollTop) > 1) {
-        builder.scrollTop = targetScrollTop;
-      }
+      restoreBuilderModeScrollAnchor();
       if (!draggingRef.current) builderModeScrollAnchorRef.current = null;
     });
-  }, [readExternalControls]);
+  }, [restoreBuilderModeScrollAnchor]);
+
+  // 549 — Divider-width reflow must not move the builder viewport. Vocal/Lyrics,
+  // Tempo and command controls legitimately rewrap as the pane width changes, but
+  // letting those height changes alter scrollTop makes the whole lower stack look
+  // like it is being pushed down/up. Capture one visual anchor when the divider
+  // grab starts and restore that same point inside the existing rAF drag frame.
+  // This adds no React renders/observers/listeners and costs only two rect reads
+  // while the pointer is actively moving. Exact top/bottom remain exact edges.
+  const captureBuilderDragScrollAnchor = useCallback(() => {
+    const builder = builderRef.current;
+    if (!builder) {
+      builderDragScrollAnchorRef.current = null;
+      return;
+    }
+
+    const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
+    const currentScrollTop = Math.max(0, Math.min(maxScrollTop, builder.scrollTop));
+    const edgeTolerance = 2;
+    if (currentScrollTop <= edgeTolerance) {
+      builderDragScrollAnchorRef.current = { edge: 'top' };
+      return;
+    }
+    if (maxScrollTop - currentScrollTop <= edgeTolerance) {
+      builderDragScrollAnchorRef.current = { edge: 'bottom' };
+      return;
+    }
+
+    const contentAnchor = captureBuilderContentAnchor(builder);
+    builderDragScrollAnchorRef.current = contentAnchor
+      ? {
+          edge: 'content',
+          element: contentAnchor.element,
+          elementRatio: contentAnchor.elementRatio,
+          viewportOffset: contentAnchor.viewportOffset,
+        }
+      : { edge: 'top' };
+  }, [captureBuilderContentAnchor]);
+
+  const restoreBuilderDragScrollAnchor = useCallback(() => {
+    if (!draggingRef.current) return;
+    const builder = builderRef.current;
+    const anchor = builderDragScrollAnchorRef.current;
+    if (!builder || !anchor) return;
+
+    const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
+    let targetScrollTop = builder.scrollTop;
+
+    if (anchor.edge === 'top') {
+      targetScrollTop = 0;
+    } else if (anchor.edge === 'bottom') {
+      targetScrollTop = maxScrollTop;
+    } else if (anchor.element && builder.contains(anchor.element)) {
+      const builderRect = builder.getBoundingClientRect();
+      const elementRect = anchor.element.getBoundingClientRect();
+      const elementRatio = Math.max(0, Math.min(1, anchor.elementRatio ?? 0));
+      const viewportOffset = Math.max(0, Math.min(builder.clientHeight, anchor.viewportOffset ?? builder.clientHeight * 0.5));
+      const anchoredPointY = elementRect.top + (elementRect.height * elementRatio);
+      const desiredPointY = builderRect.top + viewportOffset;
+      targetScrollTop = builder.scrollTop + (anchoredPointY - desiredPointY);
+    }
+
+    targetScrollTop = Math.max(0, Math.min(maxScrollTop, targetScrollTop));
+    if (Math.abs(builder.scrollTop - targetScrollTop) > 0.5) {
+      builder.scrollTop = targetScrollTop;
+    }
+  }, []);
 
   /**
    * Apply the split directly to DOM/CSS variables.
@@ -700,28 +834,49 @@ export default function StudioSplitWorkspace({
     const externalControls = readExternalControls();
     const builderModeChanged = !builderCollapsedRef.current
       && previousBuilderMode !== nextBuilderMode;
-    const shouldPreserveCollapsedBuilderScroll = builderModeChanged
-      && Boolean(externalControls.collapsedActionButton?.isConnected);
 
-    if (shouldPreserveCollapsedBuilderScroll) {
-      const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
-      const currentScrollTop = Math.max(0, Math.min(maxScrollTop, builder.scrollTop));
-      const edgeTolerance = 2;
-      builderModeScrollAnchorRef.current = {
-        targetMode: nextBuilderMode,
-        edge: currentScrollTop <= edgeTolerance
-          ? 'top'
-          : maxScrollTop - currentScrollTop <= edgeTolerance
-            ? 'bottom'
-            : 'progress',
-        progress: maxScrollTop > 0 ? currentScrollTop / maxScrollTop : 0,
-      };
+    if (builderModeChanged) {
+      // 550 — During an active divider drag, the drag-start content anchor is the
+      // sole scroll owner. Keeping a second desktop/mobile crossing anchor here
+      // leaves a stale snapshot that gets replayed after pointer-up, which is why
+      // releasing the divider in builder-mobile jumped the viewport upward.
+      // Non-drag responsive changes still use the exact top/bottom/content rule.
+      if (draggingRef.current) {
+        builderModeScrollAnchorRef.current = null;
+      } else {
+        const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
+        const currentScrollTop = Math.max(0, Math.min(maxScrollTop, builder.scrollTop));
+        const edgeTolerance = 2;
+        const contentAnchor = currentScrollTop > edgeTolerance && maxScrollTop - currentScrollTop > edgeTolerance
+          ? captureBuilderContentAnchor(builder)
+          : null;
+        builderModeScrollAnchorRef.current = {
+          targetMode: nextBuilderMode,
+          edge: currentScrollTop <= edgeTolerance
+            ? 'top'
+            : maxScrollTop - currentScrollTop <= edgeTolerance
+              ? 'bottom'
+              : contentAnchor
+                ? 'content'
+                : 'progress',
+          progress: maxScrollTop > 0 ? currentScrollTop / maxScrollTop : 0,
+          element: contentAnchor?.element,
+          elementRatio: contentAnchor?.elementRatio,
+          viewportOffset: contentAnchor?.viewportOffset,
+        };
+      }
     }
 
     if (!builderCollapsedRef.current && (previousBuilderMode !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
-      if (shouldPreserveCollapsedBuilderScroll) scheduleBuilderModeScrollAnchorRestore();
+      if (builderModeChanged && !draggingRef.current) {
+        // Correct non-drag responsive changes in the same breakpoint frame, then
+        // verify once on the next frame after CSS reflow settles. Active divider
+        // drags are already owned by restoreBuilderDragScrollAnchor below.
+        restoreBuilderModeScrollAnchor();
+        scheduleBuilderModeScrollAnchorRestore();
+      }
     }
     if (!resultCollapsedRef.current && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       modeRef.current.result = nextResultMode;
@@ -749,6 +904,11 @@ export default function StudioSplitWorkspace({
       workspaceHeroHost.dataset.paneMode = nextResultMode;
     }
 
+    // Keep the same visible builder content pinned while width-driven wrapping
+    // changes card heights. Do this after pane-mode attributes are committed so
+    // desktop/mobile crossings and ordinary in-mode reflow share one behavior.
+    restoreBuilderDragScrollAnchor();
+
     const ariaBoundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
     if (lastAriaBoundsRef.current !== ariaBoundsKey) {
       lastAriaBoundsRef.current = ariaBoundsKey;
@@ -762,7 +922,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
+  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -1075,6 +1235,7 @@ export default function StudioSplitWorkspace({
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
     builderModeScrollAnchorRef.current = null;
+    captureBuilderDragScrollAnchor();
     if (builderModeAnchorFrameRef.current !== null) {
       window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
       builderModeAnchorFrameRef.current = null;
@@ -1145,6 +1306,7 @@ export default function StudioSplitWorkspace({
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
     draggingRef.current = false;
+    builderDragScrollAnchorRef.current = null;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
     lastDragBuilderPixelRef.current = null;

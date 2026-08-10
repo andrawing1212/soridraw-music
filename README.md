@@ -1,3 +1,12 @@
+## 549차 — 분할 리사이즈 중 빌더 화면 고정 / 연쇄 밀림 차단
+
+- 분할바를 잡는 순간 빌더의 현재 화면 기준점을 1회 저장합니다.
+- 드래그 중 보컬/가사/템포/명령창의 줄바꿈과 실제 높이가 변해도, 기존 rAF 프레임 안에서 같은 콘텐츠가 같은 화면 높이에 있도록 scrollTop만 최소 보정합니다.
+- 최상단은 계속 최상단, 최하단은 계속 최하단으로 유지합니다.
+- PC↔모바일 경계뿐 아니라 같은 모드 안에서 폭이 변할 때 생기던 아래/위 연쇄 밀림도 같은 규칙으로 막습니다.
+- 새 React state, ResizeObserver, scroll/resize listener는 추가하지 않았습니다. 드래그 중에만 앵커 요소/빌더 rect를 읽습니다.
+- 생성바 위치/크기, 548차 보컬·가사 자연 높이, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
 # SORIDRAW Music Studio
 
 ## Development
@@ -1177,4 +1186,123 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 최적화: 새 JS, React state, ResizeObserver, scroll listener, DOM 측정을 추가하지 않았다. 오히려 상태별 CSS override 하나를 제거해 접기/펼치기 때 scrollHeight가 달라지는 레이아웃 변동을 줄였다.
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 541차 — 생성바 접기/펼치기 버튼 위 휠 스크롤 전달
+- 기준: `SORIDRAW_540차_펼친접힌_최하단스크롤범위통일.zip`
+- 수정 파일: `src/App.tsx`, `README.md`
+- Studio Black의 생성바 `접기` 버튼과 접힌 상태의 `펼치기` 버튼은 body portal에 고정되어 있어, 마우스 포인터가 버튼 위에 있을 때 휠 이벤트가 Builder 내부 스크롤 pane으로 전달되지 않던 문제를 수정했다.
+- 두 토글 위에서 발생한 세로 wheel 입력만 현재 Builder pane의 `scrollTop`으로 직접 전달한다.
+- Builder pane이 실제로 내부 스크롤을 소유하는 경우에만 동작하며, 내부 스크롤이 없는 화면에서는 기존 브라우저 스크롤 동작을 그대로 둔다.
+- `ctrl + wheel`은 브라우저 확대/축소를 막지 않도록 전달하지 않는다.
+- 별도 `scroll`/`resize` listener, ResizeObserver, React state, rAF 루프를 추가하지 않았다. 토글 위에서 wheel이 발생할 때만 계산하므로 기존 분할바 성능 경로에는 영향이 없다.
+- 생성바 위치/크기/접힘 애니메이션, 538차 PC↔모바일 스크롤 대칭 규칙, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+## 542차 — 생성바 펼침/접힘 공통 PC↔모바일 스크롤 기준 적용
+- 기준: `SORIDRAW_541차_생성바_접기펼치기_버튼위_휠스크롤복구.zip`
+- 수정 파일: `src/components/studio/StudioSplitWorkspace.tsx`, `README.md`
+- 538차의 PC↔Builder-mobile 전환 스크롤 보존 로직이 `collapsedActionButton` 존재 여부로 제한되어 있어, 생성바가 펼쳐진 상태에서는 같은 규칙이 적용되지 않던 조건을 제거했다.
+- 이제 생성바가 펼쳐져 있든 접혀 있든 Builder가 desktop/mobile 경계를 실제로 넘는 순간 동일한 규칙을 사용한다: 최상단은 최상단, 최하단은 최하단, 중간은 전체 스크롤 가능 범위 대비 진행 비율을 유지한다.
+- 생성바의 펼침/접힘 상태를 확인하기 위한 DOM 조건을 스크롤 보존 경로에서 제거해 상태 의존성을 없앴다. 새 observer/listener/state는 추가하지 않았고, 기존처럼 모드가 실제 변경될 때만 캡처/복원을 실행한다.
+- 541차의 접기/펼치기 버튼 위 휠 스크롤 전달, 생성바 위치/크기, 분할바 geometry, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 543차 — 생성바 접기/펼치기 버튼 휠 스크롤 공통화 + 부드러운 전달
+- 기준: 542차.
+- 펼친 생성바의 접기 버튼은 draggable Motion 패널 내부, 접힌 펼치기 버튼은 body portal 단독 구조라 휠 이벤트 경로가 달랐던 부분을 `onWheelCapture`로 통일했다.
+- 기존의 `scrollTop = current + deltaY` 즉시 점프 전달을 제거하고, 휠 입력을 목표 scrollTop에 누적한 뒤 단일 `requestAnimationFrame` 루프로 짧게 보간해 일반 스크롤처럼 부드럽게 이동한다.
+- 확대/축소용 Ctrl+휠은 가로채지 않는다.
+- 별도 상시 scroll/resize listener, ResizeObserver, React state는 추가하지 않았고 휠 입력이 들어오는 동안에만 rAF가 동작한다.
+- 생성바 위치/크기, 542차 PC↔모바일 스크롤 위치 보존, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 영상 재확인 반영: 펼친 상태에서는 사용자가 작은 접기 화살표가 아니라 `생성하기` 버튼을 포함한 생성바 본체 위에서 휠을 사용하고 있었다. 따라서 펼친 생성바는 접기 버튼 1개가 아니라 action row 전체에서 휠을 받아 Builder로 전달하도록 범위를 수정했다. 접힌 상태는 기존 왼쪽 펼치기 탭에서 동일하게 동작한다.
+
+## 544차 — 생성바 위 휠 스크롤 관성 개선 + 최하단 역방향 첫 입력 복구
+- 기준: 543차.
+- 최신 영상에서 펼친 생성바 위 휠이 여전히 계단식으로 느껴지고, 최하단에서 아래쪽 휠을 한 번 더 준 뒤 위쪽으로 방향을 바꾸면 첫 역방향 입력이 먹지 않는 현상을 확인했다.
+- 원인은 543차가 휠 입력을 `목표 scrollTop`에 누적해 보간하는 방식이어서, 최하단에서 아래 방향 입력이 들어오면 목표값이 `maxScrollTop`에 붙은 상태가 남고 역방향 첫 입력이 그 오래된 목표를 상쇄하는 데 사용될 수 있었던 것이다.
+- 목표 위치 누적 방식을 제거하고 `현재 scrollTop + 속도(velocity)` 기반의 단일 requestAnimationFrame 관성 스크롤로 변경했다. 실제 화면 위치를 매 프레임 기준으로 사용하므로 오래된 target 좌표가 남지 않는다.
+- 휠 방향이 반대로 바뀌면 기존 관성을 즉시 버리고 새 방향 속도로 시작한다. 최상단에서 위쪽, 최하단에서 아래쪽처럼 바깥 방향 휠이 들어오면 관성과 rAF를 즉시 종료하므로 다음 반대 방향 휠이 첫 입력부터 바로 작동한다.
+- 한 번의 일반 wheel delta가 여러 프레임에 나뉘어 감쇠되도록 해 543차의 큰 목표점 보간보다 연속적인 이동감을 우선했다. 연속 휠은 하나의 velocity에만 합쳐지며 최대 속도를 제한해 과도한 가속을 막는다.
+- 펼친 생성바 action row 전체와 접힌 펼치기 탭의 기존 `onWheelCapture` 범위는 그대로 유지한다. Ctrl+휠 확대/축소도 그대로 통과한다.
+- 상시 scroll/resize listener, ResizeObserver, React state는 추가하지 않았다. 휠 사용 중에만 rAF 1개가 동작한다.
+- 생성바 위치/크기, 542차 PC↔모바일 스크롤 위치 보존, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/App.tsx`, `README.md`.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 545차 — PC↔모바일 중간 영역 콘텐츠 앵커 보존
+- 기준: `SORIDRAW_544차_생성바_휠스크롤_관성부드러움_역방향잠김복구.zip`
+- 최신 영상에서 분할바가 Builder의 desktop/mobile 경계를 넘을 때 `보컬 큐 / 악기 큐`가 사라졌다 다시 나타나는 것처럼 보이던 현상을 재분석했다. 큐 자체의 조건부 렌더링 문제가 아니라, 538~542차의 **전체 scrollTop 비율 보존**이 PC 다열 ↔ Mobile 1열 재배치에서 같은 내용을 유지하지 못해 화면 위치가 튀는 문제였다.
+- 최상단/최하단 규칙은 그대로 유지한다: 전환 직전 최상단이면 전환 후도 최상단, 최하단이면 전환 후도 최하단이다.
+- 중간 영역은 더 이상 `scrollTop / maxScrollTop`만 복원하지 않는다. 전환 직전 Builder 화면 중앙에 실제로 걸쳐 있는 메뉴/세부 블록을 **콘텐츠 앵커**로 잡고, 그 앵커 내부에서 사용자가 보고 있던 상대 지점을 전환 후에도 같은 화면 높이에 맞춘다.
+- 일반 메뉴 카드 전체를 자동 후보로 사용하고, 가사 카드의 `섹션 구조`와 `보컬 큐/악기 큐` 행에는 더 세밀한 앵커를 추가했다. 따라서 영상처럼 큐 행 근처에서 PC↔Mobile을 반복해도 큐가 화면 밖으로 튀었다 돌아오는 현상을 줄인다.
+- 모드 전환 직후 같은 프레임에서 1회 즉시 보정하고, CSS 재배치가 끝나는 다음 requestAnimationFrame에서 1회만 검증 보정한다. 일반 분할 드래그 프레임에는 추가 DOM 탐색/측정이 없으므로 드래그 성능 경로는 유지한다.
+- 동일 콘텐츠 앵커를 찾지 못하는 예외 상황에서만 기존 normalized progress를 fallback으로 사용한다.
+- 생성바 위치/크기, 544차 휠 관성 스크롤, 카드 디자인/표시 조건, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/components/studio/StudioSplitWorkspace.tsx`, `src/App.tsx`, `README.md`.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 546차 — 보컬 큐/악기 큐 PC·모바일 상시 유지
+- 기준: 545차.
+- 증상: 분할바로 Builder가 PC↔Mobile 경계를 넘을 때 가사 카드 하단의 `보컬 큐 / 악기 큐` 행이 모바일 쪽에서 잘렸다가 PC에서 다시 나타나면서 가사 카드 높이와 전체 스크롤 높이가 함께 흔들리는 현상.
+- 원인: PC의 보컬/가사 2열을 같은 높이로 맞추기 위한 `height:100%` 규칙과 `useStableContentHeight` 기반 고정 높이 애니메이션이 모바일 1열 전환에도 남아 있었고, 모바일 카드의 `overflow:hidden`까지 겹쳐 분할 드래그 중 재측정이 끝나기 전 가사 카드 하단을 클리핑할 수 있었음.
+- 수정: Studio Black 가사 콘텐츠는 intrinsic(auto) 높이를 사용하고, Builder Mobile에서는 보컬/가사 슬롯의 데스크톱용 동일 높이 강제를 해제. 가사 카드 하단 overflow 클리핑도 해제하여 큐 행을 PC/모바일 모두 항상 레이아웃에 유지.
+- 범위: 가사 카드 높이/클리핑만 수정. 큐 기능값, 생성 로직, 분할바 스크롤 기준, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+## 547차 — 분할 리사이즈 카드 높이 안정화
+- 기준: 546차.
+- Studio Black 데스크톱에서 546차의 `lyrics-content-shell { height:auto }`가 `useStableContentHeight()`를 덮어쓰던 범위를 제거했다.
+- 분할바 드래그 중에는 기존 안정 높이를 유지하고, 드래그 종료 후에만 실제 콘텐츠 높이를 다시 측정한다. 화면 폭에 따른 글자 크기 변화가 보컬/가사 카드와 아래 템포 영역을 연속으로 밀어내지 않도록 복구했다.
+- Builder Mobile은 자연 높이를 그대로 유지해 보컬 큐/악기 큐가 잘리지 않는 546차 동작을 보존한다.
+- 새 observer/listener/state 없음. Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 548차 — 보컬/가사 반응형 높이 자연화 · 리사이즈 후 빈공간 제거
+- 기준: `SORIDRAW_547차_분할리사이즈_카드높이안정화.zip`.
+- 최신 영상 재분석 결과, 분할바 이동 중 `명령창` 위 간격이 순간적으로 달라졌다가 복귀하고, 다시 폭을 넓힐 때 보컬/가사 카드 내부에 빈 영역이 남는 직접 원인은 **반응형 텍스트/줄바꿈은 즉시 바뀌는데 내부 콘텐츠 높이는 `useStableContentHeight()`로 이전 값을 유지한 뒤 드래그 종료 후 다시 측정하고 0.25초 동안 애니메이션하던 구조**였다.
+- Studio Black의 `VocalControl`과 `SongStructureIntegratedControl`만 `naturalResponsiveHeight` 경로를 사용하도록 분리했다. 이 경로에서는 높이 측정용 `ResizeObserver`/settle timer를 만들지 않고, 내부 콘텐츠 shell을 항상 intrinsic `height:auto`로 유지한다.
+- 결과적으로 분할바를 줄이거나 키울 때 폰트 크기/줄바꿈 변화와 카드 실제 높이가 같은 레이아웃 패스에서 즉시 반영된다. 드래그 종료 후 뒤늦게 카드가 늘거나 줄어드는 0.25초 높이 애니메이션이 없어져 고정 section gap이 잠깐 눌렸다 복구되는 현상과 stale height 빈공간을 제거한다.
+- Classic 및 다른 테마는 기존 measured-height 동작을 유지한다. Studio Black Mobile의 보컬 큐/악기 큐 intrinsic height 및 overflow-visible 보정도 유지한다.
+- 성능: Studio Black 보컬/가사에서 불필요했던 높이 측정 `ResizeObserver`, drag-end/window-resize-end 재측정 timer, scrollHeight read 경로를 비활성화했다. 새 observer/listener/state는 추가하지 않았다.
+- 수정 파일: `src/App.tsx`, `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 550차 — 모바일 분할 해제 점프 제거 / 명령창-생성바 간격 정리
+- 기준: 549차
+- 분할바 드래그 중 PC→모바일 경계를 넘을 때 `builderModeScrollAnchor`와 `builderDragScrollAnchor`가 동시에 소유하던 스크롤 보정을 단일화했다. 드래그 중에는 시작 시점 콘텐츠 앵커만 사용하고, 마우스를 놓은 뒤 오래된 모드 전환 앵커가 재적용되어 화면이 위로 튀는 경로를 제거했다.
+- 드래그가 아닌 일반 반응형 전환에서는 기존의 최상단→최상단 / 최하단→최하단 / 중간 콘텐츠 앵커 규칙을 그대로 유지한다.
+- Builder가 모바일 모드일 때만 하단 스크롤 여유를 112px→100px로 조정해 명령창과 고정 생성바 사이의 시각 간격을 약 11px 수준으로 정리했다. PC/Tablet pane 간격과 생성바 Y 위치는 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 551차 — 모바일 명령창·생성바 간격 미세 축소
+- 기준: `SORIDRAW_550차_모바일전환_마우스해제점프제거_명령창생성바간격정리.zip`
+- Builder가 `data-pane-mode="mobile"`인 경우에만 하단 reserve를 `100px → 92px`로 8px 줄여 명령창과 고정 생성바 사이 간격을 조금 더 좁혔다.
+- PC/Tablet 간격, 생성바 Y 위치/크기, 분할바/스크롤 앵커 로직, 보컬/가사 반응형 높이, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 552차 — 비모바일 명령창·생성바 간격 미세 확대
+- 기준: `SORIDRAW_551차_모바일_명령창생성바_간격미세축소.zip`
+- Builder Mobile의 현재 하단 reserve `92px`은 그대로 유지했다.
+- PC/Tablet 등 `data-pane-mode="mobile"`이 아닌 Studio Black Builder에서만 하단 reserve를 `112px → 120px`로 8px 늘려 명령창과 고정 생성바 사이 여백을 조금 더 확보했다.
+- 생성바 Y 위치/크기, 모바일 간격, 분할바/스크롤 로직, 보컬/가사 레이아웃, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 553차 — 비모바일 명령창·생성바 간격 118px 미세조정
+- 기준: `SORIDRAW_552차_비모바일_명령창생성바_간격미세확대.zip`
+- Builder Mobile의 하단 reserve `92px`은 그대로 유지했다.
+- PC/Tablet 등 비모바일 Studio Black Builder의 하단 reserve만 `120px → 118px`로 2px 줄였다.
+- 생성바 위치/크기, 모바일 간격, 분할바/스크롤 로직, 보컬/가사 레이아웃, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+
+## 554차 — 모바일 명령창·생성바 간격 93px 미세조정
+- 기준: `SORIDRAW_553차_비모바일_명령창생성바_간격118px.zip`
+- Builder Mobile의 하단 reserve만 `92px → 93px`로 1px 늘렸다.
+- PC/Tablet 등 비모바일 reserve `118px`은 그대로 유지했다.
+- 생성바 위치/크기, 분할바/스크롤 로직, 보컬/가사 레이아웃, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.

@@ -966,9 +966,11 @@ function useStableContentHeight(
   contentRef: React.RefObject<HTMLElement>,
   setHeight: (value: number | string | ((prev: number | string) => number | string)) => void,
   deps: React.DependencyList,
-  onHeightChange?: (height: number) => void
+  onHeightChange?: (height: number) => void,
+  enabled = true
 ) {
   useLayoutEffect(() => {
+    if (!enabled) return;
     let frameId: number | null = null;
     let settleTimerId: number | null = null;
     let lastObservedWidth = -1;
@@ -1034,7 +1036,7 @@ function useStableContentHeight(
       if (settleTimerId !== null) window.clearTimeout(settleTimerId);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [enabled, ...deps]);
 }
 
 const resolveExpandedHeight = (preferredHeight: number | undefined, measuredHeight: number | string, fallbackHeight: number) => {
@@ -6674,6 +6676,106 @@ function App() {
     before: number;
     afterCollapse: number | null;
   } | null>(null);
+
+  // 544 — Forward Generate-bar wheel input with a velocity model instead of a
+  // remembered target scrollTop. The old target accumulator could stay pinned at
+  // maxScrollTop after an outward wheel at the bottom, so the first reverse wheel
+  // was spent cancelling stale intent. It also eased toward large wheel-notch
+  // targets, which felt stepped. Keep one short rAF loop, but drive it from the
+  // current scrollTop + velocity. Direction reversals reset immediately and an
+  // outward wheel at either edge clears inertia, so the next opposite wheel works
+  // on the first notch. No persistent listener/observer/state is added.
+  const actionToggleWheelRafRef = useRef<number | null>(null);
+  const actionToggleWheelVelocityRef = useRef(0);
+  const actionToggleWheelHostRef = useRef<HTMLElement | null>(null);
+
+  const forwardActionToggleWheelToBuilder = useCallback((event: React.WheelEvent<HTMLElement>) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined' || event.ctrlKey) return;
+
+    const builderPane = document.querySelector<HTMLElement>('[data-soridraw-studio-pane="builder"]');
+    if (!builderPane) return;
+
+    const maxScrollTop = Math.max(0, builderPane.scrollHeight - builderPane.clientHeight);
+    if (maxScrollTop <= 0) return;
+
+    const deltaUnit = event.deltaMode === 1
+      ? 16
+      : event.deltaMode === 2
+        ? Math.max(1, builderPane.clientHeight)
+        : 1;
+    const deltaY = event.deltaY * deltaUnit;
+    if (!Number.isFinite(deltaY) || Math.abs(deltaY) < 0.01) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const atTop = builderPane.scrollTop <= 0.5;
+    const atBottom = maxScrollTop - builderPane.scrollTop <= 0.5;
+    const outwardAtEdge = (deltaY < 0 && atTop) || (deltaY > 0 && atBottom);
+
+    if (actionToggleWheelHostRef.current !== builderPane) {
+      actionToggleWheelVelocityRef.current = 0;
+      actionToggleWheelHostRef.current = builderPane;
+    }
+
+    if (outwardAtEdge) {
+      actionToggleWheelVelocityRef.current = 0;
+      if (actionToggleWheelRafRef.current != null) {
+        window.cancelAnimationFrame(actionToggleWheelRafRef.current);
+        actionToggleWheelRafRef.current = null;
+      }
+      return;
+    }
+
+    const direction = Math.sign(deltaY);
+    const currentVelocity = actionToggleWheelVelocityRef.current;
+    const nextImpulse = deltaY * 0.14;
+    actionToggleWheelVelocityRef.current = currentVelocity !== 0 && Math.sign(currentVelocity) !== direction
+      ? nextImpulse
+      : Math.max(-42, Math.min(42, currentVelocity + nextImpulse));
+
+    if (actionToggleWheelRafRef.current != null) return;
+
+    const animateWheelScroll = () => {
+      const host = actionToggleWheelHostRef.current;
+      let velocity = actionToggleWheelVelocityRef.current;
+      if (!host || Math.abs(velocity) < 0.12) {
+        actionToggleWheelVelocityRef.current = 0;
+        actionToggleWheelRafRef.current = null;
+        actionToggleWheelHostRef.current = null;
+        return;
+      }
+
+      const hostMaxScrollTop = Math.max(0, host.scrollHeight - host.clientHeight);
+      const hostAtTop = host.scrollTop <= 0.5;
+      const hostAtBottom = hostMaxScrollTop - host.scrollTop <= 0.5;
+      if ((velocity < 0 && hostAtTop) || (velocity > 0 && hostAtBottom)) {
+        host.scrollTop = velocity < 0 ? 0 : hostMaxScrollTop;
+        actionToggleWheelVelocityRef.current = 0;
+        actionToggleWheelRafRef.current = null;
+        actionToggleWheelHostRef.current = null;
+        return;
+      }
+
+      const nextTop = Math.max(0, Math.min(hostMaxScrollTop, host.scrollTop + velocity));
+      host.scrollTop = nextTop;
+
+      velocity *= 0.84;
+      actionToggleWheelVelocityRef.current = velocity;
+      actionToggleWheelRafRef.current = window.requestAnimationFrame(animateWheelScroll);
+    };
+
+    actionToggleWheelRafRef.current = window.requestAnimationFrame(animateWheelScroll);
+  }, []);
+
+  useEffect(() => () => {
+    if (actionToggleWheelRafRef.current != null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(actionToggleWheelRafRef.current);
+    }
+    actionToggleWheelRafRef.current = null;
+    actionToggleWheelVelocityRef.current = 0;
+    actionToggleWheelHostRef.current = null;
+  }, []);
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const vocalSectionTagOptions = useMemo(
     () => buildVocalSectionTagOptions(vocalMembers, vocalMode),
@@ -13653,6 +13755,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         }
       }}
       onClickCapture={handleActionSwipeClickCapture}
+      onWheelCapture={forwardActionToggleWheelToBuilder}
       style={{ transformOrigin: 'center bottom' }}
       className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
     >
@@ -14925,6 +15028,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
               genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
               randomActivationKey={vocalRandomActivationKey}
+              naturalResponsiveHeight={isStudioBlackActionMode}
             />
             </div>
             <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
@@ -14967,6 +15071,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
               vocalSectionTags={vocalSectionTagOptions}
               selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
+              naturalResponsiveHeight={isStudioBlackActionMode}
             />
             </div>
           </div>
@@ -15202,6 +15307,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       }
                     }}
                     onClick={expandActionButtons}
+                    onWheelCapture={forwardActionToggleWheelToBuilder}
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
@@ -19681,6 +19787,7 @@ interface SongStructureIntegratedControlProps {
   vocalSectionTags?: VocalSectionTagOption[];
   selectedGenreIds?: string[];
   onModalStateChange?: (isOpen: boolean) => void;
+  naturalResponsiveHeight?: boolean;
 }
 
 function SongStructureIntegratedControlComponent({
@@ -19709,7 +19816,8 @@ function SongStructureIntegratedControlComponent({
   pointSoundTagLabels = {},
   vocalSectionTags = [],
   selectedGenreIds = [],
-  onModalStateChange
+  onModalStateChange,
+  naturalResponsiveHeight = false
 }: SongStructureIntegratedControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -19781,7 +19889,13 @@ function SongStructureIntegratedControlComponent({
     onModalStateChange?.(isCustomModalOpen || editingSectionIndex !== null || isCustomSectionEditorOpen || isSaveStructureModalOpen || isSavedSectionsModalOpen);
   }, [isCustomModalOpen, editingSectionIndex, isCustomSectionEditorOpen, isSaveStructureModalOpen, isSavedSectionsModalOpen, onModalStateChange]);
 
-  useStableContentHeight(contentRef, setContentHeight, [lyricsLength, songStructure, customStructure]);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [lyricsLength, songStructure, customStructure],
+    undefined,
+    !naturalResponsiveHeight
+  );
 
   const moveDraftSectionById = useCallback((dragId: string, targetIndex: number) => {
     setDraftStructure((prev) => {
@@ -20976,10 +21090,13 @@ function SongStructureIntegratedControlComponent({
         </div>
 
         <div className="flex flex-col flex-1 overflow-visible">
-          <motion.div 
-            animate={{ height: contentHeight }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-            className="overflow-hidden"
+          <motion.div
+            animate={naturalResponsiveHeight ? undefined : { height: contentHeight }}
+            transition={naturalResponsiveHeight ? undefined : { duration: 0.25, ease: "easeOut" }}
+            className={cn(
+              "soridraw-lyrics-content-shell",
+              naturalResponsiveHeight ? "overflow-visible" : "overflow-hidden"
+            )}
           >
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 공통 작사 스타일 */}
@@ -21057,7 +21174,7 @@ function SongStructureIntegratedControlComponent({
               </div>
 
               {/* 3. 섹션 */}
-              <div className="space-y-2">
+              <div data-soridraw-scroll-anchor="lyrics-section-structure" className="space-y-2">
                 <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
@@ -21104,7 +21221,7 @@ function SongStructureIntegratedControlComponent({
                   </p>
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2">
+                <div data-soridraw-scroll-anchor="lyrics-cues" className="mt-3 grid grid-cols-2 gap-2">
                   <div className="flex min-w-0 items-center justify-between gap-2 rounded-xl border border-btn-border bg-btn-bg px-3 py-2">
                     <span className="truncate text-[13px] md:text-[14px] font-bold text-[var(--text-primary)]">보컬 큐</span>
                     <button
@@ -21916,6 +22033,7 @@ const SongStructureIntegratedControl = React.memo(SongStructureIntegratedControl
          prev.isLocked === next.isLocked &&
          prev.userTier === next.userTier &&
          prev.user?.uid === next.user?.uid &&
+         prev.naturalResponsiveHeight === next.naturalResponsiveHeight &&
          isArrayEqual(prev.customStructure, next.customStructure) &&
          isArrayEqual(prev.selectedGenreIds, next.selectedGenreIds);
 });
@@ -23149,6 +23267,7 @@ interface VocalControlProps {
   onModalStateChange?: (isOpen: boolean) => void;
   genreHints?: string[];
   randomActivationKey?: number;
+  naturalResponsiveHeight?: boolean;
 }
 
 function VocalControlComponent({ 
@@ -23178,6 +23297,7 @@ function VocalControlComponent({
   onModalStateChange,
   genreHints = [],
   randomActivationKey = 0,
+  naturalResponsiveHeight = false,
 }: VocalControlProps) {
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
   const [editingVocalMemberId, setEditingVocalMemberId] = useState<string | null>(null);
@@ -23328,7 +23448,13 @@ function VocalControlComponent({
 
   const [contentHeight, setContentHeight] = useState<number | string>('auto');
 
-  useStableContentHeight(contentRef, setContentHeight, [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, rapMode, isKoreanEnglishMix, englishMixRatio]);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [vocalMode, maleCount, femaleCount, vocalMembers, rapEnabled, rapMode, isKoreanEnglishMix, englishMixRatio],
+    undefined,
+    !naturalResponsiveHeight
+  );
 
   const createDefaultMember = (index: number, mode: VocalMode): VocalMember => ({
     id: `member_default_${mode}_${index}_${Date.now()}`,
@@ -23899,10 +24025,13 @@ function VocalControlComponent({
         "flex flex-col flex-1 overflow-visible transition-all duration-500 ease-in-out",
         (vocalMembers.length > 0 || maleCount > 0 || femaleCount > 0 || vocalMode === 'group') ? "justify-start" : "justify-center"
       )}>
-        <motion.div 
-          animate={{ height: contentHeight }}
-          transition={{ duration: 0.25, ease: "easeOut" }}
-          className="soridraw-expand-content overflow-hidden min-h-[76px]"
+        <motion.div
+          animate={naturalResponsiveHeight ? undefined : { height: contentHeight }}
+          transition={naturalResponsiveHeight ? undefined : { duration: 0.25, ease: "easeOut" }}
+          className={cn(
+            "soridraw-expand-content soridraw-vocal-content-shell min-h-[76px]",
+            naturalResponsiveHeight ? "overflow-visible" : "overflow-hidden"
+          )}
         >
           <div ref={contentRef} className="space-y-2 mt-0">
             {/* Mode Selection */}
@@ -24522,6 +24651,7 @@ const VocalControl = React.memo(VocalControlComponent, (prev, next) => {
          isArrayEqual(prev.vocalMembers, next.vocalMembers) &&
          isArrayEqual(prev.vocalTones, next.vocalTones) &&
          prev.randomActivationKey === next.randomActivationKey &&
+         prev.naturalResponsiveHeight === next.naturalResponsiveHeight &&
          isArrayEqual(prev.genreHints || [], next.genreHints || []);
 });
 

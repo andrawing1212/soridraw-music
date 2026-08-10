@@ -11654,3 +11654,69 @@ html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-co
   }
 }
 
+
+/* 548 — Studio Black Vocal/Lyrics responsive height cleanup.
+ * Do not freeze or animate the inner content height while the split pane width is
+ * changing. Typography, wrapping and control density may respond to pane width,
+ * but the content shells now stay intrinsic (`auto`) so the fixed section gaps
+ * never collapse/expand a moment later and stale measured heights cannot leave
+ * empty space when the pane grows again. Classic keeps the legacy measured-height
+ * behavior. Mobile still keeps intrinsic outer card height so cue rows cannot clip. */
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane :is(
+  .soridraw-lyrics-content-shell,
+  .soridraw-vocal-content-shell
+) {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane[data-pane-mode="mobile"] :is(
+  .soridraw-studio-vocal-slot,
+  .soridraw-studio-lyrics-slot
+) {
+  align-self: start !important;
+  height: auto !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane[data-pane-mode="mobile"] :is(
+  .soridraw-studio-vocal-slot,
+  .soridraw-studio-lyrics-slot
+) > * {
+  height: auto !important;
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane[data-pane-mode="mobile"] :is(
+  .soridraw-studio-vocal-slot,
+  .soridraw-studio-lyrics-slot
+) .soridraw-studio-menu-card {
+  overflow: visible !important;
+}
+
+
+/* 551 — Builder-mobile command / Generate gap micro-adjustment.
+ * Keep the 550 mobile-only ownership and set the approved mobile reserve to 93px so
+ * the command card keeps a slightly wider 1px gap. PC/tablet spacing and the Generate Y position remain
+ * untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane[data-pane-mode="mobile"] {
+    padding-bottom: 93px !important;
+  }
+}
+
+/* 552 — Non-mobile command / Generate gap micro-adjustment.
+ * Keep the approved Builder-mobile 93px reserve unchanged. Desktop/tablet only
+ * receive 8px more bottom reserve so the command card sits slightly farther
+ * above the fixed Generate row. Generate geometry and scroll behavior are untouched. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) {
+    padding-bottom: 118px !important;
+  }
+}

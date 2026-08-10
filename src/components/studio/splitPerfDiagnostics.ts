@@ -75,7 +75,7 @@ export type SplitPerfResult = {
   benchmarkSurface: string | null;
   benchmarkSurfacePass: boolean | null;
   layoutMode: 'css-var' | 'direct' | null;
-  inputMode: 'react' | 'native' | 'auto' | null;
+  inputMode: 'react' | 'native' | 'raw' | 'auto' | null;
   pointerEventCount: number;
   pointerCoalescedCount: number;
   pointerEventsPerSecond: number;
@@ -86,6 +86,13 @@ export type SplitPerfResult = {
   inputToCommitAvgMs: number;
   inputToCommitP95Ms: number;
   inputToCommitMaxMs: number;
+  pointerActiveDurationMs: number;
+  pointerActiveEventsPerSecond: number;
+  pointerActiveSamplesPerSecond: number;
+  pointerPauseGapCount: number;
+  pointerCommitCount: number;
+  pointerCommitsPerSecond: number;
+  pointerCommitIntervalP95Ms: number;
   createdAt: number;
 };
 
@@ -126,11 +133,14 @@ type ActiveDrag = {
   benchmarkSurface: string | null;
   benchmarkSurfacePass: boolean | null;
   layoutMode: 'css-var' | 'direct' | null;
-  inputMode: 'react' | 'native' | 'auto' | null;
+  inputMode: 'react' | 'native' | 'raw' | 'auto' | null;
   pointerEventTimes: number[];
+  pointerClientXs: number[];
+  pointerCoalescedCounts: number[];
   pointerCoalescedCount: number;
   pointerPendingBatch: number;
   pointerBatches: number[];
+  pointerCommitTimes: number[];
   lastPointerInputAt: number | null;
   inputToCommitLatencies: number[];
   rafId: number | null;
@@ -415,7 +425,7 @@ export const beginSplitPerfDrag = ({
   benchmarkSurface?: string | null;
   benchmarkSurfacePass?: boolean | null;
   layoutMode?: 'css-var' | 'direct' | null;
-  inputMode?: 'react' | 'native' | 'auto' | null;
+  inputMode?: 'react' | 'native' | 'raw' | 'auto' | null;
 }) => {
   if (!enabled || typeof window === 'undefined' || typeof document === 'undefined') return;
   if (active?.rafId !== null && active?.rafId !== undefined) window.cancelAnimationFrame(active.rafId);
@@ -450,9 +460,12 @@ export const beginSplitPerfDrag = ({
     layoutMode,
     inputMode,
     pointerEventTimes: [],
+    pointerClientXs: [],
+    pointerCoalescedCounts: [],
     pointerCoalescedCount: 0,
     pointerPendingBatch: 0,
     pointerBatches: [],
+    pointerCommitTimes: [],
     lastPointerInputAt: null,
     inputToCommitLatencies: [],
     rafId: null,
@@ -460,12 +473,20 @@ export const beginSplitPerfDrag = ({
   runRafProbe();
 };
 
-export const recordSplitPerfPointerInput = (inputMode: 'react' | 'native', receivedAt: number, coalescedCount = 1) => {
+export const recordSplitPerfPointerInput = (
+  inputMode: 'react' | 'native' | 'raw',
+  receivedAt: number,
+  coalescedCount = 1,
+  clientX = Number.NaN,
+) => {
   if (!enabled || !active) return;
   active.inputMode = inputMode;
   const timestamp = Number.isFinite(receivedAt) ? receivedAt : now();
+  const samples = Math.max(1, Math.round(coalescedCount || 1));
   active.pointerEventTimes.push(timestamp);
-  active.pointerCoalescedCount += Math.max(1, Math.round(coalescedCount || 1));
+  active.pointerClientXs.push(Number.isFinite(clientX) ? clientX : Number.NaN);
+  active.pointerCoalescedCounts.push(samples);
+  active.pointerCoalescedCount += samples;
   active.pointerPendingBatch += 1;
   active.lastPointerInputAt = timestamp;
 };
@@ -475,6 +496,7 @@ export const recordSplitPerfPointerCommit = (committedAt: number) => {
   const timestamp = Number.isFinite(committedAt) ? committedAt : now();
   active.pointerBatches.push(active.pointerPendingBatch);
   active.pointerPendingBatch = 0;
+  active.pointerCommitTimes.push(timestamp);
   if (active.lastPointerInputAt !== null) {
     active.inputToCommitLatencies.push(Math.max(0, timestamp - active.lastPointerInputAt));
   }
@@ -510,10 +532,30 @@ export const finishSplitPerfDrag = () => {
   const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
   const heapMb = memory?.usedJSHeapSize ? memory.usedJSHeapSize / 1024 / 1024 : null;
   const pointerIntervals: number[] = [];
+  const activePointerIntervals: number[] = [];
+  let activePointerSamples = 0;
+  let pointerPauseGapCount = 0;
+  const ACTIVE_POINTER_GAP_MS = 120;
   for (let index = 1; index < active.pointerEventTimes.length; index += 1) {
-    pointerIntervals.push(active.pointerEventTimes[index] - active.pointerEventTimes[index - 1]);
+    const interval = active.pointerEventTimes[index] - active.pointerEventTimes[index - 1];
+    pointerIntervals.push(interval);
+    const currentX = active.pointerClientXs[index];
+    const previousX = active.pointerClientXs[index - 1];
+    const moved = !Number.isFinite(currentX) || !Number.isFinite(previousX) || Math.abs(currentX - previousX) >= 0.25;
+    if (interval <= ACTIVE_POINTER_GAP_MS && moved) {
+      activePointerIntervals.push(interval);
+      activePointerSamples += active.pointerCoalescedCounts[index] || 1;
+    } else if (interval > ACTIVE_POINTER_GAP_MS) {
+      pointerPauseGapCount += 1;
+    }
   }
   if (active.pointerPendingBatch > 0) active.pointerBatches.push(active.pointerPendingBatch);
+  const activePointerDurationMs = activePointerIntervals.reduce((sum, value) => sum + value, 0);
+  const pointerCommitIntervals: number[] = [];
+  for (let index = 1; index < active.pointerCommitTimes.length; index += 1) {
+    const interval = active.pointerCommitTimes[index] - active.pointerCommitTimes[index - 1];
+    if (interval <= ACTIVE_POINTER_GAP_MS) pointerCommitIntervals.push(interval);
+  }
 
   const hotspotRows: SplitPerfHotspot[] = Array.from(active.hotspots.entries())
     .map(([label, value]) => ({
@@ -589,6 +631,13 @@ export const finishSplitPerfDrag = () => {
     inputToCommitAvgMs: round(mean(active.inputToCommitLatencies), 2),
     inputToCommitP95Ms: round(percentile(active.inputToCommitLatencies, 0.95), 2),
     inputToCommitMaxMs: round(max(active.inputToCommitLatencies), 2),
+    pointerActiveDurationMs: round(activePointerDurationMs, 0),
+    pointerActiveEventsPerSecond: activePointerDurationMs > 0 ? round((activePointerIntervals.length * 1000) / activePointerDurationMs, 1) : 0,
+    pointerActiveSamplesPerSecond: activePointerDurationMs > 0 ? round((activePointerSamples * 1000) / activePointerDurationMs, 1) : 0,
+    pointerPauseGapCount,
+    pointerCommitCount: active.pointerCommitTimes.length,
+    pointerCommitsPerSecond: pointerCommitIntervals.length > 0 ? round((pointerCommitIntervals.length * 1000) / pointerCommitIntervals.reduce((sum, value) => sum + value, 0), 1) : 0,
+    pointerCommitIntervalP95Ms: round(percentile(pointerCommitIntervals, 0.95), 2),
     createdAt: Date.now(),
   };
 
@@ -617,7 +666,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 593 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 594 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),
@@ -679,6 +728,13 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
     inputToCommitAvgMs: number('inputToCommitAvgMs', 2),
     inputToCommitP95Ms: number('inputToCommitP95Ms', 2),
     inputToCommitMaxMs: number('inputToCommitMaxMs', 2),
+    pointerActiveDurationMs: number('pointerActiveDurationMs', 0),
+    pointerActiveEventsPerSecond: number('pointerActiveEventsPerSecond', 1),
+    pointerActiveSamplesPerSecond: number('pointerActiveSamplesPerSecond', 1),
+    pointerPauseGapCount: Math.round(number('pointerPauseGapCount', 0)),
+    pointerCommitCount: Math.round(number('pointerCommitCount', 0)),
+    pointerCommitsPerSecond: number('pointerCommitsPerSecond', 1),
+    pointerCommitIntervalP95Ms: number('pointerCommitIntervalP95Ms', 2),
     createdAt: Date.now(),
   };
   lastBenchmarkSummary = { setCount: results.length, median, sets: [...results], createdAt: Date.now() };

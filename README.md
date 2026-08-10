@@ -1567,3 +1567,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Native 모드는 진단 중에만 사용하며 A/B 종료 또는 진단 패널 unmount 시 기존 React 입력 방식으로 자동 복구한다. 실제 기본 런타임은 아직 React 입력을 유지한다.
 - 종합 진단서에 `[REAL POINTER INPUT A/B]` 섹션을 추가해 캡처 없이 텍스트만으로 실제 마우스 입력 경로 비교가 가능하다.
 - Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않는다.
+
+## 594차 — PointerMove vs PointerRawUpdate 입력 샘플링 A/B
+
+- 591차의 직접 pane 좌표 실런타임과 593차 React↔Native 실사용 입력 A/B는 그대로 유지한다.
+- 관리자 PERF에 `입력 샘플링 A/B`를 추가했다. 사용자가 뮤직노트 분할바를 3~5초씩 두 번 실제로 움직이면 1회차는 기존 PointerMove(React), 2회차는 Native `pointerrawupdate` 이벤트로 측정한다.
+- `pointerrawupdate`는 진단 중에만 사용하고 종료 후 기본 입력은 기존 React PointerMove로 자동 복구한다. 실제 기본 런타임은 아직 변경하지 않는다.
+- 사람 손이 잠깐 멈춘 시간을 입력률에서 제외하기 위해 이벤트 간격이 120ms를 넘는 구간을 pause gap으로 분리한다. 이동 중 event rate, coalesced/raw sample rate, 화면 commit rate와 commit P95를 별도로 기록한다.
+- `recordSplitPerfPointerInput`에 실제 clientX와 이벤트별 coalesced sample 수를 저장해 정지구간/이동구간을 구분하고, `recordSplitPerfPointerCommit`은 화면 반영 시각을 기록한다.
+- 종합 진단서에 `[POINTER SAMPLING A/B]`를 추가해 PointerMove와 PointerRawUpdate의 이동 중 입력률·샘플률·화면 반영률·P95를 한 번에 비교할 수 있다.
+- 브라우저가 PointerRawUpdate를 지원하지 않으면 테스트를 시작하지 않고 안내 메시지를 표시한다.
+- Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+

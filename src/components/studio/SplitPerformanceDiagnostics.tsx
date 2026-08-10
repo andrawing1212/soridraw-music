@@ -49,6 +49,11 @@ type ManualInputRow = {
   result: SplitPerfResult;
 };
 
+type SamplingInputRow = {
+  mode: 'move' | 'raw';
+  result: SplitPerfResult;
+};
+
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
   { id: 'effects-off', label: '효과 OFF' },
@@ -156,6 +161,7 @@ type PerfEnvironmentSnapshot = {
   viewport: string;
   dpr: number;
   idleHz: number | null;
+  pointerRawUpdateSupported: boolean;
   hardwareConcurrency: number | null;
   deviceMemoryGb: number | null;
   connection: string;
@@ -382,6 +388,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     viewport: `${window.innerWidth}×${window.innerHeight}`,
     dpr: Number(window.devicePixelRatio.toFixed(2)),
     idleHz: await estimateIdleRefreshHz(),
+    pointerRawUpdateSupported: ('onpointerrawupdate' in window || 'onpointerrawupdate' in document.documentElement),
     hardwareConcurrency: Number.isFinite(nav.hardwareConcurrency) ? nav.hardwareConcurrency : null,
     deviceMemoryGb: Number.isFinite(nav.deviceMemory) ? nav.deviceMemory! : null,
     connection: connectionLabel,
@@ -398,7 +405,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '593 · real pointer pipeline A/B + manual drag recorder',
+    buildProfile: '594 · pointermove vs pointerrawupdate sampling A/B + movement-only metrics',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -424,6 +431,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [environmentRunning, setEnvironmentRunning] = useState(false);
   const [manualInputRunning, setManualInputRunning] = useState(false);
   const [manualInputRows, setManualInputRows] = useState<ManualInputRow[]>([]);
+  const [samplingInputRunning, setSamplingInputRunning] = useState(false);
+  const [samplingInputRows, setSamplingInputRows] = useState<SamplingInputRow[]>([]);
 
   const probeRunningRef = useRef(false);
   const probeProfilesRef = useRef(PERF_RENDER_PROBE_PROFILES);
@@ -435,6 +444,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const manualInputRunningRef = useRef(false);
   const manualInputPhaseRef = useRef<'react' | 'native'>('react');
   const manualInputHandledAtRef = useRef(0);
+  const samplingInputRunningRef = useRef(false);
+  const samplingInputPhaseRef = useRef<'react' | 'raw'>('react');
+  const samplingInputHandledAtRef = useRef(0);
 
   useEffect(() => subscribeSplitPerfResult(setResult), []);
   useEffect(() => subscribeSplitPerfBenchmarkSummary(setBenchmarkSummary), []);
@@ -466,6 +478,34 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setBenchmarkMessage('실사용 입력 A/B 완료 · 실제 마우스 입력 경로의 React vs Native 차이를 기록했습니다.');
   }, [result]);
 
+  useEffect(() => {
+    if (!result || !samplingInputRunningRef.current) return;
+    if (result.createdAt === samplingInputHandledAtRef.current || result.benchmarkSurface !== null) return;
+    if (result.workspaceView !== 'music-note') return;
+    const expectedMode = samplingInputPhaseRef.current;
+    if (result.inputMode !== expectedMode) return;
+    if (result.durationMs < 1800) {
+      samplingInputHandledAtRef.current = result.createdAt;
+      setBenchmarkMessage(`${expectedMode === 'react' ? 'PointerMove' : 'PointerRawUpdate'} 기록이 너무 짧습니다 · 분할바를 3~5초 정도 계속 움직인 뒤 놓으세요.`);
+      return;
+    }
+
+    samplingInputHandledAtRef.current = result.createdAt;
+    const rowMode: SamplingInputRow['mode'] = expectedMode === 'raw' ? 'raw' : 'move';
+    setSamplingInputRows((current) => [...current.filter((row) => row.mode !== rowMode), { mode: rowMode, result }]);
+    if (expectedMode === 'react') {
+      samplingInputPhaseRef.current = 'raw';
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'raw' } }));
+      setBenchmarkMessage('입력 샘플링 A/B 2/2 · PointerRawUpdate입니다. 같은 느낌과 속도로 분할바를 3~5초 계속 움직인 뒤 놓으세요.');
+      return;
+    }
+
+    samplingInputRunningRef.current = false;
+    setSamplingInputRunning(false);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('입력 샘플링 A/B 완료 · 멈춘 구간을 제외한 실제 이동 중 입력률/샘플률/화면 반영률을 기록했습니다.');
+  }, [result]);
+
   const stopProbe = (restoreBaseline = true) => {
     probeRunningRef.current = false;
     setProbeRunning(false);
@@ -483,6 +523,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   useEffect(() => () => {
     probeRunningRef.current = false;
     manualInputRunningRef.current = false;
+    samplingInputRunningRef.current = false;
     setPerfProbeProfile('baseline');
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
     if (probeStartTimerRef.current !== null) window.clearTimeout(probeStartTimerRef.current);
@@ -635,7 +676,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
 
   const runManualInputAB = () => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current) return;
     if (!document.querySelector('.soridraw-musicnote-page-shell')) {
       setBenchmarkMessage('실사용 입력 A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
       return;
@@ -649,9 +690,29 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setBenchmarkMessage('실사용 입력 A/B 1/2 · 현재 React 입력입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
   };
 
+  const runSamplingInputAB = () => {
+    if (!ensureBenchmarkReady()) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current) return;
+    if (!document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage('입력 샘플링 A/B는 뮤직노트가 열린 분할 화면에서 실행하세요.');
+      return;
+    }
+    if (!('onpointerrawupdate' in window || 'onpointerrawupdate' in document.documentElement)) {
+      setBenchmarkMessage('이 브라우저는 PointerRawUpdate를 지원하지 않습니다. Chrome/Edge 최신 버전에서 테스트하세요.');
+      return;
+    }
+    samplingInputRunningRef.current = true;
+    samplingInputPhaseRef.current = 'react';
+    samplingInputHandledAtRef.current = 0;
+    setSamplingInputRows([]);
+    setSamplingInputRunning(true);
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_INPUT_MODE_EVENT, { detail: { mode: 'react' } }));
+    setBenchmarkMessage('입력 샘플링 A/B 1/2 · PointerMove입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
+  };
+
   const runProbeScan = (kind: 'render' | 'area' | 'layout' | 'musicnote') => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current) return;
+    if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current) return;
     if (kind === 'musicnote' && !document.querySelector('.soridraw-musicnote-page-shell')) {
       setBenchmarkMessage('뮤직노트 정밀 스캔은 뮤직노트가 열린 분할 화면에서 실행하세요.');
       return;
@@ -703,7 +764,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       `host=${snapshot.host}`,
       `mode=${snapshot.mode} prod=${snapshot.prod} assetMode=${snapshot.assetMode}`,
       `buildProfile=${snapshot.buildProfile} jsMinify=${snapshot.jsMinifyMode} cssMinify=${snapshot.cssMinifyMode}`,
-      `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'}`,
+      `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'} pointerRawUpdate=${snapshot.pointerRawUpdateSupported}`,
       `CPU=${snapshot.hardwareConcurrency ?? '-'} memoryGB=${snapshot.deviceMemoryGb ?? '-'}`,
       `SW controller=${snapshot.swController} registrations=${snapshot.swRegistrations} cacheNames=${snapshot.cacheNames ?? '-'}`,
       `JS local=${snapshot.scriptCount} transferKB=${snapshot.scriptTransferKb} decodedKB=${snapshot.scriptDecodedKb}`,
@@ -773,7 +834,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           `browserRenderPerSec=${(browserRender / durationSeconds).toFixed(1)}ms/s loaf=${current.loafCount}/${current.loafTotalMs}ms blocking=${current.loafBlockingTotalMs}ms`,
           `forcedStyleLayout=${current.forcedStyleLayoutTotalMs}ms max=${current.forcedStyleLayoutMaxMs}ms`,
           `flush=${current.flushAvgMs}/${current.flushMaxMs}ms apply=${current.applyAvgMs}/${current.applyMaxMs}ms contentCommit/divider=${current.contentCommitCount}/${current.dividerOnlyCount}`,
-          `pointerMode=${current.inputMode ?? '-'} events=${current.pointerEventCount} rate=${current.pointerEventsPerSecond}/s coalesced=${current.pointerCoalescedCount} intervalAvg/P95=${current.pointerIntervalAvgMs}/${current.pointerIntervalP95Ms}ms batchAvg/max=${current.pointerBatchAvg}/${current.pointerBatchMax} inputToCommitAvg/P95/max=${current.inputToCommitAvgMs}/${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
+          `pointerMode=${current.inputMode ?? '-'} events=${current.pointerEventCount} rate=${current.pointerEventsPerSecond}/s coalesced=${current.pointerCoalescedCount} intervalAvg/P95=${current.pointerIntervalAvgMs}/${current.pointerIntervalP95Ms}ms activeDuration=${current.pointerActiveDurationMs}ms activeEventRate=${current.pointerActiveEventsPerSecond}/s activeSampleRate=${current.pointerActiveSamplesPerSecond}/s pauseGaps=${current.pointerPauseGapCount} commitRate=${current.pointerCommitsPerSecond}/s commitP95=${current.pointerCommitIntervalP95Ms}ms batchAvg/max=${current.pointerBatchAvg}/${current.pointerBatchMax} inputToCommitAvg/P95/max=${current.inputToCommitAvgMs}/${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
           `DOM total=${current.domNodes} builder=${current.builderNodes} result=${current.resultNodes} heapMB=${current.heapMb ?? '-'}`,
           `regions musicNoteControls=${current.regionNodes.musicNoteControls} musicNoteList=${current.regionNodes.musicNoteList} libraryControls=${current.regionNodes.libraryControls} libraryList=${current.regionNodes.libraryList} externalStudioUi=${current.regionNodes.externalStudioUi} other=${current.regionNodes.other}`,
         );
@@ -802,8 +863,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         '',
         '[REAL POINTER INPUT A/B]',
         ...(manualInputRows.length
-          ? manualInputRows.map(({ mode, result: row }) => `mode=${mode} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} rate=${row.pointerEventsPerSecond}/s coalesced=${row.pointerCoalescedCount} intervalAvg/P95=${row.pointerIntervalAvgMs}/${row.pointerIntervalP95Ms}ms batchAvg/max=${row.pointerBatchAvg}/${row.pointerBatchMax} inputToCommitAvg/P95/max=${row.inputToCommitAvgMs}/${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
+          ? manualInputRows.map(({ mode, result: row }) => `mode=${mode} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} rate=${row.pointerEventsPerSecond}/s activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms coalesced=${row.pointerCoalescedCount} intervalAvg/P95=${row.pointerIntervalAvgMs}/${row.pointerIntervalP95Ms}ms batchAvg/max=${row.pointerBatchAvg}/${row.pointerBatchMax} inputToCommitAvg/P95/max=${row.inputToCommitAvgMs}/${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
           : ['미측정 · 실사용 입력 A/B를 실행하세요.']),
+        '',
+        '[POINTER SAMPLING A/B]',
+        ...(samplingInputRows.length
+          ? samplingInputRows.map(({ mode, result: row }) => `mode=${mode === 'move' ? 'pointermove' : 'pointerrawupdate'} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} totalRate=${row.pointerEventsPerSecond}/s activeDuration=${row.pointerActiveDurationMs}ms activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s pauseGaps=${row.pointerPauseGapCount} commitCount=${row.pointerCommitCount} commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms inputToCommitP95/max=${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
+          : ['미측정 · 입력 샘플링 A/B를 실행하세요.']),
       );
       await navigator.clipboard.writeText(lines.join('\n'));
       setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
@@ -845,8 +911,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'musicnote' ? '뮤직노트 정밀 중…' : '뮤직노트 정밀'}
             </button>
-            <button type="button" className="is-secondary" onClick={runManualInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runManualInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || !enabled}>
               {manualInputRunning ? `실사용 입력 ${manualInputRows.length + 1}/2` : '실사용 입력 A/B'}
+            </button>
+            <button type="button" className="is-secondary" onClick={runSamplingInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || !enabled}>
+              {samplingInputRunning ? `입력 샘플링 ${samplingInputRows.length + 1}/2` : '입력 샘플링 A/B'}
             </button>
             <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
@@ -854,7 +923,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 고정 표면 · 실사용 입력 A/B: 실제 마우스 React→Native 2회 · 환경: DEV/PROD·computed style·idle Hz</span>
+            <span>자동: 1400×900 고정 표면 · 실사용 입력: React→Native · 입력 샘플링: PointerMove→PointerRawUpdate · 환경: DEV/PROD·idle Hz</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -893,6 +962,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     <span>느린 입력 이벤트</span><b>{displayResult.eventTimingSupported ? `${displayResult.slowEventCount}회 · max ${displayResult.slowEventMaxMs}ms` : '미지원'}</b>
                     <span>입력 지연 평균/최대</span><b>{displayResult.eventTimingSupported ? `${displayResult.inputDelayAvgMs}/${displayResult.inputDelayMaxMs}ms` : '-'}</b>
                     <span>실마우스 입력률</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerEventsPerSecond}/s · ${displayResult.inputMode ?? '-'}` : '-'}</b>
+                    <span>이동중 이벤트/샘플률</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerActiveEventsPerSecond}/s · ${displayResult.pointerActiveSamplesPerSecond}/s` : '-'}</b>
+                    <span>이동중 화면반영률</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerCommitsPerSecond}/s · P95 ${displayResult.pointerCommitIntervalP95Ms}ms` : '-'}</b>
+                    <span>정지구간 제외/감지</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerActiveDurationMs}ms · gap ${displayResult.pointerPauseGapCount}` : '-'}</b>
                     <span>입력 묶음 평균/최대</span><b>{displayResult.pointerEventCount ? `${displayResult.pointerBatchAvg}/${displayResult.pointerBatchMax}` : '-'}</b>
                     <span>입력→반영 P95/최대</span><b>{displayResult.pointerEventCount ? `${displayResult.inputToCommitP95Ms}/${displayResult.inputToCommitMaxMs}ms` : '-'}</b>
                     <span>JS flush 평균/최대</span><b>{displayResult.flushAvgMs}/{displayResult.flushMaxMs}ms</b>
@@ -914,6 +986,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                         <span><i>JS minify</i><b>{environment.jsMinifyMode}</b></span>
                         <span><i>CSS minify</i><b>{environment.cssMinifyMode}</b></span>
                         <span><i>Idle Hz</i><b>{environment.idleHz ?? '-'}Hz</b></span>
+                        <span><i>PointerRaw</i><b>{environment.pointerRawUpdateSupported ? '지원' : '미지원'}</b></span>
                         <span><i>SW / Cache</i><b>{environment.swController ? 'CTRL' : '없음'} · {environment.swRegistrations}/{environment.cacheNames ?? '-'}</b></span>
                         <span><i>JS</i><b>{environment.scriptCount}개 · {environment.scriptDecodedKb}KB</b></span>
                         <span><i>CSS</i><b>{environment.cssCount}개 · rules {environment.cssRules ?? '-'}</b></span>
@@ -974,6 +1047,22 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     </details>
                   )}
 
+                  {samplingInputRows.length > 0 && (
+                    <details open>
+                      <summary>입력 샘플링 A/B — PointerMove vs PointerRawUpdate</summary>
+                      <div className="soridraw-split-perf-probe-grid">
+                        {samplingInputRows.map(({ mode, result: row }) => (
+                          <div className="soridraw-split-perf-probe-row" key={mode}>
+                            <span>{mode === 'move' ? 'PointerMove' : 'PointerRawUpdate'}</span>
+                            <b>{row.estimatedFps}fps · P95 {row.p95FrameMs}ms</b>
+                            <i>이동중 event/sample {row.pointerActiveEventsPerSecond}/{row.pointerActiveSamplesPerSecond}/s</i>
+                            <em>화면반영 {row.pointerCommitsPerSecond}/s · commit P95 {row.pointerCommitIntervalP95Ms}ms · pause gap {row.pointerPauseGapCount}</em>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+
                   <details open>
                     <summary>영역 부담 — DOM 규모</summary>
                     <div className="soridraw-split-perf-grid is-detail">
@@ -1014,7 +1103,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">593: 591 직접 pane 좌표 런타임은 유지합니다. 실사용 입력 A/B는 자동 애니메이션이 아니라 사용자의 실제 마우스 PointerEvent를 기록하고 React onPointerMove와 Native PointerEvent 경로를 순서대로 비교합니다. 진단 종료 후 입력 방식은 기존 React 방식으로 자동 복구합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">594: 591 직접 pane 좌표 런타임은 유지합니다. 기존 React↔Native 실사용 A/B도 보존하고, 입력 샘플링 A/B에서 PointerMove와 PointerRawUpdate를 실제 손 드래그로 비교합니다. 120ms 초과 정지 구간은 입력률 계산에서 제외하며, 종료 후 기본 React PointerMove로 자동 복구합니다.</p>
             </>
           )}
         </div>

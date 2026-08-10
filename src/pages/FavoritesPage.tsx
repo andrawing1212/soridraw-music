@@ -5782,7 +5782,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     )}
 
                     <div className="soridraw-musicnote-song-copy flex min-w-0 flex-1 flex-col justify-center px-0.5 md:px-1">
-                      <div className="soridraw-musicnote-song-copy-layout flex min-w-0 w-full flex-col">
                       <div className="soridraw-musicnote-song-meta flex min-w-0 items-center gap-2 leading-none">
                         <span className="soridraw-musicnote-song-genre min-w-0 flex-1 truncate text-[12px] font-extrabold text-white md:text-[13px] select-none cursor-default">
                           {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
@@ -5806,7 +5805,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         </span>
                       </div>
 
-                      <div className="soridraw-musicnote-song-secondary mt-1.5 flex min-w-0 items-center gap-2">
+                      <div className="mt-1.5 flex min-w-0 items-center gap-2">
                         {musicNoteListCreator && (
                           <span className="soridraw-musicnote-song-creator shrink-0 whitespace-nowrap text-[9px] font-bold leading-none text-[#FFC1BC]/90 md:text-[10px] select-none cursor-default">
                             {musicNoteListCreator}
@@ -5823,7 +5822,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         >
                           {renderFavoriteKeywordChips(song)}
                         </div>
-                      </div>
                       </div>
                     </div>
 

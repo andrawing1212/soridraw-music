@@ -172,8 +172,12 @@ export default function StudioSplitWorkspace({
     elementRatio?: number;
     viewportOffset?: number;
   } | null>(null);
-  const builderDragEdgeRef = useRef<'top' | 'bottom' | 'middle' | null>(null);
-  const minimumEdgeStateRef = useRef<{ builder: boolean; result: boolean }>({ builder: false, result: false });
+  const builderDragScrollAnchorRef = useRef<{
+    edge: 'top' | 'bottom' | 'content';
+    element?: HTMLElement;
+    elementRatio?: number;
+    viewportOffset?: number;
+  } | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
@@ -674,43 +678,69 @@ export default function StudioSplitWorkspace({
     });
   }, [restoreBuilderModeScrollAnchor]);
 
-  // 561 — Keep divider frames read-free. The previous drag anchor read
-  // scrollHeight + multiple getBoundingClientRect() values after changing pane
-  // width on every rAF, forcing synchronous layout of the heavy Studio tree.
-  // Native CSS scroll anchoring now owns middle-of-page reflow. We only remember
-  // whether the drag started at an exact edge and restore that edge once on
-  // pointer-up. This preserves the approved top/bottom behavior without any
-  // per-frame DOM measurement.
-  const captureBuilderDragEdge = useCallback(() => {
+  // 549 — Divider-width reflow must not move the builder viewport. Vocal/Lyrics,
+  // Tempo and command controls legitimately rewrap as the pane width changes, but
+  // letting those height changes alter scrollTop makes the whole lower stack look
+  // like it is being pushed down/up. Capture one visual anchor when the divider
+  // grab starts and restore that same point inside the existing rAF drag frame.
+  // This adds no React renders/observers/listeners and costs only two rect reads
+  // while the pointer is actively moving. Exact top/bottom remain exact edges.
+  const captureBuilderDragScrollAnchor = useCallback(() => {
     const builder = builderRef.current;
     if (!builder) {
-      builderDragEdgeRef.current = null;
+      builderDragScrollAnchorRef.current = null;
       return;
     }
 
     const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
     const currentScrollTop = Math.max(0, Math.min(maxScrollTop, builder.scrollTop));
     const edgeTolerance = 2;
-    builderDragEdgeRef.current = currentScrollTop <= edgeTolerance
-      ? 'top'
-      : maxScrollTop - currentScrollTop <= edgeTolerance
-        ? 'bottom'
-        : 'middle';
-  }, []);
-
-  const restoreBuilderDragEdge = useCallback(() => {
-    const builder = builderRef.current;
-    const edge = builderDragEdgeRef.current;
-    if (!builder || !edge || edge === 'middle') return;
-
-    if (edge === 'top') {
-      if (builder.scrollTop !== 0) builder.scrollTop = 0;
+    if (currentScrollTop <= edgeTolerance) {
+      builderDragScrollAnchorRef.current = { edge: 'top' };
+      return;
+    }
+    if (maxScrollTop - currentScrollTop <= edgeTolerance) {
+      builderDragScrollAnchorRef.current = { edge: 'bottom' };
       return;
     }
 
+    const contentAnchor = captureBuilderContentAnchor(builder);
+    builderDragScrollAnchorRef.current = contentAnchor
+      ? {
+          edge: 'content',
+          element: contentAnchor.element,
+          elementRatio: contentAnchor.elementRatio,
+          viewportOffset: contentAnchor.viewportOffset,
+        }
+      : { edge: 'top' };
+  }, [captureBuilderContentAnchor]);
+
+  const restoreBuilderDragScrollAnchor = useCallback(() => {
+    if (!draggingRef.current) return;
+    const builder = builderRef.current;
+    const anchor = builderDragScrollAnchorRef.current;
+    if (!builder || !anchor) return;
+
     const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
-    if (Math.abs(builder.scrollTop - maxScrollTop) > 0.5) {
-      builder.scrollTop = maxScrollTop;
+    let targetScrollTop = builder.scrollTop;
+
+    if (anchor.edge === 'top') {
+      targetScrollTop = 0;
+    } else if (anchor.edge === 'bottom') {
+      targetScrollTop = maxScrollTop;
+    } else if (anchor.element && builder.contains(anchor.element)) {
+      const builderRect = builder.getBoundingClientRect();
+      const elementRect = anchor.element.getBoundingClientRect();
+      const elementRatio = Math.max(0, Math.min(1, anchor.elementRatio ?? 0));
+      const viewportOffset = Math.max(0, Math.min(builder.clientHeight, anchor.viewportOffset ?? builder.clientHeight * 0.5));
+      const anchoredPointY = elementRect.top + (elementRect.height * elementRatio);
+      const desiredPointY = builderRect.top + viewportOffset;
+      targetScrollTop = builder.scrollTop + (anchoredPointY - desiredPointY);
+    }
+
+    targetScrollTop = Math.max(0, Math.min(maxScrollTop, targetScrollTop));
+    if (Math.abs(builder.scrollTop - targetScrollTop) > 0.5) {
+      builder.scrollTop = targetScrollTop;
     }
   }, []);
 
@@ -771,21 +801,15 @@ export default function StudioSplitWorkspace({
 
     const edgeTolerancePercent = (1.5 / safeWidth) * 100;
     const root = document.documentElement;
-    const builderAtMinimum = !builderCollapsedRef.current
-      && !resultCollapsedRef.current
-      && nextPercent <= bounds.min + edgeTolerancePercent;
-    const resultAtMinimum = !builderCollapsedRef.current
-      && !resultCollapsedRef.current
-      && nextPercent >= bounds.max - edgeTolerancePercent;
-    if (minimumEdgeStateRef.current.builder !== builderAtMinimum) {
-      minimumEdgeStateRef.current.builder = builderAtMinimum;
-      if (builderAtMinimum) root.dataset.soridrawBuilderAtMinimum = 'true';
-      else delete root.dataset.soridrawBuilderAtMinimum;
+    if (!builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent <= bounds.min + edgeTolerancePercent) {
+      root.dataset.soridrawBuilderAtMinimum = 'true';
+    } else {
+      delete root.dataset.soridrawBuilderAtMinimum;
     }
-    if (minimumEdgeStateRef.current.result !== resultAtMinimum) {
-      minimumEdgeStateRef.current.result = resultAtMinimum;
-      if (resultAtMinimum) root.dataset.soridrawResultAtMinimum = 'true';
-      else delete root.dataset.soridrawResultAtMinimum;
+    if (!builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent >= bounds.max - edgeTolerancePercent) {
+      root.dataset.soridrawResultAtMinimum = 'true';
+    } else {
+      delete root.dataset.soridrawResultAtMinimum;
     }
 
     const previousBuilderMode = modeRef.current.builder;
@@ -849,7 +873,7 @@ export default function StudioSplitWorkspace({
       if (builderModeChanged && !draggingRef.current) {
         // Correct non-drag responsive changes in the same breakpoint frame, then
         // verify once on the next frame after CSS reflow settles. Active divider
-        // drags use native scroll anchoring; no per-frame layout reads are needed.
+        // drags are already owned by restoreBuilderDragScrollAnchor below.
         restoreBuilderModeScrollAnchor();
         scheduleBuilderModeScrollAnchorRestore();
       }
@@ -880,10 +904,10 @@ export default function StudioSplitWorkspace({
       workspaceHeroHost.dataset.paneMode = nextResultMode;
     }
 
-    // Do not read layout after the width writes above. Native scroll anchoring
-    // handles ordinary reflow while dragging; exact top/bottom is restored once
-    // on pointer-up. Keeping this frame write-only lets the browser batch style
-    // and layout work instead of forcing synchronous reflow here.
+    // Keep the same visible builder content pinned while width-driven wrapping
+    // changes card heights. Do this after pane-mode attributes are committed so
+    // desktop/mobile crossings and ordinary in-mode reflow share one behavior.
+    restoreBuilderDragScrollAnchor();
 
     const ariaBoundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
     if (lastAriaBoundsRef.current !== ariaBoundsKey) {
@@ -898,7 +922,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
+  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -1161,7 +1185,6 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawResultCollapsed;
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
-      minimumEdgeStateRef.current = { builder: false, result: false };
     };
   }, [clearExternalMeasurements, clearRootMeasurements, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
@@ -1212,7 +1235,7 @@ export default function StudioSplitWorkspace({
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
     builderModeScrollAnchorRef.current = null;
-    captureBuilderDragEdge();
+    captureBuilderDragScrollAnchor();
     if (builderModeAnchorFrameRef.current !== null) {
       window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
       builderModeAnchorFrameRef.current = null;
@@ -1283,8 +1306,7 @@ export default function StudioSplitWorkspace({
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
     draggingRef.current = false;
-    restoreBuilderDragEdge();
-    builderDragEdgeRef.current = null;
+    builderDragScrollAnchorRef.current = null;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
     lastDragBuilderPixelRef.current = null;

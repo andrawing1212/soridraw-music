@@ -1,14 +1,3 @@
-## 561차 - 분할바 프레임 성능 수술 / 강제 레이아웃 제거
-
-- 기준: 560차. UI 기능/배치 기준은 유지하고 분할 드래그 hot path만 최적화했다.
-- 핵심 병목 제거: 549차 계열의 드래그 중 `scrollHeight/clientHeight + getBoundingClientRect()` 기반 콘텐츠 앵커 복원을 매 rAF에서 완전히 제거했다. 폭을 쓴 직후 DOM 크기를 다시 읽던 forced synchronous layout 경로가 사라져 pointer frame은 write-only로 유지된다.
-- 스크롤 안정성: 드래그 중간 구간은 브라우저 native `overflow-anchor:auto`에 맡기고, 시작 시 최상단/최하단 여부만 1회 기억해서 pointer-up 때 정확한 edge만 1회 복원한다. 중간 콘텐츠를 위해 JS rect 측정을 반복하지 않는다.
-- GPU/paint: `will-change: width/left + translateZ(0)`로 거대한 builder/result 스크롤 pane 전체를 compositor layer로 승격하던 drag 규칙을 무효화했다. width/left는 어차피 layout 속성이라 GPU 합성으로 해결되지 않고 큰 layer 메모리/paint 부담만 만들 수 있었다.
-- 309의 `content-visibility:auto + contain` 오프스크린 최적화를 1600px 이상에서 1100px 이상 isolated split 전체로 확대했다.
-- 드래그 중 pane 내부의 transition/animation뿐 아니라 shadow/filter/backdrop-filter도 임시 비활성화해 장식 paint 비용을 제외한다. pointer-up 즉시 원래 디자인으로 복구된다.
-- `data-soridrawBuilderAtMinimum` / `data-soridrawResultAtMinimum`도 값이 실제 바뀌는 순간에만 DOM attribute를 갱신하도록 캐시했다.
-- React state, ResizeObserver, scroll/resize listener는 추가하지 않았다. Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-
 ## 549차 — 분할 리사이즈 중 빌더 화면 고정 / 연쇄 밀림 차단
 
 - 분할바를 잡는 순간 빌더의 현재 화면 기준점을 1회 저장합니다.

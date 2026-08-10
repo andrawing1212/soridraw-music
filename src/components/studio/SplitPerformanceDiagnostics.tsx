@@ -92,6 +92,7 @@ type PerfEnvironmentSnapshot = {
   assetMode: 'prod-bundle' | 'dev-modules' | 'unknown';
   buildProfile: string;
   cssMinifyMode: string;
+  jsMinifyMode: string;
 };
 
 const roundKb = (bytes: number) => Number((bytes / 1024).toFixed(1));
@@ -182,8 +183,9 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '587 · PROD CSS minify A/B',
-    cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'OFF (진단)' : 'DEV · 비적용',
+    buildProfile: '588 · PROD JS minify A/B',
+    cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
+    jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'OFF (진단)' : 'DEV · 비적용',
   };
 };
 
@@ -198,6 +200,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [probeRunning, setProbeRunning] = useState(false);
   const [probeKind, setProbeKind] = useState<'render' | 'area'>('render');
   const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
+  const [renderProbeRows, setRenderProbeRows] = useState<PerfProbeRow[]>([]);
+  const [areaProbeRows, setAreaProbeRows] = useState<PerfProbeRow[]>([]);
   const [environment, setEnvironment] = useState<PerfEnvironmentSnapshot | null>(null);
   const [environmentRunning, setEnvironmentRunning] = useState(false);
 
@@ -283,8 +287,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       p95: median.p95FrameMs,
       renderPerSecond: getBrowserRenderPerSecond(median),
     };
-    probeRowsRef.current = [...probeRowsRef.current, row];
-    setProbeRows(probeRowsRef.current);
+    const nextRows = [...probeRowsRef.current, row];
+    probeRowsRef.current = nextRows;
+    setProbeRows(nextRows);
+    if (probeKind === 'render') setRenderProbeRows(nextRows);
+    else setAreaProbeRows(nextRows);
     if (profile.id === 'baseline') probeBaselineRef.current = benchmarkSummary;
 
     const nextIndex = probeIndexRef.current + 1;
@@ -379,6 +386,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     probeHandledSummaryAtRef.current = 0;
     setProbeKind(kind);
     setProbeRows([]);
+    if (kind === 'render') setRenderProbeRows([]);
+    else setAreaProbeRows([]);
     probeRunningRef.current = true;
     setProbeRunning(true);
     setPerfProbeProfile(profiles[0].id);
@@ -393,7 +402,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     try {
       const snapshot = await collectPerfEnvironmentSnapshot();
       setEnvironment(snapshot);
-      setBenchmarkMessage(`환경 진단 완료 · ${snapshot.prod ? 'PROD' : 'DEV'} / ${snapshot.assetMode} / CSS minify ${snapshot.cssMinifyMode} / idle ${snapshot.idleHz ?? '-'}Hz`);
+      setBenchmarkMessage(`환경 진단 완료 · ${snapshot.prod ? 'PROD' : 'DEV'} / ${snapshot.assetMode} / JS minify ${snapshot.jsMinifyMode} / CSS ${snapshot.cssMinifyMode} / idle ${snapshot.idleHz ?? '-'}Hz`);
     } catch (error) {
       setBenchmarkMessage(`환경 진단 실패 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     } finally {
@@ -401,25 +410,91 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     }
   };
 
+  const buildEnvironmentReportLines = (snapshot: PerfEnvironmentSnapshot) => [
+    `SORIDRAW PERF ENV ${new Date(snapshot.createdAt).toISOString()}`,
+    `host=${snapshot.host}`,
+    `mode=${snapshot.mode} prod=${snapshot.prod} assetMode=${snapshot.assetMode}`,
+    `buildProfile=${snapshot.buildProfile} jsMinify=${snapshot.jsMinifyMode} cssMinify=${snapshot.cssMinifyMode}`,
+    `viewport=${snapshot.viewport} DPR=${snapshot.dpr} idleHz=${snapshot.idleHz ?? '-'}`,
+    `CPU=${snapshot.hardwareConcurrency ?? '-'} memoryGB=${snapshot.deviceMemoryGb ?? '-'}`,
+    `SW controller=${snapshot.swController} registrations=${snapshot.swRegistrations} cacheNames=${snapshot.cacheNames ?? '-'}`,
+    `JS local=${snapshot.scriptCount} transferKB=${snapshot.scriptTransferKb} decodedKB=${snapshot.scriptDecodedKb}`,
+    `CSS=${snapshot.cssCount} transferKB=${snapshot.cssTransferKb} rules=${snapshot.cssRules ?? '-'}`,
+    `fonts=${snapshot.fontStatus}/${snapshot.fontCount ?? '-'} connection=${snapshot.connection} saveData=${snapshot.saveData ?? '-'}`,
+  ];
+
   const copyEnvironmentReport = async () => {
     if (!environment) return;
-    const report = [
-      `SORIDRAW PERF ENV ${new Date(environment.createdAt).toISOString()}`,
-      `host=${environment.host}`,
-      `mode=${environment.mode} prod=${environment.prod} assetMode=${environment.assetMode}`,
-      `buildProfile=${environment.buildProfile} cssMinify=${environment.cssMinifyMode}`,
-      `viewport=${environment.viewport} DPR=${environment.dpr} idleHz=${environment.idleHz ?? '-'}`,
-      `CPU=${environment.hardwareConcurrency ?? '-'} memoryGB=${environment.deviceMemoryGb ?? '-'}`,
-      `SW controller=${environment.swController} registrations=${environment.swRegistrations} cacheNames=${environment.cacheNames ?? '-'}`,
-      `JS local=${environment.scriptCount} transferKB=${environment.scriptTransferKb} decodedKB=${environment.scriptDecodedKb}`,
-      `CSS=${environment.cssCount} transferKB=${environment.cssTransferKb} rules=${environment.cssRules ?? '-'}`,
-      `fonts=${environment.fontStatus}/${environment.fontCount ?? '-'} connection=${environment.connection} saveData=${environment.saveData ?? '-'}`,
-    ].join('\n');
     try {
-      await navigator.clipboard.writeText(report);
+      await navigator.clipboard.writeText(buildEnvironmentReportLines(environment).join('\n'));
       setBenchmarkMessage('환경 진단서 복사 완료');
     } catch {
       setBenchmarkMessage('환경 진단서 복사 실패 · 브라우저 클립보드 권한을 확인하세요.');
+    }
+  };
+
+  const formatProbeLines = (title: string, rows: PerfProbeRow[]) => {
+    if (!rows.length) return [`[${title}] 미측정`];
+    const baseline = rows.find((row) => row.id === 'baseline')?.renderPerSecond || 0;
+    return [
+      `[${title}]`,
+      ...rows.map((row) => {
+        const delta = baseline > 0 && row.id !== 'baseline'
+          ? Number((((row.renderPerSecond - baseline) / baseline) * 100).toFixed(1))
+          : 0;
+        return `${row.label}: render=${row.renderPerSecond}ms/s fps=${row.fps} p95=${row.p95}ms${row.id === 'baseline' ? '' : ` delta=${delta > 0 ? '+' : ''}${delta}%`}`;
+      }),
+    ];
+  };
+
+  const copyComprehensiveReport = async () => {
+    if (environmentRunning) return;
+    setEnvironmentRunning(true);
+    setBenchmarkMessage('종합 진단서 작성 중 · 최신 환경 정보를 함께 수집합니다.');
+    try {
+      const snapshot = await collectPerfEnvironmentSnapshot();
+      setEnvironment(snapshot);
+      const current = benchmarkSummary?.median || result;
+      const lines = [
+        `SORIDRAW PERF FULL REPORT ${new Date().toISOString()}`,
+        ...buildEnvironmentReportLines(snapshot),
+        '',
+        '[AUTO BENCHMARK]',
+      ];
+      if (current) {
+        const durationSeconds = Math.max(0.001, current.durationMs / 1000);
+        const frameSamples = Math.max(1, current.rafFrames - 1);
+        const browserRender = current.hotspots.find((item) => item.label.startsWith('브라우저 렌더/레이아웃/페인트'))?.totalMs || 0;
+        lines.push(
+          `workspace=${current.workspaceView} duration=${(current.durationMs / 1000).toFixed(2)}s fps=${current.estimatedFps} avg=${current.avgFrameMs}ms p95=${current.p95FrameMs}ms max=${current.maxFrameMs}ms`,
+          `over20/34/50=${current.over20ms}/${current.over34ms}/${current.over50ms} over50Ratio=${((current.over50ms / frameSamples) * 100).toFixed(1)}%`,
+          `longTask=${current.longTaskCount}/${current.longTaskTotalMs}ms longTaskPerSec=${(current.longTaskTotalMs / durationSeconds).toFixed(1)}ms/s`,
+          `browserRenderPerSec=${(browserRender / durationSeconds).toFixed(1)}ms/s loaf=${current.loafCount}/${current.loafTotalMs}ms blocking=${current.loafBlockingTotalMs}ms`,
+          `forcedStyleLayout=${current.forcedStyleLayoutTotalMs}ms max=${current.forcedStyleLayoutMaxMs}ms`,
+          `flush=${current.flushAvgMs}/${current.flushMaxMs}ms apply=${current.applyAvgMs}/${current.applyMaxMs}ms contentCommit/divider=${current.contentCommitCount}/${current.dividerOnlyCount}`,
+          `DOM total=${current.domNodes} builder=${current.builderNodes} result=${current.resultNodes} heapMB=${current.heapMb ?? '-'}`,
+          `regions musicNoteControls=${current.regionNodes.musicNoteControls} musicNoteList=${current.regionNodes.musicNoteList} libraryControls=${current.regionNodes.libraryControls} libraryList=${current.regionNodes.libraryList} externalStudioUi=${current.regionNodes.externalStudioUi} other=${current.regionNodes.other}`,
+        );
+        if (benchmarkSummary?.sets?.length) {
+          lines.push(`sets=${benchmarkSummary.sets.map((set, index) => `#${index + 1}:${set.estimatedFps}fps/P95${set.p95FrameMs}ms`).join(' | ')}`);
+        }
+        lines.push('[HOTSPOTS]');
+        current.hotspots.slice(0, 8).forEach((item, index) => {
+          lines.push(`#${index + 1} ${item.label}: total=${item.totalMs}ms count=${item.count} max=${item.maxMs}ms forced=${item.forcedStyleLayoutMs}ms`);
+        });
+        lines.push(
+          `[LITE V2] layoutWrite=${current.layoutWriteAvgMs}ms responsive=${current.responsiveAvgMs}ms external=${current.externalAvgMs}ms misc=${current.miscAvgMs}ms`,
+        );
+      } else {
+        lines.push('미측정 · 자동 테스트를 먼저 실행하세요.');
+      }
+      lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows));
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
+    } catch (error) {
+      setBenchmarkMessage(`종합 진단서 복사 실패 · ${error instanceof Error ? error.message : '브라우저 클립보드 권한을 확인하세요.'}`);
+    } finally {
+      setEnvironmentRunning(false);
     }
   };
 
@@ -450,6 +525,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             </button>
             <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
+            </button>
+            <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
+              종합 진단서 복사
             </button>
             <span>자동: 동일 DOM 3세트 · 렌더/영역 A/B · 환경: DEV/PROD·번들·PWA·idle Hz</span>
           </div>
@@ -504,6 +582,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                       <div className="soridraw-split-perf-env-strip">
                         <span><i>Build</i><b>{environment.prod ? 'PROD' : 'DEV'} · {environment.assetMode}</b></span>
                         <span><i>Build Test</i><b>{environment.buildProfile}</b></span>
+                        <span><i>JS minify</i><b>{environment.jsMinifyMode}</b></span>
                         <span><i>CSS minify</i><b>{environment.cssMinifyMode}</b></span>
                         <span><i>Idle Hz</i><b>{environment.idleHz ?? '-'}Hz</b></span>
                         <span><i>SW / Cache</i><b>{environment.swController ? 'CTRL' : '없음'} · {environment.swRegistrations}/{environment.cacheNames ?? '-'}</b></span>
@@ -515,7 +594,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                       </div>
                       <div className="soridraw-split-perf-env-actions">
                         <span>{environment.host}</span>
-                        <button type="button" onClick={copyEnvironmentReport}>진단서 복사</button>
+                        <button type="button" onClick={copyEnvironmentReport}>환경만 복사</button>
                       </div>
                     </details>
                   )}
@@ -580,7 +659,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">587: PROD 전용 CSS minify OFF A/B 빌드입니다. DEV는 기존과 동일하고, 테스트앱(PROD)만 CSS 축소를 끈 상태로 동일 자동 벤치마크를 비교해 production CSS 출력이 렌더 병목에 영향을 주는지 분리합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">588: 587에서 CSS minify는 정상으로 복구하고, 테스트앱(PROD)의 JS minify만 OFF한 단일 변수 A/B 빌드입니다. 종합 진단서 복사는 환경 + 자동 벤치마크 + 저장된 렌더/영역 A/B 결과를 한 번에 텍스트로 복사합니다.</p>
             </>
           )}
         </div>

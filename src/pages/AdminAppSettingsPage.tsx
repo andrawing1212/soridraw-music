@@ -296,13 +296,14 @@ export default function AdminAppSettingsPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-black text-[var(--text-primary)]">품질·성능 진단 도구</h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 렌더/영역 A/B, DEV·PROD 실행 환경 진단을 함께 보관하며 앞으로 추가되는 검증 도구도 삭제하지 않고 다시 사용할 수 있게 유지합니다. 587차는 PROD CSS minify OFF 진단 빌드 여부도 환경 진단에서 확인합니다.
+                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 렌더/영역 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관하며 앞으로 추가되는 검증 도구도 삭제하지 않고 다시 사용할 수 있게 유지합니다. 588차는 CSS 축소를 정상 복구하고 PROD JS minify OFF 단일 변수 진단을 확인합니다.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-[var(--text-secondary)]">
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">자동 벤치마크</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">렌더 A/B</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">영역 이진 스캔</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">실행 환경 진단</span>
+                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">종합 진단서</span>
                 </div>
               </div>
             </div>

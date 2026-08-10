@@ -1495,3 +1495,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 테스트는 Music Note 동일 화면에서 자동 테스트 3세트 중앙값을 실행하고, 586/585의 PROD 기준과 FPS/P95/렌더 비JS·초를 비교한다.
 - 결과가 없거나 악화되면 이 build 옵션은 다음 차수에서 즉시 원복하고 JS minify/번들 경로를 다음 후보로 검증한다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 588차 메모
+- 587차의 PROD CSS minify OFF 실험은 원복하고 production CSS 축소를 정상 상태로 되돌렸다.
+- 다음 단일 변수 A/B로 production JS minify만 OFF했다. production bundle/청크 구조는 유지해서 JS 축소 출력 자체가 분할 렌더 병목에 관여하는지 비교한다.
+- PERF 환경 진단에 JS minify / CSS minify 상태를 각각 표시한다.
+- `종합 진단서 복사`를 추가해 최신 환경 정보, 자동 테스트 3세트 중앙값, DOM/병목 TOP/Lite V2 내부 단계와 저장된 렌더·영역 A/B 결과를 텍스트 한 번으로 복사할 수 있게 했다.
+- 기존 관리자 품질·성능 진단 도구는 유지하며 일반 사용자에게는 노출하지 않는다.

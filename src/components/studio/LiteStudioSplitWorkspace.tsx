@@ -394,6 +394,14 @@ export default function LiteStudioSplitWorkspace({
     const builderMode = readContentResponsiveMode(safeBuilderWidth);
     const resultMode = readContentResponsiveMode(safeResultWidth);
 
+    // 607: publish only the already-computed responsive ownership state. This
+    // does not add another measurement or observer; App uses it solely to keep
+    // the 606 rerender suppression scoped to Music Note's tablet state instead
+    // of affecting every Lite V2 workspace.
+    const root = document.documentElement;
+    if (root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
+    if (root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
+
     if (force || contentResponsiveModeRef.current.builder !== builderMode) {
       if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
         recordSplitPerfResponsiveSwitch('content');
@@ -800,7 +808,7 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · manual drag · 606 App-rerender-suppressed runtime + layout-ack diagnostics',
+      engine: 'Lite V2 · manual drag · 607 scoped Music Note tablet App-sync suppression + layout-ack diagnostics',
       builder: builderRef.current,
       result: resultRef.current,
       layoutMode: runtimeLayoutModeRef.current,
@@ -838,6 +846,15 @@ export default function LiteStudioSplitWorkspace({
     layoutAckObserverRef.current?.disconnect();
     layoutAckObserverRef.current = null;
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const nextWorkspace = workspaceView || 'create';
+    root.dataset.soridrawLiteWorkspace = nextWorkspace;
+    return () => {
+      if (root.dataset.soridrawLiteWorkspace === nextWorkspace) delete root.dataset.soridrawLiteWorkspace;
+    };
+  }, [workspaceView]);
 
   useLayoutEffect(() => {
     runtimeLayoutModeRef.current = runtimeLayoutMode;
@@ -1107,7 +1124,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 606 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 607 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1235,6 +1252,9 @@ export default function LiteStudioSplitWorkspace({
       const root = document.documentElement;
       delete root.dataset.soridrawBuilderMode;
       delete root.dataset.soridrawResultMode;
+      delete root.dataset.soridrawBuilderContentMode;
+      delete root.dataset.soridrawResultContentMode;
+      delete root.dataset.soridrawLiteWorkspace;
       delete root.dataset.soridrawBuilderCollapsed;
       delete root.dataset.soridrawResultCollapsed;
       delete root.dataset.soridrawBuilderAtMinimum;

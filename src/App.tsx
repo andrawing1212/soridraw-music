@@ -4000,21 +4000,22 @@ function App() {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
 
-    // 606 — the builder's mobile/desktop attribute is a visual split-pane
-    // signal and can cross its breakpoint many times during one divider drag.
-    // CSS already switches the floating Generate bar immediately from that
-    // root attribute, so mirroring every crossing back into App React state is
-    // redundant while the pointer is held. Doing so re-rendered the very large
-    // App tree during the hottest drag path and made the pane feel as if it was
-    // being pulled from behind even when Lite V2 geometry itself was fast.
-    // Keep the live CSS state, defer only the React gesture-state mirror, and
-    // commit it once after the split drag ends. Outside a drag, resize/theme
-    // changes still synchronize immediately.
+    // 607 — 606 proved that suppressing this App-level mirror helps Music
+    // Note while its result content is in tablet mode, but applying the same
+    // suppression to Library/Recent/Create made those workspaces feel worse.
+    // Restore the original immediate synchronization everywhere, and retain
+    // the drag-time deferral only for the one state that improved in real-hand
+    // testing: Music Note + tablet. PC Music Note also synchronizes immediately
+    // again so pane geometry and App-owned controls cannot drift apart.
     const syncBuilderActionMode = (forceBuilderSync = false) => {
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
       setIsStudioBlackActionMode((current) => current === isStudioBlack ? current : isStudioBlack);
 
-      if (!forceBuilderSync && root.classList.contains('soridraw-lite-split-dragging')) return;
+      const shouldDeferMusicNoteTabletSync = !forceBuilderSync
+        && root.classList.contains('soridraw-lite-split-dragging')
+        && root.dataset.soridrawLiteWorkspace === 'music-note'
+        && root.dataset.soridrawResultContentMode === 'tablet';
+      if (shouldDeferMusicNoteTabletSync) return;
 
       const nextBuilderActionMobile = isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile';
       setIsSplitBuilderActionMobile((current) => current === nextBuilderActionMobile ? current : nextBuilderActionMobile);

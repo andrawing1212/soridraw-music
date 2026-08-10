@@ -691,7 +691,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 606 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 607 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),

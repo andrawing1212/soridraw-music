@@ -1569,3 +1569,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `App.tsx` previously mirrored every `data-soridraw-builder-mode` crossing through a root `MutationObserver` into `isSplitBuilderActionMobile` React state. That can rerender the large App tree during the divider hot path even though CSS already switches the floating Generate bar from the same root attribute.
 - During an active Lite V2 split drag, 606 now keeps the visual CSS responsive switch live but defers only that React gesture-state mirror. One synchronized React update runs on `soridraw-split-drag-end`. Outside dragging, theme/resize responsive changes still synchronize immediately.
 - No Firestore/Auth/Functions/storage schema changes. No deployment.
+
+
+## 607 · stabilize PC/tablet behavior before further optimization
+
+- Based on real-hand testing, the 606 App rerender suppression is no longer global. Library, Recent, Create, and Music Note PC restore immediate `data-soridraw-builder-mode` -> App gesture-state synchronization.
+- Only Music Note while the result content is in the published `tablet` responsive mode keeps the 606 drag-time deferral, because that is the state where the user observed a clear smoothness improvement.
+- Lite V2 now publishes its already-computed builder/result content responsive mode and active workspace on root data attributes. No extra DOM measurement, ResizeObserver, or per-frame React state was added.
+- Goal of 607 is stability, not another performance experiment: preserve the good Tablet Music Note behavior, restore other workspaces from the 606 regression, and keep PC Music Note on one synchronized App/control path before any later optimization.

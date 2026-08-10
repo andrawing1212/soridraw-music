@@ -135,82 +135,87 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <p>자동 테스트를 누르면 사람 손 오차 없이 같은 거리와 같은 시간으로 분할 성능을 측정합니다.</p>
           ) : (
             <>
-              <div className="soridraw-split-perf-source">
-                <span>{displayResult.host}</span>
-                <span>{displayResult.workspaceView}</span>
-                <span>{displayResult.viewport} · DPR {displayResult.dpr}</span>
-              </div>
-              {benchmarkSummary && (
-                <div className="soridraw-split-perf-set-strip">
-                  <strong>3세트 중앙값</strong>
-                  {benchmarkSummary.sets.map((set, index) => (
-                    <span key={`${set.createdAt}-${index}`}>#{index + 1} {set.estimatedFps}fps · P95 {set.p95FrameMs}ms</span>
-                  ))}
-                </div>
-              )}
-              <div className="soridraw-split-perf-grid">
-                <span>측정 시간</span><b>{(displayResult.durationMs / 1000).toFixed(2)}s</b>
-                <span>추정 FPS</span><b>{displayResult.estimatedFps}</b>
-                <span>평균 프레임</span><b>{displayResult.avgFrameMs}ms</b>
-                <span>P95 / 최악</span><b>{displayResult.p95FrameMs} / {displayResult.maxFrameMs}ms</b>
-                <span>&gt;20 / &gt;34 / &gt;50ms</span><b>{displayResult.over20ms} / {displayResult.over34ms} / {displayResult.over50ms}</b>
-                <span>&gt;50ms 비율</span><b>{derived?.over50Ratio ?? 0}%</b>
-                <span>Long Task</span><b>{displayResult.longTaskCount}회 · {displayResult.longTaskTotalMs}ms</b>
-                <span>Long Task /초</span><b>{derived?.longTaskPerSecond ?? 0}ms/s</b>
-                <span>렌더 비JS /초</span><b>{derived?.browserRenderPerSecond ?? 0}ms/s</b>
-                <span>LoAF</span><b>{displayResult.loafSupported ? `${displayResult.loafCount}회 · ${displayResult.loafTotalMs}ms` : '미지원'}</b>
-                <span>LoAF blocking</span><b>{displayResult.loafSupported ? `${displayResult.loafBlockingTotalMs}ms` : '-'}</b>
-                <span>강제 Style/Layout</span><b>{displayResult.loafSupported ? `${displayResult.forcedStyleLayoutTotalMs} / max ${displayResult.forcedStyleLayoutMaxMs}ms` : '-'}</b>
-                <span>느린 입력 이벤트</span><b>{displayResult.eventTimingSupported ? `${displayResult.slowEventCount}회 · max ${displayResult.slowEventMaxMs}ms` : '미지원'}</b>
-                <span>입력 지연 평균/최대</span><b>{displayResult.eventTimingSupported ? `${displayResult.inputDelayAvgMs}/${displayResult.inputDelayMaxMs}ms` : '-'}</b>
-                <span>JS flush 평균/최대</span><b>{displayResult.flushAvgMs}/{displayResult.flushMaxMs}ms</b>
-                <span>실제 폭 반영 / 선만</span><b>{displayResult.contentCommitCount} / {displayResult.dividerOnlyCount}</b>
-                <span>apply 평균/최대</span><b>{displayResult.applyAvgMs}/{displayResult.applyMaxMs}ms</b>
-                <span>DOM 전체</span><b>{displayResult.domNodes.toLocaleString()}</b>
-                <span>좌/우 DOM</span><b>{displayResult.builderNodes.toLocaleString()} / {displayResult.resultNodes.toLocaleString()}</b>
-                <span>JS Heap</span><b>{format(displayResult.heapMb, 'MB')}</b>
-              </div>
-
-              <details open>
-                <summary>영역 부담 — DOM 규모</summary>
-                <div className="soridraw-split-perf-grid is-detail">
-                  <span>뮤직노트 상단/필터</span><b>{displayResult.regionNodes.musicNoteControls.toLocaleString()}</b>
-                  <span>뮤직노트 리스트</span><b>{displayResult.regionNodes.musicNoteList.toLocaleString()}</b>
-                  <span>라이브러리 상단/필터</span><b>{displayResult.regionNodes.libraryControls.toLocaleString()}</b>
-                  <span>라이브러리 리스트</span><b>{displayResult.regionNodes.libraryList.toLocaleString()}</b>
-                  <span>Studio 외부 UI</span><b>{displayResult.regionNodes.externalStudioUi.toLocaleString()}</b>
-                  <span>기타 DOM</span><b>{displayResult.regionNodes.other.toLocaleString()}</b>
-                </div>
-                <p className="soridraw-split-perf-note">브라우저 LoAF API는 비JS 렌더 시간을 DOM 하위영역별로 직접 귀속하지 못하므로, 581은 영역별 DOM 규모와 JS/LoAF 병목을 함께 보여줘 다음 격리 대상을 고릅니다.</p>
-              </details>
-
-              <details open>
-                <summary>병목 TOP — 누가 시간을 쓰는지</summary>
-                {displayResult.loafSupported ? (
-                  displayResult.hotspots.length ? (
-                    <div className="soridraw-split-perf-hotspots">
-                      {displayResult.hotspots.map((item, index) => (
-                        <div className="soridraw-split-perf-hotspot" key={`${item.label}-${index}`}>
-                          <span><i>{index + 1}</i>{item.label}</span>
-                          <b>{item.totalMs}ms · {item.count}회</b>
-                          {item.forcedStyleLayoutMs > 0 && <em>forced layout {item.forcedStyleLayoutMs}ms</em>}
-                        </div>
+              <div className="soridraw-split-perf-columns">
+                <section className="soridraw-split-perf-column is-summary">
+                  <div className="soridraw-split-perf-source">
+                    <span>{displayResult.host}</span>
+                    <span>{displayResult.workspaceView}</span>
+                    <span>{displayResult.viewport} · DPR {displayResult.dpr}</span>
+                  </div>
+                  {benchmarkSummary && (
+                    <div className="soridraw-split-perf-set-strip">
+                      <strong>3세트 중앙값</strong>
+                      {benchmarkSummary.sets.map((set, index) => (
+                        <span key={`${set.createdAt}-${index}`}>#{index + 1} {set.estimatedFps}fps · P95 {set.p95FrameMs}ms</span>
                       ))}
                     </div>
-                  ) : <p>이번 드래그에서는 LoAF 스크립트 귀속 정보가 잡히지 않았습니다.</p>
-                ) : <p>이 Chrome에서는 Long Animation Frames API가 지원되지 않습니다.</p>}
-              </details>
+                  )}
+                  <div className="soridraw-split-perf-grid is-metrics">
+                    <span>측정 시간</span><b>{(displayResult.durationMs / 1000).toFixed(2)}s</b>
+                    <span>추정 FPS</span><b>{displayResult.estimatedFps}</b>
+                    <span>평균 프레임</span><b>{displayResult.avgFrameMs}ms</b>
+                    <span>P95 / 최악</span><b>{displayResult.p95FrameMs} / {displayResult.maxFrameMs}ms</b>
+                    <span>&gt;20 / &gt;34 / &gt;50ms</span><b>{displayResult.over20ms} / {displayResult.over34ms} / {displayResult.over50ms}</b>
+                    <span>&gt;50ms 비율</span><b>{derived?.over50Ratio ?? 0}%</b>
+                    <span>Long Task</span><b>{displayResult.longTaskCount}회 · {displayResult.longTaskTotalMs}ms</b>
+                    <span>Long Task /초</span><b>{derived?.longTaskPerSecond ?? 0}ms/s</b>
+                    <span>렌더 비JS /초</span><b>{derived?.browserRenderPerSecond ?? 0}ms/s</b>
+                    <span>LoAF</span><b>{displayResult.loafSupported ? `${displayResult.loafCount}회 · ${displayResult.loafTotalMs}ms` : '미지원'}</b>
+                    <span>LoAF blocking</span><b>{displayResult.loafSupported ? `${displayResult.loafBlockingTotalMs}ms` : '-'}</b>
+                    <span>강제 Style/Layout</span><b>{displayResult.loafSupported ? `${displayResult.forcedStyleLayoutTotalMs} / max ${displayResult.forcedStyleLayoutMaxMs}ms` : '-'}</b>
+                    <span>느린 입력 이벤트</span><b>{displayResult.eventTimingSupported ? `${displayResult.slowEventCount}회 · max ${displayResult.slowEventMaxMs}ms` : '미지원'}</b>
+                    <span>입력 지연 평균/최대</span><b>{displayResult.eventTimingSupported ? `${displayResult.inputDelayAvgMs}/${displayResult.inputDelayMaxMs}ms` : '-'}</b>
+                    <span>JS flush 평균/최대</span><b>{displayResult.flushAvgMs}/{displayResult.flushMaxMs}ms</b>
+                    <span>실제 폭 반영 / 선만</span><b>{displayResult.contentCommitCount} / {displayResult.dividerOnlyCount}</b>
+                    <span>apply 평균/최대</span><b>{displayResult.applyAvgMs}/{displayResult.applyMaxMs}ms</b>
+                    <span>DOM 전체</span><b>{displayResult.domNodes.toLocaleString()}</b>
+                    <span>좌/우 DOM</span><b>{displayResult.builderNodes.toLocaleString()} / {displayResult.resultNodes.toLocaleString()}</b>
+                    <span>JS Heap</span><b>{format(displayResult.heapMb, 'MB')}</b>
+                  </div>
+                </section>
 
-              <details>
-                <summary>Lite V2 내부 단계 시간</summary>
-                <div className="soridraw-split-perf-grid is-detail">
-                  <span>폭/분할선 write</span><b>{displayResult.layoutWriteAvgMs}ms</b>
-                  <span>반응형 판정</span><b>{displayResult.responsiveAvgMs}ms</b>
-                  <span>외부 UI 동기화</span><b>{displayResult.externalAvgMs}ms</b>
-                  <span>dataset/ARIA</span><b>{displayResult.miscAvgMs}ms</b>
-                </div>
-              </details>
-              <p className="soridraw-split-perf-note">581: 자동 벤치마크는 워밍업 후 동일한 2왕복 측정을 3세트 실행하고 중앙값으로 판정합니다. 영역별 DOM 규모도 함께 기록해 Music Note/Library의 다음 격리 대상을 비교합니다.</p>
+                <section className="soridraw-split-perf-column is-detail-column">
+                  <details open>
+                    <summary>영역 부담 — DOM 규모</summary>
+                    <div className="soridraw-split-perf-grid is-detail">
+                      <span>뮤직노트 상단/필터</span><b>{displayResult.regionNodes.musicNoteControls.toLocaleString()}</b>
+                      <span>뮤직노트 리스트</span><b>{displayResult.regionNodes.musicNoteList.toLocaleString()}</b>
+                      <span>라이브러리 상단/필터</span><b>{displayResult.regionNodes.libraryControls.toLocaleString()}</b>
+                      <span>라이브러리 리스트</span><b>{displayResult.regionNodes.libraryList.toLocaleString()}</b>
+                      <span>Studio 외부 UI</span><b>{displayResult.regionNodes.externalStudioUi.toLocaleString()}</b>
+                      <span>기타 DOM</span><b>{displayResult.regionNodes.other.toLocaleString()}</b>
+                    </div>
+                  </details>
+
+                  <details open>
+                    <summary>병목 TOP — 누가 시간을 쓰는지</summary>
+                    {displayResult.loafSupported ? (
+                      displayResult.hotspots.length ? (
+                        <div className="soridraw-split-perf-hotspots">
+                          {displayResult.hotspots.slice(0, 5).map((item, index) => (
+                            <div className="soridraw-split-perf-hotspot" key={`${item.label}-${index}`}>
+                              <span><i>{index + 1}</i>{item.label}</span>
+                              <b>{item.totalMs}ms · {item.count}회</b>
+                              {item.forcedStyleLayoutMs > 0 && <em>forced layout {item.forcedStyleLayoutMs}ms</em>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p>이번 드래그에서는 LoAF 스크립트 귀속 정보가 잡히지 않았습니다.</p>
+                    ) : <p>이 Chrome에서는 Long Animation Frames API가 지원되지 않습니다.</p>}
+                  </details>
+
+                  <details open>
+                    <summary>Lite V2 내부 단계</summary>
+                    <div className="soridraw-split-perf-grid is-detail">
+                      <span>폭/분할선 write</span><b>{displayResult.layoutWriteAvgMs}ms</b>
+                      <span>반응형 판정</span><b>{displayResult.responsiveAvgMs}ms</b>
+                      <span>외부 UI 동기화</span><b>{displayResult.externalAvgMs}ms</b>
+                      <span>dataset/ARIA</span><b>{displayResult.miscAvgMs}ms</b>
+                    </div>
+                  </details>
+                </section>
+              </div>
+              <p className="soridraw-split-perf-note is-compact">582: 자동 벤치마크는 동일 화면·동일 리스트 DOM 조건의 유효 세트만 3회 모아 중앙값을 계산합니다. 조건이 달라지면 해당 세트는 자동 폐기 후 재측정합니다.</p>
             </>
           )}
         </div>

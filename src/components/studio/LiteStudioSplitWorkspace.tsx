@@ -854,32 +854,97 @@ export default function LiteStudioSplitWorkspace({
 
       clearSplitPerfBenchmarkSummary();
       const measuredSets: NonNullable<ReturnType<typeof getLastSplitPerfResult>>[] = [];
+      let attemptCount = 0;
+      const maxAttempts = 7;
+      let fingerprint: { targetNodes: number; resultNodes: number; viewport: string } | null = null;
+
+      const targetNodeCount = (measured: NonNullable<ReturnType<typeof getLastSplitPerfResult>>) => {
+        if (workspaceView === 'music-note') return measured.regionNodes.musicNoteList;
+        if (workspaceView === 'library') return measured.regionNodes.libraryList;
+        return measured.resultNodes;
+      };
+
+      const validateMeasuredSet = (measured: NonNullable<ReturnType<typeof getLastSplitPerfResult>>) => {
+        const targetNodes = targetNodeCount(measured);
+        if (measured.workspaceView !== (workspaceView || 'create')) {
+          return { valid: false, reason: `화면 대상 변경(${measured.workspaceView})` };
+        }
+        if ((workspaceView === 'music-note' || workspaceView === 'library') && targetNodes <= 0) {
+          return { valid: false, reason: `${workspaceView === 'music-note' ? '뮤직노트' : '라이브러리'} 리스트 DOM 0` };
+        }
+        if (measured.resultNodes <= 0) return { valid: false, reason: '우측 패널 DOM 0' };
+
+        if (!fingerprint) {
+          fingerprint = { targetNodes, resultNodes: measured.resultNodes, viewport: measured.viewport };
+          return { valid: true, reason: '' };
+        }
+
+        const targetTolerance = Math.max(24, Math.round(fingerprint.targetNodes * 0.22));
+        const resultTolerance = Math.max(40, Math.round(fingerprint.resultNodes * 0.25));
+        if (measured.viewport !== fingerprint.viewport) return { valid: false, reason: '측정 중 viewport 변경' };
+        if (Math.abs(targetNodes - fingerprint.targetNodes) > targetTolerance) {
+          return { valid: false, reason: `리스트 DOM 변동 ${fingerprint.targetNodes}→${targetNodes}` };
+        }
+        if (Math.abs(measured.resultNodes - fingerprint.resultNodes) > resultTolerance) {
+          return { valid: false, reason: `우측 DOM 변동 ${fingerprint.resultNodes}→${measured.resultNodes}` };
+        }
+        return { valid: true, reason: '' };
+      };
+
+      const abortBenchmark = (message: string) => {
+        benchmarkRunningRef.current = false;
+        benchmarkFrameRef.current = null;
+        if (benchmarkTimerRef.current !== null) {
+          window.clearTimeout(benchmarkTimerRef.current);
+          benchmarkTimerRef.current = null;
+        }
+        finishDrag();
+        restoreOriginalPercent();
+        if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
+        emitBenchmarkStatus('error', message);
+      };
+
       const runMeasurementSet = (setIndex: number) => {
         if (!benchmarkRunningRef.current) return;
+        if (attemptCount >= maxAttempts) {
+          abortBenchmark(`유효한 측정 3세트를 확보하지 못했습니다. 현재 ${measuredSets.length}/3세트`);
+          return;
+        }
+        attemptCount += 1;
         applyPercent(lowPercent, true);
         benchmarkTimerRef.current = window.setTimeout(() => {
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 581 · set ${setIndex + 1}/3 · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
+            engine: `Lite V2 · auto benchmark 582 · set ${setIndex + 1}/3 · attempt ${attemptCount} · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
             builder,
             result,
           });
-          emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}% · 2왕복`);
+          emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · 동일 DOM 검증 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
           runLegs(4, 1000, true, () => {
             finishSplitPerfDrag();
             const measured = getLastSplitPerfResult();
-            if (measured) measuredSets.push(measured);
+            if (!measured) {
+              benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex), 320);
+              return;
+            }
+            const validation = validateMeasuredSet(measured);
+            if (!validation.valid) {
+              emitBenchmarkStatus('running', `무효 세트 재측정 · ${validation.reason}`);
+              benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex), 520);
+              return;
+            }
+            measuredSets.push(measured);
             if (setIndex >= 2) {
               finishBenchmark(measuredSets);
               return;
             }
-            benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex + 1), 240);
+            benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex + 1), 260);
           });
         }, 180);
       };
 
-      emitBenchmarkStatus('running', `워밍업 중 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
+      emitBenchmarkStatus('running', `워밍업 중 · 동일 화면/DOM 조건 검증 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
       runLegs(2, 650, false, () => runMeasurementSet(0));
     };
 

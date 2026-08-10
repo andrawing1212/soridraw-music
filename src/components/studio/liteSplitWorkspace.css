@@ -548,3 +548,87 @@
   white-space: nowrap;
   opacity: 0.72;
 }
+
+/* 582 — screenshot-friendly PERF layout. Keep all diagnostic data, but spread it horizontally. */
+.soridraw-split-perf-panel {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+}
+
+.soridraw-split-perf-body {
+  max-height: calc(100vh - 86px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.soridraw-split-perf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.soridraw-split-perf-column {
+  min-width: 0;
+}
+
+.soridraw-split-perf-grid.is-metrics {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+
+.soridraw-split-perf-grid.is-detail {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+
+.soridraw-split-perf-column.is-detail-column details:first-child {
+  margin-top: 0;
+}
+
+.soridraw-split-perf-column.is-detail-column details {
+  margin-top: 8px;
+}
+
+.soridraw-split-perf-hotspots {
+  gap: 2px;
+  margin-top: 5px;
+}
+
+.soridraw-split-perf-hotspot {
+  padding: 3px 0;
+}
+
+.soridraw-split-perf-hotspot em {
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.soridraw-split-perf-source {
+  margin-bottom: 6px;
+}
+
+.soridraw-split-perf-set-strip {
+  margin: 5px 0 7px;
+  gap: 4px 6px;
+}
+
+.soridraw-split-perf-note.is-compact {
+  margin-top: 7px !important;
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+@media (min-width: 1100px) and (max-width: 1399px) {
+  .soridraw-split-perf-panel {
+    width: min(680px, calc(100vw - 24px));
+    right: 12px;
+    bottom: 12px;
+  }
+  .soridraw-split-perf-grid.is-metrics,
+  .soridraw-split-perf-grid.is-detail {
+    column-gap: 7px;
+  }
+}

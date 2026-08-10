@@ -1455,3 +1455,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note/Library 상단·리스트, Studio 외부 UI의 DOM 규모를 진단 패널에 분리 표시한다.
 - App 최상위 SecondaryScrollControl의 documentElement ResizeObserver와 500ms 모달 폴링을 Lite V2 분할 드래그 중 일시 중지하고 드래그 종료 후 1회 동기화한다.
 - 디자인, 분할 실시간 리플로우, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않는다.
+
+## 582차 — 자동 벤치마크 조건 검증 + PERF 가로형 압축 UI
+- 581의 3세트 중앙값 자동 테스트를 유지하면서, Music Note/Library 테스트는 동일 화면·동일 리스트 DOM 조건의 유효 세트만 채택하도록 보강했다.
+- 뮤직노트/라이브러리 리스트 DOM이 0이거나, 세트 사이 대상 DOM/viewport가 크게 달라지면 해당 세트는 자동 폐기하고 재측정한다.
+- 최대 7회 시도 안에 유효 3세트를 확보하지 못하면 결과를 억지로 정상 판정하지 않고 오류 상태로 종료한다.
+- PERF 패널은 세로 누적 대신 좌우 2열 배치로 변경해 한 번의 스크린샷에 핵심 수치·영역 DOM·병목 TOP·Lite V2 내부 단계를 함께 담기 쉽게 했다.
+- 일반 앱 디자인/분할 동작/Firebase 저장 구조는 변경하지 않았다.

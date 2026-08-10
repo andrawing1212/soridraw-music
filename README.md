@@ -1424,3 +1424,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - active menu row는 containment에서 제외해 popover/overflow 디자인을 보호.
 - 스크롤 안정화는 pane당 visible anchor 1개만 elementFromPoint로 캡처해 pointer-up 후 1회 보정.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 577차 — Lite V2 드래그 상태 전역 CSS 분리
+- 기준: 576차. 디자인/분할 비율/실시간 리플로우/leaf-card isolation은 그대로 유지한다.
+- Lite V2가 더 이상 레거시 `html.soridraw-split-dragging` 클래스를 사용하지 않도록 분리했다.
+- 레거시 `body *`, Music Note/Library 전체 descendant, pane 전체 `* / *::before / *::after` 드래그 선택자가 Lite V2에서 발동하지 않는다.
+- Lite V2는 `html.soridraw-lite-split-dragging` + workspace `.is-dragging`만 사용하고, 생성바/검색버튼/heartbeat/실제 leaf 카드처럼 필요한 대상만 정확히 지정한다.
+- `useStableContentHeight`는 새 Lite drag marker도 continuous resize로 인식해 드래그 중 높이 재측정이 다시 살아나지 않도록 유지했다.
+- 목표: pointer-down 시 전역 style matching 비용과 배포 환경의 큰 MessagePort/forced-layout spike를 줄이는 1단계 실험.

@@ -245,22 +245,19 @@
    * each row's last known block size. Visible rows still reflow every rAF, so
    * the design and the real split boundary stay fully live. Active menu rows
    * are excluded so popovers/overflow never get clipped. */
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace
+  .soridraw-lite-studio-split-workspace.is-dragging
   .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active) {
     content-visibility: auto;
     contain-intrinsic-size: auto 92px;
   }
 
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace
+  .soridraw-lite-studio-split-workspace.is-dragging
   .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active) {
     content-visibility: auto;
     contain-intrinsic-size: auto 76px;
   }
 
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace
+  .soridraw-lite-studio-split-workspace.is-dragging
   .soridraw-library-workspace-track-row {
     content-visibility: auto;
     contain-intrinsic-size: auto 76px;
@@ -269,14 +266,57 @@
   /* Keep visible leaf cards as independent formatting contexts during drag.
    * No size containment is used, so their normal responsive height/spacing is
    * still determined by the existing design. */
-  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace
+  .soridraw-lite-studio-split-workspace.is-dragging
   :is(
     .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active),
     .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active),
     .soridraw-library-workspace-track-row
   ) {
     contain: layout style paint;
+  }
+}
+
+/* 577 — Lite V2 owns a separate drag marker.
+ * The legacy `.soridraw-split-dragging` class intentionally is NOT set by
+ * Lite V2 anymore, because old Studio CSS contains app-wide `body *` and page
+ * descendant selectors that force thousands of nodes through style matching at
+ * pointer-down. Keep only the exact visual/interaction guards Lite V2 needs. */
+@media (min-width: 1100px) {
+  html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"]
+  body > :is(.soridraw-studio-action-bar--tracking, .soridraw-studio-action-collapsed) {
+    transition: none !important;
+  }
+
+  html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-generate-heartbeat {
+    animation-play-state: paused !important;
+  }
+
+  html.soridraw-lite-split-dragging[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-hero
+  button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+  }
+
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    pointer-events: none !important;
+    user-select: none !important;
+  }
+
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(
+    .soridraw-musicnote-song-card,
+    .soridraw-library-playlist-row,
+    .soridraw-library-workspace-track-row,
+    .soridraw-studio-menu-card,
+    .soridraw-result-prompt-card,
+    .soridraw-result-lyrics-card
+  ) {
+    transition: none !important;
+    animation-play-state: paused !important;
   }
 }
 

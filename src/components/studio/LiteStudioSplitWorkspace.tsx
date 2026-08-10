@@ -595,7 +595,7 @@ export default function LiteStudioSplitWorkspace({
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
-    document.documentElement.classList.remove('soridraw-split-dragging');
+    document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
     restoreDragViewportAnchors(true);
@@ -644,14 +644,14 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · unified rAF + native leaf isolation (576)',
+      engine: 'Lite V2 · scoped drag state + native leaf isolation (577)',
       builder: builderRef.current,
       result: resultRef.current,
     });
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
-    document.documentElement.classList.add('soridraw-split-dragging');
+    document.documentElement.classList.add('soridraw-lite-split-dragging');
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
@@ -738,7 +738,7 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
-      document.documentElement.classList.remove('soridraw-split-dragging');
+      document.documentElement.classList.remove('soridraw-lite-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       restoreDragViewportAnchors(false);

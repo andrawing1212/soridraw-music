@@ -997,6 +997,7 @@ function useStableContentHeight(
     const isContinuousResize = () => {
       const root = document.documentElement;
       return root.classList.contains('soridraw-split-dragging')
+        || root.classList.contains('soridraw-lite-split-dragging')
         || root.classList.contains('soridraw-window-resizing');
     };
 

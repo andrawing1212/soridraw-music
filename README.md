@@ -1340,3 +1340,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - /history 로그인 화면을 뮤직노트(좌) + 라이브러리(우) 1:1 분할 테스트 레이아웃으로 전환했다.
 - Studio 좌/우 레일은 유지하고 중앙만 StudioSplitWorkspace로 감쌌다.
 - 비로그인 note 공유 라우트와 /suno-library 단독 페이지는 그대로 유지했다.
+
+
+## 564차 메모
+- 뮤직노트+라이브러리 성능 테스트에 독립 Lite Split V2 엔진을 추가했다.
+- 기본은 Lite V2이며 우측 상단 테스트 스위치에서 기존 StudioSplitWorkspace와 즉시 비교할 수 있다.
+- Lite V2 드래그 hot path는 pointerdown 1회 측정 + rAF 1회 CSS 변수 write만 사용한다.
+- Lite pane 안의 뮤직노트/라이브러리는 각자 ResizeObserver를 만들지 않고 splitter가 계산한 pane width 이벤트를 직접 받아 PC/tablet/mobile 모드만 임계점에서 변경한다.
+- 기존 엔진 코드는 삭제/수정하지 않고 비교용으로 그대로 보존했다.

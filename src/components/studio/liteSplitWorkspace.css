@@ -1,0 +1,124 @@
+/*
+ * Lite Split V2 performance probe.
+ * Intentionally isolated from StudioSplitWorkspace: no portals, no root CSS
+ * variables, no pane mode observers, no footer/scroll/action-bar coordination.
+ */
+.soridraw-lite-split-workspace {
+  --soridraw-lite-split-percent: 50%;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, var(--soridraw-lite-split-percent)) minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  align-items: start;
+  overflow: hidden;
+}
+
+.soridraw-lite-split-pane {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.soridraw-lite-split-pane.is-left {
+  grid-column: 1;
+  padding-right: 18px;
+}
+
+.soridraw-lite-split-pane.is-right {
+  grid-column: 2;
+  padding-left: 18px;
+}
+
+.soridraw-lite-split-pane > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.soridraw-lite-splitter {
+  position: absolute;
+  z-index: 70;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--soridraw-lite-split-percent) - 8px);
+  width: 16px;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  border: 0;
+  outline: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.soridraw-lite-splitter > span {
+  display: block;
+  width: 1px;
+  min-height: 100%;
+  background: rgba(255,255,255,.105);
+  pointer-events: none;
+}
+
+.soridraw-lite-splitter:hover > span,
+.soridraw-lite-split-workspace.is-dragging .soridraw-lite-splitter > span {
+  background: rgba(255,255,255,.18);
+}
+
+.soridraw-split-engine-test-switch {
+  position: fixed;
+  z-index: 150;
+  top: 72px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(20,20,21,.92);
+  box-shadow: 0 8px 24px rgba(0,0,0,.28);
+}
+
+.soridraw-split-engine-test-switch button {
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: transparent;
+  color: #a0a0a3;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+
+.soridraw-split-engine-test-switch button.is-active {
+  background: #2c2c2e;
+  color: #ffb400;
+}
+
+@media (max-width: 1099px) {
+  .soridraw-lite-split-workspace {
+    display: block;
+  }
+
+  .soridraw-lite-split-pane.is-left,
+  .soridraw-lite-split-pane.is-right {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .soridraw-lite-split-pane.is-right,
+  .soridraw-lite-splitter,
+  .soridraw-split-engine-test-switch {
+    display: none;
+  }
+}

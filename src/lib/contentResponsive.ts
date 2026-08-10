@@ -32,6 +32,21 @@ export function attachSoridrawResponsiveContract(element: HTMLElement) {
 
   const readStableBorderWidth = () => element.getBoundingClientRect().width;
 
+  const litePane = element.closest<HTMLElement>('[data-soridraw-lite-pane]');
+  if (litePane) {
+    // Lite Split V2 owns pane width already. Consume that width directly instead
+    // of creating a second ResizeObserver + getBoundingClientRect loop for each
+    // page while the divider is moving.
+    applyWidth(readStableBorderWidth());
+    const handleLitePaneWidth = (event: Event) => {
+      const customEvent = event as CustomEvent<{ width?: number }>;
+      const width = Number(customEvent.detail?.width);
+      if (Number.isFinite(width) && width > 0) applyWidth(width);
+    };
+    litePane.addEventListener('soridraw-lite-pane-width', handleLitePaneWidth as EventListener);
+    return () => litePane.removeEventListener('soridraw-lite-pane-width', handleLitePaneWidth as EventListener);
+  }
+
   applyWidth(readStableBorderWidth());
 
   if (typeof ResizeObserver !== 'undefined') {

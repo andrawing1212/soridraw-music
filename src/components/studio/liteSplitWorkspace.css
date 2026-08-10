@@ -1,7 +1,8 @@
 /*
- * Lite Split V2 performance probe.
- * Intentionally isolated from StudioSplitWorkspace: no portals, no root CSS
- * variables, no pane mode observers, no footer/scroll/action-bar coordination.
+ * Lite Split V2.
+ * Intentionally isolated from the legacy StudioSplitWorkspace hot path.
+ * Divider dragging owns one local split variable; responsive page notifications
+ * are emitted only when a pane actually crosses PC/tablet/mobile mode.
  */
 .soridraw-lite-split-workspace {
   --soridraw-lite-split-percent: 50%;
@@ -38,37 +39,95 @@
   max-width: 100%;
 }
 
-.soridraw-lite-splitter {
+.soridraw-lite-splitter,
+.soridraw-lite-splitter:hover,
+.soridraw-lite-splitter:active,
+.soridraw-lite-splitter:focus,
+.soridraw-lite-splitter:focus-visible {
   position: absolute;
   z-index: 70;
   top: 0;
   bottom: 0;
   left: calc(var(--soridraw-lite-split-percent) - 8px);
   width: 16px;
+  height: auto;
+  min-height: 100%;
   padding: 0;
   display: flex;
   align-items: stretch;
   justify-content: center;
-  border: 0;
-  outline: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  scale: 1 !important;
+  translate: none !important;
   cursor: ew-resize;
   touch-action: none;
 }
 
-.soridraw-lite-splitter > span {
+.soridraw-lite-splitter > span,
+.soridraw-lite-splitter:hover > span,
+.soridraw-lite-splitter:active > span,
+.soridraw-lite-splitter:focus > span,
+.soridraw-lite-splitter:focus-visible > span {
   display: block;
-  width: 1px;
-  min-height: 100%;
+  width: 1px !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  flex: 0 0 1px;
   background: rgba(255,255,255,.105);
+  transform: none !important;
+  scale: 1 !important;
   pointer-events: none;
 }
 
 .soridraw-lite-splitter:hover > span,
 .soridraw-lite-split-workspace.is-dragging .soridraw-lite-splitter > span {
   background: rgba(255,255,255,.18);
+}
+
+@media (min-width: 1100px) {
+  .soridraw-lite-split-workspace[data-scroll-isolated="true"] {
+    height: var(--soridraw-lite-isolated-height, 720px);
+    min-height: 320px;
+    max-height: var(--soridraw-lite-isolated-height, 720px);
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .soridraw-lite-split-workspace[data-scroll-isolated="true"] > .soridraw-lite-split-pane {
+    height: 100%;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #626266 transparent;
+  }
+
+  .soridraw-lite-split-workspace[data-scroll-isolated="true"] > .soridraw-lite-split-pane::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  .soridraw-lite-split-workspace[data-scroll-isolated="true"] > .soridraw-lite-split-pane::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .soridraw-lite-split-workspace[data-scroll-isolated="true"] > .soridraw-lite-split-pane::-webkit-scrollbar-thumb {
+    min-height: 28px;
+    border: 0;
+    border-radius: 999px;
+    background: #626266;
+  }
+
+  .soridraw-lite-split-workspace[data-scroll-isolated="true"] > .soridraw-lite-split-pane::-webkit-scrollbar-thumb:hover {
+    background: #77777b;
+  }
 }
 
 .soridraw-split-engine-test-switch {
@@ -120,5 +179,61 @@
   .soridraw-lite-splitter,
   .soridraw-split-engine-test-switch {
     display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+ * Lite V2 — Studio compatibility shell
+ * -------------------------------------------------------------------------- */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] .soridraw-lite-studio-split-workspace {
+    --soridraw-studio-builder-width: 50%;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:hover,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:active,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus-visible {
+    left: calc(var(--soridraw-lite-studio-splitter-left, var(--soridraw-studio-splitter-left, 50vw)) - 8px) !important;
+    top: 58px !important;
+    bottom: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    transform: none !important;
+    scale: 1 !important;
+    translate: none !important;
+    will-change: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter > span,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:hover > span,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:active > span,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus > span,
+  html[data-soridraw-theme="studio-black"] body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus-visible > span {
+    width: 1px !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    transform: none !important;
+    scale: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-builder-collapse-toggle.soridraw-lite-studio-builder-toggle {
+    left: var(--soridraw-lite-studio-builder-toggle-left, calc(var(--soridraw-studio-splitter-left, 50vw) - 43px)) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-result-collapse-toggle.soridraw-lite-studio-result-toggle {
+    left: var(--soridraw-lite-studio-result-toggle-left, calc(var(--soridraw-studio-splitter-left, 50vw) + 9px)) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > .soridraw-studio-builder-collapse-toggle.soridraw-lite-studio-builder-toggle {
+    left: calc(var(--soridraw-studio-builder-left, 0px) + 12px) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"] body > .soridraw-studio-result-collapse-toggle.soridraw-lite-studio-result-toggle {
+    left: auto !important;
+    right: calc(var(--soridraw-studio-result-right, 0px) + 12px) !important;
   }
 }

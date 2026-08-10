@@ -7,6 +7,10 @@ const MIN_PERCENT = 24;
 const MAX_PERCENT = 76;
 const PANE_GUTTER_PX = 18;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
+const MOBILE_MAX = 660;
+const TABLET_MAX = 1080;
+
+type ResponsiveMode = 'mobile' | 'tablet' | 'pc';
 
 const clamp = (value: number) => Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, value));
 
@@ -19,6 +23,10 @@ const readStoredPercent = () => {
     return DEFAULT_PERCENT;
   }
 };
+
+const readResponsiveMode = (width: number): ResponsiveMode => (
+  width <= MOBILE_MAX ? 'mobile' : width <= TABLET_MAX ? 'tablet' : 'pc'
+);
 
 export function LiteSplitLeftPane({ children }: { children: ReactNode }) {
   return <>{children}</>;
@@ -42,16 +50,46 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
+  const lastAriaPercentRef = useRef<number | null>(null);
+  const lastPaneModeRef = useRef<{ left: ResponsiveMode | null; right: ResponsiveMode | null }>({ left: null, right: null });
+  const lastViewportHeightRef = useRef<number | null>(null);
 
-  const broadcastPaneWidths = useCallback((percent: number, totalWidth: number) => {
+  const broadcastPaneModes = useCallback((percent: number, totalWidth: number, force = false) => {
     const safeWidth = Math.max(1, totalWidth);
     const leftColumn = safeWidth * (percent / 100);
     const rightColumn = safeWidth - leftColumn;
     const leftContentWidth = Math.max(1, leftColumn - PANE_GUTTER_PX);
     const rightContentWidth = Math.max(1, rightColumn - PANE_GUTTER_PX);
+    const leftMode = readResponsiveMode(leftContentWidth);
+    const rightMode = readResponsiveMode(rightContentWidth);
 
-    leftPaneRef.current?.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: leftContentWidth } }));
-    rightPaneRef.current?.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: rightContentWidth } }));
+    if (force || lastPaneModeRef.current.left !== leftMode) {
+      lastPaneModeRef.current.left = leftMode;
+      leftPaneRef.current?.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: leftContentWidth } }));
+    }
+    if (force || lastPaneModeRef.current.right !== rightMode) {
+      lastPaneModeRef.current.right = rightMode;
+      rightPaneRef.current?.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: rightContentWidth } }));
+    }
+  }, []);
+
+  const refreshIsolatedHeight = useCallback(() => {
+    const layout = layoutRef.current;
+    if (!layout || typeof window === 'undefined') return;
+    if (window.innerWidth < 1100) {
+      delete layout.dataset.scrollIsolated;
+      layout.style.removeProperty('--soridraw-lite-isolated-height');
+      lastViewportHeightRef.current = null;
+      return;
+    }
+    if (lastViewportHeightRef.current === window.innerHeight && layout.dataset.scrollIsolated === 'true') return;
+
+    const rect = layout.getBoundingClientRect();
+    const visibleTop = Math.max(58, Math.min(window.innerHeight - 1, rect.top));
+    const nextHeight = Math.max(320, Math.floor(window.innerHeight - visibleTop));
+    lastViewportHeightRef.current = window.innerHeight;
+    layout.dataset.scrollIsolated = 'true';
+    layout.style.setProperty('--soridraw-lite-isolated-height', `${nextHeight}px`);
   }, []);
 
   const applyPercent = useCallback((percent: number) => {
@@ -61,10 +99,13 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
     if (!layout) return;
 
     layout.style.setProperty('--soridraw-lite-split-percent', `${next}%`);
-    const splitter = splitterRef.current;
-    if (splitter) splitter.setAttribute('aria-valuenow', String(Math.round(next)));
-    broadcastPaneWidths(next, layoutWidthRef.current);
-  }, [broadcastPaneWidths]);
+    const roundedPercent = Math.round(next);
+    if (lastAriaPercentRef.current !== roundedPercent) {
+      lastAriaPercentRef.current = roundedPercent;
+      splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
+    }
+    broadcastPaneModes(next, layoutWidthRef.current);
+  }, [broadcastPaneModes]);
 
   const flushPointer = useCallback(() => {
     frameRef.current = null;
@@ -90,12 +131,12 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
     if (!draggingRef.current) return;
     if (event && event.pointerId !== pointerIdRef.current) return;
 
-    if (event) schedulePointer(event.clientX);
+    if (event) pendingClientXRef.current = event.clientX;
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
-      flushPointer();
     }
+    flushPointer();
 
     draggingRef.current = false;
     pointerIdRef.current = -1;
@@ -108,7 +149,7 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
     } catch {
       // Persistence is optional for the performance test.
     }
-  }, [flushPointer, schedulePointer]);
+  }, [flushPointer]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     const layout = layoutRef.current;
@@ -141,9 +182,10 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
     const rect = layout.getBoundingClientRect();
     layoutWidthRef.current = Math.max(1, rect.width);
     layoutLeftRef.current = rect.left;
+    refreshIsolatedHeight();
 
     const initialFrame = window.requestAnimationFrame(() => {
-      broadcastPaneWidths(percentRef.current, layoutWidthRef.current);
+      broadcastPaneModes(percentRef.current, layoutWidthRef.current, true);
     });
 
     let observer: ResizeObserver | null = null;
@@ -155,10 +197,8 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
         const width = borderSize?.inlineSize || entry.contentRect.width;
         if (!Number.isFinite(width) || width <= 0) return;
         layoutWidthRef.current = width;
-        // The outer layout itself changed (window/rail), not the divider.
-        // One rect read here refreshes the X origin outside the drag hot path.
         layoutLeftRef.current = layout.getBoundingClientRect().left;
-        broadcastPaneWidths(percentRef.current, width);
+        broadcastPaneModes(percentRef.current, width, true);
       });
       try {
         observer.observe(layout, { box: 'border-box' });
@@ -167,14 +207,18 @@ export default function LiteSplitWorkspace({ children }: { children: ReactNode }
       }
     }
 
+    const handleResize = () => refreshIsolatedHeight();
+    window.addEventListener('resize', handleResize, { passive: true });
+
     return () => {
       window.cancelAnimationFrame(initialFrame);
       observer?.disconnect();
+      window.removeEventListener('resize', handleResize);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
     };
-  }, [broadcastPaneWidths]);
+  }, [broadcastPaneModes, refreshIsolatedHeight]);
 
   useEffect(() => {
     const handleWindowPointerUp = () => finishDrag();

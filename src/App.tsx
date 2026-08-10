@@ -81,7 +81,7 @@ import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
-import LiteSplitWorkspace, { LiteSplitLeftPane, LiteSplitRightPane } from './components/studio/LiteSplitWorkspace';
+import StudioSplitEngineWorkspace, { type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
 // so switching between fixed and anchored coordinates never remounts them.
@@ -2504,96 +2504,6 @@ function HistoryRouteWrapper({
     />
   );
 }
-function MusicNoteLibrarySplitPerformanceTest({
-  isFavoritesLoading,
-  hasMoreFavorites,
-  isLoadingMoreFavorites,
-  loadMoreFavorites,
-  searchFavoritesOnServer,
-  refreshFavoritesFromServerFirstPage,
-  toggleFavorite,
-  updateFavorite,
-  clearAllFavorites,
-  unlockAllFavorites,
-  lockAllFavorites,
-  user,
-  handleLogin,
-}: any) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const params = new URLSearchParams(location.search);
-  const engine = params.get('splitEngine') === 'legacy' ? 'legacy' : 'lite';
-
-  const setEngine = (next: 'legacy' | 'lite') => {
-    const nextParams = new URLSearchParams(location.search);
-    if (next === 'lite') nextParams.delete('splitEngine');
-    else nextParams.set('splitEngine', 'legacy');
-    const query = nextParams.toString();
-    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
-  };
-
-  const musicNotePane = (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-      <HistoryRouteWrapper
-        isFavoritesLoading={isFavoritesLoading}
-        hasMoreFavorites={hasMoreFavorites}
-        isLoadingMoreFavorites={isLoadingMoreFavorites}
-        loadMoreFavorites={loadMoreFavorites}
-        searchFavoritesOnServer={searchFavoritesOnServer}
-        refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-        toggleFavorite={toggleFavorite}
-        updateFavorite={updateFavorite}
-        clearAllFavorites={clearAllFavorites}
-        unlockAllFavorites={unlockAllFavorites}
-        lockAllFavorites={lockAllFavorites}
-        user={user}
-        handleLogin={handleLogin}
-      />
-    </Suspense>
-  );
-
-  const libraryPane = (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-      <SunoLibraryPageLazy appUser={user} />
-    </Suspense>
-  );
-
-  return (
-    <>
-      <div className="soridraw-split-engine-test-switch" aria-label="분할 엔진 성능 비교">
-        <button
-          type="button"
-          className={engine === 'lite' ? 'is-active' : ''}
-          onClick={() => setEngine('lite')}
-          title="초경량 분할 엔진 V2"
-        >
-          Lite V2
-        </button>
-        <button
-          type="button"
-          className={engine === 'legacy' ? 'is-active' : ''}
-          onClick={() => setEngine('legacy')}
-          title="기존 StudioSplitWorkspace"
-        >
-          기존 방식
-        </button>
-      </div>
-
-      {engine === 'legacy' ? (
-        <StudioSplitWorkspace viewMode="split" workspaceView="music-note">
-          <StudioBuilderPane>{musicNotePane}</StudioBuilderPane>
-          <StudioResultPane>{libraryPane}</StudioResultPane>
-        </StudioSplitWorkspace>
-      ) : (
-        <LiteSplitWorkspace>
-          <LiteSplitLeftPane>{musicNotePane}</LiteSplitLeftPane>
-          <LiteSplitRightPane>{libraryPane}</LiteSplitRightPane>
-        </LiteSplitWorkspace>
-      )}
-    </>
-  );
-}
-
 const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
 const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
@@ -4252,6 +4162,14 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
+  const studioSplitEngine: StudioSplitEngine = new URLSearchParams(location.search).get('splitEngine') === 'legacy' ? 'legacy' : 'lite';
+  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine) => {
+    const nextParams = new URLSearchParams(location.search);
+    if (engine === 'lite') nextParams.delete('splitEngine');
+    else nextParams.set('splitEngine', 'legacy');
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
   const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
     readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
   );
@@ -14466,6 +14384,26 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
+              {isStudioBlackActionMode && (
+                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교">
+                  <button
+                    type="button"
+                    className={studioSplitEngine === 'lite' ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('lite')}
+                    title="초경량 Studio 분할 엔진 V2"
+                  >
+                    Lite V2
+                  </button>
+                  <button
+                    type="button"
+                    className={studioSplitEngine === 'legacy' ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('legacy')}
+                    title="기존 StudioSplitWorkspace"
+                  >
+                    기존 방식
+                  </button>
+                </div>
+              )}
               {/* Header */}
               <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
                 <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
@@ -14506,7 +14444,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
             <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
               {isStudioLoaded && (
-                <StudioSplitWorkspace
+                <StudioSplitEngineWorkspace
+                  engine={studioSplitEngine}
                   viewMode="split"
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
@@ -16907,7 +16846,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </>
                     )}
                   </StudioResultPane>
-                </StudioSplitWorkspace>
+                </StudioSplitEngineWorkspace>
               )}
             </main>
 
@@ -16931,7 +16870,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
               (user || auth.currentUser) ? (
                 <StudioPageFrame
-                  workspaceView="music-note-library-split-test"
+                  workspaceView="music-note"
                   lockViewport={false}
                   leftRail={
                     <StudioLeftRail
@@ -16987,8 +16926,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     />
                   }
                 >
-                  <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
-                    <MusicNoteLibrarySplitPerformanceTest
+                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                    <HistoryRouteWrapper
                       isFavoritesLoading={isFavoritesLoading}
                       hasMoreFavorites={hasMoreFavorites}
                       isLoadingMoreFavorites={isLoadingMoreFavorites}
@@ -17003,7 +16942,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       user={user || auth.currentUser}
                       handleLogin={handleLogin}
                     />
-                  </main>
+                  </Suspense>
                 </StudioPageFrame>
               ) : (
                 <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>

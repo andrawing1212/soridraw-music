@@ -1348,3 +1348,25 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Lite V2 드래그 hot path는 pointerdown 1회 측정 + rAF 1회 CSS 변수 write만 사용한다.
 - Lite pane 안의 뮤직노트/라이브러리는 각자 ResizeObserver를 만들지 않고 splitter가 계산한 pane width 이벤트를 직접 받아 PC/tablet/mobile 모드만 임계점에서 변경한다.
 - 기존 엔진 코드는 삭제/수정하지 않고 비교용으로 그대로 보존했다.
+
+## 565차 — Lite Split V2 Studio 실제 적용 + 기존 방식 즉시 비교
+
+- 564차에서 성능이 확인된 Lite Split V2를 `/studio`의 기본 분할 엔진으로 적용했다.
+- 기존 `StudioSplitWorkspace`는 삭제/수정하지 않고 `?splitEngine=legacy` 비교 모드로 그대로 보존했다.
+- Studio 우측 상단의 `Lite V2 / 기존 방식` 버튼으로 같은 디자인/콘텐츠에서 두 엔진을 즉시 비교할 수 있다.
+- Lite Studio 엔진은 기존 Studio의 승인된 pane 클래스/ID, 내부 독립 스크롤, 얇은 스크롤바, PC/Tablet/Mobile pane-mode, 좌/우 접기 버튼, 공통 중앙 모달 host, 상단 masthead host를 그대로 사용한다.
+- 드래그 hot path는 React state를 갱신하지 않는다. 기본적으로 로컬 workspace의 `--soridraw-studio-builder-width`만 변경하고, body portal인 분할선/검색/생성바/상단 헤더처럼 로컬 변수를 상속할 수 없는 최소 요소만 직접 동기화한다.
+- 기존 엔진의 전역 root split 변수 갱신은 드래그 중 하지 않고 시작/종료·외부 레이아웃 변경 시에만 커밋한다.
+- Builder/Result의 `data-pane-mode`와 root pane mode도 실제 breakpoint를 넘을 때만 변경한다.
+- Genre ↔ Result 첫 카드 높이 동기화용 ResizeObserver는 평상시에만 연결하고 분할 드래그 시작 즉시 disconnect, 종료 후 재연결한다.
+- 564 Lite 테스트의 뮤직노트/라이브러리 pane-width 이벤트도 매 프레임 발송하지 않고 PC/Tablet/Mobile 모드가 실제로 바뀔 때만 보낸다.
+- 564에서 보이지 않던 중앙 pane 스크롤바를 Lite V2에도 복구했다.
+- Lite 분할선은 active/focus 상태에서도 높이 100%, transform/scale 없음으로 고정해 클릭 시 선 길이가 줄어들지 않는다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 566차 메모
+- Lite V2 성능 테스트의 중심을 뮤직노트/라이브러리 테스트 화면에서 실제 Sori Studio로 이동했다.
+- /history는 562차처럼 정상 뮤직노트 단독 화면 + 좌우 레일 구조로 복구했다.
+- /studio는 Lite Studio 분할 엔진 V2가 기본이며, 기존 StudioSplitWorkspace는 비교용 `기존 방식` 전환으로 유지한다.
+- 뮤직노트 테스트용 LiteSplitWorkspace 런타임 import/helper를 App.tsx에서 제거해 일반 뮤직노트 화면에 분할 엔진이 개입하지 않도록 했다.

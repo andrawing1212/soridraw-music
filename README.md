@@ -1307,20 +1307,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
 
-## 556차 — 생성바 하단 공통 시각 여백 24px
-- 기준: `SORIDRAW_554차_모바일_명령창생성바_간격93px.zip` (555차의 200px 과대 적용은 폐기)
-- 사용자 의도는 생성바를 크게 띄우는 것이 아니라 화면 바닥과 생성바 사이에 육안상 1cm 미만의 작은 숨 쉴 공간을 두는 것이므로, Studio Black 공통 `--soridraw-action-visual-bottom-gap`을 `12px → 24px`로 조정했다.
-- PC / Tablet / Builder Mobile / 실제 Mobile 모두 동일한 공통 하단 기준을 사용한다. 펼침/접힘 시각 하단선 통일 규칙은 유지한다.
-- 명령창↔생성바 간격은 기존 승인값(Builder Mobile `93px`, 비모바일 `118px`)을 그대로 유지했다.
-- 분할바/스크롤/보컬·가사/Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
-- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
-
-## 557차 — 생성바 위치 복구 + 하단 스크롤 여백 30px
-- 기준: 556차.
-- 556차에서 `--soridraw-action-visual-bottom-gap`을 24px로 올려 생성바 자체가 위로 밀린 변경을 되돌려, 승인된 기존 생성바 Y 위치(12px 기준)를 복구했습니다.
-- 생성바 위치와는 독립적으로 Studio Black builder 콘텐츠 끝에 30px짜리 실제 spacer를 추가했습니다.
-- PC / Tablet / Builder Mobile / 실제 Mobile 모든 비율에 동일하게 적용됩니다.
-- 명령창↔생성바 간격(모바일 93px / 비모바일 118px), 생성바 크기/폭, 분할바/스크롤 로직은 변경하지 않았습니다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+## 558차 — 554 기준 생성바 하단 여백 30px / 상단 레이아웃 고정
+- 기준: 554차 (`SORIDRAW_554차_모바일_명령창생성바_간격93px.zip`)
+- Studio Black 생성바의 **보이는 하단 여백만 30px**로 조정했습니다.
+- Builder/Page 끝 spacer, padding-bottom 추가는 하지 않았습니다.
+- 생성바 위의 템포/명령창/카드 레이아웃과 스크롤 범위는 554차 그대로 유지합니다.
+- 명령창↔생성바 예약 간격은 모바일 93px / 비모바일 118px 그대로입니다.
+- 펼침/접힘 생성 컨트롤은 동일한 하단 기준을 공유합니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

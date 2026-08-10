@@ -11721,20 +11721,11 @@ html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-co
   }
 }
 
-
-/* 557 — Keep Generate Y position unchanged; add only real page-end breathing room.
- * 556 incorrectly increased the fixed Generate bottom offset, which moved the
- * whole action bar upward. Restore the approved 554/555-era visible baseline
- * (12px) and create a separate 30px terminal spacer after the builder content.
- * This spacer increases scrollable/page-end breathing room only; it does not
- * participate in Generate geometry or the approved command↔Generate reserves
- * (mobile 93px / non-mobile 118px). Applies to every Studio Black ratio. */
-:root[data-soridraw-theme="studio-black"]
-.soridraw-studio-builder-pane::after {
-  content: "";
-  display: block;
-  width: 100%;
-  height: 30px;
-  min-height: 30px;
-  pointer-events: none;
+/* 558 — 554 baseline preserved; only the visible Generate lower gap is 30px.
+ * Do not add builder/page-end spacers and do not change the approved command↔Generate
+ * reserves (mobile 93px / non-mobile 118px). This keeps every layout element above
+ * the floating Generate row exactly on the 554 baseline and changes only the row's
+ * own lower viewport breathing room. Expanded/collapsed share the same visible edge. */
+html[data-soridraw-theme="studio-black"] {
+  --soridraw-action-visual-bottom-gap: 30px;
 }

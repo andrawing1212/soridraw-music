@@ -11721,11 +11721,26 @@ html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-co
   }
 }
 
-/* 558 — 554 baseline preserved; only the visible Generate lower gap is 30px.
- * Do not add builder/page-end spacers and do not change the approved command↔Generate
- * reserves (mobile 93px / non-mobile 118px). This keeps every layout element above
- * the floating Generate row exactly on the 554 baseline and changes only the row's
- * own lower viewport breathing room. Expanded/collapsed share the same visible edge. */
+/* 559 — 554 baseline: add a 30px visible lower gap WITHOUT changing the
+ * approved spacing above Generate. The visible lower edge grows from 12px to
+ * 30px (+18px). Move the fixed Generate row up by that 18px, and increase the
+ * builder bottom reserve by the exact same 18px so the command→Generate gap
+ * and every spacing above it remain identical to 554 at the bottom boundary.
+ * No page-end spacer, pseudo-element, or secondary Y correction is used. */
 html[data-soridraw-theme="studio-black"] {
   --soridraw-action-visual-bottom-gap: 30px;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane[data-pane-mode="mobile"] {
+    padding-bottom: 111px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) {
+    padding-bottom: 136px !important;
+  }
 }

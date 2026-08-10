@@ -97,7 +97,7 @@ export default function SplitPerformanceDiagnostics() {
                   <span>dataset/ARIA</span><b>{result.miscAvgMs}ms</b>
                 </div>
               </details>
-              <p className="soridraw-split-perf-note">575: 실제 분할 경계는 60fps로 유지하고, 내부 콘텐츠 레이아웃은 드래그 중 고정해 clipping만 움직입니다. AI Studio/테스트앱에서 같은 동작 후 PERF와 병목 TOP을 비교하세요.</p>
+              <p className="soridraw-split-perf-note">576: 573 실시간 경계를 유지한 채 React DOM 교체/전체 카드 스캔 없이 Music Note/Library의 leaf 카드만 브라우저 native isolation으로 분리했습니다. 같은 동작 후 PERF와 체감을 비교하세요.</p>
             </>
           )}
         </div>

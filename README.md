@@ -1415,12 +1415,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 분할 중 React state 갱신, 반복 DOM 측정, 별도 compositor divider는 추가하지 않았다. 진단 패널은 유지한다.
 - 목적은 디자인을 바꾸는 것이 아니라 실제 분할 때 브라우저가 다시 계산/페인트해야 하는 off-screen DOM 양을 줄이는 것이다.
 
-## 575차 — Lite V2 내부 레이아웃 고정 + 실제 경계 클리핑 테스트
-- 기준: 573차. 574차의 React 드래그 윈도잉은 사용하지 않는다.
-- 분할선과 실제 pane 경계는 매 rAF마다 하나의 좌표로 같이 움직인다.
-- 드래그 시작 시 현재 좌/우 pane 내부 콘텐츠 폭을 1회 저장하고, 드래그 중에는 내부 직접 자식의 레이아웃 폭을 고정한다.
-- 바깥 pane만 실시간으로 넓어지거나 좁아지며 overflow clipping을 담당하므로, 매 1px마다 카드/텍스트/flex/grid 전체가 다시 줄바꿈되는 비용을 줄인다.
-- PC/Tablet/Mobile 또는 기존 pane mode 경계를 실제로 통과할 때만 해당 pane의 frozen content width를 1회 갱신하여 승인된 반응형 전환 시점은 유지한다.
-- 573차의 CSS 기반 off-screen render budget/content-visibility는 유지하며, React DOM 교체는 하지 않는다.
-- pointer-up에서 최종 폭으로 내부 레이아웃을 한 번 해제하고 기존 visible-row anchor로 세로 위치를 보정한다.
+
+## 576차 메모 — 573 기준 leaf-card native isolation
+- 574/575 실험은 기준에서 제외하고 573의 단일 실경계 rAF 구조로 복귀.
+- 드래그 시작 시 모든 카드의 getBoundingClientRect를 훑어 exact-height shell로 바꾸던 JS render-budget을 제거.
+- Music Note 곡 카드, Library playlist row, Library workspace track row만 드래그 중 content-visibility:auto + cached intrinsic size로 브라우저가 off-screen work를 직접 생략.
+- visible leaf card는 기존 디자인/실시간 반응형 높이를 유지하면서 layout/style/paint containment로 카드 단위 재계산 범위를 제한.
+- active menu row는 containment에서 제외해 popover/overflow 디자인을 보호.
+- 스크롤 안정화는 pane당 visible anchor 1개만 elementFromPoint로 캡처해 pointer-up 후 1회 보정.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

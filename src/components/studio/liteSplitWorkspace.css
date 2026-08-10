@@ -239,61 +239,44 @@
     will-change: auto !important;
   }
 
-  html.soridraw-split-dragging .soridraw-split-drag-frozen {
-    box-sizing: border-box !important;
-    height: var(--soridraw-drag-frozen-height) !important;
-    min-height: var(--soridraw-drag-frozen-height) !important;
-    max-height: var(--soridraw-drag-frozen-height) !important;
-    content-visibility: hidden !important;
-    contain: strict !important;
-    overflow: hidden !important;
-    pointer-events: none !important;
+  /* 576 — browser-native leaf isolation.
+   * Do not swap React DOM and do not scan every row at pointer-down. While the
+   * divider is held, the browser may skip off-screen leaf-card work and reuse
+   * each row's last known block size. Visible rows still reflow every rAF, so
+   * the design and the real split boundary stay fully live. Active menu rows
+   * are excluded so popovers/overflow never get clipped. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 92px;
   }
 
-  /* Library workspace groups can be partially visible while many child rows
-   * remain far below the pane viewport. Give those leaf rows their own paint/
-   * layout boundary so a visible group does not wake every track on each width. */
-  :root[data-soridraw-theme="studio-black"]
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 76px;
+  }
+
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace
   .soridraw-library-workspace-track-row {
     content-visibility: auto;
     contain-intrinsic-size: auto 76px;
+  }
+
+  /* Keep visible leaf cards as independent formatting contexts during drag.
+   * No size containment is used, so their normal responsive height/spacing is
+   * still determined by the existing design. */
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace
+  :is(
+    .soridraw-musicnote-song-card:not(.soridraw-list-perf-item--active),
+    .soridraw-library-playlist-row:not(.soridraw-list-perf-item--active),
+    .soridraw-library-workspace-track-row
+  ) {
     contain: layout style paint;
-  }
-}
-
-/* --------------------------------------------------------------------------
- * 575 — frozen inner layout + live outer clipping.
- * The approved pane boundary still follows the pointer on every rAF frame.
- * Only the expensive direct content boxes keep their last committed inline
- * width between responsive thresholds, so their descendant flex/grid/text
- * layout does not rebuild for every 1px divider move. The pane itself remains
- * the clipping/scroll owner, therefore the visible divider is always the real
- * left/right boundary rather than a compositor-only ghost line.
- * -------------------------------------------------------------------------- */
-@media (min-width: 1100px) {
-  :root[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-pane[data-lite-layout-frozen="true"] {
-    overflow-x: hidden !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-pane[data-lite-layout-frozen="true"] > * {
-    box-sizing: border-box !important;
-    width: var(--soridraw-lite-frozen-content-width) !important;
-    min-width: var(--soridraw-lite-frozen-content-width) !important;
-    max-width: var(--soridraw-lite-frozen-content-width) !important;
-    transition: none !important;
-  }
-
-  /* Do not freeze the modal portal itself; it is sized against the viewport by
-   * the shared Studio modal host and must remain independent of pane clipping. */
-  :root[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-pane[data-lite-layout-frozen="true"]
-  > .soridraw-studio-center-modal-host {
-    width: auto !important;
-    min-width: 0 !important;
-    max-width: none !important;
   }
 }
 

@@ -169,22 +169,8 @@ export default function LiteStudioSplitWorkspace({
     heroRow: null,
     workspaceHeroHost: null,
   });
-  const frozenDragItemsRef = useRef<HTMLElement[]>([]);
   const dragRenderAnchorsRef = useRef<Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }>>([]);
   const dragRenderRestoreFrameRef = useRef<number | null>(null);
-  const frozenPaneLayoutRef = useRef<{
-    active: boolean;
-    builderPaddingX: number;
-    resultPaddingX: number;
-    builderContentWidth: number;
-    resultContentWidth: number;
-  }>({
-    active: false,
-    builderPaddingX: 0,
-    resultPaddingX: 0,
-    builderContentWidth: 0,
-    resultContentWidth: 0,
-  });
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -256,84 +242,7 @@ export default function LiteStudioSplitWorkspace({
   }, []);
 
 
-  const setFrozenPaneContentWidth = useCallback((pane: HTMLElement | null, width: number) => {
-    if (!pane || !Number.isFinite(width)) return;
-    const safeWidth = Math.max(1, Math.round(width));
-    pane.style.setProperty('--soridraw-lite-frozen-content-width', `${safeWidth}px`);
-  }, []);
-
-  const beginPaneLayoutFreeze = useCallback((builderPaneWidth: number, resultPaneWidth: number) => {
-    const layout = layoutRef.current;
-    const builder = builderRef.current;
-    const result = resultRef.current;
-    if (!layout || !builder || !result) return;
-
-    // Measure padding once before enabling the freeze. During pointermove there
-    // are no descendant geometry reads: only the outer pane boundary changes.
-    const builderStyle = window.getComputedStyle(builder);
-    const resultStyle = window.getComputedStyle(result);
-    const builderPaddingX = (Number.parseFloat(builderStyle.paddingLeft) || 0) + (Number.parseFloat(builderStyle.paddingRight) || 0);
-    const resultPaddingX = (Number.parseFloat(resultStyle.paddingLeft) || 0) + (Number.parseFloat(resultStyle.paddingRight) || 0);
-    const builderContentWidth = Math.max(1, builderPaneWidth - builderPaddingX);
-    const resultContentWidth = Math.max(1, resultPaneWidth - resultPaddingX);
-
-    frozenPaneLayoutRef.current = {
-      active: true,
-      builderPaddingX,
-      resultPaddingX,
-      builderContentWidth,
-      resultContentWidth,
-    };
-    setFrozenPaneContentWidth(builder, builderContentWidth);
-    setFrozenPaneContentWidth(result, resultContentWidth);
-    builder.dataset.liteLayoutFrozen = 'true';
-    result.dataset.liteLayoutFrozen = 'true';
-    layout.dataset.liteLayoutFrozen = 'true';
-  }, [setFrozenPaneContentWidth]);
-
-  const refreshFrozenPaneLayoutAtBoundary = useCallback((builderPaneWidth: number, resultPaneWidth: number, refreshBuilder: boolean, refreshResult: boolean) => {
-    const frozen = frozenPaneLayoutRef.current;
-    if (!frozen.active) return;
-    if (refreshBuilder) {
-      const nextWidth = Math.max(1, builderPaneWidth - frozen.builderPaddingX);
-      if (Math.abs(nextWidth - frozen.builderContentWidth) > 0.5) {
-        frozen.builderContentWidth = nextWidth;
-        setFrozenPaneContentWidth(builderRef.current, nextWidth);
-      }
-    }
-    if (refreshResult) {
-      const nextWidth = Math.max(1, resultPaneWidth - frozen.resultPaddingX);
-      if (Math.abs(nextWidth - frozen.resultContentWidth) > 0.5) {
-        frozen.resultContentWidth = nextWidth;
-        setFrozenPaneContentWidth(resultRef.current, nextWidth);
-      }
-    }
-  }, [setFrozenPaneContentWidth]);
-
-  const releasePaneLayoutFreeze = useCallback(() => {
-    const layout = layoutRef.current;
-    const builder = builderRef.current;
-    const result = resultRef.current;
-    if (builder) {
-      delete builder.dataset.liteLayoutFrozen;
-      builder.style.removeProperty('--soridraw-lite-frozen-content-width');
-    }
-    if (result) {
-      delete result.dataset.liteLayoutFrozen;
-      result.style.removeProperty('--soridraw-lite-frozen-content-width');
-    }
-    if (layout) delete layout.dataset.liteLayoutFrozen;
-    frozenPaneLayoutRef.current.active = false;
-  }, []);
-
-  const restoreDragRenderBudget = useCallback((preserveAnchor = true) => {
-    const frozen = frozenDragItemsRef.current;
-    frozenDragItemsRef.current = [];
-    for (const element of frozen) {
-      element.classList.remove('soridraw-split-drag-frozen');
-      element.style.removeProperty('--soridraw-drag-frozen-height');
-    }
-
+  const restoreDragViewportAnchors = useCallback((preserveAnchor = true) => {
     if (dragRenderRestoreFrameRef.current !== null) {
       window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
       dragRenderRestoreFrameRef.current = null;
@@ -343,9 +252,9 @@ export default function LiteStudioSplitWorkspace({
     dragRenderAnchorsRef.current = [];
     if (!preserveAnchor || anchors.length === 0) return;
 
-    // Releasing the frozen off-screen shells can change their natural height at
-    // the final pane width. Restore the first visible row to the same viewport
-    // offset once, after layout settles, so the user never sees a vertical jump.
+    // 576: native CSS content-visibility keeps off-screen rows cheap without
+    // swapping React DOM or scanning/measuring every card at pointer-down.
+    // Preserve only one visible anchor per pane after the final width commit.
     dragRenderRestoreFrameRef.current = window.requestAnimationFrame(() => {
       dragRenderRestoreFrameRef.current = null;
       for (const anchor of anchors) {
@@ -358,67 +267,42 @@ export default function LiteStudioSplitWorkspace({
     });
   }, []);
 
-  const applyDragRenderBudget = useCallback(() => {
-    restoreDragRenderBudget(false);
-    const panesToBudget = [builderRef.current, resultRef.current].filter(Boolean) as HTMLElement[];
-    const frozen: HTMLElement[] = [];
-    const anchors: Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }> = [];
-    const overscan = 260;
+  const captureDragViewportAnchors = useCallback(() => {
+    dragRenderAnchorsRef.current = [];
+    const selector = [
+      '.soridraw-musicnote-song-card',
+      '.soridraw-library-playlist-row',
+      '.soridraw-library-workspace-track-row',
+      '.soridraw-studio-menu-card',
+      '.soridraw-result-title-card',
+      '.soridraw-result-keywords-card',
+      '.soridraw-result-prompt-card',
+    ].join(',');
 
-    const freezeElement = (element: HTMLElement, height: number) => {
-      if (!Number.isFinite(height) || height <= 0) return;
-      element.style.setProperty('--soridraw-drag-frozen-height', `${Math.ceil(height)}px`);
-      element.classList.add('soridraw-split-drag-frozen');
-      frozen.push(element);
-    };
-
-    for (const pane of panesToBudget) {
+    for (const pane of [builderRef.current, resultRef.current]) {
+      if (!pane) continue;
       const paneRect = pane.getBoundingClientRect();
-      const viewportTop = paneRect.top;
-      const viewportBottom = paneRect.bottom;
+      const x = Math.min(paneRect.right - 8, Math.max(paneRect.left + 8, paneRect.left + paneRect.width * 0.5));
+      const probeYs = [paneRect.top + 24, paneRect.top + 96, paneRect.top + paneRect.height * 0.5];
+      let anchor: HTMLElement | null = null;
 
-      const anchorCandidates = Array.from(pane.querySelectorAll<HTMLElement>(
-        '.soridraw-musicnote-song-card, .soridraw-library-playlist-row, .soridraw-library-workspace-track-row, .soridraw-studio-menu-card, .soridraw-result-title-card, .soridraw-result-keywords-card, .soridraw-result-prompt-card'
-      ));
-      let anchorElement: HTMLElement | null = null;
-      let anchorOffset = 0;
-      for (const element of anchorCandidates) {
-        const rect = element.getBoundingClientRect();
-        if (rect.bottom > viewportTop + 1 && rect.top < viewportBottom - 1) {
-          anchorElement = element;
-          anchorOffset = rect.top - paneRect.top;
+      for (const y of probeYs) {
+        const hit = document.elementFromPoint(x, Math.min(paneRect.bottom - 4, Math.max(paneRect.top + 4, y))) as HTMLElement | null;
+        const candidate = hit?.closest<HTMLElement>(selector) || null;
+        if (candidate && pane.contains(candidate)) {
+          anchor = candidate;
           break;
         }
       }
-      if (anchorElement) anchors.push({ pane, element: anchorElement, viewportOffset: anchorOffset });
 
-      // Freeze complete Library groups first. If a group is far outside the
-      // scroll viewport, its entire descendant tree becomes a fixed-size shell.
-      const groups = Array.from(pane.querySelectorAll<HTMLElement>('.soridraw-library-workspace-group'));
-      for (const group of groups) {
-        if (group.classList.contains('soridraw-list-perf-item--active')) continue;
-        const rect = group.getBoundingClientRect();
-        if (rect.bottom < viewportTop - overscan || rect.top > viewportBottom + overscan) {
-          freezeElement(group, rect.height);
-        }
-      }
-
-      const candidates = Array.from(pane.querySelectorAll<HTMLElement>(
-        '.soridraw-musicnote-song-card, .soridraw-library-playlist-row, .soridraw-library-workspace-track-row, .soridraw-studio-menu-card, .soridraw-studio-result-content > *'
-      ));
-      for (const element of candidates) {
-        if (element.classList.contains('soridraw-list-perf-item--active')) continue;
-        if (element.closest('.soridraw-split-drag-frozen')) continue;
-        const rect = element.getBoundingClientRect();
-        if (rect.bottom < viewportTop - overscan || rect.top > viewportBottom + overscan) {
-          freezeElement(element, rect.height);
-        }
-      }
+      if (!anchor) continue;
+      dragRenderAnchorsRef.current.push({
+        pane,
+        element: anchor,
+        viewportOffset: anchor.getBoundingClientRect().top - paneRect.top,
+      });
     }
-
-    frozenDragItemsRef.current = frozen;
-    dragRenderAnchorsRef.current = anchors;
-  }, [restoreDragRenderBudget]);
+  }, []);
 
   const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
@@ -587,29 +471,8 @@ export default function LiteStudioSplitWorkspace({
 
     layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
-    const beforeBuilderPaneMode = modeRef.current.builder;
-    const beforeResultPaneMode = modeRef.current.result;
-    const beforeBuilderContentMode = contentResponsiveModeRef.current.builder;
-    const beforeResultContentMode = contentResponsiveModeRef.current.result;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
-    if (draggingRef.current && frozenPaneLayoutRef.current.active) {
-      const builderBoundaryChanged = beforeBuilderPaneMode !== modeRef.current.builder
-        || beforeBuilderContentMode !== contentResponsiveModeRef.current.builder;
-      const resultBoundaryChanged = beforeResultPaneMode !== modeRef.current.result
-        || beforeResultContentMode !== contentResponsiveModeRef.current.result;
-      if (builderBoundaryChanged || resultBoundaryChanged) {
-        // Keep the expensive descendants frozen between responsive thresholds.
-        // When a real PC/tablet/mobile boundary is crossed, refresh that pane
-        // once so the approved responsive design still switches at the right spot.
-        refreshFrozenPaneLayoutAtBoundary(
-          builderWidth,
-          resultWidth,
-          builderBoundaryChanged,
-          resultBoundaryChanged,
-        );
-      }
-    }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live) syncExternalGeometry(builderWidth, splitterLeft);
     const perfAfterExternal = perfEnabled ? performance.now() : 0;
@@ -651,7 +514,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, refreshFrozenPaneLayoutAtBoundary, syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -735,11 +598,7 @@ export default function LiteStudioSplitWorkspace({
     document.documentElement.classList.remove('soridraw-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
-    // Release the fixed descendant layout only after the outer pane reaches its
-    // exact final width. The existing visible-row anchor then corrects any one-
-    // time height change caused by the final responsive reflow.
-    releasePaneLayoutFreeze();
-    restoreDragRenderBudget(true);
+    restoreDragViewportAnchors(true);
 
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (percentRef.current / 100));
@@ -750,7 +609,7 @@ export default function LiteStudioSplitWorkspace({
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, releasePaneLayoutFreeze, restoreDragRenderBudget]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragViewportAnchors]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -767,7 +626,6 @@ export default function LiteStudioSplitWorkspace({
     };
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
-    const resultRect = resultRef.current?.getBoundingClientRect();
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {
@@ -780,16 +638,13 @@ export default function LiteStudioSplitWorkspace({
 
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
-    applyDragRenderBudget();
-    if (builderRect && resultRect) {
-      beginPaneLayoutFreeze(builderRect.width, resultRect.width);
-    }
+    captureDragViewportAnchors();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · unified rAF + frozen inner layout + clip (575)',
+      engine: 'Lite V2 · unified rAF + native leaf isolation (576)',
       builder: builderRef.current,
       result: resultRef.current,
     });
@@ -886,8 +741,7 @@ export default function LiteStudioSplitWorkspace({
       document.documentElement.classList.remove('soridraw-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
-      releasePaneLayoutFreeze();
-      restoreDragRenderBudget(false);
+      restoreDragViewportAnchors(false);
       if (dragRenderRestoreFrameRef.current !== null) {
         window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
         dragRenderRestoreFrameRef.current = null;
@@ -908,7 +762,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, releasePaneLayoutFreeze, restoreDragRenderBudget, scheduleMetricsRefresh]);
+  }, [clearLiveExternalGeometry, refreshMetrics, restoreDragViewportAnchors, scheduleMetricsRefresh]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

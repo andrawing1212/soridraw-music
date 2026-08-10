@@ -792,3 +792,72 @@
     contain: layout style paint;
   }
 }
+
+/* 586 — compact DEV/PROD runtime environment diagnostics. */
+.soridraw-split-perf-env-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 8px;
+  margin-top: 6px;
+}
+
+.soridraw-split-perf-env-strip > span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 7px;
+  padding: 4px 6px;
+  border-radius: 7px;
+  background: rgba(255,255,255,.025);
+}
+
+.soridraw-split-perf-env-strip i {
+  flex: 0 0 auto;
+  color: #8f8f94;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.soridraw-split-perf-env-strip b {
+  min-width: 0;
+  overflow: hidden;
+  color: #efeff1;
+  font-size: 8px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soridraw-split-perf-env-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  color: #77777d;
+  font-size: 8px;
+}
+
+.soridraw-split-perf-env-actions span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soridraw-split-perf-env-actions button {
+  flex: 0 0 auto;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 7px;
+  background: #323235;
+  color: #ffb400;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 800;
+  box-shadow: none !important;
+  cursor: pointer;
+}

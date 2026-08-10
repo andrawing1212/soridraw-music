@@ -1476,3 +1476,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 카드/행 leaf는 기존 576 격리를 공통 marker로 정리했다.
 - size containment나 상시 layout freeze는 사용하지 않아 승인된 디자인, 줄바꿈, 카드 높이, PC/Tablet/Mobile 실시간 반응을 유지한다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 586차 — DEV/PROD 실행 환경 종합 진단
+- 585차 페이지 영역 렌더 격리는 유지했다.
+- 관리자 PERF 패널에 `환경 진단`을 추가했다.
+- 환경 진단은 Vite DEV/PROD, production asset bundle 여부, idle rAF 추정 Hz, Service Worker controller/registration, CacheStorage 수, 로컬 JS/CSS 자원 규모, CSS rule 수, CPU thread/device memory, viewport/DPR, network 정보를 한 번에 수집한다.
+- `진단서 복사`로 같은 정보를 텍스트로 복사할 수 있다.
+- 이 기능은 관리자 `품질·성능 진단 도구`에 영구 보관하며 일반 사용자에게는 노출하지 않는다.
+- 앱 디자인/분할 동작/Firebase 데이터 구조는 변경하지 않았다.

@@ -55,10 +55,14 @@ export default function SplitPerformanceDiagnostics() {
               <div className="soridraw-split-perf-grid">
                 <span>추정 FPS</span><b>{result.estimatedFps}</b>
                 <span>평균 프레임</span><b>{result.avgFrameMs}ms</b>
-                <span>P95 프레임</span><b>{result.p95FrameMs}ms</b>
-                <span>최악 프레임</span><b>{result.maxFrameMs}ms</b>
-                <span>&gt;20ms / &gt;34ms</span><b>{result.over20ms} / {result.over34ms}</b>
+                <span>P95 / 최악</span><b>{result.p95FrameMs} / {result.maxFrameMs}ms</b>
+                <span>&gt;20 / &gt;34 / &gt;50ms</span><b>{result.over20ms} / {result.over34ms} / {result.over50ms}</b>
                 <span>Long Task</span><b>{result.longTaskCount}회 · {result.longTaskTotalMs}ms</b>
+                <span>LoAF</span><b>{result.loafSupported ? `${result.loafCount}회 · ${result.loafTotalMs}ms` : '미지원'}</b>
+                <span>LoAF blocking</span><b>{result.loafSupported ? `${result.loafBlockingTotalMs}ms` : '-'}</b>
+                <span>강제 Style/Layout</span><b>{result.loafSupported ? `${result.forcedStyleLayoutTotalMs} / max ${result.forcedStyleLayoutMaxMs}ms` : '-'}</b>
+                <span>느린 입력 이벤트</span><b>{result.eventTimingSupported ? `${result.slowEventCount}회 · max ${result.slowEventMaxMs}ms` : '미지원'}</b>
+                <span>입력 지연 평균/최대</span><b>{result.eventTimingSupported ? `${result.inputDelayAvgMs}/${result.inputDelayMaxMs}ms` : '-'}</b>
                 <span>JS flush 평균/최대</span><b>{result.flushAvgMs}/{result.flushMaxMs}ms</b>
                 <span>실제 폭 반영 / 선만</span><b>{result.contentCommitCount} / {result.dividerOnlyCount}</b>
                 <span>apply 평균/최대</span><b>{result.applyAvgMs}/{result.applyMaxMs}ms</b>
@@ -66,8 +70,26 @@ export default function SplitPerformanceDiagnostics() {
                 <span>좌/우 DOM</span><b>{result.builderNodes.toLocaleString()} / {result.resultNodes.toLocaleString()}</b>
                 <span>JS Heap</span><b>{format(result.heapMb, 'MB')}</b>
               </div>
+
+              <details open>
+                <summary>병목 TOP — 누가 시간을 쓰는지</summary>
+                {result.loafSupported ? (
+                  result.hotspots.length ? (
+                    <div className="soridraw-split-perf-hotspots">
+                      {result.hotspots.map((item, index) => (
+                        <div className="soridraw-split-perf-hotspot" key={`${item.label}-${index}`}>
+                          <span><i>{index + 1}</i>{item.label}</span>
+                          <b>{item.totalMs}ms · {item.count}회</b>
+                          {item.forcedStyleLayoutMs > 0 && <em>forced layout {item.forcedStyleLayoutMs}ms</em>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p>이번 드래그에서는 LoAF 스크립트 귀속 정보가 잡히지 않았습니다.</p>
+                ) : <p>이 Chrome에서는 Long Animation Frames API가 지원되지 않습니다.</p>}
+              </details>
+
               <details>
-                <summary>내부 단계 시간</summary>
+                <summary>Lite V2 내부 단계 시간</summary>
                 <div className="soridraw-split-perf-grid is-detail">
                   <span>폭/분할선 write</span><b>{result.layoutWriteAvgMs}ms</b>
                   <span>반응형 판정</span><b>{result.responsiveAvgMs}ms</b>
@@ -75,7 +97,7 @@ export default function SplitPerformanceDiagnostics() {
                   <span>dataset/ARIA</span><b>{result.miscAvgMs}ms</b>
                 </div>
               </details>
-              <p className="soridraw-split-perf-note">AI Studio와 테스트앱에서 같은 동작을 한 뒤 이 패널을 각각 캡처하면 직접 비교할 수 있습니다.</p>
+              <p className="soridraw-split-perf-note">572: AI Studio와 테스트앱에서 같은 동작을 한 뒤 전체 패널과 ‘병목 TOP’을 각각 캡처하세요.</p>
             </>
           )}
         </div>

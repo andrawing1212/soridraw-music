@@ -6,6 +6,14 @@ export type SplitPerfApplySample = {
   miscMs: number;
 };
 
+export type SplitPerfHotspot = {
+  label: string;
+  count: number;
+  totalMs: number;
+  maxMs: number;
+  forcedStyleLayoutMs: number;
+};
+
 export type SplitPerfResult = {
   host: string;
   workspaceView: string;
@@ -24,6 +32,20 @@ export type SplitPerfResult = {
   longTaskCount: number;
   longTaskTotalMs: number;
   longTaskMaxMs: number;
+  loafSupported: boolean;
+  loafCount: number;
+  loafTotalMs: number;
+  loafMaxMs: number;
+  loafBlockingTotalMs: number;
+  forcedStyleLayoutTotalMs: number;
+  forcedStyleLayoutMaxMs: number;
+  eventTimingSupported: boolean;
+  slowEventCount: number;
+  slowEventTotalMs: number;
+  slowEventMaxMs: number;
+  inputDelayAvgMs: number;
+  inputDelayMaxMs: number;
+  hotspots: SplitPerfHotspot[];
   flushCount: number;
   flushAvgMs: number;
   flushMaxMs: number;
@@ -43,6 +65,13 @@ export type SplitPerfResult = {
   createdAt: number;
 };
 
+type HotspotAccumulator = {
+  count: number;
+  totalMs: number;
+  maxMs: number;
+  forcedStyleLayoutMs: number;
+};
+
 type ActiveDrag = {
   workspaceView: string;
   engine: string;
@@ -53,6 +82,12 @@ type ActiveDrag = {
   dividerOnlyCount: number;
   applySamples: SplitPerfApplySample[];
   longTasks: number[];
+  loafDurations: number[];
+  loafBlockingDurations: number[];
+  forcedStyleLayoutDurations: number[];
+  slowEventDurations: number[];
+  inputDelays: number[];
+  hotspots: Map<string, HotspotAccumulator>;
   domNodes: number;
   builderNodes: number;
   resultNodes: number;
@@ -61,14 +96,17 @@ type ActiveDrag = {
 
 type Listener = (result: SplitPerfResult | null) => void;
 
-let enabled = true; // 571 is a temporary diagnostic build. Collection only runs while dragging.
+let enabled = true; // Temporary diagnostic build. Collection only runs while dragging.
 let active: ActiveDrag | null = null;
 let lastResult: SplitPerfResult | null = null;
 const listeners = new Set<Listener>();
 let longTaskObserver: PerformanceObserver | null = null;
+let loafObserver: PerformanceObserver | null = null;
+let eventObserver: PerformanceObserver | null = null;
+let loafSupported = false;
+let eventTimingSupported = false;
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
-
 const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 const max = (values: number[]) => values.length ? Math.max(...values) : 0;
 const percentile = (values: number[], ratio: number) => {
@@ -78,15 +116,45 @@ const percentile = (values: number[], ratio: number) => {
   return sorted[index];
 };
 const round = (value: number, digits = 1) => Number(value.toFixed(digits));
-
 const notify = () => listeners.forEach((listener) => listener(lastResult));
+
+const getSupportedEntryTypes = () => (
+  typeof PerformanceObserver !== 'undefined' && Array.isArray(PerformanceObserver.supportedEntryTypes)
+    ? PerformanceObserver.supportedEntryTypes
+    : []
+);
+
+const shortSource = (sourceUrl: string) => {
+  if (!sourceUrl) return '';
+  try {
+    const url = new URL(sourceUrl, window.location.href);
+    const parts = url.pathname.split('/').filter(Boolean);
+    return parts.slice(-2).join('/') || url.hostname;
+  } catch {
+    const clean = sourceUrl.split('?')[0];
+    return clean.split('/').filter(Boolean).slice(-2).join('/');
+  }
+};
+
+const addHotspot = (
+  map: Map<string, HotspotAccumulator>,
+  label: string,
+  durationMs: number,
+  forcedStyleLayoutMs = 0,
+) => {
+  if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+  const current = map.get(label) || { count: 0, totalMs: 0, maxMs: 0, forcedStyleLayoutMs: 0 };
+  current.count += 1;
+  current.totalMs += durationMs;
+  current.maxMs = Math.max(current.maxMs, durationMs);
+  current.forcedStyleLayoutMs += Math.max(0, forcedStyleLayoutMs || 0);
+  map.set(label, current);
+};
 
 const ensureLongTaskObserver = () => {
   if (longTaskObserver || typeof PerformanceObserver === 'undefined') return;
   try {
-    const supported = Array.isArray(PerformanceObserver.supportedEntryTypes)
-      && PerformanceObserver.supportedEntryTypes.includes('longtask');
-    if (!supported) return;
+    if (!getSupportedEntryTypes().includes('longtask')) return;
     longTaskObserver = new PerformanceObserver((list) => {
       if (!active) return;
       for (const entry of list.getEntries()) active.longTasks.push(entry.duration);
@@ -94,6 +162,87 @@ const ensureLongTaskObserver = () => {
     longTaskObserver.observe({ entryTypes: ['longtask'] });
   } catch {
     longTaskObserver = null;
+  }
+};
+
+const ensureLoafObserver = () => {
+  if (loafObserver || typeof PerformanceObserver === 'undefined') return;
+  loafSupported = getSupportedEntryTypes().includes('long-animation-frame');
+  if (!loafSupported) return;
+
+  try {
+    loafObserver = new PerformanceObserver((list) => {
+      if (!active) return;
+      for (const rawEntry of list.getEntries()) {
+        const entry = rawEntry as PerformanceEntry & {
+          blockingDuration?: number;
+          scripts?: Array<{
+            duration?: number;
+            forcedStyleAndLayoutDuration?: number;
+            invoker?: string;
+            invokerType?: string;
+            sourceURL?: string;
+            sourceFunctionName?: string;
+          }>;
+        };
+        const duration = Math.max(0, Number(entry.duration) || 0);
+        const blocking = Math.max(0, Number(entry.blockingDuration) || 0);
+        active.loafDurations.push(duration);
+        active.loafBlockingDurations.push(blocking);
+
+        const scripts = Array.isArray(entry.scripts) ? entry.scripts : [];
+        let scriptTotal = 0;
+        let forcedTotal = 0;
+        for (const script of scripts) {
+          const scriptDuration = Math.max(0, Number(script.duration) || 0);
+          const forced = Math.max(0, Number(script.forcedStyleAndLayoutDuration) || 0);
+          scriptTotal += scriptDuration;
+          forcedTotal += forced;
+          const invoker = String(script.invoker || '').trim();
+          const invokerType = String(script.invokerType || '').trim();
+          const functionName = String(script.sourceFunctionName || '').trim();
+          const source = shortSource(String(script.sourceURL || ''));
+          const primary = invoker || functionName || invokerType || 'script callback';
+          const label = [primary, source].filter(Boolean).join(' · ');
+          addHotspot(active.hotspots, label, scriptDuration, forced);
+        }
+        active.forcedStyleLayoutDurations.push(forcedTotal);
+
+        // Time in a long animation frame that is not attributed to JS scripts is
+        // the best in-app clue we can collect for browser rendering/layout/paint.
+        const renderGap = Math.max(0, duration - scriptTotal);
+        if (renderGap > 0.5) addHotspot(active.hotspots, '브라우저 렌더/레이아웃/페인트(비JS)', renderGap, 0);
+      }
+    });
+    loafObserver.observe({ type: 'long-animation-frame', buffered: false } as PerformanceObserverInit);
+  } catch {
+    loafObserver = null;
+    loafSupported = false;
+  }
+};
+
+const ensureEventObserver = () => {
+  if (eventObserver || typeof PerformanceObserver === 'undefined') return;
+  eventTimingSupported = getSupportedEntryTypes().includes('event');
+  if (!eventTimingSupported) return;
+
+  try {
+    eventObserver = new PerformanceObserver((list) => {
+      if (!active) return;
+      for (const rawEntry of list.getEntries()) {
+        const entry = rawEntry as PerformanceEntry & { processingStart?: number };
+        const duration = Math.max(0, Number(entry.duration) || 0);
+        const processingStart = Number(entry.processingStart) || entry.startTime;
+        const inputDelay = Math.max(0, processingStart - entry.startTime);
+        active.slowEventDurations.push(duration);
+        active.inputDelays.push(inputDelay);
+      }
+    });
+    // Chrome only reports Event Timing entries above the requested threshold.
+    eventObserver.observe({ type: 'event', buffered: false, durationThreshold: 16 } as PerformanceObserverInit);
+  } catch {
+    eventObserver = null;
+    eventTimingSupported = false;
   }
 };
 
@@ -128,6 +277,8 @@ export const beginSplitPerfDrag = ({
   if (!enabled || typeof window === 'undefined' || typeof document === 'undefined') return;
   if (active?.rafId !== null && active?.rafId !== undefined) window.cancelAnimationFrame(active.rafId);
   ensureLongTaskObserver();
+  ensureLoafObserver();
+  ensureEventObserver();
   active = {
     workspaceView: workspaceView || 'create',
     engine,
@@ -138,6 +289,12 @@ export const beginSplitPerfDrag = ({
     dividerOnlyCount: 0,
     applySamples: [],
     longTasks: [],
+    loafDurations: [],
+    loafBlockingDurations: [],
+    forcedStyleLayoutDurations: [],
+    slowEventDurations: [],
+    inputDelays: [],
+    hotspots: new Map(),
     // Count once before dragging so diagnostics do not add DOM traversal inside the hot path.
     domNodes: document.getElementsByTagName('*').length,
     builderNodes: builder ? builder.getElementsByTagName('*').length : 0,
@@ -176,6 +333,16 @@ export const finishSplitPerfDrag = () => {
   const misc = active.applySamples.map((sample) => sample.miscMs);
   const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
   const heapMb = memory?.usedJSHeapSize ? memory.usedJSHeapSize / 1024 / 1024 : null;
+  const hotspotRows: SplitPerfHotspot[] = Array.from(active.hotspots.entries())
+    .map(([label, value]) => ({
+      label,
+      count: value.count,
+      totalMs: round(value.totalMs, 1),
+      maxMs: round(value.maxMs, 1),
+      forcedStyleLayoutMs: round(value.forcedStyleLayoutMs, 1),
+    }))
+    .sort((a, b) => b.totalMs - a.totalMs)
+    .slice(0, 8);
 
   lastResult = {
     host: window.location.host || 'local-preview',
@@ -195,6 +362,20 @@ export const finishSplitPerfDrag = () => {
     longTaskCount: active.longTasks.length,
     longTaskTotalMs: round(active.longTasks.reduce((sum, value) => sum + value, 0), 1),
     longTaskMaxMs: round(max(active.longTasks), 1),
+    loafSupported,
+    loafCount: active.loafDurations.length,
+    loafTotalMs: round(active.loafDurations.reduce((sum, value) => sum + value, 0), 1),
+    loafMaxMs: round(max(active.loafDurations), 1),
+    loafBlockingTotalMs: round(active.loafBlockingDurations.reduce((sum, value) => sum + value, 0), 1),
+    forcedStyleLayoutTotalMs: round(active.forcedStyleLayoutDurations.reduce((sum, value) => sum + value, 0), 1),
+    forcedStyleLayoutMaxMs: round(max(active.forcedStyleLayoutDurations), 1),
+    eventTimingSupported,
+    slowEventCount: active.slowEventDurations.length,
+    slowEventTotalMs: round(active.slowEventDurations.reduce((sum, value) => sum + value, 0), 1),
+    slowEventMaxMs: round(max(active.slowEventDurations), 1),
+    inputDelayAvgMs: round(mean(active.inputDelays), 2),
+    inputDelayMaxMs: round(max(active.inputDelays), 2),
+    hotspots: hotspotRows,
     flushCount: active.flushTimes.length,
     flushAvgMs: round(mean(active.flushTimes), 3),
     flushMaxMs: round(max(active.flushTimes), 3),
@@ -219,6 +400,7 @@ export const finishSplitPerfDrag = () => {
   try {
     console.groupCollapsed('[SORIDRAW Split PERF]', lastResult.host, lastResult.workspaceView);
     console.table(lastResult);
+    if (lastResult.hotspots.length) console.table(lastResult.hotspots);
     console.groupEnd();
   } catch {
     // Console output is optional.

@@ -1397,3 +1397,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 진단 패널 표시: 추정 FPS, 평균/P95/최악 frame gap, 20/34/50ms 초과 프레임, Long Task, split flush/apply 시간, 콘텐츠 실제 폭 반영 횟수, DOM node 수, JS heap.
 - AI Studio 프리뷰와 Vercel 테스트앱에서 같은 창 크기·같은 페이지·같은 3~5초 왕복 드래그 후 패널을 캡처해 비교한다.
 - 임시 진단 UI이며 Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않는다.
+
+## 572차 — 분할 병목 귀속 진단 강화
+- 571의 FPS/Long Task 계측은 유지한다.
+- Chrome Long Animation Frames(LoAF) 정보를 추가 수집해 긴 프레임 안에서 실제 시간을 사용한 스크립트/콜백을 TOP 순위로 표시한다.
+- LoAF가 제공하는 forcedStyleAndLayoutDuration을 합산해 강제 Style/Layout 비용을 별도로 표시한다.
+- Event Timing이 지원되면 느린 입력 이벤트와 input delay도 함께 표시한다.
+- JS로 귀속되지 않은 LoAF 시간은 `브라우저 렌더/레이아웃/페인트(비JS)`로 따로 집계해, 엔진 JS와 브라우저 리플로우 비용을 구분한다.
+- 이번 차수는 진단 정확도를 위한 버전이라 570/571의 분할 동작, 30fps 콘텐츠 커밋, 디자인에는 손대지 않았다. 성능 원인이 확인된 뒤 실제 최적화를 적용한다.

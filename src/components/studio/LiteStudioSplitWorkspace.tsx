@@ -800,7 +800,7 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · manual drag · runtime geometry + layout-ack synchrony diagnostics (605)',
+      engine: 'Lite V2 · manual drag · 606 App-rerender-suppressed runtime + layout-ack diagnostics',
       builder: builderRef.current,
       result: resultRef.current,
       layoutMode: runtimeLayoutModeRef.current,
@@ -1107,7 +1107,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 605 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 606 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,

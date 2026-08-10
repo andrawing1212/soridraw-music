@@ -3999,21 +3999,40 @@ function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    const syncBuilderActionMode = () => {
+
+    // 606 — the builder's mobile/desktop attribute is a visual split-pane
+    // signal and can cross its breakpoint many times during one divider drag.
+    // CSS already switches the floating Generate bar immediately from that
+    // root attribute, so mirroring every crossing back into App React state is
+    // redundant while the pointer is held. Doing so re-rendered the very large
+    // App tree during the hottest drag path and made the pane feel as if it was
+    // being pulled from behind even when Lite V2 geometry itself was fast.
+    // Keep the live CSS state, defer only the React gesture-state mirror, and
+    // commit it once after the split drag ends. Outside a drag, resize/theme
+    // changes still synchronize immediately.
+    const syncBuilderActionMode = (forceBuilderSync = false) => {
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
-      setIsStudioBlackActionMode(isStudioBlack);
-      setIsSplitBuilderActionMobile(
-        isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
-      );
+      setIsStudioBlackActionMode((current) => current === isStudioBlack ? current : isStudioBlack);
+
+      if (!forceBuilderSync && root.classList.contains('soridraw-lite-split-dragging')) return;
+
+      const nextBuilderActionMobile = isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile';
+      setIsSplitBuilderActionMobile((current) => current === nextBuilderActionMobile ? current : nextBuilderActionMobile);
     };
 
-    syncBuilderActionMode();
-    const observer = new MutationObserver(syncBuilderActionMode);
+    const handleSplitDragEnd = () => syncBuilderActionMode(true);
+
+    syncBuilderActionMode(true);
+    const observer = new MutationObserver(() => syncBuilderActionMode(false));
     observer.observe(root, {
       attributes: true,
       attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
     });
-    return () => observer.disconnect();
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd);
+    };
   }, []);
 
   const isActionSwipeCollapseMode = isActionDragMobile || isSplitBuilderActionMobile;

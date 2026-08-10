@@ -1560,3 +1560,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 직접 좌표 방식은 진단 중에만 활성화되며 일반 Studio 동작과 디자인은 기존 CSS 변수 방식을 유지한다.
 - 관리자 품질·성능 진단 도구 설명에도 고정 표면과 좌표 A/B를 정리했다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+
+## 606 · split-drag App rerender suppression
+
+- Basis: 605. Runtime geometry remains the 602 screen-separated setup: Music Note uses direct pane geometry; Library/Recent/Create keep the 590 CSS-variable path.
+- 605 real-hand diagnostics showed the split engine writes themselves were tiny and input-to-commit latency was sub-millisecond, while the root builder responsive mode still crossed repeatedly during hand drags.
+- `App.tsx` previously mirrored every `data-soridraw-builder-mode` crossing through a root `MutationObserver` into `isSplitBuilderActionMobile` React state. That can rerender the large App tree during the divider hot path even though CSS already switches the floating Generate bar from the same root attribute.
+- During an active Lite V2 split drag, 606 now keeps the visual CSS responsive switch live but defers only that React gesture-state mirror. One synchronized React update runs on `soridraw-split-drag-end`. Outside dragging, theme/resize responsive changes still synchronize immediately.
+- No Firestore/Auth/Functions/storage schema changes. No deployment.

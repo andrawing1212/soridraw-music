@@ -1316,3 +1316,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
 
+
+## 557차 — 생성바 위치 복구 + 하단 스크롤 여백 30px
+- 기준: 556차.
+- 556차에서 `--soridraw-action-visual-bottom-gap`을 24px로 올려 생성바 자체가 위로 밀린 변경을 되돌려, 승인된 기존 생성바 Y 위치(12px 기준)를 복구했습니다.
+- 생성바 위치와는 독립적으로 Studio Black builder 콘텐츠 끝에 30px짜리 실제 spacer를 추가했습니다.
+- PC / Tablet / Builder Mobile / 실제 Mobile 모든 비율에 동일하게 적용됩니다.
+- 명령창↔생성바 간격(모바일 93px / 비모바일 118px), 생성바 크기/폭, 분할바/스크롤 로직은 변경하지 않았습니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

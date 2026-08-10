@@ -2033,7 +2033,7 @@ html[data-soridraw-theme="studio-black"] {
    * yellow surface sit lower by exactly that padding (8px mobile / 10px PC).
    * Keep one 12px visible lower edge and compensate only the expanded wrapper
    * by its row padding. Footer overlap remains the sole dynamic Y correction. */
-  --soridraw-action-visual-bottom-gap: 24px;
+  --soridraw-action-visual-bottom-gap: 12px;
   /* 539 — Expanded Generate must reach the same low viewport baseline the
    * approved collapsed control uses in real use. The footer collision offset
    * was the remaining blocker that held only the expanded row above the lower
@@ -11719,4 +11719,22 @@ html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-co
   > .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) {
     padding-bottom: 118px !important;
   }
+}
+
+
+/* 557 — Keep Generate Y position unchanged; add only real page-end breathing room.
+ * 556 incorrectly increased the fixed Generate bottom offset, which moved the
+ * whole action bar upward. Restore the approved 554/555-era visible baseline
+ * (12px) and create a separate 30px terminal spacer after the builder content.
+ * This spacer increases scrollable/page-end breathing room only; it does not
+ * participate in Generate geometry or the approved command↔Generate reserves
+ * (mobile 93px / non-mobile 118px). Applies to every Studio Black ratio. */
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  pointer-events: none;
 }

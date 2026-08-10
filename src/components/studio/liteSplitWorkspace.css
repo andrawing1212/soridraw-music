@@ -873,3 +873,40 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* 603 — paired Music Note / Library regression guard. Admin diagnostics only. */
+.soridraw-split-perf-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.soridraw-split-perf-pair > span {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.055);
+  min-width: 0;
+}
+
+.soridraw-split-perf-pair b,
+.soridraw-split-perf-pair strong,
+.soridraw-split-perf-pair em,
+.soridraw-split-perf-pair i,
+.soridraw-split-perf-pair small {
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.soridraw-split-perf-pair small {
+  grid-column: 1 / -1;
+  opacity: 0.72;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

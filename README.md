@@ -1,3 +1,21 @@
+## 603 - Music Note / Library paired regression guard
+
+- Keep the **602 runtime unchanged**: Recent/Library/Create use the 590 CSS-variable path, Music Note uses direct pane geometry.
+- Fix the normal automatic benchmark so it measures the **active workspace's real runtime mode**; only explicit coordinate A/B forces css-var/direct.
+- Add one-click **Music Note ↔ Library paired benchmark**. It switches workspaces automatically, runs the same 1400×900 / 3-set benchmark on both, restores the original workspace, and displays both results together.
+- The first successful pair is saved locally as the performance protection baseline. Later runs flag Library regressions (FPS -10% or P95 +15%) so Music Note optimization cannot silently slow the Library again.
+- No normal-user runtime layout, UI design, Firebase/Auth/Firestore/Functions/storage schema changes.
+
+
+## 602 - 590 baseline restore + workspace-isolated Lite V2 geometry
+
+- Reset source baseline to **590** (discarding 591-601 runtime experiments).
+- Preserve 590 CSS-variable Lite V2 geometry for **Create / Recent / Library**.
+- Apply direct pane geometry only to **Music Note**, where 590 A/B showed a clear benefit.
+- Benchmark A/B remains available, but after a benchmark the engine now restores the active workspace's own runtime mode instead of forcing one global mode.
+- Workspace switches explicitly clear stale direct inline geometry before Recent/Library/Create resumes, preventing cross-workspace leakage.
+- No Firebase/Auth/Firestore/Functions/storage schema changes.
+
 ## 549차 — 분할 리사이즈 중 빌더 화면 고정 / 연쇄 밀림 차단
 
 - 분할바를 잡는 순간 빌더의 현재 화면 기준점을 1회 저장합니다.

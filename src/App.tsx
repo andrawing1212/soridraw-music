@@ -4203,6 +4203,20 @@ function App() {
     setStudioWorkspaceLayoutRequestId((current) => current + 1);
   }, []);
 
+  // 603: admin performance diagnostics may compare Music Note and Library in
+  // one run. Keep this as a narrow workspace-selection bridge only; it never
+  // changes user data, split-engine selection, or normal navigation state.
+  useEffect(() => {
+    const handlePerfWorkspaceRequest = (event: Event) => {
+      if (location.pathname !== '/studio') return;
+      const view = (event as CustomEvent<{ view?: StudioWorkspaceView }>).detail?.view;
+      if (view !== 'music-note' && view !== 'library' && view !== 'recent' && view !== 'create') return;
+      selectStudioWorkspaceView(view);
+    };
+    window.addEventListener('soridraw:split-perf-workspace-request', handlePerfWorkspaceRequest as EventListener);
+    return () => window.removeEventListener('soridraw:split-perf-workspace-request', handlePerfWorkspaceRequest as EventListener);
+  }, [location.pathname, selectStudioWorkspaceView]);
+
   // Split mode is a separate workspace world from the classic dark/light layout.
   // When the user leaves Studio Black for either classic color mode, always
   // restore the normal Studio composition: the builder remains mounted above

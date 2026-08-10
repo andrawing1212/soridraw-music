@@ -125,6 +125,7 @@ export const SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY = 'soridraw_admin_split_perf
 export const SPLIT_PERF_TOOL_VISIBILITY_EVENT = 'soridraw:split-perf-tool-visibility';
 export const SPLIT_PERF_BENCHMARK_REQUEST_EVENT = 'soridraw:split-perf-benchmark-request';
 export const SPLIT_PERF_BENCHMARK_STATUS_EVENT = 'soridraw:split-perf-benchmark-status';
+export const SPLIT_PERF_WORKSPACE_REQUEST_EVENT = 'soridraw:split-perf-workspace-request';
 
 export const readSplitPerfToolVisibility = () => {
   if (typeof window === 'undefined') return true;
@@ -552,7 +553,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 590 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 603 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),

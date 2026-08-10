@@ -156,6 +156,10 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
 }: LiteStudioSplitWorkspaceProps) {
+  // 602: keep the fast 590 runtime for Recent/Library/Create and use the
+  // direct pane geometry only where the 590 A/B proved it helps: Music Note.
+  // This prevents one workspace experiment from changing every Lite V2 screen.
+  const runtimeLayoutMode: BenchmarkLayoutMode = workspaceView === 'music-note' ? 'direct' : 'css-var';
   const panes = Children.toArray(children);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -199,7 +203,8 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkFrameRef = useRef<number | null>(null);
   const benchmarkTimerRef = useRef<number | null>(null);
   const benchmarkRunningRef = useRef(false);
-  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
+  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutMode);
+  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutMode);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -534,8 +539,9 @@ export default function LiteStudioSplitWorkspace({
 
     if (benchmarkLayoutModeRef.current === 'direct') {
       layout.dataset.benchmarkLayoutMode = 'direct';
-      // Diagnostic-only path: avoid mutating the inherited split custom property.
-      // The same visible geometry is written directly to the three owners.
+      // Direct path is runtime-owned only by Music Note in 602, or used
+      // temporarily by the admin A/B benchmark. Other workspaces keep the
+      // original 590 CSS-variable geometry path.
       builder.style.setProperty('left', '0px', 'important');
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
@@ -769,6 +775,19 @@ export default function LiteStudioSplitWorkspace({
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(next)); } catch { /* optional */ }
   };
 
+  useLayoutEffect(() => {
+    runtimeLayoutModeRef.current = runtimeLayoutMode;
+    if (benchmarkRunningRef.current) return;
+
+    benchmarkLayoutModeRef.current = runtimeLayoutMode;
+    if (runtimeLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
+
+    // Re-apply the current split once after a workspace switch so stale inline
+    // direct geometry can never leak from Music Note into Recent/Library/Create.
+    const frame = window.requestAnimationFrame(() => refreshMetrics());
+    return () => window.cancelAnimationFrame(frame);
+  }, [clearDirectBenchmarkGeometry, refreshMetrics, runtimeLayoutMode]);
+
   useEffect(() => {
     const emitBenchmarkStatus = (state: 'running' | 'done' | 'error', message: string) => {
       window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_STATUS_EVENT, { detail: { state, message } }));
@@ -776,7 +795,13 @@ export default function LiteStudioSplitWorkspace({
 
     const handleBenchmarkRequest = (requestEvent: Event) => {
       const requestDetail = (requestEvent as CustomEvent<{ layoutMode?: BenchmarkLayoutMode }>).detail;
-      const requestedLayoutMode: BenchmarkLayoutMode = requestDetail?.layoutMode === 'direct' ? 'direct' : 'css-var';
+      // 603: a normal automatic benchmark must measure the workspace's real
+      // runtime path. Only the explicit coordinate A/B diagnostic overrides it.
+      const requestedLayoutMode: BenchmarkLayoutMode = requestDetail?.layoutMode === 'direct'
+        ? 'direct'
+        : requestDetail?.layoutMode === 'css-var'
+          ? 'css-var'
+          : runtimeLayoutModeRef.current;
       if (benchmarkRunningRef.current || draggingRef.current) {
         emitBenchmarkStatus('error', '이미 분할 테스트가 진행 중입니다.');
         return;
@@ -805,8 +830,8 @@ export default function LiteStudioSplitWorkspace({
       const originalBenchmarkSurfaceFlag = layout.dataset.perfBenchmarkSurface;
 
       const restoreBenchmarkSurface = () => {
-        benchmarkLayoutModeRef.current = 'css-var';
-        clearDirectBenchmarkGeometry();
+        benchmarkLayoutModeRef.current = runtimeLayoutModeRef.current;
+        if (runtimeLayoutModeRef.current === 'css-var') clearDirectBenchmarkGeometry();
         for (const saved of savedSurfaceStyles) {
           if (saved.value) layout.style.setProperty(saved.property, saved.value, saved.priority);
           else layout.style.removeProperty(saved.property);
@@ -831,6 +856,7 @@ export default function LiteStudioSplitWorkspace({
       builder.scrollTop = 0;
       result.scrollTop = 0;
       benchmarkLayoutModeRef.current = requestedLayoutMode;
+      if (requestedLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
 
       const rect = layout.getBoundingClientRect();
       const surfacePass = Math.abs(rect.width - BENCHMARK_SURFACE_WIDTH) <= 1 && Math.abs(rect.height - BENCHMARK_SURFACE_HEIGHT) <= 1;
@@ -1017,7 +1043,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 590 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 603 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1245,6 +1271,7 @@ export default function LiteStudioSplitWorkspace({
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio"
+        data-lite-runtime-layout={runtimeLayoutMode}
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,

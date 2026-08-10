@@ -9,6 +9,7 @@ import {
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
   SPLIT_PERF_TOOL_VISIBILITY_EVENT,
+  SPLIT_PERF_WORKSPACE_REQUEST_EVENT,
   subscribeSplitPerfBenchmarkSummary,
   subscribeSplitPerfResult,
   type SplitPerfBenchmarkSummary,
@@ -37,6 +38,19 @@ type PerfProbeRow = {
   p95: number;
   renderPerSecond: number;
 };
+
+type PairWorkspace = 'music-note' | 'library';
+type PairBenchmarkRow = {
+  workspace: PairWorkspace;
+  summary: SplitPerfBenchmarkSummary;
+  fps: number;
+  p95: number;
+  renderPerSecond: number;
+  longTaskPerSecond: number;
+  layoutMode: 'css-var' | 'direct' | null;
+};
+
+const PERF_PAIR_BASELINE_STORAGE_KEY = 'soridraw_perf_pair_baseline_603_v1';
 
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
@@ -375,7 +389,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '590 · fixed benchmark surface + layout A/B',
+    buildProfile: '603 · 602 stable runtime + Music Note/Library paired regression guard',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -398,6 +412,17 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [layoutProbeRows, setLayoutProbeRows] = useState<PerfProbeRow[]>([]);
   const [environment, setEnvironment] = useState<PerfEnvironmentSnapshot | null>(null);
   const [environmentRunning, setEnvironmentRunning] = useState(false);
+
+  const [pairRunning, setPairRunning] = useState(false);
+  const [pairRows, setPairRows] = useState<PairBenchmarkRow[]>([]);
+  const [pairBaseline, setPairBaseline] = useState<PairBenchmarkRow[]>(() => {
+    try {
+      const raw = window.localStorage.getItem(PERF_PAIR_BASELINE_STORAGE_KEY);
+      return raw ? JSON.parse(raw) as PairBenchmarkRow[] : [];
+    } catch {
+      return [];
+    }
+  });
 
   const probeRunningRef = useRef(false);
   const probeProfilesRef = useRef(PERF_RENDER_PROBE_PROFILES);
@@ -564,6 +589,125 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     return true;
   };
 
+  const getCurrentStudioWorkspace = (): PairWorkspace | 'recent' | 'create' => {
+    const current = document.documentElement.dataset.soridrawStudioWorkspaceView;
+    if (current === 'music-note' || current === 'library' || current === 'recent' || current === 'create') return current;
+    return 'create';
+  };
+
+  const waitForWorkspaceReady = (workspace: PairWorkspace, timeoutMs = 12000) => new Promise<void>((resolve, reject) => {
+    const startedAt = performance.now();
+    let frame = 0;
+    const check = () => {
+      const current = document.documentElement.dataset.soridrawStudioWorkspaceView;
+      const target = workspace === 'music-note'
+        ? document.querySelector('.soridraw-musicnote-theme .soridraw-musicnote-song-card')
+        : document.querySelector('.soridraw-library-theme :is(.soridraw-library-playlist-row, .soridraw-library-workspace-track-row)');
+      const split = document.querySelector('.soridraw-lite-studio-split-workspace');
+      if (current === workspace && target && split) {
+        window.setTimeout(resolve, 420);
+        return;
+      }
+      if (performance.now() - startedAt >= timeoutMs) {
+        reject(new Error(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 화면 준비 시간 초과`));
+        return;
+      }
+      frame = window.requestAnimationFrame(check);
+    };
+    frame = window.requestAnimationFrame(check);
+    void frame;
+  });
+
+  const runRuntimeBenchmarkPromise = (workspace: PairWorkspace) => new Promise<SplitPerfBenchmarkSummary>((resolve, reject) => {
+    const startedAt = Date.now();
+    let settled = false;
+    let timeoutId = 0;
+    const cleanup = () => {
+      unsubscribe();
+      window.removeEventListener(SPLIT_PERF_BENCHMARK_STATUS_EVENT, handleStatus as EventListener);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+    const finishResolve = (summary: SplitPerfBenchmarkSummary) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(summary);
+    };
+    const finishReject = (message: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(message));
+    };
+    const handleStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ state?: 'running' | 'done' | 'error'; message?: string }>).detail;
+      if (detail?.state === 'error') finishReject(detail.message || '자동 테스트 오류');
+    };
+    const unsubscribe = subscribeSplitPerfBenchmarkSummary((summary) => {
+      if (!summary || summary.createdAt < startedAt) return;
+      if (summary.median.workspaceView !== workspace) return;
+      finishResolve(summary);
+    });
+    window.addEventListener(SPLIT_PERF_BENCHMARK_STATUS_EVENT, handleStatus as EventListener);
+    timeoutId = window.setTimeout(() => finishReject('자동 테스트 응답 시간 초과'), 42000);
+    // No layoutMode override: 603 measures the actual runtime mode of the active workspace.
+    window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT));
+  });
+
+  const toPairRow = (workspace: PairWorkspace, summary: SplitPerfBenchmarkSummary): PairBenchmarkRow => {
+    const median = summary.median;
+    const durationSeconds = Math.max(0.001, median.durationMs / 1000);
+    return {
+      workspace,
+      summary,
+      fps: median.estimatedFps,
+      p95: median.p95FrameMs,
+      renderPerSecond: getBrowserRenderPerSecond(median),
+      longTaskPerSecond: Number((median.longTaskTotalMs / durationSeconds).toFixed(1)),
+      layoutMode: median.layoutMode,
+    };
+  };
+
+  const runPairBenchmark = async () => {
+    if (!ensureBenchmarkReady() || pairRunning || benchmarkRunning || probeRunningRef.current) return;
+    const originalWorkspace = getCurrentStudioWorkspace();
+    setPairRunning(true);
+    setPairRows([]);
+    setBenchmarkMessage('뮤직노트 → 라이브러리 순서로 같은 1400×900 조건을 자동 비교합니다.');
+    try {
+      const nextRows: PairBenchmarkRow[] = [];
+      for (const workspace of ['music-note', 'library'] as PairWorkspace[]) {
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: workspace } }));
+        await waitForWorkspaceReady(workspace);
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 자동 테스트 중 · 실제 런타임 좌표 방식`);
+        const summary = await runRuntimeBenchmarkPromise(workspace);
+        nextRows.push(toPairRow(workspace, summary));
+        setPairRows([...nextRows]);
+      }
+
+      if (!pairBaseline.length && nextRows.length === 2) {
+        try { window.localStorage.setItem(PERF_PAIR_BASELINE_STORAGE_KEY, JSON.stringify(nextRows)); } catch { /* optional */ }
+        setPairBaseline(nextRows);
+        setBenchmarkMessage('2화면 비교 완료 · 603 보호 기준을 저장했습니다. 다음 수정부터 라이브러리 회귀를 자동 확인합니다.');
+      } else {
+        const library = nextRows.find((row) => row.workspace === 'library');
+        const libraryBase = pairBaseline.find((row) => row.workspace === 'library');
+        const regressed = Boolean(library && libraryBase && (library.fps < libraryBase.fps * 0.9 || library.p95 > libraryBase.p95 * 1.15));
+        setBenchmarkMessage(regressed
+          ? '2화면 비교 완료 · 라이브러리 보호 기준보다 성능이 하락했습니다. 이 수정은 회귀 후보입니다.'
+          : '2화면 비교 완료 · 라이브러리 보호 기준 통과. 뮤직노트 개선 여부를 비교하세요.');
+      }
+    } catch (error) {
+      setBenchmarkMessage(`2화면 비교 중단 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    } finally {
+      if (originalWorkspace === 'music-note' || originalWorkspace === 'library' || originalWorkspace === 'recent' || originalWorkspace === 'create') {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: originalWorkspace } }));
+      }
+      setPairRunning(false);
+    }
+  };
+
   const runBenchmark = () => {
     if (!ensureBenchmarkReady()) return;
     setPerfProbeProfile('baseline');
@@ -701,6 +845,15 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       } else {
         lines.push('미측정 · 자동 테스트를 먼저 실행하세요.');
       }
+      if (pairRows.length) {
+        lines.push('', '[MUSIC NOTE / LIBRARY PAIRED BENCHMARK]');
+        pairRows.forEach((row) => {
+          const base = pairBaseline.find((item) => item.workspace === row.workspace);
+          const fpsDelta = base ? Number((((row.fps - base.fps) / Math.max(0.1, base.fps)) * 100).toFixed(1)) : null;
+          const p95Delta = base ? Number((((row.p95 - base.p95) / Math.max(0.1, base.p95)) * 100).toFixed(1)) : null;
+          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s${fpsDelta === null ? '' : ` baselineFpsDelta=${fpsDelta}% baselineP95Delta=${p95Delta}%`}`);
+        });
+      }
       lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
       await navigator.clipboard.writeText(lines.join('\n'));
       setBenchmarkMessage('종합 진단서 복사 완료 · 환경 + 자동 테스트 + A/B 결과를 한 번에 복사했습니다.');
@@ -730,6 +883,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || !enabled}>
               {benchmarkRunning && !probeRunning ? '자동 테스트 중…' : '자동 테스트'}
             </button>
+            <button type="button" className="is-secondary" onClick={runPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || !enabled}>
+              {pairRunning ? '2화면 비교 중…' : '뮤직노트↔라이브러리 비교'}
+            </button>
             <button type="button" className="is-secondary" onClick={() => runProbeScan('render')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'render' ? '렌더 스캔 중…' : '렌더 스캔'}
             </button>
@@ -745,9 +901,27 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 고정 표면 · 동일 DOM 3세트 · 렌더/영역/좌표 A/B · 환경: DEV/PROD·computed style·cascade·idle Hz</span>
+            <span>자동: 실제 화면 런타임 좌표 모드 · 1400×900 · 동일 DOM 3세트 · 2화면 회귀 보호 · 좌표 A/B는 명시 비교</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
+          {pairRows.length > 0 && (
+            <div className="soridraw-split-perf-pair" aria-label="뮤직노트 라이브러리 성능 비교">
+              {pairRows.map((row) => {
+                const base = pairBaseline.find((item) => item.workspace === row.workspace);
+                const fpsDelta = base ? Number((((row.fps - base.fps) / Math.max(0.1, base.fps)) * 100).toFixed(1)) : null;
+                const p95Delta = base ? Number((((row.p95 - base.p95) / Math.max(0.1, base.p95)) * 100).toFixed(1)) : null;
+                return (
+                  <span key={row.workspace}>
+                    <b>{row.workspace === 'music-note' ? '뮤직노트' : '라이브러리'}</b>
+                    <i>{row.layoutMode === 'direct' ? 'direct' : 'css-var'}</i>
+                    <strong>{row.fps} FPS</strong>
+                    <em>P95 {row.p95}ms</em>
+                    <small>render {row.renderPerSecond}ms/s{fpsDelta === null ? '' : ` · FPS ${fpsDelta >= 0 ? '+' : ''}${fpsDelta}% / P95 ${p95Delta! >= 0 ? '+' : ''}${p95Delta}%`}</small>
+                  </span>
+                );
+              })}
+            </div>
+          )}
           {!displayResult ? (
             <p>자동 테스트를 누르면 사람 손 오차 없이 같은 거리와 같은 시간으로 분할 성능을 측정합니다.</p>
           ) : (

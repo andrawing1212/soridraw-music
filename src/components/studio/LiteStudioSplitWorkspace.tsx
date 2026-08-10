@@ -52,21 +52,32 @@ type BenchmarkLayoutMode = 'css-var' | 'direct';
 type PointerInputMode = 'react' | 'native' | 'raw' | 'continuous';
 type MusicNoteTextReflowStep = 0 | 4 | 8 | 12;
 
-const MUSICNOTE_RUNTIME_REFLOW_STEP: MusicNoteTextReflowStep = 4;
-const MUSICNOTE_RUNTIME_REFLOW_GROUPS = 4;
-
-type MusicNoteTextReflowLayoutEntry = {
-  element: HTMLElement;
-  phase: number;
-  lastBucket: number | null;
-};
-
 type MusicNoteTextReflowBudgetState = {
   profile: string;
   step: MusicNoteTextReflowStep;
   pane: 'builder' | 'result' | null;
-  staggerGroups: number;
-  layouts: MusicNoteTextReflowLayoutEntry[];
+  lastBucketWidth: number | null;
+  layouts: HTMLElement[];
+};
+
+const MUSICNOTE_RUNTIME_TEXT_STEP = 4;
+const MUSICNOTE_RUNTIME_TEXT_GROUPS = 4;
+const MUSICNOTE_RUNTIME_OFFSCREEN_OVERSCAN = 160;
+
+type MusicNoteRuntimeTextEntry = {
+  element: HTMLElement;
+  baseWidth: number;
+  phase: number;
+  lastBucket: number | null;
+};
+
+type MusicNoteRuntimeTextState = {
+  active: boolean;
+  pane: 'builder' | 'result' | null;
+  basePaneWidth: number;
+  responsiveMode: ContentResponsiveMode | null;
+  entries: MusicNoteRuntimeTextEntry[];
+  offscreenCards: HTMLElement[];
 };
 
 const readMusicNoteTextReflowStep = (): MusicNoteTextReflowStep => {
@@ -244,47 +255,153 @@ export default function LiteStudioSplitWorkspace({
     profile: '',
     step: 0,
     pane: null,
-    staggerGroups: 1,
+    lastBucketWidth: null,
     layouts: [],
   });
+  const musicNoteRuntimeTextRef = useRef<MusicNoteRuntimeTextState>({
+    active: false,
+    pane: null,
+    basePaneWidth: 0,
+    responsiveMode: null,
+    entries: [],
+    offscreenCards: [],
+  });
+
+  const resetMusicNoteRuntimeText = useCallback(() => {
+    const state = musicNoteRuntimeTextRef.current;
+    for (const entry of state.entries) entry.element.style.removeProperty('width');
+    for (const card of state.offscreenCards) {
+      card.classList.remove('soridraw-drag-offscreen-hard');
+      card.style.removeProperty('--soridraw-drag-card-block-size');
+    }
+    layoutRef.current?.removeAttribute('data-musicnote-runtime-opt');
+    musicNoteRuntimeTextRef.current = {
+      active: false,
+      pane: null,
+      basePaneWidth: 0,
+      responsiveMode: null,
+      entries: [],
+      offscreenCards: [],
+    };
+  }, []);
+
+  const prepareMusicNoteRuntimeText = useCallback(() => {
+    resetMusicNoteRuntimeText();
+    if (workspaceView !== 'music-note') return;
+    if (document.documentElement.dataset.soridrawPerfProbe) return;
+
+    const page = document.querySelector<HTMLElement>('.soridraw-musicnote-page-shell');
+    if (!page) return;
+    const pane: 'builder' | 'result' = page.closest('.soridraw-lite-studio-builder-pane') ? 'builder' : 'result';
+    const paneElement = pane === 'builder' ? builderRef.current : resultRef.current;
+    if (!paneElement) return;
+
+    // 601: all geometry reads happen once at pointer-down, before live pane
+    // writes begin. During drag there are no clientWidth/getBoundingClientRect
+    // reads in the hot path, avoiding the forced-layout regression from 600.
+    const paneRect = paneElement.getBoundingClientRect();
+    if (paneRect.width <= 0) return;
+    const cards = Array.from(page.querySelectorAll<HTMLElement>('.soridraw-musicnote-song-card'));
+    const visibleEntries: MusicNoteRuntimeTextEntry[] = [];
+    const offscreenMeasurements: Array<{ card: HTMLElement; height: number }> = [];
+    let visibleIndex = 0;
+
+    for (const card of cards) {
+      const cardRect = card.getBoundingClientRect();
+      const isOffscreen = cardRect.bottom < paneRect.top - MUSICNOTE_RUNTIME_OFFSCREEN_OVERSCAN
+        || cardRect.top > paneRect.bottom + MUSICNOTE_RUNTIME_OFFSCREEN_OVERSCAN;
+      if (isOffscreen) {
+        offscreenMeasurements.push({ card, height: Math.max(1, Math.round(cardRect.height)) });
+        continue;
+      }
+      const inner = card.querySelector<HTMLElement>('.soridraw-musicnote-song-copy-layout');
+      if (!inner) continue;
+      const width = inner.getBoundingClientRect().width;
+      if (width <= 0) continue;
+      visibleEntries.push({
+        element: inner,
+        baseWidth: width,
+        phase: visibleIndex % MUSICNOTE_RUNTIME_TEXT_GROUPS,
+        lastBucket: null,
+      });
+      visibleIndex += 1;
+    }
+
+    // Writes are deliberately batched after every read above. Off-screen cards
+    // keep their exact measured block size, so scroll geometry does not move.
+    const offscreenCards: HTMLElement[] = [];
+    for (const { card, height } of offscreenMeasurements) {
+      card.style.setProperty('--soridraw-drag-card-block-size', `${height}px`);
+      card.classList.add('soridraw-drag-offscreen-hard');
+      offscreenCards.push(card);
+    }
+
+    layoutRef.current?.setAttribute('data-musicnote-runtime-opt', '601-derived-text');
+    musicNoteRuntimeTextRef.current = {
+      active: true,
+      pane,
+      basePaneWidth: paneRect.width,
+      responsiveMode: readContentResponsiveMode(paneRect.width),
+      entries: visibleEntries,
+      offscreenCards,
+    };
+  }, [resetMusicNoteRuntimeText, workspaceView]);
+
+  const syncMusicNoteRuntimeText = useCallback((builderWidth: number, resultWidth: number) => {
+    const state = musicNoteRuntimeTextRef.current;
+    if (!state.active || !state.pane) return;
+    if (document.documentElement.dataset.soridrawPerfProbe) {
+      resetMusicNoteRuntimeText();
+      return;
+    }
+
+    const paneWidth = state.pane === 'builder' ? builderWidth : resultWidth;
+    if (readContentResponsiveMode(paneWidth) !== state.responsiveMode) {
+      // Exact visual safety wins at the mobile/tablet/PC contract boundary.
+      // Drop the temporary optimization instead of carrying stale chrome
+      // measurements across a real responsive redesign.
+      resetMusicNoteRuntimeText();
+      return;
+    }
+
+    const paneDelta = paneWidth - state.basePaneWidth;
+    const phaseStride = MUSICNOTE_RUNTIME_TEXT_STEP / MUSICNOTE_RUNTIME_TEXT_GROUPS;
+    for (const entry of state.entries) {
+      const phaseOffset = entry.phase * phaseStride;
+      const bucket = Math.floor((paneWidth + phaseOffset) / MUSICNOTE_RUNTIME_TEXT_STEP);
+      if (entry.lastBucket === bucket) continue;
+      entry.lastBucket = bucket;
+      const targetWidth = Math.max(1, entry.baseWidth + paneDelta);
+      entry.element.style.setProperty('width', `${targetWidth.toFixed(2)}px`, 'important');
+    }
+  }, [resetMusicNoteRuntimeText]);
 
   const resetMusicNoteTextReflowBudget = useCallback(() => {
     const state = musicNoteTextReflowBudgetRef.current;
-    for (const entry of state.layouts) entry.element.style.removeProperty('width');
-    layoutRef.current?.removeAttribute('data-musicnote-text-runtime');
+    for (const layout of state.layouts) layout.style.removeProperty('width');
     musicNoteTextReflowBudgetRef.current = {
       profile: '',
       step: 0,
       pane: null,
-      staggerGroups: 1,
+      lastBucketWidth: null,
       layouts: [],
     };
   }, []);
 
   const syncMusicNoteTextReflowBudget = useCallback((builderWidth: number, resultWidth: number) => {
-    const diagnosticStep = isSplitPerfDiagnosticsEnabled() ? readMusicNoteTextReflowStep() : 0;
-    const runtimeEnabled = workspaceView === 'music-note' && draggingRef.current;
-    const step: MusicNoteTextReflowStep = diagnosticStep || (runtimeEnabled ? MUSICNOTE_RUNTIME_REFLOW_STEP : 0);
-    const profile = diagnosticStep
-      ? (document.documentElement.dataset.soridrawPerfProbe || `diagnostic-step-${diagnosticStep}`)
-      : runtimeEnabled
-        ? 'runtime-600-stagger-4px'
-        : '';
-    const staggerGroups = diagnosticStep ? 1 : runtimeEnabled ? MUSICNOTE_RUNTIME_REFLOW_GROUPS : 1;
-
+    if (!isSplitPerfDiagnosticsEnabled()) {
+      if (musicNoteTextReflowBudgetRef.current.layouts.length) resetMusicNoteTextReflowBudget();
+      return;
+    }
+    const step = readMusicNoteTextReflowStep();
+    const profile = document.documentElement.dataset.soridrawPerfProbe || '';
     if (!step) {
       if (musicNoteTextReflowBudgetRef.current.layouts.length) resetMusicNoteTextReflowBudget();
       return;
     }
 
     let state = musicNoteTextReflowBudgetRef.current;
-    if (
-      state.profile !== profile
-      || state.step !== step
-      || state.staggerGroups !== staggerGroups
-      || !state.pane
-      || !state.layouts.length
-    ) {
+    if (state.profile !== profile || state.step !== step || !state.pane || !state.layouts.length) {
       const page = document.querySelector<HTMLElement>('.soridraw-musicnote-page-shell');
       if (!page) {
         if (state.layouts.length) resetMusicNoteTextReflowBudget();
@@ -292,39 +409,28 @@ export default function LiteStudioSplitWorkspace({
       }
       const pane: 'builder' | 'result' = page.closest('.soridraw-lite-studio-builder-pane') ? 'builder' : 'result';
       resetMusicNoteTextReflowBudget();
-      const elements = Array.from(document.querySelectorAll<HTMLElement>('.soridraw-musicnote-song-copy-layout'));
-      const layouts = elements.map((element, index) => ({
-        element,
-        phase: staggerGroups > 1 ? index % staggerGroups : 0,
-        lastBucket: null,
-      }));
-      state = { profile, step, pane, staggerGroups, layouts };
+      const layouts = Array.from(document.querySelectorAll<HTMLElement>('.soridraw-musicnote-song-copy-layout'));
+      state = { profile, step, pane, lastBucketWidth: null, layouts };
       musicNoteTextReflowBudgetRef.current = state;
-      if (runtimeEnabled && !diagnosticStep) layoutRef.current?.setAttribute('data-musicnote-text-runtime', 'stagger-4px');
     }
 
     const paneWidth = state.pane === 'builder' ? builderWidth : resultWidth;
-    const phaseStride = state.staggerGroups > 1 ? state.step / state.staggerGroups : 0;
+    const bucketWidth = Math.round(paneWidth / step) * step;
+    if (state.lastBucketWidth === bucketWidth) return;
+    state.lastBucketWidth = bucketWidth;
 
-    // 600 runtime: keep the divider/card shell truly live, but distribute the
-    // expensive Music Note text formatting work across four 1px-offset phases.
-    // Each card still receives its exact current outer width when its phase is
-    // due, so the approved layout is never permanently approximated. The max
-    // temporary text-width lag is 3px, and pointer-up removes every inline width
-    // immediately. Diagnostic 4/8/12px profiles intentionally keep their old
-    // all-at-once behavior for historical comparison.
-    for (const entry of state.layouts) {
-      const phaseOffset = entry.phase * phaseStride;
-      const bucket = Math.floor((paneWidth + phaseOffset) / state.step);
-      if (entry.lastBucket === bucket) continue;
-      entry.lastBucket = bucket;
-      const inner = entry.element;
+    // 599 diagnostic: the outer flex item keeps tracking the real pane every
+    // frame. Only the inner text formatting box receives a new width when the
+    // pane crosses the selected pixel bucket. Reading clientWidth here is
+    // intentional: it pays the text-layout cost at the bucket boundary instead
+    // of every 1px pane change, while the outer card/divider remain fully live.
+    for (const inner of state.layouts) {
       const outer = inner.parentElement as HTMLElement | null;
       if (!outer || !outer.isConnected) continue;
       const width = outer.clientWidth;
       if (width > 0) inner.style.setProperty('width', `${width}px`, 'important');
     }
-  }, [resetMusicNoteTextReflowBudget, workspaceView]);
+  }, [resetMusicNoteTextReflowBudget]);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -702,6 +808,7 @@ export default function LiteStudioSplitWorkspace({
     const splitterLeft = metricsRef.current.left + builderWidth;
 
     writeLiveSplitGeometry(builderWidth, resultWidth);
+    syncMusicNoteRuntimeText(builderWidth, resultWidth);
     syncMusicNoteTextReflowBudget(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
@@ -747,7 +854,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncMusicNoteTextReflowBudget, syncPaneModes, writeLiveSplitGeometry]);
+  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncMusicNoteRuntimeText, syncMusicNoteTextReflowBudget, syncPaneModes, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -907,6 +1014,7 @@ export default function LiteStudioSplitWorkspace({
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
+    resetMusicNoteRuntimeText();
     resetMusicNoteTextReflowBudget();
     restoreDragViewportAnchors(true);
 
@@ -919,7 +1027,7 @@ export default function LiteStudioSplitWorkspace({
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitPointerClientX, commitRootMeasurements, connectTopCardObserver, flushPointer, handleNativePointerMove, handleRawPointerUpdate, readExternalControls, resetMusicNoteTextReflowBudget, restoreDragViewportAnchors]);
+  }, [clearLiveExternalGeometry, commitPointerClientX, commitRootMeasurements, connectTopCardObserver, flushPointer, handleNativePointerMove, handleRawPointerUpdate, readExternalControls, resetMusicNoteRuntimeText, resetMusicNoteTextReflowBudget, restoreDragViewportAnchors]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -949,12 +1057,13 @@ export default function LiteStudioSplitWorkspace({
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
     captureDragViewportAnchors();
+    prepareMusicNoteRuntimeText();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: `Lite V2 · direct geometry + staggered Music Note text reflow + ${pointerInputModeRef.current} pointer input (600)`,
+      engine: `Lite V2 · direct geometry + no-read Music Note text budget + hard offscreen isolation + ${pointerInputModeRef.current} pointer input (601)`,
       builder: builderRef.current,
       result: resultRef.current,
       inputMode: pointerInputModeRef.current,
@@ -1504,7 +1613,6 @@ export default function LiteStudioSplitWorkspace({
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio-direct"
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
-        data-workspace-view={workspaceView}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
         } as React.CSSProperties}

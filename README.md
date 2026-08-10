@@ -1650,9 +1650,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 이 단계는 진단 전용이며 4/8/12px 중 어떤 값을 실제 기본 런타임에 적용할지는 Vercel PROD 결과와 육안 확인 후 결정한다.
 
 
-## 600차 — 뮤직노트 텍스트 재배치 실제 런타임 적용
-- 599차에서 렌더 비용 약 37~40% 감소가 확인된 텍스트 재배치 예산을 진단 전용에서 실제 런타임으로 승격했습니다.
-- 단순 4px 버킷에서 모든 카드가 동시에 재배치되며 P95가 튀던 문제를 피하기 위해 카드들을 4개 위상으로 나눠 1px씩 엇갈리게 재배치합니다.
-- 분할바/카드 외형은 기존 591 직접 좌표 방식으로 매 프레임 실시간 이동합니다. 텍스트 내부만 최대 3px의 임시 폭 차이를 허용하며 드래그 종료 즉시 inline width를 제거해 정확한 최종 레이아웃을 복구합니다.
-- 기존 관리자 성능 진단 도구와 4/8/12px A/B는 유지합니다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+## 600차 — 뮤직노트 4그룹 분산 재배치 실런타임 적용 (폐기)
+- 599의 텍스트 재배치 비용 절감 결과를 실제 런타임에 적용했지만, 각 그룹 갱신 때 `outer.clientWidth`를 읽고 곧바로 width를 쓰는 구조가 라이브 rAF 안에서 강제 동기 레이아웃을 만들었다.
+- PROD 결과: `forced Style/Layout 204.5ms`, rAF callback `205.7ms`, Lite V2 layoutWrite `3.651ms`, FPS `88.1`, P95 `19.1ms`.
+- 총 browserRender 수치만 낮아진 것은 작업이 사라진 것이 아니라 JS forced-layout 쪽으로 이동한 결과라서 실제 체감은 악화됐다.
+- 600의 실런타임 방식은 다음 차수에 이어가지 않는다.
+
+## 601차 — 600 완전 제거 + no-read 텍스트 예산 + 오프스크린 강제 격리 실런타임
+- 기준 코드는 599 안정 상태로 되돌려 600의 per-frame `clientWidth` 읽기/4그룹 실런타임 코드를 전부 제거했다. 591 직접 pane 좌표 런타임과 592~599 관리자 진단 도구는 유지한다.
+- 뮤직노트 분할 드래그 시작 시에만 현재 pane, visible Music Note 카드, 텍스트 내부 폭을 한 번 읽는다. 모든 읽기를 먼저 끝낸 뒤 스타일을 쓰므로 드래그 hot path에서 DOM geometry read를 하지 않는다.
+- 드래그 중 텍스트 내부 폭은 시작 시 측정값 + pane 폭 변화량으로 산술 계산한다. 4px/4그룹 위상 예산은 유지하지만 매 프레임 `clientWidth`를 다시 읽지 않아 600의 forced-layout 원인을 제거한다.
+- pane viewport에서 160px 이상 벗어난 뮤직노트 카드는 pointer-down 때 측정한 정확한 block-size를 `contain-intrinsic-size`로 보존한 채 `content-visibility:hidden + contain:strict`로 강제 격리한다. 스크롤 높이는 유지하고 보이지 않는 카드의 width reflow만 차단한다.
+- Music Note responsive mode가 mobile/tablet/pc 경계를 실제로 넘으면 임시 텍스트 예산을 즉시 해제해 기존 반응형 디자인을 우선한다. pointer-up에서도 모든 inline width/class/CSS 변수를 즉시 제거한다.
+- Library/Recent/Classic/Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

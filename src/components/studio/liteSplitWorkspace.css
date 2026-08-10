@@ -1124,26 +1124,35 @@
   display: contents;
 }
 
-
-/* 600 — actual Music Note runtime optimization (not diagnostic).
- * 599 proved that reducing text-width reflow removes ~40% of browser render
- * work, but updating every card on the same bucket boundary created visible
- * P95 spikes. The runtime now keeps the card shell/divider live while the text
- * formatting box is updated in four staggered 1px phases (4px cycle total).
- * The temporary width lag is at most 3px and is removed immediately on drag end. */
+/* 601 — actual Music Note runtime optimization.
+ * 600 is intentionally not carried forward: its per-frame `clientWidth` reads
+ * forced synchronous layout (~204ms in the PROD report). 601 measures only at
+ * pointer-down, then derives text widths arithmetically from pane delta. Cards
+ * well outside the pane viewport are hard size-contained using their exact
+ * measured block size, so they cannot participate in live width reflow while
+ * scroll geometry remains unchanged. Responsive-mode crossings immediately
+ * drop the temporary text budget to preserve the approved mobile/tablet/PC
+ * design contract. */
 @media (min-width: 1100px) {
-  .soridraw-lite-studio-split-workspace[data-workspace-view="music-note"][data-musicnote-text-runtime="stagger-4px"].is-dragging
+  .soridraw-lite-studio-split-workspace[data-musicnote-runtime-opt="601-derived-text"].is-dragging
   .soridraw-musicnote-song-copy {
     overflow: hidden !important;
   }
 
-  .soridraw-lite-studio-split-workspace[data-workspace-view="music-note"][data-musicnote-text-runtime="stagger-4px"].is-dragging
+  .soridraw-lite-studio-split-workspace[data-musicnote-runtime-opt="601-derived-text"].is-dragging
   .soridraw-musicnote-song-copy-layout {
     display: flex !important;
     flex-direction: column !important;
     align-self: flex-start !important;
     min-width: 0 !important;
     max-width: none !important;
+  }
+
+  .soridraw-lite-studio-split-workspace[data-musicnote-runtime-opt="601-derived-text"].is-dragging
+  .soridraw-musicnote-song-card.soridraw-drag-offscreen-hard {
+    content-visibility: hidden !important;
+    contain: strict !important;
+    contain-intrinsic-size: auto var(--soridraw-drag-card-block-size, 86px) !important;
   }
 }
 

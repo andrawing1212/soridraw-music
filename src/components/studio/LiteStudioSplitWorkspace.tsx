@@ -12,8 +12,11 @@ import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } fr
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
+  clearSplitPerfBenchmarkSummary,
   finishSplitPerfDrag,
+  getLastSplitPerfResult,
   isSplitPerfDragActive,
+  publishSplitPerfBenchmarkSummary,
   recordSplitPerfApply,
   recordSplitPerfFlush,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
@@ -800,7 +803,7 @@ export default function LiteStudioSplitWorkspace({
         window.requestAnimationFrame(refreshMetrics);
       };
 
-      const finishBenchmark = () => {
+      const finishBenchmark = (measuredSets: NonNullable<ReturnType<typeof getLastSplitPerfResult>>[]) => {
         benchmarkRunningRef.current = false;
         benchmarkFrameRef.current = null;
         if (benchmarkTimerRef.current !== null) {
@@ -809,7 +812,8 @@ export default function LiteStudioSplitWorkspace({
         }
         finishDrag();
         restoreOriginalPercent();
-        emitBenchmarkStatus('done', `자동 테스트 완료 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}% · 측정 2왕복`);
+        if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
+        emitBenchmarkStatus('done', `자동 테스트 완료 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}% · 3세트 중앙값`);
       };
 
       const runLegs = (
@@ -848,21 +852,35 @@ export default function LiteStudioSplitWorkspace({
         benchmarkFrameRef.current = window.requestAnimationFrame(tick);
       };
 
-      emitBenchmarkStatus('running', `워밍업 중 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
-      runLegs(2, 650, false, () => {
+      clearSplitPerfBenchmarkSummary();
+      const measuredSets: NonNullable<ReturnType<typeof getLastSplitPerfResult>>[] = [];
+      const runMeasurementSet = (setIndex: number) => {
+        if (!benchmarkRunningRef.current) return;
         applyPercent(lowPercent, true);
         benchmarkTimerRef.current = window.setTimeout(() => {
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 579 · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
+            engine: `Lite V2 · auto benchmark 581 · set ${setIndex + 1}/3 · ${lowPercent.toFixed(1)}↔${highPercent.toFixed(1)} · 2 round trips`,
             builder,
             result,
           });
-          emitBenchmarkStatus('running', `측정 중 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}% · 2왕복`);
-          runLegs(4, 1000, true, finishBenchmark);
+          emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}% · 2왕복`);
+          runLegs(4, 1000, true, () => {
+            finishSplitPerfDrag();
+            const measured = getLastSplitPerfResult();
+            if (measured) measuredSets.push(measured);
+            if (setIndex >= 2) {
+              finishBenchmark(measuredSets);
+              return;
+            }
+            benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex + 1), 240);
+          });
         }, 180);
-      });
+      };
+
+      emitBenchmarkStatus('running', `워밍업 중 · ${lowPercent.toFixed(1)}% ↔ ${highPercent.toFixed(1)}%`);
+      runLegs(2, 650, false, () => runMeasurementSet(0));
     };
 
     window.addEventListener(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, handleBenchmarkRequest as EventListener);

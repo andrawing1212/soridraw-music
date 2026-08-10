@@ -2263,6 +2263,7 @@ function SecondaryScrollControl() {
   const startY = useRef(0);
   const scrollRaf = useRef<number | null>(null);
   const activeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const splitDraggingRef = useRef(false);
   
   // Max drag distance (track height is 160px, circle radius is 12px)
   const MAX_DRAG = 65;
@@ -2271,6 +2272,7 @@ function SecondaryScrollControl() {
     let visibilityFrame: number | null = null;
     const updateVisibility = () => {
       visibilityFrame = null;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
       setIsVisible((current) => {
@@ -2279,6 +2281,7 @@ function SecondaryScrollControl() {
       });
     };
     const scheduleVisibilityUpdate = () => {
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       if (visibilityFrame !== null) return;
       visibilityFrame = window.requestAnimationFrame(updateVisibility);
     };
@@ -2290,8 +2293,23 @@ function SecondaryScrollControl() {
     };
 
     const checkModal = () => {
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const modal = document.querySelector('.z-\\[100\\]');
-      setIsModalOpen(!!modal);
+      const next = Boolean(modal);
+      setIsModalOpen((current) => current === next ? current : next);
+    };
+
+    const handleSplitDragStart = () => {
+      splitDraggingRef.current = true;
+      if (visibilityFrame !== null) {
+        window.cancelAnimationFrame(visibilityFrame);
+        visibilityFrame = null;
+      }
+    };
+    const handleSplitDragEnd = () => {
+      splitDraggingRef.current = false;
+      scheduleVisibilityUpdate();
+      checkModal();
     };
 
     const documentResizeObserver = typeof ResizeObserver !== 'undefined'
@@ -2299,12 +2317,16 @@ function SecondaryScrollControl() {
       : null;
     documentResizeObserver?.observe(document.documentElement);
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
     const modalInterval = setInterval(checkModal, 500);
 
     scheduleVisibilityUpdate();
     return () => {
       documentResizeObserver?.disconnect();
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
       clearInterval(modalInterval);
       if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);

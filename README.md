@@ -1448,3 +1448,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - placeholder 순환 타이머는 이제 `/studio`의 `create` 화면에서만 존재하며, Music Note/Library/Recent에서는 타이머 자체를 만들지 않는다.
 - Lite V2 분할 드래그 중에는 create 화면에서도 placeholder 상태 갱신을 건너뛰어 분할 hot path에 상위 React commit이 끼어들지 않게 했다.
 - 관리자 PERF 토글/자동 벤치마크는 유지한다. UI 디자인/Firebase 저장 구조는 변경하지 않았다.
+
+## 581차 — 3세트 중앙값 자동 벤치마크 + 상위 ResizeObserver/모달 폴링 드래그 차단
+- PERF 자동 테스트를 워밍업 1회 후 동일 2왕복 측정 3세트로 변경하고, 최종 판정은 3세트 중앙값으로 표시한다.
+- 각 세트 FPS/P95를 함께 표시해 우연한 GC/이미지/백그라운드 작업에 의한 1회성 튐을 구분한다.
+- Music Note/Library 상단·리스트, Studio 외부 UI의 DOM 규모를 진단 패널에 분리 표시한다.
+- App 최상위 SecondaryScrollControl의 documentElement ResizeObserver와 500ms 모달 폴링을 Lite V2 분할 드래그 중 일시 중지하고 드래그 종료 후 1회 동기화한다.
+- 디자인, 분할 실시간 리플로우, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않는다.

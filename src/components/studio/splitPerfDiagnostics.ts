@@ -14,6 +14,15 @@ export type SplitPerfHotspot = {
   forcedStyleLayoutMs: number;
 };
 
+export type SplitPerfRegionNodes = {
+  musicNoteControls: number;
+  musicNoteList: number;
+  libraryControls: number;
+  libraryList: number;
+  externalStudioUi: number;
+  other: number;
+};
+
 export type SplitPerfResult = {
   host: string;
   workspaceView: string;
@@ -61,7 +70,15 @@ export type SplitPerfResult = {
   domNodes: number;
   builderNodes: number;
   resultNodes: number;
+  regionNodes: SplitPerfRegionNodes;
   heapMb: number | null;
+  createdAt: number;
+};
+
+export type SplitPerfBenchmarkSummary = {
+  setCount: number;
+  median: SplitPerfResult;
+  sets: SplitPerfResult[];
   createdAt: number;
 };
 
@@ -91,10 +108,12 @@ type ActiveDrag = {
   domNodes: number;
   builderNodes: number;
   resultNodes: number;
+  regionNodes: SplitPerfRegionNodes;
   rafId: number | null;
 };
 
 type Listener = (result: SplitPerfResult | null) => void;
+type BenchmarkListener = (summary: SplitPerfBenchmarkSummary | null) => void;
 
 export const SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY = 'soridraw_admin_split_perf_tools_enabled_v1';
 export const SPLIT_PERF_TOOL_VISIBILITY_EVENT = 'soridraw:split-perf-tool-visibility';
@@ -120,7 +139,9 @@ export const writeSplitPerfToolVisibility = (next: boolean) => {
 let enabled = true; // Collection only runs while the admin diagnostic tool is enabled.
 let active: ActiveDrag | null = null;
 let lastResult: SplitPerfResult | null = null;
+let lastBenchmarkSummary: SplitPerfBenchmarkSummary | null = null;
 const listeners = new Set<Listener>();
+const benchmarkListeners = new Set<BenchmarkListener>();
 let longTaskObserver: PerformanceObserver | null = null;
 let loafObserver: PerformanceObserver | null = null;
 let eventObserver: PerformanceObserver | null = null;
@@ -170,6 +191,74 @@ const addHotspot = (
   current.maxMs = Math.max(current.maxMs, durationMs);
   current.forcedStyleLayoutMs += Math.max(0, forcedStyleLayoutMs || 0);
   map.set(label, current);
+};
+
+const collectUniqueNodes = (selectors: string[]) => {
+  const nodes = new Set<Element>();
+  for (const selector of selectors) {
+    document.querySelectorAll(selector).forEach((root) => {
+      nodes.add(root);
+      root.querySelectorAll('*').forEach((node) => nodes.add(node));
+    });
+  }
+  return nodes;
+};
+
+const collectRegionNodeCounts = (domNodes: number): SplitPerfRegionNodes => {
+  if (typeof document === 'undefined') {
+    return { musicNoteControls: 0, musicNoteList: 0, libraryControls: 0, libraryList: 0, externalStudioUi: 0, other: 0 };
+  }
+  const regions = {
+    musicNoteControls: collectUniqueNodes([
+      '.soridraw-musicnote-page-shell .soridraw-musicnote-mode-tabs',
+      '.soridraw-musicnote-page-shell .soridraw-responsive-top-controls',
+      '.soridraw-musicnote-page-shell .soridraw-musicnote-folder-heading',
+    ]),
+    musicNoteList: collectUniqueNodes(['.soridraw-musicnote-list-start-divider']),
+    libraryControls: collectUniqueNodes(['.soridraw-library-theme .soridraw-library-primary-controls']),
+    libraryList: collectUniqueNodes(['.soridraw-library-theme .soridraw-library-list-start-divider']),
+    externalStudioUi: collectUniqueNodes([
+      '.soridraw-studio-left-panel',
+      '.soridraw-studio-right-panel',
+      '.soridraw-studio-action-bar',
+      '.soridraw-studio-action-collapsed',
+      '#soridraw-studio-workspace-hero-host',
+    ]),
+  };
+  const union = new Set<Element>();
+  Object.values(regions).forEach((set) => set.forEach((node) => union.add(node)));
+  return {
+    musicNoteControls: regions.musicNoteControls.size,
+    musicNoteList: regions.musicNoteList.size,
+    libraryControls: regions.libraryControls.size,
+    libraryList: regions.libraryList.size,
+    externalStudioUi: regions.externalStudioUi.size,
+    other: Math.max(0, domNodes - union.size),
+  };
+};
+
+const medianNumber = (values: number[]) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+};
+
+const medianRounded = (values: number[], digits = 1) => round(medianNumber(values), digits);
+
+const aggregateHotspots = (results: SplitPerfResult[]): SplitPerfHotspot[] => {
+  const labels = new Set<string>();
+  results.forEach((result) => result.hotspots.forEach((item) => labels.add(item.label)));
+  return Array.from(labels).map((label) => {
+    const rows = results.map((result) => result.hotspots.find((item) => item.label === label));
+    return {
+      label,
+      count: Math.round(medianNumber(rows.map((row) => row?.count || 0))),
+      totalMs: medianRounded(rows.map((row) => row?.totalMs || 0), 1),
+      maxMs: medianRounded(rows.map((row) => row?.maxMs || 0), 1),
+      forcedStyleLayoutMs: medianRounded(rows.map((row) => row?.forcedStyleLayoutMs || 0), 1),
+    };
+  }).sort((a, b) => b.totalMs - a.totalMs).slice(0, 8);
 };
 
 const ensureLongTaskObserver = () => {
@@ -300,6 +389,8 @@ export const beginSplitPerfDrag = ({
   ensureLongTaskObserver();
   ensureLoafObserver();
   ensureEventObserver();
+  const domNodes = document.getElementsByTagName('*').length;
+  const regionNodes = collectRegionNodeCounts(domNodes);
   active = {
     workspaceView: workspaceView || 'create',
     engine,
@@ -317,9 +408,10 @@ export const beginSplitPerfDrag = ({
     inputDelays: [],
     hotspots: new Map(),
     // Count once before dragging so diagnostics do not add DOM traversal inside the hot path.
-    domNodes: document.getElementsByTagName('*').length,
+    domNodes,
     builderNodes: builder ? builder.getElementsByTagName('*').length : 0,
     resultNodes: result ? result.getElementsByTagName('*').length : 0,
+    regionNodes,
     rafId: null,
   };
   runRafProbe();
@@ -412,6 +504,7 @@ export const finishSplitPerfDrag = () => {
     domNodes: active.domNodes,
     builderNodes: active.builderNodes,
     resultNodes: active.resultNodes,
+    regionNodes: active.regionNodes,
     heapMb: heapMb === null ? null : round(heapMb, 1),
     createdAt: Date.now(),
   };
@@ -427,6 +520,85 @@ export const finishSplitPerfDrag = () => {
     // Console output is optional.
   }
 };
+
+export const clearSplitPerfBenchmarkSummary = () => {
+  lastBenchmarkSummary = null;
+  benchmarkListeners.forEach((listener) => listener(lastBenchmarkSummary));
+};
+
+export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => {
+  if (!results.length) return null;
+  const first = results[0];
+  const number = (key: keyof SplitPerfResult, digits = 1) => medianRounded(results.map((result) => Number(result[key]) || 0), digits);
+  const boolMajority = (key: keyof SplitPerfResult) => results.filter((result) => Boolean(result[key])).length >= Math.ceil(results.length / 2);
+  const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
+  const median: SplitPerfResult = {
+    ...first,
+    engine: `Lite V2 · auto benchmark 581 · ${results.length}세트 중앙값`,
+    durationMs: number('durationMs', 0),
+    rafFrames: Math.round(number('rafFrames', 0)),
+    estimatedFps: number('estimatedFps', 1),
+    avgFrameMs: number('avgFrameMs', 2),
+    p95FrameMs: number('p95FrameMs', 2),
+    maxFrameMs: number('maxFrameMs', 2),
+    over20ms: Math.round(number('over20ms', 0)),
+    over34ms: Math.round(number('over34ms', 0)),
+    over50ms: Math.round(number('over50ms', 0)),
+    longTaskCount: Math.round(number('longTaskCount', 0)),
+    longTaskTotalMs: number('longTaskTotalMs', 1),
+    longTaskMaxMs: number('longTaskMaxMs', 1),
+    loafSupported: boolMajority('loafSupported'),
+    loafCount: Math.round(number('loafCount', 0)),
+    loafTotalMs: number('loafTotalMs', 1),
+    loafMaxMs: number('loafMaxMs', 1),
+    loafBlockingTotalMs: number('loafBlockingTotalMs', 1),
+    forcedStyleLayoutTotalMs: number('forcedStyleLayoutTotalMs', 1),
+    forcedStyleLayoutMaxMs: number('forcedStyleLayoutMaxMs', 1),
+    eventTimingSupported: boolMajority('eventTimingSupported'),
+    slowEventCount: Math.round(number('slowEventCount', 0)),
+    slowEventTotalMs: number('slowEventTotalMs', 1),
+    slowEventMaxMs: number('slowEventMaxMs', 1),
+    inputDelayAvgMs: number('inputDelayAvgMs', 2),
+    inputDelayMaxMs: number('inputDelayMaxMs', 2),
+    hotspots: aggregateHotspots(results),
+    flushCount: Math.round(number('flushCount', 0)),
+    flushAvgMs: number('flushAvgMs', 3),
+    flushMaxMs: number('flushMaxMs', 3),
+    contentCommitCount: Math.round(number('contentCommitCount', 0)),
+    dividerOnlyCount: Math.round(number('dividerOnlyCount', 0)),
+    applyCount: Math.round(number('applyCount', 0)),
+    applyAvgMs: number('applyAvgMs', 3),
+    applyMaxMs: number('applyMaxMs', 3),
+    layoutWriteAvgMs: number('layoutWriteAvgMs', 3),
+    responsiveAvgMs: number('responsiveAvgMs', 3),
+    externalAvgMs: number('externalAvgMs', 3),
+    miscAvgMs: number('miscAvgMs', 3),
+    domNodes: Math.round(number('domNodes', 0)),
+    builderNodes: Math.round(number('builderNodes', 0)),
+    resultNodes: Math.round(number('resultNodes', 0)),
+    regionNodes: {
+      musicNoteControls: Math.round(medianNumber(results.map((result) => result.regionNodes.musicNoteControls))),
+      musicNoteList: Math.round(medianNumber(results.map((result) => result.regionNodes.musicNoteList))),
+      libraryControls: Math.round(medianNumber(results.map((result) => result.regionNodes.libraryControls))),
+      libraryList: Math.round(medianNumber(results.map((result) => result.regionNodes.libraryList))),
+      externalStudioUi: Math.round(medianNumber(results.map((result) => result.regionNodes.externalStudioUi))),
+      other: Math.round(medianNumber(results.map((result) => result.regionNodes.other))),
+    },
+    heapMb: heapValues.length ? medianRounded(heapValues, 1) : null,
+    createdAt: Date.now(),
+  };
+  lastBenchmarkSummary = { setCount: results.length, median, sets: [...results], createdAt: Date.now() };
+  benchmarkListeners.forEach((listener) => listener(lastBenchmarkSummary));
+  return lastBenchmarkSummary;
+};
+
+export const subscribeSplitPerfBenchmarkSummary = (listener: BenchmarkListener) => {
+  benchmarkListeners.add(listener);
+  listener(lastBenchmarkSummary);
+  return () => { benchmarkListeners.delete(listener); };
+};
+
+export const getLastSplitPerfBenchmarkSummary = () => lastBenchmarkSummary;
 
 export const subscribeSplitPerfResult = (listener: Listener) => {
   listeners.add(listener);

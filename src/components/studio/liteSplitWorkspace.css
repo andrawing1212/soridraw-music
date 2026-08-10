@@ -526,3 +526,25 @@
   color: #c8b37b !important;
   font-size: 10px;
 }
+
+/* 581 — repeatable benchmark summary. Keep diagnostics visually compact. */
+.soridraw-split-perf-set-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 7px 0 9px;
+  font-size: 10px;
+  line-height: 1.35;
+  opacity: 0.82;
+}
+
+.soridraw-split-perf-set-strip strong {
+  font-size: 10px;
+  opacity: 0.92;
+}
+
+.soridraw-split-perf-set-strip span {
+  white-space: nowrap;
+  opacity: 0.72;
+}

@@ -1086,3 +1086,95 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 520~529에서 통과/개선된 분할바 좌표 안정화, Builder-mobile 3버튼, 스와이프 접기, 스와이프 후 오클릭 차단, Music Note/Library UI는 변경하지 않았다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 533차 — 생성바 접힘 상태 유령 스크롤 공간 제거
+
+- 기준: 532차
+- 생성바 세로 배치 규칙을 단순화했다. 펼친 생성바만 `floating / inline` 도킹을 사용한다.
+- 접힌 생성 컨트롤은 모든 테마에서 항상 floating edge tab으로 동작하고 inline/docked 위치를 기억하지 않는다.
+- Studio Black에서 접힌 상태에도 `soridraw-studio-action-anchor-expanded` 높이를 강제로 남기던 532 규칙을 제거했다. 따라서 접으면 펼친 생성바 높이만큼 빈 스크롤 공간이 생기지 않는다.
+- 접힘 상태에서는 action-bar 도킹/ResizeObserver 재계산도 중지해 불필요한 위치 계산을 줄였다.
+- 분할바 드래그, 모바일 3버튼, 스와이프 접기, 스와이프 후 생성 오클릭 차단, 생성 기능은 변경하지 않았다.
+
+## 534차 — 생성바 접기/펼치기 화면 위치 공통 기준 통일
+- 기준: 533차.
+- 3가지 분할 반응형 상태(PC / Tablet / Builder-mobile)에서 접기 순간의 세로 위치가 달라지는 원인을 공통 규칙으로 정리했다.
+- 접기 직전 현재 펼쳐진 생성바의 실제 화면 하단 좌표를 한 번 캡처하고, 접힌 edge tab이 그 동일한 화면 하단선에서 나타나도록 `--soridraw-action-collapsed-visual-bottom` 공통 기준을 사용한다.
+- 접힌 버튼의 `initial y: 8 -> 0` 상승 애니메이션을 제거했다. 접기 자체가 위로 8px 이동하는 Motion 효과를 더 이상 만들지 않는다.
+- 533에서 접기 시 `inline -> floating`을 강제로 바꾸던 상태 변경을 제거했다. 접기는 모양만 바꾸고 마지막 expanded 배치 상태를 보존하므로, 다시 펼칠 때도 먼저 같은 inline/floating 문맥으로 복귀한다.
+- 접힌 상태에서는 도킹을 새로 계산하지 않지만 마지막 expanded placement를 덮어쓰지도 않는다.
+- 접힘 상태의 anchor 높이 0 규칙은 그대로 유지해 533에서 해결한 유령 하단 스크롤 공간은 다시 만들지 않는다.
+- Studio Black뿐 아니라 Classic/Dark/Light도 같은 캡처 변수를 사용하도록 공통 브리지를 추가했으며, 캡처 값이 없을 때 기존 breakpoint별 기본 bottom 값은 유지한다.
+- 분할바 드래그 geometry, 모바일 3버튼/스와이프, Music Note/Library, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+- 추가 안정화: inline 슬롯 제거로 브라우저가 scrollTop을 자동 clamp한 경우, 접힌 동안 사용자가 스크롤하지 않았다면 펼칠 때 원래 scrollTop을 먼저 복원한 뒤 도킹을 재판정한다. 그래서 533의 `anchor=0`(유령 공간 제거)은 유지하면서 단순 접기→펼치기에서 화면 내용과 생성바 위치가 서로 다른 지점으로 돌아가는 문제를 막는다.
+
+## 535차 — 생성바 Y축 단일 소유권 + 분할 드래그 경량화
+- 기준: 534차.
+- 영상에서 반복된 “어떤 때는 맞고 어떤 때는 잠기는” 현상의 핵심 원인을 Studio Black 생성바의 `floating / inline / collapsed snapshot` 다중 세로 좌표 소유권으로 판단하고 구조를 단순화했다.
+- Studio Black의 펼친 생성바는 더 이상 inline/docked DOM owner로 전환하지 않고 항상 body fixed portal 한 개만 사용한다. 접기/펼치기, PC/Tablet/Builder-mobile 전환은 생성바 모양과 내부 구성만 바꾸며 Y 위치 소유권은 바꾸지 않는다.
+- 펼친 생성바와 접힌 edge tab은 모두 `--soridraw-action-current-bottom` 하나를 사용한다. 평상시 하단 간격은 동일하고, 실제 Footer가 올라올 때만 `--soridraw-studio-action-footer-offset`이 공통 baseline을 위로 민다.
+- Studio Black에서는 534의 `--soridraw-action-collapsed-visual-bottom` 캡처, inline 슬롯 제거에 따른 scrollTop snapshot/복원, 접힌 상태의 과거 dock 상태 기억을 사용하지 않는다. 접기/펼치기는 순수한 shape swap이므로 상태별 스크롤 길이 보정 로직이 사라졌다. Classic/Dark/Light의 기존 캡처 동작은 유지한다.
+- Studio Black action anchor는 높이를 예약하는 슬롯이 아니라 `soridraw-studio-action-geometry-anchor`라는 0높이 X/width 측정점으로 분리했다. 따라서 생성바 상태가 바뀌어도 Builder의 scrollHeight가 달라지지 않는다.
+- App.tsx에서 Studio Black 생성바 위치를 위해 중복으로 붙어 있던 두 번째 ResizeObserver + Builder scroll listener를 제거했다. Studio Black은 스크롤 때 App 레벨 도킹 판정을 더 이상 실행하지 않고, Footer 충돌 계산은 SplitWorkspace의 기존 rAF-coalesced 경로 하나만 사용한다.
+- 분할바를 접힌 생성바 상태로 움직일 때도 `--soridraw-action-fixed-left/width`를 매 rAF에 계속 갱신하도록 변경했다. 이전에는 펼친 portal이 존재할 때만 root geometry를 갱신해, 접힌 채 PC/mobile 폭을 넘긴 뒤 펼치면 한 프레임 오래된 좌표로 복귀할 수 있었다.
+- 분할 드래그의 기존 React state 비사용 / requestAnimationFrame / 1px pointer fidelity / 결과 타이틀 측정 지연 최적화는 유지한다.
+- 수정 파일: `src/App.tsx`, `src/components/studio/StudioSplitWorkspace.tsx`, `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 536차 — 생성바 펼침/접힘 시각 하단선 통일 + 공통 하향 조정
+- 기준: 535차.
+- 사용자 영상에서 펼친 생성바의 노란 실제 버튼 하단과 접힌 노란 edge tab 하단이 약 10px 어긋나는 것을 확인했다. 원인은 둘 다 같은 wrapper `bottom` 값을 쓰지만, 펼친 생성바는 row 내부에 PC 10px / mobile 8px의 하단 padding이 있고 접힌 tab은 padding 없이 박스 전체가 노란 표면이라 실제 보이는 하단선이 서로 달랐기 때문이다.
+- Studio Black의 Y축 소유권 단일화는 그대로 유지하면서, 기준을 wrapper 하단이 아니라 **실제 보이는 컨트롤 하단선**으로 바꿨다. 공통 visible gap을 12px로 두고, 펼친 bar만 row padding만큼 wrapper bottom을 보정한다. 따라서 접기/펼치기 전후 노란 컨트롤의 하단선이 동일해진다.
+- 535에서 PC에만 적용되던 `28px`, 기본 상태의 `20px` 하단 gap 차이를 제거했다. PC / Tablet / Builder-mobile 모두 동일한 12px visible baseline을 사용하므로 모드 전환 때 Y 위치가 다시 달라지지 않는다.
+- 기존보다 생성바와 접힌 tab을 모두 더 아래로 내렸다. Footer가 실제로 올라오는 경우에는 기존 `--soridraw-studio-action-footer-offset`만 공통으로 더해져 두 상태가 함께 올라간다.
+- 성능: JS 위치 계산, ResizeObserver, scroll/resize listener, React state를 추가하지 않았다. CSS 변수 계산만 바꿔 535의 rAF/단일 geometry 경로를 그대로 유지한다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 537차 — 접힌 생성바 상태의 Builder PC→Mobile 하단 기준 유지
+- 기준: 536차.
+- 요청 범위만 수정했다. 생성바 위치/크기, 카드 디자인, 반응형 구성, Firebase/저장 구조는 변경하지 않았다.
+- 접힌 생성바 상태에서 분할바를 줄여 Builder가 `desktop -> mobile`로 바뀌는 순간, 기존에는 `scrollTop` 숫자만 그대로 남아 3열/2열 카드가 1열로 재배치되면서 화면에 훨씬 앞쪽 메뉴가 나타났다.
+- 전환 직전 Builder 화면의 **하단에서 콘텐츠 끝까지 남은 거리**를 1회 저장하고, mobile 레이아웃 적용 후 같은 하단 거리가 유지되도록 Builder `scrollTop`을 1회 보정한다. 따라서 전체화면/PC에서 보이던 하단 정보 흐름을 기준으로 모바일 화면이 이어진다.
+- 분할바를 계속 더 줄여도 드래그 매 프레임마다 scrollHeight를 측정하지 않는다. 모드 경계 진입 시 1회 + pointer-up 최종 폭에서 1회만 보정하여 버벅임 증가를 피한다.
+- 생성바가 펼쳐진 상태, Builder가 이미 mobile인 상태, mobile->desktop 전환에는 이 보정을 적용하지 않는다.
+- 수정 파일: `src/components/studio/StudioSplitWorkspace.tsx`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 538차 — 접힌 생성바 PC↔모바일 스크롤 기준 대칭화
+- 기준: 537차. 다른 UI/생성바 위치/Firebase 구조는 변경하지 않음.
+- 접힌 생성바 상태에서 분할바가 Builder의 desktop/mobile 경계를 실제로 넘을 때만 스크롤 기준을 1회 저장·복원한다.
+- 최상단(2px 이내)은 전환 후에도 정확히 최상단, 최하단(2px 이내)은 정확히 최하단으로 고정한다.
+- 중간 영역은 `scrollTop / maxScrollTop` 비율을 보존해 PC→모바일과 모바일→PC가 서로 대칭이 되도록 했다. 537차의 하단 간격(bottom gap) 보존을 제거해 반복 전환 시 아래로 누적 수렴하던 현상을 막는다.
+- 복원은 모드가 바뀐 프레임과 분할바를 놓은 최종 프레임에만 requestAnimationFrame 1회씩 실행되며 일반 분할 드래그 프레임에는 추가 scroll 계산을 하지 않는다.
+
+
+
+## 539차 — 펼친 생성바 하단 위치를 접힘 기준까지 하향
+- 기준: 538차.
+- 요청 범위만 수정했다. PC↔모바일 스크롤 대칭 전환, 분할바 동작, 생성바 크기/구성, 접힌 버튼 위치, Firebase/저장 구조는 변경하지 않았다.
+- 펼친 생성바가 최하단에서 Footer 충돌 보정값 때문에 화면 아래쪽까지 내려오지 못하고 위에 멈추던 경로만 제거했다.
+- 펼친 생성바는 536차의 실제 노란 컨트롤 하단선 보정(행 padding 보정)은 유지하면서, Footer offset에 의해 추가로 위로 밀리지 않도록 하단 기준을 고정했다.
+- 따라서 PC / Tablet / Builder-mobile 모두 펼친 생성바가 접힌 상태에서 사용자가 확인한 낮은 하단 위치까지 내려오도록 맞춘다.
+- 성능: JS/React state/ResizeObserver/scroll listener/DOM 측정을 추가하지 않았고 CSS 변수 계산 1곳만 변경했다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 540차 — 펼친/접힌 생성바 최하단 스크롤 범위 통일
+- 기준: 539차.
+- 최신 영상 재분석 결과, 문제는 생성바 자체의 fixed `bottom` 값이 아니라 **Builder의 최하단 스크롤 여유가 펼침/접힘 상태마다 달랐던 것**으로 확인했다.
+- 300차 공통 규칙은 wide desktop Builder에 `padding-bottom: 56px`을 주고 있었지만, 오래된 328차 규칙이 `data-soridraw-action-owner=floating/inline`인 펼친 상태에서만 이를 다시 `0px`으로 덮어썼다. 그래서 접으면 56px 더 내려가고, 펼치면 그만큼 일찍 멈췄다.
+- 535차 이후 Studio Black 생성바는 이미 항상 body fixed portal이고 in-flow expanded anchor는 `height: 0`이므로, 328차의 owner별 padding 분기는 더 이상 유효하지 않다. 해당 stale override를 제거했다.
+- 결과적으로 펼침/접힘 모두 기존의 동일한 56px 하단 reserve를 사용한다. 생성바 위치/크기/PC↔Mobile 스크롤 대칭 규칙/분할바 geometry/Firebase 구조는 변경하지 않았다.
+- 최적화: 새 JS, React state, ResizeObserver, scroll listener, DOM 측정을 추가하지 않았다. 오히려 상태별 CSS override 하나를 제거해 접기/펼치기 때 scrollHeight가 달라지는 레이아웃 변동을 줄였다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

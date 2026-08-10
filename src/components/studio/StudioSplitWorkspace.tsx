@@ -163,6 +163,12 @@ export default function StudioSplitWorkspace({
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
+  const builderModeAnchorFrameRef = useRef<number | null>(null);
+  const builderModeScrollAnchorRef = useRef<{
+    targetMode: PaneMode;
+    edge: 'top' | 'bottom' | 'progress';
+    progress: number;
+  } | null>(null);
   const lastDragBuilderPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
@@ -260,7 +266,7 @@ export default function StudioSplitWorkspace({
       current.floatingActionBar = document.querySelector<HTMLElement>(
         'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
       );
-      current.actionAnchor = document.querySelector<HTMLElement>('.soridraw-studio-action-anchor-expanded');
+      current.actionAnchor = document.querySelector<HTMLElement>('.soridraw-studio-action-geometry-anchor');
       current.collapsedActionButton = document.querySelector<HTMLElement>(
         'body > .soridraw-studio-action-collapsed',
       );
@@ -402,13 +408,15 @@ export default function StudioSplitWorkspace({
     if (lastActionControlPixelRef.current === actionGeometryKey) return;
     lastActionControlPixelRef.current = actionGeometryKey;
 
+    // 535 — publish the action geometry even while the control is collapsed.
+    // The old code updated these root variables only when the expanded portal
+    // existed, so resizing the split while collapsed left stale coordinates for
+    // the next expand. Root CSS variables are now the single geometry hand-off.
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+    rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+
     if (controls.floatingActionBar) {
-      // 532: App.tsx and the split rAF fast path share one geometry helper.
-      // Above the visible panel's max width, only its center moves; the action
-      // row itself no longer relayouts on every wide-divider pixel.
-      const rootStyle = document.documentElement.style;
-      rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-      rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
       controls.floatingActionBar.style.removeProperty('left');
       controls.floatingActionBar.style.removeProperty('width');
       controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${anchorWidth}px`);
@@ -568,6 +576,40 @@ export default function StudioSplitWorkspace({
     return width > breakpoint + hysteresis ? 'desktop' : 'mobile';
   }, []);
 
+  // 538 — Collapsed Generate control: preserve the builder's relative viewport
+  // position across both desktop <-> mobile transitions. Bottom-gap anchoring
+  // was directional, so repeated breakpoint crossings accumulated downward
+  // drift. Exact top stays top, exact bottom stays bottom, and middle positions
+  // keep the same normalized scroll progress. Capture/restore only runs when
+  // the pane mode actually changes, never on ordinary drag frames.
+  const scheduleBuilderModeScrollAnchorRestore = useCallback(() => {
+    if (builderModeAnchorFrameRef.current !== null) {
+      window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
+    }
+    builderModeAnchorFrameRef.current = window.requestAnimationFrame(() => {
+      builderModeAnchorFrameRef.current = null;
+      const builder = builderRef.current;
+      const anchor = builderModeScrollAnchorRef.current;
+      if (!builder || !anchor || builder.dataset.paneMode !== anchor.targetMode) return;
+      const collapsedActionButton = readExternalControls().collapsedActionButton;
+      if (!collapsedActionButton?.isConnected) {
+        builderModeScrollAnchorRef.current = null;
+        return;
+      }
+
+      const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
+      const targetScrollTop = anchor.edge === 'top'
+        ? 0
+        : anchor.edge === 'bottom'
+          ? maxScrollTop
+          : Math.max(0, Math.min(maxScrollTop, maxScrollTop * anchor.progress));
+      if (Math.abs(builder.scrollTop - targetScrollTop) > 1) {
+        builder.scrollTop = targetScrollTop;
+      }
+      if (!draggingRef.current) builderModeScrollAnchorRef.current = null;
+    });
+  }, [readExternalControls]);
+
   /**
    * Apply the split directly to DOM/CSS variables.
    *
@@ -636,13 +678,14 @@ export default function StudioSplitWorkspace({
       delete root.dataset.soridrawResultAtMinimum;
     }
 
+    const previousBuilderMode = modeRef.current.builder;
     const nextBuilderMode = builderCollapsedRef.current
-      ? modeRef.current.builder
+      ? previousBuilderMode
       : resolvePaneMode(
           builder,
           builderWidth,
           BUILDER_MOBILE_BREAKPOINT,
-          modeRef.current.builder,
+          previousBuilderMode,
         );
     const usesUnifiedContentBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
     const nextResultMode = resultCollapsedRef.current
@@ -654,10 +697,31 @@ export default function StudioSplitWorkspace({
           modeRef.current.result,
           usesUnifiedContentBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
         );
+    const externalControls = readExternalControls();
+    const builderModeChanged = !builderCollapsedRef.current
+      && previousBuilderMode !== nextBuilderMode;
+    const shouldPreserveCollapsedBuilderScroll = builderModeChanged
+      && Boolean(externalControls.collapsedActionButton?.isConnected);
 
-    if (!builderCollapsedRef.current && (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
+    if (shouldPreserveCollapsedBuilderScroll) {
+      const maxScrollTop = Math.max(0, builder.scrollHeight - builder.clientHeight);
+      const currentScrollTop = Math.max(0, Math.min(maxScrollTop, builder.scrollTop));
+      const edgeTolerance = 2;
+      builderModeScrollAnchorRef.current = {
+        targetMode: nextBuilderMode,
+        edge: currentScrollTop <= edgeTolerance
+          ? 'top'
+          : maxScrollTop - currentScrollTop <= edgeTolerance
+            ? 'bottom'
+            : 'progress',
+        progress: maxScrollTop > 0 ? currentScrollTop / maxScrollTop : 0,
+      };
+    }
+
+    if (!builderCollapsedRef.current && (previousBuilderMode !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
+      if (shouldPreserveCollapsedBuilderScroll) scheduleBuilderModeScrollAnchorRestore();
     }
     if (!resultCollapsedRef.current && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       modeRef.current.result = nextResultMode;
@@ -680,7 +744,7 @@ export default function StudioSplitWorkspace({
     // The Library credit shortcut is portaled into the hero and sits outside the
     // result pane. Copy the resolved pane mode to the host so its compact/mobile
     // size changes at the same breakpoint as the content below it.
-    const workspaceHeroHost = readExternalControls().workspaceHeroHost;
+    const workspaceHeroHost = externalControls.workspaceHeroHost;
     if (workspaceHeroHost && workspaceHeroHost.dataset.paneMode !== nextResultMode) {
       workspaceHeroHost.dataset.paneMode = nextResultMode;
     }
@@ -698,7 +762,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, syncExternalMeasurements, workspaceView]);
+  }, [clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -932,6 +996,11 @@ export default function StudioSplitWorkspace({
         window.cancelAnimationFrame(layoutRefreshFrameRef.current);
         layoutRefreshFrameRef.current = null;
       }
+      if (builderModeAnchorFrameRef.current !== null) {
+        window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
+        builderModeAnchorFrameRef.current = null;
+      }
+      builderModeScrollAnchorRef.current = null;
       if (draggingRef.current) {
         draggingRef.current = false;
         window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
@@ -1005,6 +1074,11 @@ export default function StudioSplitWorkspace({
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
+    builderModeScrollAnchorRef.current = null;
+    if (builderModeAnchorFrameRef.current !== null) {
+      window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
+      builderModeAnchorFrameRef.current = null;
+    }
 
     // 520: Freeze the *relationship* between the in-flow action anchor and the
     // builder pane before the drag class is applied. App.tsx normally positions
@@ -1082,6 +1156,9 @@ export default function StudioSplitWorkspace({
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
+    if (builderModeScrollAnchorRef.current?.targetMode === modeRef.current.builder) {
+      scheduleBuilderModeScrollAnchorRestore();
+    }
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
     // Reconnect the result title to the final builder-card height after the
     // drag has committed. This keeps the expensive cross-pane measurement out

@@ -2027,7 +2027,27 @@ html[data-soridraw-theme="studio-black"] {
   --soridraw-action-control-height: 69px;
   --soridraw-action-row-gap: 8px;
   --soridraw-action-row-padding: 8px;
-  --soridraw-action-bottom-gap: 20px;
+  /* 536 — one *visible control* baseline for every Studio Black mode/state.
+   * The expanded row has bottom padding around its buttons while the collapsed
+   * tab does not. Sharing the same wrapper bottom therefore made the collapsed
+   * yellow surface sit lower by exactly that padding (8px mobile / 10px PC).
+   * Keep one 12px visible lower edge and compensate only the expanded wrapper
+   * by its row padding. Footer overlap remains the sole dynamic Y correction. */
+  --soridraw-action-visual-bottom-gap: 12px;
+  /* 539 — Expanded Generate must reach the same low viewport baseline the
+   * approved collapsed control uses in real use. The footer collision offset
+   * was the remaining blocker that held only the expanded row above the lower
+   * edge in the verified PC/tablet/builder-mobile screenshots. Keep the 536
+   * visible-control compensation, but do not lift the expanded row with the
+   * footer offset. No X/width/responsive/scroll logic changes. */
+  --soridraw-action-expanded-bottom: calc(
+    var(--soridraw-action-visual-bottom-gap)
+    - var(--soridraw-action-row-padding)
+  );
+  --soridraw-action-collapsed-bottom: calc(
+    var(--soridraw-studio-action-footer-offset, 0px)
+    + var(--soridraw-action-visual-bottom-gap)
+  );
   --soridraw-action-row-height: calc(
     var(--soridraw-action-control-height)
     + var(--soridraw-action-row-padding)
@@ -2047,10 +2067,10 @@ html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
 
 html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
   position: fixed !important;
-  inset: auto auto var(--soridraw-action-bottom-gap) var(--soridraw-action-fixed-left, 0px) !important;
+  inset: auto auto var(--soridraw-action-expanded-bottom) var(--soridraw-action-fixed-left, 0px) !important;
   top: auto !important;
   right: auto !important;
-  bottom: var(--soridraw-action-bottom-gap) !important;
+  bottom: var(--soridraw-action-expanded-bottom) !important;
   left: var(--soridraw-action-fixed-left, 0px) !important;
   width: var(--soridraw-action-fixed-width, 100vw) !important;
   padding: 0 !important;
@@ -2172,10 +2192,7 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
     var(--soridraw-studio-left-rail-edge, 0px)
     - var(--soridraw-collapsed-action-half-width)
   ) !important;
-  bottom: calc(
-    var(--soridraw-studio-action-footer-offset, 0px)
-    + clamp(20px, 4vw, 30px)
-  ) !important;
+  bottom: var(--soridraw-action-collapsed-bottom) !important;
   width: var(--soridraw-collapsed-action-width) !important;
   min-width: var(--soridraw-collapsed-action-width) !important;
   max-width: var(--soridraw-collapsed-action-width) !important;
@@ -2189,7 +2206,7 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
   z-index: 140 !important;
   justify-content: flex-end !important;
   transition: width 120ms linear, height 120ms linear, background-color 150ms !important;
-  will-change: top !important;
+  will-change: transform !important;
   transform: translateZ(0);
   backface-visibility: hidden;
 }
@@ -2219,7 +2236,6 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
    * density and let only the available horizontal width track the builder. */
   html[data-soridraw-theme="studio-black"] {
     --soridraw-action-control-height: 90px;
-    --soridraw-action-bottom-gap: 28px;
     --soridraw-action-row-gap: 12px;
     --soridraw-action-row-padding: 10px;
   }
@@ -2300,10 +2316,9 @@ html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-collapse
     --soridraw-collapsed-action-width: clamp(56px, calc(var(--soridraw-studio-builder-width, 920px) * 0.096), 76px);
     --soridraw-collapsed-action-half-width: clamp(28px, calc(var(--soridraw-studio-builder-width, 920px) * 0.048), 38px);
     --soridraw-collapsed-action-height: clamp(72px, calc(var(--soridraw-studio-builder-width, 920px) * 0.13), 100px);
-    bottom: calc(
-      var(--soridraw-studio-action-footer-offset, 0px)
-      + clamp(22px, calc(var(--soridraw-studio-builder-width, 920px) * 0.035), 32px)
-    ) !important;
+    /* 536 — PC/tablet/mobile can change tab size, but the visible
+     * yellow lower edge stays on the shared 12px baseline. */
+    bottom: var(--soridraw-action-collapsed-bottom) !important;
   }
 
   /* Generation modal and lower hint belong to the builder pane only. */
@@ -5441,35 +5456,18 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   box-shadow: 0 0 12px rgba(255, 180, 0, 0.12) !important;
 }
 
-/* 328 — Remove the real tail below the expanded Generate row without scroll locking.
- * 327 changed the builder bottom reserve only after the action row switched to
- * the inline owner. That owner-dependent height change moved the pane's scroll
- * end while the user was still scrolling, so the floating/inline test could
- * flip repeatedly and the viewport appeared to shake.
+/* 540 — Expanded/collapsed Studio Black must share one bottom scroll range.
+ * Since 535 the Studio Black Generate row is always a fixed body portal and the
+ * former in-flow expanded anchor is height:0. The old 328 owner-specific rule
+ * still forced builder padding-bottom to 0 only while expanded, while the
+ * collapsed state inherited the verified 56px reserve from 300. That made the
+ * builder stop about 56px earlier only when Generate was open — exactly the
+ * video symptom where the expanded state would not scroll down as far.
  *
- * Keep the expanded layout geometry identical in both owner states instead:
- * the in-flow action anchor already reserves the full Generate-row height, so
- * no additional builder bottom padding is needed while the row is expanded.
- * The collapsed tab keeps the previous 56px safety reserve. No scrollTop,
- * scroll-padding or overscroll lock is used here. */
-@media (min-width: 1600px) {
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-action-owner="floating"],
-    [data-soridraw-action-owner="inline"]
-  )
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-builder-pane {
-    padding-bottom: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-action-owner="floating"],
-    [data-soridraw-action-owner="inline"]
-  )
-  .soridraw-studio-action-anchor-expanded {
-    margin-bottom: 0 !important;
-  }
-}
+ * Do not add a second scroll correction. Remove the stale owner split and let
+ * the existing 56px wide-desktop builder reserve apply identically to floating
+ * expanded and collapsed states. This keeps scrollHeight stable across the
+ * shape swap and avoids extra React/scroll/ResizeObserver work. */
 
 /* 329 — Music Note / Suno Library surface contrast and borderless cleanup.
  * The page roots were using the same near-black background for list cards and
@@ -11636,15 +11634,23 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 532 — collapsed and expanded controls share the same docked row.
- * `data-soridraw-placement` is the only vertical-placement state; collapsing
- * changes the control's appearance, not its scroll range or remembered top. */
-html[data-soridraw-theme="studio-black"]
-  body > .soridraw-studio-action-collapsed[data-soridraw-placement="inline"] {
-  top: var(--soridraw-action-docked-top, auto) !important;
-  bottom: auto !important;
-  height: min(var(--soridraw-action-row-height, 85px), 100px) !important;
-  min-height: min(var(--soridraw-action-row-height, 85px), 100px) !important;
-  max-height: min(var(--soridraw-action-row-height, 85px), 100px) !important;
+/* 536 — Studio Black keeps one visible lower-edge baseline.
+ * Expanded/collapsed and PC/tablet/mobile all target the same 12px visual gap;
+ * the expanded wrapper alone subtracts its row padding so the actual controls
+ * align with the collapsed tab. Only footer overlap may move that baseline. */
+
+/* 534 — Shared collapse-in-place vertical baseline for non-Studio themes.
+ * App.tsx captures the visible expanded Generate row's lower screen edge before
+ * collapsing. Classic/Dark/Light consume the same one-shot variable here;
+ * Studio Black no longer consumes the captured value. Breakpoint-specific
+ * fallback positions remain unchanged for Classic/Dark/Light. */
+html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-collapsed {
+  bottom: var(--soridraw-action-collapsed-visual-bottom, 1.25rem) !important;
+}
+
+@media (min-width: 768px) {
+  html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-collapsed {
+    bottom: var(--soridraw-action-collapsed-visual-bottom, 2rem) !important;
+  }
 }
 

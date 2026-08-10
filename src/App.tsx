@@ -6349,7 +6349,6 @@ function App() {
   const [isGenreModalOpen, setIsGenreModalOpen] = useState(false);
   const [isGenreHierarchyModalOpen, setIsGenreHierarchyModalOpen] = useState(false);
   const [isActionButtonsCollapsed, setIsActionButtonsCollapsed] = useState(true);
-  const isActionButtonsCollapsedRef = useRef(true);
   // A horizontal swipe can begin on top of the generate button itself. Browsers
   // still synthesize a click after pointerup when the pointer finishes inside
   // that button, so keep a short gesture-consumed window that blocks the
@@ -6365,9 +6364,6 @@ function App() {
     event.stopPropagation();
   };
 
-  useEffect(() => {
-    isActionButtonsCollapsedRef.current = isActionButtonsCollapsed;
-  }, [isActionButtonsCollapsed]);
   const [isStructureModalOpen, setIsStructureModalOpen] = useState(false);
   const genreModalHistoryPushedRef = useRef(false);
   const storyboardModalHistoryPushedRef = useRef(false);
@@ -6671,6 +6667,13 @@ function App() {
   const isSplitDraggingRef = useRef(false);
   const actionBarPlacementRafRef = useRef<number | null>(null);
   const actionBarLayoutRafRef = useRef<number | null>(null);
+  const actionCollapseSnapshotRafRef = useRef<number | null>(null);
+  const actionCollapseRestorePendingRef = useRef(false);
+  const actionCollapseScrollSnapshotRef = useRef<{
+    host: HTMLElement | null;
+    before: number;
+    afterCollapse: number | null;
+  } | null>(null);
   const selectedKeywordCount = selectedGenres.length + subGenre.length + selectedThemes.length + selectedMoods.length + selectedStyles.length + selectedInstrumentSounds.length + selectedPointSounds.length + (hasActiveSituation(situation) ? 1 : 0);
   const vocalSectionTagOptions = useMemo(
     () => buildVocalSectionTagOptions(vocalMembers, vocalMode),
@@ -6845,30 +6848,84 @@ const toggleCycleVariantSelection = (
     // or vertical ownership.
     root.style.setProperty('--soridraw-action-fixed-left', `${floatingGeometry.left}px`);
     root.style.setProperty('--soridraw-action-fixed-width', `${floatingGeometry.width}px`);
-    root.style.setProperty('--soridraw-action-docked-top', `${Math.round(anchorRect.top + 12)}px`);
+  }, []);
+
+  const captureCollapsedActionVisualBottom = useCallback(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    // 535 — Studio Black no longer has a second Y-axis owner. Expanded and
+    // collapsed controls both consume the same fixed/footer-aware CSS bottom,
+    // so measuring the outgoing row here would reintroduce the old state lock.
+    if (document.documentElement.dataset.soridrawTheme === 'studio-black') return;
+
+    const actionBar = actionButtonsBarRef.current;
+    if (!actionBar) return;
+
+    const rect = actionBar.getBoundingClientRect();
+    if (!Number.isFinite(rect.bottom)) return;
+
+    // Classic/Dark/Light keep the verified collapse-in-place behavior.
+    const visualBottom = Math.max(4, Math.round(window.innerHeight - rect.bottom));
+    document.documentElement.style.setProperty(
+      '--soridraw-action-collapsed-visual-bottom',
+      `${visualBottom}px`,
+    );
   }, []);
 
   const collapseActionButtons = useCallback(() => {
-    isActionButtonsCollapsedRef.current = true;
+    if (!isStudioBlackActionMode) {
+      captureCollapsedActionVisualBottom();
+
+      // Non-Studio themes still swap an in-flow/floating owner, so preserve
+      // their verified scroll snapshot behavior without burdening Studio Black.
+      const anchor = actionButtonsAnchorRef.current;
+      const builderPane = anchor?.closest<HTMLElement>('.soridraw-studio-builder-pane') ?? null;
+      const readScrollTop = () => builderPane ? builderPane.scrollTop : window.scrollY;
+      const snapshot = { host: builderPane, before: readScrollTop(), afterCollapse: null as number | null };
+      actionCollapseScrollSnapshotRef.current = snapshot;
+      if (actionCollapseSnapshotRafRef.current !== null) {
+        window.cancelAnimationFrame(actionCollapseSnapshotRafRef.current);
+      }
+      actionCollapseSnapshotRafRef.current = window.requestAnimationFrame(() => {
+        actionCollapseSnapshotRafRef.current = null;
+        if (actionCollapseScrollSnapshotRef.current !== snapshot) return;
+        snapshot.afterCollapse = readScrollTop();
+      });
+    } else {
+      // Studio Black collapse is now a pure shape swap. There is no inline slot
+      // to remove, no scroll range change to compensate, and no captured bottom
+      // to keep alive across PC/tablet/mobile mode changes.
+      if (actionCollapseSnapshotRafRef.current !== null) {
+        window.cancelAnimationFrame(actionCollapseSnapshotRafRef.current);
+        actionCollapseSnapshotRafRef.current = null;
+      }
+      actionCollapseScrollSnapshotRef.current = null;
+      actionCollapseRestorePendingRef.current = false;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    }
+
     setIsActionButtonsCollapsed(true);
-  }, []);
+  }, [captureCollapsedActionVisualBottom, isStudioBlackActionMode]);
 
   const expandActionButtons = useCallback(() => {
-    isActionButtonsCollapsedRef.current = false;
+    actionCollapseRestorePendingRef.current = !isStudioBlackActionMode;
+    if (isStudioBlackActionMode) {
+      actionCollapseScrollSnapshotRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    }
     setIsActionButtonsCollapsed(false);
-  }, []);
+  }, [isStudioBlackActionMode]);
 
   const updateActionBarPlacement = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
-    const anchor = actionButtonsAnchorRef.current;
-    if (!anchor) return;
-
     const root = document.documentElement;
     const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
-    if (!isStudioBlack) {
-      root.style.removeProperty('--soridraw-action-fixed-left');
-      root.style.removeProperty('--soridraw-action-fixed-width');
-      root.style.removeProperty('--soridraw-action-docked-top');
+
+    // 535 — Studio Black has one Y-axis owner only: the body-fixed action row.
+    // Footer collision is expressed by --soridraw-studio-action-footer-offset,
+    // so scroll, builder mode and collapse state never switch this row between
+    // fixed and inline DOM owners. This removes the dock/undock rerender and its
+    // stale-position lock entirely.
+    if (isStudioBlack) {
       if (!isActionsFloatingRef.current) {
         isActionsFloatingRef.current = true;
         setIsActionsFloating(true);
@@ -6876,26 +6933,12 @@ const toggleCycleVariantSelection = (
       return;
     }
 
-    const rect = anchor.getBoundingClientRect();
-    const wasFloating = isActionsFloatingRef.current;
-    const builderPane = anchor.closest<HTMLElement>('.soridraw-studio-builder-pane');
-    const isolatedSplitWorkspace = builderPane?.closest<HTMLElement>(
-      '.soridraw-studio-split-workspace[data-scroll-isolated="true"]',
-    );
-
-    // 532 — collapsed and expanded states use the exact same reserved slot and
-    // the exact same bottom boundary. This removes the old state-dependent
-    // "locks" where collapsed could scroll farther than expanded or reopening
-    // could restore a stale floating decision.
-    const availableBottom = builderPane && isolatedSplitWorkspace
-      ? builderPane.getBoundingClientRect().bottom
-      : window.innerHeight - (window.innerWidth >= 1100 ? 28 : 20);
-    const hysteresis = wasFloating ? 0 : 2;
-    const nextIsFloating = rect.bottom > availableBottom + hysteresis;
-
-    if (wasFloating !== nextIsFloating) {
-      isActionsFloatingRef.current = nextIsFloating;
-      setIsActionsFloating(nextIsFloating);
+    // Classic/Dark/Light keep their existing shared floating behavior.
+    root.style.removeProperty('--soridraw-action-fixed-left');
+    root.style.removeProperty('--soridraw-action-fixed-width');
+    if (!isActionsFloatingRef.current) {
+      isActionsFloatingRef.current = true;
+      setIsActionsFloating(true);
     }
   }, []);
 
@@ -6931,7 +6974,12 @@ const toggleCycleVariantSelection = (
   }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
   useEffect(() => {
-    const handleScroll = () => scheduleActionBarPlacement();
+    // Studio Black fixed Y no longer depends on scroll. The split workspace owns
+    // footer collision in one rAF-coalesced listener, so registering a second
+    // App-level scroll path here only duplicates layout work.
+    const handleScroll = () => {
+      if (!isStudioBlackActionMode) scheduleActionBarPlacement();
+    };
     const scheduleLayoutChange = () => {
       if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
       if (actionBarLayoutRafRef.current !== null) return;
@@ -6950,7 +6998,9 @@ const toggleCycleVariantSelection = (
 
     const handleWindowResizeEnd = () => scheduleLayoutChange();
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    if (!isStudioBlackActionMode) {
+      window.addEventListener('scroll', handleScroll, { passive: true });
+    }
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
     window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
     window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
@@ -6966,15 +7016,16 @@ const toggleCycleVariantSelection = (
         window.cancelAnimationFrame(actionBarLayoutRafRef.current);
         actionBarLayoutRafRef.current = null;
       }
-      window.removeEventListener('scroll', handleScroll);
+      if (!isStudioBlackActionMode) {
+        window.removeEventListener('scroll', handleScroll);
+      }
       window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
       window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
       window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
-      document.documentElement.style.removeProperty('--soridraw-action-docked-top');
-    };
-  }, [scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
+      };
+  }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
 
   useEffect(() => {
@@ -7079,9 +7130,11 @@ const toggleCycleVariantSelection = (
     ? 'hidden'
     : isActionButtonsCollapsed
       ? 'collapsed'
-      : isActionsFloating
+      : isStudioBlackActionMode
         ? 'floating'
-        : 'inline';
+        : isActionsFloating
+          ? 'floating'
+          : 'inline';
 
   // 299: Framer Motion can briefly retain an exiting portal copy while the
   // action row changes between floating and inline ownership.  Publish the
@@ -7098,55 +7151,59 @@ const toggleCycleVariantSelection = (
 
   useEffect(() => () => {
     delete document.documentElement.dataset.soridrawActionOwner;
-    document.documentElement.style.removeProperty('--soridraw-action-docked-top');
+    document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    if (actionCollapseSnapshotRafRef.current !== null) {
+      window.cancelAnimationFrame(actionCollapseSnapshotRafRef.current);
+      actionCollapseSnapshotRafRef.current = null;
+    }
+    actionCollapseScrollSnapshotRef.current = null;
+    actionCollapseRestorePendingRef.current = false;
   }, []);
 
   useLayoutEffect(() => {
-    if (!shouldShowActionButtons) return;
+    if (!shouldShowActionButtons || isActionButtonsCollapsed) return;
 
-    // Placement stays live in collapsed and expanded states. Studio Black now
-    // uses CSS-owned row/slot geometry, so this pass only refreshes the shared
-    // anchor coordinates and floating/inline decision.
+    if (isStudioBlackActionMode) {
+      // 535 — one lightweight mount sync only. Geometry changes after this are
+      // owned by the single anchor ResizeObserver above and by the split rAF fast
+      // path. Do not attach a second ResizeObserver or pane-scroll listener to
+      // the same action row.
+      actionCollapseRestorePendingRef.current = false;
+      actionCollapseScrollSnapshotRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+      syncActionBarLayoutMetrics();
+      const frame = window.requestAnimationFrame(syncActionBarLayoutMetrics);
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    if (actionCollapseRestorePendingRef.current) {
+      const snapshot = actionCollapseScrollSnapshotRef.current;
+      if (snapshot) {
+        const current = snapshot.host ? snapshot.host.scrollTop : window.scrollY;
+        const untouchedCollapsedPosition = snapshot.afterCollapse ?? current;
+        if (Math.abs(current - untouchedCollapsedPosition) <= 2) {
+          if (snapshot.host) snapshot.host.scrollTop = snapshot.before;
+          else window.scrollTo(0, snapshot.before);
+        }
+      }
+      actionCollapseRestorePendingRef.current = false;
+      actionCollapseScrollSnapshotRef.current = null;
+      document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
+    }
+
     syncActionBarLayoutMetrics();
     updateActionBarPlacement();
-
     const frame = window.requestAnimationFrame(() => {
       syncActionBarLayoutMetrics();
       updateActionBarPlacement();
     });
 
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => {
-          if (isSplitDraggingRef.current) return;
-          syncActionBarLayoutMetrics();
-          scheduleActionBarPlacement();
-        })
-      : null;
-
-    const anchor = actionButtonsAnchorRef.current;
-    const actionBar = actionButtonsBarRef.current;
-    const builderPane = anchor?.closest('.soridraw-studio-builder-pane');
-    const handleBuilderPaneScroll = () => {
-      if (isSplitDraggingRef.current) return;
-      scheduleActionBarPlacement();
-    };
-
-    if (observer && anchor) observer.observe(anchor);
-    if (observer && actionBar) observer.observe(actionBar);
-    if (observer && builderPane) observer.observe(builderPane);
-    builderPane?.addEventListener('scroll', handleBuilderPaneScroll, { passive: true });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      observer?.disconnect();
-      builderPane?.removeEventListener('scroll', handleBuilderPaneScroll);
-    };
+    return () => window.cancelAnimationFrame(frame);
   }, [
     isActionButtonsCollapsed,
     isActionsFloating,
     isStudioBlackActionMode,
     shouldShowActionButtons,
-    scheduleActionBarPlacement,
     syncActionBarLayoutMetrics,
     updateActionBarPlacement,
   ]);
@@ -15093,17 +15150,21 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           <div
             ref={actionButtonsAnchorRef}
             className={cn(
-              "relative",
-              // 532 — Studio Black always reserves one canonical action slot.
-              // Expanded/collapsed and floating/inline states therefore share the
-              // same bottom scroll range; only the visible control changes.
-              shouldShowActionButtons && (isStudioBlackActionMode || (!isActionButtonsCollapsed && !isActionsFloating))
+              "relative soridraw-studio-action-geometry-anchor",
+              // 535 — Studio Black uses this node only as an X/width geometry
+              // probe. It never reserves a second expanded-row slot, so collapse,
+              // expand and PC/mobile pane changes cannot alter the scroll range.
+              !isStudioBlackActionMode
+                && shouldShowActionButtons
+                && !isActionButtonsCollapsed
+                && !isActionsFloating
                 ? "soridraw-studio-action-anchor-expanded"
                 : "h-0"
             )}
-            data-soridraw-docked={!isActionsFloating ? "true" : "false"}
+            data-soridraw-docked={!isStudioBlackActionMode && !isActionsFloating ? "true" : "false"}
           >
             {shouldShowActionButtons
+              && !isStudioBlackActionMode
               && !isActionButtonsCollapsed
               && !isActionsFloating
               && renderExpandedActionBar('inline')}
@@ -15117,9 +15178,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   <motion.button
                     key="action-buttons-collapsed-toggle"
                     type="button"
-                    initial={{ opacity: 0, y: 8, scale: 1 }}
+                    initial={{ opacity: 0, y: 0, scale: 1 }}
                     animate={{ opacity: 1, y: 0, scale: [1, 1.1, 0.995, 1.045, 1] }}
-                    exit={{ opacity: 0, y: 8, scale: 1, transition: { duration: 0 } }}
+                    exit={{ opacity: 0, y: 0, scale: 1, transition: { duration: 0 } }}
                     transition={{
                       opacity: smoothActionPanelTransition,
                       y: smoothActionPanelTransition,
@@ -15144,7 +15205,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     onMouseEnter={() => {}}
                     onMouseLeave={() => {}}
                     aria-label="생성 버튼 펼치기"
-                    data-soridraw-placement={isActionsFloating ? 'floating' : 'inline'}
+                    data-soridraw-placement="floating"
                     className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFB400] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
                   >
                     <span className="soridraw-studio-action-collapsed-arrow relative flex h-9 w-9 items-center justify-center">
@@ -15152,7 +15213,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </span>
                   </motion.button>
                 </Portal>
-              ) : isActionsFloating ? (
+              ) : (isStudioBlackActionMode || isActionsFloating) ? (
                 <Portal>
                   {renderExpandedActionBar('floating')}
                 </Portal>

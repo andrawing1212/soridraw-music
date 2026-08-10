@@ -1307,10 +1307,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
 
-### 555차 — 생성바 하단 공통 여백 200px
-- 기준: 554차
-- Studio Black 생성바의 화면 하단 시각 여백을 모든 비율에서 200px로 통일.
-- 펼침/접힘이 같은 Y축 기준을 쓰는 기존 구조는 유지하고 공통 baseline 값만 변경.
-- PC / Tablet / Builder Mobile / 실제 Mobile 모두 동일 적용.
-- 명령창↔생성바용 93px(모바일) / 118px(비모바일) reserve 값과 분할/스크롤 로직은 변경하지 않음.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+## 556차 — 생성바 하단 공통 시각 여백 24px
+- 기준: `SORIDRAW_554차_모바일_명령창생성바_간격93px.zip` (555차의 200px 과대 적용은 폐기)
+- 사용자 의도는 생성바를 크게 띄우는 것이 아니라 화면 바닥과 생성바 사이에 육안상 1cm 미만의 작은 숨 쉴 공간을 두는 것이므로, Studio Black 공통 `--soridraw-action-visual-bottom-gap`을 `12px → 24px`로 조정했다.
+- PC / Tablet / Builder Mobile / 실제 Mobile 모두 동일한 공통 하단 기준을 사용한다. 펼침/접힘 시각 하단선 통일 규칙은 유지한다.
+- 명령창↔생성바 간격은 기존 승인값(Builder Mobile `93px`, 비모바일 `118px`)을 그대로 유지했다.
+- 분할바/스크롤/보컬·가사/Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+

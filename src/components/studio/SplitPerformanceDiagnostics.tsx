@@ -51,7 +51,10 @@ type PerfProbeProfileId =
   | 'musicnote-paint-content-hidden'
   | 'musicnote-paint-glyphs-off'
   | 'musicnote-paint-keyword-chips-off'
-  | 'musicnote-paint-title-meta-off';
+  | 'musicnote-paint-title-meta-off'
+  | 'musicnote-text-step-4'
+  | 'musicnote-text-step-8'
+  | 'musicnote-text-step-12';
 type PerfProbeRow = {
   id: PerfProbeProfileId;
   label: string;
@@ -133,6 +136,13 @@ const PERF_MUSICNOTE_TEXT_PAINT_PROFILES: Array<{ id: PerfProbeProfileId; label:
   { id: 'musicnote-paint-glyphs-off', label: '글자 Paint만 OFF' },
   { id: 'musicnote-paint-keyword-chips-off', label: '키워드 칩 Paint만 OFF' },
   { id: 'musicnote-paint-title-meta-off', label: '제목·메타 Paint만 OFF' },
+];
+
+const PERF_MUSICNOTE_TEXT_REFLOW_BUDGET_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
+  { id: 'baseline', label: '기준 · 매 픽셀 재배치' },
+  { id: 'musicnote-text-step-4', label: '텍스트 재배치 4px 단위' },
+  { id: 'musicnote-text-step-8', label: '텍스트 재배치 8px 단위' },
+  { id: 'musicnote-text-step-12', label: '텍스트 재배치 12px 단위' },
 ];
 
 const setPerfProbeProfile = (profile: PerfProbeProfileId) => {
@@ -330,6 +340,7 @@ const collectComputedStyleDiagnostics = (): PerfComputedStyleDiagnostics => {
     { label: 'musicnote-list', selector: '.soridraw-musicnote-list-start-divider' },
     { label: 'musicnote-card', selector: '.soridraw-musicnote-song-card' },
     { label: 'musicnote-copy', selector: '.soridraw-musicnote-song-copy' },
+    { label: 'musicnote-copy-layout', selector: '.soridraw-musicnote-song-copy-layout' },
     { label: 'musicnote-secondary', selector: '.soridraw-musicnote-song-secondary' },
     { label: 'library-page', selector: '.soridraw-library-theme' },
     { label: 'library-top', selector: '.soridraw-library-region-top' },
@@ -458,7 +469,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '598 · Music Note text layout-vs-paint A/B',
+    buildProfile: '599 · Music Note text reflow budget 4/8/12px A/B',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -474,7 +485,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [benchmarkRunning, setBenchmarkRunning] = useState(false);
   const [benchmarkMessage, setBenchmarkMessage] = useState('');
   const [probeRunning, setProbeRunning] = useState(false);
-  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout' | 'musicnote' | 'musicnote-card' | 'musicnote-text' | 'musicnote-paint'>('render');
+  const [probeKind, setProbeKind] = useState<'render' | 'area' | 'layout' | 'musicnote' | 'musicnote-card' | 'musicnote-text' | 'musicnote-paint' | 'musicnote-reflow'>('render');
   const [probeRows, setProbeRows] = useState<PerfProbeRow[]>([]);
   const [renderProbeRows, setRenderProbeRows] = useState<PerfProbeRow[]>([]);
   const [areaProbeRows, setAreaProbeRows] = useState<PerfProbeRow[]>([]);
@@ -483,6 +494,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [musicNoteCardProbeRows, setMusicNoteCardProbeRows] = useState<PerfProbeRow[]>([]);
   const [musicNoteTextProbeRows, setMusicNoteTextProbeRows] = useState<PerfProbeRow[]>([]);
   const [musicNotePaintProbeRows, setMusicNotePaintProbeRows] = useState<PerfProbeRow[]>([]);
+  const [musicNoteReflowProbeRows, setMusicNoteReflowProbeRows] = useState<PerfProbeRow[]>([]);
   const [environment, setEnvironment] = useState<PerfEnvironmentSnapshot | null>(null);
   const [environmentRunning, setEnvironmentRunning] = useState(false);
   const [manualInputRunning, setManualInputRunning] = useState(false);
@@ -681,7 +693,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     else if (probeKind === 'musicnote') setMusicNoteProbeRows(nextRows);
     else if (probeKind === 'musicnote-card') setMusicNoteCardProbeRows(nextRows);
     else if (probeKind === 'musicnote-text') setMusicNoteTextProbeRows(nextRows);
-    else setMusicNotePaintProbeRows(nextRows);
+    else if (probeKind === 'musicnote-paint') setMusicNotePaintProbeRows(nextRows);
+    else setMusicNoteReflowProbeRows(nextRows);
     if (probeIndexRef.current === 0) probeBaselineRef.current = benchmarkSummary;
 
     const nextIndex = probeIndexRef.current + 1;
@@ -699,14 +712,16 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                 ? '텍스트 구조 A/B 완료 · 디자인을 숨기지 않고 부모 레이아웃/contain 구조만 비교했습니다.'
                 : probeKind === 'musicnote-paint'
                   ? '텍스트 Layout/Paint A/B 완료 · 자리와 배치를 유지한 Paint 제거와 Layout+Paint 제거를 분리 비교했습니다.'
-                  : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
+                  : probeKind === 'musicnote-reflow'
+                    ? '텍스트 재배치 주기 A/B 완료 · 분할바/카드 외형은 실시간 유지하고 텍스트 내부 폭 계산만 4/8/12px 단위로 비교했습니다.'
+                    : '렌더 스캔 완료 · 기준 대비 렌더 비용 감소폭이 큰 항목을 우선 확인하세요.');
       return;
     }
 
     probeIndexRef.current = nextIndex;
     const nextProfile = profiles[nextIndex];
     setPerfProbeProfile(nextProfile.id);
-    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : probeKind === 'musicnote-card' ? '카드 내부 분해' : probeKind === 'musicnote-text' ? '텍스트 구조 A/B' : probeKind === 'musicnote-paint' ? 'Layout/Paint A/B' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
+    setBenchmarkMessage(`${probeKind === 'area' ? '영역 스캔' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : probeKind === 'musicnote-card' ? '카드 내부 분해' : probeKind === 'musicnote-text' ? '텍스트 구조 A/B' : probeKind === 'musicnote-paint' ? 'Layout/Paint A/B' : probeKind === 'musicnote-reflow' ? '텍스트 재배치 A/B' : '렌더 스캔'} ${nextIndex + 1}/${profiles.length} · ${nextProfile.label}`);
     probeStartTimerRef.current = window.setTimeout(() => {
       probeStartTimerRef.current = null;
       if (!probeRunningRef.current) return;
@@ -827,11 +842,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     setBenchmarkMessage('연속 rAF A/B 1/2 · 현재 이벤트 기반 rAF입니다. 분할바를 평소처럼 3~5초 계속 움직인 뒤 놓으세요.');
   };
 
-  const runProbeScan = (kind: 'render' | 'area' | 'layout' | 'musicnote' | 'musicnote-card' | 'musicnote-text' | 'musicnote-paint') => {
+  const runProbeScan = (kind: 'render' | 'area' | 'layout' | 'musicnote' | 'musicnote-card' | 'musicnote-text' | 'musicnote-paint' | 'musicnote-reflow') => {
     if (!ensureBenchmarkReady()) return;
     if (benchmarkRunning || probeRunningRef.current || manualInputRunningRef.current || samplingInputRunningRef.current || continuousInputRunningRef.current) return;
-    if ((kind === 'musicnote' || kind === 'musicnote-card' || kind === 'musicnote-text' || kind === 'musicnote-paint') && !document.querySelector('.soridraw-musicnote-page-shell')) {
-      setBenchmarkMessage(`${kind === 'musicnote-card' ? '카드 내부 분해' : kind === 'musicnote-text' ? '텍스트 구조 A/B' : kind === 'musicnote-paint' ? 'Layout/Paint A/B' : '뮤직노트 정밀 스캔'}은 뮤직노트가 열린 분할 화면에서 실행하세요.`);
+    if ((kind === 'musicnote' || kind === 'musicnote-card' || kind === 'musicnote-text' || kind === 'musicnote-paint' || kind === 'musicnote-reflow') && !document.querySelector('.soridraw-musicnote-page-shell')) {
+      setBenchmarkMessage(`${kind === 'musicnote-card' ? '카드 내부 분해' : kind === 'musicnote-text' ? '텍스트 구조 A/B' : kind === 'musicnote-paint' ? 'Layout/Paint A/B' : kind === 'musicnote-reflow' ? '텍스트 재배치 A/B' : '뮤직노트 정밀 스캔'}은 뮤직노트가 열린 분할 화면에서 실행하세요.`);
       return;
     }
     const profiles = kind === 'area'
@@ -846,7 +861,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
               ? PERF_MUSICNOTE_TEXT_LAYOUT_PROFILES
               : kind === 'musicnote-paint'
                 ? PERF_MUSICNOTE_TEXT_PAINT_PROFILES
-                : PERF_RENDER_PROBE_PROFILES;
+                : kind === 'musicnote-reflow'
+                  ? PERF_MUSICNOTE_TEXT_REFLOW_BUDGET_PROFILES
+                  : PERF_RENDER_PROBE_PROFILES;
     probeProfilesRef.current = profiles;
     probeRowsRef.current = [];
     probeBaselineRef.current = null;
@@ -860,11 +877,12 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     else if (kind === 'musicnote') setMusicNoteProbeRows([]);
     else if (kind === 'musicnote-card') setMusicNoteCardProbeRows([]);
     else if (kind === 'musicnote-text') setMusicNoteTextProbeRows([]);
-    else setMusicNotePaintProbeRows([]);
+    else if (kind === 'musicnote-paint') setMusicNotePaintProbeRows([]);
+    else setMusicNoteReflowProbeRows([]);
     probeRunningRef.current = true;
     setProbeRunning(true);
     setPerfProbeProfile(profiles[0].id);
-    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : kind === 'musicnote' ? '뮤직노트 정밀' : kind === 'musicnote-card' ? '카드 내부 분해' : kind === 'musicnote-text' ? '텍스트 구조 A/B' : kind === 'musicnote-paint' ? 'Layout/Paint A/B' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
+    setBenchmarkMessage(`${kind === 'area' ? '영역 스캔' : kind === 'layout' ? '좌표 A/B' : kind === 'musicnote' ? '뮤직노트 정밀' : kind === 'musicnote-card' ? '카드 내부 분해' : kind === 'musicnote-text' ? '텍스트 구조 A/B' : kind === 'musicnote-paint' ? 'Layout/Paint A/B' : kind === 'musicnote-reflow' ? '텍스트 재배치 A/B' : '렌더 스캔'} 1/${profiles.length} · ${profiles[0].label}`);
     window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, { detail: { layoutMode: getPerfProbeLayoutMode(profiles[0].id) } }));
   };
 
@@ -993,6 +1011,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         '',
         ...formatProbeLines('MUSICNOTE TEXT LAYOUT VS PAINT A/B', musicNotePaintProbeRows),
         '',
+        ...formatProbeLines('MUSICNOTE TEXT REFLOW BUDGET A/B', musicNoteReflowProbeRows),
+        '',
         '[REAL POINTER INPUT A/B]',
         ...(manualInputRows.length
           ? manualInputRows.map(({ mode, result: row }) => `mode=${mode} duration=${(row.durationMs / 1000).toFixed(2)}s fps=${row.estimatedFps} p95=${row.p95FrameMs}ms max=${row.maxFrameMs}ms events=${row.pointerEventCount} rate=${row.pointerEventsPerSecond}/s activeEventRate=${row.pointerActiveEventsPerSecond}/s activeSampleRate=${row.pointerActiveSamplesPerSecond}/s commitRate=${row.pointerCommitsPerSecond}/s commitP95=${row.pointerCommitIntervalP95Ms}ms coalesced=${row.pointerCoalescedCount} intervalAvg/P95=${row.pointerIntervalAvgMs}/${row.pointerIntervalP95Ms}ms batchAvg/max=${row.pointerBatchAvg}/${row.pointerBatchMax} inputToCommitAvg/P95/max=${row.inputToCommitAvgMs}/${row.inputToCommitP95Ms}/${row.inputToCommitMaxMs}ms longTask=${row.longTaskCount}/${row.longTaskTotalMs}ms`)
@@ -1025,7 +1045,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         <button type="button" onClick={toggleEnabled} className={enabled ? 'is-on' : ''}>
           PERF {enabled ? 'ON' : 'OFF'}
         </button>
-        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : probeKind === 'musicnote-card' ? '카드 내부' : probeKind === 'musicnote-text' ? '텍스트 구조' : probeKind === 'musicnote-paint' ? 'Layout/Paint' : '렌더'} 스캔 중` : verdict}</strong>
+        <strong>{probeRunning ? `${probeKind === 'area' ? '영역' : probeKind === 'layout' ? '좌표 A/B' : probeKind === 'musicnote' ? '뮤직노트 정밀' : probeKind === 'musicnote-card' ? '카드 내부' : probeKind === 'musicnote-text' ? '텍스트 구조' : probeKind === 'musicnote-paint' ? 'Layout/Paint' : probeKind === 'musicnote-reflow' ? '텍스트 재배치' : '렌더'} 스캔 중` : verdict}</strong>
         <button type="button" onClick={() => setCollapsed((current) => !current)} aria-label={collapsed ? '진단 펼치기' : '진단 접기'}>
           {collapsed ? '＋' : '－'}
         </button>
@@ -1057,6 +1077,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote-paint')} disabled={benchmarkRunning || probeRunning || !enabled}>
               {probeRunning && probeKind === 'musicnote-paint' ? 'Layout/Paint A/B 중…' : 'Layout/Paint A/B'}
             </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('musicnote-reflow')} disabled={benchmarkRunning || probeRunning || !enabled}>
+              {probeRunning && probeKind === 'musicnote-reflow' ? '텍스트 재배치 A/B 중…' : '텍스트 재배치 A/B'}
+            </button>
             <button type="button" className="is-secondary" onClick={runManualInputAB} disabled={benchmarkRunning || probeRunning || manualInputRunning || samplingInputRunning || continuousInputRunning || !enabled}>
               {manualInputRunning ? `실사용 입력 ${manualInputRows.length + 1}/2` : '실사용 입력 A/B'}
             </button>
@@ -1072,7 +1095,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 고정 · 텍스트 구조: contain/Grid 행 비교 · 입력: Move/Raw/rAF · 환경: DEV/PROD</span>
+            <span>자동: 1400×900 고정 · 텍스트 재배치: 4/8/12px · 입력: Move/Raw/rAF · 환경: DEV/PROD</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {!displayResult ? (
@@ -1167,7 +1190,9 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                                 ? '뮤직노트 텍스트 구조 A/B — 기준 대비 렌더 비용'
                                 : probeKind === 'musicnote-paint'
                                   ? '뮤직노트 텍스트 Layout/Paint A/B — 기준 대비 렌더 비용'
-                                  : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
+                                  : probeKind === 'musicnote-reflow'
+                                    ? '뮤직노트 텍스트 재배치 주기 A/B — 기준 대비 렌더 비용'
+                                    : '렌더 A/B — 기준 대비 렌더 비용'}</summary>
                       <div className="soridraw-split-perf-probe-grid">
                         {probeRows.map((row) => {
                           const delta = probeBaselineRender && row.id !== 'baseline'
@@ -1274,7 +1299,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   </details>
                 </section>
               </div>
-              <p className="soridraw-split-perf-note is-compact">594: 591 직접 pane 좌표 런타임은 유지합니다. 기존 React↔Native 실사용 A/B도 보존하고, 입력 샘플링 A/B에서 PointerMove와 PointerRawUpdate를 실제 손 드래그로 비교합니다. 120ms 초과 정지 구간은 입력률 계산에서 제외하며, 종료 후 기본 React PointerMove로 자동 복구합니다.</p>
+              <p className="soridraw-split-perf-note is-compact">599: 591 직접 pane 좌표 런타임은 유지합니다. 598에서 Paint가 아니라 텍스트 내부 Layout 재계산이 병목으로 확인되어, 분할바·카드 외형은 매 프레임 그대로 움직이고 카드 중앙 텍스트 내부 폭 계산만 4/8/12px 단위로 줄여 비교합니다. 진단 종료 즉시 정확한 원래 폭으로 복구합니다.</p>
             </>
           )}
         </div>

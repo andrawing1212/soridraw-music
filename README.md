@@ -1635,3 +1635,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 동일한 1400×900 자동 벤치마크에서 다음을 순차 비교한다: 기준, 텍스트 본문 `visibility:hidden`(레이아웃 유지·Paint 제거), 텍스트 본문 `content-visibility:hidden`(내부 Layout+Paint 스킵), 글자 glyph Paint만 OFF, 키워드 칩 Paint만 OFF, 제목·메타 Paint만 OFF.
 - 모든 변경은 진단 중에만 `data-soridraw-perf-probe`로 임시 적용되고 종료 즉시 원복된다. 일반 사용자 화면에는 적용되지 않는다.
 - 목적: 596에서 확인된 `텍스트 본문 전체 OFF`의 큰 개선이 텍스트 레이아웃 계산 때문인지 실제 glyph/chip Paint 때문인지 분리해, 다음 실제 최적화 방향을 한 가지로 확정한다.
+
+## 599차 — 뮤직노트 텍스트 재배치 주기 4/8/12px A/B
+- 기준: `598차 뮤직노트 텍스트 Layout/Paint A/B`.
+- 598 결과에서 `visibility:hidden`/glyph/chip/title paint 제거는 개선이 없고 `content-visibility:hidden`만 렌더 비용을 크게 줄여, 병목이 Paint가 아니라 카드 중앙 텍스트 내부의 폭별 Layout 재계산임을 확인했다.
+- 뮤직노트 카드의 기존 `.soridraw-musicnote-song-copy` 안에 `.soridraw-musicnote-song-copy-layout` 내부 포맷팅 박스를 추가했다. 일반 상태에서는 `w-full`로 기존 레이아웃과 동일하게 동작한다.
+- 관리자 PERF에 `텍스트 재배치 A/B`를 추가했다. 동일한 `1400×900`, direct pane geometry, 3세트 중앙값 조건에서 다음을 비교한다.
+  - 기준: 텍스트 내부 폭을 기존처럼 pane 변화에 맞춰 매 프레임 재계산.
+  - 4px 단위: 카드/분할바 외형은 실시간 유지, 텍스트 내부 포맷팅 폭만 pane이 4px bucket을 넘을 때 갱신.
+  - 8px 단위: 동일 원칙으로 8px bucket.
+  - 12px 단위: 동일 원칙으로 12px bucket.
+- 진단 중 바깥 `.soridraw-musicnote-song-copy`는 실제 카드 폭을 계속 따라가고 `overflow:hidden`으로 내부 포맷팅 박스를 클립한다. 텍스트 내부 폭만 bucket 경계에서 갱신하며, 드래그 종료 즉시 inline width를 제거해 정확한 최종 폭/원래 디자인으로 복구한다.
+- 591 직접 pane 좌표 런타임, Library, Recent, Classic, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않았다.
+- 이 단계는 진단 전용이며 4/8/12px 중 어떤 값을 실제 기본 런타임에 적용할지는 Vercel PROD 결과와 육안 확인 후 결정한다.

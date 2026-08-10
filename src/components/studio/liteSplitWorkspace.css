@@ -1117,3 +1117,41 @@
     visibility: hidden !important;
   }
 }
+
+/* 599 wrapper is layout-transparent outside the diagnostic. This keeps the
+ * approved Music Note card box tree identical to 598 in normal runtime. */
+.soridraw-musicnote-song-copy > .soridraw-musicnote-song-copy-layout {
+  display: contents;
+}
+
+/* 599 — Music Note text reflow budget A/B. Admin diagnostic only.
+ * The outer copy flex item continues to follow the real card width every frame.
+ * The inner text formatting box is clipped by that outer item and only receives
+ * a new explicit width when the pane crosses a 4/8/12px bucket. On pointer-up
+ * LiteStudioSplitWorkspace removes the inline width immediately, so the exact
+ * approved layout is restored. */
+@media (min-width: 1100px) {
+  html:is(
+    [data-soridraw-perf-probe="musicnote-text-step-4"],
+    [data-soridraw-perf-probe="musicnote-text-step-8"],
+    [data-soridraw-perf-probe="musicnote-text-step-12"]
+  )
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    overflow: hidden !important;
+  }
+
+  html:is(
+    [data-soridraw-perf-probe="musicnote-text-step-4"],
+    [data-soridraw-perf-probe="musicnote-text-step-8"],
+    [data-soridraw-perf-probe="musicnote-text-step-12"]
+  )
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    align-self: flex-start !important;
+    min-width: 0 !important;
+    max-width: none !important;
+  }
+}

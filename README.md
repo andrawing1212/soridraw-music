@@ -1316,3 +1316,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 생성바 크기/버튼 구성/분할바/PC↔Mobile 스크롤 앵커/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+
+## 560차 — 컴팩트 전환 1074px 단일 단계 · 분할 리사이즈 경량화
+- 기준: `SORIDRAW_559차_554기준_생성바하단30px_상단간격동기고정.zip`.
+- 분할바로 Builder 폭을 줄일 때 서로 다른 임계값에서 순차적으로 변하던 UI를 하나로 통합했다. 기존에는 헤더 잠금/랜덤/리셋 아이콘이 1120px, 보컬 멤버 그리드가 1100px, `(n/n)` 카운터 숨김과 분위기/주제 5열 키워드가 1074px에서 각각 바뀌어 3단계처럼 보였다.
+- Studio Black Builder desktop의 위 항목을 모두 **1074px 한 임계값**에서 동시에 전환하도록 통합했다. 따라서 분위기/주제가 5개 키워드 열로 바뀌는 순간 잠금/랜덤/리셋 크기, 메뉴 타이틀 compact 상태, `(n/n)` 숨김, 보컬 멤버 compact 배치도 함께 바뀐다.
+- 성능: 1120/1100의 별도 container-query 단계 2개를 제거하고 1074px 블록 하나로 합쳤다. 또한 카드 헤더 액션과 키워드 버튼의 Tailwind `transition-all`이 폭/높이 geometry까지 보간하지 않도록 paint/클릭 피드백(background/color/opacity/transform)만 transition 대상으로 제한했다. 새 React state, ResizeObserver, scroll/resize listener, DOM 측정은 추가하지 않았다.
+- 559차 생성바 위치/하단 간격, 스크롤 앵커, PC↔Mobile 모드 기준, 카드 기능값, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
+- 상태: 코드 반영 완료 · 실사용 검증 전.

@@ -794,40 +794,6 @@
   text-overflow: ellipsis !important;
 }
 
-/* When the PC pane narrows, header tools yield space to the menu title. */
-@container (max-width: 1120px) {
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions {
-    gap: 4px !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions > button:has(> svg:only-child) {
-    width: 30px !important;
-    min-width: 30px !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    padding: 0 !important;
-    border-radius: 9px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions > button:has(> svg:only-child) > svg {
-    width: 14px !important;
-    height: 14px !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header h3 {
-    font-size: 18px !important;
-    gap: 6px !important;
-    min-width: 0 !important;
-  }
-
-  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header h3 > span:last-child {
-    font-size: 12px !important;
-    margin-left: 4px !important;
-  }
-}
 
 /* 185: explicit click feedback, tempo mobile fit, and result action colors. */
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active {
@@ -1731,14 +1697,54 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root button.so
   line-height: 1 !important;
 }
 
-@container (max-width: 1100px) {
+/* 560 performance: responsive geometry must not be animated by Tailwind's
+ * transition-all while the pane width changes. Keep only paint/click feedback
+ * transitions so the splitter does not spend frames interpolating width/height. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane :is(
+  .soridraw-card-header-actions > button,
+  .soridraw-category-keyword-grid button
+) {
+  transition-property: background-color, color, opacity, transform !important;
+  transition-duration: 120ms !important;
+}
+
+/* 560 — One compact-desktop threshold.
+ * Header actions, counters, Mood/Theme five-column keywords and the vocal member
+ * compact layout now switch together at 1074px. Keeping one breakpoint removes
+ * the visible 1120 -> 1100 -> 1074 staircase while the splitter is moving. */
+@container (max-width: 1074px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions {
+    gap: 4px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions > button:has(> svg:only-child) {
+    width: 30px !important;
+    min-width: 30px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    padding: 0 !important;
+    border-radius: 9px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header-actions > button:has(> svg:only-child) > svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-card-header h3 {
+    font-size: 18px !important;
+    gap: 6px !important;
+    min-width: 0 !important;
+  }
+
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-vocal-member-grid {
     grid-template-columns: minmax(0, 1fr) !important;
   }
-}
 
-@container (max-width: 1074px) {
-  /* 211: one compact-desktop threshold, aligned with the start of the top-nav '마' in the reference video. */
+  /* 211: compact desktop keyword/counter state shares this exact threshold. */
   :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] :is(
     [data-studio-menu="mood"],
     [data-studio-menu="theme"]

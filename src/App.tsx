@@ -16838,23 +16838,101 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 </div>
               </div>
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
-              <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-                <HistoryRouteWrapper
-                  isFavoritesLoading={isFavoritesLoading}
-                  hasMoreFavorites={hasMoreFavorites}
-                  isLoadingMoreFavorites={isLoadingMoreFavorites}
-                  loadMoreFavorites={loadMoreFavorites}
-                  searchFavoritesOnServer={searchFavoritesOnServer}
-                  refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-                  toggleFavorite={toggleFavorite}
-                  updateFavorite={updateFavorite}
-                  clearAllFavorites={clearAllFavorites}
-                  unlockAllFavorites={unlockAllFavorites}
-                  lockAllFavorites={lockAllFavorites}
-                  user={user || auth.currentUser}
-                  handleLogin={handleLogin}
-                />
-              </Suspense>
+              (user || auth.currentUser) ? (
+                <StudioPageFrame
+                  workspaceView="music-note-rail-test"
+                  lockViewport={false}
+                  leftRail={
+                    <StudioLeftRail
+                      activeWorkspace="music-note"
+                      onCreate={() => {
+                        selectStudioWorkspaceView('create');
+                        navigate('/studio');
+                      }}
+                      onRecentSongs={() => {
+                        selectStudioWorkspaceView('recent');
+                        navigate('/studio');
+                      }}
+                      onMusicNote={() => navigate('/history')}
+                      onLibrary={() => {
+                        clearSunoLibrarySignal();
+                        navigate('/suno-library');
+                      }}
+                      onSearch={openGlobalSearchModal}
+                      onApiSettings={() => navigate('/suno-api-settings')}
+                      onLab={() => navigate('/lab')}
+                      onProfile={() => navigate('/my-page')}
+                      onSettings={() => navigate('/my-page?tab=settings')}
+                      onPlan={() => navigate('/my-page?tab=plan')}
+                      onBilling={() => navigate('/my-page?tab=billing')}
+                      onLogout={handleLogout}
+                      profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
+                      profileEmail={user?.email || ''}
+                      profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
+                    />
+                  }
+                  rightRail={
+                    <StudioRightRail
+                      isGenerating={isGenerating}
+                      runningCount={runningGenerationCount}
+                      queuedCount={queuedGenerationCount}
+                      history={history}
+                      selectedIndex={historyIndex}
+                      remainingCredits={sunoRemainingCredits}
+                      creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                      selectedKeywords={liveSelectedKeywordItems}
+                      onRemoveSelectedKeyword={removeLiveSelectedKeyword}
+                      formatTime={formatStudioDashboardTime}
+                      formatSongTitle={formatUnifiedTitle}
+                      onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
+                      onOpenSong={(song, index) => {
+                        selectStudioWorkspaceView('recent');
+                        navigate('/studio');
+                        window.requestAnimationFrame(() => openStudioDashboardSong(song, index));
+                      }}
+                      isSongUnread={isStudioDashboardSongUnread}
+                      isSongFavorited={isSongFavorited}
+                      onOpenApiSettings={() => navigate('/suno-api-settings')}
+                    />
+                  }
+                >
+                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                    <HistoryRouteWrapper
+                      isFavoritesLoading={isFavoritesLoading}
+                      hasMoreFavorites={hasMoreFavorites}
+                      isLoadingMoreFavorites={isLoadingMoreFavorites}
+                      loadMoreFavorites={loadMoreFavorites}
+                      searchFavoritesOnServer={searchFavoritesOnServer}
+                      refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                      toggleFavorite={toggleFavorite}
+                      updateFavorite={updateFavorite}
+                      clearAllFavorites={clearAllFavorites}
+                      unlockAllFavorites={unlockAllFavorites}
+                      lockAllFavorites={lockAllFavorites}
+                      user={user || auth.currentUser}
+                      handleLogin={handleLogin}
+                    />
+                  </Suspense>
+                </StudioPageFrame>
+              ) : (
+                <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                  <HistoryRouteWrapper
+                    isFavoritesLoading={isFavoritesLoading}
+                    hasMoreFavorites={hasMoreFavorites}
+                    isLoadingMoreFavorites={isLoadingMoreFavorites}
+                    loadMoreFavorites={loadMoreFavorites}
+                    searchFavoritesOnServer={searchFavoritesOnServer}
+                    refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                    toggleFavorite={toggleFavorite}
+                    updateFavorite={updateFavorite}
+                    clearAllFavorites={clearAllFavorites}
+                    unlockAllFavorites={unlockAllFavorites}
+                    lockAllFavorites={lockAllFavorites}
+                    user={null}
+                    handleLogin={handleLogin}
+                  />
+                </Suspense>
+              )
             ) : (
               <Navigate to="/" replace />
             )

@@ -40,9 +40,10 @@ type StudioPageFrameProps = {
   leftRail: ReactNode;
   rightRail: ReactNode;
   children: ReactNode;
+  lockViewport?: boolean;
 };
 
-export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children }: StudioPageFrameProps) {
+export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children, lockViewport = true }: StudioPageFrameProps) {
   const isMobileViewport = useMediaQuery('(max-width: 1099px)');
   const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
   const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
@@ -52,15 +53,20 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   useLayoutEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-    root.classList.add('soridraw-studio-route-active');
-    body.classList.add('soridraw-studio-route-active');
+
+    if (lockViewport) {
+      root.classList.add('soridraw-studio-route-active');
+      body.classList.add('soridraw-studio-route-active');
+    }
 
     return () => {
-      root.classList.remove('soridraw-studio-route-active');
-      body.classList.remove('soridraw-studio-route-active');
+      if (lockViewport) {
+        root.classList.remove('soridraw-studio-route-active');
+        body.classList.remove('soridraw-studio-route-active');
+      }
       delete root.dataset.soridrawStudioWorkspaceView;
     };
-  }, []);
+  }, [lockViewport]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.soridrawStudioWorkspaceView = workspaceView;

@@ -1326,3 +1326,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 559차 생성바 위치/하단 간격, 스크롤 앵커, PC↔Mobile 모드 기준, 카드 기능값, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 수정 파일: `src/components/studio/studioLayout.css`, `README.md`.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 562차 - 뮤직노트 양쪽 레일 성능 비교 테스트
+- 기준: 560차 (`SORIDRAW_560차_컴팩트전환_1074px단일화_분할최적화.zip`). 561차 최적화 실험은 폐기하고 사용하지 않음.
+- `/history` 뮤직노트 페이지에 Studio Black의 좌측 메뉴 레일과 우측 대시보드 레일을 동일하게 장착.
+- 이번 차수에서는 뮤직노트/라이브러리 1:1 분할은 아직 적용하지 않음. 목적은 동일한 양쪽 레일을 가진 상태에서 뮤직노트 단일 페이지의 프레임/체감 성능을 Studio와 비교하는 것.
+- `StudioPageFrame`에 `lockViewport` 옵션을 추가. Studio는 기존 기본값(`true`)을 유지하고, 뮤직노트 테스트 셸은 `false`로 사용하여 기존 뮤직노트 문서 스크롤/레이아웃을 보존함.
+- 뮤직노트 본문 디자인/검색/필터/곡 카드/모달/데이터 로직은 변경하지 않음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

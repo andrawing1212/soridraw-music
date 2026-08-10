@@ -919,7 +919,7 @@
   }
 }
 
-/* Keep the expanded admin tool compact even with the 592 precision button. */
+/* Keep the expanded admin tool compact with the 593 diagnostic button set. */
 .soridraw-split-perf-benchmark-row {
   flex-wrap: wrap;
 }

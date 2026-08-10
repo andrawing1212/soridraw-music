@@ -19,7 +19,10 @@ import {
   publishSplitPerfBenchmarkSummary,
   recordSplitPerfApply,
   recordSplitPerfFlush,
+  recordSplitPerfPointerCommit,
+  recordSplitPerfPointerInput,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
+  SPLIT_PERF_INPUT_MODE_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
 } from './splitPerfDiagnostics';
 
@@ -45,6 +48,7 @@ const CONTENT_TABLET_MAX = 1080;
 const BENCHMARK_SURFACE_WIDTH = 1400;
 const BENCHMARK_SURFACE_HEIGHT = 900;
 type BenchmarkLayoutMode = 'css-var' | 'direct';
+type PointerInputMode = 'react' | 'native';
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -166,6 +170,7 @@ export default function LiteStudioSplitWorkspace({
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(() => readStoredCollapse(BUILDER_COLLAPSED_STORAGE_KEY));
   const [isResultCollapsed, setIsResultCollapsed] = useState(() => readStoredCollapse(RESULT_COLLAPSED_STORAGE_KEY));
+  const [pointerInputMode, setPointerInputMode] = useState<PointerInputMode>('react');
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const resultCollapsedRef = useRef(isResultCollapsed);
   const percentRef = useRef(readStoredPercent());
@@ -201,6 +206,7 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkTimerRef = useRef<number | null>(null);
   const benchmarkRunningRef = useRef(false);
   const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('direct');
+  const pointerInputModeRef = useRef<PointerInputMode>('react');
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -682,6 +688,7 @@ export default function LiteStudioSplitWorkspace({
     // the same rAF. This keeps the approved live boundary while avoiding a
     // custom-property invalidation wave through the entire pane subtree.
     applyPercent(nextPercent, true);
+    recordSplitPerfPointerCommit(performance.now());
     if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
   }, [applyPercent]);
 
@@ -690,6 +697,22 @@ export default function LiteStudioSplitWorkspace({
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(flushPointer);
   }, [flushPointer]);
+
+  const readCoalescedCount = useCallback((event: PointerEvent) => {
+    try {
+      const coalesced = event.getCoalescedEvents?.();
+      return Math.max(1, coalesced?.length || 1);
+    } catch {
+      return 1;
+    }
+  }, []);
+
+  const handleNativePointerMove = useCallback((event: PointerEvent) => {
+    if (pointerInputModeRef.current !== 'native' || !draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    const receivedAt = performance.now();
+    recordSplitPerfPointerInput('native', receivedAt, readCoalescedCount(event));
+    schedulePointer(event.clientX);
+  }, [readCoalescedCount, schedulePointer]);
 
   const finishDrag = useCallback((event?: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current) return;
@@ -701,6 +724,7 @@ export default function LiteStudioSplitWorkspace({
     }
     flushPointer();
     draggingRef.current = false;
+    splitterRef.current?.removeEventListener('pointermove', handleNativePointerMove);
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -717,7 +741,7 @@ export default function LiteStudioSplitWorkspace({
     finishSplitPerfDrag();
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragViewportAnchors]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, handleNativePointerMove, readExternalControls, restoreDragViewportAnchors]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -752,12 +776,16 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: 'Lite V2 · minimal external writes + native leaf isolation (578)',
+      engine: `Lite V2 · direct geometry + ${pointerInputModeRef.current} pointer input (593)`,
       builder: builderRef.current,
       result: resultRef.current,
+      inputMode: pointerInputModeRef.current,
     });
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (pointerInputModeRef.current === 'native') {
+      event.currentTarget.addEventListener('pointermove', handleNativePointerMove, { passive: true });
+    }
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-lite-split-dragging');
     document.body.style.cursor = 'ew-resize';
@@ -766,7 +794,9 @@ export default function LiteStudioSplitWorkspace({
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    if (pointerInputModeRef.current !== 'react' || !draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    const nativeEvent = event.nativeEvent;
+    recordSplitPerfPointerInput('react', performance.now(), readCoalescedCount(nativeEvent));
     schedulePointer(event.clientX);
   };
 
@@ -1042,6 +1072,7 @@ export default function LiteStudioSplitWorkspace({
             benchmarkSurface,
             benchmarkSurfacePass: surfacePass,
             layoutMode: requestedLayoutMode,
+            inputMode: 'auto',
           });
           emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}`);
           runLegs(4, 1000, true, () => {
@@ -1190,6 +1221,18 @@ export default function LiteStudioSplitWorkspace({
   }, [connectTopCardObserver, workspaceRequestId, workspaceView]);
 
   useEffect(() => {
+    const handleInputMode = (event: Event) => {
+      const detail = (event as CustomEvent<{ mode?: PointerInputMode }>).detail;
+      const next: PointerInputMode = detail?.mode === 'native' ? 'native' : 'react';
+      if (draggingRef.current) return;
+      pointerInputModeRef.current = next;
+      setPointerInputMode(next);
+    };
+    window.addEventListener(SPLIT_PERF_INPUT_MODE_EVENT, handleInputMode as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_INPUT_MODE_EVENT, handleInputMode as EventListener);
+  }, []);
+
+  useEffect(() => {
     const handleWindowPointerUp = () => finishDrag();
     window.addEventListener('pointerup', handleWindowPointerUp, { passive: true });
     window.addEventListener('pointercancel', handleWindowPointerUp, { passive: true });
@@ -1213,7 +1256,7 @@ export default function LiteStudioSplitWorkspace({
       aria-valuemax={MAX_PERCENT}
       aria-valuenow={Math.round(percentRef.current)}
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
+      onPointerMove={pointerInputMode === 'react' ? handlePointerMove : undefined}
       onPointerUp={finishDrag}
       onPointerCancel={finishDrag}
       onKeyDown={handleKeyDown}

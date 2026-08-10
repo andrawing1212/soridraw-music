@@ -1555,3 +1555,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모든 A/B 시각 변경은 진단 동안만 `data-soridraw-perf-probe`로 적용되고 종료 즉시 원복한다. Library/Recent/일반 Studio 런타임에는 적용하지 않는다.
 - 종합 진단서에 `[MUSICNOTE RESIDUAL A/B]` 결과를 추가했다.
 - 591의 직접 pane 좌표 실런타임, 1400×900 자동 벤치, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+
+## 593차 — 실제 마우스 Pointer 입력 경로 A/B
+
+- 기준: 592차 `Music Note residual bottleneck A/B + direct runtime`.
+- 591차의 직접 pane 좌표 실런타임과 592차 잔여 병목 진단은 그대로 유지한다.
+- 자동 벤치마크가 내부 `applyPercent()`를 직접 호출해 실제 손 드래그의 PointerEvent/React 이벤트 경로를 건너뛰는 차이를 분리하기 위해 관리자 PERF에 `실사용 입력 A/B`를 추가했다.
+- `실사용 입력 A/B`는 사용자가 실제 분할바를 3~5초씩 두 번 움직이는 반자동 검사다. 1회차는 기존 React `onPointerMove`, 2회차는 드래그 중 splitter에 직접 연결한 Native `pointermove` listener를 사용한다.
+- 각 실제 드래그에서 pointer 이벤트 수/초, coalesced 이벤트 수, 이벤트 간격 평균/P95, 한 rAF에 합쳐진 입력 batch 평균/최대, 마지막 입력 수신→실제 pane geometry 반영 평균/P95/최대, 실제 FPS/P95/Long Task를 함께 기록한다.
+- Native 모드는 진단 중에만 사용하며 A/B 종료 또는 진단 패널 unmount 시 기존 React 입력 방식으로 자동 복구한다. 실제 기본 런타임은 아직 React 입력을 유지한다.
+- 종합 진단서에 `[REAL POINTER INPUT A/B]` 섹션을 추가해 캡처 없이 텍스트만으로 실제 마우스 입력 경로 비교가 가능하다.
+- Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않는다.

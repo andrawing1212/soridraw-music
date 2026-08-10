@@ -296,11 +296,12 @@ export default function AdminAppSettingsPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-black text-[var(--text-primary)]">품질·성능 진단 도구</h3>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--text-secondary)]">
-                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 뮤직노트 정밀/렌더/영역/좌표 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 590차부터 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없습니다. 591차의 직접 pane 좌표 실런타임은 유지하며, 592차 뮤직노트 정밀 스캔은 전환효과·카드 Paint·content-visibility·영역 contain·반응형 판정을 각각 독립 비교합니다.
+                  관리자 전용 품질·성능 도구 모음입니다. 자동 분할 벤치마크, 뮤직노트 정밀/렌더/영역/좌표 A/B, 실제 마우스 입력 A/B, DEV·PROD 실행 환경 진단과 종합 진단서 복사를 함께 보관합니다. 자동 벤치마크는 1400×900 고정 표면·고정 스크롤·고정 이동거리로 실행되어 창 크기를 사람이 맞출 필요가 없습니다. 591차의 직접 pane 좌표 실런타임은 유지하며, 593차 실사용 입력 A/B는 React onPointerMove와 Native PointerEvent를 실제 마우스 드래그 2회로 비교하고 종료 후 기존 React 입력으로 자동 복구합니다.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-[var(--text-secondary)]">
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">자동 벤치마크</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">뮤직노트 정밀 A/B</span>
+                  <span className="rounded-lg bg-white/[0.04] px-2 py-1">실사용 Pointer A/B</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">렌더 A/B</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">영역 이진 스캔</span>
                   <span className="rounded-lg bg-white/[0.04] px-2 py-1">좌표 A/B</span>

@@ -75,6 +75,17 @@ export type SplitPerfResult = {
   benchmarkSurface: string | null;
   benchmarkSurfacePass: boolean | null;
   layoutMode: 'css-var' | 'direct' | null;
+  inputMode: 'react' | 'native' | 'auto' | null;
+  pointerEventCount: number;
+  pointerCoalescedCount: number;
+  pointerEventsPerSecond: number;
+  pointerIntervalAvgMs: number;
+  pointerIntervalP95Ms: number;
+  pointerBatchAvg: number;
+  pointerBatchMax: number;
+  inputToCommitAvgMs: number;
+  inputToCommitP95Ms: number;
+  inputToCommitMaxMs: number;
   createdAt: number;
 };
 
@@ -115,6 +126,13 @@ type ActiveDrag = {
   benchmarkSurface: string | null;
   benchmarkSurfacePass: boolean | null;
   layoutMode: 'css-var' | 'direct' | null;
+  inputMode: 'react' | 'native' | 'auto' | null;
+  pointerEventTimes: number[];
+  pointerCoalescedCount: number;
+  pointerPendingBatch: number;
+  pointerBatches: number[];
+  lastPointerInputAt: number | null;
+  inputToCommitLatencies: number[];
   rafId: number | null;
 };
 
@@ -125,6 +143,7 @@ export const SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY = 'soridraw_admin_split_perf
 export const SPLIT_PERF_TOOL_VISIBILITY_EVENT = 'soridraw:split-perf-tool-visibility';
 export const SPLIT_PERF_BENCHMARK_REQUEST_EVENT = 'soridraw:split-perf-benchmark-request';
 export const SPLIT_PERF_BENCHMARK_STATUS_EVENT = 'soridraw:split-perf-benchmark-status';
+export const SPLIT_PERF_INPUT_MODE_EVENT = 'soridraw:split-perf-input-mode';
 
 export const readSplitPerfToolVisibility = () => {
   if (typeof window === 'undefined') return true;
@@ -387,6 +406,7 @@ export const beginSplitPerfDrag = ({
   benchmarkSurface = null,
   benchmarkSurfacePass = null,
   layoutMode = null,
+  inputMode = null,
 }: {
   workspaceView?: string;
   engine: string;
@@ -395,6 +415,7 @@ export const beginSplitPerfDrag = ({
   benchmarkSurface?: string | null;
   benchmarkSurfacePass?: boolean | null;
   layoutMode?: 'css-var' | 'direct' | null;
+  inputMode?: 'react' | 'native' | 'auto' | null;
 }) => {
   if (!enabled || typeof window === 'undefined' || typeof document === 'undefined') return;
   if (active?.rafId !== null && active?.rafId !== undefined) window.cancelAnimationFrame(active.rafId);
@@ -427,9 +448,36 @@ export const beginSplitPerfDrag = ({
     benchmarkSurface,
     benchmarkSurfacePass,
     layoutMode,
+    inputMode,
+    pointerEventTimes: [],
+    pointerCoalescedCount: 0,
+    pointerPendingBatch: 0,
+    pointerBatches: [],
+    lastPointerInputAt: null,
+    inputToCommitLatencies: [],
     rafId: null,
   };
   runRafProbe();
+};
+
+export const recordSplitPerfPointerInput = (inputMode: 'react' | 'native', receivedAt: number, coalescedCount = 1) => {
+  if (!enabled || !active) return;
+  active.inputMode = inputMode;
+  const timestamp = Number.isFinite(receivedAt) ? receivedAt : now();
+  active.pointerEventTimes.push(timestamp);
+  active.pointerCoalescedCount += Math.max(1, Math.round(coalescedCount || 1));
+  active.pointerPendingBatch += 1;
+  active.lastPointerInputAt = timestamp;
+};
+
+export const recordSplitPerfPointerCommit = (committedAt: number) => {
+  if (!enabled || !active || active.pointerPendingBatch <= 0) return;
+  const timestamp = Number.isFinite(committedAt) ? committedAt : now();
+  active.pointerBatches.push(active.pointerPendingBatch);
+  active.pointerPendingBatch = 0;
+  if (active.lastPointerInputAt !== null) {
+    active.inputToCommitLatencies.push(Math.max(0, timestamp - active.lastPointerInputAt));
+  }
 };
 
 export const recordSplitPerfFlush = (durationMs: number, contentCommitted: boolean) => {
@@ -461,6 +509,12 @@ export const finishSplitPerfDrag = () => {
   const misc = active.applySamples.map((sample) => sample.miscMs);
   const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory;
   const heapMb = memory?.usedJSHeapSize ? memory.usedJSHeapSize / 1024 / 1024 : null;
+  const pointerIntervals: number[] = [];
+  for (let index = 1; index < active.pointerEventTimes.length; index += 1) {
+    pointerIntervals.push(active.pointerEventTimes[index] - active.pointerEventTimes[index - 1]);
+  }
+  if (active.pointerPendingBatch > 0) active.pointerBatches.push(active.pointerPendingBatch);
+
   const hotspotRows: SplitPerfHotspot[] = Array.from(active.hotspots.entries())
     .map(([label, value]) => ({
       label,
@@ -524,6 +578,17 @@ export const finishSplitPerfDrag = () => {
     benchmarkSurface: active.benchmarkSurface,
     benchmarkSurfacePass: active.benchmarkSurfacePass,
     layoutMode: active.layoutMode,
+    inputMode: active.inputMode,
+    pointerEventCount: active.pointerEventTimes.length,
+    pointerCoalescedCount: active.pointerCoalescedCount,
+    pointerEventsPerSecond: round((active.pointerEventTimes.length * 1000) / durationMs, 1),
+    pointerIntervalAvgMs: round(mean(pointerIntervals), 2),
+    pointerIntervalP95Ms: round(percentile(pointerIntervals, 0.95), 2),
+    pointerBatchAvg: round(mean(active.pointerBatches), 2),
+    pointerBatchMax: round(max(active.pointerBatches), 0),
+    inputToCommitAvgMs: round(mean(active.inputToCommitLatencies), 2),
+    inputToCommitP95Ms: round(percentile(active.inputToCommitLatencies, 0.95), 2),
+    inputToCommitMaxMs: round(max(active.inputToCommitLatencies), 2),
     createdAt: Date.now(),
   };
 
@@ -552,7 +617,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 591 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 593 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),
@@ -603,6 +668,17 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
       other: Math.round(medianNumber(results.map((result) => result.regionNodes.other))),
     },
     heapMb: heapValues.length ? medianRounded(heapValues, 1) : null,
+    inputMode: 'auto',
+    pointerEventCount: Math.round(number('pointerEventCount', 0)),
+    pointerCoalescedCount: Math.round(number('pointerCoalescedCount', 0)),
+    pointerEventsPerSecond: number('pointerEventsPerSecond', 1),
+    pointerIntervalAvgMs: number('pointerIntervalAvgMs', 2),
+    pointerIntervalP95Ms: number('pointerIntervalP95Ms', 2),
+    pointerBatchAvg: number('pointerBatchAvg', 2),
+    pointerBatchMax: number('pointerBatchMax', 0),
+    inputToCommitAvgMs: number('inputToCommitAvgMs', 2),
+    inputToCommitP95Ms: number('inputToCommitP95Ms', 2),
+    inputToCommitMaxMs: number('inputToCommitMaxMs', 2),
     createdAt: Date.now(),
   };
   lastBenchmarkSummary = { setCount: results.length, median, sets: [...results], createdAt: Date.now() };

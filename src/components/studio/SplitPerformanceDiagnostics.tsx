@@ -97,7 +97,7 @@ export default function SplitPerformanceDiagnostics() {
                   <span>dataset/ARIA</span><b>{result.miscAvgMs}ms</b>
                 </div>
               </details>
-              <p className="soridraw-split-perf-note">576: 573 실시간 경계를 유지한 채 React DOM 교체/전체 카드 스캔 없이 Music Note/Library의 leaf 카드만 브라우저 native isolation으로 분리했습니다. 같은 동작 후 PERF와 체감을 비교하세요.</p>
+              <p className="soridraw-split-perf-note">578: 577의 scoped drag 상태를 유지하고, 분할 중 외부 UI DOM write를 실제 기하 소유값만 남기도록 축소했습니다. Music Note/Library에서 같은 동작 후 577과 PERF/체감을 비교하세요.</p>
             </>
           )}
         </div>

@@ -1383,3 +1383,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 567에서 클래스만 Lite V2로 바꿨지만 Studio용 splitter를 body portal/fixed 좌표로 계속 렌더링해 564 테스트와 실제 선의 구조/길이가 달랐던 문제를 수정했다.
 - Lite V2 splitter를 Studio workspace 내부 absolute divider로 되돌려 564 뮤직노트/라이브러리 테스트와 동일한 렌더링 방식으로 통일했다.
 - splitter 위치는 workspace의 단일 `--soridraw-lite-split-percent` write가 소유하며, 클릭/드래그 상태에서도 base Lite V2 선 길이/두께가 유지된다.
+
+
+## 569차 메모
+- Lite Studio V2의 builder/result pane에 `data-soridraw-lite-pane` 신호를 복구했다.
+- Music Note/Library는 분할 중 자체 ResizeObserver + getBoundingClientRect 경로를 만들지 않고 Lite V2가 이미 계산한 pane width를 직접 받는다.
+- `soridraw-lite-pane-width`는 PC/tablet/mobile responsive 경계를 실제로 넘을 때만 전달한다. 안정된 초기/리사이즈 커밋에서는 1회 강제 동기화한다.
+- 디자인/CSS/분할선/스크롤/저장 구조는 변경하지 않았다.

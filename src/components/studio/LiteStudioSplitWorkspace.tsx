@@ -27,8 +27,12 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
+const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
+const CONTENT_MOBILE_MAX = 660;
+const CONTENT_TABLET_MAX = 1080;
 
 type PaneMode = 'mobile' | 'desktop';
+type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
 type SplitProfile = 'wide' | 'tablet';
 type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 type ViewMode = 'split' | 'result-only' | 'hidden';
@@ -99,6 +103,11 @@ const resolvePaneMode = (
   return width > breakpoint + hysteresis ? 'desktop' : 'mobile';
 };
 
+
+const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
+  width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
+);
+
 export type LiteStudioSplitWorkspaceProps = {
   children: ReactNode;
   builderMasthead?: ReactNode;
@@ -130,6 +139,7 @@ export default function LiteStudioSplitWorkspace({
   const splitProfileRef = useRef<SplitProfile>(getSplitProfile());
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
+  const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(-1);
   const pendingClientXRef = useRef<number | null>(null);
@@ -253,6 +263,32 @@ export default function LiteStudioSplitWorkspace({
     layout.style.height = `${nextHeight}px`;
   }, []);
 
+  const broadcastLitePaneResponsiveWidths = useCallback((builderWidth: number, resultWidth: number, force = false) => {
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!builder || !result) return;
+
+    // 569: Music Note / Library already have a responsive contract that can
+    // consume the split engine's known pane width directly. Do not let those
+    // pages create their own ResizeObserver + getBoundingClientRect loop while
+    // the Lite V2 divider is moving. Only notify when a published
+    // PC/tablet/mobile boundary is actually crossed (or when layout is first
+    // committed outside a drag).
+    const safeBuilderWidth = Math.max(1, builderWidth);
+    const safeResultWidth = Math.max(1, resultWidth);
+    const builderMode = readContentResponsiveMode(safeBuilderWidth);
+    const resultMode = readContentResponsiveMode(safeResultWidth);
+
+    if (force || contentResponsiveModeRef.current.builder !== builderMode) {
+      contentResponsiveModeRef.current.builder = builderMode;
+      builder.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeBuilderWidth } }));
+    }
+    if (force || contentResponsiveModeRef.current.result !== resultMode) {
+      contentResponsiveModeRef.current.result = resultMode;
+      result.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeResultWidth } }));
+    }
+  }, []);
+
   const syncPaneModes = useCallback((builderWidth: number, resultWidth: number) => {
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -366,6 +402,7 @@ export default function LiteStudioSplitWorkspace({
     // portal/fixed viewport coordinate.
     layout.style.setProperty('--soridraw-lite-split-percent', `${builderWidth}px`);
     syncPaneModes(builderWidth, resultWidth);
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
     if (live) syncExternalGeometry(builderWidth, splitterLeft);
 
     const root = document.documentElement;
@@ -395,7 +432,7 @@ export default function LiteStudioSplitWorkspace({
       splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -418,12 +455,14 @@ export default function LiteStudioSplitWorkspace({
     }
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
+    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
     readExternalControls();
     syncExternalGeometry(builderWidth, splitterLeft);
     clearLiveExternalGeometry();
-  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
+  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
@@ -718,6 +757,7 @@ export default function LiteStudioSplitWorkspace({
           id="soridraw-studio-builder-pane"
           ref={builderRef}
           data-soridraw-studio-pane="builder"
+          data-soridraw-lite-pane="builder"
           className="soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder"
           aria-hidden={isBuilderCollapsed}
         >
@@ -730,6 +770,7 @@ export default function LiteStudioSplitWorkspace({
           id="soridraw-studio-result-pane"
           ref={resultRef}
           data-soridraw-studio-pane="result"
+          data-soridraw-lite-pane="result"
           className="soridraw-studio-result-pane soridraw-lite-studio-pane is-result"
           aria-hidden={isResultCollapsed}
         >

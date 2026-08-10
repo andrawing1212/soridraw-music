@@ -977,3 +977,89 @@
     visibility: hidden !important;
   }
 }
+
+/* 597 — Music Note text-wrapper layout/contain A/B. Admin diagnostic only.
+ * 596 showed that removing the complete variable-width text wrapper cuts most
+ * resize render cost, while removing either half alone does not. These probes
+ * keep every text pixel visible and change only the wrapper's layout/isolation
+ * strategy during the fixed 1400×900 direct-geometry benchmark. */
+@media (min-width: 1100px) {
+  /* Isolate layout/style propagation without changing the flex sizing model. */
+  html[data-soridraw-perf-probe="musicnote-text-contain-layout"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    contain: layout style !important;
+  }
+
+  /* The card flex row already assigns this item its width. Inline-size
+   * containment prevents descendants from feeding intrinsic width back into
+   * the parent while preserving the live pane width and visible content. */
+  html[data-soridraw-perf-probe="musicnote-text-contain-inline"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    contain: inline-size layout style paint !important;
+  }
+
+  /* Replace only the vertical flex formatting context with a single-column
+   * grid. align-content:center mirrors flex-col + justify-center. */
+  html[data-soridraw-perf-probe="musicnote-text-parent-grid"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-content: center !important;
+    justify-content: stretch !important;
+  }
+
+  /* Replace the two horizontal nested flex algorithms with fixed two-column
+   * grids while retaining their current gaps and min-width contracts. */
+  html[data-soridraw-perf-probe="musicnote-text-rows-grid"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-meta {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+  }
+  html[data-soridraw-perf-probe="musicnote-text-rows-grid"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-secondary {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    align-items: center !important;
+  }
+
+  /* Keep the current flex/grid models but isolate each row's internal layout
+   * so width invalidation cannot propagate through all three text rows. */
+  html[data-soridraw-perf-probe="musicnote-text-row-contain"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  :is(.soridraw-musicnote-song-meta, .soridraw-musicnote-song-title, .soridraw-musicnote-song-secondary) {
+    contain: layout style paint !important;
+  }
+
+  /* Combined candidate: one-column parent grid + two-column inner grids and
+   * inline-size containment. This is the strongest design-preserving option;
+   * it never hides text or freezes the pane boundary. */
+  html[data-soridraw-perf-probe="musicnote-text-grid-contain"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-copy {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    align-content: center !important;
+    justify-content: stretch !important;
+    contain: inline-size layout style paint !important;
+  }
+  html[data-soridraw-perf-probe="musicnote-text-grid-contain"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-meta {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+  }
+  html[data-soridraw-perf-probe="musicnote-text-grid-contain"]
+  .soridraw-lite-studio-split-workspace.is-dragging
+  .soridraw-musicnote-song-secondary {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    align-items: center !important;
+  }
+}

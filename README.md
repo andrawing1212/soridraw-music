@@ -1609,3 +1609,20 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모든 시각 실험은 `data-soridraw-perf-probe`가 활성화된 자동 진단 중에만 적용되고 종료 즉시 baseline으로 복구한다.
 - 종합 진단서에 `[MUSICNOTE CARD INTERNAL A/B]` 섹션을 추가했다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 597차 — 뮤직노트 텍스트 부모 레이아웃/격리 A/B
+
+- 기준: `596차 뮤직노트 카드 내부 리플로우 이진 A/B`.
+- 596차 PROD 결과에서 카드 전체 기준 `111.9ms/s · 103.8fps`였고, 텍스트 본문 전체를 제외했을 때 `38.3ms/s · 134fps`로 렌더 비용이 65.8% 감소했다. 반면 장르·날짜·제목만 제외하면 -0.5%, 작성자·키워드만 제외하면 -9.9%여서 특정 문구보다 `.soridraw-musicnote-song-copy` 부모 레이아웃 구조 자체를 다음 후보로 좁혔다.
+- 관리자 PERF에 `텍스트 구조 A/B`를 추가했다. 뮤직노트가 열린 분할 화면에서 1400×900 고정 표면, direct pane geometry, 동일 자동 벤치마크 조건으로 실행한다.
+- 모든 텍스트와 카드 구성은 그대로 보인 상태에서 아래 구조만 비교한다.
+  - 텍스트 부모 `contain: layout style`.
+  - 텍스트 부모 `contain: inline-size layout style paint`.
+  - 세로 부모 flex → 1열 Grid.
+  - 상단 메타/하단 작성자·키워드 행 flex → 2열 Grid.
+  - 메타/제목/하단 3행 개별 layout/style/paint 격리.
+  - 부모/행 Grid + inline-size containment 결합.
+- 진단 프로필은 `data-soridraw-perf-probe`가 활성화된 동안에만 적용되고 종료 즉시 baseline으로 복구한다. 일반 사용자 런타임과 591차 직접 pane 좌표 방식은 변경하지 않는다.
+- 환경 진단의 computed-style 대상에 `musicnote-copy`, `musicnote-secondary`를 추가해 실제 적용된 display/contain 상태를 함께 확인할 수 있게 했다.
+- 종합 진단서에 `[MUSICNOTE TEXT LAYOUT A/B]` 섹션을 추가했다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

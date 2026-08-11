@@ -3978,6 +3978,7 @@ function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
   const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
+  const isStudioTabletViewport = useMediaQuery('(min-width: 1100px) and (max-width: 1599px)');
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
@@ -4237,18 +4238,22 @@ function App() {
     ? requestedStudioSplitEngineOverride
     : null;
 
-  // 617: remove the accumulated Music-Note-only split experiments. The user's
-  // real-hand comparison is now the source of truth: Recent is best on the
-  // legacy path, Library is best on the 590 Lite/CSS-variable path, and Galaxy
-  // Tab is best on adaptive Lite V2. On fine-pointer PC, Music Note now borrows
-  // Library's exact 590 split geometry instead of maintaining a separate path.
+  // 647: the user's real-hand comparison isolated the slowdown to the 1100~1599
+  // tablet band on fine-pointer PC, while the same visual band is already fast
+  // on Galaxy Tab. Do not invent a third tablet engine: in this band every
+  // workspace now borrows the already-verified Galaxy Tab adaptive Lite V2 path.
+  // Wide PC (>=1600) keeps the 617 ownership exactly as-is, and compact mobile
+  // (<1100) is handled by StudioCompactMobileWorkspace before either split
+  // engine mounts. This also prevents Studio's legacy tablet calculations from
+  // becoming a global bottleneck while Music Note/Library are visible.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
-  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
+  const useAdaptiveTabletSplitPath = isTouchPrimaryStudioEnvironment || isStudioTabletViewport;
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = useAdaptiveTabletSplitPath
     ? 'lite'
     : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
       ? 'lite'
       : 'legacy';
-  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
+  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = useAdaptiveTabletSplitPath
     ? 'adaptive'
     : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
       ? 'library-590'
@@ -4261,11 +4266,13 @@ function App() {
     : automaticLiteRuntimeProfile;
   const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
     ? '자동 선택 · 갤탭/터치: Lite V2'
-    : studioWorkspaceView === 'library'
-      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
-      : studioWorkspaceView === 'music-note'
-        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-        : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
+    : isStudioTabletViewport
+      ? '자동 선택 · PC 태블릿 1100~1599: 갤탭과 동일한 Adaptive Lite V2'
+      : studioWorkspaceView === 'library'
+        ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
+        : studioWorkspaceView === 'music-note'
+          ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+          : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');

@@ -4012,21 +4012,21 @@ function App() {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
     const syncBuilderActionMode = (force = false) => {
+      // 624: 623 intended to defer the App-root responsive mirror while Music
+      // Note is being dragged, but automatic PC Music Note uses the shared 590
+      // Lite runtime and therefore marks `soridraw-lite-split-dragging`, not the
+      // legacy `soridraw-split-dragging` class. Include both verified drag
+      // markers and return before either React state setter. CSS/root datasets
+      // continue reacting live; React mirrors catch up once on pointer-up.
+      const musicNoteDragActive = root.dataset.soridrawStudioWorkspaceView === 'music-note'
+        && (
+          root.classList.contains('soridraw-lite-split-dragging')
+          || root.classList.contains('soridraw-split-dragging')
+        );
+      if (!force && musicNoteDragActive) return;
+
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
       setIsStudioBlackActionMode(isStudioBlack);
-
-      // 623: Music Note still trails Library slightly during repeated left/right
-      // divider motion. 605/606 real-hand work already showed the split geometry
-      // write itself is cheap; the expensive part can be the App-root React
-      // mirror waking when `data-soridraw-builder-mode` crosses while the drag is
-      // still live. CSS already reacts to that root attribute immediately, so
-      // Music Note can defer only this gesture-state mirror until pointer-up.
-      // Library/Recent/Create keep their verified immediate synchronization.
-      const deferMusicNoteDragMirror = !force
-        && root.classList.contains('soridraw-split-dragging')
-        && root.dataset.soridrawStudioWorkspaceView === 'music-note';
-      if (deferMusicNoteDragMirror) return;
-
       setIsSplitBuilderActionMobile(
         isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
       );

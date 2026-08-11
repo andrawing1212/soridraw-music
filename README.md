@@ -1711,3 +1711,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 분할선 top/bottom, 1px line, hover, `ew-resize` cursor의 시각 소유권은 `studioLayout.css` 공통 규칙 하나로 통일한다.
 - 품질·성능 진단 도구는 관리자 앱 설정 토글로만 켜며 기본값은 OFF. Auto/Lite V2/기존 방식 전환 UI도 같은 토글을 따른다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 624차 — 뮤직노트 잔여 분할 딜레이 추가 억제
+- 623의 App 루트 재렌더 억제 조건이 legacy drag class만 확인해 자동 PC 뮤직노트의 Lite/590 드래그에서는 실제로 적용되지 않던 조건을 수정했다.
+- 뮤직노트 드래그 중에는 `soridraw-lite-split-dragging` / `soridraw-split-dragging` 둘 다 인식한다.
+- 드래그 중 `isStudioBlackActionMode`, `isSplitBuilderActionMobile` React mirror 갱신을 모두 건너뛰고, 기존 CSS/root dataset 반응은 그대로 실시간 유지한다. 포인터를 놓을 때 한 번만 React 상태를 동기화한다.
+- 최근 생성곡, 라이브러리, 갤탭 V2, 분할 엔진/디자인/Firebase 구조는 변경하지 않는다.

@@ -821,7 +821,7 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           previousBuilderMode,
         );
-    const usesUnifiedContentBreakpoint = workspaceView === 'library';
+    const usesUnifiedContentBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(

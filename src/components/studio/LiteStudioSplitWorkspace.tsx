@@ -199,6 +199,7 @@ export default function LiteStudioSplitWorkspace({
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(-1);
+  const activePointerTypeRef = useRef<string>('unknown');
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
@@ -787,8 +788,9 @@ export default function LiteStudioSplitWorkspace({
     flushPointer();
     draggingRef.current = false;
     pointerIdRef.current = -1;
-    layoutRef.current?.classList.remove('is-dragging');
-    document.documentElement.classList.remove('soridraw-lite-split-dragging');
+    activePointerTypeRef.current = 'unknown';
+    layoutRef.current?.classList.remove('is-dragging', 'is-mouse-dragging');
+    document.documentElement.classList.remove('soridraw-lite-split-dragging', 'soridraw-lite-split-mouse-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
     restoreDragViewportAnchors(true);
@@ -837,10 +839,11 @@ export default function LiteStudioSplitWorkspace({
     captureDragViewportAnchors();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
+    activePointerTypeRef.current = event.pointerType || 'unknown';
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: `Lite V2 · manual drag · 609 content-mode-aligned geometry (${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}) + layout-ack diagnostics`,
+      engine: `Lite V2 · manual drag · 610 mouse-touch parity (${event.pointerType || 'unknown'}) · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
       builder: builderRef.current,
       result: resultRef.current,
       layoutMode: runtimeLayoutModeRef.current,
@@ -850,6 +853,14 @@ export default function LiteStudioSplitWorkspace({
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-lite-split-dragging');
+    if (activePointerTypeRef.current === 'mouse') {
+      // 610: make mouse dragging use the same interaction shape as touch.
+      // A single transparent drag shield owns hit-testing while pointer capture
+      // keeps move/up events on the splitter. This prevents the fine-pointer
+      // hover tree from being recomputed continuously under the cursor.
+      layout.classList.add('is-mouse-dragging');
+      document.documentElement.classList.add('soridraw-lite-split-mouse-dragging');
+    }
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
@@ -858,10 +869,21 @@ export default function LiteStudioSplitWorkspace({
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
     const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-    let coalescedCount = 1;
-    try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
-    recordSplitPerfPointer(event.clientX, coalescedCount);
-    schedulePointer(event.clientX);
+    let coalesced: PointerEvent[] = [];
+    try { coalesced = nativeEvent.getCoalescedEvents?.() || []; } catch { coalesced = []; }
+    const coalescedCount = Math.max(1, coalesced.length);
+
+    // 610: a high-rate PC mouse can deliver hundreds of hardware samples per
+    // second inside a much lower-rate pointermove stream. Using the React
+    // wrapper coordinate can leave the visible pane one coalesced batch behind
+    // the physical cursor. Touch already feels good, so only fine-pointer mouse
+    // drags explicitly consume the newest hardware sample from each batch.
+    const latestPointer = activePointerTypeRef.current === 'mouse' && coalesced.length > 0
+      ? coalesced[coalesced.length - 1]
+      : nativeEvent;
+    const clientX = Number.isFinite(latestPointer.clientX) ? latestPointer.clientX : event.clientX;
+    recordSplitPerfPointer(clientX, coalescedCount);
+    schedulePointer(clientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -1154,7 +1176,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 609 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 610 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1270,7 +1292,7 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
-      document.documentElement.classList.remove('soridraw-lite-split-dragging');
+      document.documentElement.classList.remove('soridraw-lite-split-dragging', 'soridraw-lite-split-mouse-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       restoreDragViewportAnchors(false);

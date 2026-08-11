@@ -1606,3 +1606,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 606/607의 App drag-sync 억제는 재도입하지 않았다. 608의 원래 즉시 App 동기화를 유지한다.
 - 이번 차수는 안정화 작업이며 PC Music Note 추가 최적화는 후속으로 보류한다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 610차 — PC 마우스 드래그를 터치 입력 경로에 맞춤
+- 609까지 PC/Tablet 화면 모드로 해석하던 축을 더 이상 확대하지 않는다. 실제 사용자 검증 기준은 **갤럭시탭 손가락 터치=빠름 / PC 마우스=느림**으로 고정했다.
+- 좌표 엔진, responsive 기준, Music Note/Library/Recent 레이아웃은 609 상태를 유지하고 이번 차수에서는 입력 경로만 수정했다.
+- PC 마우스 `pointermove`에서 브라우저가 묶어 전달하는 `getCoalescedEvents()`의 **가장 마지막 실제 하드웨어 샘플 좌표**를 사용한다. React pointer wrapper 좌표가 물리 마우스보다 한 묶음 뒤에 남는 가능성을 제거한다.
+- 마우스 드래그 동안에만 workspace 위에 투명 hit-test shield를 하나 두고, splitter의 pointer capture는 그대로 유지한다. 따라서 마우스가 수백 개 카드/버튼/스크롤/hover 영역을 지나갈 때 발생할 수 있는 desktop hover 재판정을 차단한다.
+- touch/pen 입력에는 이 shield를 적용하지 않는다. 갤탭에서 이미 확인된 터치 손맛은 변경하지 않는다.
+- 신규 observer, per-frame DOM read, React drag state, forced layout 로직은 추가하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

@@ -910,3 +910,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 610 — mouse/touch parity for real split dragging.
+ * Touch does not continuously retarget the desktop hover tree while a finger is
+ * moving. A fine-pointer mouse does. During an active mouse drag only, place one
+ * transparent hit-test surface above both panes and below the splitter. Pointer
+ * capture keeps the splitter as the event receiver, while underlying cards,
+ * buttons, scroll thumbs and hover transitions stop being re-hit-tested on every
+ * mouse sample. No visual style, size, responsive rule or touch behavior changes. */
+@media (min-width: 1100px) and (hover: hover) and (pointer: fine) {
+  .soridraw-lite-studio-split-workspace.is-mouse-dragging::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    pointer-events: auto;
+    cursor: ew-resize;
+    background: transparent;
+  }
+}

@@ -1656,3 +1656,8 @@ The V1 song generator now fails open after temporary Gemini correction failures:
   - 관리자 `실손 드래그 비교`를 눌렀을 때만 다음 1회 드래그를 명시적으로 arm하여 PERF/ResizeObserver를 켜고, pointer-up 후 자동 해제한다. 진단 도구 자체는 삭제하지 않는다.
 - PC 자동 모드에서는 Lite V2 PERF 도구 실행 전 관리자 진단 스위치로 `Lite V2` 강제 선택을 안내한다.
 - UI 디자인, 분할 비율/반응형 규칙, 생성 기능, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## SORIDRAW 614차 — Music Note drag subtree cut
+- Music Note only: on split drag start, replace each visible full interactive row with a geometry-compatible lightweight row; restore on drag end.
+- Removes per-frame layout/style work from long max-content title/keyword scroll trees and interactive descendants while keeping pane/card geometry live.
+- Library / Recent / split-engine routing / Firebase data structures untouched.

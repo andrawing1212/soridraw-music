@@ -11789,3 +11789,31 @@ html[data-soridraw-theme="studio-black"] {
     padding-bottom: 136px !important;
   }
 }
+
+/* 614 — Music Note split-drag lightweight row path.
+ * The full Music Note row is much more expensive than Library because every
+ * visible card owns long max-content title/keyword scrollers plus many
+ * interactive descendants. 613 only changed overflow, so Chromium still had
+ * to restyle/re-layout that full subtree on every 1px pane-width change.
+ * FavoritesPage now swaps each row once at drag-start to a geometry-compatible
+ * lightweight representation and restores the full interactive row once at
+ * drag-end. The split engine itself stays untouched. */
+.soridraw-musicnote-drag-card {
+  contain: layout style paint !important;
+  content-visibility: visible !important;
+}
+
+.soridraw-musicnote-drag-card .soridraw-musicnote-drag-title,
+.soridraw-musicnote-drag-card .soridraw-musicnote-drag-keywords {
+  display: block !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  contain: layout style paint !important;
+}
+
+.soridraw-musicnote-drag-card .soridraw-musicnote-drag-keywords {
+  width: auto !important;
+}

@@ -221,7 +221,6 @@ export default function LiteStudioSplitWorkspace({
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
-  const windowResizeFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
@@ -740,55 +739,6 @@ export default function LiteStudioSplitWorkspace({
       refreshMetrics();
     });
   }, [refreshMetrics]);
-
-  // 649 — Lite/590 shares the same PC-tablet browser-resize fast path as Legacy.
-  // Pane widths and the fixed divider still follow the browser edge every frame,
-  // but responsive mode publication, content events, external-control scans and
-  // modal/scroll detail wait for the single resize-end refresh.
-  const refreshTabletWindowResizeGeometry = useCallback(() => {
-    const layout = layoutRef.current;
-    const builder = builderRef.current;
-    const result = resultRef.current;
-    if (!layout || !builder || !result) return;
-
-    const rect = layout.getBoundingClientRect();
-    const safeWidth = Math.max(1, rect.width);
-    metricsRef.current = {
-      ...metricsRef.current,
-      left: rect.left,
-      width: safeWidth,
-    };
-
-    const nextProfile = getSplitProfile();
-    if (splitProfileRef.current !== nextProfile) {
-      splitProfileRef.current = nextProfile;
-      percentRef.current = readStoredPercent(nextProfile);
-    }
-
-    const bounds = getSplitBounds(safeWidth);
-    const nextPercent = clampToBounds(percentRef.current, bounds);
-    percentRef.current = nextPercent;
-
-    const builderWidth = builderCollapsedRef.current
-      ? 0
-      : resultCollapsedRef.current
-        ? safeWidth
-        : Math.round(safeWidth * (nextPercent / 100));
-    const resultWidth = Math.max(0, safeWidth - builderWidth);
-    const splitterLeft = rect.left + builderWidth;
-
-    writeLiveSplitGeometry(builderWidth, resultWidth);
-    commitRootMeasurements(builderWidth, splitterLeft);
-  }, [commitRootMeasurements, writeLiveSplitGeometry]);
-
-  const scheduleTabletWindowResizeGeometry = useCallback(() => {
-    if (draggingRef.current || windowResizeFrameRef.current !== null) return;
-    windowResizeFrameRef.current = window.requestAnimationFrame(() => {
-      windowResizeFrameRef.current = null;
-      refreshTabletWindowResizeGeometry();
-    });
-  }, [refreshTabletWindowResizeGeometry]);
-
 
   const flushPointer = useCallback(() => {
     const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
@@ -1371,54 +1321,21 @@ export default function LiteStudioSplitWorkspace({
     let observer: ResizeObserver | null = null;
     if (layout && typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => {
-        if (draggingRef.current) return;
-        const root = document.documentElement;
-        const tabletWindowResize = root.classList.contains('soridraw-window-resizing')
-          && window.innerWidth >= TABLET_VIEWPORT_MIN
-          && window.innerWidth <= TABLET_VIEWPORT_MAX;
-        if (tabletWindowResize) scheduleTabletWindowResizeGeometry();
-        else scheduleMetricsRefresh();
+        if (!draggingRef.current) scheduleMetricsRefresh();
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
-
-    let lastViewportWidth = window.innerWidth;
+    // 650 — horizontal viewport changes are already owned by the observed Lite
+    // workspace box. Avoid a second native window.resize -> metrics refresh for
+    // the same width tick. The native listener remains only for viewport-height
+    // changes that may not resize the workspace box itself.
     let lastViewportHeight = window.innerHeight;
-    let resizeEndTimer: number | null = null;
     const handleWindowResize = () => {
-      const root = document.documentElement;
-      if (!root.classList.contains('soridraw-window-resizing')) {
-        root.classList.add('soridraw-window-resizing');
-        window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
-      }
-      if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
-
-      const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      const widthChanged = nextViewportWidth !== lastViewportWidth;
-      const heightChanged = nextViewportHeight !== lastViewportHeight;
-      lastViewportWidth = nextViewportWidth;
+      if (nextViewportHeight === lastViewportHeight) return;
       lastViewportHeight = nextViewportHeight;
-
-      const tabletHorizontalResize = widthChanged
-        && !heightChanged
-        && nextViewportWidth >= TABLET_VIEWPORT_MIN
-        && nextViewportWidth <= TABLET_VIEWPORT_MAX;
-      if (tabletHorizontalResize) scheduleTabletWindowResizeGeometry();
-      else scheduleMetricsRefresh();
-
-      resizeEndTimer = window.setTimeout(() => {
-        resizeEndTimer = null;
-        root.classList.remove('soridraw-window-resizing');
-        if (windowResizeFrameRef.current !== null) {
-          window.cancelAnimationFrame(windowResizeFrameRef.current);
-          windowResizeFrameRef.current = null;
-        }
-        refreshMetrics();
-        window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
-      }, 110);
+      scheduleMetricsRefresh();
     };
-
     // A rail toggle changes the Studio grid width immediately. Refresh the Lite
     // geometry in the same layout phase instead of one rAF later, otherwise the
     // builder masthead/search can visibly overshoot before snapping back.
@@ -1430,16 +1347,10 @@ export default function LiteStudioSplitWorkspace({
     return () => {
       window.cancelAnimationFrame(initialFrame);
       observer?.disconnect();
-      if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
-      document.documentElement.classList.remove('soridraw-window-resizing');
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
-      if (windowResizeFrameRef.current !== null) {
-        window.cancelAnimationFrame(windowResizeFrameRef.current);
-        windowResizeFrameRef.current = null;
-      }
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
@@ -1467,7 +1378,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, scheduleTabletWindowResizeGeometry]);
+  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

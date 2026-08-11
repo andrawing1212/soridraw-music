@@ -1,11 +1,12 @@
-## 649차 — PC 태블릿 외부창 연속 리사이즈 경량화
+## 650차 — 649 완전 롤백 + 외부창 수평 리사이즈 중복경로 제거
 
-- 기준: `SORIDRAW_648차_647롤백_PC태블릿_공통루트재렌더억제.zip`.
-- 새 영상 재분석 결과, 사용자가 지적한 1100~1599px 버벅임은 **분할바 드래그가 아니라 PC 브라우저 외부창을 연속으로 줄이고 늘릴 때** 발생하는 공통 태블릿 리사이즈 병목이었다. 648의 App 루트 분할드래그 재렌더 억제만으로는 이 경로를 건드리지 못했다.
-- `StudioSplitWorkspace`(곡 만들기/최근 생성곡)와 `LiteStudioSplitWorkspace`(뮤직노트/라이브러리) 모두 1100~1599px 수평 외부창 리사이즈 중에는 **geometry-only fast path**를 사용한다. 매 프레임에는 실제 pane 폭/분할선 좌표만 갱신하고, pane-mode 판정, content responsive 이벤트, 스크롤 앵커 보정, 외부 컨트롤 재탐색, 모달/푸터 측정, React percent state 동기화는 실행하지 않는다.
-- 브라우저 외부창 조절이 끝난 뒤 110ms settle 시점에 기존 전체 responsive 계산을 **1회만** 실행한다. 따라서 최종 PC/태블릿 UI 판정과 저장된 split percent 계약은 유지한다.
-- Lite/590 경로에도 `soridraw-window-resizing` 공통 마커를 적용해 기존 transition/animation/summary-container/stable-height 중지 규칙이 뮤직노트/라이브러리 외부창 리사이즈에도 동일하게 적용되도록 했다.
-- PC >=1600, 모바일 <1100, 실제 분할바 드래그 엔진, 좌우 메뉴, 646 모바일 단일페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+- 기준은 `SORIDRAW_648차_647롤백_PC태블릿_공통루트재렌더억제.zip`입니다. 649차에서 추가한 geometry-only fast path, Lite 전역 `soridraw-window-resizing` 마커, 110ms 지연 커밋은 전부 폐기했습니다.
+- 649 실사용 영상에서 1100~1599px뿐 아니라 큰 PC 폭까지 더 느려진 원인은, 이미 workspace `ResizeObserver`가 수평 폭 변화를 소유하는 상태에서 native `window.resize`가 같은 수평 변화마다 별도의 geometry/settle 경로를 추가로 실행한 중복 소유권이었습니다. Lite 경로까지 전역 resize 마커와 지연 커밋을 추가하면서 App/하위 측정까지 110ms 동안 멈췄다가 다시 계산되어 체감 지연이 더 커졌습니다.
+- Legacy `StudioSplitWorkspace`는 488/637에서 검증됐던 원칙으로 복귀했습니다. **수평 외부창 리사이즈는 workspace ResizeObserver 한 경로만 사용**하고, native resize는 viewport 높이가 실제로 변할 때만 전체 metrics를 요청합니다. resize 중 transition/container 부하를 줄이는 기존 마커와 종료 후 1회 최종 동기화는 유지합니다.
+- Lite `LiteStudioSplitWorkspace`도 같은 원칙으로 정리했습니다. 수평 폭 변화는 layout ResizeObserver만 소유하고, native window.resize는 높이 변화 때만 보조합니다. 647처럼 엔진을 바꾸거나 649처럼 별도 fast-path geometry를 추가하지 않았습니다.
+- 638에서 통과한 좌우 메뉴 접기/펼치기 동기화용 `soridraw-studio-frame-resize` 즉시 갱신, 641~644 대문/검색 정렬, 646 모바일 단일 UI, 648 App 루트 분할드래그 억제는 그대로 유지합니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
 
 ## 648차 — 647 롤백 + PC 태블릿 분할 드래그 App 루트 재렌더 억제
 - 기준은 646차입니다. 647차의 `1100~1599px PC 전체를 Galaxy Tab Adaptive Lite V2로 교체`한 변경은 전부 폐기했습니다. 따라서 Music Note/Library의 기존 `library-590` 경로, Sori Studio/Recent의 Legacy 경로, 분할바 좌표/화면 축소 반응을 646 상태로 복구합니다.

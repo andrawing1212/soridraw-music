@@ -234,6 +234,8 @@
   .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter:focus,
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace > .soridraw-lite-studio-splitter:focus-visible {
+    top: 58px !important;
+    bottom: 0 !important;
     left: calc(var(--soridraw-studio-builder-width, 50%) - 8px) !important;
     transform: none !important;
     will-change: auto !important;
@@ -991,3 +993,27 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     background: rgba(255,255,255,.145) !important;
   }
 }
+
+/* 620 — Restore the exact legacy hover/drag cursor for the Lite/590 splitter too.
+ * 618/619 matched the thin-line skin, but the Studio-wide button pointer rules could
+ * still win on hover, so the horizontal <-> resize affordance disappeared. Mirror the
+ * verified legacy splitter cursor contract without touching drag logic or geometry. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:active,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:focus,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:focus-visible,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter *,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body,
+  html.soridraw-split-dragging[data-soridraw-theme="studio-black"] body * {
+    cursor: ew-resize !important;
+  }
+}
+

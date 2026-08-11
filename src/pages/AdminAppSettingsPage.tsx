@@ -324,7 +324,7 @@ export default function AdminAppSettingsPage() {
                   : 'bg-black/25 text-[var(--text-secondary)] hover:bg-white/[0.06] hover:text-[var(--text-primary)]'
               }`}
             >
-              진단 {perfToolsVisible ? '표시' : '숨김'}
+              진단 {perfToolsVisible ? 'ON' : 'OFF'}
             </button>
           </div>
         </div>

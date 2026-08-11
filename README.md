@@ -1694,3 +1694,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 613~616에서 추가된 뮤직노트 전용 title/keyword track 및 drag containment/clip/transform 실험을 정상 구조로 원복.
 - 관리자 전용 Music Note render probe는 유지.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 622차 - 분할선 공통 구현 + 진단 도구 기본 OFF
+- 기준: 617차. 618~621의 분할선 전용 CSS 실험은 사용하지 않는다.
+- Music Note / Library의 Lite/590 분할선은 Recent Songs와 동일한 `soridraw-studio-splitter` DOM/CSS를 body portal로 공유한다.
+- 분할선 top/bottom, 1px line, hover, `ew-resize` cursor의 시각 소유권은 `studioLayout.css` 공통 규칙 하나로 통일한다.
+- 품질·성능 진단 도구는 관리자 앱 설정 토글로만 켜며 기본값은 OFF. Auto/Lite V2/기존 방식 전환 UI도 같은 토글을 따른다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

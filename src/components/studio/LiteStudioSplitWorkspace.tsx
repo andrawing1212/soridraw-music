@@ -596,6 +596,8 @@ export default function LiteStudioSplitWorkspace({
     if (!layout || !builder || !result) return;
 
     layout.dataset.liteRuntimeLayout = benchmarkLayoutModeRef.current;
+    const viewportSplitterLeft = Math.max(0, Math.round(metricsRef.current.left + builderWidth - 8));
+
     if (benchmarkLayoutModeRef.current === 'direct') {
       layout.dataset.benchmarkLayoutMode = 'direct';
       // 609: direct geometry owns every tablet/mobile result mode and PC
@@ -606,12 +608,17 @@ export default function LiteStudioSplitWorkspace({
       result.style.setProperty('left', `${builderWidth}px`, 'important');
       result.style.setProperty('right', '0px', 'important');
       result.style.setProperty('width', `${resultWidth}px`, 'important');
-      splitter?.style.setProperty('left', `${Math.max(0, builderWidth - 8)}px`, 'important');
+      // 622: splitter is now the same body-level fixed control as Recent Songs,
+      // so its live x-coordinate must be viewport-relative rather than local.
+      splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       return;
     }
 
     if (layout.dataset.benchmarkLayoutMode === 'direct') clearDirectBenchmarkGeometry();
     layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+    // CSS-variable 590 geometry keeps pane width ownership local, while the
+    // shared body splitter follows the same boundary with one tiny fixed write.
+    splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
   }, [clearDirectBenchmarkGeometry]);
 
   const applyPercent = useCallback((rawPercent: number, live = false) => {
@@ -1384,11 +1391,15 @@ export default function LiteStudioSplitWorkspace({
     <div id="soridraw-studio-center-modal-root" ref={modalHostRef} className="soridraw-studio-center-modal-host" />
   );
 
+  // 622: Studio Lite/590 now uses the exact same splitter DOM class and body
+  // portal as the verified Recent Songs legacy path. Only the width engine stays
+  // Lite; splitter top/bottom, thin line, hover color and <-> cursor have one
+  // shared visual owner in studioLayout.css.
   const splitter = (
     <button
       ref={splitterRef}
       type="button"
-      className="soridraw-lite-splitter soridraw-lite-studio-splitter"
+      className="soridraw-studio-splitter soridraw-lite-studio-splitter"
       aria-label="곡 만들기와 생성 결과 영역 너비 조절"
       aria-valuemin={MIN_PERCENT}
       aria-valuemax={MAX_PERCENT}
@@ -1476,9 +1487,9 @@ export default function LiteStudioSplitWorkspace({
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
           {panes[1] ?? null}
         </div>
-        {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed ? splitter : null}
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
+      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>

@@ -82,6 +82,7 @@ import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/St
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
+import { readSplitPerfToolVisibility, SPLIT_PERF_TOOL_VISIBILITY_EVENT } from './components/studio/splitPerfDiagnostics';
 import StudioSplitEngineWorkspace, { type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
@@ -4198,7 +4199,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const splitEngineParam = new URLSearchParams(location.search).get('splitEngine');
-  const studioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
+  const requestedStudioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
     ? splitEngineParam
     : null;
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
@@ -4220,6 +4221,22 @@ function App() {
   const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
     readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
   );
+
+  // 622: all split diagnostic UI is controlled by the existing Admin Settings
+  // toggle and starts OFF. This includes the floating diagnostics panel and the
+  // Auto/Lite/Legacy engine switch; normal Studio users never see or run it.
+  const [splitPerfToolsVisible, setSplitPerfToolsVisible] = useState(() => readSplitPerfToolVisibility());
+  useEffect(() => {
+    const handleSplitPerfVisibility = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
+      setSplitPerfToolsVisible(typeof detail?.enabled === 'boolean' ? detail.enabled : readSplitPerfToolVisibility());
+    };
+    window.addEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
+  }, []);
+  const studioSplitEngineOverride: StudioSplitEngine | null = splitPerfToolsVisible
+    ? requestedStudioSplitEngineOverride
+    : null;
 
   // 617: remove the accumulated Music-Note-only split experiments. The user's
   // real-hand comparison is now the source of truth: Recent is best on the
@@ -14493,7 +14510,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && isAdminMenuUser && (
+              {isStudioBlackActionMode && isAdminMenuUser && splitPerfToolsVisible && (
                 <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
                   <button
                     type="button"

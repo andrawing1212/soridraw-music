@@ -11961,19 +11961,21 @@ html[data-soridraw-device="phone"] body > :is(
   }
 }
 
-/* 643 — PC result-only Music Note / Suno Library masthead uses the exact same
- * horizontal owner as the body below. 642 corrected only the 1100–1599px
- * compact/tablet range, so desktop >=1600 still kept the older 478 geometry:
- * a full-width masthead host containing a separate 1548px row with 36/34px
- * insets. The result body below is owned by the established fullscreen content
- * box `min(100% - 2*gutter, 1500px)` and then uses the page's 12/10px inner
- * gutter. During native window shrink those two owners stop moving at different
- * moments, which makes the Music Note / Suno Library wordmark look fixed before
- * the tabs/search/list below finish moving left.
+/* 644 — PC result-only Music Note / Suno Library masthead keeps moving through
+ * the last wide-PC resize segment instead of stopping 24px early.
  *
- * Desktop now reuses the body's existing fullscreen owner itself for the
- * masthead host, then uses the same 12/10px inner guide as the page. No split
- * ratio, divider, rail, pane-mode or tablet/mobile logic is changed. */
+ * The body below and the masthead use two approved shells: the page row can grow
+ * to 1548px while the visible body composition is 1500px. At the widest PC size,
+ * the 48px shell difference contributes a 24px centered offset, so the old
+ * 36px/34px masthead insets correctly land on the body's 12px/10px guides.
+ * As the native window narrows through 1548px -> 1500px, that centered offset
+ * disappears continuously. Keeping 36px/34px fixed makes the wordmark/action
+ * stop while the tabs/search/list continue another 24px.
+ *
+ * Keep the existing 1548px masthead shell and make only its inner guide consume
+ * that disappearing 24px continuously. This mirrors the exact movement of the
+ * lower 1500px body owner. 642 continues to own compact 1100-1599px. Split ratio,
+ * rails, divider and pane-mode are unchanged. */
 @media (min-width: 1600px) {
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
   body #root .soridraw-app-root
@@ -11981,13 +11983,10 @@ html[data-soridraw-device="phone"] body > :is(
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-result-pane
   > .soridraw-studio-result-pane-masthead-host {
-    width: min(
-      calc(100% - (var(--soridraw-studio-full-pane-gutter) * 2)),
-      var(--soridraw-studio-full-pane-max-width)
-    ) !important;
-    max-width: var(--soridraw-studio-full-pane-max-width) !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     box-sizing: border-box !important;
   }
 
@@ -11997,11 +11996,11 @@ html[data-soridraw-device="phone"] body > :is(
   .soridraw-studio-result-pane-masthead-host
   > .soridraw-studio-result-masthead {
     width: 100% !important;
-    max-width: none !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    padding-left: 12px !important;
-    padding-right: 10px !important;
+    max-width: 1548px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: clamp(12px, calc(50% - 738px), 36px) !important;
+    padding-right: clamp(10px, calc(50% - 740px), 34px) !important;
     box-sizing: border-box !important;
   }
 
@@ -12009,13 +12008,13 @@ html[data-soridraw-device="phone"] body > :is(
   body #root .soridraw-app-root
   .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
   .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
-    right: 10px !important;
+    right: clamp(10px, calc(50% - 740px), 34px) !important;
   }
 
   html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
   body #root .soridraw-app-root
   .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
   .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
-    right: 10px !important;
+    right: clamp(10px, calc(50% - 740px), 34px) !important;
   }
 }

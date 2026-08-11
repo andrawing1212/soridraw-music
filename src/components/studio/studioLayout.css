@@ -11921,3 +11921,101 @@ html[data-soridraw-device="phone"] body > :is(
     box-sizing: border-box !important;
   }
 }
+
+/* 642 — Music Note / Suno Library result-only mastheads follow the same
+ * horizontal gutter transition as the controls below when the native browser
+ * window crosses below the >=1600 one-pane composition.
+ *
+ * At >=1600, rule 334 gives the result body an outer 24px one-pane gutter and
+ * rule 508 gives the page itself 12px/10px inner gutters. Rule 478 therefore
+ * correctly uses 36px/34px for the title/action row (24+12 / 24+10).
+ * Below 1600, rule 334 no longer owns that outer 24px gutter, but rule 478
+ * continues because it starts at 1100px. The cards/search/folders immediately
+ * move to the page's 12px/10px guides while the title/action row stays at
+ * 36px/34px, so the masthead appears to stop early during native resize.
+ * Match the exact page-content guides only in 1100-1599px result-only mode.
+ * Split geometry, rails, divider, page responsive modes and >=1600 alignment
+ * remain unchanged. */
+@media (min-width: 1100px) and (max-width: 1599.98px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
+    padding-left: 12px !important;
+    padding-right: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
+    right: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    right: 10px !important;
+  }
+}
+
+/* 643 — PC result-only Music Note / Suno Library masthead uses the exact same
+ * horizontal owner as the body below. 642 corrected only the 1100–1599px
+ * compact/tablet range, so desktop >=1600 still kept the older 478 geometry:
+ * a full-width masthead host containing a separate 1548px row with 36/34px
+ * insets. The result body below is owned by the established fullscreen content
+ * box `min(100% - 2*gutter, 1500px)` and then uses the page's 12/10px inner
+ * gutter. During native window shrink those two owners stop moving at different
+ * moments, which makes the Music Note / Suno Library wordmark look fixed before
+ * the tabs/search/list below finish moving left.
+ *
+ * Desktop now reuses the body's existing fullscreen owner itself for the
+ * masthead host, then uses the same 12/10px inner guide as the page. No split
+ * ratio, divider, rail, pane-mode or tablet/mobile logic is changed. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-pane-masthead-host {
+    width: min(
+      calc(100% - (var(--soridraw-studio-full-pane-gutter) * 2)),
+      var(--soridraw-studio-full-pane-max-width)
+    ) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 10px !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
+    right: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    right: 10px !important;
+  }
+}

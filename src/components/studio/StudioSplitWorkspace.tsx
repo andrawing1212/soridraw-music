@@ -1094,10 +1094,11 @@ export default function StudioSplitWorkspace({
     const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
 
-    // Width changes are already owned by the workspace ResizeObserver. Keep a
-    // tiny native listener only for vertical viewport changes, because the
-    // isolated workspace height must then be recalculated even if its current
-    // fixed-size box has not emitted a ResizeObserver callback yet.
+    // Keep the native viewport signal lightweight, but explicitly include
+    // horizontal browser resizing. The split workspace owns a pixel builder
+    // width, so waiting only for a later ResizeObserver callback can leave the
+    // masthead/search on the previous center width for a visible frame.
+    let lastViewportWidth = window.innerWidth;
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
     const handleViewportResize = () => {
@@ -1109,8 +1110,10 @@ export default function StudioSplitWorkspace({
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
 
+      const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
+      if (nextViewportWidth !== lastViewportWidth || nextViewportHeight !== lastViewportHeight) {
+        lastViewportWidth = nextViewportWidth;
         lastViewportHeight = nextViewportHeight;
         scheduleLayoutMetricsRefresh();
       }
@@ -1128,8 +1131,15 @@ export default function StudioSplitWorkspace({
       }, 110);
     };
 
+    // Rail collapse/expand is not a continuous resize gesture. Recalculate the
+    // new grid width synchronously when StudioPageFrame signals it so the
+    // builder pixel width cannot spend one paint at the previous rail geometry.
+    const handleStudioFrameResize = () => {
+      if (!draggingRef.current) refreshLayoutMetrics();
+    };
+
     window.addEventListener('resize', handleViewportResize, { passive: true });
-    window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
+    window.addEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
     window.addEventListener('scroll', syncCenterModalHostBounds, { passive: true });
     scheduleFooterBoundaryRefresh();
@@ -1141,7 +1151,7 @@ export default function StudioSplitWorkspace({
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
       window.removeEventListener('resize', handleViewportResize);
-      window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
+      window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       window.removeEventListener('scroll', syncCenterModalHostBounds);
       if (dragFrameRef.current !== null) {
@@ -1186,7 +1196,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;

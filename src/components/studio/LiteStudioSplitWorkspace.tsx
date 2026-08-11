@@ -1326,7 +1326,12 @@ export default function LiteStudioSplitWorkspace({
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
     const handleWindowResize = () => scheduleMetricsRefresh();
-    const handleFrameResize = () => scheduleMetricsRefresh();
+    // A rail toggle changes the Studio grid width immediately. Refresh the Lite
+    // geometry in the same layout phase instead of one rAF later, otherwise the
+    // builder masthead/search can visibly overshoot before snapping back.
+    const handleFrameResize = () => {
+      if (!draggingRef.current) refreshMetrics();
+    };
     window.addEventListener('resize', handleWindowResize, { passive: true });
     window.addEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
     return () => {

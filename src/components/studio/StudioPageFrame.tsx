@@ -72,11 +72,11 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
     document.documentElement.dataset.soridrawStudioWorkspaceView = workspaceView;
   }, [workspaceView]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (railViewport === 'compact') {
-      // Tablet/compact landscape always enters with both auxiliary rails in
-      // their space-saving state. This runs only when the 1600/1100 breakpoint
-      // is crossed, never for every pixel of native window resizing.
+      // The rail geometry is part of the center workspace width. Commit the
+      // compact rail state before paint so the builder never renders one frame
+      // with the old 214px rail width and the new 64px center origin.
       setIsLeftRailCollapsed(true);
       setIsRightRailCollapsed(true);
       return;
@@ -84,6 +84,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
 
     if (railViewport === 'wide') {
       // Compact-session choices do not overwrite the user's PC preference.
+      // Restore the wide-PC rail contract before paint for the same reason.
       setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
       setIsRightRailCollapsed(readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
     }
@@ -99,14 +100,13 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
     }
   }, [isLeftRailCollapsed, isRightRailCollapsed, railViewport]);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      // Studio owns a dedicated layout signal. Do not synthesize a second
-      // native `resize` event here; doing so used to wake every global resize
-      // listener again whenever either rail changed.
-      window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
-    });
-    return () => window.cancelAnimationFrame(frame);
+  useLayoutEffect(() => {
+    // The grid columns have already changed in this commit. Notify the split
+    // geometry owner synchronously, before paint, so its pixel builder width,
+    // masthead and search coordinates are recalculated against the new center
+    // width in the same frame. A deferred rAF here caused the visible
+    // left/right overshoot when a rail was collapsed or expanded.
+    window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
   }, [isLeftRailCollapsed, isRightRailCollapsed]);
 
   return (

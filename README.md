@@ -1818,3 +1818,14 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 627차에서 복구한 장르·스타일·사운드의 부드러운 접기 경로와 1줄 노출 높이는 그대로 유지합니다.
 - 분할바 드래그 중 기존 `transition: none !important` 성능 보호 규칙은 그대로 우선하므로 분할 성능에는 영향을 주지 않습니다.
 - UI 높이, 키워드 내용, Firestore/Auth/Functions/저장 구조는 변경하지 않았습니다.
+
+## 638차 — 외부창 축소·왼쪽 메뉴 전환의 한 프레임 좌표 튐 제거
+
+- 기준: `SORIDRAW_637차_장르펼침상태_페이지전환_접힘깜빡임제거.zip`
+- 사용자 영상에서 왼쪽 rail 접기 시 Sori Studio 대문이 정상 위치보다 한 번 더 왼쪽으로 이동한 뒤 복귀하고, 펼치기 시 같은 폭만큼 오른쪽으로 오버한 뒤 복귀하는 1-frame geometry mismatch를 확인했다.
+- 원인은 `StudioPageFrame`의 rail grid 폭은 즉시 바뀌지만, 중앙 split workspace의 pixel builder width 재계산 신호가 `useEffect -> requestAnimationFrame`으로 한 박자 늦게 전달되던 구조였다. 그 한 프레임 동안 새 center origin + 이전 builder pixel width가 동시에 사용됐다.
+- `StudioPageFrame`의 compact/wide rail 상태 전환을 `useLayoutEffect`로 옮겨 브라우저 paint 전에 rail 상태를 확정한다.
+- rail 접기/펼치기 신호 `soridraw-studio-frame-resize`를 별도 rAF로 미루지 않고 layout phase에서 즉시 전달한다.
+- 기존 `StudioSplitWorkspace`와 Lite V2 모두 rail frame-resize 신호에서는 현재 workspace 폭을 즉시 다시 측정/적용해 Sori Studio 대문·검색·builder 폭이 같은 프레임 좌표를 사용한다.
+- 기존 엔진은 외부 브라우저 창의 가로폭 변경도 명시적으로 감지해 pixel builder width를 갱신한다. divider drag 경로는 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

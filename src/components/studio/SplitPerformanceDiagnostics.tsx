@@ -25,6 +25,9 @@ type PerfProbeProfileId =
   | 'media-off'
   | 'list-paint-off'
   | 'container-off'
+  | 'musicnote-title-off'
+  | 'musicnote-keywords-off'
+  | 'musicnote-text-off'
   | 'area-list-off'
   | 'area-builder-off'
   | 'area-result-off'
@@ -85,6 +88,9 @@ const PERF_PAIR_BASELINE_STORAGE_KEY = 'soridraw_perf_pair_baseline_603_v1';
 
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
+  { id: 'musicnote-title-off', label: '뮤직노트 제목 OFF' },
+  { id: 'musicnote-keywords-off', label: '뮤직노트 키워드 OFF' },
+  { id: 'musicnote-text-off', label: '뮤직노트 제목+키워드 OFF' },
   { id: 'effects-off', label: '효과 OFF' },
   { id: 'media-off', label: '이미지 OFF' },
   { id: 'list-paint-off', label: '리스트 Paint OFF' },

@@ -1,3 +1,13 @@
+## 613차 — 뮤직노트 가로 스크롤 컨테이너 병목 격리 + 자동 병목 스캔
+
+- 612 실사용 결과에서 `자동 / 기존 방식 / V2` 모두 뮤직노트만 느리고, 같은 자동 환경의 Recent/Library는 정상임을 기준으로 분할 엔진을 원인에서 제외했다.
+- 뮤직노트 각 곡 행에는 라이브러리와 달리 `제목`과 `키워드` 두 개의 긴 native horizontal scroll container가 동시에 있고, 키워드는 장르/분위기/주제/Situation/스타일/사운드/보컬 칩 전체를 직접 자식으로 가진다. 결과 pane이 1px씩 변할 때 Chromium이 이 두 scrollable-overflow tree의 intrinsic/overflow geometry를 반복 유지하는 경로를 이번 차수의 주 병목으로 격리했다.
+- 키워드 칩을 `soridraw-musicnote-keyword-track` 한 개의 max-content track 안으로 묶고, 제목도 기존 max-content span에 전용 track class를 부여했다. 정상 상태의 수평 스크롤 기능/디자인은 그대로 유지한다.
+- 분할바를 잡고 있는 동안에만 Music Note 제목/키워드 viewport를 `overflow: clip`으로 바꿔 native scroll-container 갱신을 끊고, 두 max-content track을 독립 layout/paint island로 둔다. pointer-up 즉시 기존 `overflow-x:auto`가 복구된다.
+- 같은 Music Note 전용 drag guard를 Lite V2뿐 아니라 기존 splitter의 `html.soridraw-split-dragging` 경로에도 적용했다. Library/Recent/Create/갤탭의 이미 통과한 경로는 변경하지 않는다.
+- 관리자 기존 `렌더 스캔`에 `뮤직노트 제목 OFF / 키워드 OFF / 제목+키워드 OFF` 자동 A/B를 추가했다. 이번 수정이 충분하지 않을 경우 한 번의 자동 스캔으로 제목/키워드/기타 영역 중 실제 비용 주체를 바로 좁힐 수 있고, 진단 기능은 관리자 내부에 계속 보존한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
 ## 612차 — 화면별 검증 경로 복원 + PC 뮤직노트 전용 reflow 경량화
 
 - 611의 핵심 오류를 수정했다. **PC 전체에 하나의 분할 엔진을 강제한 것이 문제**였고, 실사용 검증에서 이미 화면별 최적 경로가 달랐다.

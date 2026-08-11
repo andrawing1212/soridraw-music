@@ -911,16 +911,17 @@
   text-overflow: ellipsis;
 }
 
-/* 612 — PC Music Note-only intrinsic-text reflow guard.
- * The user-verified winners are now routed per workspace, so this rule is
- * deliberately NOT shared with Library/Recent or Galaxy Tab's already-fast V2.
- * Music Note cards contain two horizontally scrollable, nowrap text regions
- * (title + keyword chips) inside a flex item. During every 1px pane-width write,
- * Chromium can otherwise revisit their large intrinsic inline sizes before the
- * flex item receives the same available width. Inline-size containment tells
- * layout that the flex item's width is owned by the row, not by the full text
- * contents, while descendants still receive the live width and remain visually
- * responsive on every frame. No size/height freeze and no pointer-up snap. */
+/* 613 — Music Note horizontal-strip isolation.
+ * 612 proved that engine routing alone cannot cure Music Note: automatic,
+ * legacy and Lite V2 all remain slower only on this page. The page-specific
+ * difference is the pair of native horizontal scroll containers on every row.
+ * Their long title / many keyword descendants force Chromium to maintain
+ * scrollable-overflow geometry whenever the result pane changes by 1px.
+ *
+ * During divider drag we do not need to horizontally scroll those strips, so
+ * temporarily use overflow:clip (not a native scroll container) and keep the
+ * long immutable text/chip tracks in their own contained paint/layout islands.
+ * The normal overflow-x:auto behavior returns immediately at pointer-up. */
 @media (min-width: 1100px) {
   .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
   .soridraw-musicnote-song-copy {
@@ -933,7 +934,27 @@
     .soridraw-musicnote-song-title,
     .soridraw-musicnote-song-keywords
   ) {
+    overflow-x: clip !important;
+    overflow-y: clip !important;
+    contain: inline-size layout style paint;
+  }
+
+  .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
+  :is(.soridraw-musicnote-title-track, .soridraw-musicnote-keyword-track) {
     contain: layout style paint;
+    transform: translateZ(0);
+    will-change: transform;
+  }
+
+  /* Preserve the page-owned PC/mobile keyword spacing after grouping chips
+   * into one max-content track. */
+  .soridraw-musicnote-keyword-track {
+    gap: inherit;
+  }
+
+  .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
+  .soridraw-musicnote-keyword-track > .soridraw-musicnote-keyword-chip {
+    flex: none !important;
   }
 
   .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
@@ -941,4 +962,30 @@
     transition-duration: 0s !important;
     transition-delay: 0s !important;
   }
+}
+
+/* 613 diagnostic fallbacks — existing admin Render Scan can now isolate the
+ * two Music Note horizontal strips without another code build. These profiles
+ * are benchmark-only and never affect normal use. */
+html[data-soridraw-perf-probe="musicnote-title-off"]
+.soridraw-lite-studio-split-workspace .soridraw-musicnote-song-title {
+  content-visibility: hidden !important;
+  contain: strict !important;
+  min-height: 19px !important;
+  height: 19px !important;
+}
+
+html[data-soridraw-perf-probe="musicnote-keywords-off"]
+.soridraw-lite-studio-split-workspace .soridraw-musicnote-song-keywords {
+  content-visibility: hidden !important;
+  contain: strict !important;
+  min-height: 20px !important;
+  height: 20px !important;
+}
+
+html[data-soridraw-perf-probe="musicnote-text-off"]
+.soridraw-lite-studio-split-workspace
+:is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords) {
+  content-visibility: hidden !important;
+  contain: strict !important;
 }

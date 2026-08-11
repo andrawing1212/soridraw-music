@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import {
   applySoridrawDisplayMode,
+  isSoridrawPhoneDevice,
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
 } from '../../services/themePreferences';
@@ -259,7 +260,9 @@ export default function StudioLeftRail({
               {([
                 { mode: 'dark' as const, label: '다크' },
                 { mode: 'light' as const, label: '라이트' },
-                { mode: 'studio-black' as const, label: '분할' },
+                ...(!isSoridrawPhoneDevice()
+                  ? [{ mode: 'studio-black' as const, label: '분할' }]
+                  : []),
               ]).map((item) => (
                 <button
                   key={item.mode}

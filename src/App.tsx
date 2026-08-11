@@ -312,6 +312,7 @@ import {
   applyStoredSoridrawDisplayMode,
   cycleSoridrawDisplayMode,
   getSoridrawDisplayModeLabel,
+  isSoridrawPhoneDevice,
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
 } from './services/themePreferences';
@@ -3418,7 +3419,9 @@ function Navigation({
     setDisplayMode(cycleSoridrawDisplayMode());
   };
 
-  const displayModeCycleText = '다크 · 라이트 · 분할';
+  const displayModeCycleText = isSoridrawPhoneDevice()
+    ? '다크 · 라이트'
+    : '다크 · 라이트 · 분할';
 
   // Collapse menu on scroll
   useEffect(() => {

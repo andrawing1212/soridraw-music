@@ -49,6 +49,10 @@
             : requestedTheme === 'studio-black'
               ? 'studio-black'
               : legacyColor === 'light' ? 'light' : 'dark';
+          // 630: actual phones never first-paint the split workspace. This uses
+          // the same device UA rule as the React runtime, so landscape rotation
+          // does not turn a phone into a tablet merely because viewport width grew.
+          if (isPhone && requestedDisplay === 'studio-black') requestedDisplay = 'dark';
           var effectiveTheme = requestedDisplay === 'studio-black' ? 'studio-black' : 'classic';
           var effectiveColor = requestedDisplay === 'light' ? 'light' : 'dark';
           document.documentElement.dataset.soridrawTheme = effectiveTheme;

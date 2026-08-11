@@ -30,15 +30,27 @@ export const readSoridrawTheme = (): SoridrawTheme => {
   }
 };
 
+const normalizeDisplayModeForDevice = (mode: SoridrawDisplayMode, isPhone: boolean): SoridrawDisplayMode => {
+  // 630: physical phones never enter the split workspace. The phone/large-screen
+  // distinction comes from the device UA, not viewport width, so rotating a
+  // phone to landscape cannot accidentally promote it into the tablet split UI.
+  // Tablets (Galaxy Tab/iPad/etc.) keep the existing split-capable path.
+  if (isPhone && mode === 'studio-black') return 'dark';
+  return mode;
+};
+
 const readStoredDisplayMode = (isPhone: boolean): SoridrawDisplayMode => {
   try {
     const stored = localStorage.getItem(isPhone ? PHONE_MODE_STORAGE_KEY : LARGE_MODE_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark' || stored === 'studio-black') return stored;
+    if (stored === 'light' || stored === 'dark' || stored === 'studio-black') {
+      return normalizeDisplayModeForDevice(stored, isPhone);
+    }
 
-    if (readSoridrawTheme() === 'studio-black') return 'studio-black';
-    return 'dark';
+    const legacyThemeMode: SoridrawDisplayMode = readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
+    return normalizeDisplayModeForDevice(legacyThemeMode, isPhone);
   } catch {
-    return readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
+    const fallbackMode: SoridrawDisplayMode = readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
+    return normalizeDisplayModeForDevice(fallbackMode, isPhone);
   }
 };
 
@@ -61,7 +73,7 @@ export const applySoridrawDisplayMode = (requestedMode: SoridrawDisplayMode) => 
   if (typeof document === 'undefined') return requestedMode;
 
   const isPhone = isSoridrawPhoneDevice();
-  const mode: SoridrawDisplayMode = requestedMode;
+  const mode: SoridrawDisplayMode = normalizeDisplayModeForDevice(requestedMode, isPhone);
   const theme: SoridrawTheme = mode === 'studio-black' ? 'studio-black' : 'classic';
   const colorMode: SoridrawColorMode = mode === 'light' ? 'light' : 'dark';
 
@@ -85,7 +97,9 @@ export const applyStoredSoridrawDisplayMode = () =>
 
 export const cycleSoridrawDisplayMode = () => {
   const isPhone = isSoridrawPhoneDevice();
-  const sequence: SoridrawDisplayMode[] = ['dark', 'light', 'studio-black'];
+  const sequence: SoridrawDisplayMode[] = isPhone
+    ? ['dark', 'light']
+    : ['dark', 'light', 'studio-black'];
   const current = readStoredDisplayMode(isPhone);
   const currentIndex = sequence.indexOf(current);
   const next = sequence[(currentIndex < 0 ? 0 : currentIndex + 1) % sequence.length];

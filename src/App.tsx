@@ -3985,6 +3985,17 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
   return rawModel ? (GEMINI_MODEL_LABELS[rawModel] || rawModel) : '';
 };
 
+const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'legacy';
+  // 611: choose by the active interaction environment, not by viewport width.
+  // A coarse/no-hover primary pointer matches the verified Galaxy Tab/touch
+  // path. Fine hover pointers (normal PC mouse/trackpad) use the verified
+  // legacy split engine even when the browser window itself is narrow.
+  const coarsePrimaryPointer = window.matchMedia('(pointer: coarse)').matches;
+  const noPrimaryHover = window.matchMedia('(hover: none)').matches;
+  return coarsePrimaryPointer || noPrimaryHover ? 'lite' : 'legacy';
+};
+
 function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
@@ -4186,11 +4197,35 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
-  const studioSplitEngine: StudioSplitEngine = new URLSearchParams(location.search).get('splitEngine') === 'legacy' ? 'legacy' : 'lite';
-  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine) => {
+  const splitEngineParam = new URLSearchParams(location.search).get('splitEngine');
+  const studioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
+    ? splitEngineParam
+    : null;
+  const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const pointerQuery = window.matchMedia('(pointer: coarse)');
+    const hoverQuery = window.matchMedia('(hover: none)');
+    const syncAutomaticSplitEngine = () => setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
+    syncAutomaticSplitEngine();
+    pointerQuery.addEventListener('change', syncAutomaticSplitEngine);
+    hoverQuery.addEventListener('change', syncAutomaticSplitEngine);
+    return () => {
+      pointerQuery.removeEventListener('change', syncAutomaticSplitEngine);
+      hoverQuery.removeEventListener('change', syncAutomaticSplitEngine);
+    };
+  }, []);
+
+  // 611 runtime policy: PC mouse/trackpad = verified legacy engine,
+  // Galaxy Tab / touch-primary environment = verified Lite V2. The query param
+  // remains an admin-only diagnostic override so both engines can still be
+  // compared without changing the normal user path.
+  const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticStudioSplitEngine;
+  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
-    if (engine === 'lite') nextParams.delete('splitEngine');
-    else nextParams.set('splitEngine', 'legacy');
+    if (engine === 'auto') nextParams.delete('splitEngine');
+    else nextParams.set('splitEngine', engine);
     const query = nextParams.toString();
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
@@ -14433,21 +14468,29 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && (
-                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교">
+              {isStudioBlackActionMode && isAdminMenuUser && (
+                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
                   <button
                     type="button"
-                    className={studioSplitEngine === 'lite' ? 'is-active' : ''}
+                    className={studioSplitEngineOverride === null ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('auto')}
+                    title={`자동 선택 · 현재 ${studioSplitEngine === 'lite' ? 'Lite V2' : '기존 방식'}`}
+                  >
+                    자동
+                  </button>
+                  <button
+                    type="button"
+                    className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('lite')}
-                    title="초경량 Studio 분할 엔진 V2"
+                    title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
                   >
                     Lite V2
                   </button>
                   <button
                     type="button"
-                    className={studioSplitEngine === 'legacy' ? 'is-active' : ''}
+                    className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('legacy')}
-                    title="기존 StudioSplitWorkspace"
+                    title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
                   >
                     기존 방식
                   </button>

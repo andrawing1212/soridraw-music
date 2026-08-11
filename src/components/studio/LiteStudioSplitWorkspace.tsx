@@ -25,6 +25,7 @@ import {
   recordSplitPerfResponsiveSwitch,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
+  SPLIT_PERF_MANUAL_DRAG_ARM_EVENT,
 } from './splitPerfDiagnostics';
 
 const WIDE_STORAGE_KEY = 'soridraw_lite_studio_split_percent_v2';
@@ -199,7 +200,8 @@ export default function LiteStudioSplitWorkspace({
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(-1);
-  const activePointerTypeRef = useRef<string>('unknown');
+  const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
+  const manualPerfCaptureActiveRef = useRef(false);
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
@@ -422,14 +424,14 @@ export default function LiteStudioSplitWorkspace({
 
     if (force || contentResponsiveModeRef.current.builder !== builderMode) {
       if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
-        recordSplitPerfResponsiveSwitch('content');
+        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
       }
       contentResponsiveModeRef.current.builder = builderMode;
       builder.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeBuilderWidth } }));
     }
     if (force || contentResponsiveModeRef.current.result !== resultMode) {
       if (!force && contentResponsiveModeRef.current.result !== null && contentResponsiveModeRef.current.result !== resultMode) {
-        recordSplitPerfResponsiveSwitch('content');
+        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
       }
       contentResponsiveModeRef.current.result = resultMode;
       result.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeResultWidth } }));
@@ -458,13 +460,13 @@ export default function LiteStudioSplitWorkspace({
     );
 
     if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
-      if (builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
+      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
       document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
     }
     if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
-      if (result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
+      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
       document.documentElement.dataset.soridrawResultMode = nextResultMode;
@@ -602,7 +604,10 @@ export default function LiteStudioSplitWorkspace({
     const result = resultRef.current;
     if (!layout || !builder || !result) return percentRef.current;
 
-    const perfEnabled = isSplitPerfDragActive();
+    // 611: normal hand dragging never samples PERF instrumentation. Only the
+    // synthetic benchmark or an explicitly armed one-shot admin hand test can
+    // enter the measurement branch below.
+    const perfEnabled = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive();
     const perfStart = perfEnabled ? performance.now() : 0;
     const bounds = getSplitBounds(metricsRef.current.width);
     const nextPercent = clampToBounds(rawPercent, bounds);
@@ -714,7 +719,7 @@ export default function LiteStudioSplitWorkspace({
   }, [refreshMetrics]);
 
   const flushPointer = useCallback(() => {
-    const perfStart = isSplitPerfDragActive() ? performance.now() : 0;
+    const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
@@ -788,9 +793,8 @@ export default function LiteStudioSplitWorkspace({
     flushPointer();
     draggingRef.current = false;
     pointerIdRef.current = -1;
-    activePointerTypeRef.current = 'unknown';
-    layoutRef.current?.classList.remove('is-dragging', 'is-mouse-dragging');
-    document.documentElement.classList.remove('soridraw-lite-split-dragging', 'soridraw-lite-split-mouse-dragging');
+    layoutRef.current?.classList.remove('is-dragging');
+    document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
     restoreDragViewportAnchors(true);
@@ -803,7 +807,10 @@ export default function LiteStudioSplitWorkspace({
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
     layoutAckObserverRef.current?.disconnect();
     layoutAckObserverRef.current = null;
-    finishSplitPerfDrag();
+    if (manualPerfCaptureActiveRef.current) {
+      manualPerfCaptureActiveRef.current = false;
+      finishSplitPerfDrag();
+    }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
   }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragViewportAnchors]);
@@ -823,7 +830,6 @@ export default function LiteStudioSplitWorkspace({
     };
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
-    const resultRect = resultRef.current?.getBoundingClientRect();
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {
@@ -839,28 +845,28 @@ export default function LiteStudioSplitWorkspace({
     captureDragViewportAnchors();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
-    activePointerTypeRef.current = event.pointerType || 'unknown';
     pendingClientXRef.current = null;
-    beginSplitPerfDrag({
-      workspaceView,
-      engine: `Lite V2 · manual drag · 610 mouse-touch parity (${event.pointerType || 'unknown'}) · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
-      builder: builderRef.current,
-      result: resultRef.current,
-      layoutMode: runtimeLayoutModeRef.current,
-    });
-    startLayoutAckObserver(builderRect?.width || 0, resultRect?.width || 0);
+    // 611: real hand dragging is intentionally uninstrumented unless the admin
+    // explicitly arms the one-shot "실손 드래그 비교" diagnostic. The arm is
+    // consumed here, so ordinary usage never starts observers/raf probes.
+    const activeWorkspace = workspaceView || 'create';
+    const captureManualPerf = manualPerfArmedWorkspaceRef.current === activeWorkspace;
+    manualPerfArmedWorkspaceRef.current = null;
+    manualPerfCaptureActiveRef.current = captureManualPerf;
+    if (captureManualPerf) {
+      beginSplitPerfDrag({
+        workspaceView,
+        engine: `Lite V2 · armed hand diagnostic 611 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
+        builder: builderRef.current,
+        result: resultRef.current,
+        layoutMode: runtimeLayoutModeRef.current,
+      });
+      startLayoutAckObserver(builderRect?.width || 0, resultRef.current?.getBoundingClientRect().width || 0);
+    }
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-lite-split-dragging');
-    if (activePointerTypeRef.current === 'mouse') {
-      // 610: make mouse dragging use the same interaction shape as touch.
-      // A single transparent drag shield owns hit-testing while pointer capture
-      // keeps move/up events on the splitter. This prevents the fine-pointer
-      // hover tree from being recomputed continuously under the cursor.
-      layout.classList.add('is-mouse-dragging');
-      document.documentElement.classList.add('soridraw-lite-split-mouse-dragging');
-    }
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
@@ -868,22 +874,15 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
-    const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-    let coalesced: PointerEvent[] = [];
-    try { coalesced = nativeEvent.getCoalescedEvents?.() || []; } catch { coalesced = []; }
-    const coalescedCount = Math.max(1, coalesced.length);
-
-    // 610: a high-rate PC mouse can deliver hundreds of hardware samples per
-    // second inside a much lower-rate pointermove stream. Using the React
-    // wrapper coordinate can leave the visible pane one coalesced batch behind
-    // the physical cursor. Touch already feels good, so only fine-pointer mouse
-    // drags explicitly consume the newest hardware sample from each batch.
-    const latestPointer = activePointerTypeRef.current === 'mouse' && coalesced.length > 0
-      ? coalesced[coalesced.length - 1]
-      : nativeEvent;
-    const clientX = Number.isFinite(latestPointer.clientX) ? latestPointer.clientX : event.clientX;
-    recordSplitPerfPointer(clientX, coalescedCount);
-    schedulePointer(clientX);
+    // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
+    // verified Lite V2 path; PC no longer uses this engine in automatic mode.
+    if (manualPerfCaptureActiveRef.current) {
+      const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+      let coalescedCount = 1;
+      try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
+      recordSplitPerfPointer(event.clientX, coalescedCount);
+    }
+    schedulePointer(event.clientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -899,6 +898,22 @@ export default function LiteStudioSplitWorkspace({
   useEffect(() => () => {
     layoutAckObserverRef.current?.disconnect();
     layoutAckObserverRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const handleManualPerfArm = (event: Event) => {
+      const detail = (event as CustomEvent<{ armed?: boolean; workspace?: StudioWorkspaceView }>).detail;
+      if (detail?.armed === false) {
+        manualPerfArmedWorkspaceRef.current = null;
+        return;
+      }
+      const nextWorkspace = detail?.workspace;
+      if (nextWorkspace === 'create' || nextWorkspace === 'recent' || nextWorkspace === 'music-note' || nextWorkspace === 'library') {
+        manualPerfArmedWorkspaceRef.current = nextWorkspace;
+      }
+    };
+    window.addEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
   }, []);
 
   useEffect(() => {
@@ -1176,16 +1191,19 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 610 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 611 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
             benchmarkSurfacePass: surfacePass,
             layoutMode: requestedLayoutMode,
           });
+          startLayoutAckObserver(builder.getBoundingClientRect().width, result.getBoundingClientRect().width);
           emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}`);
           runLegs(4, 1000, true, () => {
             finishSplitPerfDrag();
+            layoutAckObserverRef.current?.disconnect();
+            layoutAckObserverRef.current = null;
             const measured = getLastSplitPerfResult();
             if (!measured) {
               benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex), 320);
@@ -1224,7 +1242,7 @@ export default function LiteStudioSplitWorkspace({
       }
       benchmarkRunningRef.current = false;
     };
-  }, [applyPercent, captureDragViewportAnchors, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, viewMode, workspaceView, writeLiveSplitGeometry]);
+  }, [applyPercent, captureDragViewportAnchors, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, startLayoutAckObserver, viewMode, workspaceView, writeLiveSplitGeometry]);
 
   useLayoutEffect(() => {
     builderCollapsedRef.current = isBuilderCollapsed;
@@ -1292,7 +1310,7 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
-      document.documentElement.classList.remove('soridraw-lite-split-dragging', 'soridraw-lite-split-mouse-dragging');
+      document.documentElement.classList.remove('soridraw-lite-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       restoreDragViewportAnchors(false);

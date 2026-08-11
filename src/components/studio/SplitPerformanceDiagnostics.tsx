@@ -8,6 +8,7 @@ import {
   setSplitPerfDiagnosticsEnabled,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
+  SPLIT_PERF_MANUAL_DRAG_ARM_EVENT,
   SPLIT_PERF_TOOL_VISIBILITY_EVENT,
   SPLIT_PERF_WORKSPACE_REQUEST_EVENT,
   subscribeSplitPerfBenchmarkSummary,
@@ -618,6 +619,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       setBenchmarkMessage('스튜디오의 분할 화면에서 자동 테스트를 실행하세요.');
       return false;
     }
+    if (!document.querySelector('.soridraw-lite-studio-split-workspace')) {
+      setBenchmarkMessage('611 자동 모드의 PC는 기존 분할 엔진입니다. PERF 진단은 우측 상단에서 Lite V2를 강제 선택한 뒤 실행하세요.');
+      return false;
+    }
     return true;
   };
 
@@ -817,6 +822,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
         await waitForWorkspaceReady(workspace);
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 분할바를 4~6초 동안 계속 좌우로 실제 드래그한 뒤 놓아주세요.`);
+        // 611: normal hand dragging is never instrumented. Arm PERF only for
+        // this explicit admin hand-comparison request; Lite V2 consumes the arm
+        // once on the next matching pointer-down and disarms after pointer-up.
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, { detail: { armed: true, workspace } }));
         const measured = await waitForManualDragResult(workspace);
         rows.push(toHandPairRow(workspace, measured));
         setHandPairRows([...rows]);
@@ -840,6 +849,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     } catch (error) {
       setBenchmarkMessage(`실손 비교 중단 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     } finally {
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, { detail: { armed: false } }));
       if (originalWorkspace === 'music-note' || originalWorkspace === 'library' || originalWorkspace === 'recent' || originalWorkspace === 'create') {
         window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: originalWorkspace } }));
       }

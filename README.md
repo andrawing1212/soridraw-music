@@ -1615,3 +1615,21 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - touch/pen 입력에는 이 shield를 적용하지 않는다. 갤탭에서 이미 확인된 터치 손맛은 변경하지 않는다.
 - 신규 observer, per-frame DOM read, React drag state, forced layout 로직은 추가하지 않았다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 611차 — PC 기존 엔진 / 터치 Lite V2 자동 분기 + 실사용 PERF 분리
+- 기준: 610차 (`SORIDRAW_610차_PC마우스_터치동기화_드래그입력개선`). 같은 좁은 화면에서 **PC 마우스의 Lite V2만 느리고 기존 방식은 빠르며, 갤럭시탭 터치의 Lite V2는 빠른** 실사용 비교를 최종 기준으로 삼았다.
+- 일반 Studio Black 분할 엔진을 화면 폭이 아니라 **주 입력 환경**으로 자동 선택한다.
+  - `(pointer: fine) + hover 가능`인 일반 PC 마우스/트랙패드 환경: 검증된 `StudioSplitWorkspace` 기존 방식.
+  - `(pointer: coarse)` 또는 `hover: none`인 갤럭시탭/터치 우선 환경: 검증된 `Lite V2`.
+  - 브라우저 창을 좁혀도 PC는 기존 엔진을 유지하므로 PC/Tablet 반응형 판정과 분할 엔진 선택을 더 이상 섞지 않는다.
+- 관리자에게만 `자동 / Lite V2 / 기존 방식` 진단 스위치를 남겼다. 기본은 `자동`이며, `?splitEngine=lite|legacy`는 비교 진단용 강제 선택으로 유지한다.
+- 610차의 마우스 전용 보정은 제거했다.
+  - `getCoalescedEvents()` 마지막 샘플로 좌표를 바꾸던 경로 제거.
+  - 마우스 드래그 중 투명 hit-test shield와 `is-mouse-dragging` 상태 제거.
+  - 터치 Lite V2의 기존 rAF/좌표/반응형 동작은 그대로 유지한다.
+- PERF 진단을 일반 실사용 드래그와 분리했다.
+  - 일반 손 드래그는 `beginSplitPerfDrag`, pointer sample 기록, `layoutAck ResizeObserver`를 시작하지 않는다.
+  - 자동 벤치마크는 기존 1400×900 고정 측정과 layout-ack 계측을 유지한다.
+  - 관리자 `실손 드래그 비교`를 눌렀을 때만 다음 1회 드래그를 명시적으로 arm하여 PERF/ResizeObserver를 켜고, pointer-up 후 자동 해제한다. 진단 도구 자체는 삭제하지 않는다.
+- PC 자동 모드에서는 Lite V2 PERF 도구 실행 전 관리자 진단 스위치로 `Lite V2` 강제 선택을 안내한다.
+- UI 디자인, 분할 비율/반응형 규칙, 생성 기능, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

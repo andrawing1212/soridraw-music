@@ -171,6 +171,7 @@ export const SPLIT_PERF_TOOL_VISIBILITY_EVENT = 'soridraw:split-perf-tool-visibi
 export const SPLIT_PERF_BENCHMARK_REQUEST_EVENT = 'soridraw:split-perf-benchmark-request';
 export const SPLIT_PERF_BENCHMARK_STATUS_EVENT = 'soridraw:split-perf-benchmark-status';
 export const SPLIT_PERF_WORKSPACE_REQUEST_EVENT = 'soridraw:split-perf-workspace-request';
+export const SPLIT_PERF_MANUAL_DRAG_ARM_EVENT = 'soridraw:split-perf-manual-drag-arm';
 
 export const readSplitPerfToolVisibility = () => {
   if (typeof window === 'undefined') return true;

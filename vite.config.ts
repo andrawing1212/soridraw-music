@@ -22,6 +22,11 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // 589: restore the normal production build after the isolated minify A/B
+    // checks. The next diagnostic compares the computed/cascaded styles that
+    // the browser actually applies in DEV vs PROD without changing output.
+    minify: true,
+    cssMinify: true,
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {

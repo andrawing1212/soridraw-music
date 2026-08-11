@@ -3,9 +3,11 @@ import StudioSplitWorkspace from './StudioSplitWorkspace';
 import LiteStudioSplitWorkspace from './LiteStudioSplitWorkspace';
 
 export type StudioSplitEngine = 'lite' | 'legacy';
+export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590';
 
 type Props = {
   engine: StudioSplitEngine;
+  liteRuntimeProfile?: StudioLiteRuntimeProfile;
   children: ReactNode;
   builderMasthead?: ReactNode;
   viewMode?: 'split' | 'result-only' | 'hidden';
@@ -13,7 +15,7 @@ type Props = {
   workspaceRequestId?: number;
 };
 
-export default function StudioSplitEngineWorkspace({ engine, ...props }: Props) {
+export default function StudioSplitEngineWorkspace({ engine, liteRuntimeProfile = 'adaptive', ...props }: Props) {
   if (engine === 'legacy') return <StudioSplitWorkspace {...props} />;
-  return <LiteStudioSplitWorkspace {...props} />;
+  return <LiteStudioSplitWorkspace {...props} runtimeProfile={liteRuntimeProfile} />;
 }

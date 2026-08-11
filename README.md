@@ -1,3 +1,63 @@
+## 613차 — 뮤직노트 가로 스크롤 컨테이너 병목 격리 + 자동 병목 스캔
+
+- 612 실사용 결과에서 `자동 / 기존 방식 / V2` 모두 뮤직노트만 느리고, 같은 자동 환경의 Recent/Library는 정상임을 기준으로 분할 엔진을 원인에서 제외했다.
+- 뮤직노트 각 곡 행에는 라이브러리와 달리 `제목`과 `키워드` 두 개의 긴 native horizontal scroll container가 동시에 있고, 키워드는 장르/분위기/주제/Situation/스타일/사운드/보컬 칩 전체를 직접 자식으로 가진다. 결과 pane이 1px씩 변할 때 Chromium이 이 두 scrollable-overflow tree의 intrinsic/overflow geometry를 반복 유지하는 경로를 이번 차수의 주 병목으로 격리했다.
+- 키워드 칩을 `soridraw-musicnote-keyword-track` 한 개의 max-content track 안으로 묶고, 제목도 기존 max-content span에 전용 track class를 부여했다. 정상 상태의 수평 스크롤 기능/디자인은 그대로 유지한다.
+- 분할바를 잡고 있는 동안에만 Music Note 제목/키워드 viewport를 `overflow: clip`으로 바꿔 native scroll-container 갱신을 끊고, 두 max-content track을 독립 layout/paint island로 둔다. pointer-up 즉시 기존 `overflow-x:auto`가 복구된다.
+- 같은 Music Note 전용 drag guard를 Lite V2뿐 아니라 기존 splitter의 `html.soridraw-split-dragging` 경로에도 적용했다. Library/Recent/Create/갤탭의 이미 통과한 경로는 변경하지 않는다.
+- 관리자 기존 `렌더 스캔`에 `뮤직노트 제목 OFF / 키워드 OFF / 제목+키워드 OFF` 자동 A/B를 추가했다. 이번 수정이 충분하지 않을 경우 한 번의 자동 스캔으로 제목/키워드/기타 영역 중 실제 비용 주체를 바로 좁힐 수 있고, 진단 기능은 관리자 내부에 계속 보존한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 612차 — 화면별 검증 경로 복원 + PC 뮤직노트 전용 reflow 경량화
+
+- 611의 핵심 오류를 수정했다. **PC 전체에 하나의 분할 엔진을 강제한 것이 문제**였고, 실사용 검증에서 이미 화면별 최적 경로가 달랐다.
+- AUTO 라우팅을 입력환경 × 화면 기준으로 분리했다.
+  - 갤럭시탭/터치 우선 환경: Music Note / Library / Recent 모두 검증된 Lite V2 adaptive 경로 유지.
+  - PC Recent/Create: 기존 `StudioSplitWorkspace` 유지.
+  - PC Library: Lite V2를 사용하되 **590의 CSS-variable geometry를 PC/Tablet/Mobile 시각 모드와 무관하게 고정**.
+  - PC Music Note: Lite V2 direct pane geometry를 고정하고 Music Note 카드의 텍스트 flex intrinsic-size 재계산만 drag 중 격리.
+- Music Note 전용 reflow 가드는 `soridraw-musicnote-song-copy`의 inline-size/layout/style containment와 title/keyword strip의 layout/style/paint containment만 사용한다. 높이나 반응형 상태를 freeze하지 않아 드래그 중에도 실제 폭은 매 프레임 따라간다.
+- 갤탭에서 이미 통과한 V2 경로와 Library 590 경로에는 Music Note 전용 CSS를 적용하지 않는다.
+- 관리자 `자동 / Lite V2 / 기존 방식` 강제 비교는 유지한다. `Lite V2` 강제 선택은 기존 adaptive V2를 그대로 사용해 진단 기준을 보존한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 605 - Real-hand layout acknowledgement + responsive conflict diagnostics
+
+- Keep the **604/602 runtime behavior unchanged**. This step measures why Music Note can report high rAF FPS while still feeling as if the content is being pulled from behind.
+- During a real divider drag, attach one temporary `ResizeObserver` to the two pane boxes. It consumes the observer-provided border-box sizes only; there are **no drag-time geometry reads** and no forced-layout measurement loop.
+- Compare geometry writes with browser layout acknowledgement: acknowledgement rate, gap average/P95/max, write→ack latency, acknowledged-width error, and acknowledgement-per-commit ratio.
+- Record pointer gap P95/max and commit-per-pointer efficiency so human input cadence is separated from rendering cadence.
+- Count actual pane-mode and content-responsive-mode transitions while dragging. This directly tests whether PC/Tablet/content breakpoints are repeatedly fighting the Lite V2 geometry path.
+- The existing Music Note ↔ Library real-hand comparison includes all new metrics in the full report. Recent Songs and normal runtime layout/design are untouched. No Firebase/Auth/Firestore/Functions/storage schema changes.
+
+
+## 604 - Music Note / Library real-hand drag synchrony diagnostics
+
+- Keep the **603/602 runtime geometry unchanged** so the diagnostic does not contaminate the current hand feel: Music Note remains direct geometry; Library/Recent/Create remain the 590 CSS-variable path.
+- Add a paired **real-hand drag** workflow for Music Note and Library. The tool switches to each workspace in turn and waits for one 4–6 second manual divider drag, then restores the original workspace.
+- Record the factors that actually determine perceived drag smoothness without adding layout reads in the hot path: pointer event rate, coalesced sample rate, real pane-width commit rate, commit-gap average/P95/max, commit coverage per rAF, pointer-to-commit delay, frame P95/max, Long Tasks and browser render cost.
+- Manual drag results are included in the comprehensive copied report as `[MUSIC NOTE / LIBRARY REAL HAND DRAG]` so automatic FPS and real-hand cadence can no longer be confused.
+- Normal runtime layout/design and Recent Songs are untouched. No Firebase/Auth/Firestore/Functions/storage schema changes.
+
+
+## 603 - Music Note / Library paired regression guard
+
+- Keep the **602 runtime unchanged**: Recent/Library/Create use the 590 CSS-variable path, Music Note uses direct pane geometry.
+- Fix the normal automatic benchmark so it measures the **active workspace's real runtime mode**; only explicit coordinate A/B forces css-var/direct.
+- Add one-click **Music Note ↔ Library paired benchmark**. It switches workspaces automatically, runs the same 1400×900 / 3-set benchmark on both, restores the original workspace, and displays both results together.
+- The first successful pair is saved locally as the performance protection baseline. Later runs flag Library regressions (FPS -10% or P95 +15%) so Music Note optimization cannot silently slow the Library again.
+- No normal-user runtime layout, UI design, Firebase/Auth/Firestore/Functions/storage schema changes.
+
+
+## 602 - 590 baseline restore + workspace-isolated Lite V2 geometry
+
+- Reset source baseline to **590** (discarding 591-601 runtime experiments).
+- Preserve 590 CSS-variable Lite V2 geometry for **Create / Recent / Library**.
+- Apply direct pane geometry only to **Music Note**, where 590 A/B showed a clear benefit.
+- Benchmark A/B remains available, but after a benchmark the engine now restores the active workspace's own runtime mode instead of forcing one global mode.
+- Workspace switches explicitly clear stale direct inline geometry before Recent/Library/Create resumes, preventing cross-workspace leakage.
+- No Firebase/Auth/Firestore/Functions/storage schema changes.
+
 ## 549차 — 분할 리사이즈 중 빌더 화면 고정 / 연쇄 밀림 차단
 
 - 분할바를 잡는 순간 빌더의 현재 화면 기준점을 1회 저장합니다.
@@ -1362,4 +1422,275 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 564 Lite 테스트의 뮤직노트/라이브러리 pane-width 이벤트도 매 프레임 발송하지 않고 PC/Tablet/Mobile 모드가 실제로 바뀔 때만 보낸다.
 - 564에서 보이지 않던 중앙 pane 스크롤바를 Lite V2에도 복구했다.
 - Lite 분할선은 active/focus 상태에서도 높이 100%, transform/scale 없음으로 고정해 클릭 시 선 길이가 줄어들지 않는다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 566차 메모
+- Lite V2 성능 테스트의 중심을 뮤직노트/라이브러리 테스트 화면에서 실제 Sori Studio로 이동했다.
+- /history는 562차처럼 정상 뮤직노트 단독 화면 + 좌우 레일 구조로 복구했다.
+- /studio는 Lite Studio 분할 엔진 V2가 기본이며, 기존 StudioSplitWorkspace는 비교용 `기존 방식` 전환으로 유지한다.
+- 뮤직노트 테스트용 LiteSplitWorkspace 런타임 import/helper를 App.tsx에서 제거해 일반 뮤직노트 화면에 분할 엔진이 개입하지 않도록 했다.
+
+
+## 567차 메모
+- Lite V2 엔진은 566차에도 적용되어 있었지만 Studio용 splitter가 legacy `.soridraw-studio-splitter` 클래스를 함께 사용해 누적된 기존 CSS 디자인을 다시 상속하던 문제를 수정했다.
+- Studio Lite V2 splitter에서 legacy splitter 클래스를 제거하고, 564차 Music Note/Library 테스트에서 검증한 `.soridraw-lite-splitter` 디자인을 그대로 사용한다.
+- Studio에서 필요한 viewport fixed 위치만 별도 override하며, normal/hover/active/focus 모두 1px 전체 높이를 고정해 클릭 시 선 길이가 변하지 않는다.
+- 분할 엔진 동작/비율/반응형/데이터/Firebase 구조는 변경하지 않았다.
+
+
+## 568차 메모
+- 567에서 클래스만 Lite V2로 바꿨지만 Studio용 splitter를 body portal/fixed 좌표로 계속 렌더링해 564 테스트와 실제 선의 구조/길이가 달랐던 문제를 수정했다.
+- Lite V2 splitter를 Studio workspace 내부 absolute divider로 되돌려 564 뮤직노트/라이브러리 테스트와 동일한 렌더링 방식으로 통일했다.
+- splitter 위치는 workspace의 단일 `--soridraw-lite-split-percent` write가 소유하며, 클릭/드래그 상태에서도 base Lite V2 선 길이/두께가 유지된다.
+
+
+## 569차 메모
+- Lite Studio V2의 builder/result pane에 `data-soridraw-lite-pane` 신호를 복구했다.
+- Music Note/Library는 분할 중 자체 ResizeObserver + getBoundingClientRect 경로를 만들지 않고 Lite V2가 이미 계산한 pane width를 직접 받는다.
+- `soridraw-lite-pane-width`는 PC/tablet/mobile responsive 경계를 실제로 넘을 때만 전달한다. 안정된 초기/리사이즈 커밋에서는 1회 강제 동기화한다.
+- 디자인/CSS/분할선/스크롤/저장 구조는 변경하지 않았다.
+
+## 571차 — 분할 성능 진단 빌드
+- Lite V2 분할 동작 자체는 570차와 동일하게 유지하고, 성능 측정 코드만 추가했다.
+- 분할 드래그 중 별도 React 렌더는 하지 않는다. rAF 타임스탬프와 Long Task, JS hot-path 시간만 ref/메모리에 수집하고 pointer-up 뒤 패널을 갱신한다.
+- 진단 패널 표시: 추정 FPS, 평균/P95/최악 frame gap, 20/34/50ms 초과 프레임, Long Task, split flush/apply 시간, 콘텐츠 실제 폭 반영 횟수, DOM node 수, JS heap.
+- AI Studio 프리뷰와 Vercel 테스트앱에서 같은 창 크기·같은 페이지·같은 3~5초 왕복 드래그 후 패널을 캡처해 비교한다.
+- 임시 진단 UI이며 Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않는다.
+
+## 572차 — 분할 병목 귀속 진단 강화
+- 571의 FPS/Long Task 계측은 유지한다.
+- Chrome Long Animation Frames(LoAF) 정보를 추가 수집해 긴 프레임 안에서 실제 시간을 사용한 스크립트/콜백을 TOP 순위로 표시한다.
+- LoAF가 제공하는 forcedStyleAndLayoutDuration을 합산해 강제 Style/Layout 비용을 별도로 표시한다.
+- Event Timing이 지원되면 느린 입력 이벤트와 input delay도 함께 표시한다.
+- JS로 귀속되지 않은 LoAF 시간은 `브라우저 렌더/레이아웃/페인트(비JS)`로 따로 집계해, 엔진 JS와 브라우저 리플로우 비용을 구분한다.
+- 이번 차수는 진단 정확도를 위한 버전이라 570/571의 분할 동작, 30fps 콘텐츠 커밋, 디자인에는 손대지 않았다. 성능 원인이 확인된 뒤 실제 최적화를 적용한다.
+
+
+## 573차 메모 — 단일 60fps 경계 + 오프스크린 렌더 예산
+- 570차의 `60fps 분할선 + 약 30fps 콘텐츠` 이중 이동을 제거했다. Lite V2 분할선과 실제 좌/우 pane 폭은 다시 하나의 로컬 `--soridraw-studio-builder-width` 값으로 같은 rAF 프레임에서 움직인다.
+- 분할 드래그 시작 시 각 pane의 현재 스크롤 viewport를 한 번만 측정하고, 260px overscan 밖의 Music Note 곡 카드 / Library playlist row / Library workspace group·track / Studio menu·result 블록을 현재 높이 그대로 `content-visibility:hidden + contain:strict` shell로 임시 고정한다. 화면에 보이는 요소는 건드리지 않는다.
+- 드래그 종료 시 shell을 모두 해제하고 첫 visible row의 viewport offset을 1회 복원하여 off-screen 자연 높이 재계산 때문에 세로 위치가 튀지 않게 했다.
+- Library workspace group이 화면에 걸쳐 있을 때도 먼 track row가 매 폭 변경마다 재배치되지 않도록 track row 단위 `content-visibility:auto` containment를 추가했다.
+- 분할 중 React state 갱신, 반복 DOM 측정, 별도 compositor divider는 추가하지 않았다. 진단 패널은 유지한다.
+- 목적은 디자인을 바꾸는 것이 아니라 실제 분할 때 브라우저가 다시 계산/페인트해야 하는 off-screen DOM 양을 줄이는 것이다.
+
+
+## 576차 메모 — 573 기준 leaf-card native isolation
+- 574/575 실험은 기준에서 제외하고 573의 단일 실경계 rAF 구조로 복귀.
+- 드래그 시작 시 모든 카드의 getBoundingClientRect를 훑어 exact-height shell로 바꾸던 JS render-budget을 제거.
+- Music Note 곡 카드, Library playlist row, Library workspace track row만 드래그 중 content-visibility:auto + cached intrinsic size로 브라우저가 off-screen work를 직접 생략.
+- visible leaf card는 기존 디자인/실시간 반응형 높이를 유지하면서 layout/style/paint containment로 카드 단위 재계산 범위를 제한.
+- active menu row는 containment에서 제외해 popover/overflow 디자인을 보호.
+- 스크롤 안정화는 pane당 visible anchor 1개만 elementFromPoint로 캡처해 pointer-up 후 1회 보정.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 577차 — Lite V2 드래그 상태 전역 CSS 분리
+- 기준: 576차. 디자인/분할 비율/실시간 리플로우/leaf-card isolation은 그대로 유지한다.
+- Lite V2가 더 이상 레거시 `html.soridraw-split-dragging` 클래스를 사용하지 않도록 분리했다.
+- 레거시 `body *`, Music Note/Library 전체 descendant, pane 전체 `* / *::before / *::after` 드래그 선택자가 Lite V2에서 발동하지 않는다.
+- Lite V2는 `html.soridraw-lite-split-dragging` + workspace `.is-dragging`만 사용하고, 생성바/검색버튼/heartbeat/실제 leaf 카드처럼 필요한 대상만 정확히 지정한다.
+- `useStableContentHeight`는 새 Lite drag marker도 continuous resize로 인식해 드래그 중 높이 재측정이 다시 살아나지 않도록 유지했다.
+- 목표: pointer-down 시 전역 style matching 비용과 배포 환경의 큰 MessagePort/forced-layout spike를 줄이는 1단계 실험.
+
+## 579차 메모
+- 분할 성능 검증을 사람 손 드래그가 아닌 반복 가능한 자동 벤치마크로 표준화했다.
+- PERF 패널의 `자동 테스트`는 기본 32%↔68% 범위를 사용하고, 현재 화면의 안전 범위에 맞춰 자동 보정한다.
+- 워밍업 1왕복(측정 제외) 후 1초/leg 고정 속도로 2왕복을 측정한다. 테스트 후 기존 분할 비율로 복구한다.
+- 측정 결과에 측정 시간, 50ms 초과 비율, Long Task ms/s, 브라우저 비JS 렌더 ms/s를 추가했다.
+- 관리자 > 앱 설정에 `분할 성능 진단 도구` 표시/숨김 토글을 추가했다. 로컬 브라우저 설정으로 저장하며 일반 사용자에게 PERF 패널은 표시하지 않는다.
+- Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않았다.
+
+
+## 580차 메모
+- 579 자동 벤치마크에서 4초 측정 구간과 겹치던 App 최상위 3.6초 명령창 placeholder 갱신을 성능 병목 후보로 분리했다.
+- placeholder 순환 타이머는 이제 `/studio`의 `create` 화면에서만 존재하며, Music Note/Library/Recent에서는 타이머 자체를 만들지 않는다.
+- Lite V2 분할 드래그 중에는 create 화면에서도 placeholder 상태 갱신을 건너뛰어 분할 hot path에 상위 React commit이 끼어들지 않게 했다.
+- 관리자 PERF 토글/자동 벤치마크는 유지한다. UI 디자인/Firebase 저장 구조는 변경하지 않았다.
+
+## 581차 — 3세트 중앙값 자동 벤치마크 + 상위 ResizeObserver/모달 폴링 드래그 차단
+- PERF 자동 테스트를 워밍업 1회 후 동일 2왕복 측정 3세트로 변경하고, 최종 판정은 3세트 중앙값으로 표시한다.
+- 각 세트 FPS/P95를 함께 표시해 우연한 GC/이미지/백그라운드 작업에 의한 1회성 튐을 구분한다.
+- Music Note/Library 상단·리스트, Studio 외부 UI의 DOM 규모를 진단 패널에 분리 표시한다.
+- App 최상위 SecondaryScrollControl의 documentElement ResizeObserver와 500ms 모달 폴링을 Lite V2 분할 드래그 중 일시 중지하고 드래그 종료 후 1회 동기화한다.
+- 디자인, 분할 실시간 리플로우, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않는다.
+
+## 582차 — 자동 벤치마크 조건 검증 + PERF 가로형 압축 UI
+- 581의 3세트 중앙값 자동 테스트를 유지하면서, Music Note/Library 테스트는 동일 화면·동일 리스트 DOM 조건의 유효 세트만 채택하도록 보강했다.
+- 뮤직노트/라이브러리 리스트 DOM이 0이거나, 세트 사이 대상 DOM/viewport가 크게 달라지면 해당 세트는 자동 폐기하고 재측정한다.
+- 최대 7회 시도 안에 유효 3세트를 확보하지 못하면 결과를 억지로 정상 판정하지 않고 오류 상태로 종료한다.
+- PERF 패널은 세로 누적 대신 좌우 2열 배치로 변경해 한 번의 스크린샷에 핵심 수치·영역 DOM·병목 TOP·Lite V2 내부 단계를 함께 담기 쉽게 했다.
+- 일반 앱 디자인/분할 동작/Firebase 저장 구조는 변경하지 않았다.
+
+
+## 584차 메모
+- 관리자 PERF에 `영역 스캔`을 추가했다. 기준 → 현재 리스트 전체 OFF → 왼쪽 pane 전체 OFF → 오른쪽 pane 전체 OFF → 좌우 콘텐츠 전체 OFF를 동일 자동 벤치마크 조건으로 측정한다.
+- 영역 스캔은 진단 중에만 `content-visibility`/`contain`으로 대상 렌더를 임시 제외하고 끝나면 즉시 원래 디자인으로 복구한다. 실제 앱 디자인/레이아웃 코드는 변경하지 않았다.
+- 관리자 `품질·성능 진단 도구`에 자동 벤치마크 / 렌더 A/B / 영역 이진 스캔 항목을 보이게 정리했다. 향후 품질 테스트 도구도 같은 관리자 영역에 누적한다.
+
+
+## 585차 — Music Note / Library 페이지 영역 단위 렌더 격리
+- 기준: 584차 영역 이진 스캔 결과.
+- Music Note와 Library의 상단 컨트롤, 리스트 루트, 라이브러리 그룹을 Lite V2 드래그 동안만 독립 layout/style boundary로 분리했다.
+- 카드/행 leaf는 기존 576 격리를 공통 marker로 정리했다.
+- size containment나 상시 layout freeze는 사용하지 않아 승인된 디자인, 줄바꿈, 카드 높이, PC/Tablet/Mobile 실시간 반응을 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 586차 — DEV/PROD 실행 환경 종합 진단
+- 585차 페이지 영역 렌더 격리는 유지했다.
+- 관리자 PERF 패널에 `환경 진단`을 추가했다.
+- 환경 진단은 Vite DEV/PROD, production asset bundle 여부, idle rAF 추정 Hz, Service Worker controller/registration, CacheStorage 수, 로컬 JS/CSS 자원 규모, CSS rule 수, CPU thread/device memory, viewport/DPR, network 정보를 한 번에 수집한다.
+- `진단서 복사`로 같은 정보를 텍스트로 복사할 수 있다.
+- 이 기능은 관리자 `품질·성능 진단 도구`에 영구 보관하며 일반 사용자에게는 노출하지 않는다.
+- 앱 디자인/분할 동작/Firebase 데이터 구조는 변경하지 않았다.
+
+
+## 587차 — PROD CSS minify OFF A/B 진단
+- 586차를 기준으로 production 전용 CSS 축소를 `build.cssMinify: false`로 잠시 비활성화했다.
+- 목적은 AI Studio DEV와 Vercel PROD가 idle Hz는 동일한데 분할 Layout/Paint에서 큰 차이가 나는 원인이 production CSS 축소 출력인지 단일 변수로 검증하는 것이다.
+- JS minification, Lite V2 분할 엔진, Music Note/Library 디자인과 585 렌더 격리는 그대로 유지한다.
+- 환경 진단에 `587 · PROD CSS minify A/B`와 실제 적용 상태를 표시한다. DEV에서는 비적용, PROD에서만 OFF(진단)로 표시된다.
+- 테스트는 Music Note 동일 화면에서 자동 테스트 3세트 중앙값을 실행하고, 586/585의 PROD 기준과 FPS/P95/렌더 비JS·초를 비교한다.
+- 결과가 없거나 악화되면 이 build 옵션은 다음 차수에서 즉시 원복하고 JS minify/번들 경로를 다음 후보로 검증한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 588차 메모
+- 587차의 PROD CSS minify OFF 실험은 원복하고 production CSS 축소를 정상 상태로 되돌렸다.
+- 다음 단일 변수 A/B로 production JS minify만 OFF했다. production bundle/청크 구조는 유지해서 JS 축소 출력 자체가 분할 렌더 병목에 관여하는지 비교한다.
+- PERF 환경 진단에 JS minify / CSS minify 상태를 각각 표시한다.
+- `종합 진단서 복사`를 추가해 최신 환경 정보, 자동 테스트 3세트 중앙값, DOM/병목 TOP/Lite V2 내부 단계와 저장된 렌더·영역 A/B 결과를 텍스트 한 번으로 복사할 수 있게 했다.
+- 기존 관리자 품질·성능 진단 도구는 유지하며 일반 사용자에게는 노출하지 않는다.
+
+## 589차 — DEV/PROD computed style · CSS cascade 진단
+- 587/588에서 CSS minify 및 JS minify 단일 변수 A/B가 PROD 분할 병목의 주원인이 아님을 확인해 production minify 설정을 정상값으로 모두 복구했다.
+- 관리자 PERF `환경 진단`과 `종합 진단서`가 Lite V2 workspace 내부 실제 computed style을 DEV/PROD에서 동일하게 집계한다.
+- 집계 항목: contain/layout/paint containment, content-visibility, container-type, transform/filter/backdrop-filter/box-shadow, transition, will-change, fixed/sticky, overflow 관련 요소 수.
+- 핵심 target(workspace, 좌/우 pane, Music Note page/top/list/card, Library page/top/list/row)의 실제 적용된 크기/overflow/contain/container/transform/filter/shadow/transition/will-change 값을 진단서에 기록한다.
+- document.styleSheets의 적용 순서, local 여부, 읽을 수 있는 rule 수, source를 진단서에 기록해 DEV dev-module CSS와 PROD bundle CSS의 cascade 차이를 비교할 수 있게 했다.
+- 환경 패널은 캡처 높이가 과도하게 늘지 않도록 computed-style 요약을 3열로 표시한다.
+- 실제 Studio/Music Note/Library 디자인 및 분할 동작은 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음.
+
+
+## 590차 — 고정 벤치마크 표면 + 좌표 A/B
+- 자동 분할 벤치마크가 사용자의 브라우저 창 크기와 무관하게 내부 workspace를 1400×900으로 고정한 뒤 측정한다.
+- 좌/우 pane 스크롤은 테스트 시작 시 0으로 맞추고 테스트 종료 후 원래 스크롤, workspace 크기, 분할 비율을 복구한다.
+- 측정 결과에 `Benchmark Surface 1400×900 PASS/FAIL`을 기록하고, 표면 고정 실패 세트는 무효 처리한다.
+- 관리자 PERF에 `좌표 A/B`를 추가했다. 동일한 1400×900/3세트 조건에서 기존 부모 CSS custom property 방식과 builder/result/divider 직접 좌표 적용 방식을 비교한다.
+- 직접 좌표 방식은 진단 중에만 활성화되며 일반 Studio 동작과 디자인은 기존 CSS 변수 방식을 유지한다.
+- 관리자 품질·성능 진단 도구 설명에도 고정 표면과 좌표 A/B를 정리했다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+
+## 606 · split-drag App rerender suppression
+
+- Basis: 605. Runtime geometry remains the 602 screen-separated setup: Music Note uses direct pane geometry; Library/Recent/Create keep the 590 CSS-variable path.
+- 605 real-hand diagnostics showed the split engine writes themselves were tiny and input-to-commit latency was sub-millisecond, while the root builder responsive mode still crossed repeatedly during hand drags.
+- `App.tsx` previously mirrored every `data-soridraw-builder-mode` crossing through a root `MutationObserver` into `isSplitBuilderActionMobile` React state. That can rerender the large App tree during the divider hot path even though CSS already switches the floating Generate bar from the same root attribute.
+- During an active Lite V2 split drag, 606 now keeps the visual CSS responsive switch live but defers only that React gesture-state mirror. One synchronized React update runs on `soridraw-split-drag-end`. Outside dragging, theme/resize responsive changes still synchronize immediately.
+- No Firestore/Auth/Functions/storage schema changes. No deployment.
+
+
+## 607 · stabilize PC/tablet behavior before further optimization
+
+- Based on real-hand testing, the 606 App rerender suppression is no longer global. Library, Recent, Create, and Music Note PC restore immediate `data-soridraw-builder-mode` -> App gesture-state synchronization.
+- Only Music Note while the result content is in the published `tablet` responsive mode keeps the 606 drag-time deferral, because that is the state where the user observed a clear smoothness improvement.
+- Lite V2 now publishes its already-computed builder/result content responsive mode and active workspace on root data attributes. No extra DOM measurement, ResizeObserver, or per-frame React state was added.
+- Goal of 607 is stability, not another performance experiment: preserve the good Tablet Music Note behavior, restore other workspaces from the 606 regression, and keep PC Music Note on one synchronized App/control path before any later optimization.
+
+## 608차 — PC/Tablet 좌표 엔진 소유권 안정화
+- 607 실사용에서 확인된 대칭 증상을 기준으로 페이지별 좌표 엔진 분기를 제거했다.
+  - Tablet: Music Note(direct)는 부드럽고 다른 화면(css-var)은 버벅임.
+  - PC: 다른 화면(css-var)은 부드럽고 Music Note(direct)만 버벅임.
+- 결론: 성능 경로를 페이지가 아니라 **결과 pane의 실제 responsive mode**가 소유해야 한다.
+- 일반 손 드래그 런타임:
+  - result `pc` (>1080px): 590의 `css-var` 경로.
+  - result `tablet/mobile` (<=1080px): `direct` pane geometry 경로.
+- 모드 선택은 기존 rAF 안에서 ref로만 수행하며 React state/observer/DOM read를 새로 추가하지 않는다.
+- PC↔Tablet 경계를 넘을 때 direct inline geometry와 CSS-var geometry는 같은 동기 작업 안에서 전환되어 서로 동시에 경쟁하지 않는다. 엔진 전환에는 16px 히스테리시스를 둬 1080px 근처에서 좌우로 흔들 때 두 엔진이 반복 교대하지 않게 했다.
+- 606/607에서 추가했던 App-level drag sync 억제는 제거하고 605의 원래 즉시 동기화로 복구했다. 즉 다른 화면의 App 동작을 희생시키지 않는다.
+- 관리자 PERF 진단/명시적 layout A/B override는 그대로 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 609차 — PC/Tablet 좌표 소유권 동기 안정화
+- 608 실사용 확인 결과를 기준으로 추가 최적화보다 **양쪽 모드 안정화**를 우선했다.
+- 확인된 실제 손 드래그 결과:
+  - Tablet responsive mode: Music Note / Library / Recent 모두 `direct`가 부드러움.
+  - PC responsive mode: Library / Recent는 기존 `css-var` 경로가 안정적이며, Music Note는 별도 잔여 이슈로 남아 있음.
+- 608의 핵심 문제는 콘텐츠의 실제 PC↔Tablet 전환 기준(1080px)과 좌표 엔진 전환 기준(별도 ±16px 히스테리시스)이 서로 달랐다는 점이다. 이 때문에 경계 부근에서 화면은 Tablet인데 좌표 엔진은 PC 경로이거나 그 반대인 구간이 생길 수 있었다.
+- 609에서는 좌표 엔진이 **결과 pane의 실제 content responsive mode와 동일한 판정**을 사용한다.
+  - result `tablet/mobile`: 모든 workspace `direct`.
+  - result `pc`: Music Note=`direct`, Library/Recent/Create=`css-var`.
+- 별도의 엔진 전환 히스테리시스를 제거해 responsive mode와 geometry owner가 같은 프레임 경계에서 바뀌도록 했다.
+- workspace 전환 시 현재 result content mode를 한 번 다시 판정해 이전 화면의 inline direct geometry가 다음 화면에 남지 않게 했다.
+- 606/607의 App drag-sync 억제는 재도입하지 않았다. 608의 원래 즉시 App 동기화를 유지한다.
+- 이번 차수는 안정화 작업이며 PC Music Note 추가 최적화는 후속으로 보류한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 610차 — PC 마우스 드래그를 터치 입력 경로에 맞춤
+- 609까지 PC/Tablet 화면 모드로 해석하던 축을 더 이상 확대하지 않는다. 실제 사용자 검증 기준은 **갤럭시탭 손가락 터치=빠름 / PC 마우스=느림**으로 고정했다.
+- 좌표 엔진, responsive 기준, Music Note/Library/Recent 레이아웃은 609 상태를 유지하고 이번 차수에서는 입력 경로만 수정했다.
+- PC 마우스 `pointermove`에서 브라우저가 묶어 전달하는 `getCoalescedEvents()`의 **가장 마지막 실제 하드웨어 샘플 좌표**를 사용한다. React pointer wrapper 좌표가 물리 마우스보다 한 묶음 뒤에 남는 가능성을 제거한다.
+- 마우스 드래그 동안에만 workspace 위에 투명 hit-test shield를 하나 두고, splitter의 pointer capture는 그대로 유지한다. 따라서 마우스가 수백 개 카드/버튼/스크롤/hover 영역을 지나갈 때 발생할 수 있는 desktop hover 재판정을 차단한다.
+- touch/pen 입력에는 이 shield를 적용하지 않는다. 갤탭에서 이미 확인된 터치 손맛은 변경하지 않는다.
+- 신규 observer, per-frame DOM read, React drag state, forced layout 로직은 추가하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 611차 — PC 기존 엔진 / 터치 Lite V2 자동 분기 + 실사용 PERF 분리
+- 기준: 610차 (`SORIDRAW_610차_PC마우스_터치동기화_드래그입력개선`). 같은 좁은 화면에서 **PC 마우스의 Lite V2만 느리고 기존 방식은 빠르며, 갤럭시탭 터치의 Lite V2는 빠른** 실사용 비교를 최종 기준으로 삼았다.
+- 일반 Studio Black 분할 엔진을 화면 폭이 아니라 **주 입력 환경**으로 자동 선택한다.
+  - `(pointer: fine) + hover 가능`인 일반 PC 마우스/트랙패드 환경: 검증된 `StudioSplitWorkspace` 기존 방식.
+  - `(pointer: coarse)` 또는 `hover: none`인 갤럭시탭/터치 우선 환경: 검증된 `Lite V2`.
+  - 브라우저 창을 좁혀도 PC는 기존 엔진을 유지하므로 PC/Tablet 반응형 판정과 분할 엔진 선택을 더 이상 섞지 않는다.
+- 관리자에게만 `자동 / Lite V2 / 기존 방식` 진단 스위치를 남겼다. 기본은 `자동`이며, `?splitEngine=lite|legacy`는 비교 진단용 강제 선택으로 유지한다.
+- 610차의 마우스 전용 보정은 제거했다.
+  - `getCoalescedEvents()` 마지막 샘플로 좌표를 바꾸던 경로 제거.
+  - 마우스 드래그 중 투명 hit-test shield와 `is-mouse-dragging` 상태 제거.
+  - 터치 Lite V2의 기존 rAF/좌표/반응형 동작은 그대로 유지한다.
+- PERF 진단을 일반 실사용 드래그와 분리했다.
+  - 일반 손 드래그는 `beginSplitPerfDrag`, pointer sample 기록, `layoutAck ResizeObserver`를 시작하지 않는다.
+  - 자동 벤치마크는 기존 1400×900 고정 측정과 layout-ack 계측을 유지한다.
+  - 관리자 `실손 드래그 비교`를 눌렀을 때만 다음 1회 드래그를 명시적으로 arm하여 PERF/ResizeObserver를 켜고, pointer-up 후 자동 해제한다. 진단 도구 자체는 삭제하지 않는다.
+- PC 자동 모드에서는 Lite V2 PERF 도구 실행 전 관리자 진단 스위치로 `Lite V2` 강제 선택을 안내한다.
+- UI 디자인, 분할 비율/반응형 규칙, 생성 기능, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 615차 — 뮤직노트 PC 빠른 드래그 프레임 페이싱
+
+- 기준: 613차. 614의 드래그 중 대체 카드 DOM은 사용하지 않음(색상/외형 변경 없음).
+- 사용자 영상에서 확인된 증상은 평균 FPS 저하보다 입력 속도에 따라 지연이 누적되는 형태에 가까웠음.
+  - 천천히 이동: 비교적 부드러움
+  - 조금만 빠르게 이동: 레이아웃 처리가 입력 속도를 못 따라가며 여러 좌표가 한 번에 따라붙는 점프 발생
+- PC fine-pointer 환경의 Music Note에만 실제 레이아웃 커밋을 약 30fps 고정 cadence로 제한.
+- pointermove 자체는 계속 최신 좌표만 보관하고, 다음 허용 프레임에서 가장 최신 좌표 하나만 적용.
+- Legacy / Lite V2 모두 동일 원칙 적용.
+- Galaxy Tab / coarse-pointer V2는 기존 경로 유지.
+- Library / Recent / Create는 변경 없음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 616차 — 뮤직노트 PC 빠른 드래그 공간폭 제한 + Lite 전용 전환정지
+
+- 기준: 615차. 615의 30ms 시간 제한은 제거했다. 사용자 실사용 결과처럼 느린 드래그는 가장 부드럽고 빠른 드래그만 크게 끊기는 경우, 프레임 수 자체보다 한 프레임에 바뀌는 Music Note 폭이 커질 때 레이아웃/페인트 비용이 급증하는 패턴으로 판단했다.
+- PC fine-pointer Music Note에서만 매 rAF를 그대로 유지하면서 한 프레임의 splitter 이동폭을 제한한다.
+  - 정상 프레임: 최대 64px
+  - 지연 프레임: 최대 44px
+  - 30ms 이상 밀린 프레임: 최대 28px
+  - 느린 이동은 제한값보다 작으므로 기존처럼 1px 단위로 그대로 따라간다.
+  - 빠른 입력은 과거 좌표 큐를 재생하지 않고 항상 최신 목표만 유지한 채 제한된 공간폭으로 따라간다.
+  - pointer-up에서는 최종 좌표를 정확히 1회 확정한다.
+- Legacy와 Lite V2에 같은 Music Note 공간폭 규칙을 적용했다. Galaxy Tab/coarse-pointer는 기존 V2 경로를 변경하지 않는다.
+- Lite V2는 기존 `soridraw-lite-split-dragging` 경로 때문에 Legacy Music Note에 적용되던 transition/animation 정지가 빠져 있었다. 616에서는 body 전체가 아니라 Music Note 하위에만 정확히 같은 정지 규칙을 적용한다.
+- 613에서 title/keyword track마다 넣었던 `translateZ(0)` / `will-change: transform` 레이어 승격은 제거했다. 다수 카드가 별도 합성 레이어로 승격되어 빠른 폭 변경 때 raster/composite 비용을 키울 가능성을 없앴다. 기존 색상/레이아웃/카드 디자인은 변경하지 않는다.
+- Library / Recent / Create, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 617차 — 뮤직노트 분할 경로 공용화
+- 기준: 616차
+- PC 자동 뮤직노트의 Lite runtime profile을 라이브러리와 동일한 `library-590` CSS-variable geometry로 통일.
+- PC에서 강제 Lite V2를 선택해도 뮤직노트/라이브러리는 동일한 `library-590` geometry를 사용.
+- 갤럭시탭/터치 우선 환경은 검증된 adaptive Lite V2 유지.
+- 기존 방식에서 뮤직노트만 따로 적용했던 빠른 드래그 공간폭 제한을 제거하고 최근 생성곡과 동일한 pointer/rAF 경로로 복구.
+- 613~616에서 추가된 뮤직노트 전용 title/keyword track 및 drag containment/clip/transform 실험을 정상 구조로 원복.
+- 관리자 전용 Music Note render probe는 유지.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

@@ -10,6 +10,23 @@ import React, {
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
 import './liteSplitWorkspace.css';
+import {
+  beginSplitPerfDrag,
+  clearSplitPerfBenchmarkSummary,
+  finishSplitPerfDrag,
+  getLastSplitPerfResult,
+  isSplitPerfDragActive,
+  publishSplitPerfBenchmarkSummary,
+  recordSplitPerfApply,
+  recordSplitPerfFlush,
+  recordSplitPerfGeometryWrite,
+  recordSplitPerfLayoutAck,
+  recordSplitPerfPointer,
+  recordSplitPerfResponsiveSwitch,
+  SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
+  SPLIT_PERF_BENCHMARK_STATUS_EVENT,
+  SPLIT_PERF_MANUAL_DRAG_ARM_EVENT,
+} from './splitPerfDiagnostics';
 
 const WIDE_STORAGE_KEY = 'soridraw_lite_studio_split_percent_v2';
 const TABLET_STORAGE_KEY = 'soridraw_lite_studio_tablet_split_percent_v2';
@@ -27,8 +44,16 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
+const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
+const CONTENT_MOBILE_MAX = 660;
+const CONTENT_TABLET_MAX = 1080;
+const BENCHMARK_SURFACE_WIDTH = 1400;
+const BENCHMARK_SURFACE_HEIGHT = 900;
+type BenchmarkLayoutMode = 'css-var' | 'direct';
+type RuntimeProfile = 'adaptive' | 'library-590';
 
 type PaneMode = 'mobile' | 'desktop';
+type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
 type SplitProfile = 'wide' | 'tablet';
 type StudioWorkspaceView = 'create' | 'recent' | 'music-note' | 'library';
 type ViewMode = 'split' | 'result-only' | 'hidden';
@@ -36,14 +61,32 @@ type ViewMode = 'split' | 'result-only' | 'hidden';
 type SplitBounds = { min: number; max: number };
 type LayoutMetrics = { left: number; width: number; leftRailEdge: number };
 type ExternalControls = {
-  searchButton: HTMLElement | null;
   floatingActionBar: HTMLElement | null;
   actionAnchor: HTMLElement | null;
   collapsedActionButton: HTMLElement | null;
-  liveKeywords: HTMLElement | null;
-  heroRow: HTMLElement | null;
+  heroShell: HTMLElement | null;
   workspaceHeroHost: HTMLElement | null;
 };
+
+type ExternalGeometryCache = {
+  builderToggleLeft: string;
+  resultToggleLeft: string;
+  heroBuilderWidth: string;
+  floatingLeft: string;
+  floatingWidth: string;
+  collapsedBuilderWidth: string;
+  collapsedLeftRailEdge: string;
+};
+
+const createEmptyExternalGeometryCache = (): ExternalGeometryCache => ({
+  builderToggleLeft: '',
+  resultToggleLeft: '',
+  heroBuilderWidth: '',
+  floatingLeft: '',
+  floatingWidth: '',
+  collapsedBuilderWidth: '',
+  collapsedLeftRailEdge: '',
+});
 
 const getSplitProfile = (): SplitProfile => (
   typeof window !== 'undefined'
@@ -99,12 +142,48 @@ const resolvePaneMode = (
   return width > breakpoint + hysteresis ? 'desktop' : 'mobile';
 };
 
+
+const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
+  width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
+);
+
+// 609 stabilization rule from the user's real-hand verification:
+// - Result content in tablet/mobile mode: direct geometry is the confirmed smooth
+//   path across Music Note, Library and Recent.
+// - Result content in PC mode: restore the pre-608 stable ownership. Music Note
+//   keeps direct; Library/Recent/Create keep the 590 CSS-variable path.
+// Crucially, the geometry owner now follows the *same responsive mode* that the
+// content already uses. 608 had a second 16px engine hysteresis around 1080px,
+// so visual PC/Tablet mode and geometry ownership could disagree during drag.
+const resolveRuntimeLayoutMode = (
+  resultMode: ContentResponsiveMode,
+  workspaceView?: StudioWorkspaceView,
+  runtimeProfile: RuntimeProfile = 'adaptive',
+): BenchmarkLayoutMode => {
+  // 617 runtime policy:
+  // - `library-590` is the shared PC path for Library and Music Note. It keeps
+  //   the exact 590 CSS-variable geometry at every visual responsive width.
+  // - `adaptive` remains the verified Galaxy Tab/touch V2 path.
+  if (runtimeProfile === 'library-590') return 'css-var';
+  if (resultMode !== 'pc') return 'direct';
+  return workspaceView === 'music-note' ? 'direct' : 'css-var';
+};
+
+const readInitialRuntimeLayoutMode = (
+  workspaceView: StudioWorkspaceView | undefined,
+  runtimeProfile: RuntimeProfile,
+): BenchmarkLayoutMode => {
+  if (runtimeProfile === 'library-590') return 'css-var';
+  return workspaceView === 'music-note' ? 'direct' : 'css-var';
+};
+
 export type LiteStudioSplitWorkspaceProps = {
   children: ReactNode;
   builderMasthead?: ReactNode;
   viewMode?: ViewMode;
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
+  runtimeProfile?: RuntimeProfile;
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -113,7 +192,11 @@ export default function LiteStudioSplitWorkspace({
   viewMode = 'split',
   workspaceView,
   workspaceRequestId = 0,
+  runtimeProfile = 'adaptive',
 }: LiteStudioSplitWorkspaceProps) {
+  // 617: PC Music Note no longer owns a special geometry path. App routes it
+  // through the same `library-590` profile as Library. Adaptive mode is kept for
+  // the already-verified Galaxy Tab/touch path and explicit diagnostics.
   const panes = Children.toArray(children);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -130,8 +213,11 @@ export default function LiteStudioSplitWorkspace({
   const splitProfileRef = useRef<SplitProfile>(getSplitProfile());
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
+  const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
   const pointerIdRef = useRef(-1);
+  const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
+  const manualPerfCaptureActiveRef = useRef(false);
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
@@ -144,24 +230,36 @@ export default function LiteStudioSplitWorkspace({
   const topCardObserverRef = useRef<ResizeObserver | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
   const externalRef = useRef<ExternalControls>({
-    searchButton: null,
     floatingActionBar: null,
     actionAnchor: null,
     collapsedActionButton: null,
-    liveKeywords: null,
-    heroRow: null,
+    heroShell: null,
     workspaceHeroHost: null,
   });
+  const externalGeometryCacheRef = useRef<ExternalGeometryCache>(createEmptyExternalGeometryCache());
+  const dragRenderAnchorsRef = useRef<Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }>>([]);
+  const dragRenderRestoreFrameRef = useRef<number | null>(null);
+  const benchmarkFrameRef = useRef<number | null>(null);
+  const benchmarkTimerRef = useRef<number | null>(null);
+  const benchmarkRunningRef = useRef(false);
+  const layoutAckObserverRef = useRef<ResizeObserver | null>(null);
+  const layoutAckObservedRef = useRef<{ builder: number; result: number }>({ builder: 0, result: 0 });
+  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(readInitialRuntimeLayoutMode(workspaceView, runtimeProfile));
+  const runtimeResultContentModeRef = useRef<ContentResponsiveMode | null>(null);
+  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutModeRef.current);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
-    current.searchButton = document.querySelector<HTMLElement>('.soridraw-studio-hero-search-button');
     current.floatingActionBar = document.querySelector<HTMLElement>('body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]');
     current.actionAnchor = document.querySelector<HTMLElement>('.soridraw-studio-action-geometry-anchor');
     current.collapsedActionButton = document.querySelector<HTMLElement>('body > .soridraw-studio-action-collapsed');
-    current.liveKeywords = document.querySelector<HTMLElement>('body > .soridraw-live-keywords-fixed');
-    current.heroRow = document.querySelector<HTMLElement>('.soridraw-studio-hero-row');
+    // 578: one inherited builder-width write on the hero shell now drives the
+    // search button and masthead descendants together. The former direct
+    // search-button right/left/transform writes were redundant with existing
+    // CSS and widened the live style-invalidation surface.
+    current.heroShell = document.querySelector<HTMLElement>('.soridraw-studio-hero > .soridraw-studio-shell');
     current.workspaceHeroHost = document.getElementById('soridraw-studio-workspace-hero-host');
+    externalGeometryCacheRef.current = createEmptyExternalGeometryCache();
     return current;
   }, []);
 
@@ -222,6 +320,69 @@ export default function LiteStudioSplitWorkspace({
     host.style.height = `${Math.max(0, Math.round(window.innerHeight))}px`;
   }, []);
 
+
+  const restoreDragViewportAnchors = useCallback((preserveAnchor = true) => {
+    if (dragRenderRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
+      dragRenderRestoreFrameRef.current = null;
+    }
+
+    const anchors = dragRenderAnchorsRef.current;
+    dragRenderAnchorsRef.current = [];
+    if (!preserveAnchor || anchors.length === 0) return;
+
+    // 576: native CSS content-visibility keeps off-screen rows cheap without
+    // swapping React DOM or scanning/measuring every card at pointer-down.
+    // Preserve only one visible anchor per pane after the final width commit.
+    dragRenderRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      dragRenderRestoreFrameRef.current = null;
+      for (const anchor of anchors) {
+        if (!anchor.element.isConnected || !anchor.pane.isConnected) continue;
+        const paneRect = anchor.pane.getBoundingClientRect();
+        const nextOffset = anchor.element.getBoundingClientRect().top - paneRect.top;
+        const delta = nextOffset - anchor.viewportOffset;
+        if (Math.abs(delta) > 0.5) anchor.pane.scrollTop += delta;
+      }
+    });
+  }, []);
+
+  const captureDragViewportAnchors = useCallback(() => {
+    dragRenderAnchorsRef.current = [];
+    const selector = [
+      '.soridraw-musicnote-song-card',
+      '.soridraw-library-playlist-row',
+      '.soridraw-library-workspace-track-row',
+      '.soridraw-studio-menu-card',
+      '.soridraw-result-title-card',
+      '.soridraw-result-keywords-card',
+      '.soridraw-result-prompt-card',
+    ].join(',');
+
+    for (const pane of [builderRef.current, resultRef.current]) {
+      if (!pane) continue;
+      const paneRect = pane.getBoundingClientRect();
+      const x = Math.min(paneRect.right - 8, Math.max(paneRect.left + 8, paneRect.left + paneRect.width * 0.5));
+      const probeYs = [paneRect.top + 24, paneRect.top + 96, paneRect.top + paneRect.height * 0.5];
+      let anchor: HTMLElement | null = null;
+
+      for (const y of probeYs) {
+        const hit = document.elementFromPoint(x, Math.min(paneRect.bottom - 4, Math.max(paneRect.top + 4, y))) as HTMLElement | null;
+        const candidate = hit?.closest<HTMLElement>(selector) || null;
+        if (candidate && pane.contains(candidate)) {
+          anchor = candidate;
+          break;
+        }
+      }
+
+      if (!anchor) continue;
+      dragRenderAnchorsRef.current.push({
+        pane,
+        element: anchor,
+        viewportOffset: anchor.getBoundingClientRect().top - paneRect.top,
+      });
+    }
+  }, []);
+
   const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout || window.innerWidth < 1100) {
@@ -253,6 +414,46 @@ export default function LiteStudioSplitWorkspace({
     layout.style.height = `${nextHeight}px`;
   }, []);
 
+  const broadcastLitePaneResponsiveWidths = useCallback((builderWidth: number, resultWidth: number, force = false) => {
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!builder || !result) return;
+
+    // 569: Music Note / Library already have a responsive contract that can
+    // consume the split engine's known pane width directly. Do not let those
+    // pages create their own ResizeObserver + getBoundingClientRect loop while
+    // the Lite V2 divider is moving. Only notify when a published
+    // PC/tablet/mobile boundary is actually crossed (or when layout is first
+    // committed outside a drag).
+    const safeBuilderWidth = Math.max(1, builderWidth);
+    const safeResultWidth = Math.max(1, resultWidth);
+    const builderMode = readContentResponsiveMode(safeBuilderWidth);
+    const resultMode = readContentResponsiveMode(safeResultWidth);
+
+    // 607: publish only the already-computed responsive ownership state. This
+    // does not add another measurement or observer; App uses it solely to keep
+    // the 606 rerender suppression scoped to Music Note's tablet state instead
+    // of affecting every Lite V2 workspace.
+    const root = document.documentElement;
+    if (root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
+    if (root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
+
+    if (force || contentResponsiveModeRef.current.builder !== builderMode) {
+      if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
+        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
+      }
+      contentResponsiveModeRef.current.builder = builderMode;
+      builder.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeBuilderWidth } }));
+    }
+    if (force || contentResponsiveModeRef.current.result !== resultMode) {
+      if (!force && contentResponsiveModeRef.current.result !== null && contentResponsiveModeRef.current.result !== resultMode) {
+        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
+      }
+      contentResponsiveModeRef.current.result = resultMode;
+      result.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeResultWidth } }));
+    }
+  }, []);
+
   const syncPaneModes = useCallback((builderWidth: number, resultWidth: number) => {
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -275,11 +476,13 @@ export default function LiteStudioSplitWorkspace({
     );
 
     if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
+      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
       document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
     }
     if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
+      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
       document.documentElement.dataset.soridrawResultMode = nextResultMode;
@@ -289,26 +492,39 @@ export default function LiteStudioSplitWorkspace({
   }, [workspaceView]);
 
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
-    const { left, width, leftRailEdge } = metricsRef.current;
+    const { left, leftRailEdge } = metricsRef.current;
     const controls = externalRef.current;
+    const cache = externalGeometryCacheRef.current;
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
-    const workspaceRight = Math.max(0, Math.round(window.innerWidth - (left + width)));
 
-    splitterRef.current?.style.setProperty('--soridraw-lite-studio-splitter-left', `${roundedSplitterLeft}px`);
-    builderToggleRef.current?.style.setProperty('--soridraw-lite-studio-builder-toggle-left', `${Math.max(0, roundedSplitterLeft - 43)}px`);
-    resultToggleRef.current?.style.setProperty('--soridraw-lite-studio-result-toggle-left', `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`);
+    // 578: keep live external writes to the minimum set that actually owns
+    // visible geometry. No reads follow these writes, and unchanged rounded
+    // values are skipped. Music Note/Library are the measurement baseline.
+    const builderToggleLeft = `${Math.max(0, roundedSplitterLeft - 43)}px`;
+    if (cache.builderToggleLeft !== builderToggleLeft) {
+      cache.builderToggleLeft = builderToggleLeft;
+      builderToggleRef.current?.style.setProperty('--soridraw-lite-studio-builder-toggle-left', builderToggleLeft);
+    }
 
-    controls.heroRow?.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`, 'important');
-    if (controls.searchButton) {
-      controls.searchButton.style.setProperty('right', `${Math.max(26, Math.round(width - roundedBuilderWidth + 26))}px`, 'important');
-      controls.searchButton.style.removeProperty('left');
-      controls.searchButton.style.removeProperty('transform');
+    const resultToggleLeft = `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`;
+    if (cache.resultToggleLeft !== resultToggleLeft) {
+      cache.resultToggleLeft = resultToggleLeft;
+      resultToggleRef.current?.style.setProperty('--soridraw-lite-studio-result-toggle-left', resultToggleLeft);
     }
-    if (controls.liveKeywords) {
-      controls.liveKeywords.style.setProperty('left', `${Math.max(0, roundedSplitterLeft + 18)}px`, 'important');
-      controls.liveKeywords.style.setProperty('right', `${workspaceRight}px`, 'important');
+
+    // Search geometry is already expressed in CSS from
+    // --soridraw-studio-builder-width. Publish it once on the smallest common
+    // ancestor instead of also mutating the search button itself every frame.
+    const heroBuilderWidth = `${roundedBuilderWidth}px`;
+    if (cache.heroBuilderWidth !== heroBuilderWidth) {
+      cache.heroBuilderWidth = heroBuilderWidth;
+      controls.heroShell?.style.setProperty('--soridraw-studio-builder-width', heroBuilderWidth, 'important');
     }
+
+    // The desktop live-keyword body portal is display:none in Studio Black, so
+    // the old left/right writes were pure drag-time work and are intentionally
+    // omitted in Lite V2.
 
     const actionInsets = actionInsetsRef.current ?? { left: 0, right: 0 };
     const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
@@ -316,35 +532,87 @@ export default function LiteStudioSplitWorkspace({
     const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
     const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
     if (controls.floatingActionBar) {
-      controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-      controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
-      controls.floatingActionBar.style.setProperty('--soridraw-studio-builder-width', `${anchorWidth}px`);
+      const floatingLeft = `${actionGeometry.left}px`;
+      if (cache.floatingLeft !== floatingLeft) {
+        cache.floatingLeft = floatingLeft;
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
+      }
+      const floatingWidth = `${actionGeometry.width}px`;
+      if (cache.floatingWidth !== floatingWidth) {
+        cache.floatingWidth = floatingWidth;
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
+      }
+      // No Studio CSS consumes --soridraw-studio-builder-width from the
+      // expanded floating bar, so the former third write was redundant.
     }
     if (controls.collapsedActionButton) {
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
-      controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
+      const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
+      if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
+        cache.collapsedBuilderWidth = collapsedBuilderWidth;
+        controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
+      }
+      const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
+      if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
+        cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
+        controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
+      }
     }
   }, []);
 
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
-    controls.searchButton?.style.removeProperty('right');
-    controls.searchButton?.style.removeProperty('left');
-    controls.searchButton?.style.removeProperty('transform');
-    controls.heroRow?.style.removeProperty('--soridraw-studio-builder-width');
-    controls.liveKeywords?.style.removeProperty('left');
-    controls.liveKeywords?.style.removeProperty('right');
+    controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
     if (controls.floatingActionBar) {
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
-      controls.floatingActionBar.style.removeProperty('--soridraw-studio-builder-width');
     }
     if (controls.collapsedActionButton) {
       controls.collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
       controls.collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
+    externalGeometryCacheRef.current = createEmptyExternalGeometryCache();
     actionInsetsRef.current = null;
   }, []);
+
+  const clearDirectBenchmarkGeometry = useCallback(() => {
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    const splitter = splitterRef.current;
+    builder?.style.removeProperty('width');
+    builder?.style.removeProperty('left');
+    builder?.style.removeProperty('right');
+    result?.style.removeProperty('width');
+    result?.style.removeProperty('left');
+    result?.style.removeProperty('right');
+    splitter?.style.removeProperty('left');
+    layoutRef.current?.removeAttribute('data-benchmark-layout-mode');
+  }, []);
+
+  const writeLiveSplitGeometry = useCallback((builderWidth: number, resultWidth: number) => {
+    const layout = layoutRef.current;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    const splitter = splitterRef.current;
+    if (!layout || !builder || !result) return;
+
+    layout.dataset.liteRuntimeLayout = benchmarkLayoutModeRef.current;
+    if (benchmarkLayoutModeRef.current === 'direct') {
+      layout.dataset.benchmarkLayoutMode = 'direct';
+      // 609: direct geometry owns every tablet/mobile result mode and PC
+      // Music Note. Explicit admin A/B can still override this temporarily.
+      builder.style.setProperty('left', '0px', 'important');
+      builder.style.setProperty('right', 'auto', 'important');
+      builder.style.setProperty('width', `${builderWidth}px`, 'important');
+      result.style.setProperty('left', `${builderWidth}px`, 'important');
+      result.style.setProperty('right', '0px', 'important');
+      result.style.setProperty('width', `${resultWidth}px`, 'important');
+      splitter?.style.setProperty('left', `${Math.max(0, builderWidth - 8)}px`, 'important');
+      return;
+    }
+
+    if (layout.dataset.benchmarkLayoutMode === 'direct') clearDirectBenchmarkGeometry();
+    layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+  }, [clearDirectBenchmarkGeometry]);
 
   const applyPercent = useCallback((rawPercent: number, live = false) => {
     const layout = layoutRef.current;
@@ -352,6 +620,11 @@ export default function LiteStudioSplitWorkspace({
     const result = resultRef.current;
     if (!layout || !builder || !result) return percentRef.current;
 
+    // 611: normal hand dragging never samples PERF instrumentation. Only the
+    // synthetic benchmark or an explicitly armed one-shot admin hand test can
+    // enter the measurement branch below.
+    const perfEnabled = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive();
+    const perfStart = perfEnabled ? performance.now() : 0;
     const bounds = getSplitBounds(metricsRef.current.width);
     const nextPercent = clampToBounds(rawPercent, bounds);
     percentRef.current = nextPercent;
@@ -360,9 +633,29 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
-    layout.style.setProperty('--soridraw-studio-builder-width', `${builderWidth}px`);
+    // 609: geometry ownership changes only when the *published content mode*
+    // itself changes. This keeps the visible PC/Tablet switch and the low-level
+    // pane owner on the same boundary, eliminating the 608 16px disagreement.
+    if (!benchmarkRunningRef.current) {
+      const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
+      if (runtimeResultContentModeRef.current !== nextResultContentMode) {
+        runtimeResultContentModeRef.current = nextResultContentMode;
+        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
+        if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
+          runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
+          benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
+        }
+      }
+    }
+
+    writeLiveSplitGeometry(builderWidth, resultWidth);
+    if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
+    const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
+    const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live) syncExternalGeometry(builderWidth, splitterLeft);
+    const perfAfterExternal = perfEnabled ? performance.now() : 0;
 
     const root = document.documentElement;
     const edgeTolerancePercent = (1.5 / safeWidth) * 100;
@@ -390,8 +683,18 @@ export default function LiteStudioSplitWorkspace({
       lastAriaPercentRef.current = roundedPercent;
       splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
     }
+    if (perfEnabled) {
+      const perfEnd = performance.now();
+      recordSplitPerfApply({
+        totalMs: perfEnd - perfStart,
+        layoutWriteMs: perfAfterLayoutWrite - perfStart,
+        responsiveMs: perfAfterResponsive - perfAfterLayoutWrite,
+        externalMs: perfAfterExternal - perfAfterResponsive,
+        miscMs: perfEnd - perfAfterExternal,
+      });
+    }
     return nextPercent;
-  }, [syncExternalGeometry, syncPaneModes]);
+  }, [broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -414,12 +717,14 @@ export default function LiteStudioSplitWorkspace({
     }
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
+    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
     readExternalControls();
     syncExternalGeometry(builderWidth, splitterLeft);
     clearLiveExternalGeometry();
-  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
+  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
@@ -430,6 +735,7 @@ export default function LiteStudioSplitWorkspace({
   }, [refreshMetrics]);
 
   const flushPointer = useCallback(() => {
+    const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
@@ -441,7 +747,14 @@ export default function LiteStudioSplitWorkspace({
     const nextPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
     if (lastPixelRef.current === nextPixel) return;
     lastPixelRef.current = nextPixel;
-    applyPercent((nextPixel / width) * 100, true);
+
+    const nextPercent = (nextPixel / width) * 100;
+    // 573: one real boundary again. The divider and both panes are owned by the
+    // same single local width write on every rAF frame. Smoothness now comes
+    // from reducing the amount of off-screen content the browser must reflow,
+    // not from letting a fake 60fps divider run ahead of 30fps content.
+    applyPercent(nextPercent, true);
+    if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
   }, [applyPercent]);
 
   const schedulePointer = useCallback((clientX: number) => {
@@ -449,6 +762,41 @@ export default function LiteStudioSplitWorkspace({
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(flushPointer);
   }, [flushPointer]);
+
+  const startLayoutAckObserver = useCallback((builderWidth: number, resultWidth: number) => {
+    layoutAckObserverRef.current?.disconnect();
+    layoutAckObserverRef.current = null;
+    layoutAckObservedRef.current = { builder: builderWidth, result: resultWidth };
+    if (typeof ResizeObserver === 'undefined') return;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!builder || !result) return;
+
+    const observer = new ResizeObserver((entries) => {
+      let changed = false;
+      for (const entry of entries) {
+        const borderSize = entry.borderBoxSize?.[0]?.inlineSize;
+        const width = Number.isFinite(borderSize) ? Number(borderSize) : entry.contentRect.width;
+        if (entry.target === builder && Number.isFinite(width)) {
+          layoutAckObservedRef.current.builder = width;
+          changed = true;
+        } else if (entry.target === result && Number.isFinite(width)) {
+          layoutAckObservedRef.current.result = width;
+          changed = true;
+        }
+      }
+      if (changed) {
+        recordSplitPerfLayoutAck(
+          layoutAckObservedRef.current.builder,
+          layoutAckObservedRef.current.result,
+        );
+      }
+    });
+
+    observer.observe(builder, { box: 'border-box' });
+    observer.observe(result, { box: 'border-box' });
+    layoutAckObserverRef.current = observer;
+  }, []);
 
   const finishDrag = useCallback((event?: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current) return;
@@ -459,13 +807,13 @@ export default function LiteStudioSplitWorkspace({
       frameRef.current = null;
     }
     flushPointer();
-
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
-    document.documentElement.classList.remove('soridraw-split-dragging');
+    document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
+    restoreDragViewportAnchors(true);
 
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (percentRef.current / 100));
@@ -473,9 +821,15 @@ export default function LiteStudioSplitWorkspace({
     clearLiveExternalGeometry();
     readExternalControls();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
+    layoutAckObserverRef.current?.disconnect();
+    layoutAckObserverRef.current = null;
+    if (manualPerfCaptureActiveRef.current) {
+      manualPerfCaptureActiveRef.current = false;
+      finishSplitPerfDrag();
+    }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragViewportAnchors]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -504,13 +858,31 @@ export default function LiteStudioSplitWorkspace({
 
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
+    captureDragViewportAnchors();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
+    // 611: real hand dragging is intentionally uninstrumented unless the admin
+    // explicitly arms the one-shot "실손 드래그 비교" diagnostic. The arm is
+    // consumed here, so ordinary usage never starts observers/raf probes.
+    const activeWorkspace = workspaceView || 'create';
+    const captureManualPerf = manualPerfArmedWorkspaceRef.current === activeWorkspace;
+    manualPerfArmedWorkspaceRef.current = null;
+    manualPerfCaptureActiveRef.current = captureManualPerf;
+    if (captureManualPerf) {
+      beginSplitPerfDrag({
+        workspaceView,
+        engine: `Lite V2 · armed hand diagnostic 612 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
+        builder: builderRef.current,
+        result: resultRef.current,
+        layoutMode: runtimeLayoutModeRef.current,
+      });
+      startLayoutAckObserver(builderRect?.width || 0, resultRef.current?.getBoundingClientRect().width || 0);
+    }
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
-    document.documentElement.classList.add('soridraw-split-dragging');
+    document.documentElement.classList.add('soridraw-lite-split-dragging');
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
@@ -518,6 +890,14 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
+    // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
+    // verified Lite V2 path; PC no longer uses this engine in automatic mode.
+    if (manualPerfCaptureActiveRef.current) {
+      const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+      let coalescedCount = 1;
+      try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
+      recordSplitPerfPointer(event.clientX, coalescedCount);
+    }
     schedulePointer(event.clientX);
   };
 
@@ -530,6 +910,359 @@ export default function LiteStudioSplitWorkspace({
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(next)); } catch { /* optional */ }
   };
+
+  useEffect(() => () => {
+    layoutAckObserverRef.current?.disconnect();
+    layoutAckObserverRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const handleManualPerfArm = (event: Event) => {
+      const detail = (event as CustomEvent<{ armed?: boolean; workspace?: StudioWorkspaceView }>).detail;
+      if (detail?.armed === false) {
+        manualPerfArmedWorkspaceRef.current = null;
+        return;
+      }
+      const nextWorkspace = detail?.workspace;
+      if (nextWorkspace === 'create' || nextWorkspace === 'recent' || nextWorkspace === 'music-note' || nextWorkspace === 'library') {
+        manualPerfArmedWorkspaceRef.current = nextWorkspace;
+      }
+    };
+    window.addEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const nextWorkspace = workspaceView || 'create';
+    root.dataset.soridrawLiteWorkspace = nextWorkspace;
+    return () => {
+      if (root.dataset.soridrawLiteWorkspace === nextWorkspace) delete root.dataset.soridrawLiteWorkspace;
+    };
+  }, [workspaceView]);
+
+  useLayoutEffect(() => {
+    if (benchmarkRunningRef.current) return;
+
+    // 612: workspace/profile changes can alter the geometry owner. Reset the
+    // cached content mode so the next refresh resolves exactly one owner from
+    // the current pane, outside a gesture.
+    runtimeResultContentModeRef.current = null;
+    const nextLayoutMode = readInitialRuntimeLayoutMode(workspaceView, runtimeProfile);
+    runtimeLayoutModeRef.current = nextLayoutMode;
+    benchmarkLayoutModeRef.current = nextLayoutMode;
+    if (nextLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
+    const frame = window.requestAnimationFrame(() => refreshMetrics());
+    return () => window.cancelAnimationFrame(frame);
+  }, [clearDirectBenchmarkGeometry, refreshMetrics, runtimeProfile, workspaceView]);
+
+  useEffect(() => {
+    const emitBenchmarkStatus = (state: 'running' | 'done' | 'error', message: string) => {
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_BENCHMARK_STATUS_EVENT, { detail: { state, message } }));
+    };
+
+    const handleBenchmarkRequest = (requestEvent: Event) => {
+      const requestDetail = (requestEvent as CustomEvent<{ layoutMode?: BenchmarkLayoutMode }>).detail;
+      // 603: a normal automatic benchmark must measure the workspace's real
+      // runtime path. Only the explicit coordinate A/B diagnostic overrides it.
+      const requestedLayoutMode: BenchmarkLayoutMode = requestDetail?.layoutMode === 'direct'
+        ? 'direct'
+        : requestDetail?.layoutMode === 'css-var'
+          ? 'css-var'
+          : runtimeLayoutModeRef.current;
+      if (benchmarkRunningRef.current || draggingRef.current) {
+        emitBenchmarkStatus('error', '이미 분할 테스트가 진행 중입니다.');
+        return;
+      }
+      if (viewMode !== 'split' || builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) {
+        emitBenchmarkStatus('error', '좌우 패널이 모두 열린 PC 분할 화면에서 실행하세요.');
+        return;
+      }
+
+      const layout = layoutRef.current;
+      const builder = builderRef.current;
+      const result = resultRef.current;
+      if (!layout || !builder || !result) {
+        emitBenchmarkStatus('error', 'Lite V2 분할 영역을 찾지 못했습니다.');
+        return;
+      }
+
+      const benchmarkSurface = `${BENCHMARK_SURFACE_WIDTH}×${BENCHMARK_SURFACE_HEIGHT}`;
+      const savedSurfaceStyles = ['width', 'min-width', 'max-width', 'height', 'min-height', 'max-height', '--soridraw-studio-isolated-height'].map((property) => ({
+        property,
+        value: layout.style.getPropertyValue(property),
+        priority: layout.style.getPropertyPriority(property),
+      }));
+      const originalBuilderScrollTop = builder.scrollTop;
+      const originalResultScrollTop = result.scrollTop;
+      const originalBenchmarkSurfaceFlag = layout.dataset.perfBenchmarkSurface;
+
+      const restoreBenchmarkSurface = () => {
+        benchmarkLayoutModeRef.current = runtimeLayoutModeRef.current;
+        if (runtimeLayoutModeRef.current === 'css-var') clearDirectBenchmarkGeometry();
+        for (const saved of savedSurfaceStyles) {
+          if (saved.value) layout.style.setProperty(saved.property, saved.value, saved.priority);
+          else layout.style.removeProperty(saved.property);
+        }
+        if (originalBenchmarkSurfaceFlag === undefined) delete layout.dataset.perfBenchmarkSurface;
+        else layout.dataset.perfBenchmarkSurface = originalBenchmarkSurfaceFlag;
+        builder.scrollTop = originalBuilderScrollTop;
+        result.scrollTop = originalResultScrollTop;
+      };
+
+      // 590: benchmark geometry is fully owned by the tool. DEV/PROD can have
+      // different browser/window sizes, but the measured split surface is always
+      // exactly the same and the user's original geometry is restored afterward.
+      layout.dataset.perfBenchmarkSurface = 'true';
+      layout.style.setProperty('width', `${BENCHMARK_SURFACE_WIDTH}px`, 'important');
+      layout.style.setProperty('min-width', `${BENCHMARK_SURFACE_WIDTH}px`, 'important');
+      layout.style.setProperty('max-width', `${BENCHMARK_SURFACE_WIDTH}px`, 'important');
+      layout.style.setProperty('height', `${BENCHMARK_SURFACE_HEIGHT}px`, 'important');
+      layout.style.setProperty('min-height', `${BENCHMARK_SURFACE_HEIGHT}px`, 'important');
+      layout.style.setProperty('max-height', `${BENCHMARK_SURFACE_HEIGHT}px`, 'important');
+      layout.style.setProperty('--soridraw-studio-isolated-height', `${BENCHMARK_SURFACE_HEIGHT}px`);
+      builder.scrollTop = 0;
+      result.scrollTop = 0;
+      benchmarkLayoutModeRef.current = requestedLayoutMode;
+      if (requestedLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
+
+      const rect = layout.getBoundingClientRect();
+      const surfacePass = Math.abs(rect.width - BENCHMARK_SURFACE_WIDTH) <= 1 && Math.abs(rect.height - BENCHMARK_SURFACE_HEIGHT) <= 1;
+      if (!surfacePass) {
+        restoreBenchmarkSurface();
+        emitBenchmarkStatus('error', `벤치마크 표면 고정 실패 · 실제 ${Math.round(rect.width)}×${Math.round(rect.height)}px`);
+        return;
+      }
+
+      const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+      const leftRailRect = leftRail?.getBoundingClientRect();
+      metricsRef.current = {
+        left: rect.left,
+        width: rect.width,
+        leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+      };
+      readExternalControls();
+      const builderRect = builder.getBoundingClientRect();
+      const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
+      if (builderRect.width > 0 && actionRect && actionRect.width > 0) {
+        actionInsetsRef.current = {
+          left: Math.max(0, actionRect.left - builderRect.left),
+          right: Math.max(0, builderRect.right - actionRect.right),
+        };
+      } else {
+        actionInsetsRef.current = { left: 0, right: 0 };
+      }
+
+      const originalPercent = percentRef.current;
+      const bounds = getSplitBounds(rect.width);
+      const lowPercent = clampToBounds(32, bounds);
+      const highPercent = clampToBounds(68, bounds);
+      if (highPercent - lowPercent < 8) {
+        restoreBenchmarkSurface();
+        emitBenchmarkStatus('error', '고정 벤치마크 표면에서 이동 폭이 너무 좁습니다.');
+        return;
+      }
+
+      topCardObserverRef.current?.disconnect();
+      topCardObserverRef.current = null;
+      captureDragViewportAnchors();
+      draggingRef.current = true;
+      benchmarkRunningRef.current = true;
+      pointerIdRef.current = -1;
+      pendingClientXRef.current = null;
+      lastPixelRef.current = null;
+      layout.classList.add('is-dragging');
+      document.documentElement.classList.add('soridraw-lite-split-dragging');
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      window.dispatchEvent(new CustomEvent('soridraw-split-drag-start'));
+
+      const restoreOriginalState = () => {
+        percentRef.current = originalPercent;
+        restoreBenchmarkSurface();
+        // Restore the real workspace geometry immediately so the diagnostic
+        // never leaves a one-frame visual jump after the fixed surface closes.
+        const restoredRect = layout.getBoundingClientRect();
+        if (restoredRect.width > 0) {
+          metricsRef.current = { ...metricsRef.current, left: restoredRect.left, width: restoredRect.width };
+          const restoredBuilderWidth = Math.round(restoredRect.width * (originalPercent / 100));
+          writeLiveSplitGeometry(restoredBuilderWidth, Math.max(0, restoredRect.width - restoredBuilderWidth));
+        }
+        try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(originalPercent)); } catch { /* optional */ }
+        window.requestAnimationFrame(refreshMetrics);
+      };
+
+      const finishBenchmark = (measuredSets: NonNullable<ReturnType<typeof getLastSplitPerfResult>>[]) => {
+        benchmarkRunningRef.current = false;
+        benchmarkFrameRef.current = null;
+        if (benchmarkTimerRef.current !== null) {
+          window.clearTimeout(benchmarkTimerRef.current);
+          benchmarkTimerRef.current = null;
+        }
+        finishDrag();
+        restoreOriginalState();
+        if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
+        emitBenchmarkStatus('done', `자동 테스트 완료 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'} · 3세트 중앙값`);
+      };
+
+      const runLegs = (
+        legs: number,
+        msPerLeg: number,
+        measure: boolean,
+        onDone: () => void,
+      ) => {
+        let legIndex = 0;
+        let from = lowPercent;
+        let to = highPercent;
+        let legStartedAt = performance.now();
+        applyPercent(from, true);
+
+        const tick = (timestamp: number) => {
+          if (!benchmarkRunningRef.current) return;
+          const progress = Math.min(1, Math.max(0, (timestamp - legStartedAt) / msPerLeg));
+          const next = from + (to - from) * progress;
+          const perfStart = measure && isSplitPerfDragActive() ? performance.now() : 0;
+          applyPercent(next, true);
+          if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
+
+          if (progress >= 1) {
+            legIndex += 1;
+            if (legIndex >= legs) {
+              onDone();
+              return;
+            }
+            from = to;
+            to = from === lowPercent ? highPercent : lowPercent;
+            legStartedAt = timestamp;
+          }
+          benchmarkFrameRef.current = window.requestAnimationFrame(tick);
+        };
+
+        benchmarkFrameRef.current = window.requestAnimationFrame(tick);
+      };
+
+      clearSplitPerfBenchmarkSummary();
+      const measuredSets: NonNullable<ReturnType<typeof getLastSplitPerfResult>>[] = [];
+      let attemptCount = 0;
+      const maxAttempts = 7;
+      let fingerprint: { targetNodes: number; resultNodes: number; viewport: string } | null = null;
+
+      const targetNodeCount = (measured: NonNullable<ReturnType<typeof getLastSplitPerfResult>>) => {
+        if (workspaceView === 'music-note') return measured.regionNodes.musicNoteList;
+        if (workspaceView === 'library') return measured.regionNodes.libraryList;
+        return measured.resultNodes;
+      };
+
+      const validateMeasuredSet = (measured: NonNullable<ReturnType<typeof getLastSplitPerfResult>>) => {
+        const targetNodes = targetNodeCount(measured);
+        if (measured.workspaceView !== (workspaceView || 'create')) {
+          return { valid: false, reason: `화면 대상 변경(${measured.workspaceView})` };
+        }
+        if ((workspaceView === 'music-note' || workspaceView === 'library') && targetNodes <= 0) {
+          return { valid: false, reason: `${workspaceView === 'music-note' ? '뮤직노트' : '라이브러리'} 리스트 DOM 0` };
+        }
+        if (measured.resultNodes <= 0) return { valid: false, reason: '우측 패널 DOM 0' };
+        if (measured.benchmarkSurface !== benchmarkSurface || measured.benchmarkSurfacePass !== true) {
+          return { valid: false, reason: `벤치마크 표면 불일치(${measured.benchmarkSurface || '없음'})` };
+        }
+        if (measured.layoutMode !== requestedLayoutMode) {
+          return { valid: false, reason: `좌표 모드 불일치(${measured.layoutMode || '없음'})` };
+        }
+
+        if (!fingerprint) {
+          fingerprint = { targetNodes, resultNodes: measured.resultNodes, viewport: measured.viewport };
+          return { valid: true, reason: '' };
+        }
+
+        const targetTolerance = Math.max(24, Math.round(fingerprint.targetNodes * 0.22));
+        const resultTolerance = Math.max(40, Math.round(fingerprint.resultNodes * 0.25));
+        if (measured.viewport !== fingerprint.viewport) return { valid: false, reason: '측정 중 viewport 변경' };
+        if (Math.abs(targetNodes - fingerprint.targetNodes) > targetTolerance) {
+          return { valid: false, reason: `리스트 DOM 변동 ${fingerprint.targetNodes}→${targetNodes}` };
+        }
+        if (Math.abs(measured.resultNodes - fingerprint.resultNodes) > resultTolerance) {
+          return { valid: false, reason: `우측 DOM 변동 ${fingerprint.resultNodes}→${measured.resultNodes}` };
+        }
+        return { valid: true, reason: '' };
+      };
+
+      const abortBenchmark = (message: string) => {
+        benchmarkRunningRef.current = false;
+        benchmarkFrameRef.current = null;
+        if (benchmarkTimerRef.current !== null) {
+          window.clearTimeout(benchmarkTimerRef.current);
+          benchmarkTimerRef.current = null;
+        }
+        finishDrag();
+        restoreOriginalState();
+        if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
+        emitBenchmarkStatus('error', message);
+      };
+
+      const runMeasurementSet = (setIndex: number) => {
+        if (!benchmarkRunningRef.current) return;
+        if (attemptCount >= maxAttempts) {
+          abortBenchmark(`유효한 측정 3세트를 확보하지 못했습니다. 현재 ${measuredSets.length}/3세트`);
+          return;
+        }
+        attemptCount += 1;
+        applyPercent(lowPercent, true);
+        benchmarkTimerRef.current = window.setTimeout(() => {
+          if (!benchmarkRunningRef.current) return;
+          beginSplitPerfDrag({
+            workspaceView,
+            engine: `Lite V2 · auto benchmark 612 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            builder,
+            result,
+            benchmarkSurface,
+            benchmarkSurfacePass: surfacePass,
+            layoutMode: requestedLayoutMode,
+          });
+          startLayoutAckObserver(builder.getBoundingClientRect().width, result.getBoundingClientRect().width);
+          emitBenchmarkStatus('running', `측정 ${setIndex + 1}/3 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}`);
+          runLegs(4, 1000, true, () => {
+            finishSplitPerfDrag();
+            layoutAckObserverRef.current?.disconnect();
+            layoutAckObserverRef.current = null;
+            const measured = getLastSplitPerfResult();
+            if (!measured) {
+              benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex), 320);
+              return;
+            }
+            const validation = validateMeasuredSet(measured);
+            if (!validation.valid) {
+              emitBenchmarkStatus('running', `무효 세트 재측정 · ${validation.reason}`);
+              benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex), 520);
+              return;
+            }
+            measuredSets.push(measured);
+            if (setIndex >= 2) {
+              finishBenchmark(measuredSets);
+              return;
+            }
+            benchmarkTimerRef.current = window.setTimeout(() => runMeasurementSet(setIndex + 1), 260);
+          });
+        }, 180);
+      };
+
+      emitBenchmarkStatus('running', `워밍업 · ${benchmarkSurface} PASS · 동일 DOM · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}`);
+      runLegs(2, 650, false, () => runMeasurementSet(0));
+    };
+
+    window.addEventListener(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, handleBenchmarkRequest as EventListener);
+    return () => {
+      window.removeEventListener(SPLIT_PERF_BENCHMARK_REQUEST_EVENT, handleBenchmarkRequest as EventListener);
+      if (benchmarkFrameRef.current !== null) {
+        window.cancelAnimationFrame(benchmarkFrameRef.current);
+        benchmarkFrameRef.current = null;
+      }
+      if (benchmarkTimerRef.current !== null) {
+        window.clearTimeout(benchmarkTimerRef.current);
+        benchmarkTimerRef.current = null;
+      }
+      benchmarkRunningRef.current = false;
+    };
+  }, [applyPercent, captureDragViewportAnchors, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, startLayoutAckObserver, viewMode, workspaceView, writeLiveSplitGeometry]);
 
   useLayoutEffect(() => {
     builderCollapsedRef.current = isBuilderCollapsed;
@@ -597,13 +1330,21 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
-      document.documentElement.classList.remove('soridraw-split-dragging');
+      document.documentElement.classList.remove('soridraw-lite-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
+      restoreDragViewportAnchors(false);
+      if (dragRenderRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
+        dragRenderRestoreFrameRef.current = null;
+      }
       clearLiveExternalGeometry();
       const root = document.documentElement;
       delete root.dataset.soridrawBuilderMode;
       delete root.dataset.soridrawResultMode;
+      delete root.dataset.soridrawBuilderContentMode;
+      delete root.dataset.soridrawResultContentMode;
+      delete root.dataset.soridrawLiteWorkspace;
       delete root.dataset.soridrawBuilderCollapsed;
       delete root.dataset.soridrawResultCollapsed;
       delete root.dataset.soridrawBuilderAtMinimum;
@@ -616,7 +1357,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh]);
+  }, [clearLiveExternalGeometry, refreshMetrics, restoreDragViewportAnchors, scheduleMetricsRefresh]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);
@@ -647,7 +1388,7 @@ export default function LiteStudioSplitWorkspace({
     <button
       ref={splitterRef}
       type="button"
-      className="soridraw-studio-splitter soridraw-lite-studio-splitter"
+      className="soridraw-lite-splitter soridraw-lite-studio-splitter"
       aria-label="곡 만들기와 생성 결과 영역 너비 조절"
       aria-valuemin={MIN_PERCENT}
       aria-valuemax={MAX_PERCENT}
@@ -704,13 +1445,18 @@ export default function LiteStudioSplitWorkspace({
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio"
+        data-lite-runtime-layout="content-mode-aligned"
+        data-lite-runtime-profile={runtimeProfile}
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
-        style={{ '--soridraw-studio-builder-width': `${percentRef.current}%` } as React.CSSProperties}
+        style={{
+          '--soridraw-studio-builder-width': `${percentRef.current}%`,
+        } as React.CSSProperties}
       >
         <div
           id="soridraw-studio-builder-pane"
           ref={builderRef}
           data-soridraw-studio-pane="builder"
+          data-soridraw-lite-pane="builder"
           className="soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder"
           aria-hidden={isBuilderCollapsed}
         >
@@ -723,15 +1469,16 @@ export default function LiteStudioSplitWorkspace({
           id="soridraw-studio-result-pane"
           ref={resultRef}
           data-soridraw-studio-pane="result"
+          data-soridraw-lite-pane="result"
           className="soridraw-studio-result-pane soridraw-lite-studio-pane is-result"
           aria-hidden={isResultCollapsed}
         >
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
           {panes[1] ?? null}
         </div>
+        {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed ? splitter : null}
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
-      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>

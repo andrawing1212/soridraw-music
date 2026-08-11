@@ -5194,7 +5194,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     const setSelectedId = isShared ? setSelectedSharedNoteFolderId : setSelectedMyNoteFolderId;
 
     return (
-      <div className="mt-4 md:mt-5 space-y-3" data-selection-keep="true">
+      <div className="soridraw-musicnote-region-top mt-4 md:mt-5 space-y-3" data-selection-keep="true">
         <h3 className="soridraw-musicnote-folder-heading px-2 text-[12px] md:text-sm font-bold text-[#FFC1BC]/80 tracking-wide">
           {isShared ? '공유 받은 노트' : '나의 노트폴더'}
         </h3>
@@ -5411,7 +5411,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
         : musicNotePageHeader}
 
       {!isMusicNoteSharedView && (
-      <div className="flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
+      <div className="soridraw-musicnote-region-top flex items-center gap-2 max-w-full whitespace-nowrap" data-selection-keep="true">
         <div className="soridraw-musicnote-mode-tabs grid grid-cols-3 gap-0 p-1 bg-white/5 backdrop-blur-md rounded-2xl border border-black/20 w-full max-w-[480px] shadow-[var(--shadow-md)]">
           {musicNoteTabs.map((tab) => (
             <button
@@ -5444,7 +5444,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       )}
 
       {!isMusicNoteSharedView && (
-      <div className="mt-2 md:mt-3 space-y-4 md:space-y-5">
+      <div className="soridraw-musicnote-region-top mt-2 md:mt-3 space-y-4 md:space-y-5">
         <div className="soridraw-responsive-top-controls flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="soridraw-responsive-search-slot flex min-w-0 flex-1 items-center gap-2">
             <div className="soridraw-responsive-search relative flex-1 min-w-0 group overflow-hidden">
@@ -5594,7 +5594,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
           <p className="text-[var(--text-secondary)]">검색 결과가 없습니다.</p>
         </div>
       ) : (
-        <div className="soridraw-musicnote-list-start-divider mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
+        <div className="soridraw-musicnote-list-start-divider soridraw-perf-layout-region-list mt-[13px] md:mt-[21px] space-y-5" data-selection-keep="true">
           <div className="space-y-2 md:space-y-3" data-selection-keep="true">
             {filteredFavorites.slice(0, visibleCount).map((song) => {
               const isSelected = selectedSongIds.includes(song.id);
@@ -5675,7 +5675,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     setSelectedSong(song);
                   }}
                   className={cn(
-                    "soridraw-musicnote-song-card soridraw-list-perf-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
+                    "soridraw-musicnote-song-card soridraw-list-perf-item soridraw-perf-layout-region-item group relative overflow-visible rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
                     (activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id) ? "soridraw-list-perf-item--active z-[220]" : "z-0",
                     isSelectionMode ? "cursor-pointer" : "",
                     isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""

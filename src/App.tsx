@@ -81,8 +81,8 @@ import StudioPageFrame from './components/studio/StudioPageFrame';
 import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/StudioLeftRail';
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
-import StudioSplitEngineWorkspace, { type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
-import LiteSplitWorkspace, { LiteSplitLeftPane, LiteSplitRightPane } from './components/studio/LiteSplitWorkspace';
+import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
+import StudioSplitEngineWorkspace, { type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
 // so switching between fixed and anchored coordinates never remounts them.
@@ -997,6 +997,7 @@ function useStableContentHeight(
     const isContinuousResize = () => {
       const root = document.documentElement;
       return root.classList.contains('soridraw-split-dragging')
+        || root.classList.contains('soridraw-lite-split-dragging')
         || root.classList.contains('soridraw-window-resizing');
     };
 
@@ -2262,6 +2263,7 @@ function SecondaryScrollControl() {
   const startY = useRef(0);
   const scrollRaf = useRef<number | null>(null);
   const activeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const splitDraggingRef = useRef(false);
   
   // Max drag distance (track height is 160px, circle radius is 12px)
   const MAX_DRAG = 65;
@@ -2270,6 +2272,7 @@ function SecondaryScrollControl() {
     let visibilityFrame: number | null = null;
     const updateVisibility = () => {
       visibilityFrame = null;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
       setIsVisible((current) => {
@@ -2278,6 +2281,7 @@ function SecondaryScrollControl() {
       });
     };
     const scheduleVisibilityUpdate = () => {
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       if (visibilityFrame !== null) return;
       visibilityFrame = window.requestAnimationFrame(updateVisibility);
     };
@@ -2289,8 +2293,23 @@ function SecondaryScrollControl() {
     };
 
     const checkModal = () => {
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const modal = document.querySelector('.z-\\[100\\]');
-      setIsModalOpen(!!modal);
+      const next = Boolean(modal);
+      setIsModalOpen((current) => current === next ? current : next);
+    };
+
+    const handleSplitDragStart = () => {
+      splitDraggingRef.current = true;
+      if (visibilityFrame !== null) {
+        window.cancelAnimationFrame(visibilityFrame);
+        visibilityFrame = null;
+      }
+    };
+    const handleSplitDragEnd = () => {
+      splitDraggingRef.current = false;
+      scheduleVisibilityUpdate();
+      checkModal();
     };
 
     const documentResizeObserver = typeof ResizeObserver !== 'undefined'
@@ -2298,12 +2317,16 @@ function SecondaryScrollControl() {
       : null;
     documentResizeObserver?.observe(document.documentElement);
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
     const modalInterval = setInterval(checkModal, 500);
 
     scheduleVisibilityUpdate();
     return () => {
       documentResizeObserver?.disconnect();
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
       clearInterval(modalInterval);
       if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);
@@ -2505,96 +2528,6 @@ function HistoryRouteWrapper({
     />
   );
 }
-function MusicNoteLibrarySplitPerformanceTest({
-  isFavoritesLoading,
-  hasMoreFavorites,
-  isLoadingMoreFavorites,
-  loadMoreFavorites,
-  searchFavoritesOnServer,
-  refreshFavoritesFromServerFirstPage,
-  toggleFavorite,
-  updateFavorite,
-  clearAllFavorites,
-  unlockAllFavorites,
-  lockAllFavorites,
-  user,
-  handleLogin,
-}: any) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const params = new URLSearchParams(location.search);
-  const engine = params.get('splitEngine') === 'legacy' ? 'legacy' : 'lite';
-
-  const setEngine = (next: 'legacy' | 'lite') => {
-    const nextParams = new URLSearchParams(location.search);
-    if (next === 'lite') nextParams.delete('splitEngine');
-    else nextParams.set('splitEngine', 'legacy');
-    const query = nextParams.toString();
-    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
-  };
-
-  const musicNotePane = (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-      <HistoryRouteWrapper
-        isFavoritesLoading={isFavoritesLoading}
-        hasMoreFavorites={hasMoreFavorites}
-        isLoadingMoreFavorites={isLoadingMoreFavorites}
-        loadMoreFavorites={loadMoreFavorites}
-        searchFavoritesOnServer={searchFavoritesOnServer}
-        refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-        toggleFavorite={toggleFavorite}
-        updateFavorite={updateFavorite}
-        clearAllFavorites={clearAllFavorites}
-        unlockAllFavorites={unlockAllFavorites}
-        lockAllFavorites={lockAllFavorites}
-        user={user}
-        handleLogin={handleLogin}
-      />
-    </Suspense>
-  );
-
-  const libraryPane = (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
-      <SunoLibraryPageLazy appUser={user} />
-    </Suspense>
-  );
-
-  return (
-    <>
-      <div className="soridraw-split-engine-test-switch" aria-label="분할 엔진 성능 비교">
-        <button
-          type="button"
-          className={engine === 'lite' ? 'is-active' : ''}
-          onClick={() => setEngine('lite')}
-          title="초경량 분할 엔진 V2"
-        >
-          Lite V2
-        </button>
-        <button
-          type="button"
-          className={engine === 'legacy' ? 'is-active' : ''}
-          onClick={() => setEngine('legacy')}
-          title="기존 StudioSplitWorkspace"
-        >
-          기존 방식
-        </button>
-      </div>
-
-      {engine === 'legacy' ? (
-        <StudioSplitWorkspace viewMode="split" workspaceView="music-note">
-          <StudioBuilderPane>{musicNotePane}</StudioBuilderPane>
-          <StudioResultPane>{libraryPane}</StudioResultPane>
-        </StudioSplitWorkspace>
-      ) : (
-        <LiteSplitWorkspace>
-          <LiteSplitLeftPane>{musicNotePane}</LiteSplitLeftPane>
-          <LiteSplitRightPane>{libraryPane}</LiteSplitRightPane>
-        </LiteSplitWorkspace>
-      )}
-    </>
-  );
-}
-
 const AdminVocalTonesPageLazy = lazy(() => import('./pages/AdminVocalTonesPage'));
 const AdminSectionTagsPageLazy = lazy(() => import('./pages/AdminSectionTagsPage'));
 const AdminUserManagementPageLazy = lazy(() => import('./pages/AdminUserManagementPage'));
@@ -4052,6 +3985,17 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
   return rawModel ? (GEMINI_MODEL_LABELS[rawModel] || rawModel) : '';
 };
 
+const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'legacy';
+  // 611: choose by the active interaction environment, not by viewport width.
+  // A coarse/no-hover primary pointer matches the verified Galaxy Tab/touch
+  // path. Fine hover pointers (normal PC mouse/trackpad) use the verified
+  // legacy split engine even when the browser window itself is narrow.
+  const coarsePrimaryPointer = window.matchMedia('(pointer: coarse)').matches;
+  const noPrimaryHover = window.matchMedia('(hover: none)').matches;
+  return coarsePrimaryPointer || noPrimaryHover ? 'lite' : 'legacy';
+};
+
 function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
@@ -4253,22 +4197,85 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
-  const studioSplitEngine: StudioSplitEngine = new URLSearchParams(location.search).get('splitEngine') === 'legacy' ? 'legacy' : 'lite';
-  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine) => {
-    const nextParams = new URLSearchParams(location.search);
-    if (engine === 'lite') nextParams.delete('splitEngine');
-    else nextParams.set('splitEngine', 'legacy');
-    const query = nextParams.toString();
-    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
-  }, [location.pathname, location.search, navigate]);
+  const splitEngineParam = new URLSearchParams(location.search).get('splitEngine');
+  const studioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
+    ? splitEngineParam
+    : null;
+  const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const pointerQuery = window.matchMedia('(pointer: coarse)');
+    const hoverQuery = window.matchMedia('(hover: none)');
+    const syncAutomaticSplitEngine = () => setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
+    syncAutomaticSplitEngine();
+    pointerQuery.addEventListener('change', syncAutomaticSplitEngine);
+    hoverQuery.addEventListener('change', syncAutomaticSplitEngine);
+    return () => {
+      pointerQuery.removeEventListener('change', syncAutomaticSplitEngine);
+      hoverQuery.removeEventListener('change', syncAutomaticSplitEngine);
+    };
+  }, []);
+
   const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
     readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
   );
+
+  // 617: remove the accumulated Music-Note-only split experiments. The user's
+  // real-hand comparison is now the source of truth: Recent is best on the
+  // legacy path, Library is best on the 590 Lite/CSS-variable path, and Galaxy
+  // Tab is best on adaptive Lite V2. On fine-pointer PC, Music Note now borrows
+  // Library's exact 590 split geometry instead of maintaining a separate path.
+  const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
+    ? 'lite'
+    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+      ? 'lite'
+      : 'legacy';
+  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
+    ? 'adaptive'
+    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+      ? 'library-590'
+      : 'adaptive';
+  const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
+  const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
+    ? (!isTouchPrimaryStudioEnvironment && (studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note')
+      ? 'library-590'
+      : 'adaptive')
+    : automaticLiteRuntimeProfile;
+  const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
+    ? '자동 선택 · 갤탭/터치: Lite V2'
+    : studioWorkspaceView === 'library'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
+      : studioWorkspaceView === 'music-note'
+        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+        : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
+  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
+    const nextParams = new URLSearchParams(location.search);
+    if (engine === 'auto') nextParams.delete('splitEngine');
+    else nextParams.set('splitEngine', engine);
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
   const [studioWorkspaceLayoutRequestId, setStudioWorkspaceLayoutRequestId] = useState(0);
   const selectStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
     setStudioWorkspaceView(view);
     setStudioWorkspaceLayoutRequestId((current) => current + 1);
   }, []);
+
+  // 603: admin performance diagnostics may compare Music Note and Library in
+  // one run. Keep this as a narrow workspace-selection bridge only; it never
+  // changes user data, split-engine selection, or normal navigation state.
+  useEffect(() => {
+    const handlePerfWorkspaceRequest = (event: Event) => {
+      if (location.pathname !== '/studio') return;
+      const view = (event as CustomEvent<{ view?: StudioWorkspaceView }>).detail?.view;
+      if (view !== 'music-note' && view !== 'library' && view !== 'recent' && view !== 'create') return;
+      selectStudioWorkspaceView(view);
+    };
+    window.addEventListener('soridraw:split-perf-workspace-request', handlePerfWorkspaceRequest as EventListener);
+    return () => window.removeEventListener('soridraw:split-perf-workspace-request', handlePerfWorkspaceRequest as EventListener);
+  }, [location.pathname, selectStudioWorkspaceView]);
 
   // Split mode is a separate workspace world from the classic dark/light layout.
   // When the user leaves Studio Black for either classic color mode, always
@@ -7308,11 +7315,20 @@ const toggleCycleVariantSelection = (
   const [commandPlaceholderIndex, setCommandPlaceholderIndex] = useState(0);
 
   useEffect(() => {
+    // 580: this placeholder belongs only to the create workspace. Previously
+    // the top-level App state advanced every 3.6s even while Music Note or
+    // Library was active. Because App owns the routed Studio tree, that tiny
+    // cosmetic tick could schedule a large React commit in the middle of a
+    // split drag/benchmark. Keep the exact create-screen behavior, but do not
+    // run the timer when the command input is not actually on screen.
+    if (location.pathname !== '/studio' || studioWorkspaceView !== 'create') return;
+
     const timer = window.setInterval(() => {
+      if (document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       setCommandPlaceholderIndex((prev) => (prev + 1) % commandPlaceholderExamples.length);
     }, 3600);
     return () => window.clearInterval(timer);
-  }, [commandPlaceholderExamples.length]);
+  }, [commandPlaceholderExamples.length, location.pathname, studioWorkspaceView]);
   const [kpopMode, setKpopMode] = useState<0 | 1 | 2>(0); // legacy K-Pop mode state
   const [isKoreanEnglishMix, setIsKoreanEnglishMix] = useState(false);
   const [englishMixRatio, setEnglishMixRatio] = useState(10);
@@ -14414,6 +14430,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         clearSunoLibrarySignal={clearSunoLibrarySignal}
       />
 
+      <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
+
       <Routes>
         <Route path="/" element={
           canAccessNavigationMenu('home') ? (
@@ -14475,21 +14493,29 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && (
-                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교">
+              {isStudioBlackActionMode && isAdminMenuUser && (
+                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
                   <button
                     type="button"
-                    className={studioSplitEngine === 'lite' ? 'is-active' : ''}
+                    className={studioSplitEngineOverride === null ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('auto')}
+                    title={studioSplitAutoTitle}
+                  >
+                    자동
+                  </button>
+                  <button
+                    type="button"
+                    className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('lite')}
-                    title="초경량 Studio 분할 엔진 V2"
+                    title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
                   >
                     Lite V2
                   </button>
                   <button
                     type="button"
-                    className={studioSplitEngine === 'legacy' ? 'is-active' : ''}
+                    className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('legacy')}
-                    title="기존 StudioSplitWorkspace"
+                    title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
                   >
                     기존 방식
                   </button>
@@ -14537,6 +14563,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               {isStudioLoaded && (
                 <StudioSplitEngineWorkspace
                   engine={studioSplitEngine}
+                  liteRuntimeProfile={studioLiteRuntimeProfile}
                   viewMode="split"
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
@@ -16961,7 +16988,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             ) : (user || auth.currentUser || new URLSearchParams(location.search).has('note')) ? (
               (user || auth.currentUser) ? (
                 <StudioPageFrame
-                  workspaceView="music-note-library-split-test"
+                  workspaceView="music-note"
                   lockViewport={false}
                   leftRail={
                     <StudioLeftRail
@@ -17017,8 +17044,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     />
                   }
                 >
-                  <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
-                    <MusicNoteLibrarySplitPerformanceTest
+                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>
+                    <HistoryRouteWrapper
                       isFavoritesLoading={isFavoritesLoading}
                       hasMoreFavorites={hasMoreFavorites}
                       isLoadingMoreFavorites={isLoadingMoreFavorites}
@@ -17033,7 +17060,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       user={user || auth.currentUser}
                       handleLogin={handleLogin}
                     />
-                  </main>
+                  </Suspense>
                 </StudioPageFrame>
               ) : (
                 <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">불러오는 중...</div>}>

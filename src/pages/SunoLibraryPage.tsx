@@ -6162,7 +6162,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
 
         {/* Main Music Player relocated to GlobalPlayer */}
 
-        <div className="soridraw-library-primary-controls space-y-2 md:space-y-3">
+        <div className="soridraw-library-primary-controls soridraw-library-region-top space-y-2 md:space-y-3">
           {renderLibraryModeTabs()}
 
           {renderLibraryTopControls()}
@@ -6196,7 +6196,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
             </p>
           </motion.div>
         ) : (
-          <div className="soridraw-library-list-start-divider !mt-2 md:!mt-3 pt-0 space-y-2 md:space-y-3" data-selection-keep="true">
+          <div className="soridraw-library-list-start-divider soridraw-perf-layout-region-list !mt-2 md:!mt-3 pt-0 space-y-2 md:space-y-3" data-selection-keep="true">
             {displayedWorkspaceTracks.map((group) => {
               const dataItems = extractSunoData(group);
               const items = (dataItems.length > 0 ? dataItems : [{}])
@@ -6207,7 +6207,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               return (
                 <div
                   key={group.id}
-                  className={`soridraw-library-workspace-group soridraw-list-perf-item bg-[#151515] rounded-2xl ${activeColorMenu?.startsWith(`workspace-${group.id}-`) ? 'soridraw-list-perf-item--active' : ''}`}
+                  className={`soridraw-library-workspace-group soridraw-list-perf-item soridraw-perf-layout-region-group bg-[#151515] rounded-2xl ${activeColorMenu?.startsWith(`workspace-${group.id}-`) ? 'soridraw-list-perf-item--active' : ''}`}
                 >
                   {/* Group Header */}
                   <div className="soridraw-library-workspace-header px-4 md:px-6 py-4 flex items-start md:items-center justify-between gap-2 md:gap-3 rounded-t-2xl overflow-hidden">
@@ -6259,7 +6259,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         <div 
                           key={`${group.id}-${idx}`} 
                           data-selection-keep="true"
-                          className={`soridraw-library-workspace-track-row group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
+                          className={`soridraw-library-workspace-track-row soridraw-perf-layout-region-item group flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 transition-colors cursor-pointer ${item.hidden || group.hidden ? 'opacity-50 grayscale hover:grayscale-0' : ''}`}
                           onMouseDown={(event) => {
                             handleLibraryDragSelectStart(event, selection);
                             handleLibraryCardLongPressStart(event, selection);
@@ -6745,7 +6745,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                         }
                       }}
                       data-selection-keep="true"
-                      className={`soridraw-library-playlist-row soridraw-list-perf-item group relative flex items-center p-2 rounded-2xl transition-colors border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${(activeColorMenu === item.id || activePlaylistItemMenu === item.id) ? 'soridraw-list-perf-item--active' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
+                      className={`soridraw-library-playlist-row soridraw-list-perf-item soridraw-perf-layout-region-item group relative flex items-center p-2 rounded-2xl transition-colors border border-transparent hover:bg-white/5 hover:border-white/10 ${index < items.length - 1 ? 'after:absolute after:left-[5.25rem] md:after:left-[5.75rem] after:right-7 after:bottom-[-0.25rem] after:h-px after:bg-white/[0.035] after:content-[""]' : ''} ${(activeColorMenu === item.id || activePlaylistItemMenu === item.id) ? 'soridraw-list-perf-item--active' : ''} ${multiSelectMode ? 'cursor-pointer' : ''}`}
                     >
                       {/* Left: Play/Pause */}
                       <AnimatedTrackPlayButton

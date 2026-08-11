@@ -41,13 +41,17 @@ type StudioPageFrameProps = {
   rightRail: ReactNode;
   children: ReactNode;
   lockViewport?: boolean;
+  compactMobileLayout?: boolean;
 };
 
-export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children, lockViewport = true }: StudioPageFrameProps) {
+export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children, lockViewport = true, compactMobileLayout = false }: StudioPageFrameProps) {
   const isMobileViewport = useMediaQuery('(max-width: 1099px)');
   const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
   const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
-  const isCompactWorkspace = railViewport === 'mobile';
+  // 646: compact mobile composition is a split-theme presentation choice, not
+  // a generic viewport rule. Dark/light phone layouts keep their existing frame
+  // behavior; only Studio Black explicitly opts into the single-page mobile shell.
+  const isCompactWorkspace = compactMobileLayout && railViewport === 'mobile';
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);
 

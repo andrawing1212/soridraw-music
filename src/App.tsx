@@ -3210,6 +3210,9 @@ function Navigation({
   sunoLibrarySignal,
   sunoLibrarySignalDotClass,
   clearSunoLibrarySignal,
+  studioCompactMobileLayout = false,
+  studioWorkspaceView = 'create',
+  onStudioWorkspaceSelect,
 }: {
   user: User | null;
   cachedHeaderIdentity: CachedHeaderIdentity | null;
@@ -3223,6 +3226,9 @@ function Navigation({
   sunoLibrarySignal: 'generating' | 'completed' | null;
   sunoLibrarySignalDotClass: string;
   clearSunoLibrarySignal: () => void;
+  studioCompactMobileLayout?: boolean;
+  studioWorkspaceView?: StudioWorkspaceView;
+  onStudioWorkspaceSelect?: (view: StudioWorkspaceView) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -3277,6 +3283,56 @@ function Navigation({
   const preferredLandingPath = menuVisibility.home
     ? '/'
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
+
+  const isCompactStudioMobileNavigation = studioCompactMobileLayout && Boolean(onStudioWorkspaceSelect);
+  const isCompactStudioRoute = isCompactStudioMobileNavigation && location.pathname === '/studio';
+  const isCompactStudioMobileItemActive = (item: (typeof allTopNavItems)[number]) => {
+    if (!isCompactStudioRoute) return isActivePath(item.path);
+    if (item.key === 'studio') return studioWorkspaceView === 'create' || studioWorkspaceView === 'recent';
+    if (item.key === 'musicNote') return studioWorkspaceView === 'music-note';
+    if (item.key === 'library') return studioWorkspaceView === 'library';
+    return isActivePath(item.path);
+  };
+
+  const goToCompactMobileNav = (item: (typeof allTopNavItems)[number]) => {
+    if (!isAuthReady) return;
+    if (!user) {
+      handleLogin();
+      return;
+    }
+    if (!isCompactStudioMobileNavigation || !onStudioWorkspaceSelect) {
+      goToTopNav(item.path, { clearSuno: item.clearSuno });
+      return;
+    }
+
+    const openCompactStudioWorkspace = (view: StudioWorkspaceView) => {
+      onStudioWorkspaceSelect(view);
+      if (location.pathname !== '/studio') navigate('/studio');
+      else scrollToTop();
+    };
+
+    if (item.key === 'studio') {
+      openCompactStudioWorkspace('create');
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      return;
+    }
+    if (item.key === 'musicNote') {
+      openCompactStudioWorkspace('music-note');
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      return;
+    }
+    if (item.key === 'library') {
+      if (item.clearSuno) clearSunoLibrarySignal();
+      openCompactStudioWorkspace('library');
+      setIsExpanded(false);
+      setIsProfileOpen(false);
+      return;
+    }
+
+    goToTopNav(item.path, { clearSuno: item.clearSuno });
+  };
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -3557,12 +3613,12 @@ function Navigation({
                 <button
                   key={item.path}
                   type="button"
-                  onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
+                  onClick={() => goToCompactMobileNav(item)}
                   className={cn(
                     "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                    isActivePath(item.path) && "is-active bg-[#FFB400]/18 text-[#FFB400]"
+                    isCompactStudioMobileItemActive(item) && "is-active bg-[#FFB400]/18 text-[#FFB400]"
                   )}
-                  aria-current={isActivePath(item.path) ? 'page' : undefined}
+                  aria-current={isCompactStudioMobileItemActive(item) ? 'page' : undefined}
                   aria-label={item.label}
                   title={item.label}
                 >
@@ -3921,9 +3977,12 @@ const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
 function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
+  const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
+  const isStudioCompactMobileLayout = isStudioCompactViewport
+    && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
 
   useEffect(() => {
     applyStoredSoridrawDisplayMode();
@@ -14437,6 +14496,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         sunoLibrarySignal={sunoLibrarySignal}
         sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
         clearSunoLibrarySignal={clearSunoLibrarySignal}
+        studioCompactMobileLayout={isStudioCompactMobileLayout}
+        studioWorkspaceView={studioWorkspaceView}
+        onStudioWorkspaceSelect={selectStudioWorkspaceView}
       />
 
       <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
@@ -14455,6 +14517,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           canAccessNavigationMenu('studio') ? (
           <StudioPageFrame
             workspaceView={studioWorkspaceView}
+            compactMobileLayout={isStudioCompactMobileLayout}
             leftRail={
               <StudioLeftRail
                 activeWorkspace={studioWorkspaceView}
@@ -14576,6 +14639,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   viewMode="split"
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
+                  compactMobileMode={isStudioCompactMobileLayout}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">

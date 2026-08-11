@@ -1,3 +1,15 @@
+## 646차 — 분할모드 모바일폭을 실제 모바일 UI 구조로 완전 분리
+
+- 기준 ZIP: `SORIDRAW_645차_분할모드_모바일폭_단일페이지구조분리.zip`
+- 최종 기준을 다시 고정했다: **PC = 분할 작업환경 / 태블릿(1100~1599) = 분할 절충형 / 모바일폭(<1100) = 실제 핸드폰과 같은 단일 페이지 UI**. 테마 값은 `studio-black`을 유지하며 다크모드로 강제 변경하지 않는다.
+- 645에서 Legacy/Lite 분할 엔진 내부에 모바일 예외를 넣었던 방식을 철회했다. 모바일폭에서는 `StudioSplitEngineWorkspace`가 `StudioCompactMobileWorkspace`를 사용하므로 Legacy/Lite 분할 엔진 자체를 아예 마운트하지 않는다. 따라서 분할바, 좌우 접기 상태, pane geometry, Right Rail이 모바일 DOM에 섞일 수 없다.
+- 모바일폭의 ⚡ Studio는 기존 모바일 구조처럼 Builder와 Result를 한 페이지 상/하로 함께 유지한다. `create`/`recent`는 모바일 상단 메뉴에서 하나의 Studio 항목으로 취급한다.
+- 모바일폭의 Music Note / Suno Library는 각각 현재 페이지 하나만 렌더한다. Sori Studio 대문과 다른 분할영역은 같이 나타나지 않는다.
+- 모바일 상단 아이콘 메뉴를 분할모드 왼쪽 메뉴의 모바일 해석으로 연결했다. Studio / Music Note / Library 클릭은 모바일폭의 split theme에서 `/studio` 내부 workspace를 전환하고, 현재 항목의 활성 표시도 workspace 기준으로 맞춘다. 홈/실험실/마이페이지 등 일반 라우트 이동은 기존 방식 그대로다.
+- 실제 핸드폰의 Dark/Light 레이아웃에는 645의 폭 전용 예외가 침범하지 않도록 `compactMobileLayout`을 Studio Black에서만 명시적으로 켠다.
+- 창을 다시 1100px 이상으로 넓히면 저장된 PC/태블릿 split percent를 기존 Legacy/Lite 엔진이 다시 읽어 원래 분할 작업환경으로 복귀한다.
+- Firestore/Auth/Functions/저장 구조 변경 없음. 배포 없음.
+
 
 ## 645차 — 분할모드 모바일폭 단일페이지 구조 분리
 

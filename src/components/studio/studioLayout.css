@@ -12019,12 +12019,10 @@ html[data-soridraw-device="phone"] body > :is(
   }
 }
 
-/* 645 — Split theme compact workspace uses the real mobile information hierarchy.
- * The split theme itself stays selected; only the layout changes below 1100px.
- * - Studio create/recent: keep Builder + Result in one vertical mobile page.
- * - Music Note / Library: keep only the active result page visible.
- * - Left/right auxiliary rails and split controls are not part of compact UI.
- * This replaces the old 626 idea of stacking the desktop right rail under the page. */
+/* 646 — Studio Black mobile-width composition is a real mobile page, not a
+ * squeezed split canvas. PC remains the primary split workspace and 1100~1599px
+ * remains the tablet compromise. Below 1100px only the current mobile page
+ * hierarchy is rendered by StudioCompactMobileWorkspace. */
 @media (max-width: 1099px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-compact-workspace="true"] {
@@ -12034,6 +12032,12 @@ html[data-soridraw-device="phone"] body > :is(
     max-width: 100% !important;
     min-height: 0 !important;
     overflow-x: clip !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  > .soridraw-studio-masthead-divider {
+    display: none !important;
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
@@ -12049,28 +12053,13 @@ html[data-soridraw-device="phone"] body > :is(
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-compact-workspace="true"]
-  .soridraw-studio-split-workspace.is-compact-workspace {
-    --soridraw-studio-builder-width: 100% !important;
-    --soridraw-studio-builder-px: 100% !important;
-    display: block !important;
-    grid-template-columns: none !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
+  .soridraw-studio-compact-mobile-workspace,
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-compact-workspace="true"]
-  .soridraw-studio-split-workspace.is-compact-workspace
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+  :is(.soridraw-studio-compact-mobile-builder, .soridraw-studio-compact-mobile-result) {
+    display: block !important;
     position: relative !important;
     inset: auto !important;
-    left: auto !important;
-    right: auto !important;
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
@@ -12078,23 +12067,12 @@ html[data-soridraw-device="phone"] body > :is(
     min-height: 0 !important;
     max-height: none !important;
     margin: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
     transform: none !important;
-    translate: none !important;
     overflow: visible !important;
   }
 
-  /* Music Note / Library compact mode is a single active page, not Studio + page. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"]
-  :is(
-    .soridraw-studio-split-workspace.is-compact-workspace.is-builder-collapsed > .soridraw-studio-builder-pane,
-    .soridraw-studio-split-workspace.is-compact-workspace.is-result-collapsed > .soridraw-studio-result-pane
-  ) {
-    display: none !important;
-  }
-
+  /* Music Note / Library own the whole mobile screen. The Sori Studio hero is
+   * not part of those pages, matching the real phone navigation model. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-compact-workspace="true"]:is(
     [data-workspace-view="music-note"],
@@ -12117,12 +12095,19 @@ html[data-soridraw-device="phone"] body > :is(
     padding-top: 0 !important;
   }
 
-  /* Safety: body portals from the Builder never leak over Music Note / Library
-   * while compact mode visually owns only the result page. */
-  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > :is(
-    .soridraw-studio-action-bar--tracking,
-    .soridraw-studio-action-collapsed,
-    .soridraw-live-keywords-fixed,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  .soridraw-studio-compact-mobile-result
+  > .soridraw-studio-workspace-page {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  /* No split-only controls survive the mobile composition. This is structural
+   * cleanup, not a visual hide of an otherwise active split engine. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"] body > :is(
     .soridraw-studio-splitter,
     .soridraw-studio-builder-collapse-toggle,
     .soridraw-studio-result-collapse-toggle

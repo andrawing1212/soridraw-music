@@ -50,6 +50,7 @@ const CONTENT_TABLET_MAX = 1080;
 const BENCHMARK_SURFACE_WIDTH = 1400;
 const BENCHMARK_SURFACE_HEIGHT = 900;
 type BenchmarkLayoutMode = 'css-var' | 'direct';
+type RuntimeProfile = 'adaptive' | 'library-590' | 'music-note-pc-direct';
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -157,8 +158,26 @@ const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
 const resolveRuntimeLayoutMode = (
   resultMode: ContentResponsiveMode,
   workspaceView?: StudioWorkspaceView,
+  runtimeProfile: RuntimeProfile = 'adaptive',
 ): BenchmarkLayoutMode => {
+  // 612 PC workspace policy:
+  // - Library on PC keeps the exact 590 CSS-variable geometry regardless of
+  //   whether the *visual* result content is currently PC/tablet/mobile.
+  // - Music Note on PC keeps direct pane geometry at every responsive width.
+  // - Galaxy Tab/touch and explicit Lite diagnostics keep the 609 adaptive V2
+  //   behavior that already passed real-hand verification.
+  if (runtimeProfile === 'library-590') return 'css-var';
+  if (runtimeProfile === 'music-note-pc-direct') return 'direct';
   if (resultMode !== 'pc') return 'direct';
+  return workspaceView === 'music-note' ? 'direct' : 'css-var';
+};
+
+const readInitialRuntimeLayoutMode = (
+  workspaceView: StudioWorkspaceView | undefined,
+  runtimeProfile: RuntimeProfile,
+): BenchmarkLayoutMode => {
+  if (runtimeProfile === 'library-590') return 'css-var';
+  if (runtimeProfile === 'music-note-pc-direct') return 'direct';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
@@ -168,6 +187,7 @@ export type LiteStudioSplitWorkspaceProps = {
   viewMode?: ViewMode;
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
+  runtimeProfile?: RuntimeProfile;
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -176,6 +196,7 @@ export default function LiteStudioSplitWorkspace({
   viewMode = 'split',
   workspaceView,
   workspaceRequestId = 0,
+  runtimeProfile = 'adaptive',
 }: LiteStudioSplitWorkspaceProps) {
   // 609: stabilize the confirmed good combinations instead of forcing one
   // engine on every page. Tablet/mobile content uses direct everywhere; PC keeps
@@ -228,7 +249,7 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkRunningRef = useRef(false);
   const layoutAckObserverRef = useRef<ResizeObserver | null>(null);
   const layoutAckObservedRef = useRef<{ builder: number; result: number }>({ builder: 0, result: 0 });
-  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(workspaceView === 'music-note' ? 'direct' : 'css-var');
+  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(readInitialRuntimeLayoutMode(workspaceView, runtimeProfile));
   const runtimeResultContentModeRef = useRef<ContentResponsiveMode | null>(null);
   const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutModeRef.current);
 
@@ -624,7 +645,7 @@ export default function LiteStudioSplitWorkspace({
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
-        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView);
+        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
         if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
           runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
           benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
@@ -678,7 +699,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, syncExternalGeometry, syncPaneModes, writeLiveSplitGeometry]);
+  }, [broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -856,7 +877,7 @@ export default function LiteStudioSplitWorkspace({
     if (captureManualPerf) {
       beginSplitPerfDrag({
         workspaceView,
-        engine: `Lite V2 · armed hand diagnostic 611 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
+        engine: `Lite V2 · armed hand diagnostic 612 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
         builder: builderRef.current,
         result: resultRef.current,
         layoutMode: runtimeLayoutModeRef.current,
@@ -928,13 +949,17 @@ export default function LiteStudioSplitWorkspace({
   useLayoutEffect(() => {
     if (benchmarkRunningRef.current) return;
 
-    // 609: workspace changes can alter the PC owner (Music Note direct versus
-    // Library/Recent/Create css-var). Reset the cached content mode so the next
-    // refresh re-resolves ownership once from the current pane, outside a gesture.
+    // 612: workspace/profile changes can alter the geometry owner. Reset the
+    // cached content mode so the next refresh resolves exactly one owner from
+    // the current pane, outside a gesture.
     runtimeResultContentModeRef.current = null;
+    const nextLayoutMode = readInitialRuntimeLayoutMode(workspaceView, runtimeProfile);
+    runtimeLayoutModeRef.current = nextLayoutMode;
+    benchmarkLayoutModeRef.current = nextLayoutMode;
+    if (nextLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
     const frame = window.requestAnimationFrame(() => refreshMetrics());
     return () => window.cancelAnimationFrame(frame);
-  }, [refreshMetrics, workspaceView]);
+  }, [clearDirectBenchmarkGeometry, refreshMetrics, runtimeProfile, workspaceView]);
 
   useEffect(() => {
     const emitBenchmarkStatus = (state: 'running' | 'done' | 'error', message: string) => {
@@ -1191,7 +1216,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 611 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 612 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1426,6 +1451,7 @@ export default function LiteStudioSplitWorkspace({
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio"
         data-lite-runtime-layout="content-mode-aligned"
+        data-lite-runtime-profile={runtimeProfile}
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,

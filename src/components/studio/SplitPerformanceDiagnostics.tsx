@@ -620,7 +620,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       return false;
     }
     if (!document.querySelector('.soridraw-lite-studio-split-workspace')) {
-      setBenchmarkMessage('611 자동 모드의 PC는 기존 분할 엔진입니다. PERF 진단은 우측 상단에서 Lite V2를 강제 선택한 뒤 실행하세요.');
+      setBenchmarkMessage('612 자동 모드는 화면별 검증 엔진을 사용합니다. 현재 화면이 기존 방식이면 우측 상단에서 Lite V2를 강제 선택한 뒤 PERF 진단을 실행하세요.');
       return false;
     }
     return true;

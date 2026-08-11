@@ -1,3 +1,16 @@
+## 612차 — 화면별 검증 경로 복원 + PC 뮤직노트 전용 reflow 경량화
+
+- 611의 핵심 오류를 수정했다. **PC 전체에 하나의 분할 엔진을 강제한 것이 문제**였고, 실사용 검증에서 이미 화면별 최적 경로가 달랐다.
+- AUTO 라우팅을 입력환경 × 화면 기준으로 분리했다.
+  - 갤럭시탭/터치 우선 환경: Music Note / Library / Recent 모두 검증된 Lite V2 adaptive 경로 유지.
+  - PC Recent/Create: 기존 `StudioSplitWorkspace` 유지.
+  - PC Library: Lite V2를 사용하되 **590의 CSS-variable geometry를 PC/Tablet/Mobile 시각 모드와 무관하게 고정**.
+  - PC Music Note: Lite V2 direct pane geometry를 고정하고 Music Note 카드의 텍스트 flex intrinsic-size 재계산만 drag 중 격리.
+- Music Note 전용 reflow 가드는 `soridraw-musicnote-song-copy`의 inline-size/layout/style containment와 title/keyword strip의 layout/style/paint containment만 사용한다. 높이나 반응형 상태를 freeze하지 않아 드래그 중에도 실제 폭은 매 프레임 따라간다.
+- 갤탭에서 이미 통과한 V2 경로와 Library 590 경로에는 Music Note 전용 CSS를 적용하지 않는다.
+- 관리자 `자동 / Lite V2 / 기존 방식` 강제 비교는 유지한다. `Lite V2` 강제 선택은 기존 adaptive V2를 그대로 사용해 진단 기준을 보존한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
 ## 605 - Real-hand layout acknowledgement + responsive conflict diagnostics
 
 - Keep the **604/602 runtime behavior unchanged**. This step measures why Music Note can report high rAF FPS while still feeling as if the content is being pulled from behind.

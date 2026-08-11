@@ -910,3 +910,35 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 612 — PC Music Note-only intrinsic-text reflow guard.
+ * The user-verified winners are now routed per workspace, so this rule is
+ * deliberately NOT shared with Library/Recent or Galaxy Tab's already-fast V2.
+ * Music Note cards contain two horizontally scrollable, nowrap text regions
+ * (title + keyword chips) inside a flex item. During every 1px pane-width write,
+ * Chromium can otherwise revisit their large intrinsic inline sizes before the
+ * flex item receives the same available width. Inline-size containment tells
+ * layout that the flex item's width is owned by the row, not by the full text
+ * contents, while descendants still receive the live width and remain visually
+ * responsive on every frame. No size/height freeze and no pointer-up snap. */
+@media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
+  .soridraw-musicnote-song-copy {
+    contain: inline-size layout style;
+    min-width: 0 !important;
+  }
+
+  .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
+  .soridraw-musicnote-song-copy :is(
+    .soridraw-musicnote-song-title,
+    .soridraw-musicnote-song-keywords
+  ) {
+    contain: layout style paint;
+  }
+
+  .soridraw-lite-studio-split-workspace[data-lite-runtime-profile="music-note-pc-direct"].is-dragging
+  .soridraw-musicnote-song-card * {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+}

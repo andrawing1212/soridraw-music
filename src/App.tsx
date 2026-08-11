@@ -82,7 +82,7 @@ import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/St
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
-import StudioSplitEngineWorkspace, { type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
+import StudioSplitEngineWorkspace, { type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
 // so switching between fixed and anchored coordinates never remounts them.
@@ -4217,11 +4217,42 @@ function App() {
     };
   }, []);
 
-  // 611 runtime policy: PC mouse/trackpad = verified legacy engine,
-  // Galaxy Tab / touch-primary environment = verified Lite V2. The query param
-  // remains an admin-only diagnostic override so both engines can still be
-  // compared without changing the normal user path.
-  const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticStudioSplitEngine;
+  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
+    readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
+  );
+
+  // 612: stop choosing one engine for the whole PC. Real-hand verification has
+  // already produced three different winners, so AUTO now routes by
+  // input-environment *and* active workspace instead of forcing a compromise:
+  // - Galaxy Tab/touch primary: Lite V2 everywhere (all three pages passed).
+  // - PC Recent/Create: legacy split path (Recent passed there).
+  // - PC Library: Lite V2 locked to the 590 CSS-variable geometry path.
+  // - PC Music Note: Lite V2 direct geometry + a Music-Note-only text/flex
+  //   reflow guard in CSS. This does not touch Library/Recent/Galaxy Tab.
+  const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
+    ? 'lite'
+    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+      ? 'lite'
+      : 'legacy';
+  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
+    ? 'adaptive'
+    : studioWorkspaceView === 'library'
+      ? 'library-590'
+      : studioWorkspaceView === 'music-note'
+        ? 'music-note-pc-direct'
+        : 'adaptive';
+  const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
+  const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
+    ? 'adaptive'
+    : automaticLiteRuntimeProfile;
+  const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
+    ? '자동 선택 · 갤탭/터치: Lite V2'
+    : studioWorkspaceView === 'library'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
+      : studioWorkspaceView === 'music-note'
+        ? '자동 선택 · PC 뮤직노트: Lite V2 · 직접 좌표/전용 reflow 경로'
+        : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');
@@ -4229,9 +4260,6 @@ function App() {
     const query = nextParams.toString();
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
-  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
-    readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
-  );
   const [studioWorkspaceLayoutRequestId, setStudioWorkspaceLayoutRequestId] = useState(0);
   const selectStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
     setStudioWorkspaceView(view);
@@ -14474,7 +14502,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     type="button"
                     className={studioSplitEngineOverride === null ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('auto')}
-                    title={`자동 선택 · 현재 ${studioSplitEngine === 'lite' ? 'Lite V2' : '기존 방식'}`}
+                    title={studioSplitAutoTitle}
                   >
                     자동
                   </button>
@@ -14538,6 +14566,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               {isStudioLoaded && (
                 <StudioSplitEngineWorkspace
                   engine={studioSplitEngine}
+                  liteRuntimeProfile={studioLiteRuntimeProfile}
                   viewMode="split"
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}

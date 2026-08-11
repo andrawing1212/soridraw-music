@@ -145,22 +145,20 @@ const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
   width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
 );
 
-// 608 stability rule from real-hand A/B: PC keeps the coherent 590 CSS-variable
-// path; compact result-pane modes use direct local pane geometry. This removes
-// the former page identity split (Music Note=direct, everything else=css-var)
-// that produced the exact opposite good/bad behavior between PC and tablet.
+// 609 stabilization rule from the user's real-hand verification:
+// - Result content in tablet/mobile mode: direct geometry is the confirmed smooth
+//   path across Music Note, Library and Recent.
+// - Result content in PC mode: restore the pre-608 stable ownership. Music Note
+//   keeps direct; Library/Recent/Create keep the 590 CSS-variable path.
+// Crucially, the geometry owner now follows the *same responsive mode* that the
+// content already uses. 608 had a second 16px engine hysteresis around 1080px,
+// so visual PC/Tablet mode and geometry ownership could disagree during drag.
 const resolveRuntimeLayoutMode = (
-  currentMode: BenchmarkLayoutMode,
-  resultWidth: number,
+  resultMode: ContentResponsiveMode,
+  workspaceView?: StudioWorkspaceView,
 ): BenchmarkLayoutMode => {
-  const safeWidth = Math.max(1, resultWidth);
-  // Do not let the geometry owner ping-pong while the pointer hovers around the
-  // 1080px PC/tablet boundary. The visual responsive contract still changes at
-  // its exact breakpoint; only the low-level geometry engine gets a 16px hold.
-  if (currentMode === 'css-var') {
-    return safeWidth < CONTENT_TABLET_MAX - PANE_MODE_HYSTERESIS ? 'direct' : 'css-var';
-  }
-  return safeWidth > CONTENT_TABLET_MAX + PANE_MODE_HYSTERESIS ? 'css-var' : 'direct';
+  if (resultMode !== 'pc') return 'direct';
+  return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
 export type LiteStudioSplitWorkspaceProps = {
@@ -178,13 +176,10 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
 }: LiteStudioSplitWorkspaceProps) {
-  // 608: real-hand testing exposed a diagonal pattern that page-based engine
-  // ownership could not explain away: direct geometry was the smoother path
-  // whenever the result pane was in tablet density, while CSS-variable geometry
-  // was the smoother path in PC density. The same pattern held across pages in
-  // opposite directions. Runtime ownership therefore follows the result pane's
-  // responsive mode, not Music Note/Library/Recent identity. No React state is
-  // involved; the active path is selected inside the existing rAF geometry write.
+  // 609: stabilize the confirmed good combinations instead of forcing one
+  // engine on every page. Tablet/mobile content uses direct everywhere; PC keeps
+  // Library/Recent/Create on css-var and Music Note on direct. Geometry switching
+  // is tied to the exact content responsive mode, not a second hidden threshold.
   const panes = Children.toArray(children);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -230,8 +225,9 @@ export default function LiteStudioSplitWorkspace({
   const benchmarkRunningRef = useRef(false);
   const layoutAckObserverRef = useRef<ResizeObserver | null>(null);
   const layoutAckObservedRef = useRef<{ builder: number; result: number }>({ builder: 0, result: 0 });
-  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
-  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>('css-var');
+  const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(workspaceView === 'music-note' ? 'direct' : 'css-var');
+  const runtimeResultContentModeRef = useRef<ContentResponsiveMode | null>(null);
+  const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutModeRef.current);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -583,9 +579,8 @@ export default function LiteStudioSplitWorkspace({
     layout.dataset.liteRuntimeLayout = benchmarkLayoutModeRef.current;
     if (benchmarkLayoutModeRef.current === 'direct') {
       layout.dataset.benchmarkLayoutMode = 'direct';
-      // 608: direct geometry is the compact (tablet/mobile result pane)
-      // runtime path, or an explicit admin A/B override. PC density keeps the
-      // 590 CSS-variable path. Page identity no longer chooses the engine.
+      // 609: direct geometry owns every tablet/mobile result mode and PC
+      // Music Note. Explicit admin A/B can still override this temporarily.
       builder.style.setProperty('left', '0px', 'important');
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
@@ -616,14 +611,18 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
-    // 608: choose one geometry owner from the *current result-pane mode*.
-    // During explicit admin coordinate A/B, the benchmark owns the path; during
-    // normal hand drag this is a ref-only switch and never causes a React render.
+    // 609: geometry ownership changes only when the *published content mode*
+    // itself changes. This keeps the visible PC/Tablet switch and the low-level
+    // pane owner on the same boundary, eliminating the 608 16px disagreement.
     if (!benchmarkRunningRef.current) {
-      const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(runtimeLayoutModeRef.current, resultWidth);
-      if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
-        runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
-        benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
+      const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
+      if (runtimeResultContentModeRef.current !== nextResultContentMode) {
+        runtimeResultContentModeRef.current = nextResultContentMode;
+        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView);
+        if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
+          runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
+          benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
+        }
       }
     }
 
@@ -841,7 +840,7 @@ export default function LiteStudioSplitWorkspace({
     pendingClientXRef.current = null;
     beginSplitPerfDrag({
       workspaceView,
-      engine: `Lite V2 · manual drag · 608 responsive-owned geometry (${runtimeLayoutModeRef.current}) + layout-ack diagnostics`,
+      engine: `Lite V2 · manual drag · 609 content-mode-aligned geometry (${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}) + layout-ack diagnostics`,
       builder: builderRef.current,
       result: resultRef.current,
       layoutMode: runtimeLayoutModeRef.current,
@@ -892,9 +891,10 @@ export default function LiteStudioSplitWorkspace({
   useLayoutEffect(() => {
     if (benchmarkRunningRef.current) return;
 
-    // 608: workspace changes no longer change the geometry engine. Recompute the
-    // current result width once and let applyPercent select PC(css-var) versus
-    // compact(direct), clearing any stale inline geometry synchronously if needed.
+    // 609: workspace changes can alter the PC owner (Music Note direct versus
+    // Library/Recent/Create css-var). Reset the cached content mode so the next
+    // refresh re-resolves ownership once from the current pane, outside a gesture.
+    runtimeResultContentModeRef.current = null;
     const frame = window.requestAnimationFrame(() => refreshMetrics());
     return () => window.cancelAnimationFrame(frame);
   }, [refreshMetrics, workspaceView]);
@@ -1154,7 +1154,7 @@ export default function LiteStudioSplitWorkspace({
           if (!benchmarkRunningRef.current) return;
           beginSplitPerfDrag({
             workspaceView,
-            engine: `Lite V2 · auto benchmark 608 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
+            engine: `Lite V2 · auto benchmark 609 · ${requestedLayoutMode} · ${benchmarkSurface} · set ${setIndex + 1}/3 · attempt ${attemptCount}`,
             builder,
             result,
             benchmarkSurface,
@@ -1385,7 +1385,7 @@ export default function LiteStudioSplitWorkspace({
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
         data-split-engine="lite-v2-studio"
-        data-lite-runtime-layout="responsive"
+        data-lite-runtime-layout="content-mode-aligned"
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,

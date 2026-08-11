@@ -1591,3 +1591,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 606/607에서 추가했던 App-level drag sync 억제는 제거하고 605의 원래 즉시 동기화로 복구했다. 즉 다른 화면의 App 동작을 희생시키지 않는다.
 - 관리자 PERF 진단/명시적 layout A/B override는 그대로 유지한다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 609차 — PC/Tablet 좌표 소유권 동기 안정화
+- 608 실사용 확인 결과를 기준으로 추가 최적화보다 **양쪽 모드 안정화**를 우선했다.
+- 확인된 실제 손 드래그 결과:
+  - Tablet responsive mode: Music Note / Library / Recent 모두 `direct`가 부드러움.
+  - PC responsive mode: Library / Recent는 기존 `css-var` 경로가 안정적이며, Music Note는 별도 잔여 이슈로 남아 있음.
+- 608의 핵심 문제는 콘텐츠의 실제 PC↔Tablet 전환 기준(1080px)과 좌표 엔진 전환 기준(별도 ±16px 히스테리시스)이 서로 달랐다는 점이다. 이 때문에 경계 부근에서 화면은 Tablet인데 좌표 엔진은 PC 경로이거나 그 반대인 구간이 생길 수 있었다.
+- 609에서는 좌표 엔진이 **결과 pane의 실제 content responsive mode와 동일한 판정**을 사용한다.
+  - result `tablet/mobile`: 모든 workspace `direct`.
+  - result `pc`: Music Note=`direct`, Library/Recent/Create=`css-var`.
+- 별도의 엔진 전환 히스테리시스를 제거해 responsive mode와 geometry owner가 같은 프레임 경계에서 바뀌도록 했다.
+- workspace 전환 시 현재 result content mode를 한 번 다시 판정해 이전 화면의 inline direct geometry가 다음 화면에 남지 않게 했다.
+- 606/607의 App drag-sync 억제는 재도입하지 않았다. 608의 원래 즉시 App 동기화를 유지한다.
+- 이번 차수는 안정화 작업이며 PC Music Note 추가 최적화는 후속으로 보류한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

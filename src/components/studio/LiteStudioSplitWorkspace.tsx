@@ -237,8 +237,8 @@ export default function LiteStudioSplitWorkspace({
     workspaceHeroHost: null,
   });
   const externalGeometryCacheRef = useRef<ExternalGeometryCache>(createEmptyExternalGeometryCache());
-  const dragRenderAnchorsRef = useRef<Array<{ pane: HTMLElement; element: HTMLElement; viewportOffset: number }>>([]);
-  const dragRenderRestoreFrameRef = useRef<number | null>(null);
+  const dragScrollLocksRef = useRef<Array<{ pane: HTMLElement; edge: 'top' | 'bottom' | 'position'; scrollTop: number }>>([]);
+  const dragScrollRestoreFrameRef = useRef<number | null>(null);
   const benchmarkFrameRef = useRef<number | null>(null);
   const benchmarkTimerRef = useRef<number | null>(null);
   const benchmarkRunningRef = useRef(false);
@@ -321,67 +321,65 @@ export default function LiteStudioSplitWorkspace({
   }, []);
 
 
-  const restoreDragViewportAnchors = useCallback((preserveAnchor = true) => {
-    if (dragRenderRestoreFrameRef.current !== null) {
-      window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
-      dragRenderRestoreFrameRef.current = null;
-    }
-
-    const anchors = dragRenderAnchorsRef.current;
-    dragRenderAnchorsRef.current = [];
-    if (!preserveAnchor || anchors.length === 0) return;
-
-    // 576: native CSS content-visibility keeps off-screen rows cheap without
-    // swapping React DOM or scanning/measuring every card at pointer-down.
-    // Preserve only one visible anchor per pane after the final width commit.
-    dragRenderRestoreFrameRef.current = window.requestAnimationFrame(() => {
-      dragRenderRestoreFrameRef.current = null;
-      for (const anchor of anchors) {
-        if (!anchor.element.isConnected || !anchor.pane.isConnected) continue;
-        const paneRect = anchor.pane.getBoundingClientRect();
-        const nextOffset = anchor.element.getBoundingClientRect().top - paneRect.top;
-        const delta = nextOffset - anchor.viewportOffset;
-        if (Math.abs(delta) > 0.5) anchor.pane.scrollTop += delta;
-      }
-    });
-  }, []);
-
-  const captureDragViewportAnchors = useCallback(() => {
-    dragRenderAnchorsRef.current = [];
-    const selector = [
-      '.soridraw-musicnote-song-card',
-      '.soridraw-library-playlist-row',
-      '.soridraw-library-workspace-track-row',
-      '.soridraw-studio-menu-card',
-      '.soridraw-result-title-card',
-      '.soridraw-result-keywords-card',
-      '.soridraw-result-prompt-card',
-    ].join(',');
-
+  // 633 — A horizontal split drag must never become a vertical scroll action.
+  // The old Lite path captured a visible card and, on pointer-up, moved scrollTop
+  // by that card's reflow delta. Repeating left/right drags therefore accumulated
+  // downward movement in Library and made Music Note oscillate as card heights
+  // changed. Keep the user's actual pane scroll state instead: exact top stays
+  // top, exact bottom stays bottom, and a middle position keeps the same scrollTop.
+  // This is shared by Library + Music Note and uses no per-frame DOM scanning.
+  const captureDragScrollLocks = useCallback(() => {
+    dragScrollLocksRef.current = [];
+    const edgeTolerance = 2;
     for (const pane of [builderRef.current, resultRef.current]) {
       if (!pane) continue;
-      const paneRect = pane.getBoundingClientRect();
-      const x = Math.min(paneRect.right - 8, Math.max(paneRect.left + 8, paneRect.left + paneRect.width * 0.5));
-      const probeYs = [paneRect.top + 24, paneRect.top + 96, paneRect.top + paneRect.height * 0.5];
-      let anchor: HTMLElement | null = null;
-
-      for (const y of probeYs) {
-        const hit = document.elementFromPoint(x, Math.min(paneRect.bottom - 4, Math.max(paneRect.top + 4, y))) as HTMLElement | null;
-        const candidate = hit?.closest<HTMLElement>(selector) || null;
-        if (candidate && pane.contains(candidate)) {
-          anchor = candidate;
-          break;
-        }
-      }
-
-      if (!anchor) continue;
-      dragRenderAnchorsRef.current.push({
+      const maxScrollTop = Math.max(0, pane.scrollHeight - pane.clientHeight);
+      const scrollTop = Math.max(0, Math.min(maxScrollTop, pane.scrollTop));
+      dragScrollLocksRef.current.push({
         pane,
-        element: anchor,
-        viewportOffset: anchor.getBoundingClientRect().top - paneRect.top,
+        edge: scrollTop <= edgeTolerance
+          ? 'top'
+          : maxScrollTop - scrollTop <= edgeTolerance
+            ? 'bottom'
+            : 'position',
+        scrollTop,
       });
     }
   }, []);
+
+  const applyDragScrollLocks = useCallback(() => {
+    for (const lock of dragScrollLocksRef.current) {
+      if (!lock.pane.isConnected) continue;
+      const target = lock.edge === 'top'
+        ? 0
+        : lock.edge === 'bottom'
+          ? 1_000_000_000
+          : lock.scrollTop;
+      if (Math.abs(lock.pane.scrollTop - target) > 0.5 || lock.edge === 'bottom') {
+        lock.pane.scrollTop = target;
+      }
+    }
+  }, []);
+
+  const finishDragScrollLocks = useCallback((preserveScroll = true) => {
+    if (dragScrollRestoreFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragScrollRestoreFrameRef.current);
+      dragScrollRestoreFrameRef.current = null;
+    }
+    if (!preserveScroll || dragScrollLocksRef.current.length === 0) {
+      dragScrollLocksRef.current = [];
+      return;
+    }
+
+    // Re-apply once after drag-end listeners/React state settle. This prevents
+    // the release frame itself from changing vertical position without adding
+    // a continuing observer or another layout owner.
+    dragScrollRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      dragScrollRestoreFrameRef.current = null;
+      applyDragScrollLocks();
+      dragScrollLocksRef.current = [];
+    });
+  }, [applyDragScrollLocks]);
 
   const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
@@ -690,6 +688,7 @@ export default function LiteStudioSplitWorkspace({
       lastAriaPercentRef.current = roundedPercent;
       splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
     }
+    if (live && draggingRef.current) applyDragScrollLocks();
     if (perfEnabled) {
       const perfEnd = performance.now();
       recordSplitPerfApply({
@@ -701,7 +700,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -805,7 +804,7 @@ export default function LiteStudioSplitWorkspace({
     layoutAckObserverRef.current = observer;
   }, []);
 
-  const finishDrag = useCallback((event?: React.PointerEvent<HTMLButtonElement>) => {
+  const finishDrag = useCallback((event?: React.PointerEvent<HTMLButtonElement>, preserveScroll = true) => {
     if (!draggingRef.current) return;
     if (event && event.pointerId !== pointerIdRef.current) return;
     if (event) pendingClientXRef.current = event.clientX;
@@ -820,7 +819,6 @@ export default function LiteStudioSplitWorkspace({
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
-    restoreDragViewportAnchors(true);
 
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (percentRef.current / 100));
@@ -828,6 +826,7 @@ export default function LiteStudioSplitWorkspace({
     clearLiveExternalGeometry();
     readExternalControls();
     window.dispatchEvent(new CustomEvent('soridraw-split-drag-end'));
+    finishDragScrollLocks(preserveScroll);
     layoutAckObserverRef.current?.disconnect();
     layoutAckObserverRef.current = null;
     if (manualPerfCaptureActiveRef.current) {
@@ -836,7 +835,7 @@ export default function LiteStudioSplitWorkspace({
     }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, flushPointer, readExternalControls, restoreDragViewportAnchors]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -865,7 +864,7 @@ export default function LiteStudioSplitWorkspace({
 
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
-    captureDragViewportAnchors();
+    captureDragScrollLocks();
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
@@ -1072,7 +1071,7 @@ export default function LiteStudioSplitWorkspace({
 
       topCardObserverRef.current?.disconnect();
       topCardObserverRef.current = null;
-      captureDragViewportAnchors();
+      captureDragScrollLocks();
       draggingRef.current = true;
       benchmarkRunningRef.current = true;
       pointerIdRef.current = -1;
@@ -1106,7 +1105,7 @@ export default function LiteStudioSplitWorkspace({
           window.clearTimeout(benchmarkTimerRef.current);
           benchmarkTimerRef.current = null;
         }
-        finishDrag();
+        finishDrag(undefined, false);
         restoreOriginalState();
         if (measuredSets.length) publishSplitPerfBenchmarkSummary(measuredSets);
         emitBenchmarkStatus('done', `자동 테스트 완료 · ${benchmarkSurface} PASS · ${requestedLayoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'} · 3세트 중앙값`);
@@ -1269,7 +1268,7 @@ export default function LiteStudioSplitWorkspace({
       }
       benchmarkRunningRef.current = false;
     };
-  }, [applyPercent, captureDragViewportAnchors, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, startLayoutAckObserver, viewMode, workspaceView, writeLiveSplitGeometry]);
+  }, [applyPercent, captureDragScrollLocks, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, startLayoutAckObserver, viewMode, workspaceView, writeLiveSplitGeometry]);
 
   useLayoutEffect(() => {
     builderCollapsedRef.current = isBuilderCollapsed;
@@ -1340,11 +1339,11 @@ export default function LiteStudioSplitWorkspace({
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
-      restoreDragViewportAnchors(false);
-      if (dragRenderRestoreFrameRef.current !== null) {
-        window.cancelAnimationFrame(dragRenderRestoreFrameRef.current);
-        dragRenderRestoreFrameRef.current = null;
+      if (dragScrollRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragScrollRestoreFrameRef.current);
+        dragScrollRestoreFrameRef.current = null;
       }
+      dragScrollLocksRef.current = [];
       clearLiveExternalGeometry();
       const root = document.documentElement;
       delete root.dataset.soridrawBuilderMode;
@@ -1364,7 +1363,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, restoreDragViewportAnchors, scheduleMetricsRefresh]);
+  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

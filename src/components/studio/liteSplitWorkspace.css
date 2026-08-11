@@ -938,3 +938,13 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   content-visibility: hidden !important;
   contain: strict !important;
 }
+
+/* 633 — horizontal split movement must not trigger native vertical scroll anchoring.
+ * Library/Music Note share this Lite workspace, so one common drag-only rule keeps
+ * both pane scroll positions owned by the split component while width reflow runs. */
+@media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace.is-dragging
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    overflow-anchor: none !important;
+  }
+}

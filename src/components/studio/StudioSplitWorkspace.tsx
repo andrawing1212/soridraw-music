@@ -163,6 +163,7 @@ export default function StudioSplitWorkspace({
   const dragFrameRef = useRef<number | null>(null);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
+  const windowResizeFrameRef = useRef<number | null>(null);
   const builderModeAnchorFrameRef = useRef<number | null>(null);
   const builderModeScrollAnchorRef = useRef<{
     targetMode: PaneMode;
@@ -972,6 +973,69 @@ export default function StudioSplitWorkspace({
     });
   }, [refreshLayoutMetrics]);
 
+  // 649 — PC tablet continuous browser-resize fast path.
+  // The 488 principle was partially lost over later revisions: 1100~1599px
+  // horizontal window resizing again ran the full pane responsive/scroll/modal/
+  // footer pipeline on every resize frame. Galaxy Tab never pays that continuous
+  // desktop-window cost, which is why the same tablet composition feels much
+  // lighter there. During a horizontal desktop resize, keep only the real split
+  // geometry live and defer responsive detail to the single resize-end commit.
+  const refreshTabletWindowResizeGeometry = useCallback(() => {
+    const layout = layoutRef.current;
+    const builder = builderRef.current;
+    const result = resultRef.current;
+    if (!layout || !builder || !result || !isStudioBlack()) return;
+
+    const rect = layout.getBoundingClientRect();
+    const safeWidth = Math.max(1, rect.width);
+    metricsRef.current = {
+      ...metricsRef.current,
+      left: rect.left,
+      width: safeWidth,
+    };
+
+    const nextProfile = getSplitProfile();
+    if (splitProfileRef.current !== nextProfile) {
+      splitProfileRef.current = nextProfile;
+      percentRef.current = readStored(nextProfile);
+    }
+
+    const bounds = getSplitBounds(safeWidth);
+    const nextPercent = clampToBounds(percentRef.current, bounds);
+    percentRef.current = nextPercent;
+
+    const builderWidth = builderCollapsedRef.current
+      ? 0
+      : resultCollapsedRef.current
+        ? safeWidth
+        : Math.round(safeWidth * (nextPercent / 100));
+    const splitterLeft = rect.left + builderWidth;
+
+    if (layout.dataset.scrollIsolated === 'true') {
+      builder.style.removeProperty('flex-basis');
+      builder.style.setProperty('width', `${Math.max(0, builderWidth)}px`, 'important');
+      result.style.setProperty('left', `${Math.max(0, builderWidth)}px`, 'important');
+    } else {
+      builder.style.removeProperty('width');
+      result.style.removeProperty('left');
+      builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
+    }
+
+    // Keep only the coordinates consumed by fixed/portaled controls live.
+    // No pane-mode resolution, scroll anchor reads, querySelector refreshes,
+    // modal measurements, footer measurements, or React state writes occur here.
+    commitRootMeasurements(builderWidth, splitterLeft);
+  }, [commitRootMeasurements, isStudioBlack]);
+
+  const scheduleTabletWindowResizeGeometry = useCallback(() => {
+    if (draggingRef.current || windowResizeFrameRef.current !== null) return;
+    windowResizeFrameRef.current = window.requestAnimationFrame(() => {
+      windowResizeFrameRef.current = null;
+      refreshTabletWindowResizeGeometry();
+    });
+  }, [refreshTabletWindowResizeGeometry]);
+
+
   useLayoutEffect(() => {
     percentRef.current = percent;
     const frame = window.requestAnimationFrame(refreshLayoutMetrics);
@@ -1083,9 +1147,16 @@ export default function StudioSplitWorkspace({
   useEffect(() => {
     const observer = new ResizeObserver(() => {
       // Browser resize and rail/layout changes can produce several observer
-      // callbacks in the same frame. The Studio geometry owner commits at most
-      // once per animation frame.
-      if (!draggingRef.current) scheduleLayoutMetricsRefresh();
+      // callbacks in the same frame. In the 1100~1599px continuous window-resize
+      // band, use the lightweight geometry-only path; every other case keeps the
+      // verified full refresh.
+      if (draggingRef.current) return;
+      const root = document.documentElement;
+      const tabletWindowResize = root.classList.contains('soridraw-window-resizing')
+        && window.innerWidth >= TABLET_VIEWPORT_MIN
+        && window.innerWidth <= TABLET_VIEWPORT_MAX;
+      if (tabletWindowResize) scheduleTabletWindowResizeGeometry();
+      else scheduleLayoutMetricsRefresh();
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
@@ -1112,20 +1183,32 @@ export default function StudioSplitWorkspace({
 
       const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportWidth !== lastViewportWidth || nextViewportHeight !== lastViewportHeight) {
+      const widthChanged = nextViewportWidth !== lastViewportWidth;
+      const heightChanged = nextViewportHeight !== lastViewportHeight;
+      if (widthChanged || heightChanged) {
         lastViewportWidth = nextViewportWidth;
         lastViewportHeight = nextViewportHeight;
-        scheduleLayoutMetricsRefresh();
+
+        const tabletHorizontalResize = widthChanged
+          && !heightChanged
+          && nextViewportWidth >= TABLET_VIEWPORT_MIN
+          && nextViewportWidth <= TABLET_VIEWPORT_MAX;
+        if (tabletHorizontalResize) scheduleTabletWindowResizeGeometry();
+        else scheduleLayoutMetricsRefresh();
       }
 
-      // Do not replace the verified viewport/pane geometry path while the user
-      // drags the browser edge. This class only lets heavy descendants suspend
-      // container-query/animation work. Once native resizing settles, restore
-      // the full responsive detail and perform one final geometry sync.
+      // 649: while the browser edge is moving through the tablet band, the live
+      // frame owns geometry only. When native resizing settles, restore the full
+      // responsive contract once and mirror the final percent into React once.
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
-        scheduleLayoutMetricsRefresh();
+        if (windowResizeFrameRef.current !== null) {
+          window.cancelAnimationFrame(windowResizeFrameRef.current);
+          windowResizeFrameRef.current = null;
+        }
+        refreshLayoutMetrics();
+        setPercent(percentRef.current);
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
       }, 110);
@@ -1166,6 +1249,10 @@ export default function StudioSplitWorkspace({
         window.cancelAnimationFrame(layoutRefreshFrameRef.current);
         layoutRefreshFrameRef.current = null;
       }
+      if (windowResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(windowResizeFrameRef.current);
+        windowResizeFrameRef.current = null;
+      }
       if (builderModeAnchorFrameRef.current !== null) {
         window.cancelAnimationFrame(builderModeAnchorFrameRef.current);
         builderModeAnchorFrameRef.current = null;
@@ -1196,7 +1283,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, scheduleTabletWindowResizeGeometry, syncCenterModalHostBounds, syncResultTitleHeight]);
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;

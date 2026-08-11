@@ -1,3 +1,12 @@
+## 649차 — PC 태블릿 외부창 연속 리사이즈 경량화
+
+- 기준: `SORIDRAW_648차_647롤백_PC태블릿_공통루트재렌더억제.zip`.
+- 새 영상 재분석 결과, 사용자가 지적한 1100~1599px 버벅임은 **분할바 드래그가 아니라 PC 브라우저 외부창을 연속으로 줄이고 늘릴 때** 발생하는 공통 태블릿 리사이즈 병목이었다. 648의 App 루트 분할드래그 재렌더 억제만으로는 이 경로를 건드리지 못했다.
+- `StudioSplitWorkspace`(곡 만들기/최근 생성곡)와 `LiteStudioSplitWorkspace`(뮤직노트/라이브러리) 모두 1100~1599px 수평 외부창 리사이즈 중에는 **geometry-only fast path**를 사용한다. 매 프레임에는 실제 pane 폭/분할선 좌표만 갱신하고, pane-mode 판정, content responsive 이벤트, 스크롤 앵커 보정, 외부 컨트롤 재탐색, 모달/푸터 측정, React percent state 동기화는 실행하지 않는다.
+- 브라우저 외부창 조절이 끝난 뒤 110ms settle 시점에 기존 전체 responsive 계산을 **1회만** 실행한다. 따라서 최종 PC/태블릿 UI 판정과 저장된 split percent 계약은 유지한다.
+- Lite/590 경로에도 `soridraw-window-resizing` 공통 마커를 적용해 기존 transition/animation/summary-container/stable-height 중지 규칙이 뮤직노트/라이브러리 외부창 리사이즈에도 동일하게 적용되도록 했다.
+- PC >=1600, 모바일 <1100, 실제 분할바 드래그 엔진, 좌우 메뉴, 646 모바일 단일페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
 ## 648차 — 647 롤백 + PC 태블릿 분할 드래그 App 루트 재렌더 억제
 - 기준은 646차입니다. 647차의 `1100~1599px PC 전체를 Galaxy Tab Adaptive Lite V2로 교체`한 변경은 전부 폐기했습니다. 따라서 Music Note/Library의 기존 `library-590` 경로, Sori Studio/Recent의 Legacy 경로, 분할바 좌표/화면 축소 반응을 646 상태로 복구합니다.
 - 647 실사용 결과에서 속도 개선은 없고 Music Note 축소 반응과 분할바 추적만 달라졌으므로, 병목이 split engine 자체가 아니라 1100~1599px 공통 responsive 전환 쪽이라는 근거로 판단했습니다.

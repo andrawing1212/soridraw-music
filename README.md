@@ -1657,7 +1657,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - PC 자동 모드에서는 Lite V2 PERF 도구 실행 전 관리자 진단 스위치로 `Lite V2` 강제 선택을 안내한다.
 - UI 디자인, 분할 비율/반응형 규칙, 생성 기능, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 
-## SORIDRAW 614차 — Music Note drag subtree cut
-- Music Note only: on split drag start, replace each visible full interactive row with a geometry-compatible lightweight row; restore on drag end.
-- Removes per-frame layout/style work from long max-content title/keyword scroll trees and interactive descendants while keeping pane/card geometry live.
-- Library / Recent / split-engine routing / Firebase data structures untouched.
+## 615차 — 뮤직노트 PC 빠른 드래그 프레임 페이싱
+
+- 기준: 613차. 614의 드래그 중 대체 카드 DOM은 사용하지 않음(색상/외형 변경 없음).
+- 사용자 영상에서 확인된 증상은 평균 FPS 저하보다 입력 속도에 따라 지연이 누적되는 형태에 가까웠음.
+  - 천천히 이동: 비교적 부드러움
+  - 조금만 빠르게 이동: 레이아웃 처리가 입력 속도를 못 따라가며 여러 좌표가 한 번에 따라붙는 점프 발생
+- PC fine-pointer 환경의 Music Note에만 실제 레이아웃 커밋을 약 30fps 고정 cadence로 제한.
+- pointermove 자체는 계속 최신 좌표만 보관하고, 다음 허용 프레임에서 가장 최신 좌표 하나만 적용.
+- Legacy / Lite V2 모두 동일 원칙 적용.
+- Galaxy Tab / coarse-pointer V2는 기존 경로 유지.
+- Library / Recent / Create는 변경 없음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

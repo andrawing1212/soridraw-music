@@ -44,6 +44,11 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
+// 615: pace only fine-pointer PC Music Note hand dragging. The page has a
+// velocity-dependent backpressure pattern: slow movement is smooth, fast input
+// outruns layout and arrives in visible catch-up jumps. Stable pacing prevents
+// that queue pressure while always applying the latest pointer position.
+const MUSIC_NOTE_PC_DRAG_FRAME_MS = 30;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
@@ -225,6 +230,7 @@ export default function LiteStudioSplitWorkspace({
   const manualPerfCaptureActiveRef = useRef(false);
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
+  const lastMusicNoteDragFlushAtRef = useRef(0);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
@@ -742,6 +748,19 @@ export default function LiteStudioSplitWorkspace({
   const flushPointer = useCallback(() => {
     const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
+    const shouldPaceMusicNote = workspaceView === 'music-note'
+      && typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: fine)').matches;
+    if (shouldPaceMusicNote && pendingClientXRef.current !== null && draggingRef.current) {
+      const now = performance.now();
+      if (lastMusicNoteDragFlushAtRef.current > 0 && now - lastMusicNoteDragFlushAtRef.current < MUSIC_NOTE_PC_DRAG_FRAME_MS) {
+        frameRef.current = window.requestAnimationFrame(flushPointer);
+        return;
+      }
+      lastMusicNoteDragFlushAtRef.current = now;
+    }
+
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
     if (clientX === null || !draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return;
@@ -760,7 +779,7 @@ export default function LiteStudioSplitWorkspace({
     // not from letting a fake 60fps divider run ahead of 30fps content.
     applyPercent(nextPercent, true);
     if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
-  }, [applyPercent]);
+  }, [applyPercent, workspaceView]);
 
   const schedulePointer = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -807,6 +826,7 @@ export default function LiteStudioSplitWorkspace({
     if (!draggingRef.current) return;
     if (event && event.pointerId !== pointerIdRef.current) return;
     if (event) pendingClientXRef.current = event.clientX;
+    lastMusicNoteDragFlushAtRef.current = 0;
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
@@ -867,6 +887,7 @@ export default function LiteStudioSplitWorkspace({
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
+    lastMusicNoteDragFlushAtRef.current = 0;
     // 611: real hand dragging is intentionally uninstrumented unless the admin
     // explicitly arms the one-shot "실손 드래그 비교" diagnostic. The arm is
     // consumed here, so ordinary usage never starts observers/raf probes.

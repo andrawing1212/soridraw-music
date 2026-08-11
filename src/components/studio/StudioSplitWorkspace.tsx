@@ -26,6 +26,11 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
+// 615: Music Note is not failing because the pointer is slow; it fails when
+// resize work is requested faster than this page can finish it. Keep one latest
+// pointer sample but pace actual Music Note layout commits on fine-pointer PCs
+// to one stable ~30fps cadence. Touch/Galaxy Tab keeps the existing V2 path.
+const MUSIC_NOTE_PC_DRAG_FRAME_MS = 30;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
@@ -161,6 +166,7 @@ export default function StudioSplitWorkspace({
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
+  const lastMusicNoteDragFlushAtRef = useRef(0);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
   const builderModeAnchorFrameRef = useRef<number | null>(null);
@@ -1190,6 +1196,19 @@ export default function StudioSplitWorkspace({
 
   const flushPendingPointer = useCallback(() => {
     dragFrameRef.current = null;
+    const shouldPaceMusicNote = workspaceView === 'music-note'
+      && typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: fine)').matches;
+    if (shouldPaceMusicNote && pendingClientXRef.current !== null) {
+      const now = performance.now();
+      if (lastMusicNoteDragFlushAtRef.current > 0 && now - lastMusicNoteDragFlushAtRef.current < MUSIC_NOTE_PC_DRAG_FRAME_MS) {
+        dragFrameRef.current = window.requestAnimationFrame(flushPendingPointer);
+        return;
+      }
+      lastMusicNoteDragFlushAtRef.current = now;
+    }
+
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
     if (clientX === null) return;
@@ -1208,7 +1227,7 @@ export default function StudioSplitWorkspace({
     if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
     lastDragBuilderPixelRef.current = nextBuilderPixel;
     applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
-  }, [applyPercentToLayout]);
+  }, [applyPercentToLayout, workspaceView]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -1233,6 +1252,7 @@ export default function StudioSplitWorkspace({
       width: rect.width,
     };
     pendingClientXRef.current = null;
+    lastMusicNoteDragFlushAtRef.current = 0;
     lastDragBuilderPixelRef.current = null;
     builderModeScrollAnchorRef.current = null;
     captureBuilderDragScrollAnchor();
@@ -1296,6 +1316,7 @@ export default function StudioSplitWorkspace({
     if (event.pointerId !== dragRef.current.pointerId) return;
 
     pendingClientXRef.current = event.clientX;
+    lastMusicNoteDragFlushAtRef.current = 0;
     if (dragFrameRef.current !== null) {
       window.cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;

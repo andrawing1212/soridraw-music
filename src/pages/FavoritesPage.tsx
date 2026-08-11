@@ -701,19 +701,7 @@ export default function FavoritesPage({
   onLogin?: () => void;
 }) {
   const [selectedSong, setSelectedSong] = useState<any | null>(null);
-  const [isMusicNoteSplitDragging, setIsMusicNoteSplitDragging] = useState(false);
   const musicNotePageRootRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const handleSplitDragStart = () => setIsMusicNoteSplitDragging(true);
-    const handleSplitDragEnd = () => setIsMusicNoteSplitDragging(false);
-    window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
-    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
-    return () => {
-      window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
-      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
-    };
-  }, []);
 
   useLayoutEffect(() => {
     const root = musicNotePageRootRef.current;
@@ -4676,22 +4664,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     }
   };
 
-  const getFavoriteDragKeywordSummary = (song: any) => {
-    const values = [
-      ...getSongGenreValues(song),
-      ...getSongMoodValues(song),
-      ...getSongThemeValues(song),
-      ...(getSongSituationSummary(song) ? [getSongSituationSummary(song)] : []),
-      ...getSongStyleValues(song),
-      ...getSongInstrumentSoundValues(song),
-      ...(song.appliedKeywords?.vocalType ? [song.appliedKeywords.vocalType] : []),
-    ]
-      .map((value) => String(value || '').trim())
-      .filter(Boolean)
-      .slice(0, 8);
-    return values.map((value) => `#${value}`).join('  ');
-  };
-
   const renderFavoriteKeywordChips = (song: any) => {
     const entries: Array<{ type: string; value: string; displayLabel?: string }> = [
       ...getSongGenreValues(song).map((value: string) => ({ type: 'genre', value, displayLabel: value })),
@@ -5637,71 +5609,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
               const musicNoteListCreator = (musicNoteViewMode === 'myNote' || musicNoteViewMode === 'sharedNote' || isMusicNoteSharedView || isSharedMusicNoteItem(song))
                 ? getMusicNoteCreatorNickname(song)
                 : '';
-
-              if (isMusicNoteSplitDragging) {
-                return (
-                  <div
-                    key={song.id}
-                    className={cn(
-                      "soridraw-musicnote-song-card soridraw-musicnote-drag-card soridraw-list-perf-item soridraw-perf-layout-region-item relative overflow-hidden rounded-2xl border border-black/24 bg-[var(--bg-secondary)] select-none",
-                      isFavoriteTrashMode ? "opacity-65 grayscale-[0.35] saturate-[0.45]" : ""
-                    )}
-                    aria-hidden="true"
-                  >
-                    <div className="soridraw-musicnote-song-row flex items-center gap-3 md:gap-4 px-4 md:px-6 py-4">
-                      {isSelectionMode && (
-                        <span className={cn(
-                          "flex h-6 w-6 shrink-0 items-center justify-center rounded-md",
-                          isSelected ? "bg-[#FFC1BC]/20 text-[#FFC1BC]" : "bg-white/[0.08] text-white/35"
-                        )}>
-                          {isSelected ? <Check className="h-4 w-4 stroke-[3]" /> : null}
-                        </span>
-                      )}
-
-                      <div className="soridraw-musicnote-song-media flex h-[52px] w-[42px] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.10] text-[#FFC1BC] md:h-[60px] md:w-12">
-                        {getFavoriteSunoShareUrl(song) ? <Play className="h-5 w-5 fill-current" /> : <Music className="h-6 w-6 md:h-7 md:w-7" />}
-                      </div>
-
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                        <span className="block h-3 w-3 rounded-full" style={{ backgroundColor: colorHex }} />
-                      </span>
-
-                      <div className="soridraw-musicnote-song-copy flex min-w-0 flex-1 flex-col justify-center px-0.5 md:px-1">
-                        <div className="soridraw-musicnote-song-meta flex min-w-0 items-center gap-2 leading-none">
-                          <span className="soridraw-musicnote-song-genre min-w-0 flex-1 truncate text-[12px] font-extrabold text-white md:text-[13px]">
-                            {mobileGenreLabel ? `[${mobileGenreLabel}]` : '[Music]'}
-                          </span>
-                          <span className="soridraw-musicnote-song-date shrink-0 whitespace-nowrap text-[9px] font-semibold text-white/35 md:text-[10px]">
-                            {getRelativeTime(song.createdAtMs || song.createdAt)}
-                          </span>
-                        </div>
-
-                        <div className="soridraw-musicnote-song-title soridraw-musicnote-drag-title mt-1 min-w-0 text-[13px] font-bold leading-tight text-white/92 md:text-[15px]">
-                          {mobileTitleText}
-                        </div>
-
-                        <div className="mt-1.5 flex min-w-0 items-center gap-2">
-                          {musicNoteListCreator && (
-                            <span className="soridraw-musicnote-song-creator shrink-0 whitespace-nowrap text-[9px] font-bold leading-none text-[#FFC1BC]/90 md:text-[10px]">
-                              {musicNoteListCreator}
-                            </span>
-                          )}
-                          <div className="soridraw-musicnote-song-keywords soridraw-musicnote-drag-keywords h-5 min-w-0 flex-1 text-[9px] leading-5 text-white/48">
-                            {getFavoriteDragKeywordSummary(song)}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="soridraw-musicnote-song-actions flex shrink-0 items-center gap-2">
-                        {song.isLocked && <Lock className="h-4 w-4 text-[#FF7A72]" />}
-                        <span className="flex h-10 w-10 items-center justify-center text-white/30">
-                          <MoreVertical className="h-4 w-4" />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
 
               return (
                 <div

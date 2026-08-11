@@ -1669,3 +1669,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Galaxy Tab / coarse-pointer V2는 기존 경로 유지.
 - Library / Recent / Create는 변경 없음.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 616차 — 뮤직노트 PC 빠른 드래그 공간폭 제한 + Lite 전용 전환정지
+
+- 기준: 615차. 615의 30ms 시간 제한은 제거했다. 사용자 실사용 결과처럼 느린 드래그는 가장 부드럽고 빠른 드래그만 크게 끊기는 경우, 프레임 수 자체보다 한 프레임에 바뀌는 Music Note 폭이 커질 때 레이아웃/페인트 비용이 급증하는 패턴으로 판단했다.
+- PC fine-pointer Music Note에서만 매 rAF를 그대로 유지하면서 한 프레임의 splitter 이동폭을 제한한다.
+  - 정상 프레임: 최대 64px
+  - 지연 프레임: 최대 44px
+  - 30ms 이상 밀린 프레임: 최대 28px
+  - 느린 이동은 제한값보다 작으므로 기존처럼 1px 단위로 그대로 따라간다.
+  - 빠른 입력은 과거 좌표 큐를 재생하지 않고 항상 최신 목표만 유지한 채 제한된 공간폭으로 따라간다.
+  - pointer-up에서는 최종 좌표를 정확히 1회 확정한다.
+- Legacy와 Lite V2에 같은 Music Note 공간폭 규칙을 적용했다. Galaxy Tab/coarse-pointer는 기존 V2 경로를 변경하지 않는다.
+- Lite V2는 기존 `soridraw-lite-split-dragging` 경로 때문에 Legacy Music Note에 적용되던 transition/animation 정지가 빠져 있었다. 616에서는 body 전체가 아니라 Music Note 하위에만 정확히 같은 정지 규칙을 적용한다.
+- 613에서 title/keyword track마다 넣었던 `translateZ(0)` / `will-change: transform` 레이어 승격은 제거했다. 다수 카드가 별도 합성 레이어로 승격되어 빠른 폭 변경 때 raster/composite 비용을 키울 가능성을 없앴다. 기존 색상/레이아웃/카드 디자인은 변경하지 않는다.
+- Library / Recent / Create, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

@@ -26,11 +26,14 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
-// 615: Music Note is not failing because the pointer is slow; it fails when
-// resize work is requested faster than this page can finish it. Keep one latest
-// pointer sample but pace actual Music Note layout commits on fine-pointer PCs
-// to one stable ~30fps cadence. Touch/Galaxy Tab keeps the existing V2 path.
-const MUSIC_NOTE_PC_DRAG_FRAME_MS = 30;
+// 616: Music Note has a velocity-dependent resize cost: tiny width deltas are
+// very smooth, while large deltas in one frame trigger much heavier reflow/paint.
+// Do not lower the frame rate (615 made fast motion jump farther per commit).
+// Instead keep every rAF and cap only the *spatial* width delta on fine-pointer
+// PCs. Slow movement stays pixel-exact; fast movement catches up in bounded steps.
+const MUSIC_NOTE_PC_MAX_STEP_HEALTHY_PX = 64;
+const MUSIC_NOTE_PC_MAX_STEP_BUSY_PX = 44;
+const MUSIC_NOTE_PC_MAX_STEP_STALLED_PX = 28;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
@@ -166,7 +169,7 @@ export default function StudioSplitWorkspace({
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
-  const lastMusicNoteDragFlushAtRef = useRef(0);
+  const lastMusicNoteDragFrameAtRef = useRef(0);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
   const builderModeAnchorFrameRef = useRef<number | null>(null);
@@ -1194,23 +1197,9 @@ export default function StudioSplitWorkspace({
     };
   }, [clearExternalMeasurements, clearRootMeasurements, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
-  const flushPendingPointer = useCallback(() => {
+  const flushPendingPointer = useCallback((frameTime?: number, forceExact = false) => {
     dragFrameRef.current = null;
-    const shouldPaceMusicNote = workspaceView === 'music-note'
-      && typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(pointer: fine)').matches;
-    if (shouldPaceMusicNote && pendingClientXRef.current !== null) {
-      const now = performance.now();
-      if (lastMusicNoteDragFlushAtRef.current > 0 && now - lastMusicNoteDragFlushAtRef.current < MUSIC_NOTE_PC_DRAG_FRAME_MS) {
-        dragFrameRef.current = window.requestAnimationFrame(flushPendingPointer);
-        return;
-      }
-      lastMusicNoteDragFlushAtRef.current = now;
-    }
-
     const clientX = pendingClientXRef.current;
-    pendingClientXRef.current = null;
     if (clientX === null) return;
 
     const { startX, startPercent, width } = dragRef.current;
@@ -1220,13 +1209,44 @@ export default function StudioSplitWorkspace({
       startPercent + deltaPercent,
       getSplitBounds(safeWidth),
     );
-    const rawBuilderPixel = safeWidth * (rawPercent / 100);
-    // Preserve one-pixel pointer fidelity. The former 2px quantization made a
-    // healthy frame rate still look like stepping on wide desktop screens.
-    const nextBuilderPixel = Math.round(rawBuilderPixel);
-    if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
-    lastDragBuilderPixelRef.current = nextBuilderPixel;
-    applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
+    const targetBuilderPixel = Math.round(safeWidth * (rawPercent / 100));
+
+    const shouldSpatiallyPaceMusicNote = !forceExact
+      && workspaceView === 'music-note'
+      && typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: fine)').matches;
+
+    let nextBuilderPixel = targetBuilderPixel;
+    if (shouldSpatiallyPaceMusicNote && lastDragBuilderPixelRef.current !== null) {
+      const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
+      const previousFrameAt = lastMusicNoteDragFrameAtRef.current;
+      const frameGap = previousFrameAt > 0 ? Math.max(0, now - previousFrameAt) : 16.7;
+      lastMusicNoteDragFrameAtRef.current = now;
+      const maxStep = frameGap >= 30
+        ? MUSIC_NOTE_PC_MAX_STEP_STALLED_PX
+        : frameGap >= 21
+          ? MUSIC_NOTE_PC_MAX_STEP_BUSY_PX
+          : MUSIC_NOTE_PC_MAX_STEP_HEALTHY_PX;
+      const currentBuilderPixel = lastDragBuilderPixelRef.current;
+      const remaining = targetBuilderPixel - currentBuilderPixel;
+      if (Math.abs(remaining) > maxStep) {
+        nextBuilderPixel = currentBuilderPixel + Math.sign(remaining) * maxStep;
+      }
+    }
+
+    if (lastDragBuilderPixelRef.current !== nextBuilderPixel) {
+      lastDragBuilderPixelRef.current = nextBuilderPixel;
+      applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
+    }
+
+    if (!forceExact && nextBuilderPixel !== targetBuilderPixel) {
+      // Keep only the newest target. No historical pointer queue is replayed.
+      pendingClientXRef.current = clientX;
+      dragFrameRef.current = window.requestAnimationFrame(flushPendingPointer);
+    } else {
+      pendingClientXRef.current = null;
+    }
   }, [applyPercentToLayout, workspaceView]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
@@ -1252,8 +1272,8 @@ export default function StudioSplitWorkspace({
       width: rect.width,
     };
     pendingClientXRef.current = null;
-    lastMusicNoteDragFlushAtRef.current = 0;
-    lastDragBuilderPixelRef.current = null;
+    lastMusicNoteDragFrameAtRef.current = 0;
+    lastDragBuilderPixelRef.current = Math.round(rect.width * (percentRef.current / 100));
     builderModeScrollAnchorRef.current = null;
     captureBuilderDragScrollAnchor();
     if (builderModeAnchorFrameRef.current !== null) {
@@ -1316,12 +1336,12 @@ export default function StudioSplitWorkspace({
     if (event.pointerId !== dragRef.current.pointerId) return;
 
     pendingClientXRef.current = event.clientX;
-    lastMusicNoteDragFlushAtRef.current = 0;
+    lastMusicNoteDragFrameAtRef.current = 0;
     if (dragFrameRef.current !== null) {
       window.cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
     }
-    flushPendingPointer();
+    flushPendingPointer(performance.now(), true);
 
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
     document.body.style.removeProperty('cursor');

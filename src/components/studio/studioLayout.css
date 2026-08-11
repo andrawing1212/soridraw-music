@@ -7354,12 +7354,15 @@ h1.text-3xl.md\:text-5xl {
 }
 
 html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme),
-html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) * {
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) *,
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme,
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme * {
   animation: none !important;
   transition: none !important;
 }
 
-html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme),
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme {
   pointer-events: none !important;
   user-select: none !important;
 }
@@ -7373,12 +7376,15 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
  * temporarily remove that native scroll-container work, then restore the exact
  * normal horizontal scrolling behavior on pointer-up. Library/Recent are not
  * touched. */
-html.soridraw-split-dragging .soridraw-musicnote-theme .soridraw-musicnote-song-copy {
+html.soridraw-split-dragging .soridraw-musicnote-theme .soridraw-musicnote-song-copy,
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme .soridraw-musicnote-song-copy {
   contain: inline-size layout style;
   min-width: 0 !important;
 }
 
 html.soridraw-split-dragging .soridraw-musicnote-theme
+:is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords),
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme
 :is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords) {
   overflow-x: clip !important;
   overflow-y: clip !important;
@@ -7386,10 +7392,10 @@ html.soridraw-split-dragging .soridraw-musicnote-theme
 }
 
 html.soridraw-split-dragging .soridraw-musicnote-theme
+:is(.soridraw-musicnote-title-track, .soridraw-musicnote-keyword-track),
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme
 :is(.soridraw-musicnote-title-track, .soridraw-musicnote-keyword-track) {
   contain: layout style paint;
-  transform: translateZ(0);
-  will-change: transform;
 }
 
 /* Preserve the page-owned PC/mobile keyword spacing after grouping chips
@@ -7399,6 +7405,8 @@ html.soridraw-split-dragging .soridraw-musicnote-theme
 }
 
 html.soridraw-split-dragging .soridraw-musicnote-theme
+.soridraw-musicnote-keyword-track > .soridraw-musicnote-keyword-chip,
+html.soridraw-lite-split-dragging .soridraw-musicnote-theme
 .soridraw-musicnote-keyword-track > .soridraw-musicnote-keyword-chip {
   flex: none !important;
 }

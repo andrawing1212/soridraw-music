@@ -1,3 +1,11 @@
+## 631차 — 실제 핸드폰 하단 Split 보조영역 노출 오류 수정
+
+- 기준 ZIP: `SORIDRAW_630차_핸드폰_분할모드비활성_태블릿PC유지.zip`
+- 증상: 실제 핸드폰에서 Classic 다크/라이트 Studio 아래에 `GENERATION / RECENT SONGS / MUSIC API / SELECTED KEYWORDS` Split 우측 레일이 원시 형태로 노출됨.
+- 원인: 일부 Android/Samsung 브라우저·PWA에서 `userAgentData.mobile === false`를 그대로 확정하면 실제 폰이 large-screen으로 오판될 수 있었고, 626차의 좁은 화면 Split 보조레일 스택 규칙이 실제 폰에서도 살아날 수 있었음.
+- 수정: UA-CH는 `mobile:true`만 확정값으로 사용하고 Android `Mobile` UA + 짧은 물리화면/터치 fallback을 추가. `index.html` 첫 페인트에서도 같은 판정을 사용해 폰의 저장된 Split 값을 즉시 dark로 정규화. 626차 좁은 화면 Split 스택은 `data-soridraw-device=large-screen`인 태블릿/대화면 기기에만 적용하고, 실제 폰에서는 좌/우 보조 레일과 분할 제어를 테마와 무관하게 숨김.
+- PC/태블릿 Split 엔진, 최근 생성곡/뮤직노트/라이브러리 데이터 경로, Firebase/Auth/Functions/저장 구조는 변경하지 않음.
+
 ## 630차 — 실제 핸드폰 분할모드 비활성 · 태블릿/PC 분할 유지
 
 - 실제 핸드폰에서는 분할(`studio-black`) 모드를 사용하지 않도록 정리했다.

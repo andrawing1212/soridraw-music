@@ -13,13 +13,27 @@ export const isSoridrawPhoneDevice = (): boolean => {
   if (typeof navigator === 'undefined') return false;
 
   const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
-  if (typeof nav.userAgentData?.mobile === 'boolean') {
-    return nav.userAgentData.mobile;
-  }
+
+  // 631: `userAgentData.mobile === false` is not strong enough to classify a
+  // Samsung/Android device as a tablet. Some browser/PWA combinations report
+  // false while the legacy UA still carries the Android `Mobile` token. Treat
+  // only an explicit `true` as decisive, then fall through to the UA and a
+  // conservative physical-screen fallback. This keeps a real phone classified
+  // as a phone even when it is rotated to landscape.
+  if (nav.userAgentData?.mobile === true) return true;
 
   const ua = navigator.userAgent || '';
   if (/iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)) return true;
-  return /Android/i.test(ua) && /Mobile/i.test(ua);
+  if (/Android/i.test(ua) && /Mobile/i.test(ua)) return true;
+
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    const coarsePrimary = window.matchMedia('(pointer: coarse)').matches;
+    const noHover = window.matchMedia('(hover: none)').matches;
+    const screenShortSide = Math.min(window.screen?.width || 9999, window.screen?.height || 9999);
+    if ((coarsePrimary || noHover) && screenShortSide <= 600) return true;
+  }
+
+  return false;
 };
 
 export const readSoridrawTheme = (): SoridrawTheme => {

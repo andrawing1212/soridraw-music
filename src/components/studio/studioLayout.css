@@ -11764,23 +11764,36 @@ html[data-soridraw-theme="studio-black"] {
 }
 
 
-/* 626 — Phone Split Mode uses one stable stacked geometry.
- * The mobile Studio already owns the same builder/result DOM as desktop; do
- * not let desktop split widths or a theme round-trip leave those panes in a
- * squeezed side-by-side state. On phones, both panes are always full-width
- * blocks and the desktop auxiliary rails/split controls stay hidden. */
+/* 631 — Phones use Classic dark/light only.
+ * Never allow the old Split auxiliary rails to appear below the normal Studio,
+ * even during an initial-theme correction or a stale stored Split preference. */
+html[data-soridraw-device="phone"] .soridraw-studio-left-panel,
+html[data-soridraw-device="phone"] .soridraw-studio-dashboard-panel,
+html[data-soridraw-device="phone"] .soridraw-studio-left-rail-collapse-toggle,
+html[data-soridraw-device="phone"] .soridraw-studio-right-rail-collapse-toggle,
+html[data-soridraw-device="phone"] body > :is(
+  .soridraw-studio-splitter,
+  .soridraw-studio-builder-collapse-toggle,
+  .soridraw-studio-result-collapse-toggle
+) {
+  display: none !important;
+}
+
+/* 626 — Narrow Split stacked geometry, retained for large-screen touch devices.
+ * 631 scopes this legacy fallback to `data-soridraw-device=large-screen` only.
+ * Physical phones now use Classic dark/light and never enter this path. */
 @media (max-width: 1099px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"],
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] > .soridraw-studio-page-center,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-hero,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-shell,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-main,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-split-workspace {
     width: 100% !important;
     min-width: 0 !important;
@@ -11789,14 +11802,14 @@ html[data-soridraw-theme="studio-black"] {
     margin-right: 0 !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] {
     display: block !important;
     grid-template-columns: none !important;
     overflow-x: clip !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-split-workspace {
     --soridraw-studio-builder-width: 100% !important;
     --soridraw-studio-builder-px: 100% !important;
@@ -11808,7 +11821,7 @@ html[data-soridraw-theme="studio-black"] {
     overflow: visible !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"]
   .soridraw-studio-split-workspace > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
     display: block !important;
@@ -11831,7 +11844,7 @@ html[data-soridraw-theme="studio-black"] {
   /* Mobile keeps the desktop right-rail DOM instead of inventing a second
    * recent-song implementation. Stack it below the center workspace at full
    * width so generation state / Recent Songs / credits stay reachable. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"]
   > .soridraw-studio-dashboard-panel {
     display: block !important;
@@ -11849,7 +11862,7 @@ html[data-soridraw-theme="studio-black"] {
     border-top: 1px solid var(--sb-divider) !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"]
   > .soridraw-studio-dashboard-panel > .soridraw-studio-dashboard-inner {
     display: block !important;
@@ -11866,19 +11879,19 @@ html[data-soridraw-theme="studio-black"] {
   /* The React collapse state is a desktop concern. On mobile the center panes
    * stack, so honor create/recent state explicitly and never let an old 64px
    * rail state squeeze the mobile layout. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"]
   .soridraw-studio-split-workspace.is-result-collapsed > .soridraw-studio-result-pane,
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"]
   .soridraw-studio-split-workspace.is-builder-collapsed > .soridraw-studio-builder-pane {
     display: none !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-rail-viewport="mobile"]
   > .soridraw-studio-left-panel,
-  html[data-soridraw-theme="studio-black"] body > :is(
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body > :is(
     .soridraw-studio-splitter,
     .soridraw-studio-builder-collapse-toggle,
     .soridraw-studio-result-collapse-toggle

@@ -44,20 +44,13 @@ const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
-// 616: Music Note's slow/fast gap is spatial, not temporal. Keep the full rAF
-// cadence and bound only the width delta committed in one frame on fine-pointer
-// PCs. This avoids the 615 failure mode where a 30ms timer made fast motion jump
-// farther per commit. Galaxy Tab/coarse-pointer keeps the verified V2 path.
-const MUSIC_NOTE_PC_MAX_STEP_HEALTHY_PX = 64;
-const MUSIC_NOTE_PC_MAX_STEP_BUSY_PX = 44;
-const MUSIC_NOTE_PC_MAX_STEP_STALLED_PX = 28;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
 const BENCHMARK_SURFACE_WIDTH = 1400;
 const BENCHMARK_SURFACE_HEIGHT = 900;
 type BenchmarkLayoutMode = 'css-var' | 'direct';
-type RuntimeProfile = 'adaptive' | 'library-590' | 'music-note-pc-direct';
+type RuntimeProfile = 'adaptive' | 'library-590';
 
 type PaneMode = 'mobile' | 'desktop';
 type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
@@ -167,14 +160,11 @@ const resolveRuntimeLayoutMode = (
   workspaceView?: StudioWorkspaceView,
   runtimeProfile: RuntimeProfile = 'adaptive',
 ): BenchmarkLayoutMode => {
-  // 612 PC workspace policy:
-  // - Library on PC keeps the exact 590 CSS-variable geometry regardless of
-  //   whether the *visual* result content is currently PC/tablet/mobile.
-  // - Music Note on PC keeps direct pane geometry at every responsive width.
-  // - Galaxy Tab/touch and explicit Lite diagnostics keep the 609 adaptive V2
-  //   behavior that already passed real-hand verification.
+  // 617 runtime policy:
+  // - `library-590` is the shared PC path for Library and Music Note. It keeps
+  //   the exact 590 CSS-variable geometry at every visual responsive width.
+  // - `adaptive` remains the verified Galaxy Tab/touch V2 path.
   if (runtimeProfile === 'library-590') return 'css-var';
-  if (runtimeProfile === 'music-note-pc-direct') return 'direct';
   if (resultMode !== 'pc') return 'direct';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
@@ -184,7 +174,6 @@ const readInitialRuntimeLayoutMode = (
   runtimeProfile: RuntimeProfile,
 ): BenchmarkLayoutMode => {
   if (runtimeProfile === 'library-590') return 'css-var';
-  if (runtimeProfile === 'music-note-pc-direct') return 'direct';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
@@ -205,10 +194,9 @@ export default function LiteStudioSplitWorkspace({
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
 }: LiteStudioSplitWorkspaceProps) {
-  // 609: stabilize the confirmed good combinations instead of forcing one
-  // engine on every page. Tablet/mobile content uses direct everywhere; PC keeps
-  // Library/Recent/Create on css-var and Music Note on direct. Geometry switching
-  // is tied to the exact content responsive mode, not a second hidden threshold.
+  // 617: PC Music Note no longer owns a special geometry path. App routes it
+  // through the same `library-590` profile as Library. Adaptive mode is kept for
+  // the already-verified Galaxy Tab/touch path and explicit diagnostics.
   const panes = Children.toArray(children);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -232,7 +220,6 @@ export default function LiteStudioSplitWorkspace({
   const manualPerfCaptureActiveRef = useRef(false);
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
-  const lastMusicNoteDragFrameAtRef = useRef(0);
   const refreshFrameRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
@@ -747,56 +734,28 @@ export default function LiteStudioSplitWorkspace({
     });
   }, [refreshMetrics]);
 
-  const flushPointer = useCallback((frameTime?: number, forceExact = false) => {
+  const flushPointer = useCallback(() => {
     const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
-
     const clientX = pendingClientXRef.current;
+    pendingClientXRef.current = null;
     if (clientX === null || !draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return;
     const width = Math.max(1, metricsRef.current.width);
     const bounds = getSplitBounds(width);
     const minPx = width * (bounds.min / 100);
     const maxPx = width * (bounds.max / 100);
-    const targetPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
+    const nextPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
+    if (lastPixelRef.current === nextPixel) return;
+    lastPixelRef.current = nextPixel;
 
-    const shouldSpatiallyPaceMusicNote = !forceExact
-      && workspaceView === 'music-note'
-      && typeof window !== 'undefined'
-      && typeof window.matchMedia === 'function'
-      && window.matchMedia('(pointer: fine)').matches;
-
-    let nextPixel = targetPixel;
-    if (shouldSpatiallyPaceMusicNote && lastPixelRef.current !== null) {
-      const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
-      const previousFrameAt = lastMusicNoteDragFrameAtRef.current;
-      const frameGap = previousFrameAt > 0 ? Math.max(0, now - previousFrameAt) : 16.7;
-      lastMusicNoteDragFrameAtRef.current = now;
-      const maxStep = frameGap >= 30
-        ? MUSIC_NOTE_PC_MAX_STEP_STALLED_PX
-        : frameGap >= 21
-          ? MUSIC_NOTE_PC_MAX_STEP_BUSY_PX
-          : MUSIC_NOTE_PC_MAX_STEP_HEALTHY_PX;
-      const currentPixel = lastPixelRef.current;
-      const remaining = targetPixel - currentPixel;
-      if (Math.abs(remaining) > maxStep) {
-        nextPixel = currentPixel + Math.sign(remaining) * maxStep;
-      }
-    }
-
-    if (lastPixelRef.current !== nextPixel) {
-      lastPixelRef.current = nextPixel;
-      const nextPercent = (nextPixel / width) * 100;
-      applyPercent(nextPercent, true);
-      if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
-    }
-
-    if (!forceExact && nextPixel !== targetPixel) {
-      pendingClientXRef.current = clientX;
-      frameRef.current = window.requestAnimationFrame(flushPointer);
-    } else {
-      pendingClientXRef.current = null;
-    }
-  }, [applyPercent, workspaceView]);
+    const nextPercent = (nextPixel / width) * 100;
+    // 573: one real boundary again. The divider and both panes are owned by the
+    // same single local width write on every rAF frame. Smoothness now comes
+    // from reducing the amount of off-screen content the browser must reflow,
+    // not from letting a fake 60fps divider run ahead of 30fps content.
+    applyPercent(nextPercent, true);
+    if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
+  }, [applyPercent]);
 
   const schedulePointer = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
@@ -843,12 +802,11 @@ export default function LiteStudioSplitWorkspace({
     if (!draggingRef.current) return;
     if (event && event.pointerId !== pointerIdRef.current) return;
     if (event) pendingClientXRef.current = event.clientX;
-    lastMusicNoteDragFrameAtRef.current = 0;
     if (frameRef.current !== null) {
       window.cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     }
-    flushPointer(performance.now(), true);
+    flushPointer();
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
@@ -904,7 +862,6 @@ export default function LiteStudioSplitWorkspace({
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
-    lastMusicNoteDragFrameAtRef.current = 0;
     // 611: real hand dragging is intentionally uninstrumented unless the admin
     // explicitly arms the one-shot "실손 드래그 비교" diagnostic. The arm is
     // consumed here, so ordinary usage never starts observers/raf probes.
@@ -922,7 +879,7 @@ export default function LiteStudioSplitWorkspace({
       });
       startLayoutAckObserver(builderRect?.width || 0, resultRef.current?.getBoundingClientRect().width || 0);
     }
-    lastPixelRef.current = Math.round(rect.width * (percentRef.current / 100));
+    lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-lite-split-dragging');

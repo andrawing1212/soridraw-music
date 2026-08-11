@@ -4221,14 +4221,11 @@ function App() {
     readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
   );
 
-  // 612: stop choosing one engine for the whole PC. Real-hand verification has
-  // already produced three different winners, so AUTO now routes by
-  // input-environment *and* active workspace instead of forcing a compromise:
-  // - Galaxy Tab/touch primary: Lite V2 everywhere (all three pages passed).
-  // - PC Recent/Create: legacy split path (Recent passed there).
-  // - PC Library: Lite V2 locked to the 590 CSS-variable geometry path.
-  // - PC Music Note: Lite V2 direct geometry + a Music-Note-only text/flex
-  //   reflow guard in CSS. This does not touch Library/Recent/Galaxy Tab.
+  // 617: remove the accumulated Music-Note-only split experiments. The user's
+  // real-hand comparison is now the source of truth: Recent is best on the
+  // legacy path, Library is best on the 590 Lite/CSS-variable path, and Galaxy
+  // Tab is best on adaptive Lite V2. On fine-pointer PC, Music Note now borrows
+  // Library's exact 590 split geometry instead of maintaining a separate path.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
   const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
     ? 'lite'
@@ -4237,21 +4234,21 @@ function App() {
       : 'legacy';
   const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
     ? 'adaptive'
-    : studioWorkspaceView === 'library'
+    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
       ? 'library-590'
-      : studioWorkspaceView === 'music-note'
-        ? 'music-note-pc-direct'
-        : 'adaptive';
+      : 'adaptive';
   const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
   const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
-    ? 'adaptive'
+    ? (!isTouchPrimaryStudioEnvironment && (studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note')
+      ? 'library-590'
+      : 'adaptive')
     : automaticLiteRuntimeProfile;
   const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
     ? '자동 선택 · 갤탭/터치: Lite V2'
     : studioWorkspaceView === 'library'
       ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
       : studioWorkspaceView === 'music-note'
-        ? '자동 선택 · PC 뮤직노트: Lite V2 · 직접 좌표/전용 reflow 경로'
+        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
         : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);

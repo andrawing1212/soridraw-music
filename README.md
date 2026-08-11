@@ -1684,3 +1684,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Lite V2는 기존 `soridraw-lite-split-dragging` 경로 때문에 Legacy Music Note에 적용되던 transition/animation 정지가 빠져 있었다. 616에서는 body 전체가 아니라 Music Note 하위에만 정확히 같은 정지 규칙을 적용한다.
 - 613에서 title/keyword track마다 넣었던 `translateZ(0)` / `will-change: transform` 레이어 승격은 제거했다. 다수 카드가 별도 합성 레이어로 승격되어 빠른 폭 변경 때 raster/composite 비용을 키울 가능성을 없앴다. 기존 색상/레이아웃/카드 디자인은 변경하지 않는다.
 - Library / Recent / Create, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 617차 — 뮤직노트 분할 경로 공용화
+- 기준: 616차
+- PC 자동 뮤직노트의 Lite runtime profile을 라이브러리와 동일한 `library-590` CSS-variable geometry로 통일.
+- PC에서 강제 Lite V2를 선택해도 뮤직노트/라이브러리는 동일한 `library-590` geometry를 사용.
+- 갤럭시탭/터치 우선 환경은 검증된 adaptive Lite V2 유지.
+- 기존 방식에서 뮤직노트만 따로 적용했던 빠른 드래그 공간폭 제한을 제거하고 최근 생성곡과 동일한 pointer/rAF 경로로 복구.
+- 613~616에서 추가된 뮤직노트 전용 title/keyword track 및 drag containment/clip/transform 실험을 정상 구조로 원복.
+- 관리자 전용 Music Note render probe는 유지.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

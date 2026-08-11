@@ -3,7 +3,7 @@ import StudioSplitWorkspace from './StudioSplitWorkspace';
 import LiteStudioSplitWorkspace from './LiteStudioSplitWorkspace';
 
 export type StudioSplitEngine = 'lite' | 'legacy';
-export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590' | 'music-note-pc-direct';
+export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590';
 
 type Props = {
   engine: StudioSplitEngine;

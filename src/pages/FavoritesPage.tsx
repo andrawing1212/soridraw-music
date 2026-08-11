@@ -5800,7 +5800,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                         onClickCapture={consumeHorizontalListClick}
                         onWheel={handleHorizontalListWheel}
                       >
-                        <span className="soridraw-musicnote-title-track inline-block w-max max-w-none select-none whitespace-nowrap">
+                        <span className="inline-block w-max max-w-none select-none whitespace-nowrap">
                           {mobileTitleText}
                         </span>
                       </div>
@@ -5820,9 +5820,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                           onClickCapture={consumeHorizontalListClick}
                           onWheel={handleHorizontalListWheel}
                         >
-                          <div className="soridraw-musicnote-keyword-track flex h-full w-max shrink-0 flex-nowrap items-center">
-                            {renderFavoriteKeywordChips(song)}
-                          </div>
+                          {renderFavoriteKeywordChips(song)}
                         </div>
                       </div>
                     </div>

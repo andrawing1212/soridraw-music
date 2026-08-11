@@ -7354,61 +7354,14 @@ h1.text-3xl.md\:text-5xl {
 }
 
 html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme),
-html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) *,
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme,
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme * {
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) * {
   animation: none !important;
   transition: none !important;
 }
 
-html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme),
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme {
+html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
   pointer-events: none !important;
   user-select: none !important;
-}
-
-/* 613 — Legacy splitter Music Note hot-path isolation.
- * Music Note is the only page that stayed slow under Automatic, Legacy and V2,
- * so the remaining bottleneck is page-local rather than engine-local. Each
- * visible note row owns two long native horizontal scroll containers (title and
- * keyword chips). A 1px pane resize makes Chromium maintain their scrollable
- * overflow geometry repeatedly. While the divider itself is being dragged we
- * temporarily remove that native scroll-container work, then restore the exact
- * normal horizontal scrolling behavior on pointer-up. Library/Recent are not
- * touched. */
-html.soridraw-split-dragging .soridraw-musicnote-theme .soridraw-musicnote-song-copy,
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme .soridraw-musicnote-song-copy {
-  contain: inline-size layout style;
-  min-width: 0 !important;
-}
-
-html.soridraw-split-dragging .soridraw-musicnote-theme
-:is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords),
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme
-:is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords) {
-  overflow-x: clip !important;
-  overflow-y: clip !important;
-  contain: inline-size layout style paint;
-}
-
-html.soridraw-split-dragging .soridraw-musicnote-theme
-:is(.soridraw-musicnote-title-track, .soridraw-musicnote-keyword-track),
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme
-:is(.soridraw-musicnote-title-track, .soridraw-musicnote-keyword-track) {
-  contain: layout style paint;
-}
-
-/* Preserve the page-owned PC/mobile keyword spacing after grouping chips
- * into one max-content track. */
-.soridraw-musicnote-keyword-track {
-  gap: inherit;
-}
-
-html.soridraw-split-dragging .soridraw-musicnote-theme
-.soridraw-musicnote-keyword-track > .soridraw-musicnote-keyword-chip,
-html.soridraw-lite-split-dragging .soridraw-musicnote-theme
-.soridraw-musicnote-keyword-track > .soridraw-musicnote-keyword-chip {
-  flex: none !important;
 }
 
 /* 383: Music Note and Suno Library detail overlays use one body-level center

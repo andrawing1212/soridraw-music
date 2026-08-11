@@ -108,42 +108,37 @@ body,
 html {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(205, 140, 49, 0.42) rgba(10, 10, 10, 0.35);
+  scrollbar-color: #626266 transparent;
 }
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: 4px;
+  height: 4px;
 }
 
 html::-webkit-scrollbar-track,
 body::-webkit-scrollbar-track {
-  background: rgba(10, 10, 10, 0.45);
+  background: transparent;
 }
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb {
-  background: rgba(205, 140, 49, 0.42);
+  background: #626266;
   border-radius: 999px;
-  border: 2px solid rgba(10, 10, 10, 0.45);
+  border: 0;
 }
 
 html::-webkit-scrollbar-thumb:hover,
 body::-webkit-scrollbar-thumb:hover {
-  background: rgba(205, 140, 49, 0.68);
+  background: #77777b;
 }
 
 @media (max-width: 640px) {
   html::-webkit-scrollbar,
   body::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-  }
-
-  html::-webkit-scrollbar-thumb,
-  body::-webkit-scrollbar-thumb {
-    border-width: 1px;
+    width: 3px;
+    height: 3px;
   }
 }
 
@@ -183,7 +178,8 @@ body::-webkit-scrollbar-thumb:hover {
 
 /* Custom Scrollbar for Textarea */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -191,17 +187,17 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
+  background: #626266;
+  border-radius: 999px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 130, 0, 0.4);
+  background: #77777b;
 }
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: #626266 transparent;
 }
 
 

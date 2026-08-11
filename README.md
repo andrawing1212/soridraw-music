@@ -1718,3 +1718,35 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 뮤직노트 드래그 중에는 `soridraw-lite-split-dragging` / `soridraw-split-dragging` 둘 다 인식한다.
 - 드래그 중 `isStudioBlackActionMode`, `isSplitBuilderActionMobile` React mirror 갱신을 모두 건너뛰고, 기존 CSS/root dataset 반응은 그대로 실시간 유지한다. 포인터를 놓을 때 한 번만 React 상태를 동기화한다.
 - 최근 생성곡, 라이브러리, 갤탭 V2, 분할 엔진/디자인/Firebase 구조는 변경하지 않는다.
+
+
+## 625차 - 전역 스크롤바 중립 회색 통일
+- 모바일/다크/라이트에 남아 있던 갈색·주황 계열 스크롤바를 기존 분할 패널과 동일한 중립 회색(#626266, hover #77777b)으로 통일.
+- 전역 html/body 스크롤바는 4px, 모바일은 3px로 얇게 조정하고 트랙은 투명 처리.
+- custom-scrollbar 및 Studio 가사 스크롤바의 주황 hover/thumb도 동일 회색 규칙으로 통일.
+- 스크롤 동작/레이아웃/성능 로직은 변경하지 않음.
+
+
+## 626차 — 모바일 분할모드 최근 생성/테마 왕복 복구
+- 기준: 625차.
+- 휴대폰 Studio Black은 PC와 같은 `StudioRightRail` DOM을 새로 만들지 않고 그대로 재사용해, 센터 작업공간 아래에 100% 폭으로 쌓이도록 복구. 따라서 생성 상태/최근 생성곡/크레딧 영역이 모바일에서도 사라지지 않음.
+- 다크/라이트로 전환할 때는 기존처럼 `recent` 구성을 사용하고, 다시 분할(Studio Black)로 돌아올 때는 `create` 작업공간으로 복구해 이전 테마의 split 상태가 남지 않도록 수정.
+- 1099px 이하에서는 builder/result를 공통 세로 100% 폭으로 고정하고, create/recent의 접힘 상태를 실제 display에 반영해 테마 왕복 뒤 64px/분할 폭이 남아 화면이 찌그러지는 문제를 차단.
+- PC/갤탭 분할 엔진, 생성 로직, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+
+## 627차 - 키워드 접기 전환 통일 / 스토리보드 카드 높이 축소
+- 기준: 626차
+- 장르/스타일/사운드 접힘 시 강제로 `height: 58px`을 즉시 적용하던 규칙을 제거하고, 분위기/주제와 동일한 `max-height` 300ms 전환 경로를 사용하도록 수정했습니다.
+- 접힌 상태의 첫 키워드 1줄 노출 높이(58px)는 유지합니다.
+- 스토리보드 카드의 세로 패딩만 줄여 카드 높이를 낮췄습니다. 기능/모달/데이터 구조는 변경하지 않았습니다.
+
+## 628차 - Firestore 읽기 절감 / 캐시 우선 구조
+- 기준: 627차. Firestore 저장 구조/문서 스키마는 변경하지 않음.
+- `section_tags` 전체 실시간 listener 제거. Studio 진입 시 로컬 캐시를 먼저 사용하고 12시간 TTL이 지난 경우에만 1회 조회.
+- 전역 `suno_tracks` 최근 30곡 listener는 생성 중이거나 완료 후 크레딧 확인이 남아 있을 때만 연결. 평상시 로그인 상태에서는 연결하지 않음.
+- `users/{uid}` 로그인 초기 `getDoc` 2회를 제거하고 기존 실시간 listener의 첫 서버 snapshot 하나로 역할/상태/강제로그아웃/세션 동기화를 처리. 캐시 snapshot은 UI 선표시만 하고 보안 판정은 서버 snapshot을 기다림.
+- 메뉴 공개 설정은 6시간, 전체 가사 클리셰 설정은 6시간 로컬 TTL 캐시를 사용. 클리셰 설정은 Studio에서만 서버 refresh하며 관리자 저장 시 같은 브라우저 캐시를 즉시 갱신.
+- 섹션 태그 관리자 화면이 서버 최신 목록을 수신할 때 사용자용 section-tags 캐시도 같이 갱신.
+- Firestore Web persistent multi-tab cache를 로컬/AI Studio 개발 환경과 `로그인 기억`을 선택한 신뢰 기기에서 활성화. 짧은 새로고침/재연결이 매번 새 query처럼 시작되는 비용을 줄이는 목적.
+- Favorites / 최근 생성곡 / Library의 실제 사용자 데이터 실시간 동기화는 이번 차수에서 유지. 데이터 최신성이 중요한 영역까지 임의 TTL 캐시로 바꾸지 않음.

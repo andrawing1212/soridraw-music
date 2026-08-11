@@ -926,24 +926,24 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   overflow-y: scroll !important;
   scrollbar-gutter: stable !important;
   scrollbar-width: thin !important;
-  scrollbar-color: rgba(255, 180, 0, 0.48) rgba(255, 255, 255, 0.035) !important;
+  scrollbar-color: #626266 transparent !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar {
-  width: 6px !important;
+  width: 4px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.035) !important;
+  background: transparent !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 180, 0, 0.48) !important;
+  background: #626266 !important;
   border-radius: 999px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 180, 0, 0.72) !important;
+  background: #77777b !important;
 }
 
 /* overflow-x:hidden promoted this card to overflow-y:auto and created the unwanted side scrollbar. */
@@ -7601,10 +7601,11 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
 }
 
 
-/* 388 — Keep only the first keyword row visible when Genre / Style / Sound
- * cards are collapsed. Do not add spacing or move the header/summary apart:
- * clip only the keyword viewport to the exact 58px button-row height.
- * Expanded cards keep their existing measured height and full keyword list. */
+/* 627 — Genre / Style / Sound collapse uses the same smooth max-height path
+ * as Mood / Theme. Keep one keyword row visible, but never force `height:58px`
+ * because that bypasses the existing 300ms max-height transition and makes the
+ * card snap shut. `max-height` alone clips to the first row while preserving the
+ * shared smooth collapse animation. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-builder-pane :is(
   [data-studio-menu="genre"],
@@ -7612,7 +7613,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   [data-studio-menu="sound"]
 ).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"])
 .soridraw-expand-content {
-  height: 58px !important;
+  height: auto !important;
   min-height: 58px !important;
   max-height: 58px !important;
   overflow: hidden !important;
@@ -11748,5 +11749,129 @@ html[data-soridraw-theme="studio-black"] {
   .soridraw-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) {
     padding-bottom: 136px !important;
+  }
+}
+
+
+/* 626 — Phone Split Mode uses one stable stacked geometry.
+ * The mobile Studio already owns the same builder/result DOM as desktop; do
+ * not let desktop split widths or a theme round-trip leave those panes in a
+ * squeezed side-by-side state. On phones, both panes are always full-width
+ * blocks and the desktop auxiliary rails/split controls stay hidden. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"],
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] > .soridraw-studio-page-center,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-hero,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-shell,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-main,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-split-workspace {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] {
+    display: block !important;
+    grid-template-columns: none !important;
+    overflow-x: clip !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-split-workspace {
+    --soridraw-studio-builder-width: 100% !important;
+    --soridraw-studio-builder-px: 100% !important;
+    display: block !important;
+    grid-template-columns: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  .soridraw-studio-split-workspace > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    display: block !important;
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Mobile keeps the desktop right-rail DOM instead of inventing a second
+   * recent-song implementation. Stack it below the center workspace at full
+   * width so generation state / Recent Songs / credits stay reachable. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  > .soridraw-studio-dashboard-panel {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    border-left: 0 !important;
+    border-top: 1px solid var(--sb-divider) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  > .soridraw-studio-dashboard-panel > .soridraw-studio-dashboard-inner {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 12px 14px 28px !important;
+  }
+
+  /* The React collapse state is a desktop concern. On mobile the center panes
+   * stack, so honor create/recent state explicitly and never let an old 64px
+   * rail state squeeze the mobile layout. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  .soridraw-studio-split-workspace.is-result-collapsed > .soridraw-studio-result-pane,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  .soridraw-studio-split-workspace.is-builder-collapsed > .soridraw-studio-builder-pane {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  > .soridraw-studio-left-panel,
+  html[data-soridraw-theme="studio-black"] body > :is(
+    .soridraw-studio-splitter,
+    .soridraw-studio-builder-collapse-toggle,
+    .soridraw-studio-result-collapse-toggle
+  ) {
+    display: none !important;
   }
 }

@@ -529,6 +529,7 @@ import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
+import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from './lib/firestoreReadCache';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
 
@@ -4323,9 +4324,18 @@ function App() {
       if (location.pathname !== '/studio') return;
 
       const nextMode = (event as CustomEvent<{ mode?: SoridrawDisplayMode }>).detail?.mode;
-      if (nextMode !== 'dark' && nextMode !== 'light') return;
+      if (nextMode === 'dark' || nextMode === 'light') {
+        selectStudioWorkspaceView('recent');
+        return;
+      }
 
-      selectStudioWorkspaceView('recent');
+      // Returning to Split mode must restore Split's own workspace target.
+      // Dark/light intentionally uses the normal recent/result composition;
+      // keeping that `recent` target after switching back was what left the
+      // phone with two split panes squeezed into the old geometry.
+      if (nextMode === 'studio-black') {
+        selectStudioWorkspaceView('create');
+      }
     };
 
     window.addEventListener('soridraw-theme-change', handleStudioThemeChange as EventListener);
@@ -5078,45 +5088,93 @@ function App() {
   });
 
 
-  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(
-    readStoredNavigationVisibilitySettings,
+  const cachedNavigationVisibility = readFirestoreReadCache<NavigationVisibilitySettings>(
+    FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+    FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+  );
+  const cachedGlobalLyricClicheGuard = readFirestoreReadCache<LyricClicheGuardSettings>(
+    FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+    FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+  );
+  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(() =>
+    cachedNavigationVisibility?.data || readStoredNavigationVisibilitySettings(),
   );
   const menuVisibility = navigationVisibilitySettings.menuVisibility;
   const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
-  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
-    hardBanTerms: [],
-    softBanTerms: [],
-  });
+  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>(() =>
+    cachedGlobalLyricClicheGuard?.data || { hardBanTerms: [], softBanTerms: [] },
+  );
   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
-  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(false);
+  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(Boolean(cachedGlobalLyricClicheGuard));
   const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
   const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
 
   useEffect(() => {
-    const unsubscribe = onSnapshot(
-      doc(db, 'app_settings', 'lyric_cliche_guard'),
-      (snapshot) => {
+    if (location.pathname !== '/studio') return;
+    let isMounted = true;
+
+    const loadGlobalLyricClicheGuard = async (force = false) => {
+      const cached = readFirestoreReadCache<LyricClicheGuardSettings>(
+        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
+        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
+      );
+      if (cached?.data) {
+        setGlobalLyricClicheGuard(cached.data);
+        setIsGlobalLyricClicheGuardReady(true);
+        if (cached.isFresh && !force) return;
+      }
+
+      try {
+        const snapshot = await getDoc(doc(db, 'app_settings', 'lyric_cliche_guard'));
+        if (!isMounted) return;
         const data = snapshot.exists() ? snapshot.data() : null;
-        setGlobalLyricClicheGuard({
+        const nextSettings: LyricClicheGuardSettings = {
           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
-        });
-        setIsGlobalLyricClicheGuardReady(true);
-      },
-      (error) => {
-        console.warn('Lyric cliche guard setting read failed. Keeping built-in defaults:', error);
-        setGlobalLyricClicheGuard({ hardBanTerms: [], softBanTerms: [] });
-        setIsGlobalLyricClicheGuardReady(true);
-      },
-    );
+        };
+        setGlobalLyricClicheGuard(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextSettings);
+      } catch (error) {
+        console.warn('Lyric cliche guard setting read failed. Keeping cached/built-in defaults:', error);
+      } finally {
+        if (isMounted) setIsGlobalLyricClicheGuardReady(true);
+      }
+    };
 
-    return () => unsubscribe();
-  }, []);
+    const handleLocalClicheGuardUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<LyricClicheGuardSettings>).detail;
+      if (!detail) return;
+      setGlobalLyricClicheGuard(detail);
+      setIsGlobalLyricClicheGuardReady(true);
+      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, detail);
+    };
+
+    window.addEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+    void loadGlobalLyricClicheGuard();
+    return () => {
+      isMounted = false;
+      window.removeEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadNavigationVisibility = async () => {
+      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
+        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
+        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
+      );
+      if (cached?.data) {
+        const nextCachedSettings = normalizeNavigationVisibilitySettings(
+          cached.data,
+          readStoredNavigationVisibilitySettings(),
+        );
+        setNavigationVisibilitySettings(nextCachedSettings);
+        writeStoredNavigationVisibilitySettings(nextCachedSettings);
+        if (cached.isFresh) return;
+      }
+
       try {
         const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));
         if (!isMounted) return;
@@ -5127,6 +5185,7 @@ function App() {
         );
         setNavigationVisibilitySettings(nextSettings);
         writeStoredNavigationVisibilitySettings(nextSettings);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
       } catch (error) {
         console.warn('Navigation visibility setting read failed. Keeping cached fallback:', error);
         if (isMounted) {
@@ -5143,10 +5202,11 @@ function App() {
       );
       setNavigationVisibilitySettings(nextSettings);
       writeStoredNavigationVisibilitySettings(nextSettings);
+      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
     };
 
     window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
-    loadNavigationVisibility();
+    void loadNavigationVisibility();
 
     return () => {
       isMounted = false;
@@ -5393,6 +5453,13 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
+    const pendingTrackIdsAtAttach = getPendingSunoCreditTrackIds();
+    const needsGlobalTrackListener = sunoLibrarySignal === 'generating' || pendingTrackIdsAtAttach.length > 0;
+    if (!needsGlobalTrackListener) {
+      setRecentSunoTracksForPolling([]);
+      return;
+    }
+
     const q = query(
       collection(db, 'suno_tracks', user.uid, 'tracks'),
       orderBy('createdAt', 'desc'),
@@ -5429,7 +5496,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
+  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, sunoRemainingCreditsUpdatedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
 
   const shouldPollSunoTrackGlobally = useCallback((track: any, now: number): boolean => {
     if (!track || typeof track !== 'object') return false;
@@ -6450,26 +6517,52 @@ function App() {
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isSituationExpanded, setIsSituationExpanded] = useState(false);
   const [draftSituation, setDraftSituation] = useState<SituationConfig>(createEmptySituation);
-  const [sectionTags, setSectionTags] = useState<SectionTag[]>([]);
+  const [sectionTags, setSectionTags] = useState<SectionTag[]>(() =>
+    readFirestoreReadCache<SectionTag[]>(
+      FIRESTORE_READ_CACHE_KEYS.sectionTags,
+      FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
+    )?.data || [],
+  );
 
-  // Load section tags from Firestore
+  // Section tags are static configuration, not live user data. Hydrate from the
+  // free local cache and refresh from Firestore only when Studio actually needs
+  // them and the cache is stale. This removes the always-on full-collection
+  // listener that used to re-read every tag after each development reload.
   useEffect(() => {
-    const q = query(
-      collection(db, 'section_tags'),
-      orderBy('label', 'asc')
-    );
+    if (location.pathname !== '/studio') return;
+    let isMounted = true;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const fetchedTags = snapshot.docs.map(doc => ({
-        ...doc.data()
-      })) as SectionTag[];
-      setSectionTags(fetchedTags);
-    }, (err) => {
-      console.error("Error fetching section tags for user UI:", err);
-    });
+    const loadSectionTags = async () => {
+      const cached = readFirestoreReadCache<SectionTag[]>(
+        FIRESTORE_READ_CACHE_KEYS.sectionTags,
+        FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
+      );
+      if (Array.isArray(cached?.data) && cached.data.length > 0) {
+        setSectionTags(cached.data);
+        if (cached.isFresh) return;
+      }
 
-    return () => unsubscribe();
-  }, []);
+      try {
+        const snapshot = await getDocs(query(
+          collection(db, 'section_tags'),
+          orderBy('label', 'asc'),
+        ));
+        if (!isMounted) return;
+        const fetchedTags = snapshot.docs.map((snapshotDoc) => ({
+          ...snapshotDoc.data(),
+        })) as SectionTag[];
+        setSectionTags(fetchedTags);
+        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, fetchedTags);
+      } catch (err) {
+        console.error('Error fetching section tags for user UI. Keeping cache:', err);
+      }
+    };
+
+    void loadSectionTags();
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname]);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
     if (section === 'genre') setIsGenreExpanded(prev => !prev);
@@ -7895,62 +7988,61 @@ const toggleCycleVariantSelection = (
         }
         const userRef = doc(db, 'users', currentUser.uid);
 
-        const runInitialForceLogoutCheck = async () => {
+        let hasSyncedSessionDoc = false;
+        let hasCreatedMissingUserDoc = false;
+
+        const syncSessionFieldsOnce = async () => {
+          if (hasSyncedSessionDoc) return;
+          hasSyncedSessionDoc = true;
           try {
-            const userSnap = await getDoc(userRef);
-            if (!userSnap.exists()) {
-              setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
-              setIsEmailVerificationCycleReady(true);
-              setUserLyricClicheGuard(null);
-              writeGeminiAutoModelFallback(true, currentUser.uid);
-              setIsUserLyricClicheGuardReady(true);
-              hasCompletedForceLogoutReentryCheckRef.current = true;
-              return;
-            }
-
-            const data = userSnap.data();
-            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
-            setIsEmailVerificationCycleReady(true);
-            setUserLyricClicheGuard({
-              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
-              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
+            await updateDoc(userRef, {
+              uid: currentUser.uid,
+              email: currentUser.email ?? '',
+              displayName: currentUser.displayName ?? '',
+              lastLoginAt: Date.now(),
+              lastSeenAt: Date.now(),
+              isOnline: true,
             });
-            writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
-            setIsUserLyricClicheGuardReady(true);
-            {
-              const verifiedRole = (data.role || 'free') as UserRole;
-              setUserRole(verifiedRole);
-              setStaffRole(normalizeStaffRole(data));
-              setAdminPermissions(normalizeAdminPermissions(data));
-              setIsUserRoleReady(true);
-              const roleCache = { uid: currentUser.uid, role: verifiedRole };
-              setCachedUserRoleHint(roleCache);
-              writeCachedUserRole(currentUser.uid, verifiedRole);
-            }
-            if (data.accountStatus) {
-              const status = data.accountStatus as AccountStatus;
-              setUserStatus(status);
-              if (status === 'banned') setIsBanModalOpen(true);
-            }
-
-            if (shouldProcessForceLogout(data, currentUser)) {
-              await performForcedLogout({ silent: true });
-              return;
-            }
           } catch (error) {
-            console.error('[Auth] Initial force logout check failed:', error);
-            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
-            setIsEmailVerificationCycleReady(true);
-          } finally {
-            setIsUserRoleReady(true);
-            hasCompletedForceLogoutReentryCheckRef.current = true;
+            console.error('Failed to sync user document:', error);
           }
         };
 
-        runInitialForceLogoutCheck();
+        const createMissingUserDocOnce = async () => {
+          if (hasCreatedMissingUserDoc) return;
+          hasCreatedMissingUserDoc = true;
+          try {
+            const favsSnap = await getDocs(
+              query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
+            );
+            const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
+            const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
+            await setDoc(userRef, {
+              uid: currentUser.uid,
+              email: currentUser.email ?? '',
+              displayName: currentUser.displayName ?? '',
+              lastLoginAt: Date.now(),
+              lastSeenAt: Date.now(),
+              isOnline: true,
+              favoriteCount: favsSnap.size,
+              songGeneratedCount: songCount,
+              createdAt: Date.now(),
+              role: 'free',
+              accountStatus: 'active',
+              paymentStatus: 'none',
+            });
+          } catch (error) {
+            console.error('Failed to create user document:', error);
+          }
+        };
 
-        // Sync user role in real-time
-        unsubUserDoc = onSnapshot(userRef, (docSnap) => {
+        // One listener is now the single source for role/status/force-logout. Its
+        // first server snapshot replaces the two extra getDoc(userRef) calls that
+        // previously ran on every login/reload. Cached snapshots may hydrate the UI
+        // immediately, but force-logout and session writes wait for the server copy.
+        unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
+          const isServerSnapshot = !docSnap.metadata.fromCache;
+
           if (docSnap.exists()) {
             const data = docSnap.data();
             setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
@@ -7972,25 +8064,28 @@ const toggleCycleVariantSelection = (
             writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
-            
-            // Check for Banned status
+
             if (data.accountStatus) {
               const status = data.accountStatus as AccountStatus;
               setUserStatus(status);
-              if (status === 'banned') {
-                setIsBanModalOpen(true);
-              }
+              if (status === 'banned') setIsBanModalOpen(true);
             }
 
-            if (!hasCompletedForceLogoutReentryCheckRef.current) {
+            if (isServerSnapshot && !hasCompletedForceLogoutReentryCheckRef.current) {
+              if (shouldProcessForceLogout(data, currentUser)) {
+                hasCompletedForceLogoutReentryCheckRef.current = true;
+                void performForcedLogout({ silent: true });
+                return;
+              }
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              void syncSessionFieldsOnce();
               return;
             }
 
-            if (shouldProcessForceLogout(data, currentUser)) {
+            if (isServerSnapshot && hasCompletedForceLogoutReentryCheckRef.current && shouldProcessForceLogout(data, currentUser)) {
               setIsForcedLogoutModalOpen(true);
             }
           } else {
-            // Initial signup fallback
             setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
             setIsEmailVerificationCycleReady(true);
             setUserRole('free');
@@ -8004,6 +8099,11 @@ const toggleCycleVariantSelection = (
             setUserLyricClicheGuard(null);
             writeGeminiAutoModelFallback(true, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
+
+            if (isServerSnapshot) {
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              void createMissingUserDocOnce();
+            }
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
@@ -8013,53 +8113,6 @@ const toggleCycleVariantSelection = (
           setUserLyricClicheGuard(null);
           setIsUserLyricClicheGuardReady(true);
         });
-
-        const syncUserDoc = async () => {
-          try {
-            const userRef = doc(db, 'users', currentUser.uid);
-            const userSnap = await getDoc(userRef);
-
-            const safeSessionData = {
-              uid: currentUser.uid,
-              email: currentUser.email ?? '',
-              displayName: currentUser.displayName ?? '',
-              lastLoginAt: Date.now(),
-              lastSeenAt: Date.now(),
-              isOnline: true,
-            };
-
-            if (!userSnap.exists()) {
-              const favsSnap = await getDocs(
-                query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
-              );
-              const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
-              const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
-
-              await setDoc(userRef, {
-                ...safeSessionData,
-                favoriteCount: favsSnap.size,
-                songGeneratedCount: songCount,
-                createdAt: Date.now(),
-                role: 'free',
-                accountStatus: 'active',
-                paymentStatus: 'none',
-              });
-            } else {
-              const currentData = userSnap.data();
-
-              if (currentData.accountStatus === 'banned') {
-                setIsBanModalOpen(true);
-              }
-
-              // Existing users: never touch role/plan/account status from the client.
-              await updateDoc(userRef, safeSessionData);
-            }
-          } catch (error) {
-            console.error('Failed to sync user document:', error);
-          }
-        };
-
-        syncUserDoc();
 
         // Fetch favorites for the user.
         // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
@@ -14903,7 +14956,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               }}
             />
             <div className="soridraw-storyboard-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
-              <div className="soridraw-storyboard-card-inner p-5 md:p-6 flex items-center justify-between gap-4">
+              <div className="soridraw-storyboard-card-inner px-5 md:px-6 py-3.5 md:py-4 flex items-center justify-between gap-4">
                 <button
                   type="button"
                   onClick={openStoryboardModal}

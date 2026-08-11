@@ -520,14 +520,13 @@
   grid-row: auto !important;
 }
 
-/* 629 — One shared expand/collapse motion contract for all five keyword menus.
- * Genre / Style / Sound / Mood / Theme now use this single timing owner in both
- * directions, matching the approved Mood / Theme feel exactly. Split-drag
- * performance rules can still disable transitions with their existing !important
- * override, so this does not change divider performance. */
+/* 634 — Keep one shared expand/collapse motion owner for all five keyword menus,
+ * but shorten the full-card motion. Genre / Style / Sound contain much denser
+ * keyword grids, so the previous 300ms max-height motion felt noticeably heavy.
+ * Mood / Theme use the same timing as before: all five stay perfectly matched. */
 .soridraw-keyword-expand-motion {
   transition-property: max-height, opacity;
-  transition-duration: 300ms;
+  transition-duration: 220ms;
   transition-timing-function: ease-out;
 }
 

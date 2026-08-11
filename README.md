@@ -1,11 +1,9 @@
-## 633차 — Library/Music Note 분할 드래그 세로 위치 고정
-
-- 기준: 632차
-- 실사용 영상에서 분할바를 좌우로만 이동했는데 pointer-up을 반복할수록 Library의 Studio가 아래로 누적 이동하고, Music Note는 Studio/결과 pane의 세로 위치가 위아래로 흔들리는 현상을 확인했습니다.
-- 원인은 Lite 공통 경로가 drag 시작 시 보이는 카드 DOM을 anchor로 잡고, pointer-up에서 폭 reflow로 달라진 카드 top 차이만큼 `scrollTop`을 보정하던 방식이었습니다. 폭이 바뀔 때 카드 높이가 달라지므로 이 보정 자체가 수평 드래그를 세로 스크롤로 변환하고 있었습니다.
-- 카드 DOM anchor 보정을 제거하고 Library/Music Note가 함께 쓰는 Lite 공통 scroll lock으로 교체했습니다: 상단에서 시작하면 항상 상단(0), 하단에서 시작하면 항상 현재 하단, 중간에서는 drag 시작 시 `scrollTop`을 그대로 유지합니다.
-- drag 중에는 별도 DOM 탐색/카드 rect 측정을 하지 않고 pane `scrollTop`만 유지하며, pointer-up 후 한 프레임에 한 번 최종 위치를 재확정합니다. 브라우저 native scroll anchoring도 drag 중에만 끕니다.
-- 분할 엔진, 폭 판정, Recent Songs legacy 경로, Firebase/Auth/Functions/Firestore 저장 구조는 변경하지 않았습니다.
+## 634차 — 키워드 5메뉴 접기/펼치기 체감속도 단축
+- 기준: 633차
+- 장르 / 스타일 / 사운드 / 분위기 / 주제 5개 메뉴가 계속 하나의 공통 `soridraw-keyword-expand-motion`을 사용하도록 유지했습니다.
+- 공통 접기·펼치기 시간을 `300ms` → `220ms`로 단축했습니다. 장르/스타일/사운드만 별도 속도를 만들지 않아 629차의 "전 메뉴 동일 조건" 원칙은 그대로 유지됩니다.
+- `max-height + opacity / ease-out` 방식과 632차의 공통 높이 측정 경로는 그대로 유지했습니다.
+- 분할바, Firebase/Auth/Functions, 저장 구조는 변경하지 않았습니다.
 
 ## 632차 — 장르 접기/펼치기 높이 측정 경로 공통화
 

@@ -938,3 +938,56 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   content-visibility: hidden !important;
   contain: strict !important;
 }
+
+/* 618 — Visual parity only: Lite/590 keeps its existing 16px drag hit-area,
+ * geometry and engine behavior, but uses the exact legacy splitter skin.
+ * The Studio-wide button surface rules can otherwise paint the Lite hit-area
+ * with --sb-control, which makes it look like a thick vertical rail. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:hover,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:active,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:focus,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:focus-visible {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    filter: none !important;
+    outline: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter > span,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:active > span,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:focus > span,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:focus-visible > span {
+    width: 1px !important;
+    min-width: 1px !important;
+    flex: 0 0 1px !important;
+    background: var(--sb-divider, rgba(255,255,255,.105)) !important;
+    opacity: 1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace > button.soridraw-lite-studio-splitter:hover > span,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace.is-dragging > button.soridraw-lite-studio-splitter > span {
+    width: 1px !important;
+    min-width: 1px !important;
+    flex-basis: 1px !important;
+    background: rgba(255,255,255,.145) !important;
+  }
+}

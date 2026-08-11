@@ -11898,3 +11898,26 @@ html[data-soridraw-device="phone"] body > :is(
     display: none !important;
   }
 }
+
+/* 641 — Builder-only wide masthead uses the exact same horizontal owner as the cards.
+ * In the approved one-pane wide layout, the builder's direct content children are
+ * centered at `min(100% - 84px, 1500px)`. Later masthead normalization rules reset
+ * only `.soridraw-studio-builder-pane-masthead-host` back to `width:100%`, so during
+ * native window resizing the Sori Studio wordmark/search crossed the 1600px boundary
+ * at a different horizontal guide than Genre/Style/Sound and the rows below.
+ * Re-apply the existing card guide to the masthead host only in the same >=1600px
+ * one-pane state. Below 1600px both cards and masthead naturally return to 100%
+ * together. No split percent/rail/drag geometry is changed. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane
+  > .soridraw-studio-builder-pane-masthead-host {
+    width: min(calc(100% - 84px), var(--soridraw-studio-full-pane-max-width)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}

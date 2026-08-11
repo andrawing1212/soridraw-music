@@ -1829,3 +1829,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 `StudioSplitWorkspace`와 Lite V2 모두 rail frame-resize 신호에서는 현재 workspace 폭을 즉시 다시 측정/적용해 Sori Studio 대문·검색·builder 폭이 같은 프레임 좌표를 사용한다.
 - 기존 엔진은 외부 브라우저 창의 가로폭 변경도 명시적으로 감지해 pixel builder width를 갱신한다. divider drag 경로는 변경하지 않았다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## 641차 — 외부창 축소 시 Sori Studio 대문/검색과 카드 폭 전환 타이밍 통일
+- 기준: 638차로 롤백 후 재작업. 639/640의 분할폭·1100~1599px 보정은 포함하지 않음.
+- 영상 재확인 결과, 문제는 외부창 좌표 이탈 자체가 아니라 `곡 만들기`의 builder-only wide 상태에서 대문/검색과 아래 카드들이 서로 다른 가로 폭 소유자를 사용해 1600px 경계를 다른 타이밍/가이드로 통과하던 것이었다.
+- 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
+- masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
+- 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.

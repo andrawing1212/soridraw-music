@@ -1,3 +1,12 @@
+## 632차 — 장르 접기/펼치기 높이 측정 경로 공통화
+
+- 기준: 631차
+- 장르 카드만 남아 있던 별도 `useLayoutEffect + scrollHeight` 높이 측정 경로를 제거했습니다.
+- 장르 / 스타일 / 사운드 / 분위기 / 주제가 모두 동일한 `useStableContentHeight` 공통 경로를 사용합니다.
+- 공통 경로는 ResizeObserver 폭 변화와 resize/split 종료 후 안정화 시점에만 높이를 다시 측정하므로 장르 접기 시 동기 레이아웃 측정 차이를 없앴습니다.
+- 접기/펼치기 애니메이션 조건은 629차의 `300ms ease-out / max-height + opacity`를 그대로 유지합니다.
+- Firebase/Auth/Functions/Firestore 저장 구조 변경 없음.
+
 ## 631차 — 실제 핸드폰 하단 Split 보조영역 노출 오류 수정
 
 - 기준 ZIP: `SORIDRAW_630차_핸드폰_분할모드비활성_태블릿PC유지.zip`

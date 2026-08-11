@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryItem, GenreGroupItem } from "../types";
 import { GENRE_HIERARCHY, GENRES } from "../constants";
 import {
@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { resolveExpandedHeight, useStableContentHeight } from "../lib/stableContentHeight";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -471,15 +472,12 @@ function GenreHierarchySelectorComponent({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
-  useLayoutEffect(() => {
-    if (contentRef.current) {
-      const height = contentRef.current.scrollHeight;
-      setContentHeight(height);
-      if (onHeightChange) {
-        onHeightChange(height);
-      }
-    }
-  }, [groups, onHeightChange]);
+  useStableContentHeight(
+    contentRef,
+    setContentHeight,
+    [groups],
+    onHeightChange,
+  );
 
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
@@ -1110,7 +1108,7 @@ function GenreHierarchySelectorComponent({
         <div
           className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
-            maxHeight: isExpanded ? forcedHeight || contentHeight || 320 : 76,
+            maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
           }}
         >

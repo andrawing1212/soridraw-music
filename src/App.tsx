@@ -4011,21 +4011,40 @@ function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    const syncBuilderActionMode = () => {
+    const syncBuilderActionMode = (force = false) => {
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
       setIsStudioBlackActionMode(isStudioBlack);
+
+      // 623: Music Note still trails Library slightly during repeated left/right
+      // divider motion. 605/606 real-hand work already showed the split geometry
+      // write itself is cheap; the expensive part can be the App-root React
+      // mirror waking when `data-soridraw-builder-mode` crosses while the drag is
+      // still live. CSS already reacts to that root attribute immediately, so
+      // Music Note can defer only this gesture-state mirror until pointer-up.
+      // Library/Recent/Create keep their verified immediate synchronization.
+      const deferMusicNoteDragMirror = !force
+        && root.classList.contains('soridraw-split-dragging')
+        && root.dataset.soridrawStudioWorkspaceView === 'music-note';
+      if (deferMusicNoteDragMirror) return;
+
       setIsSplitBuilderActionMobile(
         isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
       );
     };
 
-    syncBuilderActionMode();
-    const observer = new MutationObserver(syncBuilderActionMode);
+    syncBuilderActionMode(true);
+    const observer = new MutationObserver(() => syncBuilderActionMode(false));
     observer.observe(root, {
       attributes: true,
       attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
     });
-    return () => observer.disconnect();
+
+    const handleSplitDragEnd = () => syncBuilderActionMode(true);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    };
   }, []);
 
   const isActionSwipeCollapseMode = isActionDragMobile || isSplitBuilderActionMobile;

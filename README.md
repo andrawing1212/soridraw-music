@@ -1,3 +1,12 @@
+## 623차 — 뮤직노트 분할 드래그 App 루트 재렌더 억제
+
+- 622를 기준으로 분할 엔진/분할선/라이브러리/최근 생성곡은 그대로 유지한다.
+- 실사용 영상 기준 뮤직노트는 라이브러리보다 약 10~20% 늦게 따라오는 체감이 남았고, 특히 분할바를 좌우로 반복할 때 PC/Tablet 경계를 넘는 순간 반응 타이밍 차이가 컸다.
+- 605~607에서 이미 확인했던 원리를 최소 범위로 재적용했다: 분할 드래그 중 `data-soridraw-builder-mode`가 바뀌어도 **뮤직노트 화면에서만** App 루트의 `isSplitBuilderActionMobile` React state 동기화를 잠시 미룬다. CSS는 같은 root attribute를 직접 읽기 때문에 화면 반응은 계속 즉시 유지된다.
+- pointer-up의 `soridraw-split-drag-end`에서 React state를 1회 동기화한다. Library / Recent / Create / Galaxy Tab 경로는 기존 즉시 동기화를 유지한다.
+- 새 진단 UI, 새 ResizeObserver, 새 레이아웃 읽기, 페이지별 분할 엔진은 추가하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
 ## 613차 — 뮤직노트 가로 스크롤 컨테이너 병목 격리 + 자동 병목 스캔
 
 - 612 실사용 결과에서 `자동 / 기존 방식 / V2` 모두 뮤직노트만 느리고, 같은 자동 환경의 Recent/Library는 정상임을 기준으로 분할 엔진을 원인에서 제외했다.

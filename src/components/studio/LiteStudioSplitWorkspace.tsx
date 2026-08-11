@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
+import { useMediaQuery } from '../../lib/mediaQueryStore';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -198,6 +199,7 @@ export default function LiteStudioSplitWorkspace({
   // through the same `library-590` profile as Library. Adaptive mode is kept for
   // the already-verified Galaxy Tab/touch path and explicit diagnostics.
   const panes = Children.toArray(children);
+  const isCompactWorkspace = useMediaQuery('(max-width: 1099px)');
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
@@ -207,6 +209,9 @@ export default function LiteStudioSplitWorkspace({
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(() => readStoredCollapse(BUILDER_COLLAPSED_STORAGE_KEY));
   const [isResultCollapsed, setIsResultCollapsed] = useState(() => readStoredCollapse(RESULT_COLLAPSED_STORAGE_KEY));
+  const compactBuilderHidden = isCompactWorkspace && (workspaceView === 'music-note' || workspaceView === 'library');
+  const effectiveBuilderCollapsed = isCompactWorkspace ? compactBuilderHidden : isBuilderCollapsed;
+  const effectiveResultCollapsed = isCompactWorkspace ? false : isResultCollapsed;
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const resultCollapsedRef = useRef(isResultCollapsed);
   const percentRef = useRef(readStoredPercent());
@@ -1271,27 +1276,27 @@ export default function LiteStudioSplitWorkspace({
   }, [applyPercent, captureDragScrollLocks, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, startLayoutAckObserver, viewMode, workspaceView, writeLiveSplitGeometry]);
 
   useLayoutEffect(() => {
-    builderCollapsedRef.current = isBuilderCollapsed;
-    resultCollapsedRef.current = isResultCollapsed;
+    builderCollapsedRef.current = effectiveBuilderCollapsed;
+    resultCollapsedRef.current = effectiveResultCollapsed;
     const root = document.documentElement;
-    if (isBuilderCollapsed) root.dataset.soridrawBuilderCollapsed = 'true'; else delete root.dataset.soridrawBuilderCollapsed;
-    if (isResultCollapsed) root.dataset.soridrawResultCollapsed = 'true'; else delete root.dataset.soridrawResultCollapsed;
+    if (effectiveBuilderCollapsed) root.dataset.soridrawBuilderCollapsed = 'true'; else delete root.dataset.soridrawBuilderCollapsed;
+    if (effectiveResultCollapsed) root.dataset.soridrawResultCollapsed = 'true'; else delete root.dataset.soridrawResultCollapsed;
     if (layoutRef.current) {
-      if (isBuilderCollapsed) layoutRef.current.dataset.builderCollapsed = 'true'; else delete layoutRef.current.dataset.builderCollapsed;
-      if (isResultCollapsed) layoutRef.current.dataset.resultCollapsed = 'true'; else delete layoutRef.current.dataset.resultCollapsed;
+      if (effectiveBuilderCollapsed) layoutRef.current.dataset.builderCollapsed = 'true'; else delete layoutRef.current.dataset.builderCollapsed;
+      if (effectiveResultCollapsed) layoutRef.current.dataset.resultCollapsed = 'true'; else delete layoutRef.current.dataset.resultCollapsed;
     }
-    if (isBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
-    if (isResultCollapsed && builderRef.current) builderRef.current.scrollTop = 0;
+    if (effectiveBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
+    if (effectiveResultCollapsed && builderRef.current) builderRef.current.scrollTop = 0;
     refreshMetrics();
     const frame = window.requestAnimationFrame(() => {
       refreshMetrics();
-      window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', { detail: { collapsed: isBuilderCollapsed } }));
-      window.dispatchEvent(new CustomEvent('soridraw-studio-pane-collapse-change', { detail: { builderCollapsed: isBuilderCollapsed, resultCollapsed: isResultCollapsed } }));
+      window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', { detail: { collapsed: effectiveBuilderCollapsed } }));
+      window.dispatchEvent(new CustomEvent('soridraw-studio-pane-collapse-change', { detail: { builderCollapsed: effectiveBuilderCollapsed, resultCollapsed: effectiveResultCollapsed } }));
     });
     try { window.localStorage.setItem(BUILDER_COLLAPSED_STORAGE_KEY, String(isBuilderCollapsed)); } catch { /* optional */ }
     try { window.localStorage.setItem(RESULT_COLLAPSED_STORAGE_KEY, String(isResultCollapsed)); } catch { /* optional */ }
     return () => window.cancelAnimationFrame(frame);
-  }, [isBuilderCollapsed, isResultCollapsed, refreshMetrics]);
+  }, [effectiveBuilderCollapsed, effectiveResultCollapsed, isBuilderCollapsed, isResultCollapsed, refreshMetrics]);
 
   useLayoutEffect(() => {
     if (viewMode === 'result-only') {
@@ -1462,7 +1467,7 @@ export default function LiteStudioSplitWorkspace({
         data-split-engine="lite-v2-studio"
         data-lite-runtime-layout="content-mode-aligned"
         data-lite-runtime-profile={runtimeProfile}
-        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${effectiveBuilderCollapsed ? ' is-builder-collapsed' : ''}${effectiveResultCollapsed ? ' is-result-collapsed' : ''}${isCompactWorkspace ? ' is-compact-workspace' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
         } as React.CSSProperties}
@@ -1473,7 +1478,7 @@ export default function LiteStudioSplitWorkspace({
           data-soridraw-studio-pane="builder"
           data-soridraw-lite-pane="builder"
           className="soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder"
-          aria-hidden={isBuilderCollapsed}
+          aria-hidden={effectiveBuilderCollapsed}
         >
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}
@@ -1486,16 +1491,16 @@ export default function LiteStudioSplitWorkspace({
           data-soridraw-studio-pane="result"
           data-soridraw-lite-pane="result"
           className="soridraw-studio-result-pane soridraw-lite-studio-pane is-result"
-          aria-hidden={isResultCollapsed}
+          aria-hidden={effectiveResultCollapsed}
         >
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
           {panes[1] ?? null}
         </div>
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
-      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
-      {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
+      {viewMode === 'split' && !isCompactWorkspace && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
+      {viewMode === 'split' && !isCompactWorkspace && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
+      {viewMode === 'split' && !isCompactWorkspace && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>
   );
 }

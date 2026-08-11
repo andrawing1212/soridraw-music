@@ -47,6 +47,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   const isMobileViewport = useMediaQuery('(max-width: 1099px)');
   const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
   const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
+  const isCompactWorkspace = railViewport === 'mobile';
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);
 
@@ -114,33 +115,38 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
       className={`soridraw-studio-page-frame${isLeftRailCollapsed ? ' is-left-rail-collapsed' : ''}${isRightRailCollapsed ? ' is-right-rail-collapsed' : ''}`}
       data-rail-viewport={railViewport}
       data-workspace-view={workspaceView}
+      data-compact-workspace={isCompactWorkspace ? 'true' : 'false'}
     >
       <div className="soridraw-studio-masthead-divider" aria-hidden="true" />
-      {leftRail}
-      <button
-        type="button"
-        className="soridraw-studio-left-rail-collapse-toggle"
-        onClick={() => setIsLeftRailCollapsed((current) => !current)}
-        aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
-        title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
-        aria-expanded={!isLeftRailCollapsed}
-      >
-        <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
-      </button>
+      {!isCompactWorkspace && leftRail}
+      {!isCompactWorkspace && (
+        <button
+          type="button"
+          className="soridraw-studio-left-rail-collapse-toggle"
+          onClick={() => setIsLeftRailCollapsed((current) => !current)}
+          aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+          title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+          aria-expanded={!isLeftRailCollapsed}
+        >
+          <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
+        </button>
+      )}
 
       <div className="soridraw-studio-page-center">{children}</div>
 
-      {rightRail}
-      <button
-        type="button"
-        className="soridraw-studio-right-rail-collapse-toggle"
-        onClick={() => setIsRightRailCollapsed((current) => !current)}
-        aria-label={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
-        title={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
-        aria-expanded={!isRightRailCollapsed}
-      >
-        <span className="soridraw-studio-panel-toggle-icon is-right" aria-hidden="true" />
-      </button>
+      {!isCompactWorkspace && rightRail}
+      {!isCompactWorkspace && (
+        <button
+          type="button"
+          className="soridraw-studio-right-rail-collapse-toggle"
+          onClick={() => setIsRightRailCollapsed((current) => !current)}
+          aria-label={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
+          title={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
+          aria-expanded={!isRightRailCollapsed}
+        >
+          <span className="soridraw-studio-panel-toggle-icon is-right" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

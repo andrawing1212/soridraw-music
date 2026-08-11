@@ -12018,3 +12018,115 @@ html[data-soridraw-device="phone"] body > :is(
     right: clamp(10px, calc(50% - 740px), 34px) !important;
   }
 }
+
+/* 645 — Split theme compact workspace uses the real mobile information hierarchy.
+ * The split theme itself stays selected; only the layout changes below 1100px.
+ * - Studio create/recent: keep Builder + Result in one vertical mobile page.
+ * - Music Note / Library: keep only the active result page visible.
+ * - Left/right auxiliary rails and split controls are not part of compact UI.
+ * This replaces the old 626 idea of stacking the desktop right rail under the page. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"] {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    overflow-x: clip !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  > .soridraw-studio-page-center {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  .soridraw-studio-split-workspace.is-compact-workspace {
+    --soridraw-studio-builder-width: 100% !important;
+    --soridraw-studio-builder-px: 100% !important;
+    display: block !important;
+    grid-template-columns: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  .soridraw-studio-split-workspace.is-compact-workspace
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    overflow: visible !important;
+  }
+
+  /* Music Note / Library compact mode is a single active page, not Studio + page. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  :is(
+    .soridraw-studio-split-workspace.is-compact-workspace.is-builder-collapsed > .soridraw-studio-builder-pane,
+    .soridraw-studio-split-workspace.is-compact-workspace.is-result-collapsed > .soridraw-studio-result-pane
+  ) {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  /* Safety: body portals from the Builder never leak over Music Note / Library
+   * while compact mode visually owns only the result page. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"] body > :is(
+    .soridraw-studio-action-bar--tracking,
+    .soridraw-studio-action-collapsed,
+    .soridraw-live-keywords-fixed,
+    .soridraw-studio-splitter,
+    .soridraw-studio-builder-collapse-toggle,
+    .soridraw-studio-result-collapse-toggle
+  ) {
+    display: none !important;
+  }
+}

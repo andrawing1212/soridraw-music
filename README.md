@@ -1,3 +1,14 @@
+
+## 645차 — 분할모드 모바일폭 단일페이지 구조 분리
+
+- 기준: 644차.
+- 목표: 분할 테마를 유지한 채 외부창이 1099px 이하로 좁아지면 실제 모바일 정보구조로 전환한다.
+- Studio의 `곡 만들기`/`최근 생성곡`은 별도 모바일 메뉴로 나누지 않고 기존 모바일 Sori Studio처럼 Builder 위 + Result 아래의 한 페이지로 함께 유지한다.
+- `뮤직노트`/`Suno Library`는 현재 선택 페이지 하나만 남기고 Builder, 좌/우 보조 레일, 분할바/접기 버튼을 compact 레이아웃에서 제외한다.
+- `StudioPageFrame`은 compact에서 좌/우 레일 DOM을 렌더하지 않아 우측 GENERATION/RECENT SONGS/MUSIC API/SELECTED KEYWORDS가 페이지 하단으로 흘러내릴 수 없게 했다.
+- Legacy/Lite 분할 엔진의 저장된 PC/태블릿 접힘 상태와 분할 비율은 변경하지 않는다. compact에서는 시각 상태만 덮고 다시 넓히면 기존 분할 상태를 복구한다.
+- 테마 값은 `studio-black` 그대로 유지하며 다크/라이트 테마로 강제 전환하지 않는다.
+- Firestore/Auth/Functions/저장 구조 변경 없음.
 # 644차 — PC 마지막 구간 대문 이동거리 완전 동기화
 
 - 기준: 643차

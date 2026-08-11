@@ -1108,7 +1108,7 @@ function GenreHierarchySelectorComponent({
         </div>
 
         <div
-          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
+          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
             maxHeight: isExpanded ? forcedHeight || contentHeight || 320 : 76,
             opacity: 1

@@ -520,6 +520,17 @@
   grid-row: auto !important;
 }
 
+/* 629 — One shared expand/collapse motion contract for all five keyword menus.
+ * Genre / Style / Sound / Mood / Theme now use this single timing owner in both
+ * directions, matching the approved Mood / Theme feel exactly. Split-drag
+ * performance rules can still disable transitions with their existing !important
+ * override, so this does not change divider performance. */
+.soridraw-keyword-expand-motion {
+  transition-property: max-height, opacity;
+  transition-duration: 300ms;
+  transition-timing-function: ease-out;
+}
+
 /* 519 — collapsed keyword-card height follows the builder pane itself.
  * The old App.tsx fallback used window.innerWidth, so a narrow split pane inside
  * a desktop browser could retain desktop height until a later React render. */

@@ -1750,3 +1750,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 섹션 태그 관리자 화면이 서버 최신 목록을 수신할 때 사용자용 section-tags 캐시도 같이 갱신.
 - Firestore Web persistent multi-tab cache를 로컬/AI Studio 개발 환경과 `로그인 기억`을 선택한 신뢰 기기에서 활성화. 짧은 새로고침/재연결이 매번 새 query처럼 시작되는 비용을 줄이는 목적.
 - Favorites / 최근 생성곡 / Library의 실제 사용자 데이터 실시간 동기화는 이번 차수에서 유지. 데이터 최신성이 중요한 영역까지 임의 TTL 캐시로 바꾸지 않음.
+
+
+## 629차 — 키워드 메뉴 접기/펼치기 속도 완전 통일
+- 기준: 628차
+- 장르 / 스타일 / 사운드 / 분위기 / 주제 5개 메뉴의 접기·펼치기 애니메이션을 단일 공통 클래스 `soridraw-keyword-expand-motion`으로 통합했습니다.
+- 모든 메뉴가 펼치기와 접기 양방향 모두 `max-height + opacity / 300ms / ease-out` 조건을 동일하게 사용합니다.
+- 627차에서 복구한 장르·스타일·사운드의 부드러운 접기 경로와 1줄 노출 높이는 그대로 유지합니다.
+- 분할바 드래그 중 기존 `transition: none !important` 성능 보호 규칙은 그대로 우선하므로 분할 성능에는 영향을 주지 않습니다.
+- UI 높이, 키워드 내용, Firestore/Auth/Functions/저장 구조는 변경하지 않았습니다.

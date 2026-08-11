@@ -18933,7 +18933,7 @@ function CycleSectionComponent({
         </div>
 
         <div
-          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
+          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
             maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
@@ -19797,7 +19797,7 @@ function CategorySectionComponent({
         </div>
         
         <div
-          className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px] transition-[max-height,opacity] duration-300 ease-out"
+          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
           style={{
             maxHeight: isExpanded
               ? resolveExpandedHeight(forcedHeight, contentHeight, 96)

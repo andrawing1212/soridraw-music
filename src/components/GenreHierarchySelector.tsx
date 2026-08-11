@@ -1108,7 +1108,18 @@ function GenreHierarchySelectorComponent({
         <div
           className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
-            maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
+            // 637: if this selector remounts while Genre is already expanded (for example
+            // when the split result page changes), the stable-height observer has not
+            // measured yet. Starting from the collapsed 76px fallback made the card
+            // visibly fold once and then reopen on the next frame. Keep the content
+            // naturally open until the first real height arrives; normal user-triggered
+            // collapse/expand still uses the measured numeric height and the shared motion.
+            maxHeight: isExpanded
+              ? ((typeof forcedHeight === 'number' && forcedHeight > 0)
+                  || (typeof contentHeight === 'number' && contentHeight > 0)
+                    ? resolveExpandedHeight(forcedHeight, contentHeight, 76)
+                    : 'none')
+              : 76,
             opacity: 1
           }}
         >

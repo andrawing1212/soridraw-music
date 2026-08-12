@@ -1,0 +1,13 @@
+{
+  "version": 669,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지.zip",
+  "required_css_marker": "669 — outer-window body-layout snapshot",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "16c25ee27b9786fe71a810572727f68f288d2e46262b178b6b79628f6ff9b3fc",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "d6d3c1e36c673071850e6190e29909dfbad337cabb1418b2aef2abc73108e5c3",
+    "src/components/studio/studioLayout.css": "d77c2815fceb51156d9fe25d965dfc8c6030f0b0e805bf28b45be4e494acc89a",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

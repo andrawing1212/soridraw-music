@@ -1035,6 +1035,27 @@ export default function StudioSplitWorkspace({
     return () => window.cancelAnimationFrame(frame);
   }, [percent, refreshLayoutMetrics]);
 
+  const freezeOuterResizePaneBodies = useCallback(() => {
+    const freezePane = (pane: HTMLDivElement | null) => {
+      if (!pane) return;
+      const width = Math.max(1, Math.round(pane.getBoundingClientRect().width));
+      pane.style.setProperty('--soridraw-outer-resize-body-width', `${width}px`);
+      pane.dataset.soridrawOuterResizeBodyFrozen = 'true';
+    };
+    freezePane(builderRef.current);
+    freezePane(resultRef.current);
+  }, []);
+
+  const clearOuterResizePaneBodies = useCallback(() => {
+    const clearPane = (pane: HTMLDivElement | null) => {
+      if (!pane) return;
+      pane.style.removeProperty('--soridraw-outer-resize-body-width');
+      delete pane.dataset.soridrawOuterResizeBodyFrozen;
+    };
+    clearPane(builderRef.current);
+    clearPane(resultRef.current);
+  }, []);
+
   useLayoutEffect(() => {
     builderCollapsedRef.current = isBuilderCollapsed;
     resultCollapsedRef.current = isResultCollapsed;
@@ -1164,6 +1185,7 @@ export default function StudioSplitWorkspace({
     const handleViewportResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
+        freezeOuterResizePaneBodies();
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
@@ -1179,6 +1201,7 @@ export default function StudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        clearOuterResizePaneBodies();
         scheduleLayoutMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1204,6 +1227,7 @@ export default function StudioSplitWorkspace({
       themeObserver.disconnect();
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
+      clearOuterResizePaneBodies();
       window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
@@ -1250,7 +1274,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearOuterResizePaneBodies, clearRootMeasurements, freezeOuterResizePaneBodies, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
   // 660 — keep the pointer/divider lane independent from an expensive PROD
   // Studio tablet reflow. 659 already proved that the fixed splitter can follow

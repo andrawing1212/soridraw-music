@@ -1,3 +1,16 @@
+## 669차 — 외부창 본문 레이아웃 폭 고정 / 공통 reflow 차단
+- 기준: 668차.
+- 668은 GitHub main/Vercel에 정확히 반영됐고, 실사용에서 곡 만들기/최근 생성곡은 조금 개선됐지만 AI Studio 수준에는 못 미쳤습니다. Music Note/Library는 외부창 체감 변화가 거의 없었습니다.
+- 667에서 본문을 React unmount했을 때 곡 만들기/최근 생성곡이 확실히 빨라졌으므로, 남은 핵심 비용을 **본문이 살아 있는 상태에서 폭이 매 픽셀 바뀔 때 발생하는 text/grid/card reflow**로 좁혔습니다.
+- 외부 브라우저 resize 시작 시 Builder/Result pane의 실제 폭을 각각 **1회만 측정**해 본문 레이아웃 폭을 고정합니다.
+- resize 중 outer pane shell·대문·분할바·좌우 rail은 실시간으로 움직이지만, 무거운 본문 레이아웃은 같은 폭을 유지해 매 픽셀 재배치를 막습니다.
+- resize 종료 시 고정 폭을 제거하고 실제 최종 폭으로 **1회만 responsive reflow**합니다.
+- React state 추가 없음, 본문 unmount/숨김 없음, split divider 드래그 경로 변경 없음.
+- Legacy와 Lite 모두 같은 base split class를 사용하므로 네 화면 모두 동일 규칙이 적용됩니다.
+- 668의 container-query 일시정지도 유지합니다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 정식배포 없음.
+- 상태: 코드 반영 완료 · Vercel 테스트앱 실사용 검증 전.
+
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.

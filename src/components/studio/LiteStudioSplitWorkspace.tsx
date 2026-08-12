@@ -184,7 +184,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
-  leftPanePresentation?: 'builder' | 'result';
+  pairProbeRecentLeft?: boolean;
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -194,7 +194,7 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
-  leftPanePresentation = 'builder',
+  pairProbeRecentLeft = false,
 }: LiteStudioSplitWorkspaceProps) {
   // 617: PC Music Note no longer owns a special geometry path. App routes it
   // through the same `library-590` profile as Library. Adaptive mode is kept for
@@ -471,7 +471,7 @@ export default function LiteStudioSplitWorkspace({
       modeRef.current.builder,
       builder.dataset.paneMode === 'desktop' || builder.dataset.paneMode === 'mobile',
       builderWidth,
-      BUILDER_MOBILE_BREAKPOINT,
+      pairProbeRecentLeft ? RESULT_MOBILE_BREAKPOINT : BUILDER_MOBILE_BREAKPOINT,
       PANE_MODE_HYSTERESIS,
     );
     const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
@@ -497,7 +497,7 @@ export default function LiteStudioSplitWorkspace({
       const host = externalRef.current.workspaceHeroHost || document.getElementById('soridraw-studio-workspace-hero-host');
       if (host) host.dataset.paneMode = nextResultMode;
     }
-  }, [workspaceView]);
+  }, [pairProbeRecentLeft, workspaceView]);
 
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
     const { left, leftRailEdge } = metricsRef.current;
@@ -1293,27 +1293,29 @@ export default function LiteStudioSplitWorkspace({
   }, [applyPercent, captureDragScrollLocks, clearDirectBenchmarkGeometry, finishDrag, readExternalControls, refreshMetrics, startLayoutAckObserver, viewMode, workspaceView, writeLiveSplitGeometry]);
 
   useLayoutEffect(() => {
-    builderCollapsedRef.current = isBuilderCollapsed;
-    resultCollapsedRef.current = isResultCollapsed;
+    const effectiveBuilderCollapsed = pairProbeRecentLeft ? false : isBuilderCollapsed;
+    const effectiveResultCollapsed = pairProbeRecentLeft ? false : isResultCollapsed;
+    builderCollapsedRef.current = effectiveBuilderCollapsed;
+    resultCollapsedRef.current = effectiveResultCollapsed;
     const root = document.documentElement;
-    if (isBuilderCollapsed) root.dataset.soridrawBuilderCollapsed = 'true'; else delete root.dataset.soridrawBuilderCollapsed;
-    if (isResultCollapsed) root.dataset.soridrawResultCollapsed = 'true'; else delete root.dataset.soridrawResultCollapsed;
+    if (effectiveBuilderCollapsed) root.dataset.soridrawBuilderCollapsed = 'true'; else delete root.dataset.soridrawBuilderCollapsed;
+    if (effectiveResultCollapsed) root.dataset.soridrawResultCollapsed = 'true'; else delete root.dataset.soridrawResultCollapsed;
     if (layoutRef.current) {
-      if (isBuilderCollapsed) layoutRef.current.dataset.builderCollapsed = 'true'; else delete layoutRef.current.dataset.builderCollapsed;
-      if (isResultCollapsed) layoutRef.current.dataset.resultCollapsed = 'true'; else delete layoutRef.current.dataset.resultCollapsed;
+      if (effectiveBuilderCollapsed) layoutRef.current.dataset.builderCollapsed = 'true'; else delete layoutRef.current.dataset.builderCollapsed;
+      if (effectiveResultCollapsed) layoutRef.current.dataset.resultCollapsed = 'true'; else delete layoutRef.current.dataset.resultCollapsed;
     }
-    if (isBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
-    if (isResultCollapsed && builderRef.current) builderRef.current.scrollTop = 0;
+    if (effectiveBuilderCollapsed && resultRef.current) resultRef.current.scrollTop = 0;
+    if (effectiveResultCollapsed && builderRef.current) builderRef.current.scrollTop = 0;
     refreshMetrics();
     const frame = window.requestAnimationFrame(() => {
       refreshMetrics();
-      window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', { detail: { collapsed: isBuilderCollapsed } }));
-      window.dispatchEvent(new CustomEvent('soridraw-studio-pane-collapse-change', { detail: { builderCollapsed: isBuilderCollapsed, resultCollapsed: isResultCollapsed } }));
+      window.dispatchEvent(new CustomEvent('soridraw-studio-builder-collapse-change', { detail: { collapsed: effectiveBuilderCollapsed } }));
+      window.dispatchEvent(new CustomEvent('soridraw-studio-pane-collapse-change', { detail: { builderCollapsed: effectiveBuilderCollapsed, resultCollapsed: effectiveResultCollapsed } }));
     });
     try { window.localStorage.setItem(BUILDER_COLLAPSED_STORAGE_KEY, String(isBuilderCollapsed)); } catch { /* optional */ }
     try { window.localStorage.setItem(RESULT_COLLAPSED_STORAGE_KEY, String(isResultCollapsed)); } catch { /* optional */ }
     return () => window.cancelAnimationFrame(frame);
-  }, [isBuilderCollapsed, isResultCollapsed, refreshMetrics]);
+  }, [isBuilderCollapsed, isResultCollapsed, pairProbeRecentLeft, refreshMetrics]);
 
   useLayoutEffect(() => {
     if (viewMode === 'result-only') {
@@ -1515,43 +1517,68 @@ export default function LiteStudioSplitWorkspace({
         data-split-engine="lite-v2-studio"
         data-lite-runtime-layout="content-mode-aligned"
         data-lite-runtime-profile={runtimeProfile}
-        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+        data-soridraw-679-pair-probe={pairProbeRecentLeft ? 'true' : undefined}
+        className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${pairProbeRecentLeft ? ' soridraw-679-recent-pair-probe' : ''}${!pairProbeRecentLeft && isBuilderCollapsed ? ' is-builder-collapsed' : ''}${!pairProbeRecentLeft && isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
         } as React.CSSProperties}
       >
-        <div
-          id="soridraw-studio-builder-pane"
-          ref={builderRef}
-          data-soridraw-studio-pane="builder"
-          data-soridraw-lite-pane="builder"
-          data-soridraw-677-pane-presentation={leftPanePresentation}
-          className={leftPanePresentation === 'result'
-            ? 'soridraw-studio-result-pane soridraw-lite-studio-pane is-builder soridraw-677-pair-probe-left-result'
-            : 'soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder'}
-          aria-hidden={isBuilderCollapsed}
-        >
-          {leftPanePresentation === 'builder' && (
-            <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
-              {builderMasthead}
+        {pairProbeRecentLeft ? (
+          <>
+            <div
+              id="soridraw-studio-builder-pane"
+              ref={builderRef}
+              data-soridraw-studio-pane="builder"
+              data-soridraw-lite-pane="builder"
+              className="soridraw-studio-result-pane soridraw-lite-studio-pane is-builder soridraw-679-pair-left-result"
+              aria-hidden={false}
+            >
+              <div className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
+              {panes[1] ?? null}
             </div>
-          )}
-          {panes[0] ?? null}
-        </div>
-        <div
-          id="soridraw-studio-result-pane"
-          ref={resultRef}
-          data-soridraw-studio-pane="result"
-          data-soridraw-lite-pane="result"
-          className="soridraw-studio-result-pane soridraw-lite-studio-pane is-result"
-          aria-hidden={isResultCollapsed}
-        >
-          <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
-          {panes[1] ?? null}
-        </div>
+            <div
+              id="soridraw-studio-result-pane"
+              ref={resultRef}
+              data-soridraw-studio-pane="result"
+              data-soridraw-lite-pane="result"
+              className="soridraw-studio-result-pane soridraw-lite-studio-pane is-result soridraw-679-pair-right-result"
+              aria-hidden={false}
+            >
+              <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
+              {panes[0] ?? null}
+            </div>
+          </>
+        ) : (
+          <>
+            <div
+              id="soridraw-studio-builder-pane"
+              ref={builderRef}
+              data-soridraw-studio-pane="builder"
+              data-soridraw-lite-pane="builder"
+              className="soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder"
+              aria-hidden={isBuilderCollapsed}
+            >
+              <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
+                {builderMasthead}
+              </div>
+              {panes[0] ?? null}
+            </div>
+            <div
+              id="soridraw-studio-result-pane"
+              ref={resultRef}
+              data-soridraw-studio-pane="result"
+              data-soridraw-lite-pane="result"
+              className="soridraw-studio-result-pane soridraw-lite-studio-pane is-result"
+              aria-hidden={isResultCollapsed}
+            >
+              <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
+              {panes[1] ?? null}
+            </div>
+          </>
+        )}
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}
-      {viewMode === 'split' && !isBuilderCollapsed && !isResultCollapsed && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
+      {viewMode === 'split' && (pairProbeRecentLeft || (!isBuilderCollapsed && !isResultCollapsed)) && (typeof document !== 'undefined' ? createPortal(splitter, document.body) : splitter)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(builderToggle, document.body) : builderToggle)}
       {viewMode === 'split' && (typeof document !== 'undefined' ? createPortal(resultToggle, document.body) : resultToggle)}
     </>

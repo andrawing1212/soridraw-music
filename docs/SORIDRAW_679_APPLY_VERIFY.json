@@ -1,0 +1,29 @@
+{
+  "version": 679,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "Final control: real Recent Songs left + real Music Note/Library right",
+  "marker": "SORIDRAW_VERIFY_679: REAL_RECENT_LEFT_REAL_NOTE_LIBRARY_RIGHT",
+  "changed_files": [
+    "src/App.tsx",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx",
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/studioLayout.css",
+    "README.md"
+  ],
+  "added_files": [
+    "docs/SORIDRAW_679_APPLY_VERIFY.json"
+  ],
+  "deleted_files": [],
+  "firebase_write_changes": false,
+  "firestore_probe_read_only": "user_recent_songs/{uid} only when in-memory/cache has no result",
+  "forbidden_669_freeze_snapshot_clipping": false,
+  "sha256": {
+    "src/App.tsx": "7d1553730dde6d551da1b26766e55874d898aec0185d0680e423fcbf9647764a",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx": "3b1a4fe7b42e8e3d5fde76572ca0393db78e29432c9ea109be71c98271dec6a1",
+    "src/components/studio/StudioSplitWorkspace.tsx": "780752e686e5bca90cfc1b7622b6cc152fc82797ff61977789e9b9ab18a832d3",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "c26097d453efa51752f93aba7ed0e5edf90c81c7d42c569ca371afa955c965ba",
+    "src/components/studio/studioLayout.css": "cbb18b8e19190c218da8d5c3e5d83ea7fbb3c8b4fd0bc9b16d9fcfc216eac7d2",
+    "README.md": "384a8d37cf697c21787f25efd97b4a79e077aae64f4b8e76372ad82c9c29a443"
+  }
+}

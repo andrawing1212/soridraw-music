@@ -15,7 +15,7 @@ type Props = {
   workspaceView?: 'create' | 'recent' | 'music-note' | 'library';
   workspaceRequestId?: number;
   compactMobileMode?: boolean;
-  leftPanePresentation?: 'builder' | 'result';
+  pairProbeRecentLeft?: boolean;
 };
 
 export default function StudioSplitEngineWorkspace({

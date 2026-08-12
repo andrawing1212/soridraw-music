@@ -2020,24 +2020,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
 
-## 677차 — 최종 대조실험: 최근 생성곡 + 뮤직노트/라이브러리 양면 실콘텐츠
+## 679차 — 최종 대조실험: 실제 최근 생성곡(왼쪽) + 뮤직노트/라이브러리(오른쪽)
 
-- 기준: 668차 clean ZIP. 676차의 빈 왼쪽 구현은 사용하지 않음.
-- 목적: Sori Studio 본문을 완전히 제외하고도 두 개의 실제 반응형 본문을 동시에 분할 렌더링할 때 외부 창 리사이즈 병목이 남는지 확인.
-- 왼쪽: 기존 `최근 생성곡`/생성 결과 본문 JSX를 **복제하지 않고 동일 렌더 함수로 재사용**.
-- 오른쪽: 기존 Music Note 또는 Library 본문을 그대로 유지.
-- Music Note/Library 진입 시 `result`가 비어 있어도 최근곡 `history`가 있으면 현재/첫 최근곡을 화면 상태에만 복구해 왼쪽이 빈 화면이 되지 않도록 보정. Firestore 저장/수정 없음.
-- 두 본문 모두 mount 상태 유지. unmount, hidden, width snapshot/freeze, clip 진단, content-visibility 추가 최적화 없음.
-- 분할바/비율/좌우 rail/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-- 테스트 판정: 이 조합이 Studio 조합보다 확실히 빠르면 Studio 본문이 주 병목. 비슷하게 느리면 두 실콘텐츠 동시 리사이즈/분할 경로 자체의 비용 비중이 큼.
-
-
-## 678차 — 677 빈 왼쪽 수정 / 실제 최근 생성곡 직접 주입 최종 대조
-
-- 기준: 677차. 677의 분할 배치 구조는 유지하고, 왼쪽 최근 생성곡이 비어 버린 원인만 수정.
-- 677은 Music Note/Library 진입 뒤 전역 `result` 상태를 `setResult()`로 복구하려 했지만, 정상 workspace lifecycle에서 그 상태가 다시 비거나 늦게 반영될 수 있어 왼쪽 실제 본문이 렌더되지 않았다.
-- 678은 전역 상태를 수정하지 않는다. 현재 `result` → `resultRef.current` → `history` → `historyRef.current` 순서로 이미 메모리에 존재하는 실제 `SongResult` 객체를 선택하고, 기존 최근 생성곡 렌더러에 직접 인자로 전달한다.
-- 최근 생성곡 JSX는 677에서 추출한 단일 렌더러를 그대로 사용하되, 함수 내부에서 전달받은 실제 `SongResult`를 지역 `result`로 사용한다. 별도 복제 화면/iframe/fallback UI 없음.
-- 왼쪽 = 실제 최근 생성곡 결과 본문, 오른쪽 = 기존 Music Note 또는 Library 실제 본문. 양쪽 모두 mount 유지.
-- hidden/unmount, width freeze/snapshot, clip 진단, 새 성능 UI, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-- 678의 목적은 오직 `최근 생성곡 + 뮤직노트/라이브러리`의 최종 대조 실험이며, 677은 빈 왼쪽 때문에 판정에서 제외한다.
+- 기준: 668차 clean ZIP.
+- 676~678의 빈 왼쪽 문제를 버리고 새로 구성했다.
+- 새 테스트 UI를 만들지 않고, 기존 `StudioResultPane`의 실제 최근 생성곡 렌더러 자체를 왼쪽 pane으로 이동한다.
+- 오른쪽에는 기존 `HistoryRouteWrapper` 또는 `SunoLibraryPageLazy` 실제 본문을 그대로 mount한다.
+- 최근 생성곡 `result`가 비어 있으면 메모리 history → 계정 로컬 캐시 → `user_recent_songs/{uid}` 1회 읽기 순서로 기존 곡을 복구한다. Firestore 쓰기는 하지 않는다.
+- 기존 접힘 저장값 때문에 테스트 pane이 사라지지 않도록 679 대조실험 동안에만 두 pane을 펼친 상태로 계산하며, 저장된 접힘 설정 자체는 변경하지 않는다.
+- 숨김/unmount/freeze/폭 고정/669식 clipping을 사용하지 않는다.
+- 검증 마커: `SORIDRAW_VERIFY_679: REAL_RECENT_LEFT_REAL_NOTE_LIBRARY_RIGHT`.

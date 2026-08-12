@@ -2021,10 +2021,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
 
 
-## 684 - ResizeObserver completed-layout reuse (2026-08-13)
-- Basis: 683 (clean 668 behavior).
-- Uses the already-available ResizeObserver border-box width during continuous native window resizing instead of immediately calling `getBoundingClientRect()` on the workspace/rail again.
-- Full exact left/rail/modal geometry still refreshes on rail breakpoint changes and once at resize settle.
-- `contentResponsive` now consumes `borderBoxSize.inlineSize` directly when supported.
-- Visible resizing remains live; no width freeze, clipping, body removal, or delayed settle-only UI.
-- Firebase/Auth/Firestore/Functions/storage schema untouched.
+## 685차 — 마우스/터치 입력 소유권 분리 · 태블릿 혼합 상태 제거 (2/5)
+- 기준: 683차 clean. 684의 강제 동기 레이아웃 실험은 체감 개선이 없어 이어받지 않았다.
+- 목적: PC 마우스 최적화가 실제 태블릿 손터치 경로에 침범하거나, 반대로 터치 주 입력 환경 변경이 실행 중 split engine을 바꾸는 혼합 상태를 제거한다.
+- `StudioSplitWorkspace`와 `LiteStudioSplitWorkspace`의 `(hover:hover) and (pointer:fine)` 사전 판정을 제거하고, 분할바 `pointerdown`에서 받은 실제 `event.pointerType`을 해당 제스처 동안만 고정한다.
+- 661~1080px 마우스 전용 tablet fast path / adaptive cadence / 로컬 floating-action geometry는 실제 `pointerType === 'mouse'` 드래그에서만 동작한다. 손가락/펜은 그 경로를 타지 않는다.
+- 마우스는 `getCoalescedEvents()`의 최신 좌표를 사용할 수 있지만, touch/pen은 기존 raw PointerEvent 좌표 경로를 유지한다. 두 입력은 한 드래그 도중 섞이지 않는다.
+- App의 자동 split-engine 주 입력 판정은 앱 마운트 시 한 번만 고정한다. 하이브리드 장치에서 마우스 연결/해제 등으로 pointer/hover media query가 바뀌어도 실행 중 split engine을 remount하지 않는다. 화면 폭 기반 PC/Tablet/Mobile 반응형 변화는 기존처럼 실시간 유지한다.
+- 외부창 리사이즈 중에는 활성 pointer gesture가 없으므로 마우스 전용 tablet fast path가 개입하지 않는다.
+- UI/디자인/테두리, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

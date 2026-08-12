@@ -141,9 +141,11 @@ export default function StudioSplitWorkspace({
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
   const draggingRef = useRef(false);
-  const finePointerFastPathRef = useRef(
-    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
-  );
+  // 685: never infer the active drag source from global media queries.
+  // On hybrid devices `(pointer: fine)` may describe the primary mouse even
+  // while the current gesture is a finger touch. Lock the real PointerEvent
+  // source at pointerdown and use it for the lifetime of that gesture only.
+  const activePointerTypeRef = useRef<string | null>(null);
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -168,7 +170,6 @@ export default function StudioSplitWorkspace({
   const dragLayoutIntervalRef = useRef(16);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
-  const observedLayoutWidthRef = useRef<number | null>(null);
   const builderModeAnchorFrameRef = useRef<number | null>(null);
   const builderModeScrollAnchorRef = useRef<{
     targetMode: PaneMode;
@@ -348,10 +349,12 @@ export default function StudioSplitWorkspace({
     // properties. 656/657 isolated the remaining slow state to a 661~1080px
     // pane. In that exact fine-pointer band, keep external live geometry local
     // to the element that consumes it, matching Lite V2's verified PROD path.
-    const useTabletProdParityPath = finePointerFastPathRef.current && (
-      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
-      || (resultWidth > 660 && resultWidth <= 1080)
-    );
+    const useTabletProdParityPath = draggingRef.current
+      && activePointerTypeRef.current === 'mouse'
+      && (
+        (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+        || (resultWidth > 660 && resultWidth <= 1080)
+      );
 
     // The page masthead is outside the split layout and therefore cannot inherit
     // the builder pane's temporary inline width. Mirror the live builder width
@@ -832,7 +835,10 @@ export default function StudioSplitWorkspace({
     // pane whose live width is 661~1080px. CSS uses this marker only while an
     // active divider drag is in progress; resting tablet UI remains unchanged.
     const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = finePointerFastPathRef.current && paneWidth > 660 && paneWidth <= 1080;
+      const active = draggingRef.current
+        && activePointerTypeRef.current === 'mouse'
+        && paneWidth > 660
+        && paneWidth <= 1080;
       if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
       else delete pane.dataset.soridrawPaneTabletFastpath;
     };
@@ -982,43 +988,23 @@ export default function StudioSplitWorkspace({
     return nextPercent;
   }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
 
-  const refreshLayoutMetrics = useCallback((observedWidth?: number) => {
+  const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout || !isStudioBlack()) {
       clearRootMeasurements();
       return;
     }
 
-    const continuousWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
-    const canUseObservedWidth = continuousWindowResize
-      && Number.isFinite(observedWidth)
-      && Number(observedWidth) > 0
-      && metricsRef.current.width > 0;
-
-    if (canUseObservedWidth) {
-      // 684: the ResizeObserver callback already ran after Chromium completed
-      // layout for the new viewport width. Re-reading layout/rail rects here
-      // forces a second synchronous layout on the same resize frame. The split
-      // workspace left edge is stable during an ordinary horizontal resize; any
-      // rail breakpoint change is separately owned by soridraw-studio-frame-resize
-      // and performs a full exact refresh. Therefore consume only the observer's
-      // border-box width while the gesture is active.
-      metricsRef.current = {
-        ...metricsRef.current,
-        width: Math.max(Number(observedWidth), 1),
-      };
-    } else {
-      refreshWorkspaceIsolation();
-      const rect = layout.getBoundingClientRect();
-      syncCenterModalHostBounds();
-      const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
-      const leftRailRect = leftRail?.getBoundingClientRect();
-      metricsRef.current = {
-        left: rect.left,
-        width: Math.max(rect.width, 1),
-        leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
-      };
-    }
+    refreshWorkspaceIsolation();
+    const rect = layout.getBoundingClientRect();
+    syncCenterModalHostBounds();
+    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+    const leftRailRect = leftRail?.getBoundingClientRect();
+    metricsRef.current = {
+      left: rect.left,
+      width: Math.max(rect.width, 1),
+      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+    };
 
     const nextProfile = getSplitProfile();
     const profileChanged = splitProfileRef.current !== nextProfile;
@@ -1039,8 +1025,6 @@ export default function StudioSplitWorkspace({
         : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearExternalMeasurements();
-    // Vertical/footer geometry is deliberately settled only after the native
-    // resize marker ends; scheduleFooterBoundaryRefresh already enforces that.
     scheduleFooterBoundaryRefresh();
   }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
 
@@ -1048,12 +1032,9 @@ export default function StudioSplitWorkspace({
     if (layoutRefreshFrameRef.current !== null) return;
     layoutRefreshFrameRef.current = window.requestAnimationFrame(() => {
       layoutRefreshFrameRef.current = null;
-      const observedWidth = observedLayoutWidthRef.current;
-      observedLayoutWidthRef.current = null;
-      refreshLayoutMetrics(observedWidth ?? undefined);
+      refreshLayoutMetrics();
     });
   }, [refreshLayoutMetrics]);
-
 
   useLayoutEffect(() => {
     percentRef.current = percent;
@@ -1164,30 +1145,13 @@ export default function StudioSplitWorkspace({
   }, [syncResultTitleHeight]);
 
   useEffect(() => {
-    const observer = new ResizeObserver((entries) => {
-      // 684: this observer also watches the footer, so consume only the actual
-      // split-workspace entry as horizontal geometry. A footer-only callback
-      // during native resize must not fall back to a full synchronous rect read.
-      const layout = layoutRef.current;
-      const entry = layout ? entries.find((candidate) => candidate.target === layout) : undefined;
-      const borderBox = Array.isArray(entry?.borderBoxSize)
-        ? entry.borderBoxSize[0]
-        : entry?.borderBoxSize;
-      const observedWidth = Number(borderBox?.inlineSize);
-      if (Number.isFinite(observedWidth) && observedWidth > 0) {
-        observedLayoutWidthRef.current = observedWidth;
-      } else if (document.documentElement.classList.contains('soridraw-window-resizing')) {
-        return;
-      }
+    const observer = new ResizeObserver(() => {
       // Browser resize and rail/layout changes can produce several observer
       // callbacks in the same frame. The Studio geometry owner commits at most
       // once per animation frame.
       if (!draggingRef.current) scheduleLayoutMetricsRefresh();
     });
-    if (layoutRef.current) {
-      try { observer.observe(layoutRef.current, { box: 'border-box' }); }
-      catch { observer.observe(layoutRef.current); }
-    }
+    if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
     if (footer) observer.observe(footer);
 
@@ -1222,7 +1186,6 @@ export default function StudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
-        observedLayoutWidthRef.current = null;
         scheduleLayoutMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1233,7 +1196,6 @@ export default function StudioSplitWorkspace({
     // new grid width synchronously when StudioPageFrame signals it so the
     // builder pixel width cannot spend one paint at the previous rail geometry.
     const handleStudioFrameResize = () => {
-      observedLayoutWidthRef.current = null;
       if (!draggingRef.current) refreshLayoutMetrics();
     };
 
@@ -1326,7 +1288,7 @@ export default function StudioSplitWorkspace({
     if (lastDragBuilderPixelRef.current === nextBuilderPixel && !forceLayout) return;
 
     const nextResultPixel = Math.max(0, safeWidth - nextBuilderPixel);
-    const inConfirmedTabletHotBand = finePointerFastPathRef.current && (
+    const inConfirmedTabletHotBand = activePointerTypeRef.current === 'mouse' && (
       (nextBuilderPixel > 660 && nextBuilderPixel <= 1080)
       || (nextResultPixel > 660 && nextResultPixel <= 1080)
     );
@@ -1405,6 +1367,8 @@ export default function StudioSplitWorkspace({
     const rect = layoutRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
 
+    activePointerTypeRef.current = event.pointerType || 'unknown';
+
     metricsRef.current = {
       left: rect.left,
       width: rect.width,
@@ -1452,7 +1416,7 @@ export default function StudioSplitWorkspace({
         actionGutter,
       );
       const currentResultWidth = Math.max(0, metricsRef.current.width - builderRect.width);
-      const seedTabletProdParityPath = finePointerFastPathRef.current && (
+      const seedTabletProdParityPath = activePointerTypeRef.current === 'mouse' && (
         (builderRect.width > 660 && builderRect.width <= 1080)
         || (currentResultWidth > 660 && currentResultWidth <= 1080)
       );
@@ -1481,12 +1445,13 @@ export default function StudioSplitWorkspace({
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== dragRef.current.pointerId) return;
     const nativeEvent = event.nativeEvent as PointerEvent;
-    const coalesced = typeof nativeEvent.getCoalescedEvents === 'function'
-      ? nativeEvent.getCoalescedEvents()
-      : [];
-    const latestEvent = coalesced.length > 0 ? coalesced[coalesced.length - 1] : nativeEvent;
-    previewSplitterAtClientX(latestEvent.clientX);
-    schedulePointerUpdate(latestEvent.clientX);
+    let clientX = event.clientX;
+    if (activePointerTypeRef.current === 'mouse' && typeof nativeEvent.getCoalescedEvents === 'function') {
+      const coalesced = nativeEvent.getCoalescedEvents();
+      if (coalesced.length > 0) clientX = coalesced[coalesced.length - 1].clientX;
+    }
+    previewSplitterAtClientX(clientX);
+    schedulePointerUpdate(clientX);
   };
 
   const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -1506,6 +1471,9 @@ export default function StudioSplitWorkspace({
     builderDragScrollAnchorRef.current = null;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
+    if (builderRef.current) delete builderRef.current.dataset.soridrawPaneTabletFastpath;
+    if (resultRef.current) delete resultRef.current.dataset.soridrawPaneTabletFastpath;
+    activePointerTypeRef.current = null;
     lastDragBuilderPixelRef.current = null;
     const builderWidth = builderCollapsedRef.current
       ? 0

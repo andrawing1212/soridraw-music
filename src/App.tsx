@@ -4215,17 +4215,13 @@ function App() {
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const pointerQuery = window.matchMedia('(pointer: coarse)');
-    const hoverQuery = window.matchMedia('(hover: none)');
-    const syncAutomaticSplitEngine = () => setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
-    syncAutomaticSplitEngine();
-    pointerQuery.addEventListener('change', syncAutomaticSplitEngine);
-    hoverQuery.addEventListener('change', syncAutomaticSplitEngine);
-    return () => {
-      pointerQuery.removeEventListener('change', syncAutomaticSplitEngine);
-      hoverQuery.removeEventListener('change', syncAutomaticSplitEngine);
-    };
+    // 685: latch the primary input environment for the mounted Studio session.
+    // Hybrid Windows/tablet devices can change `(pointer)` / `(hover)` media
+    // answers when a mouse is connected, removed, or promoted as primary.
+    // Remounting the split engine in response to that change mixes the mouse and
+    // touch geometry paths. Viewport/tablet responsive mode remains fully live;
+    // only the split-engine owner stays stable until the next app mount.
+    setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
   }, []);
 
   const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>

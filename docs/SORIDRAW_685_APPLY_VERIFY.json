@@ -1,0 +1,21 @@
+{
+  "version": 685,
+  "basis": "SORIDRAW_683차_668클린복귀_Firestore캐시원복.zip",
+  "attempt": "2/5",
+  "goal": "Separate real mouse/touch pointer ownership from responsive tablet width so mouse-only fast paths cannot leak into touch or outer-window resize.",
+  "changed_files": [
+    "src/App.tsx",
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "README.md"
+  ],
+  "contracts": [
+    "No matchMedia fine-pointer fast-path refs remain in either split workspace.",
+    "Actual event.pointerType is latched on pointerdown and cleared on pointerup/cancel.",
+    "Mouse-only 661-1080 fast paths require an active mouse gesture.",
+    "Touch/pen do not use mouse coalesced-coordinate correction.",
+    "Automatic split engine no longer changes live from pointer/hover media-query change events.",
+    "Viewport responsive behavior remains live and unchanged.",
+    "No Firebase/Auth/Firestore/Functions/storage schema changes."
+  ]
+}

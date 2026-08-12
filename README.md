@@ -2019,3 +2019,19 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+## SORIDRAW 680 — outer-resize local geometry / root-write suppression A/B
+
+Basis: clean 668 ZIP.
+
+This experiment preserves the current real-time browser-window resize behavior but changes only how live split geometry is published while the native resize gesture is active.
+
+- `StudioSplitWorkspace` and `LiteStudioSplitWorkspace` stop writing the seven split coordinate custom properties to `<html>` while `soridraw-window-resizing` is active.
+- Builder/result panes, fixed splitter, masthead/search geometry and floating generation controls continue to move live through pane-local / element-local writes on every layout frame.
+- The floating generation bar captures its anchor relationship once at native resize start; it does not re-measure that relationship every frame.
+- Lite V2 no longer force-dispatches pane-width events every outer-resize frame; only actual responsive-mode crossings publish during the gesture, followed by one forced final publication at settle.
+- 110 ms after native resize activity settles, the existing resize-end path removes the marker, commits one final stable root geometry snapshot, and clears temporary local geometry.
+- Divider dragging behavior is not changed. No freeze/snapshot/clipping/unmount technique is used.
+- Firebase/Auth/Firestore/Functions/storage schema are unchanged.
+
+Verification marker: `SORIDRAW_VERIFY_680: OUTER_RESIZE_LOCAL_GEOMETRY_ROOT_WRITE_ZERO`.

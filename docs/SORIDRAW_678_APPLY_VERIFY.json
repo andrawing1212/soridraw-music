@@ -1,0 +1,31 @@
+{
+  "version": 678,
+  "baseline": "SORIDRAW_677차_668기준_최종대조_최근생성곡_뮤직노트라이브러리_양면실콘텐츠.zip",
+  "purpose": "Fix the invalid empty-left 677 control and render the real in-memory Recent Songs result on the left while Music Note/Library remains fully mounted on the right.",
+  "expected_conditions": {
+    "left": "real Recent Songs/generated-result JSX with a real in-memory SongResult passed directly to the existing renderer",
+    "right": "existing Music Note or Library body unchanged",
+    "both_bodies_mounted": true,
+    "no_global_result_state_mutation_for_probe": true,
+    "no_iframe_or_clone": true,
+    "no_body_unmount_or_hidden": true,
+    "no_width_snapshot_or_freeze": true,
+    "no_new_diagnostic_ui": true,
+    "firebase_auth_firestore_functions_storage_unchanged": true
+  },
+  "implementation_checks": [
+    "SORIDRAW_VERIFY_678 marker exists in App.tsx",
+    "probe source uses result/resultRef/history/historyRef and never calls setResult for the probe",
+    "render678RecentSongsContent(sourceResult) shadows local result and reuses the existing extracted Recent renderer",
+    "left probe call passes recentResultFor678 directly",
+    "right Music Note/Library rendering path is unchanged from 677"
+  ],
+  "sha256": {
+    "src/App.tsx": "6853889a5cd07a4c838b960bdae6c39231a6d65fa105241c1f9b587629d1f047",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx": "8a1628138fdc03fcc30fe9aebd3c9fafa67aebeedff87922119033beb47eb42e",
+    "src/components/studio/StudioSplitWorkspace.tsx": "e3f4cb9a752ce438ac9cddd035c8237b2b02528e029c35be5bdbba706c12fbfd",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "118d0b309f188df3753aed1eb0160da2eb354fbee8b5d90e7a0308be71cdd11e",
+    "src/components/studio/studioLayout.css": "2a4ff00ac3e4ebf22398caea503a742f5f58db8bad716b5a428023e555511183",
+    "README.md": "2b4757d84e9b853af48588fab251281b4bd1a9ddbb5ede887fc71d28a0bdd0c2"
+  }
+}

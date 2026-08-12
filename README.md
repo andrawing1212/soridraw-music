@@ -2031,3 +2031,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 분할바/비율/좌우 rail/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 - 테스트 판정: 이 조합이 Studio 조합보다 확실히 빠르면 Studio 본문이 주 병목. 비슷하게 느리면 두 실콘텐츠 동시 리사이즈/분할 경로 자체의 비용 비중이 큼.
 
+
+## 678차 — 677 빈 왼쪽 수정 / 실제 최근 생성곡 직접 주입 최종 대조
+
+- 기준: 677차. 677의 분할 배치 구조는 유지하고, 왼쪽 최근 생성곡이 비어 버린 원인만 수정.
+- 677은 Music Note/Library 진입 뒤 전역 `result` 상태를 `setResult()`로 복구하려 했지만, 정상 workspace lifecycle에서 그 상태가 다시 비거나 늦게 반영될 수 있어 왼쪽 실제 본문이 렌더되지 않았다.
+- 678은 전역 상태를 수정하지 않는다. 현재 `result` → `resultRef.current` → `history` → `historyRef.current` 순서로 이미 메모리에 존재하는 실제 `SongResult` 객체를 선택하고, 기존 최근 생성곡 렌더러에 직접 인자로 전달한다.
+- 최근 생성곡 JSX는 677에서 추출한 단일 렌더러를 그대로 사용하되, 함수 내부에서 전달받은 실제 `SongResult`를 지역 `result`로 사용한다. 별도 복제 화면/iframe/fallback UI 없음.
+- 왼쪽 = 실제 최근 생성곡 결과 본문, 오른쪽 = 기존 Music Note 또는 Library 실제 본문. 양쪽 모두 mount 유지.
+- hidden/unmount, width freeze/snapshot, clip 진단, 새 성능 UI, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 678의 목적은 오직 `최근 생성곡 + 뮤직노트/라이브러리`의 최종 대조 실험이며, 677은 빈 왼쪽 때문에 판정에서 제외한다.

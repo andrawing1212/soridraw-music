@@ -1,3 +1,64 @@
+## 658차 — Studio 태블릿 PROD 패리티 · 루트 CSS 변수 hot-path 제거
+
+- 기준: 657차. 656에서 실제 pane 661~1080px 본문이 병목임을 확정했고, 657에서 AI Studio의 Studio 체감은 크게 개선되었지만 Vercel 테스트앱은 같은 수준까지 따라오지 못했다.
+- 590/591의 DEV/PROD A/B에서 검증된 원리를 재사용한다. production에서 매 프레임 상속되는 root CSS custom property 좌표가 자손 style/layout 재계산을 크게 키웠고, 좌표를 실제 소비 요소에 직접/local로 주면 PROD가 크게 개선됐다.
+- PC fine-pointer에서 builder 또는 result 실제 pane이 661~1080px인 동안, Legacy Studio의 하단 생성바 live 좌표를 `<html>` root 변수에 매 프레임 쓰지 않고 floating portal 자체의 `--soridraw-action-fixed-left/width`에 직접 기록한다. pointer-up에서는 기존처럼 최종 root 좌표를 1회 커밋하므로 정지 상태와 저장 구조는 그대로다.
+- Studio Black 데스크톱에서 이미 `display:none`인 body live-keyword portal의 left/right 매 프레임 쓰기도 해당 hot band에서 생략한다.
+- 657의 본문 layout/paint 격리, pane breakpoint, 분할 geometry, 대문/검색/분할바 좌표, Galaxy Tab Touch Lite V2, 646 모바일 단일 UI는 변경하지 않았다. Music Note/Library의 Lite 경로도 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음.
+
+## 657차 — 실제 pane 태블릿 구간 본문 유지 실사용 최적화
+
+- 기준: 656차. 656의 `display:none` 원인분리 테스트에서 661~1080px 실제 pane 본문이 빠지면 분할바가 확실히 빨라지는 것을 실사용 영상으로 확인했다.
+- 진단용 본문 숨김을 완전히 제거했다. 장르/스타일/사운드/스토리보드/템포, Music Note, Suno Library 콘텐츠는 드래그 중에도 그대로 보인다.
+- `window` 폭이 아니라 split engine이 이미 계산한 실제 pane 폭 661~1080px만 fast-path 표식으로 사용한다. 별도 ResizeObserver, window.resize, 타이머, React state 경로는 추가하지 않았다.
+- 활성 드래그 동안에만 Studio 본문, 메뉴 카드, Music Note/Library 상단/리스트/그룹을 독립 `layout/style/paint` 경계로 격리하고, off-screen 카드/행은 `content-visibility:auto`로 마지막 실측 높이를 재사용한다.
+- 519에서 검증된 것처럼 화면 구성을 소유하지 않는 메뉴 summary/live-keyword 보조 container query만 드래그 중 정지한다. 메인 builder container query와 실제 tablet UI 전환은 유지한다.
+- 분할 geometry, breakpoint, PC/Tablet/Mobile 디자인, Galaxy Tab Touch Lite V2, 646 모바일 단일 UI, Firebase/Auth/Functions/저장 구조는 변경하지 않았다.
+
+## 656차 — 실제 pane 폭 661~1080px 태블릿 병목 단일변수 테스트
+- 기준: 655차. 655의 `window 1100~1599px` CSS 진단은 제거했습니다. 그 방식은 큰 PC 창에서 분할바만 움직여 pane이 태블릿 폭이 되는 실제 증상 경로를 테스트하지 못했습니다.
+- Legacy/Lite 두 분할 엔진이 이미 계산한 builder/result 실제 pane 폭을 그대로 사용합니다. fine pointer PC에서 pane 폭이 `661~1080px`일 때만 해당 pane에 `data-soridraw-pane-tablet-probe=true`를 붙입니다. 별도 ResizeObserver, window.resize, 타이머, getBoundingClientRect 진단 경로는 추가하지 않았습니다.
+- probe가 켜진 pane은 masthead/분할 shell/divider는 유지하고 무거운 본문 direct child만 임시로 `display:none` 처리합니다. 따라서 넓은 PC 창을 유지한 채 분할바를 움직여도 실제 pane 태블릿 구간에서 테스트가 걸립니다.
+- AI Studio와 Vercel 모두 동일한 pane data attribute + CSS 한 경로를 사용합니다. 실제 Galaxy Tab/coarse pointer에는 probe를 적용하지 않습니다.
+- 테스트 목적: 이 상태에서 Vercel도 661~1080px pane 구간이 확 빨라지면 병목은 태블릿 내부 body reflow/paint 쪽으로 확정합니다. 본문이 사라져도 Vercel이 그대로 느리면 frame/split geometry/portal 외부 UI 쪽으로 범위를 확정합니다.
+- Firebase/Auth/Functions/저장 구조 변경 없음. 진단 전용이며 정식 배포용 변경이 아닙니다.
+
+## 655차 — AI Studio / Vercel 태블릿 성능갭 CSS-only 단일변수 검증
+- 기준: 654차. 654의 `window.resize + 140ms timer + soridraw-tablet-resize-probe` 진단 경로는 제거했습니다.
+- 587~591에서 DEV/PROD 갭을 좁힐 때 사용했던 단일변수 A/B 원칙을 다시 적용합니다. 이번 차수는 JS/React/타이머를 거치지 않고 production bundle에도 동일하게 들어가는 순수 CSS media query만 사용합니다.
+- fine-pointer PC의 1100~1599px에서 Studio/Recent/Music Note/Library의 무거운 pane body를 항상 layout/paint에서 제외하고 masthead/pane shell/divider만 남깁니다. 따라서 이 구간에서는 내부 본문이 비어 보이는 것이 정상인 진단본입니다.
+- AI Studio와 Vercel에서 둘 다 본문이 빠지고 속도도 빨라지면 654의 native resize probe가 PROD에서 동일하게 작동하지 않은 것으로 확정합니다. Vercel에서도 본문이 빠졌는데 여전히 느리면 내부 page body가 주원인이 아니며 frame/rail/navigation/split geometry 쪽으로 범위를 확정합니다.
+- 분할 엔진 선택, 저장된 percent, pane responsive 판정, Firebase/Auth/Firestore/Functions/사용자 데이터 구조는 변경하지 않습니다.
+
+## 654차 — PC 태블릿 1100~1599 빈껍데기 테스트 시각 복구
+
+- 기준: 650차
+- 653차의 전체 검은 화면 테스트는 폐기했다.
+- fine-pointer PC에서 외부창을 1100~1599px 구간으로 리사이즈하는 동안 Builder/Result의 무거운 본문만 DOM 레이아웃/페인트에서 임시 제외한다.
+- 대문/검색이 있는 masthead, pane shell, 분할선은 유지해 실제 리사이즈 움직임을 눈으로 확인할 수 있게 했다.
+- 리사이즈 종료 약 140ms 뒤 본문을 즉시 복구한다.
+- 실제 태블릿/터치, 1600px 이상 PC, 1099px 이하 모바일에는 적용하지 않는다.
+- 최종 제품 동작이 아니라 병목 위치를 가르는 1회성 진단본이다.
+- Firebase/Auth/Functions/저장 구조 변경 없음.
+
+## 650차 — 649 완전 롤백 + 외부창 수평 리사이즈 중복경로 제거
+
+- 기준은 `SORIDRAW_648차_647롤백_PC태블릿_공통루트재렌더억제.zip`입니다. 649차에서 추가한 geometry-only fast path, Lite 전역 `soridraw-window-resizing` 마커, 110ms 지연 커밋은 전부 폐기했습니다.
+- 649 실사용 영상에서 1100~1599px뿐 아니라 큰 PC 폭까지 더 느려진 원인은, 이미 workspace `ResizeObserver`가 수평 폭 변화를 소유하는 상태에서 native `window.resize`가 같은 수평 변화마다 별도의 geometry/settle 경로를 추가로 실행한 중복 소유권이었습니다. Lite 경로까지 전역 resize 마커와 지연 커밋을 추가하면서 App/하위 측정까지 110ms 동안 멈췄다가 다시 계산되어 체감 지연이 더 커졌습니다.
+- Legacy `StudioSplitWorkspace`는 488/637에서 검증됐던 원칙으로 복귀했습니다. **수평 외부창 리사이즈는 workspace ResizeObserver 한 경로만 사용**하고, native resize는 viewport 높이가 실제로 변할 때만 전체 metrics를 요청합니다. resize 중 transition/container 부하를 줄이는 기존 마커와 종료 후 1회 최종 동기화는 유지합니다.
+- Lite `LiteStudioSplitWorkspace`도 같은 원칙으로 정리했습니다. 수평 폭 변화는 layout ResizeObserver만 소유하고, native window.resize는 높이 변화 때만 보조합니다. 647처럼 엔진을 바꾸거나 649처럼 별도 fast-path geometry를 추가하지 않았습니다.
+- 638에서 통과한 좌우 메뉴 접기/펼치기 동기화용 `soridraw-studio-frame-resize` 즉시 갱신, 641~644 대문/검색 정렬, 646 모바일 단일 UI, 648 App 루트 분할드래그 억제는 그대로 유지합니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
+## 648차 — 647 롤백 + PC 태블릿 분할 드래그 App 루트 재렌더 억제
+- 기준은 646차입니다. 647차의 `1100~1599px PC 전체를 Galaxy Tab Adaptive Lite V2로 교체`한 변경은 전부 폐기했습니다. 따라서 Music Note/Library의 기존 `library-590` 경로, Sori Studio/Recent의 Legacy 경로, 분할바 좌표/화면 축소 반응을 646 상태로 복구합니다.
+- 647 실사용 결과에서 속도 개선은 없고 Music Note 축소 반응과 분할바 추적만 달라졌으므로, 병목이 split engine 자체가 아니라 1100~1599px 공통 responsive 전환 쪽이라는 근거로 판단했습니다.
+- 새 최적화는 `src/App.tsx`의 기존 623/624 App-root 상태 미러 억제 원리만 공통화합니다. 1100~1599px에서 Legacy/Lite 어느 엔진이든 분할바를 잡고 있는 동안 `data-soridraw-builder-mode` 변화는 CSS에 즉시 반영하되 App 전체 React 상태(`isSplitBuilderActionMobile`) 갱신은 보류하고, `soridraw-split-drag-end`에서 1회만 동기화합니다.
+- PC >=1600px, 모바일 <1100px, Galaxy Tab touch 경로, split percent/좌표, pane responsive 판정, Music Note/Library 데이터 구조, Firebase/Auth/Functions/Firestore 저장 구조는 변경하지 않습니다.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
+
 ## 646차 — 분할모드 모바일폭을 실제 모바일 UI 구조로 완전 분리
 
 - 기준 ZIP: `SORIDRAW_645차_분할모드_모바일폭_단일페이지구조분리.zip`

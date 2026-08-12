@@ -3998,12 +3998,23 @@ function App() {
       // legacy `soridraw-split-dragging` class. Include both verified drag
       // markers and return before either React state setter. CSS/root datasets
       // continue reacting live; React mirrors catch up once on pointer-up.
+      const splitDragActive = root.classList.contains('soridraw-lite-split-dragging')
+        || root.classList.contains('soridraw-split-dragging');
+      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1600;
+      const tabletSplitDragActive = splitDragActive && viewportWidth >= 1100 && viewportWidth < 1600;
       const musicNoteDragActive = root.dataset.soridrawStudioWorkspaceView === 'music-note'
-        && (
-          root.classList.contains('soridraw-lite-split-dragging')
-          || root.classList.contains('soridraw-split-dragging')
-        );
-      if (!force && musicNoteDragActive) return;
+        && splitDragActive;
+
+      // 648: do not mirror pane-mode changes into App-level React state while
+      // the divider is actively moving inside the shared 1100~1599 tablet band.
+      // The root data-soridraw-builder-mode attribute still changes immediately,
+      // so CSS keeps the live compact/desktop visual response. Only the expensive
+      // App-root React mirror waits until soridraw-split-drag-end, where it is
+      // synchronized once. This is the same already-verified rerender-suppression
+      // principle used by 623/624, now applied to the shared tablet band rather
+      // than swapping PC to the Galaxy Tab split engine. Wide PC behavior and
+      // the existing Music Note protection remain unchanged.
+      if (!force && (tabletSplitDragActive || musicNoteDragActive)) return;
 
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
       setIsStudioBlackActionMode(isStudioBlack);

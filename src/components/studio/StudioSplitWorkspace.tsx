@@ -140,11 +140,12 @@ export default function StudioSplitWorkspace({
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
-  // 671 A/B probe: during an OUTER browser-window resize, temporarily unmount
-  // only the Builder body while leaving the masthead, Result body, split shell,
-  // rails and divider mounted. This is intentionally a one-variable diagnostic:
-  // if resize speed jumps, Builder or Builder+Result interaction is implicated;
-  // if it does not, the Result side becomes the next isolation target.
+  // SORIDRAW_VERIFY_672: SHARED_BUILDER_ONLY_OUTER_RESIZE_AB
+  // Diagnostic only: while the OUTER browser window is actively resizing,
+  // unmount only the left Sori Studio/Builder body. Keep its masthead, the
+  // entire right result body, shell, rails and divider mounted. The same test
+  // condition is mirrored in LiteStudioSplitWorkspace so Recent, Music Note
+  // and Library can finally be compared under one identical A/B condition.
   const [builderResizeProbeActive, setBuilderResizeProbeActive] = useState(false);
   const builderResizeProbeActiveRef = useRef(false);
   const draggingRef = useRef(false);
@@ -1170,12 +1171,14 @@ export default function StudioSplitWorkspace({
     let resizeEndTimer: number | null = null;
     const handleViewportResize = () => {
       const root = document.documentElement;
+      // 672: activate the Builder-only A/B independently of which workspace
+      // listener happened to add the shared resize marker first.
+      if (!builderResizeProbeActiveRef.current) {
+        builderResizeProbeActiveRef.current = true;
+        setBuilderResizeProbeActive(true);
+      }
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
-        if (!builderResizeProbeActiveRef.current) {
-          builderResizeProbeActiveRef.current = true;
-          setBuilderResizeProbeActive(true);
-        }
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
 
@@ -1607,9 +1610,7 @@ export default function StudioSplitWorkspace({
     ><span /></button>
   );
 
-  const suppressBuilderBodyForResizeProbe = builderResizeProbeActive
-    && viewMode === 'split'
-    && (workspaceView === 'create' || workspaceView === 'recent');
+  const suppressBuilderBodyForResizeProbe = builderResizeProbeActive && viewMode === 'split';
 
   return (
     <>

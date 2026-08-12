@@ -1,11 +1,10 @@
-## 671차 — 외부창 리사이즈 Builder 본문 단독 제거 A/B 진단
-- 기준: 668차. 669의 본문 폭 고정 방식과 670의 외부창 fast-path 확장은 사용하지 않습니다.
-- 목적: 667에서 "두 pane 본문을 제거하면 즉시 빨라진다"는 결과를 더 좁혀, Builder(곡 만들기) 단독 비용인지 Builder+Result 동시 배치 상호작용인지 확인합니다.
-- PC fine-pointer Studio의 외부 브라우저 창 리사이즈가 시작되면 **왼쪽 Builder 본문만** 일시적으로 React unmount합니다. Builder 대문/마스트헤드, 오른쪽 최근 생성곡 본문, 분할 shell, 분할바, 좌우 rail은 그대로 유지합니다.
-- 리사이즈가 110ms 멈추면 Builder 본문을 다시 mount하여 정상 화면으로 복구합니다. 매 픽셀마다 mount/unmount하지 않고 resize 시작/종료에만 1회 전환합니다.
-- Music Note/Library Lite 경로, 분할바 드래그 경로, breakpoint, pane 비율, 모바일 구조는 변경하지 않습니다.
-- 판정: 크게 빨라지면 Builder 단독 또는 Builder+Result 상호작용이 유력합니다. 차이가 없으면 다음 단계에서 오른쪽 Result 본문 단독 제거로 비교합니다.
-- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
+## 672차 — 세 화면 공통 Builder-only 외부창 A/B 진단
+- 기준: 668차. 671은 Legacy(최근 생성곡)만 검사해 Music Note/Library가 빠진 불완전 진단이므로 기준으로 사용하지 않습니다.
+- 외부 브라우저 창을 연속 resize하는 동안 왼쪽 `Sori Studio / 곡 만들기`의 **본문만** React에서 일시 unmount합니다. 대문/마스트헤드, 분할 shell, 분할바, 좌우 메뉴와 오른쪽 본문은 그대로 유지합니다.
+- 같은 A/B 조건을 `StudioSplitWorkspace`와 `LiteStudioSplitWorkspace` 양쪽에 넣어 `최근 생성곡`, `뮤직노트`, `라이브러리` 세 조합을 모두 동일하게 검사합니다.
+- resize 종료 110ms 후 왼쪽 본문을 즉시 복구합니다. 분할바 드래그에는 이 진단을 적용하지 않습니다.
+- 목적은 최적화가 아니라 원인 분리입니다. 세 화면 모두 빨라지면 Builder 공통 병목, 화면별 차이가 나면 오른쪽 화면/엔진과의 조합 병목 가능성을 좁힙니다.
+- breakpoint, 레이아웃 비율, 모바일 구조, Firebase/Auth/Firestore/Functions/사용자 저장 구조는 변경하지 않습니다.
 - 상태: 코드 반영 완료 · 테스트앱 실사용 검증 전.
 
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지

@@ -207,6 +207,13 @@ export default function LiteStudioSplitWorkspace({
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(() => readStoredCollapse(BUILDER_COLLAPSED_STORAGE_KEY));
   const [isResultCollapsed, setIsResultCollapsed] = useState(() => readStoredCollapse(RESULT_COLLAPSED_STORAGE_KEY));
+  // SORIDRAW_VERIFY_672: SHARED_BUILDER_ONLY_OUTER_RESIZE_AB
+  // Mirror the Legacy A/B exactly: during an OUTER browser resize, remove only
+  // the left Sori Studio/Builder body while Music Note or Library on the right
+  // remains fully mounted. This makes all three right-side workspaces comparable
+  // instead of testing Recent alone.
+  const [builderResizeProbeActive, setBuilderResizeProbeActive] = useState(false);
+  const builderResizeProbeActiveRef = useRef(false);
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const resultCollapsedRef = useRef(isResultCollapsed);
   const percentRef = useRef(readStoredPercent());
@@ -1354,6 +1361,12 @@ export default function LiteStudioSplitWorkspace({
     let resizeEndTimer: number | null = null;
     const handleWindowResize = () => {
       const root = document.documentElement;
+      // 672: activate locally even if another mounted workspace added the shared
+      // root marker first, so the test condition cannot silently miss Lite.
+      if (!builderResizeProbeActiveRef.current) {
+        builderResizeProbeActiveRef.current = true;
+        setBuilderResizeProbeActive(true);
+      }
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
@@ -1370,6 +1383,10 @@ export default function LiteStudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        if (builderResizeProbeActiveRef.current) {
+          builderResizeProbeActiveRef.current = false;
+          setBuilderResizeProbeActive(false);
+        }
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1390,6 +1407,7 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
+      builderResizeProbeActiveRef.current = false;
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -1505,6 +1523,8 @@ export default function LiteStudioSplitWorkspace({
     </button>
   );
 
+  const suppressBuilderBodyForResizeProbe = builderResizeProbeActive && viewMode === 'split';
+
   return (
     <>
       <div
@@ -1529,7 +1549,7 @@ export default function LiteStudioSplitWorkspace({
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}
           </div>
-          {panes[0] ?? null}
+          {suppressBuilderBodyForResizeProbe ? null : (panes[0] ?? null)}
         </div>
         <div
           id="soridraw-studio-result-pane"

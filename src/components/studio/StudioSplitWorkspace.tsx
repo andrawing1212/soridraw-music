@@ -140,17 +140,15 @@ export default function StudioSplitWorkspace({
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
-  // SORIDRAW_VERIFY_666: 665_PROD_TABLET_SHELL_PROBE_EXACT
-  // 665 PROD-only A/B: keep DEV completely unchanged, but in the deployed
-  // production build unmount the heavy Studio pane subtrees while a fine-pointer
-  // browser sits in the 1100~1599 tablet viewport. The media query only flips at
-  // the band edges, so there is no per-pixel React work during the resize itself.
-  const [prodTabletShellProbe, setProdTabletShellProbe] = useState(() => {
-    if (!import.meta.env.PROD || typeof window === 'undefined') return false;
-    return window.matchMedia(
-      '(min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine)',
-    ).matches;
-  });
+  // SORIDRAW_VERIFY_667: ACTUAL_PANE_661_1080_SHELL_PROBE
+  // 667 single-variable A/B: the prior 665/666 probe keyed off the browser
+  // viewport, but the confirmed slow state is owned by the actual split-pane
+  // width. Keep the shell/mastheads/splitter mounted and unmount only the heavy
+  // pane bodies when either live pane is 661~1080px on a fine-pointer device.
+  // This ignores DEV/PROD and outer-window width so the probe follows the real
+  // pane geometry that 656 already proved to be performance-sensitive.
+  const [paneTabletShellProbe, setPaneTabletShellProbe] = useState(false);
+  const paneTabletShellProbeRef = useRef(false);
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -215,21 +213,6 @@ export default function StudioSplitWorkspace({
 
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
-
-  useEffect(() => {
-    if (!import.meta.env.PROD || typeof window === 'undefined') {
-      setProdTabletShellProbe(false);
-      return;
-    }
-
-    const media = window.matchMedia(
-      '(min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine)',
-    );
-    const sync = () => setProdTabletShellProbe(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
 
   const syncCenterModalHostBounds = useCallback(() => {
     const host = modalHostRef.current;
@@ -834,6 +817,10 @@ export default function StudioSplitWorkspace({
     const splitter = splitterRef.current;
 
     if (!layout || !builder || !result || !isStudioBlack()) {
+      if (paneTabletShellProbeRef.current) {
+        paneTabletShellProbeRef.current = false;
+        setPaneTabletShellProbe(false);
+      }
       layout?.style.removeProperty('grid-template-columns');
       builder?.style.removeProperty('flex-basis');
       builder?.style.removeProperty('width');
@@ -851,6 +838,18 @@ export default function StudioSplitWorkspace({
         : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
+
+    // 667: follow the ACTUAL live pane width, not window.innerWidth.
+    // React state changes only when we cross the 661/1080 boundaries; there is
+    // no per-pixel setState loop during continuous resize/drag.
+    const nextPaneTabletShellProbe = finePointerFastPathRef.current && (
+      (builderWidth > 660 && builderWidth <= 1080)
+      || (resultWidth > 660 && resultWidth <= 1080)
+    );
+    if (paneTabletShellProbeRef.current !== nextPaneTabletShellProbe) {
+      paneTabletShellProbeRef.current = nextPaneTabletShellProbe;
+      setPaneTabletShellProbe(nextPaneTabletShellProbe);
+    }
 
     // 657: reuse the 656-proven pane-owned tablet band as a real drag fast path.
     // The split engine already knows both pane widths, so mark only a fine-pointer
@@ -1622,18 +1621,18 @@ export default function StudioSplitWorkspace({
       <div
         ref={layoutRef}
         data-workspace-view-mode={viewMode}
-        data-soridraw-prod-tablet-shell-probe={prodTabletShellProbe ? 'true' : 'false'}
+        data-soridraw-pane-tablet-shell-probe={paneTabletShellProbe ? 'true' : 'false'}
         className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
       >
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}
           </div>
-          {prodTabletShellProbe ? null : (panes[0] ?? null)}
+          {paneTabletShellProbe ? null : (panes[0] ?? null)}
         </div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
-          {prodTabletShellProbe ? null : (panes[1] ?? null)}
+          {paneTabletShellProbe ? null : (panes[1] ?? null)}
         </div>
       </div>
       {viewMode !== 'hidden' && (typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost)}

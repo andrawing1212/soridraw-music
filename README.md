@@ -1,3 +1,13 @@
+## 667차 — 실제 pane 폭 661~1080 본문 unmount 단일변수 검증
+- 기준: 666차.
+- 665/666의 `window.innerWidth 1100~1599 + PROD` 조건을 폐기하고, 이미 656에서 성능 민감 구간으로 확인된 **실제 Builder/Result pane 폭 661~1080px**만 기준으로 테스트합니다.
+- fine-pointer PC에서 Builder 또는 Result의 실제 live width가 `661~1080px`에 들어가면 masthead/pane shell/splitter는 유지하고 무거운 두 pane 본문만 React에서 unmount합니다.
+- DEV/PROD와 외부 브라우저 전체 폭은 판정에 사용하지 않습니다. 따라서 AI Studio와 Vercel 모두 동일한 실제 pane-width 조건을 사용합니다.
+- React state는 661/1080 경계 통과 때만 변경되며, 매 픽셀마다 setState하지 않습니다.
+- 테스트 목적: 본문이 사라진 상태에서 Vercel 리사이즈가 빨라지면 pane 본문 내부 병목, 그대로 느리면 Frame/Rail/Split shell 등 본문 바깥 병목으로 확정합니다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · 테스트앱 실사용 검증 전.
+
 ## 666차 — 665 정확복제 + GitHub 적용 검증 기준
 - 기준: 665차.
 - 665의 Vercel PROD 전용 1100~1599px Studio 본문 React unmount 단일변수 테스트 로직을 그대로 유지합니다.

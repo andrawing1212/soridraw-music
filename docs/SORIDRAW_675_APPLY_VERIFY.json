@@ -1,0 +1,35 @@
+{
+  "version": 675,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "actual Classic/Dark Studio Builder style-path A/B inside the existing Studio Black split shell",
+  "discarded_probe": 674,
+  "changed_files": [
+    "src/App.tsx",
+    "src/components/studio/ClassicDarkStudioBuilderProbe.tsx",
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx",
+    "README.md"
+  ],
+  "critical_sha256": {
+    "src/App.tsx": "504f7a934c70301cfa61f841cb83cf693ca47dedb32ea1236c338464fd58c2fc",
+    "src/components/studio/ClassicDarkStudioBuilderProbe.tsx": "98bff52e5e0e876362c4953fcb9ee830ee5be58b3b1ff262b5f935a46961f81b",
+    "src/components/studio/StudioSplitWorkspace.tsx": "62076f51d9d3e43c91cd243a291f78d62d876309c9619bf5fd0e76a3fee13a34",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "c167c4f38f109404a78ada4d3257a68ffb2708c72f6f53fa4d800e94d04636b1",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx": "19ca296109ad74de81b1b00da4a1fc58050cd0efc00411b12aa014ac3da3e21f",
+    "README.md": "3a633cbfd4867b30b92411496ff51bf287eca375f9871c2debdad4d652efeef6"
+  },
+  "guards": {
+    "right_pane": "668 unchanged",
+    "split_shell_divider_rails": "668 unchanged",
+    "compact_mobile_below_1100": "probe bypassed",
+    "iframe_or_second_app": false,
+    "firebase_auth_firestore_functions_storage_schema_changed": false,
+    "deployment_performed": false
+  },
+  "checks": {
+    "typescript_transpile_syntax": "PASS for 5 changed TS/TSX files",
+    "full_npm_build": "NOT_RUN: dependency install unavailable in artifact container; no node_modules in basis ZIP",
+    "user_live_test": "PENDING"
+  }
+}

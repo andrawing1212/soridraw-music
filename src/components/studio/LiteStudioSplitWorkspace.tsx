@@ -267,7 +267,12 @@ export default function LiteStudioSplitWorkspace({
   }, []);
 
   const syncResultTitleHeight = useCallback(() => {
-    if (draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return;
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+      || builderCollapsedRef.current
+      || resultCollapsedRef.current
+    ) return;
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result) return;
@@ -1340,16 +1345,35 @@ export default function LiteStudioSplitWorkspace({
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
-    // 650 — horizontal viewport changes are already owned by the observed Lite
-    // workspace box. Avoid a second native window.resize -> metrics refresh for
-    // the same width tick. The native listener remains only for viewport-height
-    // changes that may not resize the workspace box itself.
+    // 668 — one shared outer-window resize contract for Legacy and Lite.
+    // Horizontal geometry still belongs to ResizeObserver, but the native resize
+    // event owns only the start/end marker. That marker lets CSS suspend the
+    // expensive structural container-query layer while the browser is being
+    // continuously resized, then restore exact responsive detail once at settle.
     let lastViewportHeight = window.innerHeight;
+    let resizeEndTimer: number | null = null;
     const handleWindowResize = () => {
+      const root = document.documentElement;
+      if (!root.classList.contains('soridraw-window-resizing')) {
+        root.classList.add('soridraw-window-resizing');
+        window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
+      }
+
+      if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
+
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight === lastViewportHeight) return;
-      lastViewportHeight = nextViewportHeight;
-      scheduleMetricsRefresh();
+      if (nextViewportHeight !== lastViewportHeight) {
+        lastViewportHeight = nextViewportHeight;
+        scheduleMetricsRefresh();
+      }
+
+      resizeEndTimer = window.setTimeout(() => {
+        resizeEndTimer = null;
+        root.classList.remove('soridraw-window-resizing');
+        scheduleMetricsRefresh();
+        syncResultTitleHeight();
+        window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
+      }, 110);
     };
     // A rail toggle changes the Studio grid width immediately. Refresh the Lite
     // geometry in the same layout phase instead of one rAF later, otherwise the
@@ -1364,6 +1388,8 @@ export default function LiteStudioSplitWorkspace({
       observer?.disconnect();
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
+      if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
+      document.documentElement.classList.remove('soridraw-window-resizing');
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -1393,7 +1419,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh]);
+  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

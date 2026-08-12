@@ -10864,6 +10864,25 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
+/* 668 — external browser-window resize restores the proven 488 principle.
+ * 667 proved that removing the heavy pane bodies makes the Vercel resize path
+ * immediately fast. The remaining high-cost work is therefore inside the pane
+ * responsive trees. For the OUTER browser resize only, suspend the two structural
+ * pane containers so their large @container rule sets do not recalculate for every
+ * pixel. Geometry, pane DOM, mastheads, splitter and content all stay mounted.
+ * When native resize settles, `soridraw-window-resizing` is removed and the exact
+ * responsive layout resolves once. Divider dragging intentionally keeps 519's
+ * live container behavior, so the already-approved splitter interaction is not
+ * changed by this fix. */
+@media (min-width: 1100px) {
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    container-type: normal !important;
+    container-name: none !important;
+  }
+}
+
 /* 519 — continuous-resize fast path without a temporary "PC/default" UI.
  * 488 disabled the builder pane, result pane and Generate panel containers while
  * the divider was held. Their @container rules therefore disappeared during the

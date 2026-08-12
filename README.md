@@ -1,3 +1,14 @@
+## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
+- 기준: 667차.
+- 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.
+- 667의 본문 React unmount 진단 코드는 완전히 제거하여 실제 콘텐츠는 다시 항상 렌더링합니다.
+- 과거 488에서 검증했던 원리를 **외부 브라우저 창 리사이즈에만** 복구합니다. `soridraw-window-resizing` 동안 Builder/Result의 구조 `container-type`을 잠시 해제해 대규모 `@container` 규칙이 매 픽셀 재계산되지 않게 하고, 리사이즈 종료 후 한 번만 원래 responsive detail을 복구합니다.
+- 519 이후 승인된 분할바 드래그 동작은 건드리지 않습니다. 즉 split drag에서는 구조 container query가 계속 실시간으로 살아 있고, 이번 경량화는 외부창 리사이즈에만 적용됩니다.
+- Music Note/Library가 사용하는 Lite 엔진에도 Legacy와 동일한 `soridraw-window-resizing` start/end 마커를 추가했습니다. 따라서 네 화면 모두 같은 외부창 경량화 규칙을 공유합니다.
+- Lite의 Genre/Result 제목 높이 교차 측정도 연속 외부창 리사이즈 중에는 멈추고 종료 후 1회 동기화합니다.
+- breakpoint, pane 비율, 모바일 <1100 compact 구조, Galaxy Tab touch 경로, Firebase/Auth/Firestore/Functions/사용자 저장 구조는 변경하지 않습니다.
+- 상태: 코드 반영 완료 · Vercel 테스트앱 실사용 검증 전.
+
 ## 667차 — 실제 pane 폭 661~1080 본문 unmount 단일변수 검증
 - 기준: 666차.
 - 665/666의 `window.innerWidth 1100~1599 + PROD` 조건을 폐기하고, 이미 656에서 성능 민감 구간으로 확인된 **실제 Builder/Result pane 폭 661~1080px**만 기준으로 테스트합니다.

@@ -9,7 +9,6 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import ClassicDarkStudioBuilderProbe from './ClassicDarkStudioBuilderProbe';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -128,7 +127,6 @@ type StudioSplitWorkspaceProps = {
   viewMode?: 'split' | 'result-only' | 'hidden';
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
-  classicDarkBuilderProbe?: boolean;
 };
 
 export default function StudioSplitWorkspace({
@@ -137,7 +135,6 @@ export default function StudioSplitWorkspace({
   viewMode = 'split',
   workspaceView,
   workspaceRequestId = 0,
-  classicDarkBuilderProbe = false,
 }: StudioSplitWorkspaceProps) {
   const panes = Children.toArray(children);
   const [percent, setPercent] = useState(readStored);
@@ -1601,17 +1598,11 @@ export default function StudioSplitWorkspace({
         data-workspace-view-mode={viewMode}
         className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
       >
-        <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" style={classicDarkBuilderProbe ? { containerType: 'normal', containerName: 'none' } : undefined} aria-hidden={isBuilderCollapsed}>
-          {!classicDarkBuilderProbe && (
-            <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
-              {builderMasthead}
-            </div>
-          )}
-          {classicDarkBuilderProbe ? (
-            <ClassicDarkStudioBuilderProbe masthead={builderMasthead}>
-              {panes[0] ?? null}
-            </ClassicDarkStudioBuilderProbe>
-          ) : (panes[0] ?? null)}
+        <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
+          <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
+            {builderMasthead}
+          </div>
+          {panes[0] ?? null}
         </div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />

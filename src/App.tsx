@@ -3981,11 +3981,6 @@ function App() {
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
-  // 675 diagnostic: keep the real Studio-Black split shell, but make the left
-  // Builder use Classic/Dark presentation semantics so the A/B is not just a
-  // CSS-class alias of the split UI.
-  const isClassicDarkBuilderProbeActive = isStudioBlackActionMode;
-  const isStudioBlackBuilderPresentation = isStudioBlackActionMode && !isClassicDarkBuilderProbeActive;
   const isStudioCompactMobileLayout = isStudioCompactViewport
     && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
 
@@ -6896,7 +6891,6 @@ function App() {
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
   const actionButtonsBarRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(true);
-  const isBuilderActionsFloating = isClassicDarkBuilderProbeActive ? false : isActionsFloating;
   const isActionsFloatingRef = useRef(true);
   const isSplitDraggingRef = useRef(false);
   const actionBarPlacementRafRef = useRef<number | null>(null);
@@ -7206,7 +7200,7 @@ const toggleCycleVariantSelection = (
   }, []);
 
   const collapseActionButtons = useCallback(() => {
-    if (!isStudioBlackBuilderPresentation) {
+    if (!isStudioBlackActionMode) {
       captureCollapsedActionVisualBottom();
 
       // Non-Studio themes still swap an in-flow/floating owner, so preserve
@@ -7238,16 +7232,16 @@ const toggleCycleVariantSelection = (
     }
 
     setIsActionButtonsCollapsed(true);
-  }, [captureCollapsedActionVisualBottom, isStudioBlackBuilderPresentation]);
+  }, [captureCollapsedActionVisualBottom, isStudioBlackActionMode]);
 
   const expandActionButtons = useCallback(() => {
-    actionCollapseRestorePendingRef.current = !isStudioBlackBuilderPresentation;
-    if (isStudioBlackBuilderPresentation) {
+    actionCollapseRestorePendingRef.current = !isStudioBlackActionMode;
+    if (isStudioBlackActionMode) {
       actionCollapseScrollSnapshotRef.current = null;
       document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
     }
     setIsActionButtonsCollapsed(false);
-  }, [isStudioBlackBuilderPresentation]);
+  }, [isStudioBlackActionMode]);
 
   const updateActionBarPlacement = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
@@ -7312,7 +7306,7 @@ const toggleCycleVariantSelection = (
     // footer collision in one rAF-coalesced listener, so registering a second
     // App-level scroll path here only duplicates layout work.
     const handleScroll = () => {
-      if (!isStudioBlackBuilderPresentation) scheduleActionBarPlacement();
+      if (!isStudioBlackActionMode) scheduleActionBarPlacement();
     };
     const scheduleLayoutChange = () => {
       if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
@@ -7332,7 +7326,7 @@ const toggleCycleVariantSelection = (
 
     const handleWindowResizeEnd = () => scheduleLayoutChange();
 
-    if (!isStudioBlackBuilderPresentation) {
+    if (!isStudioBlackActionMode) {
       window.addEventListener('scroll', handleScroll, { passive: true });
     }
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
@@ -7350,7 +7344,7 @@ const toggleCycleVariantSelection = (
         window.cancelAnimationFrame(actionBarLayoutRafRef.current);
         actionBarLayoutRafRef.current = null;
       }
-      if (!isStudioBlackBuilderPresentation) {
+      if (!isStudioBlackActionMode) {
         window.removeEventListener('scroll', handleScroll);
       }
       window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
@@ -7359,7 +7353,7 @@ const toggleCycleVariantSelection = (
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       };
-  }, [isStudioBlackBuilderPresentation, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
+  }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
 
   useEffect(() => {
@@ -7473,9 +7467,9 @@ const toggleCycleVariantSelection = (
     ? 'hidden'
     : isActionButtonsCollapsed
       ? 'collapsed'
-      : isStudioBlackBuilderPresentation
+      : isStudioBlackActionMode
         ? 'floating'
-        : isBuilderActionsFloating
+        : isActionsFloating
           ? 'floating'
           : 'inline';
 
@@ -7506,7 +7500,7 @@ const toggleCycleVariantSelection = (
   useLayoutEffect(() => {
     if (!shouldShowActionButtons || isActionButtonsCollapsed) return;
 
-    if (isStudioBlackBuilderPresentation) {
+    if (isStudioBlackActionMode) {
       // 535 — one lightweight mount sync only. Geometry changes after this are
       // owned by the single anchor ResizeObserver above and by the split rAF fast
       // path. Do not attach a second ResizeObserver or pane-scroll listener to
@@ -7545,7 +7539,7 @@ const toggleCycleVariantSelection = (
   }, [
     isActionButtonsCollapsed,
     isActionsFloating,
-    isStudioBlackBuilderPresentation,
+    isStudioBlackActionMode,
     shouldShowActionButtons,
     syncActionBarLayoutMetrics,
     updateActionBarPlacement,
@@ -14657,7 +14651,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   compactMobileMode={isStudioCompactMobileLayout}
-                  classicDarkBuilderProbe={isClassicDarkBuilderProbeActive}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
@@ -14748,7 +14741,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={!isStudioBlackBuilderPresentation && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                forcedHeight={!isStudioBlackActionMode && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
                 directInput={{
                   selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
@@ -15267,7 +15260,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
               genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
               randomActivationKey={vocalRandomActivationKey}
-              naturalResponsiveHeight={isStudioBlackBuilderPresentation}
+              naturalResponsiveHeight={isStudioBlackActionMode}
             />
             </div>
             <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
@@ -15310,7 +15303,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
               vocalSectionTags={vocalSectionTagOptions}
               selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
-              naturalResponsiveHeight={isStudioBlackBuilderPresentation}
+              naturalResponsiveHeight={isStudioBlackActionMode}
             />
             </div>
           </div>
@@ -15498,19 +15491,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               // 535 — Studio Black uses this node only as an X/width geometry
               // probe. It never reserves a second expanded-row slot, so collapse,
               // expand and PC/mobile pane changes cannot alter the scroll range.
-              !isStudioBlackBuilderPresentation
+              !isStudioBlackActionMode
                 && shouldShowActionButtons
                 && !isActionButtonsCollapsed
-                && !isBuilderActionsFloating
+                && !isActionsFloating
                 ? "soridraw-studio-action-anchor-expanded"
                 : "h-0"
             )}
-            data-soridraw-docked={!isStudioBlackBuilderPresentation && !isBuilderActionsFloating ? "true" : "false"}
+            data-soridraw-docked={!isStudioBlackActionMode && !isActionsFloating ? "true" : "false"}
           >
             {shouldShowActionButtons
-              && !isStudioBlackBuilderPresentation
+              && !isStudioBlackActionMode
               && !isActionButtonsCollapsed
-              && !isBuilderActionsFloating
+              && !isActionsFloating
               && renderExpandedActionBar('inline')}
           </div>
 
@@ -15558,7 +15551,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </span>
                   </motion.button>
                 </Portal>
-              ) : (isStudioBlackBuilderPresentation || isBuilderActionsFloating) ? (
+              ) : (isStudioBlackActionMode || isActionsFloating) ? (
                 <Portal>
                   {renderExpandedActionBar('floating')}
                 </Portal>

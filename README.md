@@ -1,15 +1,3 @@
-## 675차 — 668 기준 / 실제 Classic Dark Studio Builder 격리 이식 A/B 진단
-- 기준: `SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip`. 669~674의 진단/최적화 변경은 누적하지 않습니다.
-- 674는 Studio Black 루트 안에서 Builder pane class 일부만 제거해 화면 자체가 계속 분할 UI로 보였으므로 이번 판정 기준에서 폐기합니다.
-- 675는 왼쪽 Builder의 **기존 React 인스턴스 하나를 그대로 유지**한 채 ShadowRoot로 격리하고, 현재 앱에서 실제 컴파일된 CSS를 그 안에 한 번 복사합니다. 격리 내부에는 실제 다크모드와 같은 `html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] > body > #root > .soridraw-app-root` 계층을 재현해 기존 Classic/Dark 선택자가 그대로 적용됩니다.
-- 부모 문서의 Studio Black 전용 조상 선택자는 ShadowRoot를 넘지 못하므로 674처럼 분할 디자인이 왼쪽 본문에 계속 덮이는 문제를 차단합니다. 반대로 오른쪽 Recent/Music Note/Library, 분할 shell, divider, 좌우 rail은 668 Studio Black 상태를 그대로 유지합니다.
-- 외부 Builder pane은 분할 폭 소유만 남기고 probe 동안 `container-type/name`을 해제해 `soridraw-builder-pane` 전용 container-query가 다크 본문 안으로 다시 들어오지 않게 합니다.
-- Sori Studio 대문도 probe 내부 Classic/Dark 헤더로 이동합니다. Builder 전용 높이/생성바 표현 조건도 Classic 쪽 의미로 전환해 단순 색상만 바꾼 테스트가 되지 않게 했습니다.
-- iframe/두 번째 App을 만들지 않으므로 Firebase/Auth listener와 앱 상태를 중복 생성하지 않습니다. 목적은 외부 브라우저 창 resize에서 `Studio Black Builder 표현/반응형 트리`와 `Classic Dark Builder 표현/반응형 트리`의 비용 차이를 보는 것입니다.
-- 1099px 이하 compact 모바일 경로는 기존 구조를 유지하며 이번 probe를 적용하지 않습니다.
-- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
-- 상태: 코드 반영 완료 · 테스트앱 실사용 검증 전.
-
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.

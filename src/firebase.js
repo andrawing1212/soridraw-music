@@ -46,16 +46,8 @@ if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefin
   try {
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
-      // SORIDRAW_VERIFY_681: VERCEL_APPCHECK_AUTO_REFRESH_AB
-      // A/B only: keep App Check itself enabled, but stop the Vercel test app
-      // from refreshing attestation tokens proactively in the background.
-      // Explicit API calls still request a valid token through getToken(..., false).
-      // AI Studio debug preview and Firebase production hosting remain unchanged.
-      isTokenAutoRefreshEnabled: !isVercelTestApp,
+      isTokenAutoRefreshEnabled: true,
     });
-    if (isVercelTestApp) {
-      console.info("[SORIDRAW 681] Vercel App Check auto refresh: OFF (A/B)");
-    }
   } catch (error) {
     console.warn("[Firebase App Check] initialization skipped:", error);
   }
@@ -113,8 +105,13 @@ try {
   // This lets short development reloads/reconnects reuse IndexedDB instead of
   // behaving like brand-new listener queries, while session-only user logins keep
   // the default memory cache.
+  // 682 A/B: make the Vercel test app use the same persistent Firestore
+  // local-cache path as AI Studio. This isolates one real host/runtime
+  // difference without changing split/layout/render code. Firebase Hosting
+  // production keeps the existing behavior.
   const shouldUsePersistentFirestoreCache = readRememberLoginPreference()
     || isAiStudioPreview
+    || isVercelTestApp
     || currentHostname === "localhost"
     || currentHostname === "127.0.0.1";
   firestoreDb = shouldUsePersistentFirestoreCache

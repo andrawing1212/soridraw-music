@@ -1,12 +1,12 @@
-## 681차 — Vercel App Check 자동 토큰 갱신 OFF 단일변수 A/B
-- 기준: 668차 clean. 669~680의 리사이즈/UI 실험 코드는 포함하지 않습니다.
-- 목적: AI Studio preview는 빠르고 Vercel 배포앱에서만 느리다는 호스트 차이만 검증합니다. UI/분할/Studio/Note/Library 리사이즈 코드는 한 줄도 변경하지 않습니다.
-- Vercel 테스트앱(`soridraw-music.vercel.app`)에서만 Firebase App Check의 `isTokenAutoRefreshEnabled`를 `false`로 설정합니다. App Check 초기화와 reCAPTCHA Enterprise provider 자체는 유지합니다.
-- SORIDRAW API 호출은 기존 `getFirebaseAppCheckToken() -> getToken(appCheck, false)` 경로를 그대로 사용하므로, 호출 시 필요한 App Check 토큰 요청 구조는 변경하지 않습니다.
-- AI Studio debug-provider preview와 Firebase 정식 Hosting의 App Check 자동 갱신은 기존 `true`를 유지합니다.
-- Firestore/Auth/Functions/Rules/저장 구조와 화면 디자인/반응형/분할 동작은 변경하지 않습니다.
-- 검증 마커: `SORIDRAW_VERIFY_681: VERCEL_APPCHECK_AUTO_REFRESH_AB`.
-- 상태: 코드 반영 완료 · Vercel 테스트앱 실사용 성능 검증 전.
+## 682차 — AI Studio/Vercel Firestore 로컬캐시 경로 일치 A/B
+- 기준: 668차 clean. 681 App Check 자동갱신 실험은 포함하지 않습니다.
+- 587/588에서 production CSS/JS minify OFF A/B가 이미 주원인이 아닌 것으로 기록되어 있어 같은 실험을 반복하지 않습니다.
+- 이번에는 AI Studio와 Vercel 사이에 실제로 남아 있는 Firebase 실행환경 차이 하나만 비교합니다. AI Studio는 항상 Firestore persistentLocalCache를 사용하지만, Vercel 테스트앱은 rememberLogin이 false면 기본 memory cache를 사용하고 있었습니다.
+- Vercel 테스트앱(`soridraw-music.vercel.app`)만 AI Studio와 동일하게 `persistentLocalCache + persistentMultipleTabManager`를 사용하도록 맞춥니다.
+- Firebase Hosting 정식앱의 캐시 정책은 변경하지 않습니다. persistent cache 초기화가 실패하면 기존처럼 memory cache로 자동 fallback합니다.
+- Studio/분할/외부창 resize/App.tsx/CSS/App Check/Auth/Functions/Firestore 서버 데이터 구조는 변경하지 않습니다.
+- 테스트 목적: 같은 화면/같은 코드에서 Vercel의 Firestore client cache 경로만 AI Studio와 일치시켰을 때 외부창 리사이즈 체감 차이가 줄어드는지 확인합니다.
+- 상태: 코드 반영 완료 · Vercel 실사용 검증 전.
 
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.

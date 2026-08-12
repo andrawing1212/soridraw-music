@@ -2048,3 +2048,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note/Library가 Legacy 엔진 안에 들어왔을 때 페이지 자체 `ResizeObserver + getBoundingClientRect()`를 다시 만들지 않도록, Legacy split owner가 이미 계산한 result 폭의 PC/tablet/mobile 경계 변화만 `soridraw-studio-pane-width` 이벤트로 전달한다.
 - Legacy 결과 pane의 mobile breakpoint도 Music Note/Library 둘 다 동일하게 661px 기준을 사용한다.
 - 686 viewport windowing은 유지한다. 디자인/실시간 외부창 리사이즈/분할바 동작/Firestore·Auth·Functions 저장 구조는 변경하지 않는다.
+
+## 689차 — Music Note / Library 외부창 리사이즈 히트테스트 격리
+- 기준: 688차. 687/688 실사용에서 Music Note/Library를 Recent와 같은 PC Legacy geometry 소유권으로 맞추자 체감 개선이 누적되었으므로 그 경로를 그대로 유지한다.
+- 이번 추가 실험은 Studio/Create/Recent/분할 geometry를 더 수정하지 않는다.
+- 네이티브 **외부 브라우저 창 리사이즈 중에만** Music Note / Library 본문을 `pointer-events:none`, `user-select:none`으로 만들어 복잡한 카드/버튼/hover 트리에 대한 hit-test 및 hover invalidation을 차단한다.
+- 같은 구간에서 해당 두 페이지의 animation/transition 계산도 완전히 중지한다. 화면 크기, pane 폭, 텍스트 줄바꿈, PC↔Tablet↔Mobile 반응형 변화는 기존처럼 실시간이다.
+- 창 리사이즈가 끝나면 기존 `soridraw-window-resizing` marker 제거와 동시에 상호작용/애니메이션 상태도 즉시 원복된다.
+- 686 viewport windowing, 687 direct geometry, 688 PC Legacy 공통 엔진은 그대로 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

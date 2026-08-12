@@ -1,0 +1,20 @@
+{
+  "version": 689,
+  "base": 688,
+  "goal": "Reduce the remaining Music Note / Library tablet-band native window-resize hitch without changing live geometry.",
+  "scope": [
+    "src/components/studio/studioLayout.css",
+    "README.md",
+    "docs/SORIDRAW_689_APPLY_VERIFY.json"
+  ],
+  "contract": {
+    "musicNoteLibraryOnly": true,
+    "nativeOuterResizeOnly": true,
+    "liveResizeGeometryPreserved": true,
+    "hitTestingSuspendedDuringResize": true,
+    "hoverInvalidationSuspendedDuringResize": true,
+    "animationsTransitionsSuspendedDuringResize": true,
+    "recentCreateStudioGeometryUntouched": true,
+    "firebaseDataModelUntouched": true
+  }
+}

@@ -223,15 +223,9 @@ export default function StudioSplitWorkspace({
     // Width dragging already owns the pane geometry for this frame. Running a
     // second ResizeObserver-driven measurement here forces another synchronous
     // layout of both large panes and is the main source of visible card stutter.
-    // 664: native horizontal window resizing has the same ownership rule. In the
-    // 1100~1599 compact/tablet composition the Genre card rewraps repeatedly, so
-    // its observer can otherwise force a second full-tree layout on nearly every
-    // browser resize tick. Keep the last stable cross-pane title height until the
-    // existing resize-end path performs one final exact sync.
-    if (
-      draggingRef.current
-      || document.documentElement.classList.contains('soridraw-window-resizing')
-    ) return;
+    // Keep the last stable title height during the drag and refresh it once on
+    // pointer-up instead.
+    if (draggingRef.current) return;
 
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -347,10 +341,32 @@ export default function StudioSplitWorkspace({
     // properties. 656/657 isolated the remaining slow state to a 661~1080px
     // pane. In that exact fine-pointer band, keep external live geometry local
     // to the element that consumes it, matching Lite V2's verified PROD path.
+    const root = document.documentElement;
+    const isOuterTabletWindowResize = finePointerFastPathRef.current
+      && root.classList.contains('soridraw-window-resizing')
+      && window.innerWidth >= TABLET_VIEWPORT_MIN
+      && window.innerWidth <= TABLET_VIEWPORT_MAX;
     const useTabletProdParityPath = finePointerFastPathRef.current && (
-      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+      isOuterTabletWindowResize
+      || (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
       || (resultWidth > 660 && resultWidth <= 1080)
     );
+
+    // Outer-window resize has no pointer-down phase to seed the floating action
+    // bar's approved inner insets. Capture them once at the beginning of the
+    // resize gesture, then reuse the cached values for every following frame.
+    // This keeps the local PROD-parity geometry visually identical to resting
+    // geometry without adding repeated measurements to the hot path.
+    if (isOuterTabletWindowResize && actionAnchorInsetsRef.current === null) {
+      const builderRect = builderRef.current?.getBoundingClientRect();
+      const actionAnchorRect = controls.actionAnchor?.getBoundingClientRect();
+      if (builderRect && actionAnchorRect && builderRect.width > 0 && actionAnchorRect.width > 0) {
+        actionAnchorInsetsRef.current = {
+          left: Math.max(0, actionAnchorRect.left - builderRect.left),
+          right: Math.max(0, builderRect.right - actionAnchorRect.right),
+        };
+      }
+    }
 
     // The page masthead is outside the split layout and therefore cannot inherit
     // the builder pane's temporary inline width. Mirror the live builder width
@@ -536,15 +552,7 @@ export default function StudioSplitWorkspace({
   }, [isStudioBlack]);
 
   const scheduleFooterBoundaryRefresh = useCallback(() => {
-    // 664: footer position is vertical geometry. A horizontal native resize must
-    // not force footer.getBoundingClientRect() in parallel with the workspace
-    // width layout on every frame. The existing resize-end refresh commits the
-    // exact footer/splitter bottom once the gesture settles.
-    if (
-      draggingRef.current
-      || document.documentElement.classList.contains('soridraw-window-resizing')
-      || footerFrameRef.current !== null
-    ) return;
+    if (draggingRef.current || footerFrameRef.current !== null) return;
     footerFrameRef.current = window.requestAnimationFrame(() => {
       footerFrameRef.current = null;
       refreshSplitterFooterBoundary();
@@ -1016,10 +1024,28 @@ export default function StudioSplitWorkspace({
       : resultCollapsedRef.current
         ? metricsRef.current.width
         : metricsRef.current.width * (appliedPercent / 100);
-    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
-    clearExternalMeasurements();
-    scheduleFooterBoundaryRefresh();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
+    const splitterLeft = metricsRef.current.left + builderWidth;
+    const root = document.documentElement;
+    const isOuterTabletWindowResize = finePointerFastPathRef.current
+      && root.classList.contains('soridraw-window-resizing')
+      && window.innerWidth >= TABLET_VIEWPORT_MIN
+      && window.innerWidth <= TABLET_VIEWPORT_MAX;
+
+    if (isOuterTabletWindowResize) {
+      // 661 — Browser-window resizing used to republish seven inherited root
+      // geometry variables on every ResizeObserver frame. PROD pays much more
+      // for that cascade than DEV. During the active 1100~1599 fine-pointer
+      // gesture, keep geometry local to the panes/portals (the same proven
+      // ownership used by the 659 divider path) and commit the root only once
+      // after `soridraw-window-resizing` clears. This preserves live geometry
+      // without forcing the entire Studio subtree to restyle each width tick.
+      syncExternalMeasurements(builderWidth, splitterLeft);
+    } else {
+      commitRootMeasurements(builderWidth, splitterLeft);
+      clearExternalMeasurements();
+      scheduleFooterBoundaryRefresh();
+    }
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds, syncExternalMeasurements]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
     if (layoutRefreshFrameRef.current !== null) return;

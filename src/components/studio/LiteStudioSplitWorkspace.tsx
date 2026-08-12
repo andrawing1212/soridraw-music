@@ -215,9 +215,6 @@ export default function LiteStudioSplitWorkspace({
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
-  const finePointerFastPathRef = useRef(
-    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
-  );
   const pointerIdRef = useRef(-1);
   const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
   const manualPerfCaptureActiveRef = useRef(false);
@@ -640,18 +637,6 @@ export default function LiteStudioSplitWorkspace({
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
-
-    // 657: the 656 test confirmed the slow state is owned by pane width.
-    // Reuse the engine's already-known geometry and mark each fine-pointer pane
-    // while its live width sits in the shared 661~1080px tablet band. The marker
-    // activates only drag-time CSS isolation; normal tablet rendering is untouched.
-    const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
-      if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
-      else delete pane.dataset.soridrawPaneTabletFastpath;
-    };
-    syncPaneTabletProbe(builder, builderWidth);
-    syncPaneTabletProbe(result, resultWidth);
 
     // 609: geometry ownership changes only when the *published content mode*
     // itself changes. This keeps the visible PC/Tablet switch and the low-level
@@ -1340,17 +1325,7 @@ export default function LiteStudioSplitWorkspace({
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
-    // 650 — horizontal viewport changes are already owned by the observed Lite
-    // workspace box. Avoid a second native window.resize -> metrics refresh for
-    // the same width tick. The native listener remains only for viewport-height
-    // changes that may not resize the workspace box itself.
-    let lastViewportHeight = window.innerHeight;
-    const handleWindowResize = () => {
-      const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight === lastViewportHeight) return;
-      lastViewportHeight = nextViewportHeight;
-      scheduleMetricsRefresh();
-    };
+    const handleWindowResize = () => scheduleMetricsRefresh();
     // A rail toggle changes the Studio grid width immediately. Refresh the Lite
     // geometry in the same layout phase instead of one rAF later, otherwise the
     // builder masthead/search can visibly overshoot before snapping back.

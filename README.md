@@ -2030,3 +2030,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - App의 자동 split-engine 주 입력 판정은 앱 마운트 시 한 번만 고정한다. 하이브리드 장치에서 마우스 연결/해제 등으로 pointer/hover media query가 바뀌어도 실행 중 split engine을 remount하지 않는다. 화면 폭 기반 PC/Tablet/Mobile 반응형 변화는 기존처럼 실시간 유지한다.
 - 외부창 리사이즈 중에는 활성 pointer gesture가 없으므로 마우스 전용 tablet fast path가 개입하지 않는다.
 - UI/디자인/테두리, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 686차 — 뮤직노트/라이브러리 외부창 리사이즈 뷰포트 윈도잉
+- 기준: 685차. Studio/분할 엔진/최근 생성곡은 수정하지 않고 `FavoritesPage`(뮤직노트), `SunoLibraryPage`, 공통 content responsive helper, 관련 CSS만 수정했다.
+- 사용자 A/B에서 왼쪽 pane이 빈 상태여도 오른쪽 뮤직노트/라이브러리만으로 태블릿 구간 외부창 리사이즈 버벅임이 동일하게 재현됐고, 최근 생성곡은 상대적으로 부드러웠다. 따라서 이번 차수는 오른쪽 두 페이지의 긴 리스트 렌더 비용만 대상으로 한다.
+- 평상시 IntersectionObserver로 현재 viewport ±900px 안의 리스트 항목만 `data-soridraw-resize-nearby=true`로 기록한다.
+- 외부창 리사이즈가 시작되면 IntersectionObserver를 즉시 끊어 resize 자체가 observer churn을 만들지 않게 하고, 마지막으로 기록된 visible/nearby 항목만 계속 실시간 렌더한다.
+- 화면 밖의 뮤직노트/라이브러리 리스트 항목은 리사이즈 동안만 `content-visibility:hidden`으로 내부 layout/paint를 완전히 건너뛴다. 기존 `contain-intrinsic-size`를 그대로 사용하므로 리스트의 세로 공간/스크롤 구조는 유지한다.
+- 리사이즈가 끝나면 윈도잉을 즉시 해제하고 observer를 다시 연결한다. 보이는 카드/검색/필터/대문/분할 폭과 PC↔Tablet↔Mobile 변화는 기존처럼 실시간이다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

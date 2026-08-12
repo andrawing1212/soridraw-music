@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
-import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
+import { attachSoridrawResponsiveContract, attachSoridrawResizeViewportWindowing } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -695,7 +695,12 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   useLayoutEffect(() => {
     const root = libraryPageRootRef.current;
     if (!root) return;
-    return attachSoridrawResponsiveContract(root);
+    const detachResponsive = attachSoridrawResponsiveContract(root);
+    const detachResizeWindowing = attachSoridrawResizeViewportWindowing(root);
+    return () => {
+      detachResizeWindowing();
+      detachResponsive();
+    };
   }, []);
   const libraryLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryLongPressStartPointRef = useRef<{ x: number; y: number } | null>(null);

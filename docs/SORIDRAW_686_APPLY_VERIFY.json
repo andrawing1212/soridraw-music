@@ -1,0 +1,14 @@
+{
+  "version": 686,
+  "basis": "SORIDRAW_685차_683기준_마우스터치_입력소유권분리_태블릿혼합제거_2차.zip",
+  "scope": "Music Note + Suno Library only",
+  "problem_evidence": "With the left split pane blank, Music Note / Library on the right still reproduced the same outer-window tablet-band hitch; Recent Songs is materially smoother.",
+  "change": "Freeze IntersectionObserver membership at outer-resize start and force only far-off Music Note / Library list items to content-visibility:hidden until resize settles. Visible/nearby items and all page geometry remain live.",
+  "not_changed": [
+    "Studio split geometry/drag engine",
+    "Recent Songs",
+    "Firebase/Auth/Firestore/Functions",
+    "data/storage schema",
+    "visible pane real-time resize"
+  ]
+}

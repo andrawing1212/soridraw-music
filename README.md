@@ -2039,3 +2039,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 화면 밖의 뮤직노트/라이브러리 리스트 항목은 리사이즈 동안만 `content-visibility:hidden`으로 내부 layout/paint를 완전히 건너뛴다. 기존 `contain-intrinsic-size`를 그대로 사용하므로 리스트의 세로 공간/스크롤 구조는 유지한다.
 - 리사이즈가 끝나면 윈도잉을 즉시 해제하고 observer를 다시 연결한다. 보이는 카드/검색/필터/대문/분할 폭과 PC↔Tablet↔Mobile 변화는 기존처럼 실시간이다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+
+## 687차 — 뮤직노트/라이브러리 태블릿 geometry 소유권 Recent 계열로 복구 (4/5)
+- 기준: 686차. 686의 뮤직노트/라이브러리 resize viewport windowing은 약한 개선이 확인되어 유지한다.
+- 사용자 실사용 관찰을 기준으로 범위를 뮤직노트/라이브러리의 **실제 result pane 661~1080px 태블릿 구간**으로만 좁혔다. Recent는 같은 외부창 축소에서 상대적으로 부드럽고, 과거 빈 왼쪽 pane 대조에서도 Music Note/Library 오른쪽 본문만으로 동일한 버벅임이 재현됐다.
+- 원인 후보로 확인된 기존 정책: PC 자동 Music Note/Library는 `library-590` runtime profile 때문에 result content가 tablet으로 바뀌어도 geometry owner가 계속 `css-var`로 고정되어 있었다. 이는 609의 검증 규칙인 `tablet/mobile result = direct geometry`를 617에서 덮어쓴 상태였다.
+- 687에서는 `library-590`을 **PC(>1080px) 전용**으로 제한한다. 실제 result width가 1080px 이하로 들어오면 Music Note/Library도 즉시 `direct` geometry로 전환하고, 다시 PC 폭으로 나오면 기존 590 CSS-variable geometry로 복귀한다.
+- 화면 디자인/PC↔Tablet↔Mobile 전환/외부창 실시간 리사이즈/분할바 동작은 변경하지 않는다. Studio/Create/Recent 경로는 수정하지 않는다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

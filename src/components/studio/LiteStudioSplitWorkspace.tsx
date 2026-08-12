@@ -160,12 +160,16 @@ const resolveRuntimeLayoutMode = (
   workspaceView?: StudioWorkspaceView,
   runtimeProfile: RuntimeProfile = 'adaptive',
 ): BenchmarkLayoutMode => {
-  // 617 runtime policy:
-  // - `library-590` is the shared PC path for Library and Music Note. It keeps
-  //   the exact 590 CSS-variable geometry at every visual responsive width.
-  // - `adaptive` remains the verified Galaxy Tab/touch V2 path.
-  if (runtimeProfile === 'library-590') return 'css-var';
+  // 687 targeted stabilization:
+  // The `library-590` profile is a PC ownership choice only. 617 accidentally
+  // kept that CSS-variable owner even after the *content itself* entered the
+  // 661~1080px tablet band, overriding the already-verified 609 rule that
+  // tablet/mobile result panes use direct geometry. That left Music Note and
+  // Library on a different resize owner from the smooth tablet result path.
+  // Keep the exact 590 CSS-variable path above 1080px, but the moment the real
+  // result width publishes tablet/mobile, use direct pane geometry.
   if (resultMode !== 'pc') return 'direct';
+  if (runtimeProfile === 'library-590') return 'css-var';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 

@@ -140,14 +140,13 @@ export default function StudioSplitWorkspace({
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
-  // SORIDRAW_VERIFY_672: SHARED_BUILDER_ONLY_OUTER_RESIZE_AB
-  // Diagnostic only: while the OUTER browser window is actively resizing,
-  // unmount only the left Sori Studio/Builder body. Keep its masthead, the
-  // entire right result body, shell, rails and divider mounted. The same test
-  // condition is mirrored in LiteStudioSplitWorkspace so Recent, Music Note
-  // and Library can finally be compared under one identical A/B condition.
-  const [builderResizeProbeActive, setBuilderResizeProbeActive] = useState(false);
-  const builderResizeProbeActiveRef = useRef(false);
+  // SORIDRAW_VERIFY_673: SHARED_RESULT_ONLY_OUTER_RESIZE_AB
+  // Diagnostic only: during an OUTER browser resize, unmount only the right
+  // result body while the left Sori Studio/Builder body stays fully mounted.
+  // The same condition is mirrored in LiteStudioSplitWorkspace so Recent,
+  // Music Note and Library are tested under one identical opposite-side A/B.
+  const [resultResizeProbeActive, setResultResizeProbeActive] = useState(false);
+  const resultResizeProbeActiveRef = useRef(false);
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -1171,11 +1170,11 @@ export default function StudioSplitWorkspace({
     let resizeEndTimer: number | null = null;
     const handleViewportResize = () => {
       const root = document.documentElement;
-      // 672: activate the Builder-only A/B independently of which workspace
-      // listener happened to add the shared resize marker first.
-      if (!builderResizeProbeActiveRef.current) {
-        builderResizeProbeActiveRef.current = true;
-        setBuilderResizeProbeActive(true);
+      // 673: activate the Result-only A/B independently of the shared root
+      // resize marker so this workspace cannot miss the diagnostic condition.
+      if (!resultResizeProbeActiveRef.current) {
+        resultResizeProbeActiveRef.current = true;
+        setResultResizeProbeActive(true);
       }
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
@@ -1193,9 +1192,9 @@ export default function StudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
-        if (builderResizeProbeActiveRef.current) {
-          builderResizeProbeActiveRef.current = false;
-          setBuilderResizeProbeActive(false);
+        if (resultResizeProbeActiveRef.current) {
+          resultResizeProbeActiveRef.current = false;
+          setResultResizeProbeActive(false);
         }
         scheduleLayoutMetricsRefresh();
         syncResultTitleHeight();
@@ -1222,7 +1221,7 @@ export default function StudioSplitWorkspace({
       themeObserver.disconnect();
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
-      builderResizeProbeActiveRef.current = false;
+      resultResizeProbeActiveRef.current = false;
       window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
@@ -1610,7 +1609,7 @@ export default function StudioSplitWorkspace({
     ><span /></button>
   );
 
-  const suppressBuilderBodyForResizeProbe = builderResizeProbeActive && viewMode === 'split';
+  const suppressResultBodyForResizeProbe = resultResizeProbeActive && viewMode === 'split';
 
   return (
     <>
@@ -1623,11 +1622,11 @@ export default function StudioSplitWorkspace({
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}
           </div>
-          {suppressBuilderBodyForResizeProbe ? null : (panes[0] ?? null)}
+          {panes[0] ?? null}
         </div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
-          {panes[1] ?? null}
+          {suppressResultBodyForResizeProbe ? null : (panes[1] ?? null)}
         </div>
       </div>
       {viewMode !== 'hidden' && (typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost)}

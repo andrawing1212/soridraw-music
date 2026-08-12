@@ -1,0 +1,14 @@
+{
+  "version": 673,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지.zip",
+  "purpose": "Opposite-side A/B diagnosis: keep Sori Studio builder mounted and unmount only the right result body during outer browser resize across Recent, Music Note and Library.",
+  "required_marker": "SORIDRAW_VERIFY_673: SHARED_RESULT_ONLY_OUTER_RESIZE_AB",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "6a5bd0059d2eaf33d6ea6fded709233e4b5d7f865a0d37c43343f90b90838ff9",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "343deb6c4689f4466314549f8397870fb04c0156dd6c7b9f083684829f9d8209",
+    "src/components/studio/studioLayout.css": "0f5d8bba1eeaab991cd988c26c1a546514e1a08a70a663116a02a457da5195d0",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

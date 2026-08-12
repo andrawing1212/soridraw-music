@@ -215,6 +215,9 @@ export default function LiteStudioSplitWorkspace({
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
+  const finePointerProbeRef = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+  );
   const pointerIdRef = useRef(-1);
   const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
   const manualPerfCaptureActiveRef = useRef(false);
@@ -637,6 +640,17 @@ export default function LiteStudioSplitWorkspace({
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
+
+    // 656 diagnostic: the slow state is owned by pane width, not window width.
+    // Reuse the engine's already-known geometry and mark each fine-pointer pane
+    // only while its live width sits in the shared 661~1080px tablet band.
+    const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
+      const active = finePointerProbeRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+      if (active) pane.dataset.soridrawPaneTabletProbe = 'true';
+      else delete pane.dataset.soridrawPaneTabletProbe;
+    };
+    syncPaneTabletProbe(builder, builderWidth);
+    syncPaneTabletProbe(result, resultWidth);
 
     // 609: geometry ownership changes only when the *published content mode*
     // itself changes. This keeps the visible PC/Tablet switch and the low-level

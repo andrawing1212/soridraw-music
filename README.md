@@ -1,3 +1,11 @@
+## 656차 — 실제 pane 폭 661~1080px 태블릿 병목 단일변수 테스트
+- 기준: 655차. 655의 `window 1100~1599px` CSS 진단은 제거했습니다. 그 방식은 큰 PC 창에서 분할바만 움직여 pane이 태블릿 폭이 되는 실제 증상 경로를 테스트하지 못했습니다.
+- Legacy/Lite 두 분할 엔진이 이미 계산한 builder/result 실제 pane 폭을 그대로 사용합니다. fine pointer PC에서 pane 폭이 `661~1080px`일 때만 해당 pane에 `data-soridraw-pane-tablet-probe=true`를 붙입니다. 별도 ResizeObserver, window.resize, 타이머, getBoundingClientRect 진단 경로는 추가하지 않았습니다.
+- probe가 켜진 pane은 masthead/분할 shell/divider는 유지하고 무거운 본문 direct child만 임시로 `display:none` 처리합니다. 따라서 넓은 PC 창을 유지한 채 분할바를 움직여도 실제 pane 태블릿 구간에서 테스트가 걸립니다.
+- AI Studio와 Vercel 모두 동일한 pane data attribute + CSS 한 경로를 사용합니다. 실제 Galaxy Tab/coarse pointer에는 probe를 적용하지 않습니다.
+- 테스트 목적: 이 상태에서 Vercel도 661~1080px pane 구간이 확 빨라지면 병목은 태블릿 내부 body reflow/paint 쪽으로 확정합니다. 본문이 사라져도 Vercel이 그대로 느리면 frame/split geometry/portal 외부 UI 쪽으로 범위를 확정합니다.
+- Firebase/Auth/Functions/저장 구조 변경 없음. 진단 전용이며 정식 배포용 변경이 아닙니다.
+
 ## 655차 — AI Studio / Vercel 태블릿 성능갭 CSS-only 단일변수 검증
 - 기준: 654차. 654의 `window.resize + 140ms timer + soridraw-tablet-resize-probe` 진단 경로는 제거했습니다.
 - 587~591에서 DEV/PROD 갭을 좁힐 때 사용했던 단일변수 A/B 원칙을 다시 적용합니다. 이번 차수는 JS/React/타이머를 거치지 않고 production bundle에도 동일하게 들어가는 순수 CSS media query만 사용합니다.

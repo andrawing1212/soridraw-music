@@ -46,8 +46,16 @@ if (APP_CHECK_SITE_KEY && shouldInitializeAppCheck && typeof window !== "undefin
   try {
     appCheck = initializeAppCheck(app, {
       provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY),
-      isTokenAutoRefreshEnabled: true,
+      // SORIDRAW_VERIFY_681: VERCEL_APPCHECK_AUTO_REFRESH_AB
+      // A/B only: keep App Check itself enabled, but stop the Vercel test app
+      // from refreshing attestation tokens proactively in the background.
+      // Explicit API calls still request a valid token through getToken(..., false).
+      // AI Studio debug preview and Firebase production hosting remain unchanged.
+      isTokenAutoRefreshEnabled: !isVercelTestApp,
     });
+    if (isVercelTestApp) {
+      console.info("[SORIDRAW 681] Vercel App Check auto refresh: OFF (A/B)");
+    }
   } catch (error) {
     console.warn("[Firebase App Check] initialization skipped:", error);
   }

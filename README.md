@@ -1,3 +1,13 @@
+## 681차 — Vercel App Check 자동 토큰 갱신 OFF 단일변수 A/B
+- 기준: 668차 clean. 669~680의 리사이즈/UI 실험 코드는 포함하지 않습니다.
+- 목적: AI Studio preview는 빠르고 Vercel 배포앱에서만 느리다는 호스트 차이만 검증합니다. UI/분할/Studio/Note/Library 리사이즈 코드는 한 줄도 변경하지 않습니다.
+- Vercel 테스트앱(`soridraw-music.vercel.app`)에서만 Firebase App Check의 `isTokenAutoRefreshEnabled`를 `false`로 설정합니다. App Check 초기화와 reCAPTCHA Enterprise provider 자체는 유지합니다.
+- SORIDRAW API 호출은 기존 `getFirebaseAppCheckToken() -> getToken(appCheck, false)` 경로를 그대로 사용하므로, 호출 시 필요한 App Check 토큰 요청 구조는 변경하지 않습니다.
+- AI Studio debug-provider preview와 Firebase 정식 Hosting의 App Check 자동 갱신은 기존 `true`를 유지합니다.
+- Firestore/Auth/Functions/Rules/저장 구조와 화면 디자인/반응형/분할 동작은 변경하지 않습니다.
+- 검증 마커: `SORIDRAW_VERIFY_681: VERCEL_APPCHECK_AUTO_REFRESH_AB`.
+- 상태: 코드 반영 완료 · Vercel 테스트앱 실사용 성능 검증 전.
+
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.
@@ -2019,19 +2029,3 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
-
-## SORIDRAW 680 — outer-resize local geometry / root-write suppression A/B
-
-Basis: clean 668 ZIP.
-
-This experiment preserves the current real-time browser-window resize behavior but changes only how live split geometry is published while the native resize gesture is active.
-
-- `StudioSplitWorkspace` and `LiteStudioSplitWorkspace` stop writing the seven split coordinate custom properties to `<html>` while `soridraw-window-resizing` is active.
-- Builder/result panes, fixed splitter, masthead/search geometry and floating generation controls continue to move live through pane-local / element-local writes on every layout frame.
-- The floating generation bar captures its anchor relationship once at native resize start; it does not re-measure that relationship every frame.
-- Lite V2 no longer force-dispatches pane-width events every outer-resize frame; only actual responsive-mode crossings publish during the gesture, followed by one forced final publication at settle.
-- 110 ms after native resize activity settles, the existing resize-end path removes the marker, commits one final stable root geometry snapshot, and clears temporary local geometry.
-- Divider dragging behavior is not changed. No freeze/snapshot/clipping/unmount technique is used.
-- Firebase/Auth/Firestore/Functions/storage schema are unchanged.
-
-Verification marker: `SORIDRAW_VERIFY_680: OUTER_RESIZE_LOCAL_GEOMETRY_ROOT_WRITE_ZERO`.

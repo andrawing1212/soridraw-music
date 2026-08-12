@@ -305,10 +305,6 @@ export default function LiteStudioSplitWorkspace({
 
   const commitRootMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const root = document.documentElement;
-    // 680 — Keep native outer-resize coordinates off <html>. Lite already owns
-    // pane/divider/action geometry locally, so inherited root writes only widen
-    // the production style-invalidation surface. Commit once after resize-end.
-    if (root.classList.contains('soridraw-window-resizing')) return;
     const { left, width, leftRailEdge } = metricsRef.current;
     const roundedLeft = Math.max(0, Math.round(left));
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
@@ -745,26 +741,15 @@ export default function LiteStudioSplitWorkspace({
       splitProfileRef.current = nextProfile;
       percentRef.current = readStoredPercent(nextProfile);
     }
-    const outerWindowResizeActive = document.documentElement.classList.contains('soridraw-window-resizing');
-    const appliedPercent = applyPercent(percentRef.current, outerWindowResizeActive);
+    const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
     const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
-    // applyPercent already publishes breakpoint changes. During a native resize
-    // do not force two pane-width CustomEvents on every rAF; the settle refresh
-    // below performs one forced final publication after the marker is removed.
-    if (!outerWindowResizeActive) {
-      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
-    }
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
     const splitterLeft = metricsRef.current.left + builderWidth;
-    if (!outerWindowResizeActive) {
-      commitRootMeasurements(builderWidth, splitterLeft);
-      readExternalControls();
-      syncExternalGeometry(builderWidth, splitterLeft);
-      clearLiveExternalGeometry();
-    }
-    // While the browser window is moving, applyPercent(..., true) keeps the
-    // actual panes, fixed splitter and portaled controls live via local writes.
-    // The resize-end refresh above then publishes one stable root snapshot.
+    commitRootMeasurements(builderWidth, splitterLeft);
+    readExternalControls();
+    syncExternalGeometry(builderWidth, splitterLeft);
+    clearLiveExternalGeometry();
   }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
@@ -1370,20 +1355,6 @@ export default function LiteStudioSplitWorkspace({
     const handleWindowResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
-        // One stable read at gesture start is enough to preserve the floating
-        // Generate bar's exact anchor relationship while all subsequent frames
-        // are driven by local writes only.
-        const controls = readExternalControls();
-        const builderRect = builderRef.current?.getBoundingClientRect();
-        const actionRect = controls.actionAnchor?.getBoundingClientRect();
-        if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
-          actionInsetsRef.current = {
-            left: Math.max(0, actionRect.left - builderRect.left),
-            right: Math.max(0, builderRect.right - actionRect.right),
-          };
-        } else {
-          actionInsetsRef.current = null;
-        }
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
@@ -1448,7 +1419,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, readExternalControls, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
+  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

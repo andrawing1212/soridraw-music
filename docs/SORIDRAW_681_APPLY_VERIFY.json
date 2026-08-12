@@ -1,0 +1,24 @@
+{
+  "version": 681,
+  "baseline": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "Vercel-only Firebase App Check auto-refresh A/B; preserve live resize/UI code unchanged",
+  "marker": "SORIDRAW_VERIFY_681: VERCEL_APPCHECK_AUTO_REFRESH_AB",
+  "expectedChanges": [
+    "src/firebase.js",
+    "README.md",
+    "docs/SORIDRAW_681_APPLY_VERIFY.json"
+  ],
+  "vercelOnly": {
+    "hostname": "soridraw-music.vercel.app",
+    "appCheckInitialization": "unchanged/enabled",
+    "recaptchaEnterpriseProvider": "unchanged/enabled",
+    "isTokenAutoRefreshEnabled": false,
+    "explicitGetTokenCalls": "unchanged"
+  },
+  "unchanged": [
+    "AI Studio App Check debug-provider behavior",
+    "Firebase Hosting App Check auto-refresh",
+    "Studio split/resize implementation",
+    "Firestore/Auth/Functions/Rules/data schema"
+  ]
+}

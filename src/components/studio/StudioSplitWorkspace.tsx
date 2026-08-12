@@ -347,11 +347,9 @@ export default function StudioSplitWorkspace({
     // properties. 656/657 isolated the remaining slow state to a 661~1080px
     // pane. In that exact fine-pointer band, keep external live geometry local
     // to the element that consumes it, matching Lite V2's verified PROD path.
-    const useTabletProdParityPath = document.documentElement.classList.contains('soridraw-window-resizing') || (
-      finePointerFastPathRef.current && (
-        (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
-        || (resultWidth > 660 && resultWidth <= 1080)
-      )
+    const useTabletProdParityPath = finePointerFastPathRef.current && (
+      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+      || (resultWidth > 660 && resultWidth <= 1080)
     );
 
     // The page masthead is outside the split layout and therefore cannot inherit
@@ -477,12 +475,6 @@ export default function StudioSplitWorkspace({
 
   const commitRootMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const root = document.documentElement;
-    // 680 — Native outer-window resize must keep all live geometry local.
-    // Publishing the seven split coordinates on <html> invalidates inherited
-    // custom properties across the whole deployed Studio tree. The visible
-    // panes/divider still update every frame through direct/local geometry;
-    // root values are committed once after the resize marker is removed.
-    if (root.classList.contains('soridraw-window-resizing')) return;
     const { left, leftRailEdge } = metricsRef.current;
     const roundedLeft = Math.max(0, Math.round(left));
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
@@ -862,12 +854,7 @@ export default function StudioSplitWorkspace({
       result.style.removeProperty('left');
       builder.style.flexBasis = `${Math.max(0, builderWidth)}px`;
     }
-    if (
-      draggingRef.current
-      || document.documentElement.classList.contains('soridraw-window-resizing')
-    ) {
-      syncExternalMeasurements(builderWidth, splitterLeft);
-    }
+    if (draggingRef.current) syncExternalMeasurements(builderWidth, splitterLeft);
 
     const edgeTolerancePercent = (1.5 / safeWidth) * 100;
     const root = document.documentElement;
@@ -1029,14 +1016,8 @@ export default function StudioSplitWorkspace({
       : resultCollapsedRef.current
         ? metricsRef.current.width
         : metricsRef.current.width * (appliedPercent / 100);
-    const outerWindowResizeActive = document.documentElement.classList.contains('soridraw-window-resizing');
-    if (!outerWindowResizeActive) {
-      commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
-      clearExternalMeasurements();
-    }
-    // During native resize, applyPercentToLayout already keeps the panes,
-    // splitter and portaled controls on live local geometry. Do not clear those
-    // local values until the resize-end refresh commits the final root snapshot.
+    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+    clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
   }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
 
@@ -1183,21 +1164,6 @@ export default function StudioSplitWorkspace({
     const handleViewportResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
-        // Capture the already-rendered action-anchor relationship once at the
-        // start of the native resize. This lets the floating Generate bar use
-        // exact local geometry for the whole gesture without repeated layout
-        // reads or inherited <html> coordinate writes.
-        const controls = readExternalControls(true);
-        const builderRect = builderRef.current?.getBoundingClientRect();
-        const actionAnchorRect = controls.actionAnchor?.getBoundingClientRect();
-        if (builderRect && actionAnchorRect && builderRect.width > 0 && actionAnchorRect.width > 0) {
-          actionAnchorInsetsRef.current = {
-            left: Math.max(0, actionAnchorRect.left - builderRect.left),
-            right: Math.max(0, builderRect.right - actionAnchorRect.right),
-          };
-        } else {
-          actionAnchorInsetsRef.current = null;
-        }
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
@@ -1284,7 +1250,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, readExternalControls, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
   // 660 — keep the pointer/divider lane independent from an expensive PROD
   // Studio tablet reflow. 659 already proved that the fixed splitter can follow

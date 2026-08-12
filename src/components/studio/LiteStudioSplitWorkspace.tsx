@@ -1335,27 +1335,6 @@ export default function LiteStudioSplitWorkspace({
     }
   }, [viewMode, workspaceRequestId, workspaceView]);
 
-  const freezeOuterResizePaneBodies = useCallback(() => {
-    const freezePane = (pane: HTMLDivElement | null) => {
-      if (!pane) return;
-      const width = Math.max(1, Math.round(pane.getBoundingClientRect().width));
-      pane.style.setProperty('--soridraw-outer-resize-body-width', `${width}px`);
-      pane.dataset.soridrawOuterResizeBodyFrozen = 'true';
-    };
-    freezePane(builderRef.current);
-    freezePane(resultRef.current);
-  }, []);
-
-  const clearOuterResizePaneBodies = useCallback(() => {
-    const clearPane = (pane: HTMLDivElement | null) => {
-      if (!pane) return;
-      pane.style.removeProperty('--soridraw-outer-resize-body-width');
-      delete pane.dataset.soridrawOuterResizeBodyFrozen;
-    };
-    clearPane(builderRef.current);
-    clearPane(resultRef.current);
-  }, []);
-
   useLayoutEffect(() => {
     const initialFrame = window.requestAnimationFrame(refreshMetrics);
     const layout = layoutRef.current;
@@ -1376,7 +1355,6 @@ export default function LiteStudioSplitWorkspace({
     const handleWindowResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
-        freezeOuterResizePaneBodies();
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
@@ -1392,7 +1370,6 @@ export default function LiteStudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
-        clearOuterResizePaneBodies();
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1413,7 +1390,6 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
-      clearOuterResizePaneBodies();
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -1443,7 +1419,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, clearOuterResizePaneBodies, freezeOuterResizePaneBodies, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
+  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

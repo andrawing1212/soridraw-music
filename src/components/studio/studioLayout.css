@@ -10864,33 +10864,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 669 — outer-window body-layout snapshot.
- * 667 proved that removing the heavy pane bodies makes the Vercel resize path
- * dramatically faster. 668 reduced container-query churn, but the mounted body
- * still reflowed text/grids/cards for every browser pixel. During native OUTER
- * resize only, each pane body keeps the width captured once at resize-start.
- * The outer pane shell, mastheads, divider and rails still track live. At settle
- * the fixed width is cleared and the full responsive body resolves once.
- * No React unmount, no hidden content, no divider-drag behavior change. */
-@media (min-width: 1100px) {
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)[data-soridraw-outer-resize-body-frozen="true"] {
-    overflow: clip !important;
-    contain: layout paint style !important;
-  }
-
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)[data-soridraw-outer-resize-body-frozen="true"]
-  > :not(.soridraw-studio-pane-masthead-host) {
-    width: var(--soridraw-outer-resize-body-width) !important;
-    min-width: var(--soridraw-outer-resize-body-width) !important;
-    max-width: var(--soridraw-outer-resize-body-width) !important;
-    contain: layout style paint !important;
-  }
-}
-
 /* 668 — external browser-window resize restores the proven 488 principle.
  * 667 proved that removing the heavy pane bodies makes the Vercel resize path
  * immediately fast. The remaining high-cost work is therefore inside the pane

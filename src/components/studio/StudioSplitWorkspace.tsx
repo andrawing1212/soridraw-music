@@ -140,6 +140,13 @@ export default function StudioSplitWorkspace({
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
+  // 671 A/B probe: during an OUTER browser-window resize, temporarily unmount
+  // only the Builder body while leaving the masthead, Result body, split shell,
+  // rails and divider mounted. This is intentionally a one-variable diagnostic:
+  // if resize speed jumps, Builder or Builder+Result interaction is implicated;
+  // if it does not, the Result side becomes the next isolation target.
+  const [builderResizeProbeActive, setBuilderResizeProbeActive] = useState(false);
+  const builderResizeProbeActiveRef = useRef(false);
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -1165,6 +1172,10 @@ export default function StudioSplitWorkspace({
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
+        if (!builderResizeProbeActiveRef.current) {
+          builderResizeProbeActiveRef.current = true;
+          setBuilderResizeProbeActive(true);
+        }
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
 
@@ -1179,6 +1190,10 @@ export default function StudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        if (builderResizeProbeActiveRef.current) {
+          builderResizeProbeActiveRef.current = false;
+          setBuilderResizeProbeActive(false);
+        }
         scheduleLayoutMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1204,6 +1219,7 @@ export default function StudioSplitWorkspace({
       themeObserver.disconnect();
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
+      builderResizeProbeActiveRef.current = false;
       window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
@@ -1591,6 +1607,10 @@ export default function StudioSplitWorkspace({
     ><span /></button>
   );
 
+  const suppressBuilderBodyForResizeProbe = builderResizeProbeActive
+    && viewMode === 'split'
+    && (workspaceView === 'create' || workspaceView === 'recent');
+
   return (
     <>
       <div
@@ -1602,7 +1622,7 @@ export default function StudioSplitWorkspace({
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}
           </div>
-          {panes[0] ?? null}
+          {suppressBuilderBodyForResizeProbe ? null : (panes[0] ?? null)}
         </div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />

@@ -1,22 +1,10 @@
-## 670차 — 668 기준 / 657 pane fast path 외부창 resize 공통 재사용
-- 기준: `SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip`. 669의 본문 폭 snapshot/clip 방식은 사용하지 않습니다.
-- 667 실사용으로 실제 병목이 pane 본문 내부에 있음을 확인했고, 668은 외부창 resize에서 구조 `@container`만 일시정지해 개선 폭이 제한적이었습니다.
-- 새 최적화 엔진을 추가하지 않고, 657에서 이미 분할바 드래그에 사용 중인 실제 pane 폭 661~1080px fast path를 외부 브라우저 창 resize에도 그대로 재사용합니다.
-- 외부창 resize 중 해당 pane의 Builder 카드, Music Note/Library 리스트·그룹을 독립 layout/style/paint 경계로 격리하고, off-screen leaf에는 기존 `content-visibility:auto`를 사용합니다.
-- 기존 668의 구조 container-query 일시정지와 519의 transition/animation 정지는 유지합니다.
-- 본문 React unmount 없음, 폭 고정 없음, `overflow: clip` 없음, resize 종료 시 강제 폭 해제/점프 로직 없음.
-- 분할바 드래그의 기존 657 동작과 breakpoint/pane 비율/모바일 compact/Galaxy Tab touch 경로는 변경하지 않습니다.
-- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
-- 상태: 코드 반영 완료 · 테스트앱 실사용 검증 전.
-
-## 670차 — 668 기준 / 657 pane fast path 외부창 resize 공통 재사용
-- 기준: `SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip`. 669의 본문 폭 snapshot/clip 방식은 사용하지 않습니다.
-- 667 실사용으로 실제 병목이 pane 본문 내부에 있음을 확인했고, 668은 외부창 resize에서 구조 `@container`만 일시정지해 개선 폭이 제한적이었습니다.
-- 새 최적화 엔진을 추가하지 않고, 657에서 이미 분할바 드래그에 사용 중인 실제 pane 폭 661~1080px fast path를 외부 브라우저 창 resize에도 그대로 재사용합니다.
-- 외부창 resize 중 해당 pane의 Builder 카드, Music Note/Library 리스트·그룹을 독립 layout/style/paint 경계로 격리하고, off-screen leaf에는 기존 `content-visibility:auto`를 사용합니다.
-- 기존 668의 구조 container-query 일시정지와 519의 transition/animation 정지는 유지합니다.
-- 본문 React unmount 없음, 폭 고정 없음, `overflow: clip` 없음, resize 종료 시 강제 폭 해제/점프 로직 없음.
-- 분할바 드래그의 기존 657 동작과 breakpoint/pane 비율/모바일 compact/Galaxy Tab touch 경로는 변경하지 않습니다.
+## 671차 — 외부창 리사이즈 Builder 본문 단독 제거 A/B 진단
+- 기준: 668차. 669의 본문 폭 고정 방식과 670의 외부창 fast-path 확장은 사용하지 않습니다.
+- 목적: 667에서 "두 pane 본문을 제거하면 즉시 빨라진다"는 결과를 더 좁혀, Builder(곡 만들기) 단독 비용인지 Builder+Result 동시 배치 상호작용인지 확인합니다.
+- PC fine-pointer Studio의 외부 브라우저 창 리사이즈가 시작되면 **왼쪽 Builder 본문만** 일시적으로 React unmount합니다. Builder 대문/마스트헤드, 오른쪽 최근 생성곡 본문, 분할 shell, 분할바, 좌우 rail은 그대로 유지합니다.
+- 리사이즈가 110ms 멈추면 Builder 본문을 다시 mount하여 정상 화면으로 복구합니다. 매 픽셀마다 mount/unmount하지 않고 resize 시작/종료에만 1회 전환합니다.
+- Music Note/Library Lite 경로, 분할바 드래그 경로, breakpoint, pane 비율, 모바일 구조는 변경하지 않습니다.
+- 판정: 크게 빨라지면 Builder 단독 또는 Builder+Result 상호작용이 유력합니다. 차이가 없으면 다음 단계에서 오른쪽 Result 본문 단독 제거로 비교합니다.
 - Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
 - 상태: 코드 반영 완료 · 테스트앱 실사용 검증 전.
 

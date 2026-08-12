@@ -50,22 +50,29 @@ export function attachSoridrawResponsiveContract(element: HTMLElement) {
   applyWidth(readStableBorderWidth());
 
   if (typeof ResizeObserver !== 'undefined') {
-    const observer = new ResizeObserver(() => {
-      // IMPORTANT: responsive mode itself changes the page padding.
-      // ResizeObserverEntry.contentRect is the content-box width, so using it
-      // here creates a feedback loop near the mobile/tablet threshold:
-      // tablet padding -> smaller contentRect -> mobile -> smaller padding ->
-      // larger contentRect -> tablet -> ...
-      // Measure the border-box instead so visual padding changes never alter
-      // the width that owns the responsive decision.
+    const observer = new ResizeObserver((entries) => {
+      // 684: ResizeObserver already gives us the post-layout border-box size.
+      // Reading getBoundingClientRect() inside the callback can force Chromium
+      // to synchronously lay out the page again after the viewport invalidated
+      // styles. Prefer borderBoxSize so responsive ownership consumes the
+      // browser's existing layout result without starting a second layout pass.
+      const entry = entries[0];
+      const borderBox = Array.isArray(entry?.borderBoxSize)
+        ? entry.borderBoxSize[0]
+        : entry?.borderBoxSize;
+      const observedWidth = Number(borderBox?.inlineSize);
+      if (Number.isFinite(observedWidth) && observedWidth > 0) {
+        applyWidth(observedWidth);
+        return;
+      }
+
+      // Older engines may not expose borderBoxSize. Fall back only there.
       applyWidth(readStableBorderWidth());
     });
 
     try {
       observer.observe(element, { box: 'border-box' });
     } catch {
-      // Older browsers can still use the default observer because the callback
-      // reads getBoundingClientRect(), not the unstable contentRect width.
       observer.observe(element);
     }
     return () => observer.disconnect();

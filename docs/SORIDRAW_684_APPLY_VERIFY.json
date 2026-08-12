@@ -1,0 +1,17 @@
+{
+  "version": 684,
+  "basis": "SORIDRAW_683차_668클린복귀_Firestore캐시원복.zip",
+  "goal": "Keep real-time resize while eliminating a second synchronous geometry read/layout pass from ResizeObserver callbacks.",
+  "trace_evidence": {
+    "vercel": "647 Layout events / 21.3s, 2745ms total Layout, max 55.8ms; many full #document layouts.",
+    "ai_studio_app": "409 Layout events / 29.25s, 2451ms total Layout; profiler overhead present, so used only for stack attribution.",
+    "attribution": "AI Studio trace repeatedly attributes expensive layout to LiteStudioSplitWorkspace/StudioSplitWorkspace geometry measurement paths; contentResponsive also appears as a forced geometry read."
+  },
+  "changes": [
+    "StudioSplitWorkspace consumes ResizeObserver borderBoxSize during continuous native resize and keeps cached left/rail geometry until an explicit frame breakpoint or resize-end exact refresh.",
+    "LiteStudioSplitWorkspace uses the same observer-width fast path and stops force-broadcasting exact responsive widths every native resize frame.",
+    "contentResponsive consumes ResizeObserver borderBoxSize directly instead of getBoundingClientRect inside the observer callback.",
+    "No freeze, clipping, body unmount, delayed resize, visual snapshot, iframe, Firebase, Auth, Firestore, Functions, or storage-schema change."
+  ],
+  "success_test": "On Vercel/test build, resize the outer browser window repeatedly across PC/tablet widths and drag the split bar. The panes must continue to resize live; judge only visible stutter/latency versus 683."
+}

@@ -224,6 +224,7 @@ export default function LiteStudioSplitWorkspace({
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
+  const observedLayoutWidthRef = useRef<number | null>(null);
   const lastPixelRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
@@ -722,19 +723,38 @@ export default function LiteStudioSplitWorkspace({
     return nextPercent;
   }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
-  const refreshMetrics = useCallback(() => {
+  const refreshMetrics = useCallback((observedWidth?: number) => {
     const layout = layoutRef.current;
     if (!layout) return;
-    refreshIsolationHeight();
-    syncModalHost();
-    const rect = layout.getBoundingClientRect();
-    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
-    const leftRailRect = leftRail?.getBoundingClientRect();
-    metricsRef.current = {
-      left: rect.left,
-      width: Math.max(1, rect.width),
-      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
-    };
+
+    const continuousWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
+    const canUseObservedWidth = continuousWindowResize
+      && Number.isFinite(observedWidth)
+      && Number(observedWidth) > 0
+      && metricsRef.current.width > 0;
+
+    if (canUseObservedWidth) {
+      // 684: ResizeObserver has already completed the browser's layout for this
+      // width. Re-reading layout + left rail rectangles here is a forced second
+      // layout on production resize frames. Keep the stable left/rail metrics
+      // and consume only the new border-box width. Rail breakpoint changes are
+      // handled by the explicit frame-resize event below with a full refresh.
+      metricsRef.current = {
+        ...metricsRef.current,
+        width: Math.max(1, Number(observedWidth)),
+      };
+    } else {
+      refreshIsolationHeight();
+      syncModalHost();
+      const rect = layout.getBoundingClientRect();
+      const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+      const leftRailRect = leftRail?.getBoundingClientRect();
+      metricsRef.current = {
+        left: rect.left,
+        width: Math.max(1, rect.width),
+        leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+      };
+    }
 
     const nextProfile = getSplitProfile();
     if (splitProfileRef.current !== nextProfile) {
@@ -744,19 +764,25 @@ export default function LiteStudioSplitWorkspace({
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
     const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
-    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
+    // During a continuous native resize, the page only needs a responsive event
+    // when PC/tablet/mobile ownership actually changes. The exact final widths
+    // are published by the full settle refresh.
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, !canUseObservedWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
-    readExternalControls();
+    if (!canUseObservedWidth) readExternalControls();
     syncExternalGeometry(builderWidth, splitterLeft);
-    clearLiveExternalGeometry();
+    if (!canUseObservedWidth) clearLiveExternalGeometry();
   }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
+
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
     refreshFrameRef.current = window.requestAnimationFrame(() => {
       refreshFrameRef.current = null;
-      refreshMetrics();
+      const observedWidth = observedLayoutWidthRef.current;
+      observedLayoutWidthRef.current = null;
+      refreshMetrics(observedWidth ?? undefined);
     });
   }, [refreshMetrics]);
 
@@ -1340,7 +1366,15 @@ export default function LiteStudioSplitWorkspace({
     const layout = layoutRef.current;
     let observer: ResizeObserver | null = null;
     if (layout && typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(() => {
+      observer = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        const borderBox = Array.isArray(entry?.borderBoxSize)
+          ? entry.borderBoxSize[0]
+          : entry?.borderBoxSize;
+        const observedWidth = Number(borderBox?.inlineSize);
+        if (Number.isFinite(observedWidth) && observedWidth > 0) {
+          observedLayoutWidthRef.current = observedWidth;
+        }
         if (!draggingRef.current) scheduleMetricsRefresh();
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
@@ -1370,6 +1404,7 @@ export default function LiteStudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        observedLayoutWidthRef.current = null;
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1379,6 +1414,7 @@ export default function LiteStudioSplitWorkspace({
     // geometry in the same layout phase instead of one rAF later, otherwise the
     // builder masthead/search can visibly overshoot before snapping back.
     const handleFrameResize = () => {
+      observedLayoutWidthRef.current = null;
       if (!draggingRef.current) refreshMetrics();
     };
     window.addEventListener('resize', handleWindowResize, { passive: true });

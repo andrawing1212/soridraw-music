@@ -2019,3 +2019,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+
+## 684 - ResizeObserver completed-layout reuse (2026-08-13)
+- Basis: 683 (clean 668 behavior).
+- Uses the already-available ResizeObserver border-box width during continuous native window resizing instead of immediately calling `getBoundingClientRect()` on the workspace/rail again.
+- Full exact left/rail/modal geometry still refreshes on rail breakpoint changes and once at resize settle.
+- `contentResponsive` now consumes `borderBoxSize.inlineSize` directly when supported.
+- Visible resizing remains live; no width freeze, clipping, body removal, or delayed settle-only UI.
+- Firebase/Auth/Firestore/Functions/storage schema untouched.

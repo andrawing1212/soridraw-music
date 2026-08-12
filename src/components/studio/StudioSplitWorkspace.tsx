@@ -931,15 +931,25 @@ export default function StudioSplitWorkspace({
       return;
     }
 
-    refreshWorkspaceIsolation();
+    const tabletNativeResizeActive = document.documentElement.classList.contains('soridraw-tablet-window-resizing');
+    // 652: During a native browser-width gesture the workspace ResizeObserver
+    // remains the single geometry owner. Keep only the one layout rect needed
+    // for live pane geometry; defer isolation/modal/footer/rail re-measurement
+    // until resize-end. Those secondary reads/writes were being repeated for
+    // every width tick only in the compact tablet composition.
+    if (!tabletNativeResizeActive) refreshWorkspaceIsolation();
     const rect = layout.getBoundingClientRect();
-    syncCenterModalHostBounds();
-    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
-    const leftRailRect = leftRail?.getBoundingClientRect();
+    if (!tabletNativeResizeActive) syncCenterModalHostBounds();
+    let leftRailEdge = rect.left;
+    if (!tabletNativeResizeActive) {
+      const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+      const leftRailRect = leftRail?.getBoundingClientRect();
+      leftRailEdge = leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left;
+    }
     metricsRef.current = {
       left: rect.left,
       width: Math.max(rect.width, 1),
-      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+      leftRailEdge,
     };
 
     const nextProfile = getSplitProfile();
@@ -951,7 +961,12 @@ export default function StudioSplitWorkspace({
     if (profileChanged) splitProfileRef.current = nextProfile;
 
     const appliedPercent = applyPercentToLayout(requestedPercent);
-    if (profileChanged || Math.abs(appliedPercent - requestedPercent) > 0.001) {
+    // 652: tablet min-pane bounds are pixel-based, so native browser resizing
+    // can clamp the stored percent by tiny amounts on many consecutive width
+    // ticks. Mirroring each clamp through React makes the whole Studio subtree
+    // reconcile while the browser is already doing layout. Keep the live DOM
+    // geometry in percentRef/CSS and commit React state once at resize-end.
+    if (!tabletNativeResizeActive && (profileChanged || Math.abs(appliedPercent - requestedPercent) > 0.001)) {
       setPercent(appliedPercent);
     }
     const builderWidth = builderCollapsedRef.current
@@ -960,8 +975,10 @@ export default function StudioSplitWorkspace({
         ? metricsRef.current.width
         : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
-    clearExternalMeasurements();
-    scheduleFooterBoundaryRefresh();
+    if (!tabletNativeResizeActive) {
+      clearExternalMeasurements();
+      scheduleFooterBoundaryRefresh();
+    }
   }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
@@ -1135,8 +1152,15 @@ export default function StudioSplitWorkspace({
       if (!draggingRef.current) refreshLayoutMetrics();
     };
 
+    const handleTabletNativeResizeEnd = () => {
+      if (getSplitProfile() !== 'tablet') return;
+      setPercent(percentRef.current);
+      scheduleLayoutMetricsRefresh();
+    };
+
     window.addEventListener('resize', handleViewportResize, { passive: true });
     window.addEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
+    window.addEventListener('soridraw-tablet-window-resize-end', handleTabletNativeResizeEnd as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
     window.addEventListener('scroll', syncCenterModalHostBounds, { passive: true });
     scheduleFooterBoundaryRefresh();
@@ -1149,6 +1173,7 @@ export default function StudioSplitWorkspace({
       document.documentElement.classList.remove('soridraw-window-resizing');
       window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
+      window.removeEventListener('soridraw-tablet-window-resize-end', handleTabletNativeResizeEnd as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       window.removeEventListener('scroll', syncCenterModalHostBounds);
       if (dragFrameRef.current !== null) {

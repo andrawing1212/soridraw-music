@@ -705,31 +705,48 @@ export default function LiteStudioSplitWorkspace({
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout) return;
-    refreshIsolationHeight();
-    syncModalHost();
+    const tabletNativeResizeActive = document.documentElement.classList.contains('soridraw-tablet-window-resizing');
+    // 652: Native tablet-width resizing keeps Lite's existing ResizeObserver as
+    // the sole geometry owner. Do not add another resize path; simply omit the
+    // secondary isolation/modal/rail/external-control work until the gesture
+    // settles. applyPercent still writes the real pane widths and publishes
+    // responsive mode crossings live, so the visible layout remains accurate.
+    if (!tabletNativeResizeActive) {
+      refreshIsolationHeight();
+      syncModalHost();
+    }
     const rect = layout.getBoundingClientRect();
-    const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
-    const leftRailRect = leftRail?.getBoundingClientRect();
+    let leftRailEdge = rect.left;
+    if (!tabletNativeResizeActive) {
+      const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
+      const leftRailRect = leftRail?.getBoundingClientRect();
+      leftRailEdge = leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left;
+    }
     metricsRef.current = {
       left: rect.left,
       width: Math.max(1, rect.width),
-      leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
+      leftRailEdge,
     };
 
     const nextProfile = getSplitProfile();
-    if (splitProfileRef.current !== nextProfile) {
+    const profileChanged = splitProfileRef.current !== nextProfile;
+    if (profileChanged) {
       splitProfileRef.current = nextProfile;
       percentRef.current = readStoredPercent(nextProfile);
     }
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
     const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
-    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
+    if (!tabletNativeResizeActive || profileChanged) {
+      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
+    }
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
-    readExternalControls();
-    syncExternalGeometry(builderWidth, splitterLeft);
-    clearLiveExternalGeometry();
+    if (!tabletNativeResizeActive) {
+      readExternalControls();
+      syncExternalGeometry(builderWidth, splitterLeft);
+      clearLiveExternalGeometry();
+    }
   }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
@@ -1342,13 +1359,18 @@ export default function LiteStudioSplitWorkspace({
     const handleFrameResize = () => {
       if (!draggingRef.current) refreshMetrics();
     };
+    const handleTabletNativeResizeEnd = () => {
+      if (!draggingRef.current && getSplitProfile() === 'tablet') refreshMetrics();
+    };
     window.addEventListener('resize', handleWindowResize, { passive: true });
     window.addEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
+    window.addEventListener('soridraw-tablet-window-resize-end', handleTabletNativeResizeEnd as EventListener);
     return () => {
       window.cancelAnimationFrame(initialFrame);
       observer?.disconnect();
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
+      window.removeEventListener('soridraw-tablet-window-resize-end', handleTabletNativeResizeEnd as EventListener);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');

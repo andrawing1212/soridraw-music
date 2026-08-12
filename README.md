@@ -1,3 +1,13 @@
+## 652차 — PC 태블릿 1100~1599 공통 리사이즈 병목 구조 수정
+- 기준: `SORIDRAW_651차_PC태블릿_네이티브리사이즈_공통페인트레이아웃충돌제거.zip`. 651에서 추가한 태블릿 `content-visibility` 임시 정지/헤더 blur 추정 최적화는 효과가 없었으므로 CSS 블록을 제거했습니다.
+- 코드 재대조 결과, 넓은 PC(>=1600)는 309차부터 split pane에 `contain:strict`, direct child/card `content-visibility:auto + contain:layout paint style`, drag 중 compositor 힌트가 적용되지만 1100~1599 태블릿에는 이 검증된 성능 계약이 빠져 있었습니다. 같은 DOM을 리사이즈해도 태블릿에서 전체 builder/result tree가 폭 변경마다 더 넓게 reflow/paint되는 구조였습니다.
+- 652는 309의 **렌더 격리 원리만** 1100~1599에도 적용합니다. pane/카드의 크기·breakpoint·split percent·PC/Tablet/Mobile 디자인은 변경하지 않습니다.
+- 네이티브 브라우저 창 리사이즈 중 `soridraw-tablet-window-resizing`은 레이아웃 엔진을 추가로 실행하지 않고, 기존 workspace ResizeObserver 한 경로를 그대로 사용하면서 transition/animation/hit-test만 잠시 정지합니다.
+- Legacy Studio/Recent는 태블릿의 430px 최소 pane 제한 때문에 창 폭 변화마다 clamp 값이 조금씩 바뀔 때 React `setPercent`가 연속 발생할 수 있던 경로를 막고, DOM/CSS geometry는 실시간 유지한 채 resize 종료 시 React state를 1회 동기화합니다.
+- Legacy의 native resize 프레임에서는 isolation 높이·modal host·left rail rect·footer boundary·external control 재탐색을 매 프레임 반복하지 않고 종료 시 1회 갱신합니다.
+- Lite Music Note/Library도 같은 native resize 동안 isolation/modal/rail/external-control 측정과 강제 pane-width rebroadcast를 생략하고, `applyPercent`의 실제 pane geometry와 responsive mode crossing만 실시간 유지합니다. 종료 시 full refresh 1회로 동기화합니다.
+- 647처럼 split engine을 바꾸지 않았고, 649처럼 별도 window.resize geometry 경로를 추가하지 않았습니다. 646 모바일 단일 UI, 641~644 대문 정렬, 638 왼쪽 메뉴 동작, Firebase/Auth/Firestore/Functions/저장 구조는 그대로입니다.
+
 ## 651차 — PC 태블릿 네이티브 리사이즈 공통 paint/layout 충돌 제거
 - 기준: `SORIDRAW_650차_649완전롤백_외부창수평리사이즈_중복경로제거.zip`.
 - 650 실사용 영상에서 1600px 이상 PC는 상대적으로 정상이고 1100~1599px에서만 반복적으로 느려지는 공통점을 다시 추적했습니다. Studio/Recent는 Legacy, Music Note/Library는 Lite/library-590로 엔진이 다른데도 같은 구간에서 느려지므로 split engine 교체가 원인이 아니라 **태블릿 구간 공통 CSS/paint 경로**가 병목 후보였습니다.

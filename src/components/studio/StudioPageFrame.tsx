@@ -96,6 +96,45 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   }, [railViewport]);
 
   useEffect(() => {
+    // 652: Native desktop-window resizing is materially different from a
+    // divider drag. Mark only the 1100~1599 tablet band so CSS can reuse the
+    // proven wide-PC containment/transition fast path without changing split
+    // geometry or the actual responsive breakpoint. The class changes only at
+    // gesture start/end; resize ticks merely reset the settle timer.
+    const root = document.documentElement;
+    let settleTimer: number | null = null;
+
+    const finishTabletResize = () => {
+      if (settleTimer !== null) {
+        window.clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+      const wasActive = root.classList.contains('soridraw-tablet-window-resizing');
+      root.classList.remove('soridraw-tablet-window-resizing');
+      if (wasActive) {
+        window.dispatchEvent(new CustomEvent('soridraw-tablet-window-resize-end'));
+      }
+    };
+
+    const handleNativeResize = () => {
+      const inTabletBand = window.innerWidth >= 1100 && window.innerWidth < 1600;
+      if (!inTabletBand) {
+        finishTabletResize();
+        return;
+      }
+      root.classList.add('soridraw-tablet-window-resizing');
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(finishTabletResize, 90);
+    };
+
+    window.addEventListener('resize', handleNativeResize, { passive: true });
+    return () => {
+      window.removeEventListener('resize', handleNativeResize);
+      finishTabletResize();
+    };
+  }, []);
+
+  useEffect(() => {
     if (railViewport !== 'wide') return;
     try {
       window.localStorage.setItem(LEFT_RAIL_STORAGE_KEY, String(isLeftRailCollapsed));

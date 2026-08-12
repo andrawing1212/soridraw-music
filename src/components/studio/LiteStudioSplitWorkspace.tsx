@@ -215,7 +215,7 @@ export default function LiteStudioSplitWorkspace({
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
-  const finePointerProbeRef = useRef(
+  const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
   );
   const pointerIdRef = useRef(-1);
@@ -641,13 +641,14 @@ export default function LiteStudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
 
-    // 656 diagnostic: the slow state is owned by pane width, not window width.
+    // 657: the 656 test confirmed the slow state is owned by pane width.
     // Reuse the engine's already-known geometry and mark each fine-pointer pane
-    // only while its live width sits in the shared 661~1080px tablet band.
+    // while its live width sits in the shared 661~1080px tablet band. The marker
+    // activates only drag-time CSS isolation; normal tablet rendering is untouched.
     const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = finePointerProbeRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
-      if (active) pane.dataset.soridrawPaneTabletProbe = 'true';
-      else delete pane.dataset.soridrawPaneTabletProbe;
+      const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+      if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
+      else delete pane.dataset.soridrawPaneTabletFastpath;
     };
     syncPaneTabletProbe(builder, builderWidth);
     syncPaneTabletProbe(result, resultWidth);

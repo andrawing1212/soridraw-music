@@ -1,3 +1,12 @@
+## 657차 — 실제 pane 태블릿 구간 본문 유지 실사용 최적화
+
+- 기준: 656차. 656의 `display:none` 원인분리 테스트에서 661~1080px 실제 pane 본문이 빠지면 분할바가 확실히 빨라지는 것을 실사용 영상으로 확인했다.
+- 진단용 본문 숨김을 완전히 제거했다. 장르/스타일/사운드/스토리보드/템포, Music Note, Suno Library 콘텐츠는 드래그 중에도 그대로 보인다.
+- `window` 폭이 아니라 split engine이 이미 계산한 실제 pane 폭 661~1080px만 fast-path 표식으로 사용한다. 별도 ResizeObserver, window.resize, 타이머, React state 경로는 추가하지 않았다.
+- 활성 드래그 동안에만 Studio 본문, 메뉴 카드, Music Note/Library 상단/리스트/그룹을 독립 `layout/style/paint` 경계로 격리하고, off-screen 카드/행은 `content-visibility:auto`로 마지막 실측 높이를 재사용한다.
+- 519에서 검증된 것처럼 화면 구성을 소유하지 않는 메뉴 summary/live-keyword 보조 container query만 드래그 중 정지한다. 메인 builder container query와 실제 tablet UI 전환은 유지한다.
+- 분할 geometry, breakpoint, PC/Tablet/Mobile 디자인, Galaxy Tab Touch Lite V2, 646 모바일 단일 UI, Firebase/Auth/Functions/저장 구조는 변경하지 않았다.
+
 ## 656차 — 실제 pane 폭 661~1080px 태블릿 병목 단일변수 테스트
 - 기준: 655차. 655의 `window 1100~1599px` CSS 진단은 제거했습니다. 그 방식은 큰 PC 창에서 분할바만 움직여 pane이 태블릿 폭이 되는 실제 증상 경로를 테스트하지 못했습니다.
 - Legacy/Lite 두 분할 엔진이 이미 계산한 builder/result 실제 pane 폭을 그대로 사용합니다. fine pointer PC에서 pane 폭이 `661~1080px`일 때만 해당 pane에 `data-soridraw-pane-tablet-probe=true`를 붙입니다. 별도 ResizeObserver, window.resize, 타이머, getBoundingClientRect 진단 경로는 추가하지 않았습니다.

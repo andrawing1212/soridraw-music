@@ -141,7 +141,7 @@ export default function StudioSplitWorkspace({
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
   const draggingRef = useRef(false);
-  const finePointerProbeRef = useRef(
+  const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
   );
   const layoutRef = useRef<HTMLDivElement | null>(null);
@@ -784,15 +784,14 @@ export default function StudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
-    // 656 diagnostic: test the real pane-owned tablet band, not the browser
-    // viewport. The existing split engine already knows both pane widths on
-    // every commit, so mark only a fine-pointer pane whose live width is in
-    // the shared content-tablet range (661~1080px). No observer, timer, or
-    // window-size heuristic is added.
+    // 657: reuse the 656-proven pane-owned tablet band as a real drag fast path.
+    // The split engine already knows both pane widths, so mark only a fine-pointer
+    // pane whose live width is 661~1080px. CSS uses this marker only while an
+    // active divider drag is in progress; resting tablet UI remains unchanged.
     const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = finePointerProbeRef.current && paneWidth > 660 && paneWidth <= 1080;
-      if (active) pane.dataset.soridrawPaneTabletProbe = 'true';
-      else delete pane.dataset.soridrawPaneTabletProbe;
+      const active = finePointerFastPathRef.current && paneWidth > 660 && paneWidth <= 1080;
+      if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
+      else delete pane.dataset.soridrawPaneTabletFastpath;
     };
     syncPaneTabletProbe(builder, builderWidth);
     syncPaneTabletProbe(result, resultWidth);

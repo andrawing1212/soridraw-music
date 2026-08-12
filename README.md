@@ -1,3 +1,10 @@
+## 660차 — Studio 태블릿 PROD 적응형 레이아웃 페이싱
+- 기준: 659차. 659의 pointer→분할바 직결 경로와 657/658의 실제 pane 661~1080px 최적화는 그대로 유지합니다.
+- AI Studio에서는 659가 매우 빠르지만 Vercel 테스트앱에서는 여전히 같은 태블릿 구간이 느린 실사용 결과를 기준으로, DEV/PROD를 hostname으로 나누지 않고 실제 한 번의 Studio layout commit 비용으로 다음 commit 간격을 자동 조절합니다.
+- 분할바는 659처럼 매 pointermove 최신 X를 즉시 따라갑니다. Studio pane 폭 갱신만 661~1080px fine-pointer hot band에서 최신 좌표 1개만 보관하며 self-paced 처리합니다.
+- commit이 가벼우면 16ms(약 60fps) 유지, 비용이 커질수록 20/28/36ms로만 완화해 production main thread가 연속 reflow에 잠기는 것을 방지합니다. 과거 좌표 큐를 재생하지 않고 항상 최신 X만 사용하며 pointer-up은 최종 좌표를 즉시 1회 확정합니다.
+- 1080px 밖의 일반 PC 구간, Music Note/Library Lite 경로, Galaxy Tab touch V2, 모바일 compact 구조, 분할 비율/breakpoint/Firebase/Auth/Functions/Firestore 저장 구조는 변경하지 않습니다.
+
 ## 659차 — Studio 분할바 pointer 직결 · 태블릿 지연 분리
 
 - 기준: 658차. 657/658의 실제 pane 661~1080px 태블릿 본문 최적화와 PROD 패리티 경로는 그대로 유지한다.

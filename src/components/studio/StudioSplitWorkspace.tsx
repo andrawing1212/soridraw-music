@@ -164,6 +164,8 @@ export default function StudioSplitWorkspace({
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
+  const lastDragLayoutCommitAtRef = useRef(0);
+  const dragLayoutIntervalRef = useRef(16);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
   const builderModeAnchorFrameRef = useRef<number | null>(null);
@@ -1236,7 +1238,16 @@ export default function StudioSplitWorkspace({
     };
   }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
-  const flushPendingPointer = useCallback(() => {
+  // 660 — keep the pointer/divider lane independent from an expensive PROD
+  // Studio tablet reflow. 659 already proved that the fixed splitter can follow
+  // the pointer directly. The remaining DEV/PROD gap comes from immediately
+  // committing every rAF to the large Studio pane tree even when one live pane
+  // sits in the confirmed 661~1080px tablet band. Let that layout lane self-pace
+  // from its *measured* commit cost while always retaining only the newest X.
+  // Fast environments keep ~60fps commits; expensive production frames back off
+  // just enough to give pointer delivery/paint breathing room. No hostname/build
+  // branch is used, so DEV and PROD run the exact same code.
+  const flushPendingPointer = useCallback((forceLayout = false) => {
     dragFrameRef.current = null;
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
@@ -1253,15 +1264,59 @@ export default function StudioSplitWorkspace({
     // Preserve one-pixel pointer fidelity. The former 2px quantization made a
     // healthy frame rate still look like stepping on wide desktop screens.
     const nextBuilderPixel = Math.round(rawBuilderPixel);
-    if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
+    if (lastDragBuilderPixelRef.current === nextBuilderPixel && !forceLayout) return;
+
+    const nextResultPixel = Math.max(0, safeWidth - nextBuilderPixel);
+    const inConfirmedTabletHotBand = finePointerFastPathRef.current && (
+      (nextBuilderPixel > 660 && nextBuilderPixel <= 1080)
+      || (nextResultPixel > 660 && nextResultPixel <= 1080)
+    );
+
+    if (inConfirmedTabletHotBand && !forceLayout) {
+      const now = performance.now();
+      const elapsed = now - lastDragLayoutCommitAtRef.current;
+      if (elapsed < dragLayoutIntervalRef.current) {
+        // Do not replay old positions. Keep only the latest pointer X and try
+        // again on the next animation frame; the splitter itself already moved
+        // immediately in handlePointerMove.
+        pendingClientXRef.current = clientX;
+        if (dragFrameRef.current === null) {
+          dragFrameRef.current = window.requestAnimationFrame(() => {
+            flushPendingPointer(false);
+          });
+        }
+        return;
+      }
+    }
+
     lastDragBuilderPixelRef.current = nextBuilderPixel;
+    const commitStart = performance.now();
     applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
+    const commitCost = Math.max(0, performance.now() - commitStart);
+    lastDragLayoutCommitAtRef.current = performance.now();
+
+    if (inConfirmedTabletHotBand) {
+      // Adaptive cadence: cheap layouts stay at the native frame cadence.
+      // Expensive PROD frames back off progressively instead of monopolising the
+      // main thread and starving subsequent pointer events.
+      dragLayoutIntervalRef.current = commitCost >= 18
+        ? 36
+        : commitCost >= 12
+          ? 28
+          : commitCost >= 8
+            ? 20
+            : 16;
+    } else {
+      dragLayoutIntervalRef.current = 16;
+    }
   }, [applyPercentToLayout]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
     if (dragFrameRef.current !== null) return;
-    dragFrameRef.current = window.requestAnimationFrame(flushPendingPointer);
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      flushPendingPointer(false);
+    });
   }, [flushPendingPointer]);
 
   // 659 — The fixed splitter must never wait for the Studio pane reflow path.
@@ -1304,6 +1359,8 @@ export default function StudioSplitWorkspace({
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
+    lastDragLayoutCommitAtRef.current = 0;
+    dragLayoutIntervalRef.current = 16;
     builderModeScrollAnchorRef.current = null;
     captureBuilderDragScrollAnchor();
     if (builderModeAnchorFrameRef.current !== null) {
@@ -1381,7 +1438,7 @@ export default function StudioSplitWorkspace({
       window.cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
     }
-    flushPendingPointer();
+    flushPendingPointer(true);
 
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
     document.body.style.removeProperty('cursor');

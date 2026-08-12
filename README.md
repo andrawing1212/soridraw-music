@@ -1,13 +1,3 @@
-## 682차 — AI Studio/Vercel Firestore 로컬캐시 경로 일치 A/B
-- 기준: 668차 clean. 681 App Check 자동갱신 실험은 포함하지 않습니다.
-- 587/588에서 production CSS/JS minify OFF A/B가 이미 주원인이 아닌 것으로 기록되어 있어 같은 실험을 반복하지 않습니다.
-- 이번에는 AI Studio와 Vercel 사이에 실제로 남아 있는 Firebase 실행환경 차이 하나만 비교합니다. AI Studio는 항상 Firestore persistentLocalCache를 사용하지만, Vercel 테스트앱은 rememberLogin이 false면 기본 memory cache를 사용하고 있었습니다.
-- Vercel 테스트앱(`soridraw-music.vercel.app`)만 AI Studio와 동일하게 `persistentLocalCache + persistentMultipleTabManager`를 사용하도록 맞춥니다.
-- Firebase Hosting 정식앱의 캐시 정책은 변경하지 않습니다. persistent cache 초기화가 실패하면 기존처럼 memory cache로 자동 fallback합니다.
-- Studio/분할/외부창 resize/App.tsx/CSS/App Check/Auth/Functions/Firestore 서버 데이터 구조는 변경하지 않습니다.
-- 테스트 목적: 같은 화면/같은 코드에서 Vercel의 Firestore client cache 경로만 AI Studio와 일치시켰을 때 외부창 리사이즈 체감 차이가 줄어드는지 확인합니다.
-- 상태: 코드 반영 완료 · Vercel 실사용 검증 전.
-
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.

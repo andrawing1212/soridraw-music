@@ -105,13 +105,8 @@ try {
   // This lets short development reloads/reconnects reuse IndexedDB instead of
   // behaving like brand-new listener queries, while session-only user logins keep
   // the default memory cache.
-  // 682 A/B: make the Vercel test app use the same persistent Firestore
-  // local-cache path as AI Studio. This isolates one real host/runtime
-  // difference without changing split/layout/render code. Firebase Hosting
-  // production keeps the existing behavior.
   const shouldUsePersistentFirestoreCache = readRememberLoginPreference()
     || isAiStudioPreview
-    || isVercelTestApp
     || currentHostname === "localhost"
     || currentHostname === "127.0.0.1";
   firestoreDb = shouldUsePersistentFirestoreCache

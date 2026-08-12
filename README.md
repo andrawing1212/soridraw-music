@@ -1,10 +1,9 @@
-## 662차 — 외부창 전역 강제 레이아웃 측정 제거
-
-- 661의 외부창 local geometry/추가 containment는 실사용에서 효과가 없었으므로 해당 변경은 제거하고 660 동작으로 복귀했습니다.
-- App 전역 `document.documentElement` ResizeObserver가 외부 브라우저 resize 중 매 프레임 `scrollHeight/clientHeight`를 읽어 전체 Studio 레이아웃 완료를 강제하던 경로를 차단했습니다.
-- 분할바 drag에서 이미 건너뛰던 전역 scroll-visibility/modal 측정을 `soridraw-window-resizing` 동안에도 동일하게 건너뜁니다.
-- resize 종료 후 `soridraw-window-resize-end`에서 한 번만 최종 상태를 갱신합니다.
-- Studio split geometry, responsive breakpoint, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않습니다.
+## 663차 — 661·662 폐기 / 660 안정 기준 복구
+- 실사용 결과 661은 외부창 태블릿 리사이즈 성능 개선이 없었고, 662는 오히려 더 느려졌으므로 두 실험을 모두 폐기합니다.
+- 코드 기준을 660차로 완전히 복구합니다. 659의 pointer 직결 분할바, 657/658의 pane 태블릿 최적화, 660의 PROD 적응형 레이아웃 페이싱만 유지합니다.
+- 661의 외부창 local geometry/containment 변경과 662의 App 전역 측정 억제 변경은 포함하지 않습니다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 상태: 660 성능 기준 복구 완료 · 외부창 태블릿 병목은 미해결.
 
 ## 660차 — Studio 태블릿 PROD 적응형 레이아웃 페이싱
 - 기준: 659차. 659의 pointer→분할바 직결 경로와 657/658의 실제 pane 661~1080px 최적화는 그대로 유지합니다.

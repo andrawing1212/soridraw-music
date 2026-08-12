@@ -2190,18 +2190,9 @@ function SecondaryScrollControl() {
 
   useEffect(() => {
     let visibilityFrame: number | null = null;
-    const isContinuousLayoutGesture = () => {
-      const root = document.documentElement;
-      return splitDraggingRef.current
-        || root.classList.contains('soridraw-lite-split-dragging')
-        || root.classList.contains('soridraw-window-resizing');
-    };
     const updateVisibility = () => {
       visibilityFrame = null;
-      // 662: external window resize used to force a full-document layout here
-      // on nearly every ResizeObserver frame. Split drag already skipped this
-      // measurement; native resize now follows the same rule.
-      if (isContinuousLayoutGesture()) return;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
       setIsVisible((current) => {
@@ -2210,7 +2201,7 @@ function SecondaryScrollControl() {
       });
     };
     const scheduleVisibilityUpdate = () => {
-      if (isContinuousLayoutGesture()) return;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       if (visibilityFrame !== null) return;
       visibilityFrame = window.requestAnimationFrame(updateVisibility);
     };
@@ -2222,7 +2213,7 @@ function SecondaryScrollControl() {
     };
 
     const checkModal = () => {
-      if (isContinuousLayoutGesture()) return;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const modal = document.querySelector('.z-\\[100\\]');
       const next = Boolean(modal);
       setIsModalOpen((current) => current === next ? current : next);
@@ -2240,13 +2231,6 @@ function SecondaryScrollControl() {
       scheduleVisibilityUpdate();
       checkModal();
     };
-    const handleWindowResizeEnd = () => {
-      // 662: native browser resize is intentionally measurement-free while
-      // active. Settle scroll/modal state once after the shared resize marker
-      // has been released.
-      scheduleVisibilityUpdate();
-      checkModal();
-    };
 
     const documentResizeObserver = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(scheduleVisibilityUpdate)
@@ -2255,7 +2239,6 @@ function SecondaryScrollControl() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
     window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
-    window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
     const modalInterval = setInterval(checkModal, 500);
 
     scheduleVisibilityUpdate();
@@ -2264,7 +2247,6 @@ function SecondaryScrollControl() {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
       window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
-      window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
       clearInterval(modalInterval);
       if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);

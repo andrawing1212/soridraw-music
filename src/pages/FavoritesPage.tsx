@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
-import { attachSoridrawResponsiveContract, attachSoridrawResizeViewportWindowing } from '../lib/contentResponsive';
+import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
@@ -706,12 +706,7 @@ export default function FavoritesPage({
   useLayoutEffect(() => {
     const root = musicNotePageRootRef.current;
     if (!root) return;
-    const detachResponsive = attachSoridrawResponsiveContract(root);
-    const detachResizeWindowing = attachSoridrawResizeViewportWindowing(root);
-    return () => {
-      detachResizeWindowing();
-      detachResponsive();
-    };
+    return attachSoridrawResponsiveContract(root);
   }, []);
   const [studioWorkspaceHeroHost, setStudioWorkspaceHeroHost] = useState<HTMLElement | null>(null);
   const isStudioDesktopViewport = useMediaQuery('(min-width: 1100px)');

@@ -4215,13 +4215,17 @@ function App() {
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
-    // 685: latch the primary input environment for the mounted Studio session.
-    // Hybrid Windows/tablet devices can change `(pointer)` / `(hover)` media
-    // answers when a mouse is connected, removed, or promoted as primary.
-    // Remounting the split engine in response to that change mixes the mouse and
-    // touch geometry paths. Viewport/tablet responsive mode remains fully live;
-    // only the split-engine owner stays stable until the next app mount.
-    setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const pointerQuery = window.matchMedia('(pointer: coarse)');
+    const hoverQuery = window.matchMedia('(hover: none)');
+    const syncAutomaticSplitEngine = () => setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
+    syncAutomaticSplitEngine();
+    pointerQuery.addEventListener('change', syncAutomaticSplitEngine);
+    hoverQuery.addEventListener('change', syncAutomaticSplitEngine);
+    return () => {
+      pointerQuery.removeEventListener('change', syncAutomaticSplitEngine);
+      hoverQuery.removeEventListener('change', syncAutomaticSplitEngine);
+    };
   }, []);
 
   const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
@@ -4244,20 +4248,22 @@ function App() {
     ? requestedStudioSplitEngineOverride
     : null;
 
-  // 688: restore one input-owned split engine for the whole Studio session.
-  // The 685/687 real-hand result narrowed the remaining resize lag to the exact
-  // state 611 had already warned about: a fine-pointer PC session was legacy for
-  // Create/Recent but silently switched to Lite V2 for Music Note/Library. That
-  // meant shrinking the same mouse-driven browser window into tablet widths also
-  // changed the underlying split implementation only on those two pages.
-  //
-  // Keep viewport responsiveness fully live, but never switch split engines by
-  // workspace. Fine-pointer PC/trackpad stays on the same Legacy owner as Recent;
-  // coarse/no-hover touch sessions stay on adaptive Lite V2. Explicit admin
-  // ?splitEngine=lite|legacy diagnostics remain available and unchanged.
+  // 617: remove the accumulated Music-Note-only split experiments. The user's
+  // real-hand comparison is now the source of truth: Recent is best on the
+  // legacy path, Library is best on the 590 Lite/CSS-variable path, and Galaxy
+  // Tab is best on adaptive Lite V2. On fine-pointer PC, Music Note now borrows
+  // Library's exact 590 split geometry instead of maintaining a separate path.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
-  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment ? 'lite' : 'legacy';
-  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = 'adaptive';
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
+    ? 'lite'
+    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+      ? 'lite'
+      : 'legacy';
+  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
+    ? 'adaptive'
+    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+      ? 'library-590'
+      : 'adaptive';
   const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
   const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
     ? (!isTouchPrimaryStudioEnvironment && (studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note')
@@ -4266,7 +4272,11 @@ function App() {
     : automaticLiteRuntimeProfile;
   const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
     ? '자동 선택 · 갤탭/터치: Lite V2'
-    : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : studioWorkspaceView === 'music-note' ? '뮤직노트' : studioWorkspaceView === 'library' ? '라이브러리' : '스튜디오'}: 최근 생성곡과 동일한 기존 방식`;
+    : studioWorkspaceView === 'library'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
+      : studioWorkspaceView === 'music-note'
+        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+        : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');

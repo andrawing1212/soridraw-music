@@ -160,16 +160,12 @@ const resolveRuntimeLayoutMode = (
   workspaceView?: StudioWorkspaceView,
   runtimeProfile: RuntimeProfile = 'adaptive',
 ): BenchmarkLayoutMode => {
-  // 687 targeted stabilization:
-  // The `library-590` profile is a PC ownership choice only. 617 accidentally
-  // kept that CSS-variable owner even after the *content itself* entered the
-  // 661~1080px tablet band, overriding the already-verified 609 rule that
-  // tablet/mobile result panes use direct geometry. That left Music Note and
-  // Library on a different resize owner from the smooth tablet result path.
-  // Keep the exact 590 CSS-variable path above 1080px, but the moment the real
-  // result width publishes tablet/mobile, use direct pane geometry.
-  if (resultMode !== 'pc') return 'direct';
+  // 617 runtime policy:
+  // - `library-590` is the shared PC path for Library and Music Note. It keeps
+  //   the exact 590 CSS-variable geometry at every visual responsive width.
+  // - `adaptive` remains the verified Galaxy Tab/touch V2 path.
   if (runtimeProfile === 'library-590') return 'css-var';
+  if (resultMode !== 'pc') return 'direct';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
@@ -219,10 +215,9 @@ export default function LiteStudioSplitWorkspace({
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
-  // 685: the live gesture source belongs to PointerEvent, not matchMedia.
-  // This prevents a finger drag on a hybrid tablet from inheriting mouse-only
-  // tablet fast paths just because a fine primary pointer also exists.
-  const activePointerTypeRef = useRef<string | null>(null);
+  const finePointerFastPathRef = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+  );
   const pointerIdRef = useRef(-1);
   const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
   const manualPerfCaptureActiveRef = useRef(false);
@@ -656,10 +651,7 @@ export default function LiteStudioSplitWorkspace({
     // while its live width sits in the shared 661~1080px tablet band. The marker
     // activates only drag-time CSS isolation; normal tablet rendering is untouched.
     const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = draggingRef.current
-        && activePointerTypeRef.current === 'mouse'
-        && paneWidth > CONTENT_MOBILE_MAX
-        && paneWidth <= CONTENT_TABLET_MAX;
+      const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
       if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
       else delete pane.dataset.soridrawPaneTabletFastpath;
     };
@@ -843,9 +835,6 @@ export default function LiteStudioSplitWorkspace({
     flushPointer();
     draggingRef.current = false;
     pointerIdRef.current = -1;
-    if (builderRef.current) delete builderRef.current.dataset.soridrawPaneTabletFastpath;
-    if (resultRef.current) delete resultRef.current.dataset.soridrawPaneTabletFastpath;
-    activePointerTypeRef.current = null;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
@@ -874,7 +863,6 @@ export default function LiteStudioSplitWorkspace({
     if (!layout) return;
     const rect = layout.getBoundingClientRect();
     if (rect.width <= 0) return;
-    activePointerTypeRef.current = event.pointerType || 'unknown';
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
     metricsRef.current = {
@@ -930,22 +918,13 @@ export default function LiteStudioSplitWorkspace({
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
     // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
     // verified Lite V2 path; PC no longer uses this engine in automatic mode.
-    const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-    let clientX = event.clientX;
-    let coalescedCount = 1;
-    if (activePointerTypeRef.current === 'mouse') {
-      try {
-        const coalesced = nativeEvent.getCoalescedEvents?.() || [];
-        coalescedCount = Math.max(1, coalesced.length || 1);
-        if (coalesced.length > 0) clientX = coalesced[coalesced.length - 1].clientX;
-      } catch {
-        coalescedCount = 1;
-      }
-    }
     if (manualPerfCaptureActiveRef.current) {
-      recordSplitPerfPointer(clientX, coalescedCount);
+      const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+      let coalescedCount = 1;
+      try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
+      recordSplitPerfPointer(event.clientX, coalescedCount);
     }
-    schedulePointer(clientX);
+    schedulePointer(event.clientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {

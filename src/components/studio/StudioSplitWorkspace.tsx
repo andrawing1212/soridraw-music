@@ -25,15 +25,11 @@ const TABLET_MIN_PANE_PX = 430;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
-const CONTENT_MOBILE_MAX = 660;
-const CONTENT_TABLET_MAX = 1080;
-const LEGACY_PANE_WIDTH_EVENT = 'soridraw-studio-pane-width';
 const PANE_MODE_HYSTERESIS = 16;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
 type PaneMode = 'mobile' | 'desktop';
-type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
 type SplitProfile = 'wide' | 'tablet';
 
 type SplitBounds = {
@@ -93,10 +89,6 @@ const clampToBounds = (value: number, bounds: SplitBounds) => (
   Math.min(bounds.max, Math.max(bounds.min, value))
 );
 
-const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
-  width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
-);
-
 const readStoredCollapseState = (storageKey: string) => {
   if (typeof window === 'undefined') return false;
   try {
@@ -149,11 +141,9 @@ export default function StudioSplitWorkspace({
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
   const draggingRef = useRef(false);
-  // 685: never infer the active drag source from global media queries.
-  // On hybrid devices `(pointer: fine)` may describe the primary mouse even
-  // while the current gesture is a finger touch. Lock the real PointerEvent
-  // source at pointerdown and use it for the lifetime of that gesture only.
-  const activePointerTypeRef = useRef<string | null>(null);
+  const finePointerFastPathRef = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+  );
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -171,11 +161,6 @@ export default function StudioSplitWorkspace({
     builder: 'desktop',
     result: 'desktop',
   });
-  // 688: Music Note/Library running on the same Legacy engine as Recent still
-  // need their content-level PC/tablet/mobile contract. Publish only boundary
-  // changes from the split owner's already-known result width so those pages do
-  // not attach their own ResizeObserver + getBoundingClientRect loop.
-  const resultContentResponsiveModeRef = useRef<ContentResponsiveMode | null>(null);
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
@@ -362,12 +347,10 @@ export default function StudioSplitWorkspace({
     // properties. 656/657 isolated the remaining slow state to a 661~1080px
     // pane. In that exact fine-pointer band, keep external live geometry local
     // to the element that consumes it, matching Lite V2's verified PROD path.
-    const useTabletProdParityPath = draggingRef.current
-      && activePointerTypeRef.current === 'mouse'
-      && (
-        (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
-        || (resultWidth > 660 && resultWidth <= 1080)
-      );
+    const useTabletProdParityPath = finePointerFastPathRef.current && (
+      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+      || (resultWidth > 660 && resultWidth <= 1080)
+    );
 
     // The page masthead is outside the split layout and therefore cannot inherit
     // the builder pane's temporary inline width. Mirror the live builder width
@@ -848,10 +831,7 @@ export default function StudioSplitWorkspace({
     // pane whose live width is 661~1080px. CSS uses this marker only while an
     // active divider drag is in progress; resting tablet UI remains unchanged.
     const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = draggingRef.current
-        && activePointerTypeRef.current === 'mouse'
-        && paneWidth > 660
-        && paneWidth <= 1080;
+      const active = finePointerFastPathRef.current && paneWidth > 660 && paneWidth <= 1080;
       if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
       else delete pane.dataset.soridrawPaneTabletFastpath;
     };
@@ -898,7 +878,7 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           previousBuilderMode,
         );
-    const usesUnifiedContentBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
+    const usesUnifiedContentBreakpoint = workspaceView === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(
@@ -958,14 +938,6 @@ export default function StudioSplitWorkspace({
     if (!resultCollapsedRef.current && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
-    }
-
-    if (!resultCollapsedRef.current && (workspaceView === 'music-note' || workspaceView === 'library')) {
-      const nextContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
-      if (resultContentResponsiveModeRef.current !== nextContentMode) {
-        resultContentResponsiveModeRef.current = nextContentMode;
-        result.dispatchEvent(new CustomEvent(LEGACY_PANE_WIDTH_EVENT, { detail: { width: Math.max(1, resultWidth) } }));
-      }
     }
 
     // 521 — The floating Generate bar is portaled directly under <body>, so it
@@ -1166,15 +1138,6 @@ export default function StudioSplitWorkspace({
   }, [syncResultTitleHeight]);
 
   useEffect(() => {
-    // Workspace changes can swap Recent <-> Music Note/Library while preserving
-    // the same split shell. Force the next legacy layout commit to publish the
-    // current content-width bucket to the newly mounted result page.
-    resultContentResponsiveModeRef.current = null;
-    const frame = window.requestAnimationFrame(() => refreshLayoutMetrics());
-    return () => window.cancelAnimationFrame(frame);
-  }, [refreshLayoutMetrics, workspaceView]);
-
-  useEffect(() => {
     const observer = new ResizeObserver(() => {
       // Browser resize and rail/layout changes can produce several observer
       // callbacks in the same frame. The Studio geometry owner commits at most
@@ -1318,7 +1281,7 @@ export default function StudioSplitWorkspace({
     if (lastDragBuilderPixelRef.current === nextBuilderPixel && !forceLayout) return;
 
     const nextResultPixel = Math.max(0, safeWidth - nextBuilderPixel);
-    const inConfirmedTabletHotBand = activePointerTypeRef.current === 'mouse' && (
+    const inConfirmedTabletHotBand = finePointerFastPathRef.current && (
       (nextBuilderPixel > 660 && nextBuilderPixel <= 1080)
       || (nextResultPixel > 660 && nextResultPixel <= 1080)
     );
@@ -1397,8 +1360,6 @@ export default function StudioSplitWorkspace({
     const rect = layoutRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
 
-    activePointerTypeRef.current = event.pointerType || 'unknown';
-
     metricsRef.current = {
       left: rect.left,
       width: rect.width,
@@ -1446,7 +1407,7 @@ export default function StudioSplitWorkspace({
         actionGutter,
       );
       const currentResultWidth = Math.max(0, metricsRef.current.width - builderRect.width);
-      const seedTabletProdParityPath = activePointerTypeRef.current === 'mouse' && (
+      const seedTabletProdParityPath = finePointerFastPathRef.current && (
         (builderRect.width > 660 && builderRect.width <= 1080)
         || (currentResultWidth > 660 && currentResultWidth <= 1080)
       );
@@ -1475,13 +1436,12 @@ export default function StudioSplitWorkspace({
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== dragRef.current.pointerId) return;
     const nativeEvent = event.nativeEvent as PointerEvent;
-    let clientX = event.clientX;
-    if (activePointerTypeRef.current === 'mouse' && typeof nativeEvent.getCoalescedEvents === 'function') {
-      const coalesced = nativeEvent.getCoalescedEvents();
-      if (coalesced.length > 0) clientX = coalesced[coalesced.length - 1].clientX;
-    }
-    previewSplitterAtClientX(clientX);
-    schedulePointerUpdate(clientX);
+    const coalesced = typeof nativeEvent.getCoalescedEvents === 'function'
+      ? nativeEvent.getCoalescedEvents()
+      : [];
+    const latestEvent = coalesced.length > 0 ? coalesced[coalesced.length - 1] : nativeEvent;
+    previewSplitterAtClientX(latestEvent.clientX);
+    schedulePointerUpdate(latestEvent.clientX);
   };
 
   const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -1501,9 +1461,6 @@ export default function StudioSplitWorkspace({
     builderDragScrollAnchorRef.current = null;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-split-dragging');
-    if (builderRef.current) delete builderRef.current.dataset.soridrawPaneTabletFastpath;
-    if (resultRef.current) delete resultRef.current.dataset.soridrawPaneTabletFastpath;
-    activePointerTypeRef.current = null;
     lastDragBuilderPixelRef.current = null;
     const builderWidth = builderCollapsedRef.current
       ? 0

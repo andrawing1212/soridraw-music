@@ -1,0 +1,32 @@
+{
+  "version": 676,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "A/B performance probe with real Recent Songs on the left and real Music Note/Library on the right, removing Sori Studio from the split pair.",
+  "behavior": {
+    "studio_black_music_note": "left=existing Recent Songs result body, right=existing Music Note body",
+    "studio_black_library": "left=existing Recent Songs result body, right=existing Library body",
+    "create_or_recent": "original 668 behavior",
+    "compact_under_1100": "unchanged"
+  },
+  "safety": {
+    "firebase_auth_firestore_functions_changed": false,
+    "storage_schema_changed": false,
+    "iframe_or_second_app_mount": false,
+    "body_unmount_or_freeze": false,
+    "deployment_performed": false
+  },
+  "checks": {
+    "tsx_parse": "PASS",
+    "css_parse": "PASS",
+    "static_contract": "PASS",
+    "full_build": "NOT_RUN_DEPENDENCY_CACHE_MISSING"
+  },
+  "critical_sha256": {
+    "src/App.tsx": "a8722fe9559acf420f5895b404a18d97dd5445308fcfaac06227d5c658110158",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx": "8a1628138fdc03fcc30fe9aebd3c9fafa67aebeedff87922119033beb47eb42e",
+    "src/components/studio/StudioSplitWorkspace.tsx": "509c74862c1c27f4722716b6b194cf2861325ae25b29264259f7fe06a0fca047",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "7827ffa157ce44281d4e168928354316be533608ffd3fa7b7ec216d559e54a1b",
+    "src/components/studio/studioLayout.css": "cc3de88e006e111be70aa2762565ead463366ab616144903fc7cb6558193dd16",
+    "README.md": "e2fafd60a7392b8d95a41b46da2959787b295cec13ade06ec8fb30e87920bbb6"
+  }
+}

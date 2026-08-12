@@ -3981,11 +3981,6 @@ function App() {
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
-  // 675 diagnostic: keep the real Studio-Black split shell, but make the left
-  // Builder use Classic/Dark presentation semantics so the A/B is not just a
-  // CSS-class alias of the split UI.
-  const isClassicDarkBuilderProbeActive = isStudioBlackActionMode;
-  const isStudioBlackBuilderPresentation = isStudioBlackActionMode && !isClassicDarkBuilderProbeActive;
   const isStudioCompactMobileLayout = isStudioCompactViewport
     && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
 
@@ -6896,7 +6891,6 @@ function App() {
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
   const actionButtonsBarRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(true);
-  const isBuilderActionsFloating = isClassicDarkBuilderProbeActive ? false : isActionsFloating;
   const isActionsFloatingRef = useRef(true);
   const isSplitDraggingRef = useRef(false);
   const actionBarPlacementRafRef = useRef<number | null>(null);
@@ -7206,7 +7200,7 @@ const toggleCycleVariantSelection = (
   }, []);
 
   const collapseActionButtons = useCallback(() => {
-    if (!isStudioBlackBuilderPresentation) {
+    if (!isStudioBlackActionMode) {
       captureCollapsedActionVisualBottom();
 
       // Non-Studio themes still swap an in-flow/floating owner, so preserve
@@ -7238,16 +7232,16 @@ const toggleCycleVariantSelection = (
     }
 
     setIsActionButtonsCollapsed(true);
-  }, [captureCollapsedActionVisualBottom, isStudioBlackBuilderPresentation]);
+  }, [captureCollapsedActionVisualBottom, isStudioBlackActionMode]);
 
   const expandActionButtons = useCallback(() => {
-    actionCollapseRestorePendingRef.current = !isStudioBlackBuilderPresentation;
-    if (isStudioBlackBuilderPresentation) {
+    actionCollapseRestorePendingRef.current = !isStudioBlackActionMode;
+    if (isStudioBlackActionMode) {
       actionCollapseScrollSnapshotRef.current = null;
       document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
     }
     setIsActionButtonsCollapsed(false);
-  }, [isStudioBlackBuilderPresentation]);
+  }, [isStudioBlackActionMode]);
 
   const updateActionBarPlacement = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
@@ -7312,7 +7306,7 @@ const toggleCycleVariantSelection = (
     // footer collision in one rAF-coalesced listener, so registering a second
     // App-level scroll path here only duplicates layout work.
     const handleScroll = () => {
-      if (!isStudioBlackBuilderPresentation) scheduleActionBarPlacement();
+      if (!isStudioBlackActionMode) scheduleActionBarPlacement();
     };
     const scheduleLayoutChange = () => {
       if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
@@ -7332,7 +7326,7 @@ const toggleCycleVariantSelection = (
 
     const handleWindowResizeEnd = () => scheduleLayoutChange();
 
-    if (!isStudioBlackBuilderPresentation) {
+    if (!isStudioBlackActionMode) {
       window.addEventListener('scroll', handleScroll, { passive: true });
     }
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
@@ -7350,7 +7344,7 @@ const toggleCycleVariantSelection = (
         window.cancelAnimationFrame(actionBarLayoutRafRef.current);
         actionBarLayoutRafRef.current = null;
       }
-      if (!isStudioBlackBuilderPresentation) {
+      if (!isStudioBlackActionMode) {
         window.removeEventListener('scroll', handleScroll);
       }
       window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
@@ -7359,7 +7353,7 @@ const toggleCycleVariantSelection = (
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       };
-  }, [isStudioBlackBuilderPresentation, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
+  }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
 
   useEffect(() => {
@@ -7473,9 +7467,9 @@ const toggleCycleVariantSelection = (
     ? 'hidden'
     : isActionButtonsCollapsed
       ? 'collapsed'
-      : isStudioBlackBuilderPresentation
+      : isStudioBlackActionMode
         ? 'floating'
-        : isBuilderActionsFloating
+        : isActionsFloating
           ? 'floating'
           : 'inline';
 
@@ -7506,7 +7500,7 @@ const toggleCycleVariantSelection = (
   useLayoutEffect(() => {
     if (!shouldShowActionButtons || isActionButtonsCollapsed) return;
 
-    if (isStudioBlackBuilderPresentation) {
+    if (isStudioBlackActionMode) {
       // 535 — one lightweight mount sync only. Geometry changes after this are
       // owned by the single anchor ResizeObserver above and by the split rAF fast
       // path. Do not attach a second ResizeObserver or pane-scroll listener to
@@ -7545,7 +7539,7 @@ const toggleCycleVariantSelection = (
   }, [
     isActionButtonsCollapsed,
     isActionsFloating,
-    isStudioBlackBuilderPresentation,
+    isStudioBlackActionMode,
     shouldShowActionButtons,
     syncActionBarLayoutMetrics,
     updateActionBarPlacement,
@@ -14032,1603 +14026,14 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     });
   };
 
-  return (
-    <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
-      {user && emailVerificationGate !== 'idle' && (
-        <Portal>
-          <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/78 px-4 py-8 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, y: 16, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              className="relative w-full max-w-[430px] rounded-2xl border border-white/12 bg-[#151313] p-6 shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
-            >
-              <button
-                type="button"
-                onClick={requestCloseEmailVerificationGate}
-                aria-label="이메일 인증 창 닫기"
-                className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition-all hover:bg-white/[0.07] hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+  // 676 diagnostic: remove Sori Studio from the equation entirely.
+  // When Music Note or Library is selected in Studio Black, the left pane shows
+  // the exact existing Recent Songs/result body while the selected workspace stays
+  // mounted on the right. No body is hidden/frozen and no extra app instance is created.
+  const is676RecentPairProbe = isStudioBlackActionMode
+    && (studioWorkspaceView === 'music-note' || studioWorkspaceView === 'library');
 
-              {emailVerificationGate === 'checking' ? (
-                <div className="flex min-h-40 flex-col items-center justify-center text-center">
-                  <Loader2 className="h-7 w-7 animate-spin text-[#F2C587]" />
-                  <p className="mt-4 text-sm font-black text-white">계정 확인 중</p>
-                  <p className="mt-1 text-xs font-bold text-white/50">이메일 인증 상태와 관리자 예외 여부를 확인하고 있습니다.</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F2C587]/20 bg-[#F2C587]/10">
-                    <Shield className="h-6 w-6 text-[#F2C587]" />
-                  </div>
-                  <h2 className="mt-4 text-xl font-black text-white">이메일 인증이 필요합니다</h2>
-                  <p className="mt-2 text-sm font-bold leading-6 text-white/58">
-                    <span className="text-white">{user.email}</span> 주소로 받은 인증메일의 링크를 한 번만 눌러주세요. 인증 전에는 앱을 사용할 수 없습니다.
-                  </p>
-
-                  {emailVerificationMessage && (
-                    <div className="mt-4 rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2.5 text-xs font-bold leading-5 text-[#FFE08A]">
-                      {emailVerificationMessage}
-                    </div>
-                  )}
-
-                  <div className="mt-5 grid gap-2">
-                    <button
-                      type="button"
-                      onClick={handleCheckEmailVerification}
-                      disabled={isEmailVerificationActionPending}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
-                    >
-                      {isEmailVerificationActionPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                      인증 완료 확인
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void sendVerificationEmailToCurrentUser({ source: 'manual' })}
-                      disabled={isEmailVerificationActionPending || emailVerificationResendSeconds > 0}
-                      className="h-11 w-full rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-black text-white transition-all hover:bg-white/[0.1] disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {emailVerificationResendSeconds > 0
-                        ? `${emailVerificationResendSeconds}초 후 다시 보내기`
-                        : '인증메일 다시 보내기'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={requestCloseEmailVerificationGate}
-                      disabled={isEmailVerificationActionPending}
-                      className="h-10 w-full rounded-xl text-xs font-black text-white/45 transition-all hover:bg-white/[0.05] hover:text-white/70 disabled:opacity-50"
-                    >
-                      다른 계정으로 로그인
-                    </button>
-                  </div>
-                </>
-              )}
-            </motion.div>
-          </div>
-        </Portal>
-      )}
-
-      {/* Account Status Banner */}
-      {user && userStatus !== 'active' && !isAdminUser && (
-        <Portal>
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%_-_48px)] max-w-lg">
-            <motion.div 
-              initial={{ y: -20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className={cn(
-                "px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center gap-3 shadow-2xl overflow-hidden relative",
-                userStatus === 'banned' ? "bg-red-500/10 border-red-500/20 text-red-400" :
-                "bg-orange-500/10 border-orange-500/20 text-orange-400"
-              )}
-            >
-              <div className="absolute inset-0 bg-white/5 pointer-events-none" />
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <div className="flex-1">
-                <p className="text-[13px] font-black leading-tight mb-0.5">
-                  {userStatus === 'paused' && '계정 일시 제한'}
-                  {userStatus === 'expired' && '이용 기간 만료'}
-                  {userStatus === 'banned' && '계정 차단됨'}
-                </p>
-                <p className="text-[11px] opacity-80 leading-snug">
-                  {userStatus === 'paused' && '관리자에 의해 계정이 일시 정지되었습니다. 곡 생성이 불가능합니다.'}
-                  {userStatus === 'expired' && '워크스페이스 이용 기간이 종료되었습니다. 갱신 후 이용해주세요.'}
-                  {userStatus === 'banned' && '해당 계정은 서비스 이용이 제한되었습니다. 고객센터에 문의하세요.'}
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </Portal>
-      )}
-
-      {isGlobalSearchOpen && (
-        <Portal>
-          <motion.div
-            className="fixed inset-0 z-[10000] flex items-start justify-center overflow-hidden overscroll-none bg-black/35 backdrop-blur-[1px] px-3 pb-5 pt-10 sm:pt-14"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onPointerDown={(event) => {
-              globalSearchBackdropMouseDownRef.current = event.target === event.currentTarget;
-            }}
-            onPointerUp={(event) => {
-              if (globalSearchBackdropMouseDownRef.current && event.target === event.currentTarget) {
-                closeGlobalSearchModal();
-              }
-              globalSearchBackdropMouseDownRef.current = false;
-            }}
-          >
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.14, ease: "easeOut" }}
-              className="soridraw-studio-global-search-panel flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--modal-soft-border)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
-              onPointerDown={(event) => event.stopPropagation()}
-              onPointerUp={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--modal-soft-border)] px-5 py-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Search className="h-5 w-5 text-brand-orange" />
-                    <h2 className="text-lg font-black text-[var(--text-primary)]">통합 검색</h2>
-                  </div>
-                  <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">장르, 스타일, 사운드, 분위기, 주제를 한 번에 찾아요.</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={clearGlobalSearchSelections}
-                    disabled={!isGlobalSearchSelectionClearable}
-                    className={cn(
-                      "rounded-2xl border px-3 py-2 text-[11px] font-black transition-all active:scale-95",
-                      isGlobalSearchSelectionClearable
-                        ? "border-brand-orange/40 bg-brand-orange/10 text-brand-orange hover:bg-amber-500/15"
-                        : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)]/40"
-                    )}
-                  >
-                    초기화
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => closeGlobalSearchModal()}
-                    className={cn(
-                      "rounded-2xl border p-2 transition-all active:scale-95",
-                      isGlobalSearchSelectionClearable
-                        ? "border-brand-orange bg-brand-orange text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange/90"
-                        : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
-                    )}
-                    aria-label="통합 검색 확인"
-                  >
-                    <Check className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => closeGlobalSearchModal()}
-                    className="rounded-2xl border border-[var(--modal-button-border)] bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-btn-hover hover:text-[var(--text-primary)] active:scale-95"
-                    aria-label="통합 검색 닫기"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="border-b border-[var(--modal-soft-border)] px-5 py-4">
-                <div className="flex items-center gap-3 rounded-2xl border border-[var(--modal-button-border)] bg-[var(--bg-primary)] px-4 py-3 shadow-inner">
-                  <Search className="h-5 w-5 text-brand-orange" />
-                  <input
-                    autoFocus
-                    value={globalSearchQuery}
-                    onChange={(event) => setGlobalSearchQuery(event.target.value)}
-                    placeholder="예: 시티팝, 후렴, lead, 합창, 차가운"
-                    className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]/60"
-                  />
-                  {globalSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setGlobalSearchQuery('')}
-                      className="rounded-full p-1 text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
-                      aria-label="검색어 지우기"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
-                {!globalSearchQuery.trim() ? (
-                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--modal-soft-border)] bg-[var(--bg-primary)]/60 px-6 text-center">
-                    <Search className="mb-3 h-8 w-8 text-brand-orange/70" />
-                    <p className="text-sm font-black text-[var(--text-primary)]">찾고 싶은 키워드를 입력해줘.</p>
-                    <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">한글, 영어, 설명, 내부 프롬프트까지 같이 검색해요.</p>
-                  </div>
-                ) : globalSearchResults.length === 0 ? (
-                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--modal-soft-border)] bg-[var(--bg-primary)]/60 px-6 text-center">
-                    <p className="text-sm font-black text-[var(--text-primary)]">검색 결과가 없어요.</p>
-                    <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">비슷한 단어나 영어 키워드로 다시 찾아봐.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {globalSearchResults.map((item) => {
-                      const isSelected = isGlobalSearchItemSelected(item);
-                      return (
-                        <button
-                          key={`${item.type}-${item.id}`}
-                          type="button"
-                          onClick={() => handleGlobalSearchItemToggle(item)}
-                          onMouseEnter={() => setHoveredItem({ id: item.id, label: item.labelEn || item.label, labelKo: item.label, description: item.description || '', _ts: Date.now() })}
-                          onMouseLeave={() => setHoveredItem(null)}
-                          className={cn(
-                            "w-full rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.99]",
-                            isSelected
-                              ? "border-black/20 bg-[#FFB400]/74 text-[#171717] font-black soridraw-selected-strong shadow-lg shadow-[#FFB400]/10"
-                              : "border-[var(--modal-button-border)] bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="mb-1 flex flex-wrap items-center gap-2">
-                                <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-black", getGlobalSearchCategoryClass(item.type))}>
-                                  {item.categoryLabel}
-                                </span>
-                                {item.groupLabel && (
-                                  <span className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] font-bold text-[var(--text-secondary)]">
-                                    {getGlobalSearchBreadcrumbParts(item.groupLabel).map((part) => (
-                                      <span key={`${item.type}-${item.id}-${part}`} className="inline-flex min-w-0 items-center gap-1">
-                                        <span className="text-[var(--text-tertiary)]">&gt;</span>
-                                        <span className="max-w-[9rem] truncate">{part}</span>
-                                      </span>
-                                    ))}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                                <span className="text-sm font-black text-[var(--text-primary)]">{item.label}</span>
-                                {item.labelEn && item.labelEn !== item.label && (
-                                  <span className="text-[11px] font-bold text-[var(--text-secondary)]">{item.labelEn}</span>
-                                )}
-                              </div>
-                              {item.description && (
-                                <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-4 text-[var(--text-secondary)]">
-                                  {item.description}
-                                </p>
-                              )}
-                            </div>
-                            <span className={cn(
-                              "mt-1 shrink-0 rounded-full px-2 py-1 text-[10px] font-black",
-                              isSelected ? "bg-[#FFB400] text-[#171717] font-black" : "bg-[var(--hover-bg)] text-[var(--text-secondary)]"
-                            )}>
-                              {isSelected ? '선택됨' : '선택'}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        </Portal>
-      )}
-
-
-      <AnimatePresence>
-        {isAuthModalOpen && !user && (
-          <Portal>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/68 px-4 py-6 backdrop-blur-md"
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget) closeAuthModal();
-              }}
-            >
-              <motion.div
-                initial={{ opacity: 0, y: 18, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 18, scale: 0.96 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#151313] shadow-[0_24px_90px_rgba(0,0,0,0.52)]"
-              >
-                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                  <div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F2C587]/70">SORiDRAW</p>
-                    <h2 className="mt-1 text-lg font-black text-white">
-                      {authMode === 'signup' ? '이메일 회원가입' : authMode === 'reset' ? '비밀번호 재설정' : '로그인'}
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={closeAuthModal}
-                    disabled={isLoggingIn}
-                    className="flex h-9 w-9 items-center justify-center rounded-xl text-white/54 transition-all hover:bg-white/[0.07] hover:text-white disabled:opacity-50"
-                    aria-label="닫기"
-                    title="닫기"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-
-                <div className="p-5">
-                  <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/14 p-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('login');
-                        setAuthMessage(null);
-                      }}
-                      className={cn(
-                        "rounded-lg px-3 py-2 text-xs font-black transition-all",
-                        authMode === 'login' ? "bg-white/12 text-white" : "text-white/55 hover:text-white"
-                      )}
-                    >
-                      로그인
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('signup');
-                        setAuthMessage(null);
-                      }}
-                      className={cn(
-                        "rounded-lg px-3 py-2 text-xs font-black transition-all",
-                        authMode === 'signup' ? "bg-white/12 text-white" : "text-white/55 hover:text-white"
-                      )}
-                    >
-                      회원가입
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    disabled={isLoggingIn}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.07] px-4 py-3 text-sm font-black text-white transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-60"
-                  >
-                    {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#F2C587]" />}
-                    Google로 계속하기
-                  </button>
-
-                  {authMode !== 'reset' && (
-                    <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/12 px-3 py-2.5 text-xs font-bold text-white/60 transition-all hover:border-white/15 hover:text-white/75">
-                      <input
-                        type="checkbox"
-                        checked={rememberLogin}
-                        onChange={(event) => setRememberLogin(event.target.checked)}
-                        disabled={isLoggingIn}
-                        className="h-4 w-4 rounded border border-white/20 accent-sky-500 disabled:opacity-60"
-                      />
-                      로그인 유지
-                    </label>
-                  )}
-
-                  <div className="my-4 flex items-center gap-3">
-                    <div className="h-px flex-1 bg-white/10" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/32">or</span>
-                    <div className="h-px flex-1 bg-white/10" />
-                  </div>
-
-                  <form onSubmit={handleEmailAuth} className="space-y-3">
-                    <label className="block">
-                      <span className="mb-1.5 block text-[11px] font-black text-white/55">이메일</span>
-                      <input
-                        type="email"
-                        value={authEmail}
-                        onChange={(event) => setAuthEmail(event.target.value)}
-                        autoComplete="email"
-                        placeholder="name@example.com"
-                        className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
-                      />
-                    </label>
-
-                    {authMode !== 'reset' && (
-                      <label className="block">
-                        <span className="mb-1.5 block text-[11px] font-black text-white/55">비밀번호</span>
-                        <input
-                          type="password"
-                          value={authPassword}
-                          onChange={(event) => setAuthPassword(event.target.value)}
-                          autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-                          placeholder="6자 이상"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
-                        />
-                      </label>
-                    )}
-
-                    {authMode === 'signup' && (
-                      <label className="block">
-                        <span className="mb-1.5 block text-[11px] font-black text-white/55">비밀번호 확인</span>
-                        <input
-                          type="password"
-                          value={authPasswordConfirm}
-                          onChange={(event) => setAuthPasswordConfirm(event.target.value)}
-                          autoComplete="new-password"
-                          placeholder="비밀번호 다시 입력"
-                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
-                        />
-                      </label>
-                    )}
-
-                    {authMessage && (
-                      <div className="rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2 text-xs font-bold leading-5 text-[#FFE08A]">
-                        {authMessage}
-                      </div>
-                    )}
-
-                    <button
-                      type="submit"
-                      disabled={isLoggingIn}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
-                    >
-                      {isLoggingIn && <Loader2 className="h-4 w-4 animate-spin" />}
-                      {authMode === 'signup' ? '이메일로 가입하기' : authMode === 'reset' ? '재설정 메일 보내기' : '이메일로 로그인'}
-                    </button>
-                  </form>
-
-                  <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-white/45">
-                    {authMode === 'reset' ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode('login');
-                          setAuthMessage(null);
-                        }}
-                        className="text-[#F2C587] hover:text-[#FFE08A]"
-                      >
-                        로그인으로 돌아가기
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthMode('reset');
-                          setAuthMessage(null);
-                        }}
-                        className="text-[#F2C587] hover:text-[#FFE08A]"
-                      >
-                        비밀번호를 잊으셨나요?
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            </motion.div>
-          </Portal>
-        )}
-      </AnimatePresence>
-
-      <Navigation
-        user={user}
-        cachedHeaderIdentity={cachedHeaderIdentity}
-        isAuthReady={isAuthReady}
-        handleLogin={handleLogin}
-        isLoggingIn={isLoggingIn}
-        handleLogout={handleLogout}
-        isAdminUser={isAdminMenuUser}
-        menuVisibility={menuVisibility}
-        menuAdminOnly={menuAdminOnly}
-        sunoLibrarySignal={sunoLibrarySignal}
-        sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
-        clearSunoLibrarySignal={clearSunoLibrarySignal}
-        studioCompactMobileLayout={isStudioCompactMobileLayout}
-        studioWorkspaceView={studioWorkspaceView}
-        onStudioWorkspaceSelect={selectStudioWorkspaceView}
-      />
-
-      <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
-
-      <Routes>
-        <Route path="/" element={
-          canAccessNavigationMenu('home') ? (
-            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
-              <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} menuVisibility={menuVisibilityForCurrentUser} />
-            </Suspense>
-          ) : (
-            <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
-          )
-        } />
-        <Route path="/studio" element={
-          canAccessNavigationMenu('studio') ? (
-          <StudioPageFrame
-            workspaceView={studioWorkspaceView}
-            compactMobileLayout={isStudioCompactMobileLayout}
-            leftRail={
-              <StudioLeftRail
-                activeWorkspace={studioWorkspaceView}
-                onCreate={() => {
-                  selectStudioWorkspaceView('create');
-                  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
-                }}
-                onRecentSongs={() => selectStudioWorkspaceView('recent')}
-                onMusicNote={() => selectStudioWorkspaceView('music-note')}
-                onLibrary={() => selectStudioWorkspaceView('library')}
-                onSearch={openGlobalSearchModal}
-                onApiSettings={() => navigate('/suno-api-settings')}
-                onLab={() => navigate('/lab')}
-                onProfile={() => navigate('/my-page')}
-                onSettings={() => navigate('/my-page?tab=settings')}
-                onPlan={() => navigate('/my-page?tab=plan')}
-                onBilling={() => navigate('/my-page?tab=billing')}
-                onLogout={handleLogout}
-                profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
-                profileEmail={user?.email || ''}
-                profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
-              />
-            }
-            rightRail={
-              <StudioRightRail
-                isGenerating={isGenerating}
-                runningCount={runningGenerationCount}
-                queuedCount={queuedGenerationCount}
-                history={history}
-                selectedIndex={historyIndex}
-                remainingCredits={sunoRemainingCredits}
-                creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
-                selectedKeywords={liveSelectedKeywordItems}
-                onRemoveSelectedKeyword={removeLiveSelectedKeyword}
-                formatTime={formatStudioDashboardTime}
-                formatSongTitle={formatUnifiedTitle}
-                onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
-                onOpenSong={(song, index) => {
-                  selectStudioWorkspaceView('recent');
-                  openStudioDashboardSong(song, index);
-                }}
-                isSongUnread={isStudioDashboardSongUnread}
-                isSongFavorited={isSongFavorited}
-                onOpenApiSettings={() => navigate('/suno-api-settings')}
-              />
-            }
-          >
-              {isStudioBlackActionMode && isAdminMenuUser && splitPerfToolsVisible && (
-                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === null ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('auto')}
-                    title={studioSplitAutoTitle}
-                  >
-                    자동
-                  </button>
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('lite')}
-                    title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
-                  >
-                    Lite V2
-                  </button>
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('legacy')}
-                    title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
-                  >
-                    기존 방식
-                  </button>
-                </div>
-              )}
-              {/* Header */}
-              <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
-                <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
-                  {/* Studio header search button */}
-                  {user && (
-                    <button
-                      type="button"
-                      onClick={openGlobalSearchModal}
-                      className="soridraw-studio-hero-search-button absolute bottom-0 right-5 md:right-6 z-20 flex h-9 w-9 md:h-10 md:w-10 translate-y-1/2 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
-                      aria-label="통합 검색"
-                      title="통합 검색"
-                    >
-                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
-                    </button>
-                  )}
-
-                  <div className="soridraw-studio-hero-row">
-                    <motion.div
-                      initial={false}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="soridraw-studio-masthead flex flex-col items-start mt-4 md:mt-10"
-                    >
-                      <h1 
-                        className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
-                      >
-                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
-                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
-                      </h1>
-                    </motion.div>
-                    <div
-                      id="soridraw-studio-workspace-hero-host"
-                      className="soridraw-studio-workspace-hero-host"
-                      aria-live="polite"
-                    />
-                  </div>
-                </div>
-              </header>
-
-            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
-              {isStudioLoaded && (
-                <StudioSplitEngineWorkspace
-                  engine={studioSplitEngine}
-                  liteRuntimeProfile={studioLiteRuntimeProfile}
-                  viewMode="split"
-                  workspaceView={studioWorkspaceView}
-                  workspaceRequestId={studioWorkspaceLayoutRequestId}
-                  compactMobileMode={isStudioCompactMobileLayout}
-                  classicDarkBuilderProbe={isClassicDarkBuilderProbeActive}
-                  builderMasthead={
-                    <div className="soridraw-studio-scroll-builder-masthead">
-                      <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
-                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
-                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
-                      </h1>
-                      {user && (
-                        <button
-                          type="button"
-                          onClick={openGlobalSearchModal}
-                          className="soridraw-studio-scroll-search-button flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
-                          aria-label="통합 검색"
-                          title="통합 검색"
-                        >
-                          <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
-                        </button>
-                      )}
-                    </div>
-                  }
-                >
-                  <StudioBuilderPane>
-                    {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
-              <GenreHierarchySelector
-                selectedGenre={selectedGenres}
-                selectedSubGenre={subGenre}
-                onSelectGenre={(id) => {
-                  setSelectedGenres([]);
-                  setSubGenre((prev) =>
-                    limitFusionGenreIds(prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id])
-                  );
-                  setIsGenreRandomized(false);
-                }}
-                onSelectSubGenre={(id) =>
-                  setSubGenre((prev) =>
-                    limitFusionGenreIds(prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id])
-                  )
-                }
-                onCommitSelection={(mainId, subId, meta) => {
-                  const removeMainId = meta?.removeMainId ?? null;
-                  const removeSubId = meta?.removeSubId ?? null;
-
-                  const nextIds = Array.from(
-                    new Set(
-                      subGenre
-                        .filter((id) => id !== removeMainId && id !== removeSubId)
-                        .filter((id) => id !== mainId && id !== subId)
-                    )
-                  );
-
-                  // Only store the final selectable leaf genre.
-                  // If a sub genre exists, the parent/middle genre is only a navigation folder and must not be saved.
-                  if (subId) {
-                    nextIds.push(subId);
-                  } else if (mainId && hierarchyLeafGenreIdSet.has(mainId)) {
-                    nextIds.push(mainId);
-                  }
-
-                  setSelectedGenres([]);
-                  setSubGenre(Array.from(new Set(nextIds)).slice(-MAX_FUSION_GENRES));
-                  setIsGenreRandomized(false);
-                }}
-                onCommitSelectionList={(subIds) => {
-                  setSelectedGenres([]);
-                  setSubGenre(limitFusionGenreIds(subIds.filter((id) => hierarchyLeafGenreIdSet.has(id))));
-                  setIsGenreRandomized(false);
-                }}
-                onClear={() => {
-                  setSelectedGenres([]);
-                  setSubGenre([]);
-                  setIsGenreRandomized(false);
-                }}
-                onRandom={() => {
-                  if (menuLocks.genre) {
-                    showToast('장르 메뉴가 잠겨 있습니다.');
-                    return;
-                  }
-                  const randomLeafGenreIds = pickRandomLeafGenreIds(MAX_FUSION_GENRES);
-                  if (randomLeafGenreIds.length === 0) return;
-                  setSelectedGenres([]);
-                  setSubGenre(limitFusionGenreIds(randomLeafGenreIds));
-                  setIsGenreRandomized(true);
-                }}
-                isLocked={menuLocks.genre}
-                onToggleLock={() => toggleMenuLock('genre')}
-                onHover={setHoveredItem}
-                isExpanded={isGenreExpanded}
-                onToggleExpand={() => toggleMainSections('genre')}
-                isRandomized={isGenreRandomized}
-                onHeightChange={setGenreHeight}
-                forcedHeight={!isStudioBlackBuilderPresentation && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
-                onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
-                directInput={{
-                  selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
-                  onApply: applyDirectGenreInput,
-                  onCancelSelected: clearDirectGenreInput,
-                }}
-              />
-          <CycleSection 
-            title="Style" 
-            titleKo="스타일"
-            description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
-            descriptionKo="선택한 장르 위에 하이브리드, 시대감, 보컬 표현, 공간감, 후렴, 전환, 리듬 같은 개성을 더합니다."
-            cycles={STYLE_CYCLES}
-            selected={selectedStyles}
-            onCycleToggle={(cycleId, variantId) => {
-              const baseStyles = selectedStyles.filter((id) => !isCustomStyleKeyword(id));
-              if (variantId) {
-                const isAddingCallResponse = cycleId === 'hook-addiction'
-                  && variantId === 'call-response-hook'
-                  && !baseStyles.includes(variantId);
-                if (isAddingCallResponse) {
-                  const declaredVocalCount = (maleCount + femaleCount) > 0
-                    ? (maleCount + femaleCount)
-                    : vocalMode === 'duo'
-                      ? 2
-                      : vocalMode === 'group'
-                        ? 3
-                        : 1;
-                  const responsiveVocalLayerIds = new Set([
-                    'la-la-chorus', 'crowd-chant', 'group-chant', 'vocal-shouts',
-                    'gospel-choir', 'kids-choir', 'children-choir', 'youth-choir', 'whisper-choir', 'humming-choir',
-                  ]);
-                  const hasResponsiveVocalLayer = selectedInstrumentSounds.some((id) => responsiveVocalLayerIds.has(id));
-                  if (declaredVocalCount < 2 && !hasResponsiveVocalLayer) {
-                    showToast('콜앤리스폰스는 2인 이상 보컬 또는 사운드의 응답형 보컬 레이어가 필요합니다.');
-                    return;
-                  }
-                }
-                const isAddingHybrid = cycleId === 'hybrid' && !baseStyles.includes(variantId);
-                const selectedHybridCount = baseStyles.filter(isHybridStyleId).length;
-                if (isAddingHybrid && selectedHybridCount >= maxHybridStyleSelections) {
-                  showToast(activeGenreIdentityCount >= 2
-                    ? '장르를 2개 선택한 경우 하이브리드는 1개까지 사용할 수 있습니다.'
-                    : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
-                  return;
-                }
-                toggleCycleVariantSelection(variantId, baseStyles, setSelectedStyles);
-              } else {
-                cycleFamilySelection(cycleId, baseStyles, setSelectedStyles, STYLE_CYCLES);
-              }
-            }}
-            onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
-            onRandom={() => randomizeCategory('style')}
-            isLocked={menuLocks.style}
-            onToggleLock={() => toggleMenuLock('style')}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-            isRandomized={isStyleRandomized}
-            isExpanded={isStyleExpanded}
-            onToggleExpand={() => toggleMainSections('style')}
-            onHeightChange={setStyleHeight}
-            forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
-            onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('style', isOpen); }}
-            directInput={{
-              selectedText: selectedStyles.map((id) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX)).find(Boolean) || '',
-              onApply: applyDirectStyleInput,
-              onCancelSelected: clearDirectStyleInput,
-            }}
-          />
-          <CycleSection 
-            title="Sound/Texture" 
-            titleKo="사운드"
-            description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
-            descriptionKo="악기 톤과 배경 질감을 설정합니다. 기본 장르에 적용된 악기 사운드의 질감을 바꿔서 원하는 느낌으로 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
-            cycles={filteredSoundTextureCycles}
-            selected={selectedInstrumentSounds}
-            pointSelected={selectedPointSounds}
-            isPointSelectionMode={false}
-            highlightedVariantIds={recommendedComboAppliedSoundIds}
-            onCycleToggle={(cycleId, variantId) => {
-              const baseInstrumentSounds = selectedInstrumentSounds.filter((id) => !isCustomSoundKeyword(id));
-              if (variantId) {
-                const isRecommendedCombo = !!getRecommendedSoundComboVariant(variantId);
-                if (isRecommendedCombo) {
-                  if (baseInstrumentSounds.includes(variantId)) {
-                    clearRecommendedSoundCombo(variantId);
-                    return;
-                  }
-                  setSelectedInstrumentSounds(baseInstrumentSounds);
-                  if (applyRecommendedSoundCombo(variantId)) return;
-                }
-                setSelectedPointSounds((prev) => prev.filter((id) => id !== variantId));
-                toggleCycleVariantSelection(variantId, baseInstrumentSounds, setSelectedInstrumentSounds);
-              }
-              else cycleFamilySelection(cycleId, baseInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
-            }}
-            onOtherModeVariantToggle={(variantId) => {
-              setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId && !isCustomSoundKeyword(id)));
-              const combo = getRecommendedSoundComboVariant(variantId);
-              if (combo) {
-                recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
-                  Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([comboVariantId]) => comboVariantId !== variantId)
-                );
-              }
-              toggleCycleVariantSelection(variantId, selectedPointSounds, setSelectedPointSounds);
-            }}
-            onClear={() => {
-              recommendedSoundComboAppliedIdsRef.current = {};
-              setSelectedInstrumentSounds([]);
-              setSelectedPointSounds([]);
-              setIsPointSoundMode(false);
-              setIsSoundTextureRandomized(false);
-            }}
-            onRandom={() => randomizeCategory('sound')}
-            isLocked={menuLocks.sound}
-            onToggleLock={() => toggleMenuLock('sound')}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-            isRandomized={isSoundTextureRandomized}
-            isExpanded={isSoundExpanded}
-            onToggleExpand={() => toggleMainSections('sound')}
-            onHeightChange={setSoundHeight}
-            forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
-            onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('sound', isOpen); }}
-            directInput={{
-              selectedText: selectedInstrumentSounds.map((id) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX)).find(Boolean) || '',
-              onApply: applyDirectSoundInput,
-              onCancelSelected: clearDirectSoundInput,
-            }}
-          />
-        </div>
-
-        <AnimatePresence>
-          {isGenreModalOpen && activeGenreGroupId && (
-            <GenreSelectModal
-              group={GENRE_GROUPS.find((item) => item.id === activeGenreGroupId) ?? null}
-              selectedGenreId={selectedGenres[0] ?? null}
-              onClose={() => closeGenreModal('ui')}
-              onSelect={handleGenreSelect}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
-        <div className="soridraw-studio-secondary-section space-y-5">
-          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
-            <CategorySection 
-              title="Mood" 
-              titleKo="분위기"
-              description="Determines the emotional curve and mood of the song. By setting the emotional core the music aims to convey, such as sadness, joy, or tension, it decides the overall emotional tone of the generated music."
-              descriptionKo="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
-              items={MOODS} 
-              selected={selectedMoods} 
-              onToggle={(id) => toggleSelection(id, 'mood')}
-              onClear={() => clearCategory('mood')}
-              onRandom={() => randomizeCategory('mood')}
-              isLocked={menuLocks.mood}
-              onToggleLock={() => toggleMenuLock('mood')}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
-              isExpanded={isMoodExpanded}
-              onToggleExpand={() => toggleSubSections('mood')}
-              onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
-              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
-              isRandomized={isMoodRandomized}
-              hidePin={true}
-              uniformKeywordGrid={true}
-              directInput={{
-                selectedText: selectedMoods.map((id) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX)).find(Boolean) || '',
-                onApply: applyDirectMoodInput,
-                onCancelSelected: clearDirectMoodInput,
-              }}
-            />
-            <CategorySection 
-              title="Theme" 
-              titleKo="주제"
-              description="Determines the situation, story, and message of the song. Like love, breakup, night, or travel, it sets what the song talks about and what scene it paints."
-              descriptionKo="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
-              items={THEMES} 
-              selected={selectedThemes} 
-              onToggle={(id) => toggleSelection(id, 'theme')}
-              onClear={() => clearCategory('theme')}
-              onRandom={() => randomizeCategory('theme')}
-              isLocked={menuLocks.theme}
-              onToggleLock={() => toggleMenuLock('theme')}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-              hoveredItem={hoveredItem}
-              isExpanded={isThemeExpanded}
-              onToggleExpand={() => toggleSubSections('theme')}
-              onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
-              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
-              isRandomized={isThemeRandomized}
-              hidePin={true}
-              uniformKeywordGrid={true}
-              directInput={{
-                selectedText: selectedThemes.map((id) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX)).find(Boolean) || '',
-                onApply: applyDirectThemeInput,
-                onCancelSelected: clearDirectThemeInput,
-              }}
-            />
-            <div className="soridraw-storyboard-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
-              <div className="soridraw-storyboard-card-inner px-5 md:px-6 py-3.5 md:py-4 flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={openStoryboardModal}
-                  className="flex-1 min-w-0 text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
-                    </div>
-                    <div className="soridraw-card-title-anchor relative min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3
-                          onMouseEnter={() => setShowStoryboardTitleTooltip(true)}
-                          onMouseLeave={() => setShowStoryboardTitleTooltip(false)}
-                          className="text-base md:text-lg font-black text-[var(--text-primary)] cursor-help"
-                        >
-                          스토리보드
-                        </h3>
-                      </div>
-                      <AnimatePresence>
-                        {showStoryboardTitleTooltip && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl w-64 pointer-events-none"
-                          >
-                            <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
-                            <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                      <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
-                        {buildStoryboardSummary(situation)}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-
-                <div className="soridraw-card-header-actions flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => toggleMenuLock('situation')}
-                    onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock Storyboard' : 'Lock Storyboard', labelKo: menuLocks.situation ? '잠금 해제' : '스토리보드 잠금', description: menuLocks.situation ? '스토리보드를 랜덤 선택에 다시 포함합니다.' : '현재 스토리보드 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
-                    onMouseLeave={() => setHoveredItem(null)}
-                    className={cn(
-                      "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
-                      menuLocks.situation
-                        ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
-                        : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
-                    )}
-                    title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
-                    aria-label={menuLocks.situation ? '스토리보드 잠금 해제' : '스토리보드 잠금'}
-                  >
-                    {menuLocks.situation ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                  </button>
-                  {hasActiveSituation(situation) && (
-                    <button
-                      type="button"
-                      onClick={clearSituation}
-                      className="px-3 py-2 rounded-xl text-xs font-bold bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
-                    >
-                      초기화
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={openStoryboardModal}
-                    className={cn(
-                      "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
-                      hasActiveSituation(situation)
-                        ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong hover:bg-[#FFB400]/90"
-                        : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
-                    )}
-                    title={hasActiveSituation(situation) ? '스토리보드 편집' : '스토리보드 설정'}
-                    aria-label="스토리보드 설정 열기"
-                  >
-                    <Settings className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {isSituationExpanded && (
-                <Portal>
-                  <motion.div
-                    initial={{ opacity: 1 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 1 }}
-                    transition={{ duration: 0 }}
-                    className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm px-3 py-5"
-                    onPointerDown={(event) => {
-                      storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
-                    }}
-                    onPointerUp={(event) => {
-                      if (storyboardModalBackdropMouseDownRef.current && event.target === event.currentTarget) {
-                        storyboardModalBackdropMouseDownRef.current = false;
-                        applyStoryboardModal();
-                        return;
-                      }
-                      storyboardModalBackdropMouseDownRef.current = false;
-                    }}
-                    onPointerCancel={() => {
-                      storyboardModalBackdropMouseDownRef.current = false;
-                    }}
-                  >
-                    <motion.div
-                      initial={{ opacity: 1, scale: 1, y: 0 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 1, scale: 1, y: 0 }}
-                      transition={{ duration: 0 }}
-                      className="soridraw-studio-storyboard-modal-panel storyboard-tone-flat-panel w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
-                      onClick={(e) => e.stopPropagation()}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onPointerUp={(e) => e.stopPropagation()}
-                    >
-                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 bg-[var(--card-bg)]/95 backdrop-blur-xl shadow-[inset_0_-1px_0_rgba(228,95,89,0.08)]">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <Users className="w-[22px] h-[22px] text-[#FF9B92]" />
-                            <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
-                          </div>
-                          <p className="mt-1 text-[11px] md:text-xs text-[var(--text-secondary)]">캐릭터와 이야기 흐름을 정해요</p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {hasDraftStoryboard && (
-                            <button
-                              type="button"
-                              onClick={clearDraftSituation}
-                              className="soridraw-modal-reset-button"
-                            >
-                              초기화
-                            </button>
-                          )}
-                          {isStoryboardDraftChanged && (
-                            <button
-                              type="button"
-                              onClick={applyStoryboardModal}
-                              className="p-2 rounded-xl bg-[#E45F59]/78 text-[#171717] font-black soridraw-selected-strong hover:bg-[#E45F59]/86 transition-all"
-                              title="적용"
-                              aria-label="스토리보드 적용"
-                            >
-                              <Check className="w-[18px] h-[18px]" />
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => closeStoryboardModal()}
-                            className="p-2 rounded-xl bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
-                            title="닫기"
-                            aria-label="스토리보드 닫기"
-                          >
-                            <X className="w-[18px] h-[18px]" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="storyboard-tone-flat-body max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
-                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
-                          <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div className="space-y-3.5">
-                              <label className="block text-xs font-black text-[#FF9B92] mb-2">캐릭터 A</label>
-                              <input
-                                value={draftSituation.targetA || ''}
-                                onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
-                                placeholder="예: 저승사자, 엄마, 상사"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
-                              />
-                              <StoryboardVocalRoleButtons label="노래 역할" value={getStoryboardVocalRoleValue(draftSituation, 'characterAVocalRole')} onChange={(v) => updateDraftSituationField('characterAVocalRole', v === 'auto' ? '' : v)} accent="story" />
-                              <StoryboardGenderButtons label="성별" value={getStoryboardGenderValue(draftSituation, 'characterAGender')} onChange={(v) => updateDraftSituationField('characterAGender', v || '')} accent="story" />
-                              <StoryboardSlider label="연령" left="어림" right="연륜" value={getStoryboardSliderValue(draftSituation, 'characterAAge')} onChange={(v) => updateDraftSituationField('characterAAge', v)} statusLabels={["어림", "중간", "연륜"]} accent="story" />
-                            </div>
-                            <div className="space-y-3.5">
-                              <label className="block text-xs font-black text-[#FFD36A] mb-2">캐릭터 B</label>
-                              <input
-                                value={draftSituation.targetB || ''}
-                                onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
-                                placeholder="예: 귀신, 아들, 직원"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
-                              />
-                              <StoryboardVocalRoleButtons label="노래 역할" value={getStoryboardVocalRoleValue(draftSituation, 'characterBVocalRole')} onChange={(v) => updateDraftSituationField('characterBVocalRole', v === 'auto' ? '' : v)} accent="characterB" />
-                              <StoryboardGenderButtons label="성별" value={getStoryboardGenderValue(draftSituation, 'characterBGender')} onChange={(v) => updateDraftSituationField('characterBGender', v || '')} accent="characterB" />
-                              <StoryboardSlider label="연령" left="어림" right="연륜" value={getStoryboardSliderValue(draftSituation, 'characterBAge')} onChange={(v) => updateDraftSituationField('characterBAge', v)} accent="characterB" statusLabels={["어림", "중간", "연륜"]} />
-                            </div>
-                          </div>
-                        </section>
-
-                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
-                          <StoryboardSectionTitle title="캐릭터 포지션" description="원하는 스타일로 게이지를 맞춰보세요" />
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div className="storyboard-character-card rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
-                              <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#FF9B92] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
-                              </div>
-                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="story" />
-                              <StoryboardSlider label="감정" left="절제" right="표출" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["절제", "중간", "표출"]} accent="story" />
-                              <StoryboardSlider label="화법" left="직설" right="은유" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="story" />
-                              <input
-                                value={draftSituation.speakerAExtra || ''}
-                                onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
-                                placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
-                              />
-                            </div>
-
-                            <div className="storyboard-character-card rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
-                              <div className="flex items-center gap-2 pl-2">
-                                <p className="text-sm font-black text-[#FFD36A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
-                              </div>
-                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} accent="characterB" statusLabels={["존댓말", "반존대", "반말"]} />
-                              <StoryboardSlider label="감정" left="절제" right="표출" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["절제", "중간", "표출"]} />
-                              <StoryboardSlider label="화법" left="직설" right="은유" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} accent="characterB" statusLabels={["직설", "혼합", "은유"]} />
-                              <input
-                                value={draftSituation.speakerBExtra || ''}
-                                onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
-                                placeholder="추가 말맛: 예: 공손하지만 안 물러남"
-                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
-                              />
-                            </div>
-                          </div>
-                        </section>
-
-                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
-                          <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
-                          <textarea
-                            value={draftSituation.description || ''}
-                            onChange={(e) => updateDraftSituationField('description', e.target.value)}
-                            placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
-                            rows={4}
-                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40 resize-none"
-                          />
-                          <input
-                            value={draftSituation.detailCustom || draftSituation.details || ''}
-                            onChange={(e) => {
-                              updateDraftSituationField('detailCustom', e.target.value);
-                              updateDraftSituationField('detailPresets', []);
-                            }}
-                            placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
-                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
-                          />
-                        </section>
-
-                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
-                          <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                            <StoryboardSlider label="대화" left="대화" right="혼잣말" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["대화", "반반", "혼잣말"]} />
-                            <StoryboardSlider label="전개" left="현실적" right="비현실적" value={getStoryboardSliderValue(draftSituation, 'storyRealityScale')} onChange={(v) => updateDraftSituationField('storyRealityScale', v)} description="현실과 비현실의 비중을 조절해요." statusLabels={["현실적", "반반", "비현실적"]} />
-                            <StoryboardSlider label="감정" left="장난" right="진심" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["장난", "반반", "진심"]} />
-                          </div>
-                        </section>
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                </Portal>
-              )}
-            </AnimatePresence>
-
-            <div className="soridraw-studio-vocal-slot min-w-0 h-full">
-            <VocalControl 
-              maleCount={maleCount}
-              femaleCount={femaleCount}
-              vocalMode={vocalMode}
-              vocalTones={vocalTones}
-              vocalMembers={vocalMembers}
-              rapEnabled={rapEnabled}
-              rapMode={rapMode}
-              onRapModeChange={(mode) => {
-                setRapMode(mode);
-                setRapEnabled(mode === 'on');
-              }}
-              onMaleChange={setMaleCount}
-              onFemaleChange={setFemaleCount}
-              onModeChange={setVocalMode}
-              onMembersChange={setVocalMembers}
-              onRapChange={setRapEnabled}
-              isKoreanEnglishMix={isKoreanEnglishMix}
-              englishMixRatio={englishMixRatio}
-              onEnglishMixRatioChange={setEnglishMixRatio}
-              onToggleKoreanEnglishMix={() => {
-                const nextValue = !isKoreanEnglishMix;
-                setIsKoreanEnglishMix(nextValue);
-                setHoveredItem({
-                  id: 'lyrics-mix-toggle',
-                  label: '언어 혼합',
-                  description: nextValue
-                    ? '선택한 첫 번째 언어를 기준으로 다른 언어를 자연스럽게 섞은 가사를 생성합니다.'
-                    : '언어 혼합을 끄고 기본 언어 흐름으로 되돌립니다.',
-                  _ts: Date.now(),
-                });
-              }}
-              isLocked={menuLocks.vocal}
-              onToggleLock={() => toggleMenuLock('vocal')}
-              onClear={() => {
-                setMaleCount(0);
-                setFemaleCount(0);
-                setVocalMode('solo');
-                setSelectedVocalToneId(undefined);
-                setVocalMembers([{ id: 'member_default_solo', gender: 'neutral', roles: ['main'] }]);
-              }}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-              onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
-              genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
-              randomActivationKey={vocalRandomActivationKey}
-              naturalResponsiveHeight={isStudioBlackBuilderPresentation}
-            />
-            </div>
-            <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
-            <SongStructureIntegratedControl
-              lyricsLength={lyricsLength}
-              onLyricsLengthChange={setLyricsLength}
-              lyricWritingStyle={lyricWritingStyle}
-              onLyricWritingStyleChange={setLyricWritingStyle}
-              songStructure={songStructure}
-              customStructure={customStructure}
-              sectionVocalCueEnabled={sectionVocalCueEnabled}
-              sectionInstrumentCueEnabled={sectionInstrumentCueEnabled}
-              onSectionVocalCueEnabledChange={setSectionVocalCueEnabled}
-              onSectionInstrumentCueEnabledChange={setSectionInstrumentCueEnabled}
-              onSongStructureChange={setSongStructure}
-              onCustomStructureChange={setCustomStructure}
-              isLocked={menuLocks.structure}
-              onToggleLock={() => toggleMenuLock('structure')}
-              onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsStructureModalOpen(isOpen); }}
-              onClear={() => {
-                setLyricsLength('normal');
-                setSongStructure('1');
-                setCustomStructure([]);
-                setSectionVocalCueEnabled(true);
-                setSectionInstrumentCueEnabled(true);
-                setLyricWritingStyle('default');
-                writeStoredV1LyricWritingStyle('default');
-              }}
-              onHover={setHoveredItem}
-              onLongPressStart={handleLongPressStart}
-              onLongPressEnd={handleLongPressEnd}
-              user={user}
-              userTier={effectiveUserTier}
-              sectionTags={sectionTags}
-              pointSoundTags={filterSelectableIds(selectedPointSounds).map(getPointSoundTagLabelById).filter(Boolean)}
-              pointSoundTagLabels={Object.fromEntries(
-                filterSelectableIds(selectedPointSounds)
-                  .map((id) => [getPointSoundTagLabelById(id), getPointSoundTagDisplayLabelById(id)] as const)
-                  .filter(([tag, label]) => Boolean(tag && label))
-              )}
-              vocalSectionTags={vocalSectionTagOptions}
-              selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
-              naturalResponsiveHeight={isStudioBlackBuilderPresentation}
-            />
-            </div>
-          </div>
-        </div>
-
-        {/* Tempo Control Bar */}
-        <div className="soridraw-studio-tempo-wrap mb-4">
-          <TempoControl 
-            enabled={tempoEnabled}
-            onEnabledChange={setTempoEnabled}
-            min={minBPM}
-            max={maxBPM}
-            onMinChange={setMinBPM}
-            onMaxChange={setMaxBPM}
-            onClear={() => {
-              setTempoEnabled(true);
-              setMinBPM(90);
-              setMaxBPM(110);
-            }}
-            onHover={setHoveredItem}
-            onLongPressStart={handleLongPressStart}
-            onLongPressEnd={handleLongPressEnd}
-          />
-        </div>
-
-        {/* Search & Actions */}
-        <div className="space-y-1 md:space-y-1">
-          <div className="relative group rounded-2xl soridraw-studio-command-card">
-            <div className="absolute top-6 left-4 pointer-events-none z-10">
-              <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
-            </div>
-            
-              <textarea
-                ref={commandInputRef}
-                value={userInput}
-                onChange={(e) => {
-                  setUserInput(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
-                }}
-                onFocus={() => {
-                  setIsInputFocused(true);
-                }}
-                onBlur={() => setIsInputFocused(false)}
-                className="w-full bg-[rgba(255,255,255,0.16)] border border-white/20 rounded-2xl py-5 pl-12 pr-52 md:pr-60 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/60 focus:border-brand-orange/60 transition-all duration-300 text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative placeholder:text-white/60 scroll-smooth hover:border-white/30"
-                rows={1}
-                placeholder=""
-              />
-            <AnimatePresence mode="wait">
-              {!userInput && (
-                <motion.div
-                  key={commandPlaceholderIndex}
-                  initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
-                  animate={{ opacity: isInputFocused ? 0.78 : 0.92, y: 0, filter: 'blur(0px)' }}
-                  exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
-                  transition={{ duration: 0.35, ease: 'easeOut' }}
-                  className="soridraw-command-placeholder pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
-                >
-                  {commandPlaceholderExamples[commandPlaceholderIndex]}
-                </motion.div>
-              )}
-            </AnimatePresence>
-            {userInput && (
-              <div className="absolute right-36 md:right-40 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center">
-                <button
-                  type="button"
-                  aria-label="명령창 내용 삭제"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setUserInput('');
-                    window.requestAnimationFrame(() => {
-                      if (commandInputRef.current) {
-                        commandInputRef.current.style.height = 'auto';
-                        commandInputRef.current.focus();
-                      }
-                    });
-                  }}
-                  className="soridraw-no-active-translate w-9 h-9 rounded-full bg-white/12 border border-white/15 text-white/70 hover:text-white hover:bg-white/20 hover:border-white/25 transition-all flex items-center justify-center shadow-[0_8px_22px_rgba(0,0,0,0.22)] active:scale-95 origin-center"
-                >
-                  <X className="w-4.5 h-4.5" />
-                </button>
-              </div>
-            )}
-
-            {/* Direct Lyrics Toggle Button */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
-              <button
-                onClick={() => setIsLyricMode(!isLyricMode)}
-                onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
-                onMouseLeave={() => setHoveredItem(null)}
-                aria-pressed={isLyricMode}
-                className={cn(
-                  "soridraw-direct-lyrics-toggle flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
-                  isLyricMode 
-                    ? "bg-[#F4A900] text-[#18110A] border-[#F4A900] hover:bg-[#F7B31A] hover:border-[#F7B31A]" 
-                    : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-[#F4A900]/80"
-                )}
-              >
-                <Languages className="w-[18px] h-[18px]" />
-                직접 작사
-              </button>
-            </div>
-          </div>
-
-          {/* Direct Lyrics Input Area */}
-          <AnimatePresence>
-            {isLyricMode && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="pt-2 pb-4 space-y-3">
-                  <div className="h-px bg-btn-border w-full" />
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-[#F4A900]" />
-                      <p className="text-[12px] font-medium text-[var(--text-secondary)]">
-                        이 아래 내용은 가사 초안으로 우선 반영됩니다.
-                      </p>
-                    </div>
-                    
-                    {/* Lyric Mode Selector */}
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
-                        <button
-                          onClick={() => setLyricMode('assist')}
-                          className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
-                            lyricMode === 'assist' 
-                              ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
-                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                          )}
-                        >
-                          AI 보정
-                        </button>
-                        <button
-                          onClick={() => setLyricMode('preserve')}
-                          className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
-                            lyricMode === 'preserve' 
-                              ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
-                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                          )}
-                        >
-                          원문 유지
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setLyricDraft('');
-                          setIsLyricMode(false);
-                        }}
-                        onMouseEnter={() => setHoveredItem({ id: 'delete-lyric', label: '가사 삭제', description: '입력한 가사 초안을 모두 지우고 창을 닫습니다.' })}
-                        onMouseLeave={() => setHoveredItem(null)}
-                        className="p-1.5 rounded-lg bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all shadow-btn"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="relative group">
-                    <textarea
-                      value={lyricDraft}
-                      onChange={(e) => {
-                        setLyricDraft(e.target.value);
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
-                      }}
-                      placeholder="여기에 적은 가사초안을 기초로 Ai가 보정하여 재창작됩니다.(작사를 직접 하고싶다면 '원문유지'를 이용하세요.)"
-                      className="w-full bg-[rgba(255,255,255,0.055)] border border-white/10 rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#F4A900]/25 focus:border-[#F4A900]/35 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-white/35"
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Action Buttons Anchor */}
-          <div
-            ref={actionButtonsAnchorRef}
-            className={cn(
-              "relative soridraw-studio-action-geometry-anchor",
-              // 535 — Studio Black uses this node only as an X/width geometry
-              // probe. It never reserves a second expanded-row slot, so collapse,
-              // expand and PC/mobile pane changes cannot alter the scroll range.
-              !isStudioBlackBuilderPresentation
-                && shouldShowActionButtons
-                && !isActionButtonsCollapsed
-                && !isBuilderActionsFloating
-                ? "soridraw-studio-action-anchor-expanded"
-                : "h-0"
-            )}
-            data-soridraw-docked={!isStudioBlackBuilderPresentation && !isBuilderActionsFloating ? "true" : "false"}
-          >
-            {shouldShowActionButtons
-              && !isStudioBlackBuilderPresentation
-              && !isActionButtonsCollapsed
-              && !isBuilderActionsFloating
-              && renderExpandedActionBar('inline')}
-          </div>
-
-          {/* Floating / Collapsible Action Buttons */}
-          <AnimatePresence initial={false} mode="wait">
-            {shouldShowActionButtons && (
-              isActionButtonsCollapsed ? (
-                <Portal>
-                  <motion.button
-                    key="action-buttons-collapsed-toggle"
-                    type="button"
-                    initial={{ opacity: 0, y: 0, scale: 1 }}
-                    animate={{ opacity: 1, y: 0, scale: [1, 1.1, 0.995, 1.045, 1] }}
-                    exit={{ opacity: 0, y: 0, scale: 1, transition: { duration: 0 } }}
-                    transition={{
-                      opacity: smoothActionPanelTransition,
-                      y: smoothActionPanelTransition,
-                      scale: {
-                        duration: 2.05,
-                        times: [0, 0.32, 0.52, 0.74, 1],
-                        ease: [0.33, 1, 0.68, 1],
-                        repeat: Infinity,
-                        repeatDelay: 0.18,
-                      },
-                    }}
-                    drag={isActionSwipeCollapseMode ? "x" : false}
-                    dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 92 } : undefined}
-                    dragElastic={0.12}
-                    onDragEnd={(_, info) => {
-                      if (!isActionSwipeCollapseMode) return;
-                      if (info.offset.x > 34 || info.velocity.x > 360) {
-                        expandActionButtons();
-                      }
-                    }}
-                    onClick={expandActionButtons}
-                    onWheelCapture={forwardActionToggleWheelToBuilder}
-                    onMouseEnter={() => {}}
-                    onMouseLeave={() => {}}
-                    aria-label="생성 버튼 펼치기"
-                    data-soridraw-placement="floating"
-                    className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFB400] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
-                  >
-                    <span className="soridraw-studio-action-collapsed-arrow relative flex h-9 w-9 items-center justify-center">
-                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
-                    </span>
-                  </motion.button>
-                </Portal>
-              ) : (isStudioBlackBuilderPresentation || isBuilderActionsFloating) ? (
-                <Portal>
-                  {renderExpandedActionBar('floating')}
-                </Portal>
-              ) : null
-            )}
-          </AnimatePresence>
-
-          {/* Applied Keywords Display (Classic only; Studio Black uses the sticky result-pane strip.) */}
-          <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
-            <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
-              {liveSelectedKeywordItems.map((item) => {
-                const chipClassName = cn(
-                  'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
-                  getAppliedSelectionKeywordChipClass(item.type)
-                );
-                return (
-                  <span key={`${item.type}-${item.id}`} className={chipClassName}>
-                    {item.label}
-                    <button
-                      type="button"
-                      onClick={() => removeLiveSelectedKeyword(item)}
-                      aria-label={`${item.label} 선택 해제`}
-                      className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
-                    >
-                      <X className="w-[18px] h-[18px]" />
-                    </button>
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-                  </StudioBuilderPane>
-                  <StudioResultPane>
-                    {studioWorkspaceView === 'music-note' ? (
-                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
-                        {!isAuthReady ? (
-                          <div className="soridraw-studio-workspace-loading">
-                            <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-                            <span>뮤직노트를 불러오는 중...</span>
-                          </div>
-                        ) : (user || auth.currentUser) ? (
-                          <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
-                            <HistoryRouteWrapper
-                              isFavoritesLoading={isFavoritesLoading}
-                              hasMoreFavorites={hasMoreFavorites}
-                              isLoadingMoreFavorites={isLoadingMoreFavorites}
-                              loadMoreFavorites={loadMoreFavorites}
-                              searchFavoritesOnServer={searchFavoritesOnServer}
-                              refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-                              toggleFavorite={toggleFavorite}
-                              updateFavorite={updateFavorite}
-                              clearAllFavorites={clearAllFavorites}
-                              unlockAllFavorites={unlockAllFavorites}
-                              lockAllFavorites={lockAllFavorites}
-                              user={user || auth.currentUser}
-                              handleLogin={handleLogin}
-                            />
-                          </Suspense>
-                        ) : (
-                          <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
-                        )}
-                      </section>
-                    ) : studioWorkspaceView === 'library' ? (
-                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
-                        <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
-                          <SunoLibraryPageLazy appUser={user || auth.currentUser} />
-                        </Suspense>
-                      </section>
-                    ) : (
+  const render676RecentSongsContent = () => (
                       <>
                     {liveSelectedKeywordItems.length > 0 && (
                       <Portal>
@@ -17053,6 +15458,1612 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </div>
           )}
                       </>
+  );
+
+  return (
+    <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
+      {user && emailVerificationGate !== 'idle' && (
+        <Portal>
+          <div className="fixed inset-0 z-[30000] flex items-center justify-center bg-black/78 px-4 py-8 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="relative w-full max-w-[430px] rounded-2xl border border-white/12 bg-[#151313] p-6 shadow-[0_28px_100px_rgba(0,0,0,0.62)]"
+            >
+              <button
+                type="button"
+                onClick={requestCloseEmailVerificationGate}
+                aria-label="이메일 인증 창 닫기"
+                className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-white/45 transition-all hover:bg-white/[0.07] hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              {emailVerificationGate === 'checking' ? (
+                <div className="flex min-h-40 flex-col items-center justify-center text-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-[#F2C587]" />
+                  <p className="mt-4 text-sm font-black text-white">계정 확인 중</p>
+                  <p className="mt-1 text-xs font-bold text-white/50">이메일 인증 상태와 관리자 예외 여부를 확인하고 있습니다.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F2C587]/20 bg-[#F2C587]/10">
+                    <Shield className="h-6 w-6 text-[#F2C587]" />
+                  </div>
+                  <h2 className="mt-4 text-xl font-black text-white">이메일 인증이 필요합니다</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-white/58">
+                    <span className="text-white">{user.email}</span> 주소로 받은 인증메일의 링크를 한 번만 눌러주세요. 인증 전에는 앱을 사용할 수 없습니다.
+                  </p>
+
+                  {emailVerificationMessage && (
+                    <div className="mt-4 rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2.5 text-xs font-bold leading-5 text-[#FFE08A]">
+                      {emailVerificationMessage}
+                    </div>
+                  )}
+
+                  <div className="mt-5 grid gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCheckEmailVerification}
+                      disabled={isEmailVerificationActionPending}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
+                    >
+                      {isEmailVerificationActionPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                      인증 완료 확인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void sendVerificationEmailToCurrentUser({ source: 'manual' })}
+                      disabled={isEmailVerificationActionPending || emailVerificationResendSeconds > 0}
+                      className="h-11 w-full rounded-xl border border-white/12 bg-white/[0.06] px-4 text-sm font-black text-white transition-all hover:bg-white/[0.1] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {emailVerificationResendSeconds > 0
+                        ? `${emailVerificationResendSeconds}초 후 다시 보내기`
+                        : '인증메일 다시 보내기'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={requestCloseEmailVerificationGate}
+                      disabled={isEmailVerificationActionPending}
+                      className="h-10 w-full rounded-xl text-xs font-black text-white/45 transition-all hover:bg-white/[0.05] hover:text-white/70 disabled:opacity-50"
+                    >
+                      다른 계정으로 로그인
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
+          </div>
+        </Portal>
+      )}
+
+      {/* Account Status Banner */}
+      {user && userStatus !== 'active' && !isAdminUser && (
+        <Portal>
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] w-[calc(100%_-_48px)] max-w-lg">
+            <motion.div 
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className={cn(
+                "px-4 py-3 rounded-2xl border backdrop-blur-md flex items-center gap-3 shadow-2xl overflow-hidden relative",
+                userStatus === 'banned' ? "bg-red-500/10 border-red-500/20 text-red-400" :
+                "bg-orange-500/10 border-orange-500/20 text-orange-400"
+              )}
+            >
+              <div className="absolute inset-0 bg-white/5 pointer-events-none" />
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-[13px] font-black leading-tight mb-0.5">
+                  {userStatus === 'paused' && '계정 일시 제한'}
+                  {userStatus === 'expired' && '이용 기간 만료'}
+                  {userStatus === 'banned' && '계정 차단됨'}
+                </p>
+                <p className="text-[11px] opacity-80 leading-snug">
+                  {userStatus === 'paused' && '관리자에 의해 계정이 일시 정지되었습니다. 곡 생성이 불가능합니다.'}
+                  {userStatus === 'expired' && '워크스페이스 이용 기간이 종료되었습니다. 갱신 후 이용해주세요.'}
+                  {userStatus === 'banned' && '해당 계정은 서비스 이용이 제한되었습니다. 고객센터에 문의하세요.'}
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        </Portal>
+      )}
+
+      {isGlobalSearchOpen && (
+        <Portal>
+          <motion.div
+            className="fixed inset-0 z-[10000] flex items-start justify-center overflow-hidden overscroll-none bg-black/35 backdrop-blur-[1px] px-3 pb-5 pt-10 sm:pt-14"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onPointerDown={(event) => {
+              globalSearchBackdropMouseDownRef.current = event.target === event.currentTarget;
+            }}
+            onPointerUp={(event) => {
+              if (globalSearchBackdropMouseDownRef.current && event.target === event.currentTarget) {
+                closeGlobalSearchModal();
+              }
+              globalSearchBackdropMouseDownRef.current = false;
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.14, ease: "easeOut" }}
+              className="soridraw-studio-global-search-panel flex h-[calc(100vh-5rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-[var(--modal-soft-border)] bg-[var(--card-bg)] shadow-2xl sm:h-[min(760px,calc(100vh-7rem))]"
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--modal-soft-border)] px-5 py-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Search className="h-5 w-5 text-brand-orange" />
+                    <h2 className="text-lg font-black text-[var(--text-primary)]">통합 검색</h2>
+                  </div>
+                  <p className="mt-1 text-xs font-medium text-[var(--text-secondary)]">장르, 스타일, 사운드, 분위기, 주제를 한 번에 찾아요.</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={clearGlobalSearchSelections}
+                    disabled={!isGlobalSearchSelectionClearable}
+                    className={cn(
+                      "rounded-2xl border px-3 py-2 text-[11px] font-black transition-all active:scale-95",
+                      isGlobalSearchSelectionClearable
+                        ? "border-brand-orange/40 bg-brand-orange/10 text-brand-orange hover:bg-amber-500/15"
+                        : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)]/40"
+                    )}
+                  >
+                    초기화
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => closeGlobalSearchModal()}
+                    className={cn(
+                      "rounded-2xl border p-2 transition-all active:scale-95",
+                      isGlobalSearchSelectionClearable
+                        ? "border-brand-orange bg-brand-orange text-white shadow-lg shadow-brand-orange/20 hover:bg-brand-orange/90"
+                        : "border-[var(--modal-button-border)] bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover hover:text-brand-orange"
+                    )}
+                    aria-label="통합 검색 확인"
+                  >
+                    <Check className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => closeGlobalSearchModal()}
+                    className="rounded-2xl border border-[var(--modal-button-border)] bg-btn-bg p-2 text-[var(--text-secondary)] transition-all hover:bg-btn-hover hover:text-[var(--text-primary)] active:scale-95"
+                    aria-label="통합 검색 닫기"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="border-b border-[var(--modal-soft-border)] px-5 py-4">
+                <div className="flex items-center gap-3 rounded-2xl border border-[var(--modal-button-border)] bg-[var(--bg-primary)] px-4 py-3 shadow-inner">
+                  <Search className="h-5 w-5 text-brand-orange" />
+                  <input
+                    autoFocus
+                    value={globalSearchQuery}
+                    onChange={(event) => setGlobalSearchQuery(event.target.value)}
+                    placeholder="예: 시티팝, 후렴, lead, 합창, 차가운"
+                    className="min-w-0 flex-1 bg-transparent text-sm font-bold text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]/60"
+                  />
+                  {globalSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setGlobalSearchQuery('')}
+                      className="rounded-full p-1 text-[var(--text-secondary)] transition hover:bg-[var(--hover-bg)] hover:text-[var(--text-primary)]"
+                      aria-label="검색어 지우기"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
+                {!globalSearchQuery.trim() ? (
+                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--modal-soft-border)] bg-[var(--bg-primary)]/60 px-6 text-center">
+                    <Search className="mb-3 h-8 w-8 text-brand-orange/70" />
+                    <p className="text-sm font-black text-[var(--text-primary)]">찾고 싶은 키워드를 입력해줘.</p>
+                    <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">한글, 영어, 설명, 내부 프롬프트까지 같이 검색해요.</p>
+                  </div>
+                ) : globalSearchResults.length === 0 ? (
+                  <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-[var(--modal-soft-border)] bg-[var(--bg-primary)]/60 px-6 text-center">
+                    <p className="text-sm font-black text-[var(--text-primary)]">검색 결과가 없어요.</p>
+                    <p className="mt-2 text-xs font-medium text-[var(--text-secondary)]">비슷한 단어나 영어 키워드로 다시 찾아봐.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {globalSearchResults.map((item) => {
+                      const isSelected = isGlobalSearchItemSelected(item);
+                      return (
+                        <button
+                          key={`${item.type}-${item.id}`}
+                          type="button"
+                          onClick={() => handleGlobalSearchItemToggle(item)}
+                          onMouseEnter={() => setHoveredItem({ id: item.id, label: item.labelEn || item.label, labelKo: item.label, description: item.description || '', _ts: Date.now() })}
+                          onMouseLeave={() => setHoveredItem(null)}
+                          className={cn(
+                            "w-full rounded-2xl border px-4 py-3 text-left transition-all active:scale-[0.99]",
+                            isSelected
+                              ? "border-black/20 bg-[#FFB400]/74 text-[#171717] font-black soridraw-selected-strong shadow-lg shadow-[#FFB400]/10"
+                              : "border-[var(--modal-button-border)] bg-[var(--bg-primary)]/80 hover:border-brand-orange/40 hover:bg-[var(--hover-bg)]"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex flex-wrap items-center gap-2">
+                                <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-black", getGlobalSearchCategoryClass(item.type))}>
+                                  {item.categoryLabel}
+                                </span>
+                                {item.groupLabel && (
+                                  <span className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-[10px] font-bold text-[var(--text-secondary)]">
+                                    {getGlobalSearchBreadcrumbParts(item.groupLabel).map((part) => (
+                                      <span key={`${item.type}-${item.id}-${part}`} className="inline-flex min-w-0 items-center gap-1">
+                                        <span className="text-[var(--text-tertiary)]">&gt;</span>
+                                        <span className="max-w-[9rem] truncate">{part}</span>
+                                      </span>
+                                    ))}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                <span className="text-sm font-black text-[var(--text-primary)]">{item.label}</span>
+                                {item.labelEn && item.labelEn !== item.label && (
+                                  <span className="text-[11px] font-bold text-[var(--text-secondary)]">{item.labelEn}</span>
+                                )}
+                              </div>
+                              {item.description && (
+                                <p className="mt-1 line-clamp-2 text-[10px] font-medium leading-4 text-[var(--text-secondary)]">
+                                  {item.description}
+                                </p>
+                              )}
+                            </div>
+                            <span className={cn(
+                              "mt-1 shrink-0 rounded-full px-2 py-1 text-[10px] font-black",
+                              isSelected ? "bg-[#FFB400] text-[#171717] font-black" : "bg-[var(--hover-bg)] text-[var(--text-secondary)]"
+                            )}>
+                              {isSelected ? '선택됨' : '선택'}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        </Portal>
+      )}
+
+
+      <AnimatePresence>
+        {isAuthModalOpen && !user && (
+          <Portal>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/68 px-4 py-6 backdrop-blur-md"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget) closeAuthModal();
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 18, scale: 0.96 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#151313] shadow-[0_24px_90px_rgba(0,0,0,0.52)]"
+              >
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                  <div>
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#F2C587]/70">SORiDRAW</p>
+                    <h2 className="mt-1 text-lg font-black text-white">
+                      {authMode === 'signup' ? '이메일 회원가입' : authMode === 'reset' ? '비밀번호 재설정' : '로그인'}
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeAuthModal}
+                    disabled={isLoggingIn}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-white/54 transition-all hover:bg-white/[0.07] hover:text-white disabled:opacity-50"
+                    aria-label="닫기"
+                    title="닫기"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/14 p-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('login');
+                        setAuthMessage(null);
+                      }}
+                      className={cn(
+                        "rounded-lg px-3 py-2 text-xs font-black transition-all",
+                        authMode === 'login' ? "bg-white/12 text-white" : "text-white/55 hover:text-white"
+                      )}
+                    >
+                      로그인
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMode('signup');
+                        setAuthMessage(null);
+                      }}
+                      className={cn(
+                        "rounded-lg px-3 py-2 text-xs font-black transition-all",
+                        authMode === 'signup' ? "bg-white/12 text-white" : "text-white/55 hover:text-white"
+                      )}
+                    >
+                      회원가입
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isLoggingIn}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/[0.07] px-4 py-3 text-sm font-black text-white transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {isLoggingIn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-[#F2C587]" />}
+                    Google로 계속하기
+                  </button>
+
+                  {authMode !== 'reset' && (
+                    <label className="mt-3 flex cursor-pointer items-center gap-2 rounded-xl border border-white/10 bg-black/12 px-3 py-2.5 text-xs font-bold text-white/60 transition-all hover:border-white/15 hover:text-white/75">
+                      <input
+                        type="checkbox"
+                        checked={rememberLogin}
+                        onChange={(event) => setRememberLogin(event.target.checked)}
+                        disabled={isLoggingIn}
+                        className="h-4 w-4 rounded border border-white/20 accent-sky-500 disabled:opacity-60"
+                      />
+                      로그인 유지
+                    </label>
+                  )}
+
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-white/10" />
+                    <span className="text-[10px] font-black uppercase tracking-[0.18em] text-white/32">or</span>
+                    <div className="h-px flex-1 bg-white/10" />
+                  </div>
+
+                  <form onSubmit={handleEmailAuth} className="space-y-3">
+                    <label className="block">
+                      <span className="mb-1.5 block text-[11px] font-black text-white/55">이메일</span>
+                      <input
+                        type="email"
+                        value={authEmail}
+                        onChange={(event) => setAuthEmail(event.target.value)}
+                        autoComplete="email"
+                        placeholder="name@example.com"
+                        className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
+                      />
+                    </label>
+
+                    {authMode !== 'reset' && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11px] font-black text-white/55">비밀번호</span>
+                        <input
+                          type="password"
+                          value={authPassword}
+                          onChange={(event) => setAuthPassword(event.target.value)}
+                          autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                          placeholder="6자 이상"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
+                        />
+                      </label>
+                    )}
+
+                    {authMode === 'signup' && (
+                      <label className="block">
+                        <span className="mb-1.5 block text-[11px] font-black text-white/55">비밀번호 확인</span>
+                        <input
+                          type="password"
+                          value={authPasswordConfirm}
+                          onChange={(event) => setAuthPasswordConfirm(event.target.value)}
+                          autoComplete="new-password"
+                          placeholder="비밀번호 다시 입력"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/18 px-3 text-sm font-medium text-white outline-none transition-all placeholder:text-white/25 focus:border-[#F2C587]/45"
+                        />
+                      </label>
+                    )}
+
+                    {authMessage && (
+                      <div className="rounded-xl border border-[#F2C587]/20 bg-[#F2C587]/10 px-3 py-2 text-xs font-bold leading-5 text-[#FFE08A]">
+                        {authMessage}
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isLoggingIn}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#FFD84F] via-[#FF9B72] to-[#F06C8B] px-4 text-sm font-black text-[#151313] transition-all hover:brightness-110 disabled:cursor-wait disabled:opacity-65"
+                    >
+                      {isLoggingIn && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {authMode === 'signup' ? '이메일로 가입하기' : authMode === 'reset' ? '재설정 메일 보내기' : '이메일로 로그인'}
+                    </button>
+                  </form>
+
+                  <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-white/45">
+                    {authMode === 'reset' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setAuthMessage(null);
+                        }}
+                        className="text-[#F2C587] hover:text-[#FFE08A]"
+                      >
+                        로그인으로 돌아가기
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('reset');
+                          setAuthMessage(null);
+                        }}
+                        className="text-[#F2C587] hover:text-[#FFE08A]"
+                      >
+                        비밀번호를 잊으셨나요?
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          </Portal>
+        )}
+      </AnimatePresence>
+
+      <Navigation
+        user={user}
+        cachedHeaderIdentity={cachedHeaderIdentity}
+        isAuthReady={isAuthReady}
+        handleLogin={handleLogin}
+        isLoggingIn={isLoggingIn}
+        handleLogout={handleLogout}
+        isAdminUser={isAdminMenuUser}
+        menuVisibility={menuVisibility}
+        menuAdminOnly={menuAdminOnly}
+        sunoLibrarySignal={sunoLibrarySignal}
+        sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
+        clearSunoLibrarySignal={clearSunoLibrarySignal}
+        studioCompactMobileLayout={isStudioCompactMobileLayout}
+        studioWorkspaceView={studioWorkspaceView}
+        onStudioWorkspaceSelect={selectStudioWorkspaceView}
+      />
+
+      <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
+
+      <Routes>
+        <Route path="/" element={
+          canAccessNavigationMenu('home') ? (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white"><Loader2 className="w-8 h-8 text-violet-300 animate-spin" /></div>}>
+              <HomePageLazy user={user} onLogin={handleLogin} isLoggingIn={isLoggingIn} menuVisibility={menuVisibilityForCurrentUser} />
+            </Suspense>
+          ) : (
+            <FeatureUnavailablePage label="홈" fallbackPath={navigationFallbackPath} />
+          )
+        } />
+        <Route path="/studio" element={
+          canAccessNavigationMenu('studio') ? (
+          <StudioPageFrame
+            workspaceView={studioWorkspaceView}
+            compactMobileLayout={isStudioCompactMobileLayout}
+            leftRail={
+              <StudioLeftRail
+                activeWorkspace={studioWorkspaceView}
+                onCreate={() => {
+                  selectStudioWorkspaceView('create');
+                  window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: window.scrollX, behavior: 'auto' }));
+                }}
+                onRecentSongs={() => selectStudioWorkspaceView('recent')}
+                onMusicNote={() => selectStudioWorkspaceView('music-note')}
+                onLibrary={() => selectStudioWorkspaceView('library')}
+                onSearch={openGlobalSearchModal}
+                onApiSettings={() => navigate('/suno-api-settings')}
+                onLab={() => navigate('/lab')}
+                onProfile={() => navigate('/my-page')}
+                onSettings={() => navigate('/my-page?tab=settings')}
+                onPlan={() => navigate('/my-page?tab=plan')}
+                onBilling={() => navigate('/my-page?tab=billing')}
+                onLogout={handleLogout}
+                profileName={user?.displayName || cachedHeaderIdentity?.displayName || 'SORiDRAW'}
+                profileEmail={user?.email || ''}
+                profilePhotoURL={user?.photoURL || cachedHeaderIdentity?.photoURL || ''}
+              />
+            }
+            rightRail={
+              <StudioRightRail
+                isGenerating={isGenerating}
+                runningCount={runningGenerationCount}
+                queuedCount={queuedGenerationCount}
+                history={history}
+                selectedIndex={historyIndex}
+                remainingCredits={sunoRemainingCredits}
+                creditsUpdatedAt={sunoRemainingCreditsUpdatedAt}
+                selectedKeywords={liveSelectedKeywordItems}
+                onRemoveSelectedKeyword={removeLiveSelectedKeyword}
+                formatTime={formatStudioDashboardTime}
+                formatSongTitle={formatUnifiedTitle}
+                onOpenGenerationOptions={() => setShowMainGenerationModal(true)}
+                onOpenSong={(song, index) => {
+                  selectStudioWorkspaceView('recent');
+                  openStudioDashboardSong(song, index);
+                }}
+                isSongUnread={isStudioDashboardSongUnread}
+                isSongFavorited={isSongFavorited}
+                onOpenApiSettings={() => navigate('/suno-api-settings')}
+              />
+            }
+          >
+              {isStudioBlackActionMode && isAdminMenuUser && splitPerfToolsVisible && (
+                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
+                  <button
+                    type="button"
+                    className={studioSplitEngineOverride === null ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('auto')}
+                    title={studioSplitAutoTitle}
+                  >
+                    자동
+                  </button>
+                  <button
+                    type="button"
+                    className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('lite')}
+                    title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
+                  >
+                    Lite V2
+                  </button>
+                  <button
+                    type="button"
+                    className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
+                    onClick={() => setStudioSplitEngine('legacy')}
+                    title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
+                  >
+                    기존 방식
+                  </button>
+                </div>
+              )}
+              {/* Header */}
+              <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
+                <div className="soridraw-studio-shell mx-auto w-full max-w-[1500px] px-4 md:px-6 relative">
+                  {/* Studio header search button */}
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={openGlobalSearchModal}
+                      className="soridraw-studio-hero-search-button absolute bottom-0 right-5 md:right-6 z-20 flex h-9 w-9 md:h-10 md:w-10 translate-y-1/2 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                      aria-label="통합 검색"
+                      title="통합 검색"
+                    >
+                      <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
+                    </button>
+                  )}
+
+                  <div className="soridraw-studio-hero-row">
+                    <motion.div
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="soridraw-studio-masthead flex flex-col items-start mt-4 md:mt-10"
+                    >
+                      <h1 
+                        className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full"
+                      >
+                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
+                      </h1>
+                    </motion.div>
+                    <div
+                      id="soridraw-studio-workspace-hero-host"
+                      className="soridraw-studio-workspace-hero-host"
+                      aria-live="polite"
+                    />
+                  </div>
+                </div>
+              </header>
+
+            <main className="soridraw-studio-main studio-tone-down mx-auto w-full max-w-[1500px] px-3 md:px-5 pt-6 pb-6 space-y-5 md:space-y-5">
+              {isStudioLoaded && (
+                <StudioSplitEngineWorkspace
+                  engine={studioSplitEngine}
+                  liteRuntimeProfile={studioLiteRuntimeProfile}
+                  viewMode="split"
+                  workspaceView={studioWorkspaceView}
+                  workspaceRequestId={studioWorkspaceLayoutRequestId}
+                  compactMobileMode={isStudioCompactMobileLayout}
+                  leftPanePresentation={is676RecentPairProbe ? 'result' : 'builder'}
+                  builderMasthead={
+                    <div className="soridraw-studio-scroll-builder-masthead">
+                      <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
+                        <Zap className="w-8 h-8 md:w-10 md:h-10 text-[#FFB400]" />
+                        <span>Sori <span className="text-[#FFB400]">Studio</span></span>
+                      </h1>
+                      {user && (
+                        <button
+                          type="button"
+                          onClick={openGlobalSearchModal}
+                          className="soridraw-studio-scroll-search-button flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-2xl bg-transparent border-0 shadow-none hover:scale-105 transition-all group"
+                          aria-label="통합 검색"
+                          title="통합 검색"
+                        >
+                          <Search className="w-6 h-6 md:w-7 md:h-7 text-[#FFB400] group-hover:scale-110 transition-transform" />
+                        </button>
+                      )}
+                    </div>
+                  }
+                >
+                  <StudioBuilderPane>
+                    {is676RecentPairProbe ? (
+                      render676RecentSongsContent()
+                    ) : (
+                      <>
+                    {/* Selection Sections */}
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+              <GenreHierarchySelector
+                selectedGenre={selectedGenres}
+                selectedSubGenre={subGenre}
+                onSelectGenre={(id) => {
+                  setSelectedGenres([]);
+                  setSubGenre((prev) =>
+                    limitFusionGenreIds(prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id])
+                  );
+                  setIsGenreRandomized(false);
+                }}
+                onSelectSubGenre={(id) =>
+                  setSubGenre((prev) =>
+                    limitFusionGenreIds(prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id])
+                  )
+                }
+                onCommitSelection={(mainId, subId, meta) => {
+                  const removeMainId = meta?.removeMainId ?? null;
+                  const removeSubId = meta?.removeSubId ?? null;
+
+                  const nextIds = Array.from(
+                    new Set(
+                      subGenre
+                        .filter((id) => id !== removeMainId && id !== removeSubId)
+                        .filter((id) => id !== mainId && id !== subId)
+                    )
+                  );
+
+                  // Only store the final selectable leaf genre.
+                  // If a sub genre exists, the parent/middle genre is only a navigation folder and must not be saved.
+                  if (subId) {
+                    nextIds.push(subId);
+                  } else if (mainId && hierarchyLeafGenreIdSet.has(mainId)) {
+                    nextIds.push(mainId);
+                  }
+
+                  setSelectedGenres([]);
+                  setSubGenre(Array.from(new Set(nextIds)).slice(-MAX_FUSION_GENRES));
+                  setIsGenreRandomized(false);
+                }}
+                onCommitSelectionList={(subIds) => {
+                  setSelectedGenres([]);
+                  setSubGenre(limitFusionGenreIds(subIds.filter((id) => hierarchyLeafGenreIdSet.has(id))));
+                  setIsGenreRandomized(false);
+                }}
+                onClear={() => {
+                  setSelectedGenres([]);
+                  setSubGenre([]);
+                  setIsGenreRandomized(false);
+                }}
+                onRandom={() => {
+                  if (menuLocks.genre) {
+                    showToast('장르 메뉴가 잠겨 있습니다.');
+                    return;
+                  }
+                  const randomLeafGenreIds = pickRandomLeafGenreIds(MAX_FUSION_GENRES);
+                  if (randomLeafGenreIds.length === 0) return;
+                  setSelectedGenres([]);
+                  setSubGenre(limitFusionGenreIds(randomLeafGenreIds));
+                  setIsGenreRandomized(true);
+                }}
+                isLocked={menuLocks.genre}
+                onToggleLock={() => toggleMenuLock('genre')}
+                onHover={setHoveredItem}
+                isExpanded={isGenreExpanded}
+                onToggleExpand={() => toggleMainSections('genre')}
+                isRandomized={isGenreRandomized}
+                onHeightChange={setGenreHeight}
+                forcedHeight={!isStudioBlackActionMode && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
+                directInput={{
+                  selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
+                  onApply: applyDirectGenreInput,
+                  onCancelSelected: clearDirectGenreInput,
+                }}
+              />
+          <CycleSection 
+            title="Style" 
+            titleKo="스타일"
+            description="Determines the expression and flow of the song. Depending on the selected style, the development and rhythmic feel of the song change, leading the overall impression of the music in the desired direction, such as classic, sophisticated, or emotional."
+            descriptionKo="선택한 장르 위에 하이브리드, 시대감, 보컬 표현, 공간감, 후렴, 전환, 리듬 같은 개성을 더합니다."
+            cycles={STYLE_CYCLES}
+            selected={selectedStyles}
+            onCycleToggle={(cycleId, variantId) => {
+              const baseStyles = selectedStyles.filter((id) => !isCustomStyleKeyword(id));
+              if (variantId) {
+                const isAddingCallResponse = cycleId === 'hook-addiction'
+                  && variantId === 'call-response-hook'
+                  && !baseStyles.includes(variantId);
+                if (isAddingCallResponse) {
+                  const declaredVocalCount = (maleCount + femaleCount) > 0
+                    ? (maleCount + femaleCount)
+                    : vocalMode === 'duo'
+                      ? 2
+                      : vocalMode === 'group'
+                        ? 3
+                        : 1;
+                  const responsiveVocalLayerIds = new Set([
+                    'la-la-chorus', 'crowd-chant', 'group-chant', 'vocal-shouts',
+                    'gospel-choir', 'kids-choir', 'children-choir', 'youth-choir', 'whisper-choir', 'humming-choir',
+                  ]);
+                  const hasResponsiveVocalLayer = selectedInstrumentSounds.some((id) => responsiveVocalLayerIds.has(id));
+                  if (declaredVocalCount < 2 && !hasResponsiveVocalLayer) {
+                    showToast('콜앤리스폰스는 2인 이상 보컬 또는 사운드의 응답형 보컬 레이어가 필요합니다.');
+                    return;
+                  }
+                }
+                const isAddingHybrid = cycleId === 'hybrid' && !baseStyles.includes(variantId);
+                const selectedHybridCount = baseStyles.filter(isHybridStyleId).length;
+                if (isAddingHybrid && selectedHybridCount >= maxHybridStyleSelections) {
+                  showToast(activeGenreIdentityCount >= 2
+                    ? '장르를 2개 선택한 경우 하이브리드는 1개까지 사용할 수 있습니다.'
+                    : '하이브리드는 최대 2개까지 사용할 수 있습니다.');
+                  return;
+                }
+                toggleCycleVariantSelection(variantId, baseStyles, setSelectedStyles);
+              } else {
+                cycleFamilySelection(cycleId, baseStyles, setSelectedStyles, STYLE_CYCLES);
+              }
+            }}
+            onClear={() => { setSelectedStyles([]); setIsStyleRandomized(false); }}
+            onRandom={() => randomizeCategory('style')}
+            isLocked={menuLocks.style}
+            onToggleLock={() => toggleMenuLock('style')}
+            onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
+            isRandomized={isStyleRandomized}
+            isExpanded={isStyleExpanded}
+            onToggleExpand={() => toggleMainSections('style')}
+            onHeightChange={setStyleHeight}
+            forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+            onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('style', isOpen); }}
+            directInput={{
+              selectedText: selectedStyles.map((id) => getCustomKeywordText(id, CUSTOM_STYLE_PREFIX)).find(Boolean) || '',
+              onApply: applyDirectStyleInput,
+              onCancelSelected: clearDirectStyleInput,
+            }}
+          />
+          <CycleSection 
+            title="Sound/Texture" 
+            titleKo="사운드"
+            description="Sets the instrument tone and background texture. By adjusting the grain of the sound, spaciousness, weight, and impact, it determines the auditory impression of the music, affecting the production of rich or clean sounds."
+            descriptionKo="악기 톤과 배경 질감을 설정합니다. 기본 장르에 적용된 악기 사운드의 질감을 바꿔서 원하는 느낌으로 풍성하거나 깔끔한 사운드를 연출하는 데 영향을 줍니다."
+            cycles={filteredSoundTextureCycles}
+            selected={selectedInstrumentSounds}
+            pointSelected={selectedPointSounds}
+            isPointSelectionMode={false}
+            highlightedVariantIds={recommendedComboAppliedSoundIds}
+            onCycleToggle={(cycleId, variantId) => {
+              const baseInstrumentSounds = selectedInstrumentSounds.filter((id) => !isCustomSoundKeyword(id));
+              if (variantId) {
+                const isRecommendedCombo = !!getRecommendedSoundComboVariant(variantId);
+                if (isRecommendedCombo) {
+                  if (baseInstrumentSounds.includes(variantId)) {
+                    clearRecommendedSoundCombo(variantId);
+                    return;
+                  }
+                  setSelectedInstrumentSounds(baseInstrumentSounds);
+                  if (applyRecommendedSoundCombo(variantId)) return;
+                }
+                setSelectedPointSounds((prev) => prev.filter((id) => id !== variantId));
+                toggleCycleVariantSelection(variantId, baseInstrumentSounds, setSelectedInstrumentSounds);
+              }
+              else cycleFamilySelection(cycleId, baseInstrumentSounds, setSelectedInstrumentSounds, SOUND_TEXTURE_CYCLES);
+            }}
+            onOtherModeVariantToggle={(variantId) => {
+              setSelectedInstrumentSounds((prev) => prev.filter((id) => id !== variantId && !isCustomSoundKeyword(id)));
+              const combo = getRecommendedSoundComboVariant(variantId);
+              if (combo) {
+                recommendedSoundComboAppliedIdsRef.current = Object.fromEntries(
+                  Object.entries(recommendedSoundComboAppliedIdsRef.current).filter(([comboVariantId]) => comboVariantId !== variantId)
+                );
+              }
+              toggleCycleVariantSelection(variantId, selectedPointSounds, setSelectedPointSounds);
+            }}
+            onClear={() => {
+              recommendedSoundComboAppliedIdsRef.current = {};
+              setSelectedInstrumentSounds([]);
+              setSelectedPointSounds([]);
+              setIsPointSoundMode(false);
+              setIsSoundTextureRandomized(false);
+            }}
+            onRandom={() => randomizeCategory('sound')}
+            isLocked={menuLocks.sound}
+            onToggleLock={() => toggleMenuLock('sound')}
+            onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
+            isRandomized={isSoundTextureRandomized}
+            isExpanded={isSoundExpanded}
+            onToggleExpand={() => toggleMainSections('sound')}
+            onHeightChange={setSoundHeight}
+            forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+            onModalStateChange={(isOpen) => { if (isOpen) syncActionBarModalBlock(true); handleCycleKeywordModalStateChange('sound', isOpen); }}
+            directInput={{
+              selectedText: selectedInstrumentSounds.map((id) => getCustomKeywordText(id, CUSTOM_SOUND_PREFIX)).find(Boolean) || '',
+              onApply: applyDirectSoundInput,
+              onCancelSelected: clearDirectSoundInput,
+            }}
+          />
+        </div>
+
+        <AnimatePresence>
+          {isGenreModalOpen && activeGenreGroupId && (
+            <GenreSelectModal
+              group={GENRE_GROUPS.find((item) => item.id === activeGenreGroupId) ?? null}
+              selectedGenreId={selectedGenres[0] ?? null}
+              onClose={() => closeGenreModal('ui')}
+              onSelect={handleGenreSelect}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Lyrics Length & Drum Style & Vocal Gender Controls */}
+        <div className="soridraw-studio-secondary-section space-y-5">
+          <div className="soridraw-studio-secondary-grid soridraw-studio-mood-theme-grid soridraw-studio-vocal-lyrics-grid grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-5 items-start">
+            <CategorySection 
+              title="Mood" 
+              titleKo="분위기"
+              description="Determines the emotional curve and mood of the song. By setting the emotional core the music aims to convey, such as sadness, joy, or tension, it decides the overall emotional tone of the generated music."
+              descriptionKo="곡의 감정선과 분위기를 결정합니다. 슬픔, 기쁨, 긴장감 등 음악이 전달하고자 하는 감정적 핵심을 설정하여, 생성되는 음악의 전반적인 감성적 톤을 결정합니다."
+              items={MOODS} 
+              selected={selectedMoods} 
+              onToggle={(id) => toggleSelection(id, 'mood')}
+              onClear={() => clearCategory('mood')}
+              onRandom={() => randomizeCategory('mood')}
+              isLocked={menuLocks.mood}
+              onToggleLock={() => toggleMenuLock('mood')}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+              hoveredItem={hoveredItem}
+              isExpanded={isMoodExpanded}
+              onToggleExpand={() => toggleSubSections('mood')}
+              onHeightChange={setMoodHeight}
+              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+              isRandomized={isMoodRandomized}
+              hidePin={true}
+              uniformKeywordGrid={true}
+              directInput={{
+                selectedText: selectedMoods.map((id) => getCustomKeywordText(id, CUSTOM_MOOD_PREFIX)).find(Boolean) || '',
+                onApply: applyDirectMoodInput,
+                onCancelSelected: clearDirectMoodInput,
+              }}
+            />
+            <CategorySection 
+              title="Theme" 
+              titleKo="주제"
+              description="Determines the situation, story, and message of the song. Like love, breakup, night, or travel, it sets what the song talks about and what scene it paints."
+              descriptionKo="곡의 상황, 이야기, 메시지를 결정합니다. 사랑, 이별, 밤, 여행처럼 노래가 무엇을 말하는지와 어떤 장면을 그릴지 설정합니다."
+              items={THEMES} 
+              selected={selectedThemes} 
+              onToggle={(id) => toggleSelection(id, 'theme')}
+              onClear={() => clearCategory('theme')}
+              onRandom={() => randomizeCategory('theme')}
+              isLocked={menuLocks.theme}
+              onToggleLock={() => toggleMenuLock('theme')}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+              hoveredItem={hoveredItem}
+              isExpanded={isThemeExpanded}
+              onToggleExpand={() => toggleSubSections('theme')}
+              onHeightChange={setThemeHeight}
+              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
+              isRandomized={isThemeRandomized}
+              hidePin={true}
+              uniformKeywordGrid={true}
+              directInput={{
+                selectedText: selectedThemes.map((id) => getCustomKeywordText(id, CUSTOM_THEME_PREFIX)).find(Boolean) || '',
+                onApply: applyDirectThemeInput,
+                onCancelSelected: clearDirectThemeInput,
+              }}
+            />
+            <div className="soridraw-storyboard-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
+              <div className="soridraw-storyboard-card-inner px-5 md:px-6 py-3.5 md:py-4 flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={openStoryboardModal}
+                  className="flex-1 min-w-0 text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
+                    </div>
+                    <div className="soridraw-card-title-anchor relative min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3
+                          onMouseEnter={() => setShowStoryboardTitleTooltip(true)}
+                          onMouseLeave={() => setShowStoryboardTitleTooltip(false)}
+                          className="text-base md:text-lg font-black text-[var(--text-primary)] cursor-help"
+                        >
+                          스토리보드
+                        </h3>
+                      </div>
+                      <AnimatePresence>
+                        {showStoryboardTitleTooltip && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 10 }}
+                            className="soridraw-card-title-tooltip absolute top-full left-0 mt-2 z-50 px-3 py-2 rounded-xl w-64 pointer-events-none"
+                          >
+                            <p className="soridraw-card-title-tooltip-label hidden">스토리보드</p>
+                            <p className="soridraw-card-title-tooltip-description text-[11px] leading-snug">캐릭터, 관계, 말투, 감정, 세계관과 이야기 전개를 설정합니다.</p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <p className="text-xs md:text-sm text-[var(--text-secondary)] truncate">
+                        {buildStoryboardSummary(situation)}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                <div className="soridraw-card-header-actions flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => toggleMenuLock('situation')}
+                    onMouseEnter={() => setHoveredItem({ id: 'situation-lock', label: menuLocks.situation ? 'Unlock Storyboard' : 'Lock Storyboard', labelKo: menuLocks.situation ? '잠금 해제' : '스토리보드 잠금', description: menuLocks.situation ? '스토리보드를 랜덤 선택에 다시 포함합니다.' : '현재 스토리보드 설정을 유지하고 랜덤 선택에서 제외합니다.' })}
+                    onMouseLeave={() => setHoveredItem(null)}
+                    className={cn(
+                      "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                      menuLocks.situation
+                        ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+                        : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
+                    )}
+                    title={menuLocks.situation ? '잠금 해제' : '스토리보드 잠금'}
+                    aria-label={menuLocks.situation ? '스토리보드 잠금 해제' : '스토리보드 잠금'}
+                  >
+                    {menuLocks.situation ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                  {hasActiveSituation(situation) && (
+                    <button
+                      type="button"
+                      onClick={clearSituation}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                    >
+                      초기화
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={openStoryboardModal}
+                    className={cn(
+                      "p-2.5 rounded-xl transition-all shadow-btn border border-btn-border",
+                      hasActiveSituation(situation)
+                        ? "bg-[#FFB400] text-[#171717] font-black border-black/20 soridraw-selected-strong hover:bg-[#FFB400]/90"
+                        : "bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover"
+                    )}
+                    title={hasActiveSituation(situation) ? '스토리보드 편집' : '스토리보드 설정'}
+                    aria-label="스토리보드 설정 열기"
+                  >
+                    <Settings className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {isSituationExpanded && (
+                <Portal>
+                  <motion.div
+                    initial={{ opacity: 1 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 1 }}
+                    transition={{ duration: 0 }}
+                    className="fixed inset-0 z-[9999] flex items-center justify-center overflow-hidden overscroll-none bg-black/40 backdrop-blur-[1px] md:backdrop-blur-sm px-3 py-5"
+                    onPointerDown={(event) => {
+                      storyboardModalBackdropMouseDownRef.current = event.target === event.currentTarget;
+                    }}
+                    onPointerUp={(event) => {
+                      if (storyboardModalBackdropMouseDownRef.current && event.target === event.currentTarget) {
+                        storyboardModalBackdropMouseDownRef.current = false;
+                        applyStoryboardModal();
+                        return;
+                      }
+                      storyboardModalBackdropMouseDownRef.current = false;
+                    }}
+                    onPointerCancel={() => {
+                      storyboardModalBackdropMouseDownRef.current = false;
+                    }}
+                  >
+                    <motion.div
+                      initial={{ opacity: 1, scale: 1, y: 0 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ duration: 0 }}
+                      className="soridraw-studio-storyboard-modal-panel storyboard-tone-flat-panel w-full max-w-4xl max-h-[88vh] overflow-hidden overscroll-contain rounded-[28px] bg-[var(--card-bg)] shadow-[0_24px_70px_rgba(0,0,0,0.66)]"
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                    >
+                      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 md:px-5 py-4 bg-[var(--card-bg)]/95 backdrop-blur-xl shadow-[inset_0_-1px_0_rgba(228,95,89,0.08)]">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-[22px] h-[22px] text-[#FF9B92]" />
+                            <h3 className="text-base md:text-lg font-black text-[var(--text-primary)]">스토리보드</h3>
+                          </div>
+                          <p className="mt-1 text-[11px] md:text-xs text-[var(--text-secondary)]">캐릭터와 이야기 흐름을 정해요</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {hasDraftStoryboard && (
+                            <button
+                              type="button"
+                              onClick={clearDraftSituation}
+                              className="soridraw-modal-reset-button"
+                            >
+                              초기화
+                            </button>
+                          )}
+                          {isStoryboardDraftChanged && (
+                            <button
+                              type="button"
+                              onClick={applyStoryboardModal}
+                              className="p-2 rounded-xl bg-[#E45F59]/78 text-[#171717] font-black soridraw-selected-strong hover:bg-[#E45F59]/86 transition-all"
+                              title="적용"
+                              aria-label="스토리보드 적용"
+                            >
+                              <Check className="w-[18px] h-[18px]" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => closeStoryboardModal()}
+                            className="p-2 rounded-xl bg-btn-bg text-[var(--text-secondary)] hover:bg-btn-hover transition-all"
+                            title="닫기"
+                            aria-label="스토리보드 닫기"
+                          >
+                            <X className="w-[18px] h-[18px]" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="storyboard-tone-flat-body max-h-[calc(88vh-76px)] overflow-y-auto overscroll-contain custom-scrollbar p-4 md:p-5 space-y-5">
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                          <StoryboardSectionTitle title="캐릭터" description="등장하는 캐릭터를 정해요. 한 명만 써도 됩니다." />
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="space-y-3.5">
+                              <label className="block text-xs font-black text-[#FF9B92] mb-2">캐릭터 A</label>
+                              <input
+                                value={draftSituation.targetA || ''}
+                                onChange={(e) => updateDraftSituationField('targetA', e.target.value)}
+                                placeholder="예: 저승사자, 엄마, 상사"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
+                              />
+                              <StoryboardVocalRoleButtons label="노래 역할" value={getStoryboardVocalRoleValue(draftSituation, 'characterAVocalRole')} onChange={(v) => updateDraftSituationField('characterAVocalRole', v === 'auto' ? '' : v)} accent="story" />
+                              <StoryboardGenderButtons label="성별" value={getStoryboardGenderValue(draftSituation, 'characterAGender')} onChange={(v) => updateDraftSituationField('characterAGender', v || '')} accent="story" />
+                              <StoryboardSlider label="연령" left="어림" right="연륜" value={getStoryboardSliderValue(draftSituation, 'characterAAge')} onChange={(v) => updateDraftSituationField('characterAAge', v)} statusLabels={["어림", "중간", "연륜"]} accent="story" />
+                            </div>
+                            <div className="space-y-3.5">
+                              <label className="block text-xs font-black text-[#FFD36A] mb-2">캐릭터 B</label>
+                              <input
+                                value={draftSituation.targetB || ''}
+                                onChange={(e) => updateDraftSituationField('targetB', e.target.value)}
+                                placeholder="예: 귀신, 아들, 직원"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
+                              />
+                              <StoryboardVocalRoleButtons label="노래 역할" value={getStoryboardVocalRoleValue(draftSituation, 'characterBVocalRole')} onChange={(v) => updateDraftSituationField('characterBVocalRole', v === 'auto' ? '' : v)} accent="characterB" />
+                              <StoryboardGenderButtons label="성별" value={getStoryboardGenderValue(draftSituation, 'characterBGender')} onChange={(v) => updateDraftSituationField('characterBGender', v || '')} accent="characterB" />
+                              <StoryboardSlider label="연령" left="어림" right="연륜" value={getStoryboardSliderValue(draftSituation, 'characterBAge')} onChange={(v) => updateDraftSituationField('characterBAge', v)} accent="characterB" statusLabels={["어림", "중간", "연륜"]} />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                          <StoryboardSectionTitle title="캐릭터 포지션" description="원하는 스타일로 게이지를 맞춰보세요" />
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div className="storyboard-character-card rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
+                              <div className="flex items-center gap-2 pl-2">
+                                <p className="text-sm font-black text-[#FF9B92] truncate">{draftSituation.targetA || '캐릭터 A'}</p>
+                              </div>
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterAPoliteness')} onChange={(v) => updateDraftSituationField('characterAPoliteness', v)} statusLabels={["존댓말", "반존대", "반말"]} accent="story" />
+                              <StoryboardSlider label="감정" left="절제" right="표출" value={getStoryboardSliderValue(draftSituation, 'characterAIntensity')} onChange={(v) => updateDraftSituationField('characterAIntensity', v)} statusLabels={["절제", "중간", "표출"]} accent="story" />
+                              <StoryboardSlider label="화법" left="직설" right="은유" value={getStoryboardSliderValue(draftSituation, 'characterADelivery')} onChange={(v) => updateDraftSituationField('characterADelivery', v)} statusLabels={["직설", "혼합", "은유"]} accent="story" />
+                              <input
+                                value={draftSituation.speakerAExtra || ''}
+                                onChange={(e) => updateDraftSituationField('speakerAExtra', e.target.value)}
+                                placeholder="추가 말맛: 예: 건방진 말투, 욕 살짝 섞음"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
+                              />
+                            </div>
+
+                            <div className="storyboard-character-card rounded-3xl bg-[#151515] p-4 space-y-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.14)]">
+                              <div className="flex items-center gap-2 pl-2">
+                                <p className="text-sm font-black text-[#FFD36A] truncate">{draftSituation.targetB || '캐릭터 B'}</p>
+                              </div>
+                              <StoryboardSlider label="말투" left="존댓말" right="반말" value={getStoryboardSliderValue(draftSituation, 'characterBPoliteness')} onChange={(v) => updateDraftSituationField('characterBPoliteness', v)} accent="characterB" statusLabels={["존댓말", "반존대", "반말"]} />
+                              <StoryboardSlider label="감정" left="절제" right="표출" value={getStoryboardSliderValue(draftSituation, 'characterBIntensity')} onChange={(v) => updateDraftSituationField('characterBIntensity', v)} accent="characterB" statusLabels={["절제", "중간", "표출"]} />
+                              <StoryboardSlider label="화법" left="직설" right="은유" value={getStoryboardSliderValue(draftSituation, 'characterBDelivery')} onChange={(v) => updateDraftSituationField('characterBDelivery', v)} accent="characterB" statusLabels={["직설", "혼합", "은유"]} />
+                              <input
+                                value={draftSituation.speakerBExtra || ''}
+                                onChange={(e) => updateDraftSituationField('speakerBExtra', e.target.value)}
+                                placeholder="추가 말맛: 예: 공손하지만 안 물러남"
+                                className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
+                              />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                          <StoryboardSectionTitle title="세계관" description="무슨 일이 벌어지는지, 어떤 배경인지 적어주세요." />
+                          <textarea
+                            value={draftSituation.description || ''}
+                            onChange={(e) => updateDraftSituationField('description', e.target.value)}
+                            placeholder="예: 저승사자가 살아 있을 때 못한 게 많아 미련이 남은 귀신을 데리러 온다"
+                            rows={4}
+                            className="w-full px-3 py-3 rounded-2xl bg-[var(--input-bg)] text-sm text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40 resize-none"
+                          />
+                          <input
+                            value={draftSituation.detailCustom || draftSituation.details || ''}
+                            onChange={(e) => {
+                              updateDraftSituationField('detailCustom', e.target.value);
+                              updateDraftSituationField('detailPresets', []);
+                            }}
+                            placeholder="추가 디테일: 장소, 물건, 말버릇, 엔딩 느낌"
+                            className="w-full px-3 py-2.5 rounded-xl bg-[var(--input-bg)] text-xs text-[var(--text-primary)] outline-none focus:ring-1 focus:ring-[#E45F59]/40"
+                          />
+                        </section>
+
+                        <section className="storyboard-section-card rounded-3xl bg-[#1a1a1a] p-5 space-y-5 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
+                          <StoryboardSectionTitle title="스토리 라인" description="노래를 부를때 어떤 방식으로 전개하는지 결정해요." />
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <StoryboardSlider label="대화" left="대화" right="혼잣말" value={getStoryboardSliderValue(draftSituation, 'storyDialogueBalance')} onChange={(v) => updateDraftSituationField('storyDialogueBalance', v)} description="주도하는 대화방식을 조절해요." statusLabels={["대화", "반반", "혼잣말"]} />
+                            <StoryboardSlider label="전개" left="현실적" right="비현실적" value={getStoryboardSliderValue(draftSituation, 'storyRealityScale')} onChange={(v) => updateDraftSituationField('storyRealityScale', v)} description="현실과 비현실의 비중을 조절해요." statusLabels={["현실적", "반반", "비현실적"]} />
+                            <StoryboardSlider label="감정" left="장난" right="진심" value={getStoryboardSliderValue(draftSituation, 'storyPlayfulSincere')} onChange={(v) => updateDraftSituationField('storyPlayfulSincere', v)} description="장난과 진심 사이의 강약을 조절해요." statusLabels={["장난", "반반", "진심"]} />
+                          </div>
+                        </section>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                </Portal>
+              )}
+            </AnimatePresence>
+
+            <div className="soridraw-studio-vocal-slot min-w-0 h-full">
+            <VocalControl 
+              maleCount={maleCount}
+              femaleCount={femaleCount}
+              vocalMode={vocalMode}
+              vocalTones={vocalTones}
+              vocalMembers={vocalMembers}
+              rapEnabled={rapEnabled}
+              rapMode={rapMode}
+              onRapModeChange={(mode) => {
+                setRapMode(mode);
+                setRapEnabled(mode === 'on');
+              }}
+              onMaleChange={setMaleCount}
+              onFemaleChange={setFemaleCount}
+              onModeChange={setVocalMode}
+              onMembersChange={setVocalMembers}
+              onRapChange={setRapEnabled}
+              isKoreanEnglishMix={isKoreanEnglishMix}
+              englishMixRatio={englishMixRatio}
+              onEnglishMixRatioChange={setEnglishMixRatio}
+              onToggleKoreanEnglishMix={() => {
+                const nextValue = !isKoreanEnglishMix;
+                setIsKoreanEnglishMix(nextValue);
+                setHoveredItem({
+                  id: 'lyrics-mix-toggle',
+                  label: '언어 혼합',
+                  description: nextValue
+                    ? '선택한 첫 번째 언어를 기준으로 다른 언어를 자연스럽게 섞은 가사를 생성합니다.'
+                    : '언어 혼합을 끄고 기본 언어 흐름으로 되돌립니다.',
+                  _ts: Date.now(),
+                });
+              }}
+              isLocked={menuLocks.vocal}
+              onToggleLock={() => toggleMenuLock('vocal')}
+              onClear={() => {
+                setMaleCount(0);
+                setFemaleCount(0);
+                setVocalMode('solo');
+                setSelectedVocalToneId(undefined);
+                setVocalMembers([{ id: 'member_default_solo', gender: 'neutral', roles: ['main'] }]);
+              }}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+              onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
+              genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
+              randomActivationKey={vocalRandomActivationKey}
+              naturalResponsiveHeight={isStudioBlackActionMode}
+            />
+            </div>
+            <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
+            <SongStructureIntegratedControl
+              lyricsLength={lyricsLength}
+              onLyricsLengthChange={setLyricsLength}
+              lyricWritingStyle={lyricWritingStyle}
+              onLyricWritingStyleChange={setLyricWritingStyle}
+              songStructure={songStructure}
+              customStructure={customStructure}
+              sectionVocalCueEnabled={sectionVocalCueEnabled}
+              sectionInstrumentCueEnabled={sectionInstrumentCueEnabled}
+              onSectionVocalCueEnabledChange={setSectionVocalCueEnabled}
+              onSectionInstrumentCueEnabledChange={setSectionInstrumentCueEnabled}
+              onSongStructureChange={setSongStructure}
+              onCustomStructureChange={setCustomStructure}
+              isLocked={menuLocks.structure}
+              onToggleLock={() => toggleMenuLock('structure')}
+              onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsStructureModalOpen(isOpen); }}
+              onClear={() => {
+                setLyricsLength('normal');
+                setSongStructure('1');
+                setCustomStructure([]);
+                setSectionVocalCueEnabled(true);
+                setSectionInstrumentCueEnabled(true);
+                setLyricWritingStyle('default');
+                writeStoredV1LyricWritingStyle('default');
+              }}
+              onHover={setHoveredItem}
+              onLongPressStart={handleLongPressStart}
+              onLongPressEnd={handleLongPressEnd}
+              user={user}
+              userTier={effectiveUserTier}
+              sectionTags={sectionTags}
+              pointSoundTags={filterSelectableIds(selectedPointSounds).map(getPointSoundTagLabelById).filter(Boolean)}
+              pointSoundTagLabels={Object.fromEntries(
+                filterSelectableIds(selectedPointSounds)
+                  .map((id) => [getPointSoundTagLabelById(id), getPointSoundTagDisplayLabelById(id)] as const)
+                  .filter(([tag, label]) => Boolean(tag && label))
+              )}
+              vocalSectionTags={vocalSectionTagOptions}
+              selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
+              naturalResponsiveHeight={isStudioBlackActionMode}
+            />
+            </div>
+          </div>
+        </div>
+
+        {/* Tempo Control Bar */}
+        <div className="soridraw-studio-tempo-wrap mb-4">
+          <TempoControl 
+            enabled={tempoEnabled}
+            onEnabledChange={setTempoEnabled}
+            min={minBPM}
+            max={maxBPM}
+            onMinChange={setMinBPM}
+            onMaxChange={setMaxBPM}
+            onClear={() => {
+              setTempoEnabled(true);
+              setMinBPM(90);
+              setMaxBPM(110);
+            }}
+            onHover={setHoveredItem}
+            onLongPressStart={handleLongPressStart}
+            onLongPressEnd={handleLongPressEnd}
+          />
+        </div>
+
+        {/* Search & Actions */}
+        <div className="space-y-1 md:space-y-1">
+          <div className="relative group rounded-2xl soridraw-studio-command-card">
+            <div className="absolute top-6 left-4 pointer-events-none z-10">
+              <Search className="w-5 h-5 text-[var(--text-secondary)] group-focus-within:text-brand-orange transition-colors" />
+            </div>
+            
+              <textarea
+                ref={commandInputRef}
+                value={userInput}
+                onChange={(e) => {
+                  setUserInput(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
+                }}
+                onFocus={() => {
+                  setIsInputFocused(true);
+                }}
+                onBlur={() => setIsInputFocused(false)}
+                className="w-full bg-[rgba(255,255,255,0.16)] border border-white/20 rounded-2xl py-5 pl-12 pr-52 md:pr-60 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-brand-orange/60 focus:border-brand-orange/60 transition-all duration-300 text-lg min-h-[68px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar relative placeholder:text-white/60 scroll-smooth hover:border-white/30"
+                rows={1}
+                placeholder=""
+              />
+            <AnimatePresence mode="wait">
+              {!userInput && (
+                <motion.div
+                  key={commandPlaceholderIndex}
+                  initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }}
+                  animate={{ opacity: isInputFocused ? 0.78 : 0.92, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }}
+                  transition={{ duration: 0.35, ease: 'easeOut' }}
+                  className="soridraw-command-placeholder pointer-events-none absolute left-12 right-52 md:right-60 top-1/2 -translate-y-1/2 z-10 text-base md:text-lg leading-snug text-white/65 truncate"
+                >
+                  {commandPlaceholderExamples[commandPlaceholderIndex]}
+                </motion.div>
+              )}
+            </AnimatePresence>
+            {userInput && (
+              <div className="absolute right-36 md:right-40 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center">
+                <button
+                  type="button"
+                  aria-label="명령창 내용 삭제"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setUserInput('');
+                    window.requestAnimationFrame(() => {
+                      if (commandInputRef.current) {
+                        commandInputRef.current.style.height = 'auto';
+                        commandInputRef.current.focus();
+                      }
+                    });
+                  }}
+                  className="soridraw-no-active-translate w-9 h-9 rounded-full bg-white/12 border border-white/15 text-white/70 hover:text-white hover:bg-white/20 hover:border-white/25 transition-all flex items-center justify-center shadow-[0_8px_22px_rgba(0,0,0,0.22)] active:scale-95 origin-center"
+                >
+                  <X className="w-4.5 h-4.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Direct Lyrics Toggle Button */}
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
+              <button
+                onClick={() => setIsLyricMode(!isLyricMode)}
+                onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
+                onMouseLeave={() => setHoveredItem(null)}
+                aria-pressed={isLyricMode}
+                className={cn(
+                  "soridraw-direct-lyrics-toggle flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
+                  isLyricMode 
+                    ? "bg-[#F4A900] text-[#18110A] border-[#F4A900] hover:bg-[#F7B31A] hover:border-[#F7B31A]" 
+                    : "bg-white/14 text-white border-white/25 hover:bg-white/20 hover:border-[#F4A900]/80"
+                )}
+              >
+                <Languages className="w-[18px] h-[18px]" />
+                직접 작사
+              </button>
+            </div>
+          </div>
+
+          {/* Direct Lyrics Input Area */}
+          <AnimatePresence>
+            {isLyricMode && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-2 pb-4 space-y-3">
+                  <div className="h-px bg-btn-border w-full" />
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-[#F4A900]" />
+                      <p className="text-[12px] font-medium text-[var(--text-secondary)]">
+                        이 아래 내용은 가사 초안으로 우선 반영됩니다.
+                      </p>
+                    </div>
+                    
+                    {/* Lyric Mode Selector */}
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
+                        <button
+                          onClick={() => setLyricMode('assist')}
+                          className={cn(
+                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            lyricMode === 'assist' 
+                              ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
+                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          )}
+                        >
+                          AI 보정
+                        </button>
+                        <button
+                          onClick={() => setLyricMode('preserve')}
+                          className={cn(
+                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            lyricMode === 'preserve' 
+                              ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
+                              : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                          )}
+                        >
+                          원문 유지
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setLyricDraft('');
+                          setIsLyricMode(false);
+                        }}
+                        onMouseEnter={() => setHoveredItem({ id: 'delete-lyric', label: '가사 삭제', description: '입력한 가사 초안을 모두 지우고 창을 닫습니다.' })}
+                        onMouseLeave={() => setHoveredItem(null)}
+                        className="p-1.5 rounded-lg bg-btn-bg border border-btn-border text-[var(--text-secondary)] hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-all shadow-btn"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative group">
+                    <textarea
+                      value={lyricDraft}
+                      onChange={(e) => {
+                        setLyricDraft(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = Math.min(e.target.scrollHeight, 320) + 'px';
+                      }}
+                      placeholder="여기에 적은 가사초안을 기초로 Ai가 보정하여 재창작됩니다.(작사를 직접 하고싶다면 '원문유지'를 이용하세요.)"
+                      className="w-full bg-[rgba(255,255,255,0.055)] border border-white/10 rounded-2xl py-4 px-5 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[#F4A900]/25 focus:border-[#F4A900]/35 transition-all text-[15px] min-h-[100px] max-h-[320px] resize-none overflow-y-auto custom-scrollbar placeholder:text-white/35"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Action Buttons Anchor */}
+          <div
+            ref={actionButtonsAnchorRef}
+            className={cn(
+              "relative soridraw-studio-action-geometry-anchor",
+              // 535 — Studio Black uses this node only as an X/width geometry
+              // probe. It never reserves a second expanded-row slot, so collapse,
+              // expand and PC/mobile pane changes cannot alter the scroll range.
+              !isStudioBlackActionMode
+                && shouldShowActionButtons
+                && !isActionButtonsCollapsed
+                && !isActionsFloating
+                ? "soridraw-studio-action-anchor-expanded"
+                : "h-0"
+            )}
+            data-soridraw-docked={!isStudioBlackActionMode && !isActionsFloating ? "true" : "false"}
+          >
+            {shouldShowActionButtons
+              && !isStudioBlackActionMode
+              && !isActionButtonsCollapsed
+              && !isActionsFloating
+              && renderExpandedActionBar('inline')}
+          </div>
+
+          {/* Floating / Collapsible Action Buttons */}
+          <AnimatePresence initial={false} mode="wait">
+            {shouldShowActionButtons && (
+              isActionButtonsCollapsed ? (
+                <Portal>
+                  <motion.button
+                    key="action-buttons-collapsed-toggle"
+                    type="button"
+                    initial={{ opacity: 0, y: 0, scale: 1 }}
+                    animate={{ opacity: 1, y: 0, scale: [1, 1.1, 0.995, 1.045, 1] }}
+                    exit={{ opacity: 0, y: 0, scale: 1, transition: { duration: 0 } }}
+                    transition={{
+                      opacity: smoothActionPanelTransition,
+                      y: smoothActionPanelTransition,
+                      scale: {
+                        duration: 2.05,
+                        times: [0, 0.32, 0.52, 0.74, 1],
+                        ease: [0.33, 1, 0.68, 1],
+                        repeat: Infinity,
+                        repeatDelay: 0.18,
+                      },
+                    }}
+                    drag={isActionSwipeCollapseMode ? "x" : false}
+                    dragConstraints={isActionSwipeCollapseMode ? { left: 0, right: 92 } : undefined}
+                    dragElastic={0.12}
+                    onDragEnd={(_, info) => {
+                      if (!isActionSwipeCollapseMode) return;
+                      if (info.offset.x > 34 || info.velocity.x > 360) {
+                        expandActionButtons();
+                      }
+                    }}
+                    onClick={expandActionButtons}
+                    onWheelCapture={forwardActionToggleWheelToBuilder}
+                    onMouseEnter={() => {}}
+                    onMouseLeave={() => {}}
+                    aria-label="생성 버튼 펼치기"
+                    data-soridraw-placement="floating"
+                    className="soridraw-studio-action-collapsed group soridraw-generate-heartbeat fixed left-[-20px] md:left-[24px] 2xl:left-[max(0px,calc((100vw-1320px)/2-142px))] bottom-5 md:bottom-8 z-[120] h-[54px] md:h-24 w-[60px] md:w-14 overflow-hidden rounded-[19px] border border-black/20 bg-[#FFB400] text-[#171717] shadow-[0_8px_18px_rgba(0,0,0,0.34)] flex items-center justify-end pr-3 md:justify-center md:pr-0 opacity-100 touch-pan-y cursor-grab active:cursor-grabbing transition-colors duration-150 hover:brightness-[1.06] will-change-transform"
+                  >
+                    <span className="soridraw-studio-action-collapsed-arrow relative flex h-9 w-9 items-center justify-center">
+                      <ArrowRight className="h-5 w-5 translate-x-0.5 text-[#171717] transition-transform group-hover:translate-x-1" strokeWidth={3.2} />
+                    </span>
+                  </motion.button>
+                </Portal>
+              ) : (isStudioBlackActionMode || isActionsFloating) ? (
+                <Portal>
+                  {renderExpandedActionBar('floating')}
+                </Portal>
+              ) : null
+            )}
+          </AnimatePresence>
+
+          {/* Applied Keywords Display (Classic only; Studio Black uses the sticky result-pane strip.) */}
+          <div className="soridraw-builder-live-keywords relative mt-2 md:mt-3">
+            <div className="flex flex-wrap gap-2 justify-center min-h-[24px] md:min-h-[26px] content-start">
+              {liveSelectedKeywordItems.map((item) => {
+                const chipClassName = cn(
+                  'px-3 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 shadow-sm',
+                  getAppliedSelectionKeywordChipClass(item.type)
+                );
+                return (
+                  <span key={`${item.type}-${item.id}`} className={chipClassName}>
+                    {item.label}
+                    <button
+                      type="button"
+                      onClick={() => removeLiveSelectedKeyword(item)}
+                      aria-label={`${item.label} 선택 해제`}
+                      className="hover:bg-btn-hover rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="w-[18px] h-[18px]" />
+                    </button>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+                      </>
+                    )}
+                  </StudioBuilderPane>
+                  <StudioResultPane>
+                    {studioWorkspaceView === 'music-note' ? (
+                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
+                        {!isAuthReady ? (
+                          <div className="soridraw-studio-workspace-loading">
+                            <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
+                            <span>뮤직노트를 불러오는 중...</span>
+                          </div>
+                        ) : (user || auth.currentUser) ? (
+                          <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                            <HistoryRouteWrapper
+                              isFavoritesLoading={isFavoritesLoading}
+                              hasMoreFavorites={hasMoreFavorites}
+                              isLoadingMoreFavorites={isLoadingMoreFavorites}
+                              loadMoreFavorites={loadMoreFavorites}
+                              searchFavoritesOnServer={searchFavoritesOnServer}
+                              refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
+                              toggleFavorite={toggleFavorite}
+                              updateFavorite={updateFavorite}
+                              clearAllFavorites={clearAllFavorites}
+                              unlockAllFavorites={unlockAllFavorites}
+                              lockAllFavorites={lockAllFavorites}
+                              user={user || auth.currentUser}
+                              handleLogin={handleLogin}
+                            />
+                          </Suspense>
+                        ) : (
+                          <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
+                        )}
+                      </section>
+                    ) : studioWorkspaceView === 'library' ? (
+                      <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
+                        <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
+                          <SunoLibraryPageLazy appUser={user || auth.currentUser} />
+                        </Suspense>
+                      </section>
+                    ) : (
+                      render676RecentSongsContent()
                     )}
                   </StudioResultPane>
                 </StudioSplitEngineWorkspace>

@@ -1,14 +1,14 @@
-## 675차 — 668 기준 / 실제 Classic Dark Studio Builder 격리 이식 A/B 진단
-- 기준: `SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip`. 669~674의 진단/최적화 변경은 누적하지 않습니다.
-- 674는 Studio Black 루트 안에서 Builder pane class 일부만 제거해 화면 자체가 계속 분할 UI로 보였으므로 이번 판정 기준에서 폐기합니다.
-- 675는 왼쪽 Builder의 **기존 React 인스턴스 하나를 그대로 유지**한 채 ShadowRoot로 격리하고, 현재 앱에서 실제 컴파일된 CSS를 그 안에 한 번 복사합니다. 격리 내부에는 실제 다크모드와 같은 `html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] > body > #root > .soridraw-app-root` 계층을 재현해 기존 Classic/Dark 선택자가 그대로 적용됩니다.
-- 부모 문서의 Studio Black 전용 조상 선택자는 ShadowRoot를 넘지 못하므로 674처럼 분할 디자인이 왼쪽 본문에 계속 덮이는 문제를 차단합니다. 반대로 오른쪽 Recent/Music Note/Library, 분할 shell, divider, 좌우 rail은 668 Studio Black 상태를 그대로 유지합니다.
-- 외부 Builder pane은 분할 폭 소유만 남기고 probe 동안 `container-type/name`을 해제해 `soridraw-builder-pane` 전용 container-query가 다크 본문 안으로 다시 들어오지 않게 합니다.
-- Sori Studio 대문도 probe 내부 Classic/Dark 헤더로 이동합니다. Builder 전용 높이/생성바 표현 조건도 Classic 쪽 의미로 전환해 단순 색상만 바꾼 테스트가 되지 않게 했습니다.
-- iframe/두 번째 App을 만들지 않으므로 Firebase/Auth listener와 앱 상태를 중복 생성하지 않습니다. 목적은 외부 브라우저 창 resize에서 `Studio Black Builder 표현/반응형 트리`와 `Classic Dark Builder 표현/반응형 트리`의 비용 차이를 보는 것입니다.
-- 1099px 이하 compact 모바일 경로는 기존 구조를 유지하며 이번 probe를 적용하지 않습니다.
+## 676차 — 최근 생성곡 + 뮤직노트/라이브러리 양면 실콘텐츠 A/B 진단
+- 기준 ZIP: `SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip`. 669~675 실험 코드는 누적하지 않는다.
+- 목적: Sori Studio를 완전히 제외한 상태에서도 두 개의 실제 무거운 화면을 좌우로 동시에 배치하면 외부 브라우저 리사이즈 병목이 재현되는지 확인한다.
+- Studio Black에서 WORKSPACE의 `뮤직노트` 또는 `라이브러리`를 선택하면 왼쪽 pane은 기존 **최근 생성곡(result) 본문을 그대로 재사용**하고, 오른쪽 pane은 각각 기존 **뮤직노트 / 라이브러리 실제 본문**을 그대로 유지한다.
+- 최근 생성곡 JSX는 새 복제품을 만들지 않고 기존 렌더 블록을 내부 renderer로 1회 추출해 일반 `recent` 화면과 676 진단 왼쪽 화면이 같은 소스를 사용한다. 앱/라우터/iframe을 이중 마운트하지 않는다.
+- 왼쪽 진단 pane은 기존 result-pane CSS/컨테이너 반응형 계약을 사용하되 실제 위치만 grid 1열로 고정한다. 오른쪽 뮤직노트/라이브러리는 기존 result pane 및 Lite/590 경로를 그대로 사용한다.
+- 본문 unmount, width freeze, `overflow: clip` 추가, 리사이즈 중 내용 숨김은 사용하지 않는다. 두 화면 모두 실제 콘텐츠가 계속 살아 있는 상태에서 속도만 비교한다.
+- `곡 만들기` / `최근 생성곡`을 다시 선택하면 원래 668 구조로 돌아간다. 1100px 미만 compact mobile 구조는 변경하지 않는다.
 - Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
-- 상태: 코드 반영 완료 · 테스트앱 실사용 검증 전.
+- 판정: 이 조합이 Studio 분할보다 확실히 빠르면 Studio 본문이 주 병목. 비슷하게 느리면 두 개의 완전한 반응형 화면을 동시에 리사이즈하는 분할 구조/상호 reflow 비용이 주 병목 후보.
+- 상태: 코드 반영 완료 · 실사용 검증 전.
 
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.

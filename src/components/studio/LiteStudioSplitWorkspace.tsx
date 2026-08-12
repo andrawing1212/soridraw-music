@@ -9,7 +9,6 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import ClassicDarkStudioBuilderProbe from './ClassicDarkStudioBuilderProbe';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -185,7 +184,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
-  classicDarkBuilderProbe?: boolean;
+  leftPanePresentation?: 'builder' | 'result';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -195,7 +194,7 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
-  classicDarkBuilderProbe = false,
+  leftPanePresentation = 'builder',
 }: LiteStudioSplitWorkspaceProps) {
   // 617: PC Music Note no longer owns a special geometry path. App routes it
   // through the same `library-590` profile as Library. Adaptive mode is kept for
@@ -1526,20 +1525,18 @@ export default function LiteStudioSplitWorkspace({
           ref={builderRef}
           data-soridraw-studio-pane="builder"
           data-soridraw-lite-pane="builder"
-          className="soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder"
-          style={classicDarkBuilderProbe ? { containerType: 'normal', containerName: 'none' } : undefined}
+          data-soridraw-676-pane-presentation={leftPanePresentation}
+          className={leftPanePresentation === 'result'
+            ? 'soridraw-studio-result-pane soridraw-lite-studio-pane is-builder soridraw-676-pair-probe-left-result'
+            : 'soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder'}
           aria-hidden={isBuilderCollapsed}
         >
-          {!classicDarkBuilderProbe && (
+          {leftPanePresentation === 'builder' && (
             <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
               {builderMasthead}
             </div>
           )}
-          {classicDarkBuilderProbe ? (
-            <ClassicDarkStudioBuilderProbe masthead={builderMasthead}>
-              {panes[0] ?? null}
-            </ClassicDarkStudioBuilderProbe>
-          ) : (panes[0] ?? null)}
+          {panes[0] ?? null}
         </div>
         <div
           id="soridraw-studio-result-pane"

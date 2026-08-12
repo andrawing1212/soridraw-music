@@ -10899,6 +10899,21 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 }
 
+/* Tablet keeps the exact 486 rail/split geometry. Only off-screen sections
+ * are allowed to skip rendering work, so crossing 1600/1100 cannot blank or
+ * reposition either pane. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-builder-pane
+  .soridraw-studio-menu-card,
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-result-content
+  > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 240px;
+  }
+}
+
 /* 508 — Music Note / Library one real-width content contract.
  * Canonical visual reference: the already-approved Studio result-pane UI.
  * Dark standalone pages no longer use viewport-only compact spacing while the
@@ -12100,77 +12115,4 @@ html[data-soridraw-device="phone"] body > :is(
     display: none !important;
   }
 }
-
-
-/* 652 — Tablet keeps the same proven pane isolation as wide PC.
- *
- * The 1100~1599px slowdown was not a different split engine problem. The wide
- * >=1600 path already skips off-screen split content and gives each visible
- * region a hard layout/paint boundary (309), while the tablet band lost that
- * performance contract and therefore reflowed/painted the full Studio + result
- * trees on every native window-width tick. Galaxy Tab stays fast because Lite V2
- * already owns equivalent local containment during its touch path.
- *
- * Extend only the proven rendering isolation to tablet. Geometry, breakpoints,
- * split ratios, pane modes and visual density are unchanged. */
-@media (min-width: 1100px) and (max-width: 1599.98px) {
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    contain: strict !important;
-    isolation: isolate !important;
-    overflow-anchor: none !important;
-    backface-visibility: hidden !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-builder-pane
-  > *,
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  .soridraw-studio-builder-pane .soridraw-studio-menu-card,
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  .soridraw-studio-result-content
-  > * {
-    content-visibility: auto;
-    contain-intrinsic-size: auto 240px;
-    contain: layout paint style;
-  }
-
-  /* Native desktop-window resizing inside the tablet band is a gesture just
-   * like divider dragging. Freeze decorative work/hit-testing only while that
-   * gesture is active; the final responsive state is restored at resize-end. */
-  html.soridraw-tablet-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-builder-pane {
-    will-change: width;
-    transform: translateZ(0);
-    pointer-events: none !important;
-  }
-
-  html.soridraw-tablet-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-result-pane {
-    will-change: left, width;
-    transform: translateZ(0);
-    pointer-events: none !important;
-  }
-
-  html.soridraw-tablet-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
-  *,
-  html.soridraw-tablet-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
-  *::before,
-  html.soridraw-tablet-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
-  *::after {
-    transition: none !important;
-    animation-play-state: paused !important;
-  }
-}
+\n\n/* 653 — one-build tablet native-resize isolation probe.\n * Fine-pointer PC only: while the outer browser window is actively resizing in\n * 1100~1599px, remove the heavy Builder/Result page subtrees from layout/paint\n * but keep the split workspace shells + divider geometry alive. This is not a\n * final visual rule. It answers one question cleanly: is the tablet slowdown\n * caused by the page subtrees or by the surrounding frame/geometry path? */\n@media (min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine) {\n  html.soridraw-tablet-resize-probe[data-soridraw-theme=\"studio-black\"]\n  .soridraw-studio-split-workspace\n  > .soridraw-studio-builder-pane\n  > *,\n  html.soridraw-tablet-resize-probe[data-soridraw-theme=\"studio-black\"]\n  .soridraw-studio-split-workspace\n  > .soridraw-studio-result-pane\n  > * {\n    display: none !important;\n  }\n\n  html.soridraw-tablet-resize-probe[data-soridraw-theme=\"studio-black\"]\n  .soridraw-studio-split-workspace\n  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {\n    contain: strict !important;\n    overflow: hidden !important;\n    pointer-events: none !important;\n  }\n}\n

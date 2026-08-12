@@ -96,41 +96,43 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   }, [railViewport]);
 
   useEffect(() => {
-    // 652: Native desktop-window resizing is materially different from a
-    // divider drag. Mark only the 1100~1599 tablet band so CSS can reuse the
-    // proven wide-PC containment/transition fast path without changing split
-    // geometry or the actual responsive breakpoint. The class changes only at
-    // gesture start/end; resize ticks merely reset the settle timer.
+    // 653 diagnostic probe — fine-pointer PC only. The user consistently sees
+    // native window resizing become heavy only in the 1100~1599 tablet band.
+    // Previous geometry/containment guesses did not change the symptom, so this
+    // one build deliberately removes the expensive center-page subtrees while
+    // the browser window is actively being resized in that band. Pane shells and
+    // the divider remain alive. If resize becomes smooth, the bottleneck is in
+    // tablet content reflow/paint; if it remains slow, the culprit is outside the
+    // page subtrees (frame/rail/navigation/geometry). This is intentionally a
+    // one-build probe, not the final product behavior.
     const root = document.documentElement;
     let settleTimer: number | null = null;
 
-    const finishTabletResize = () => {
+    const finishProbe = () => {
       if (settleTimer !== null) {
         window.clearTimeout(settleTimer);
         settleTimer = null;
       }
-      const wasActive = root.classList.contains('soridraw-tablet-window-resizing');
-      root.classList.remove('soridraw-tablet-window-resizing');
-      if (wasActive) {
-        window.dispatchEvent(new CustomEvent('soridraw-tablet-window-resize-end'));
-      }
+      root.classList.remove('soridraw-tablet-resize-probe');
     };
 
     const handleNativeResize = () => {
+      const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
       const inTabletBand = window.innerWidth >= 1100 && window.innerWidth < 1600;
-      if (!inTabletBand) {
-        finishTabletResize();
+      if (!finePointer || !inTabletBand) {
+        finishProbe();
         return;
       }
-      root.classList.add('soridraw-tablet-window-resizing');
+
+      root.classList.add('soridraw-tablet-resize-probe');
       if (settleTimer !== null) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(finishTabletResize, 90);
+      settleTimer = window.setTimeout(finishProbe, 120);
     };
 
     window.addEventListener('resize', handleNativeResize, { passive: true });
     return () => {
       window.removeEventListener('resize', handleNativeResize);
-      finishTabletResize();
+      finishProbe();
     };
   }, []);
 

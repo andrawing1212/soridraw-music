@@ -1,3 +1,12 @@
+## 659차 — Studio 분할바 pointer 직결 · 태블릿 지연 분리
+
+- 기준: 658차. 657/658의 실제 pane 661~1080px 태블릿 본문 최적화와 PROD 패리티 경로는 그대로 유지한다.
+- 대상: `src/components/studio/StudioSplitWorkspace.tsx`의 Studio Legacy 분할바 hot-path만 수정했다. Music Note/Library Lite V2, 갤탭 Touch V2, 모바일 구조는 변경하지 않았다.
+- 원인 분리: 658에서 Studio 내부 reflow/paint는 크게 줄었지만 태블릿 pane 구간에서 fixed body-portal 분할바가 `applyPercentToLayout -> syncExternalMeasurements`까지 기다리며 포인터보다 뒤늦게 따라올 수 있었다.
+- 수정: `pointermove`의 최신 coalesced `clientX`로 분할바 `left`를 즉시 직접 적용한다. 기존 `requestAnimationFrame` 레이아웃 경로는 같은 `clientX`를 그대로 받아 Builder/Result 폭과 나머지 외부 컨트롤을 갱신한다.
+- 효과 의도: Studio 내부 반응형 재배치가 순간적으로 늦더라도 분할바 자체는 포인터 입력과 분리되어 즉시 따라간다. 분할 비율, breakpoint, pane mode 판정, pointer-up 최종 커밋 방식은 바꾸지 않았다.
+- Firebase/Auth/Functions/Firestore 저장 구조 변경 없음. 배포 없음.
+
 ## 658차 — Studio 태블릿 PROD 패리티 · 루트 CSS 변수 hot-path 제거
 
 - 기준: 657차. 656에서 실제 pane 661~1080px 본문이 병목임을 확정했고, 657에서 AI Studio의 Studio 체감은 크게 개선되었지만 Vercel 테스트앱은 같은 수준까지 따라오지 못했다.

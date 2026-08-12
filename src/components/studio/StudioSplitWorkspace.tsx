@@ -1264,6 +1264,28 @@ export default function StudioSplitWorkspace({
     dragFrameRef.current = window.requestAnimationFrame(flushPendingPointer);
   }, [flushPendingPointer]);
 
+  // 659 — The fixed splitter must never wait for the Studio pane reflow path.
+  // In the 661~1080px builder/result tablet band the inner Studio DOM can still
+  // need more than one frame to settle even after the 657/658 paint isolation.
+  // Drive the body-portal divider directly from the latest pointer coordinate
+  // first, then let the existing rAF layout path consume the exact same X value.
+  // This keeps pointer -> divider latency independent from pane responsive work.
+  const previewSplitterAtClientX = useCallback((clientX: number) => {
+    const splitter = splitterRef.current;
+    if (!splitter || !draggingRef.current) return;
+
+    const { startX, startPercent, width } = dragRef.current;
+    const safeWidth = Math.max(width, 1);
+    const bounds = getSplitBounds(safeWidth);
+    const deltaPercent = ((clientX - startX) / safeWidth) * 100;
+    const rawPercent = clampToBounds(startPercent + deltaPercent, bounds);
+    const builderPixel = Math.round(safeWidth * (rawPercent / 100));
+    const viewportLeft = metricsRef.current.left + builderPixel;
+
+    splitter.style.removeProperty('transform');
+    splitter.style.setProperty('left', `${Math.max(0, Math.round(viewportLeft) - 8)}px`, 'important');
+  }, []);
+
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!isStudioBlack() || builderCollapsedRef.current || resultCollapsedRef.current) return;
     const rect = layoutRef.current?.getBoundingClientRect();
@@ -1347,6 +1369,7 @@ export default function StudioSplitWorkspace({
       ? nativeEvent.getCoalescedEvents()
       : [];
     const latestEvent = coalesced.length > 0 ? coalesced[coalesced.length - 1] : nativeEvent;
+    previewSplitterAtClientX(latestEvent.clientX);
     schedulePointerUpdate(latestEvent.clientX);
   };
 

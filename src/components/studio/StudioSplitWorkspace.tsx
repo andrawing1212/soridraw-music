@@ -302,6 +302,8 @@ export default function StudioSplitWorkspace({
       floatingActionBar.style.removeProperty('left');
       floatingActionBar.style.removeProperty('width');
       floatingActionBar.style.removeProperty('--soridraw-studio-builder-width');
+      floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
+      floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }
     if (collapsedActionButton) {
       collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
@@ -331,6 +333,16 @@ export default function StudioSplitWorkspace({
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
     const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
+    const resultWidth = Math.max(0, metricsRef.current.width - roundedBuilderWidth);
+    // 658: 590/591 proved that production can pay a much larger style/layout
+    // cost when live geometry is published through inherited root custom
+    // properties. 656/657 isolated the remaining slow state to a 661~1080px
+    // pane. In that exact fine-pointer band, keep external live geometry local
+    // to the element that consumes it, matching Lite V2's verified PROD path.
+    const useTabletProdParityPath = finePointerFastPathRef.current && (
+      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+      || (resultWidth > 660 && resultWidth <= 1080)
+    );
 
     // The page masthead is outside the split layout and therefore cannot inherit
     // the builder pane's temporary inline width. Mirror the live builder width
@@ -377,7 +389,7 @@ export default function StudioSplitWorkspace({
         'important',
       );
     }
-    if (controls.liveKeywords) {
+    if (controls.liveKeywords && !useTabletProdParityPath) {
       controls.liveKeywords.style.setProperty(
         'left',
         `${Math.max(0, roundedSplitterLeft + 18)}px`,
@@ -388,6 +400,11 @@ export default function StudioSplitWorkspace({
         `${Math.max(0, Math.round(workspaceRight))}px`,
         'important',
       );
+    } else if (controls.liveKeywords) {
+      // Desktop Studio Black hides this body portal. Avoid two dead layout
+      // writes per pointer frame in the 656-confirmed hot band.
+      controls.liveKeywords.style.removeProperty('left');
+      controls.liveKeywords.style.removeProperty('right');
     }
     if (controls.searchButton) {
       // Search is absolutely positioned inside the same 1500px Studio shell as
@@ -420,13 +437,22 @@ export default function StudioSplitWorkspace({
     if (lastActionControlPixelRef.current === actionGeometryKey) return;
     lastActionControlPixelRef.current = actionGeometryKey;
 
-    // 535 — publish the action geometry even while the control is collapsed.
-    // The old code updated these root variables only when the expanded portal
-    // existed, so resizing the split while collapsed left stale coordinates for
-    // the next expand. Root CSS variables are now the single geometry hand-off.
+    // 535 keeps resting geometry on the root, but 658 must not mutate inherited
+    // root custom properties on every pointer frame inside the confirmed tablet
+    // hot band. Publish directly on the floating portal there (same mechanism as
+    // Lite V2); pointer-up still commits the final root values once.
     const rootStyle = document.documentElement.style;
-    rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-    rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+    if (useTabletProdParityPath) {
+      if (controls.floatingActionBar) {
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+      }
+    } else {
+      controls.floatingActionBar?.style.removeProperty('--soridraw-action-fixed-left');
+      controls.floatingActionBar?.style.removeProperty('--soridraw-action-fixed-width');
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+    }
 
     if (controls.floatingActionBar) {
       controls.floatingActionBar.style.removeProperty('left');
@@ -1287,8 +1313,18 @@ export default function StudioSplitWorkspace({
         actionAnchorRect.width,
         actionGutter,
       );
-      rootStyle.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
-      rootStyle.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      const currentResultWidth = Math.max(0, metricsRef.current.width - builderRect.width);
+      const seedTabletProdParityPath = finePointerFastPathRef.current && (
+        (builderRect.width > 660 && builderRect.width <= 1080)
+        || (currentResultWidth > 660 && currentResultWidth <= 1080)
+      );
+      if (seedTabletProdParityPath && controls.floatingActionBar) {
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      } else {
+        rootStyle.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
+        rootStyle.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      }
       lastActionControlPixelRef.current = `${restingActionGeometry.left}:${restingActionGeometry.width}`;
     } else {
       actionAnchorInsetsRef.current = null;

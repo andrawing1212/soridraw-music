@@ -1,3 +1,12 @@
+## 658차 — Studio 태블릿 PROD 패리티 · 루트 CSS 변수 hot-path 제거
+
+- 기준: 657차. 656에서 실제 pane 661~1080px 본문이 병목임을 확정했고, 657에서 AI Studio의 Studio 체감은 크게 개선되었지만 Vercel 테스트앱은 같은 수준까지 따라오지 못했다.
+- 590/591의 DEV/PROD A/B에서 검증된 원리를 재사용한다. production에서 매 프레임 상속되는 root CSS custom property 좌표가 자손 style/layout 재계산을 크게 키웠고, 좌표를 실제 소비 요소에 직접/local로 주면 PROD가 크게 개선됐다.
+- PC fine-pointer에서 builder 또는 result 실제 pane이 661~1080px인 동안, Legacy Studio의 하단 생성바 live 좌표를 `<html>` root 변수에 매 프레임 쓰지 않고 floating portal 자체의 `--soridraw-action-fixed-left/width`에 직접 기록한다. pointer-up에서는 기존처럼 최종 root 좌표를 1회 커밋하므로 정지 상태와 저장 구조는 그대로다.
+- Studio Black 데스크톱에서 이미 `display:none`인 body live-keyword portal의 left/right 매 프레임 쓰기도 해당 hot band에서 생략한다.
+- 657의 본문 layout/paint 격리, pane breakpoint, 분할 geometry, 대문/검색/분할바 좌표, Galaxy Tab Touch Lite V2, 646 모바일 단일 UI는 변경하지 않았다. Music Note/Library의 Lite 경로도 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음.
+
 ## 657차 — 실제 pane 태블릿 구간 본문 유지 실사용 최적화
 
 - 기준: 656차. 656의 `display:none` 원인분리 테스트에서 661~1080px 실제 pane 본문이 빠지면 분할바가 확실히 빨라지는 것을 실사용 영상으로 확인했다.

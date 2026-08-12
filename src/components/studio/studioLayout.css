@@ -12115,4 +12115,36 @@ html[data-soridraw-device="phone"] body > :is(
     display: none !important;
   }
 }
-\n\n/* 653 — one-build tablet native-resize isolation probe.\n * Fine-pointer PC only: while the outer browser window is actively resizing in\n * 1100~1599px, remove the heavy Builder/Result page subtrees from layout/paint\n * but keep the split workspace shells + divider geometry alive. This is not a\n * final visual rule. It answers one question cleanly: is the tablet slowdown\n * caused by the page subtrees or by the surrounding frame/geometry path? */\n@media (min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine) {\n  html.soridraw-tablet-resize-probe[data-soridraw-theme=\"studio-black\"]\n  .soridraw-studio-split-workspace\n  > .soridraw-studio-builder-pane\n  > *,\n  html.soridraw-tablet-resize-probe[data-soridraw-theme=\"studio-black\"]\n  .soridraw-studio-split-workspace\n  > .soridraw-studio-result-pane\n  > * {\n    display: none !important;\n  }\n\n  html.soridraw-tablet-resize-probe[data-soridraw-theme=\"studio-black\"]\n  .soridraw-studio-split-workspace\n  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {\n    contain: strict !important;\n    overflow: hidden !important;\n    pointer-events: none !important;\n  }\n}\n
+
+/* 654 — tablet native-resize isolation probe.
+ * Keep the visible frame/mastheads/divider, but remove only the heavy pane body
+ * subtrees while a fine-pointer PC browser is actively resized in 1100~1599px.
+ * This avoids the unusable all-black probe from 653 while preserving the same
+ * diagnostic question: does removing page body reflow/paint eliminate the lag? */
+@media (min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine) {
+  html.soridraw-tablet-resize-probe[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  > .soridraw-studio-builder-pane
+  > :not(.soridraw-studio-pane-masthead-host),
+  html.soridraw-tablet-resize-probe[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  > .soridraw-studio-result-pane
+  > :not(.soridraw-studio-pane-masthead-host) {
+    display: none !important;
+  }
+
+  html.soridraw-tablet-resize-probe[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    contain: strict !important;
+    min-height: calc(100dvh - 96px) !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    background: #171719 !important;
+  }
+
+  html.soridraw-tablet-resize-probe[data-soridraw-theme="studio-black"]
+  .soridraw-studio-splitter {
+    pointer-events: none !important;
+  }
+}

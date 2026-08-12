@@ -96,15 +96,11 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   }, [railViewport]);
 
   useEffect(() => {
-    // 653 diagnostic probe — fine-pointer PC only. The user consistently sees
-    // native window resizing become heavy only in the 1100~1599 tablet band.
-    // Previous geometry/containment guesses did not change the symptom, so this
-    // one build deliberately removes the expensive center-page subtrees while
-    // the browser window is actively being resized in that band. Pane shells and
-    // the divider remain alive. If resize becomes smooth, the bottleneck is in
-    // tablet content reflow/paint; if it remains slow, the culprit is outside the
-    // page subtrees (frame/rail/navigation/geometry). This is intentionally a
-    // one-build probe, not the final product behavior.
+    // 654 diagnostic probe — fine-pointer PC only. While the outer browser
+    // window is actively resizing inside the 1100~1599px tablet band, remove
+    // only the heavy pane bodies from layout/paint. Keep mastheads, pane shells
+    // and the divider visible so the resize motion can still be judged. This is
+    // a temporary isolation build, not final product behavior.
     const root = document.documentElement;
     let settleTimer: number | null = null;
 
@@ -126,7 +122,7 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
 
       root.classList.add('soridraw-tablet-resize-probe');
       if (settleTimer !== null) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(finishProbe, 120);
+      settleTimer = window.setTimeout(finishProbe, 140);
     };
 
     window.addEventListener('resize', handleNativeResize, { passive: true });

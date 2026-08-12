@@ -96,43 +96,6 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
   }, [railViewport]);
 
   useEffect(() => {
-    // 654 diagnostic probe — fine-pointer PC only. While the outer browser
-    // window is actively resizing inside the 1100~1599px tablet band, remove
-    // only the heavy pane bodies from layout/paint. Keep mastheads, pane shells
-    // and the divider visible so the resize motion can still be judged. This is
-    // a temporary isolation build, not final product behavior.
-    const root = document.documentElement;
-    let settleTimer: number | null = null;
-
-    const finishProbe = () => {
-      if (settleTimer !== null) {
-        window.clearTimeout(settleTimer);
-        settleTimer = null;
-      }
-      root.classList.remove('soridraw-tablet-resize-probe');
-    };
-
-    const handleNativeResize = () => {
-      const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-      const inTabletBand = window.innerWidth >= 1100 && window.innerWidth < 1600;
-      if (!finePointer || !inTabletBand) {
-        finishProbe();
-        return;
-      }
-
-      root.classList.add('soridraw-tablet-resize-probe');
-      if (settleTimer !== null) window.clearTimeout(settleTimer);
-      settleTimer = window.setTimeout(finishProbe, 140);
-    };
-
-    window.addEventListener('resize', handleNativeResize, { passive: true });
-    return () => {
-      window.removeEventListener('resize', handleNativeResize);
-      finishProbe();
-    };
-  }, []);
-
-  useEffect(() => {
     if (railViewport !== 'wide') return;
     try {
       window.localStorage.setItem(LEFT_RAIL_STORAGE_KEY, String(isLeftRailCollapsed));

@@ -1,3 +1,10 @@
+## 655차 — AI Studio / Vercel 태블릿 성능갭 CSS-only 단일변수 검증
+- 기준: 654차. 654의 `window.resize + 140ms timer + soridraw-tablet-resize-probe` 진단 경로는 제거했습니다.
+- 587~591에서 DEV/PROD 갭을 좁힐 때 사용했던 단일변수 A/B 원칙을 다시 적용합니다. 이번 차수는 JS/React/타이머를 거치지 않고 production bundle에도 동일하게 들어가는 순수 CSS media query만 사용합니다.
+- fine-pointer PC의 1100~1599px에서 Studio/Recent/Music Note/Library의 무거운 pane body를 항상 layout/paint에서 제외하고 masthead/pane shell/divider만 남깁니다. 따라서 이 구간에서는 내부 본문이 비어 보이는 것이 정상인 진단본입니다.
+- AI Studio와 Vercel에서 둘 다 본문이 빠지고 속도도 빨라지면 654의 native resize probe가 PROD에서 동일하게 작동하지 않은 것으로 확정합니다. Vercel에서도 본문이 빠졌는데 여전히 느리면 내부 page body가 주원인이 아니며 frame/rail/navigation/split geometry 쪽으로 범위를 확정합니다.
+- 분할 엔진 선택, 저장된 percent, pane responsive 판정, Firebase/Auth/Firestore/Functions/사용자 데이터 구조는 변경하지 않습니다.
+
 ## 654차 — PC 태블릿 1100~1599 빈껍데기 테스트 시각 복구
 
 - 기준: 650차

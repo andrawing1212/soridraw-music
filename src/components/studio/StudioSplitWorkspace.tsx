@@ -223,9 +223,15 @@ export default function StudioSplitWorkspace({
     // Width dragging already owns the pane geometry for this frame. Running a
     // second ResizeObserver-driven measurement here forces another synchronous
     // layout of both large panes and is the main source of visible card stutter.
-    // Keep the last stable title height during the drag and refresh it once on
-    // pointer-up instead.
-    if (draggingRef.current) return;
+    // 664: native horizontal window resizing has the same ownership rule. In the
+    // 1100~1599 compact/tablet composition the Genre card rewraps repeatedly, so
+    // its observer can otherwise force a second full-tree layout on nearly every
+    // browser resize tick. Keep the last stable cross-pane title height until the
+    // existing resize-end path performs one final exact sync.
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+    ) return;
 
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -530,7 +536,15 @@ export default function StudioSplitWorkspace({
   }, [isStudioBlack]);
 
   const scheduleFooterBoundaryRefresh = useCallback(() => {
-    if (draggingRef.current || footerFrameRef.current !== null) return;
+    // 664: footer position is vertical geometry. A horizontal native resize must
+    // not force footer.getBoundingClientRect() in parallel with the workspace
+    // width layout on every frame. The existing resize-end refresh commits the
+    // exact footer/splitter bottom once the gesture settles.
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+      || footerFrameRef.current !== null
+    ) return;
     footerFrameRef.current = window.requestAnimationFrame(() => {
       footerFrameRef.current = null;
       refreshSplitterFooterBoundary();

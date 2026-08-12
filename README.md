@@ -1,3 +1,13 @@
+## 664차 — 외부창 태블릿 수평리사이즈 교차축 강제레이아웃 제거
+- 기준: 663차(실제 코드 660 안정 기준). 661/662 실험은 계속 폐기 상태로 유지합니다.
+- 코드 구조상 모바일 <1100px는 `StudioCompactMobileWorkspace`로 전환되어 분할 엔진 자체가 마운트되지 않지만, 1100~1599px 태블릿 구간은 무거운 2-pane Studio split DOM을 그대로 유지합니다. 동시에 카드들이 좁은 폭에서 자주 줄바꿈되어 높이가 계속 변합니다.
+- Legacy Studio에는 Genre 카드 높이를 Result 제목 카드에 맞추는 `ResizeObserver -> getBoundingClientRect()` 교차-pane 측정이 있습니다. 분할바 드래그 때는 이미 이 측정을 중지했지만, 외부 브라우저 수평 리사이즈 때는 매 폭 변화마다 다시 실행될 수 있었습니다.
+- 664는 기존 `soridraw-window-resizing` 마커를 그대로 재사용하여 외부창 이동 중 `syncResultTitleHeight()`를 중지하고, 기존 resize-end 경로에서 마지막 높이를 1회 정확히 동기화합니다. 새 resize listener/timer/state는 추가하지 않았습니다.
+- 같은 원칙으로 수평 리사이즈 중 footer의 `getBoundingClientRect()` 교차축 측정도 중지하고, resize-end 최종 layout refresh에서 1회 확정합니다.
+- 분할바 pointer 직결(659), 657/658 pane 최적화, 660 PROD pacing, breakpoint/화면 디자인/갤탭 touch/모바일 구조는 변경하지 않습니다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
+- 상태: 코드 반영 완료 · Vercel 외부창 1100~1599px 실사용 검증 전.
+
 ## 663차 — 661·662 폐기 / 660 안정 기준 복구
 - 실사용 결과 661은 외부창 태블릿 리사이즈 성능 개선이 없었고, 662는 오히려 더 느려졌으므로 두 실험을 모두 폐기합니다.
 - 코드 기준을 660차로 완전히 복구합니다. 659의 pointer 직결 분할바, 657/658의 pane 태블릿 최적화, 660의 PROD 적응형 레이아웃 페이싱만 유지합니다.

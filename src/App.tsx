@@ -3981,6 +3981,11 @@ function App() {
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
+  // 675 diagnostic: keep the real Studio-Black split shell, but make the left
+  // Builder use Classic/Dark presentation semantics so the A/B is not just a
+  // CSS-class alias of the split UI.
+  const isClassicDarkBuilderProbeActive = isStudioBlackActionMode;
+  const isStudioBlackBuilderPresentation = isStudioBlackActionMode && !isClassicDarkBuilderProbeActive;
   const isStudioCompactMobileLayout = isStudioCompactViewport
     && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
 
@@ -6891,6 +6896,7 @@ function App() {
   const actionButtonsAnchorRef = useRef<HTMLDivElement>(null);
   const actionButtonsBarRef = useRef<HTMLDivElement>(null);
   const [isActionsFloating, setIsActionsFloating] = useState(true);
+  const isBuilderActionsFloating = isClassicDarkBuilderProbeActive ? false : isActionsFloating;
   const isActionsFloatingRef = useRef(true);
   const isSplitDraggingRef = useRef(false);
   const actionBarPlacementRafRef = useRef<number | null>(null);
@@ -7200,7 +7206,7 @@ const toggleCycleVariantSelection = (
   }, []);
 
   const collapseActionButtons = useCallback(() => {
-    if (!isStudioBlackActionMode) {
+    if (!isStudioBlackBuilderPresentation) {
       captureCollapsedActionVisualBottom();
 
       // Non-Studio themes still swap an in-flow/floating owner, so preserve
@@ -7232,16 +7238,16 @@ const toggleCycleVariantSelection = (
     }
 
     setIsActionButtonsCollapsed(true);
-  }, [captureCollapsedActionVisualBottom, isStudioBlackActionMode]);
+  }, [captureCollapsedActionVisualBottom, isStudioBlackBuilderPresentation]);
 
   const expandActionButtons = useCallback(() => {
-    actionCollapseRestorePendingRef.current = !isStudioBlackActionMode;
-    if (isStudioBlackActionMode) {
+    actionCollapseRestorePendingRef.current = !isStudioBlackBuilderPresentation;
+    if (isStudioBlackBuilderPresentation) {
       actionCollapseScrollSnapshotRef.current = null;
       document.documentElement.style.removeProperty('--soridraw-action-collapsed-visual-bottom');
     }
     setIsActionButtonsCollapsed(false);
-  }, [isStudioBlackActionMode]);
+  }, [isStudioBlackBuilderPresentation]);
 
   const updateActionBarPlacement = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
@@ -7306,7 +7312,7 @@ const toggleCycleVariantSelection = (
     // footer collision in one rAF-coalesced listener, so registering a second
     // App-level scroll path here only duplicates layout work.
     const handleScroll = () => {
-      if (!isStudioBlackActionMode) scheduleActionBarPlacement();
+      if (!isStudioBlackBuilderPresentation) scheduleActionBarPlacement();
     };
     const scheduleLayoutChange = () => {
       if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
@@ -7326,7 +7332,7 @@ const toggleCycleVariantSelection = (
 
     const handleWindowResizeEnd = () => scheduleLayoutChange();
 
-    if (!isStudioBlackActionMode) {
+    if (!isStudioBlackBuilderPresentation) {
       window.addEventListener('scroll', handleScroll, { passive: true });
     }
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
@@ -7344,7 +7350,7 @@ const toggleCycleVariantSelection = (
         window.cancelAnimationFrame(actionBarLayoutRafRef.current);
         actionBarLayoutRafRef.current = null;
       }
-      if (!isStudioBlackActionMode) {
+      if (!isStudioBlackBuilderPresentation) {
         window.removeEventListener('scroll', handleScroll);
       }
       window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
@@ -7353,7 +7359,7 @@ const toggleCycleVariantSelection = (
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       };
-  }, [isStudioBlackActionMode, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
+  }, [isStudioBlackBuilderPresentation, scheduleActionBarPlacement, syncActionBarLayoutMetrics]);
 
 
   useEffect(() => {
@@ -7467,9 +7473,9 @@ const toggleCycleVariantSelection = (
     ? 'hidden'
     : isActionButtonsCollapsed
       ? 'collapsed'
-      : isStudioBlackActionMode
+      : isStudioBlackBuilderPresentation
         ? 'floating'
-        : isActionsFloating
+        : isBuilderActionsFloating
           ? 'floating'
           : 'inline';
 
@@ -7500,7 +7506,7 @@ const toggleCycleVariantSelection = (
   useLayoutEffect(() => {
     if (!shouldShowActionButtons || isActionButtonsCollapsed) return;
 
-    if (isStudioBlackActionMode) {
+    if (isStudioBlackBuilderPresentation) {
       // 535 — one lightweight mount sync only. Geometry changes after this are
       // owned by the single anchor ResizeObserver above and by the split rAF fast
       // path. Do not attach a second ResizeObserver or pane-scroll listener to
@@ -7539,7 +7545,7 @@ const toggleCycleVariantSelection = (
   }, [
     isActionButtonsCollapsed,
     isActionsFloating,
-    isStudioBlackActionMode,
+    isStudioBlackBuilderPresentation,
     shouldShowActionButtons,
     syncActionBarLayoutMetrics,
     updateActionBarPlacement,
@@ -14026,65 +14032,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     });
   };
 
-  // 679 final control probe. Keep the existing Recent Songs/result renderer intact
-  // and physically place that exact result pane on the LEFT while Music Note or
-  // Library uses the RIGHT pane. No diagnostic replacement UI is created.
-  // SORIDRAW_VERIFY_679: REAL_RECENT_LEFT_REAL_NOTE_LIBRARY_RIGHT
-  const is679RecentPairProbe = isStudioBlackActionMode
-    && (studioWorkspaceView === 'music-note' || studioWorkspaceView === 'library');
-  const pairProbeRecentFetchKeyRef = useRef<string | null>(null);
-
-  // The normal Recent result body only renders when `result` is populated.
-  // Restore a real existing recent song for this read-only probe without writing
-  // Firestore. Prefer current memory/cache; use one direct Firestore read only if
-  // the regular Studio listener has not populated history yet.
-  useEffect(() => {
-    const currentUser = user || auth.currentUser;
-    if (!is679RecentPairProbe) {
-      pairProbeRecentFetchKeyRef.current = null;
-      return;
-    }
-    if (!currentUser || result) return;
-
-    const commitRecentSong = (songs: SongResult[]) => {
-      if (!songs.length) return false;
-      const preferredIndex = historyIndex >= 0 && historyIndex < songs.length ? historyIndex : 0;
-      const nextSong = songs[preferredIndex] ?? songs[0];
-      if (!nextSong) return false;
-      if (history.length === 0) setHistory(songs);
-      setHistoryIndex(preferredIndex);
-      historyIndexRef.current = preferredIndex;
-      setResult(nextSong);
-      resultRef.current = nextSong;
-      setLatestGenerationBatchId((nextSong.appliedKeywords as any)?.generationBatchId || null);
-      return true;
-    };
-
-    if (commitRecentSong(history)) return;
-
-    const cached = loadRecentSongsCache(currentUser.uid);
-    const cachedSongs = normalizeRecentSongList(cached?.history || []);
-    if (commitRecentSong(cachedSongs)) return;
-
-    if (pairProbeRecentFetchKeyRef.current === currentUser.uid) return;
-    pairProbeRecentFetchKeyRef.current = currentUser.uid;
-    let cancelled = false;
-
-    void getDoc(doc(db, 'user_recent_songs', currentUser.uid))
-      .then((snap) => {
-        if (cancelled || !snap.exists()) return;
-        const songs = normalizeRecentSongList(snap.data().songs || []);
-        if (songs.length > 0) commitRecentSong(songs);
-      })
-      .catch((error) => {
-        console.warn('[679 recent-pair probe] recent-song read failed', error);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [history, historyIndex, is679RecentPairProbe, result, user]);
-
   return (
     <div className="soridraw-app-root min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans selection:bg-brand-orange/30">
       {user && emailVerificationGate !== 'idle' && (
@@ -14710,7 +14657,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   compactMobileMode={isStudioCompactMobileLayout}
-                  pairProbeRecentLeft={is679RecentPairProbe}
+                  classicDarkBuilderProbe={isClassicDarkBuilderProbeActive}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
@@ -14732,45 +14679,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   }
                 >
                   <StudioBuilderPane>
-                    {is679RecentPairProbe ? (
-                      studioWorkspaceView === 'music-note' ? (
-                        <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
-                          {!isAuthReady ? (
-                            <div className="soridraw-studio-workspace-loading">
-                              <Loader2 className="h-8 w-8 animate-spin text-brand-orange" />
-                              <span>뮤직노트를 불러오는 중...</span>
-                            </div>
-                          ) : (user || auth.currentUser) ? (
-                            <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
-                              <HistoryRouteWrapper
-                                isFavoritesLoading={isFavoritesLoading}
-                                hasMoreFavorites={hasMoreFavorites}
-                                isLoadingMoreFavorites={isLoadingMoreFavorites}
-                                loadMoreFavorites={loadMoreFavorites}
-                                searchFavoritesOnServer={searchFavoritesOnServer}
-                                refreshFavoritesFromServerFirstPage={refreshFavoritesFromServerFirstPage}
-                                toggleFavorite={toggleFavorite}
-                                updateFavorite={updateFavorite}
-                                clearAllFavorites={clearAllFavorites}
-                                unlockAllFavorites={unlockAllFavorites}
-                                lockAllFavorites={lockAllFavorites}
-                                user={user || auth.currentUser}
-                                handleLogin={handleLogin}
-                              />
-                            </Suspense>
-                          ) : (
-                            <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
-                          )}
-                        </section>
-                      ) : (
-                        <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
-                          <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
-                            <SunoLibraryPageLazy appUser={user || auth.currentUser} />
-                          </Suspense>
-                        </section>
-                      )
-                    ) : (
-                      <>
                     {/* Selection Sections */}
                   <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
@@ -14840,7 +14748,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={!isStudioBlackActionMode && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                forcedHeight={!isStudioBlackBuilderPresentation && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
                 directInput={{
                   selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
@@ -15359,7 +15267,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsVocalCharacterModalOpen(isOpen); }}
               genreHints={[...selectedGenres, ...subGenre, ...selectedStyles]}
               randomActivationKey={vocalRandomActivationKey}
-              naturalResponsiveHeight={isStudioBlackActionMode}
+              naturalResponsiveHeight={isStudioBlackBuilderPresentation}
             />
             </div>
             <div className="soridraw-studio-lyrics-slot min-w-0 h-full">
@@ -15402,7 +15310,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               )}
               vocalSectionTags={vocalSectionTagOptions}
               selectedGenreIds={Array.from(new Set([...selectedGenres, ...subGenre]))}
-              naturalResponsiveHeight={isStudioBlackActionMode}
+              naturalResponsiveHeight={isStudioBlackBuilderPresentation}
             />
             </div>
           </div>
@@ -15590,19 +15498,19 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               // 535 — Studio Black uses this node only as an X/width geometry
               // probe. It never reserves a second expanded-row slot, so collapse,
               // expand and PC/mobile pane changes cannot alter the scroll range.
-              !isStudioBlackActionMode
+              !isStudioBlackBuilderPresentation
                 && shouldShowActionButtons
                 && !isActionButtonsCollapsed
-                && !isActionsFloating
+                && !isBuilderActionsFloating
                 ? "soridraw-studio-action-anchor-expanded"
                 : "h-0"
             )}
-            data-soridraw-docked={!isStudioBlackActionMode && !isActionsFloating ? "true" : "false"}
+            data-soridraw-docked={!isStudioBlackBuilderPresentation && !isBuilderActionsFloating ? "true" : "false"}
           >
             {shouldShowActionButtons
-              && !isStudioBlackActionMode
+              && !isStudioBlackBuilderPresentation
               && !isActionButtonsCollapsed
-              && !isActionsFloating
+              && !isBuilderActionsFloating
               && renderExpandedActionBar('inline')}
           </div>
 
@@ -15650,7 +15558,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     </span>
                   </motion.button>
                 </Portal>
-              ) : (isStudioBlackActionMode || isActionsFloating) ? (
+              ) : (isStudioBlackBuilderPresentation || isBuilderActionsFloating) ? (
                 <Portal>
                   {renderExpandedActionBar('floating')}
                 </Portal>
@@ -15683,11 +15591,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             </div>
           </div>
         </div>
-                      </>
-                    )}
                   </StudioBuilderPane>
                   <StudioResultPane>
-                    {!is679RecentPairProbe && studioWorkspaceView === 'music-note' ? (
+                    {studioWorkspaceView === 'music-note' ? (
                       <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--music-note" aria-label="뮤직노트 작업공간">
                         {!isAuthReady ? (
                           <div className="soridraw-studio-workspace-loading">
@@ -15716,7 +15622,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                           <div className="soridraw-studio-workspace-loading">로그인이 필요합니다.</div>
                         )}
                       </section>
-                    ) : !is679RecentPairProbe && studioWorkspaceView === 'library' ? (
+                    ) : studioWorkspaceView === 'library' ? (
                       <section className="soridraw-studio-workspace-page soridraw-studio-workspace-page--library" aria-label="라이브러리 작업공간">
                         <Suspense fallback={<div className="soridraw-studio-workspace-loading"><Loader2 className="h-8 w-8 animate-spin text-brand-orange" /></div>}>
                           <SunoLibraryPageLazy appUser={user || auth.currentUser} />
@@ -15749,7 +15655,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       </Portal>
                     )}
                     {/* Result Area */}
-        {(is679RecentPairProbe ? (user || auth.currentUser) : user) && result && (
+        {user && result && (
             <div
               ref={resultAreaRef}
               className="soridraw-studio-result-content space-y-6 pt-4 md:pt-5 border-t-2 border-[#e3a13a]/30 shadow-[0_-1px_0_rgba(227,161,58,0.16)] relative"

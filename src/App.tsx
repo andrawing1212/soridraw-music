@@ -14651,6 +14651,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   compactMobileMode={isStudioCompactMobileLayout}
+                  classicBuilderProbe={isStudioBlackActionMode}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">

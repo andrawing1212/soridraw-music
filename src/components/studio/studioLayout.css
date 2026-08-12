@@ -18,6 +18,34 @@
   display: contents !important;
 }
 
+/* 674 — classic Studio builder transplant probe.
+ * The Builder JSX is already shared by Classic Dark and Studio Black.
+ * This A/B keeps only the split left-column geometry and intentionally removes
+ * the normal builder-pane/Lite builder classes from that live Studio subtree.
+ * Result: the left Studio body stays mounted, but the split-specific builder
+ * container-query and pane rule tree no longer owns it. Right-side content is
+ * unchanged. Diagnostics only; no production UI contract is implied. */
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace[data-soridraw-classic-builder-probe="true"]
+  > .soridraw-studio-classic-builder-probe-pane {
+    grid-column: 1;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-right: 18px;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  :root[data-soridraw-theme="studio-black"]
+  .soridraw-studio-classic-builder-probe-pane * {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+}
+
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-left-panel,
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-dashboard-panel,
 :root:not([data-soridraw-theme="studio-black"]) .soridraw-studio-splitter {

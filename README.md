@@ -1,11 +1,11 @@
-## 673차 — 668 기준 / 세 화면 공통 오른쪽 본문 단독 제거 A/B 진단
-- 기준: 668차. 669/670/671/672 변경은 누적하지 않습니다.
-- 672에서 외부 브라우저 창 리사이즈 중 왼쪽 Sori Studio/Builder 본문만 제거했을 때 Recent, Music Note, Library 모두 체감 속도가 크게 개선되는 것을 확인했습니다. 다만 Music Note/Library에는 약한 잔여 병목이 남았습니다.
-- 673은 반대쪽 단일변수 확인입니다. 외부 브라우저 창 리사이즈 중 왼쪽 Sori Studio/Builder는 완전히 유지하고, 오른쪽 Result 본문만 React에서 일시적으로 unmount합니다.
-- Legacy의 최근 생성곡과 Lite의 Music Note/Library 모두 같은 조건으로 적용합니다. shell, masthead host, divider, rails, 왼쪽 Builder 본문은 그대로 유지합니다.
-- resize 종료 약 110ms 후 오른쪽 본문을 즉시 복구합니다. 분할바 드래그 경로는 변경하지 않습니다.
-- 목적: 왼쪽 단독 부담인지, 오른쪽 단독 부담인지, 혹은 좌+우 동시 배치에서 비용이 합쳐져 병목이 증폭되는지 확정합니다.
-- breakpoint, pane 비율, 모바일 compact 구조, Firebase/Auth/Firestore/Functions/사용자 저장 구조는 변경하지 않습니다.
+## 674차 — 668 기준 / 일반 다크 Studio 본문 구조 이식 A/B 진단
+- 기준: 668차.
+- 672/673 실사용 결과에서 왼쪽 Sori Studio 본문이 가장 큰 병목임을 확인했습니다.
+- 이번 버전은 새 최적화를 추가하지 않습니다. Classic Dark와 Studio Black이 실제로 같은 Builder JSX를 공유한다는 구조를 이용해, Studio Black 왼쪽 Builder에서 **분할 전용 pane class/container-query 소유권만 제거**합니다.
+- 바깥 왼쪽 칼럼 폭/분할선/오른쪽 Recent·Music Note·Library는 그대로 유지합니다. 즉 왼쪽 실제 Studio 내용은 유지하되, 일반 다크 Studio에 가까운 비분할 본문 조건으로 동작하게 만드는 A/B 진단입니다.
+- Legacy(최근 생성곡)와 Lite(뮤직노트/라이브러리) 엔진 모두 같은 probe를 사용합니다.
+- 결과 해석: 빨라지면 Studio 자체보다 분할 전용 Builder pane/container-query 구조가 원인, 그대로 느리면 Builder 내용 자체의 reflow 비용이 원인입니다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
 - 상태: 코드 반영 완료 · 실사용 검증 전.
 
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지

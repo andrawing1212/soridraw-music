@@ -184,6 +184,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
+  classicBuilderProbe?: boolean;
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -193,6 +194,7 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
+  classicBuilderProbe = false,
 }: LiteStudioSplitWorkspaceProps) {
   // 617: PC Music Note no longer owns a special geometry path. App routes it
   // through the same `library-590` profile as Library. Adaptive mode is kept for
@@ -207,12 +209,6 @@ export default function LiteStudioSplitWorkspace({
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(() => readStoredCollapse(BUILDER_COLLAPSED_STORAGE_KEY));
   const [isResultCollapsed, setIsResultCollapsed] = useState(() => readStoredCollapse(RESULT_COLLAPSED_STORAGE_KEY));
-  // SORIDRAW_VERIFY_673: SHARED_RESULT_ONLY_OUTER_RESIZE_AB
-  // Mirror the Legacy opposite-side A/B: during an OUTER browser resize,
-  // remove only the right Recent/Music Note/Library body while the left Sori
-  // Studio/Builder body remains fully mounted.
-  const [resultResizeProbeActive, setResultResizeProbeActive] = useState(false);
-  const resultResizeProbeActiveRef = useRef(false);
   const builderCollapsedRef = useRef(isBuilderCollapsed);
   const resultCollapsedRef = useRef(isResultCollapsed);
   const percentRef = useRef(readStoredPercent());
@@ -1360,12 +1356,6 @@ export default function LiteStudioSplitWorkspace({
     let resizeEndTimer: number | null = null;
     const handleWindowResize = () => {
       const root = document.documentElement;
-      // 673: activate locally even if another mounted workspace already owns
-      // the shared root resize marker, keeping Legacy/Lite A/B conditions equal.
-      if (!resultResizeProbeActiveRef.current) {
-        resultResizeProbeActiveRef.current = true;
-        setResultResizeProbeActive(true);
-      }
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
@@ -1382,10 +1372,6 @@ export default function LiteStudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
-        if (resultResizeProbeActiveRef.current) {
-          resultResizeProbeActiveRef.current = false;
-          setResultResizeProbeActive(false);
-        }
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1406,7 +1392,6 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
-      resultResizeProbeActiveRef.current = false;
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -1522,8 +1507,6 @@ export default function LiteStudioSplitWorkspace({
     </button>
   );
 
-  const suppressResultBodyForResizeProbe = resultResizeProbeActive && viewMode === 'split';
-
   return (
     <>
       <div
@@ -1532,6 +1515,7 @@ export default function LiteStudioSplitWorkspace({
         data-split-engine="lite-v2-studio"
         data-lite-runtime-layout="content-mode-aligned"
         data-lite-runtime-profile={runtimeProfile}
+        data-soridraw-classic-builder-probe={classicBuilderProbe ? 'true' : 'false'}
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,
@@ -1542,7 +1526,8 @@ export default function LiteStudioSplitWorkspace({
           ref={builderRef}
           data-soridraw-studio-pane="builder"
           data-soridraw-lite-pane="builder"
-          className="soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder"
+          data-soridraw-classic-builder-probe={classicBuilderProbe ? 'true' : 'false'}
+          className={classicBuilderProbe ? 'soridraw-studio-classic-builder-probe-pane' : 'soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder'}
           aria-hidden={isBuilderCollapsed}
         >
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
@@ -1559,7 +1544,7 @@ export default function LiteStudioSplitWorkspace({
           aria-hidden={isResultCollapsed}
         >
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
-          {suppressResultBodyForResizeProbe ? null : (panes[1] ?? null)}
+          {panes[1] ?? null}
         </div>
       </div>
       {typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost}

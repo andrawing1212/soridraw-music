@@ -1,0 +1,17 @@
+{
+  "version": 674,
+  "basis": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "A/B diagnostic: keep the live Studio builder content but detach split-specific builder pane/container ownership so it behaves closer to Classic Dark while remaining beside the right pane.",
+  "required_marker": "674 — classic Studio builder transplant probe",
+  "critical_sha256": {
+    "src/App.tsx": "dbe1bda372863a6c4cf197d10aea33669dfbc0be7e64e3405504ab375e52e268",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx": "5014f8f17836bb5bc71a31ba8811e677180d2019e75515216185a5cf9229e5ee",
+    "src/components/studio/StudioSplitWorkspace.tsx": "e899b9252d8918908318ed365f04527ff652d428b6204623d5aaeb8ffbc425d6",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "8de8d5e6355fc148fdf174921613d97bb8521a47c024a42be09cd403b3c9872b",
+    "src/components/studio/studioLayout.css": "a78c32a2e4946821fb8f8527789e205250afd95d907389d801c82d2e6ce85f70",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  },
+  "firebase_data_structure_changed": false,
+  "deployment_performed": false
+}

@@ -2040,11 +2040,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 리사이즈가 끝나면 윈도잉을 즉시 해제하고 observer를 다시 연결한다. 보이는 카드/검색/필터/대문/분할 폭과 PC↔Tablet↔Mobile 변화는 기존처럼 실시간이다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 
-
-## 687차 — 뮤직노트/라이브러리 태블릿 geometry 소유권 Recent 계열로 복구 (4/5)
-- 기준: 686차. 686의 뮤직노트/라이브러리 resize viewport windowing은 약한 개선이 확인되어 유지한다.
-- 사용자 실사용 관찰을 기준으로 범위를 뮤직노트/라이브러리의 **실제 result pane 661~1080px 태블릿 구간**으로만 좁혔다. Recent는 같은 외부창 축소에서 상대적으로 부드럽고, 과거 빈 왼쪽 pane 대조에서도 Music Note/Library 오른쪽 본문만으로 동일한 버벅임이 재현됐다.
-- 원인 후보로 확인된 기존 정책: PC 자동 Music Note/Library는 `library-590` runtime profile 때문에 result content가 tablet으로 바뀌어도 geometry owner가 계속 `css-var`로 고정되어 있었다. 이는 609의 검증 규칙인 `tablet/mobile result = direct geometry`를 617에서 덮어쓴 상태였다.
-- 687에서는 `library-590`을 **PC(>1080px) 전용**으로 제한한다. 실제 result width가 1080px 이하로 들어오면 Music Note/Library도 즉시 `direct` geometry로 전환하고, 다시 PC 폭으로 나오면 기존 590 CSS-variable geometry로 복귀한다.
-- 화면 디자인/PC↔Tablet↔Mobile 전환/외부창 실시간 리사이즈/분할바 동작은 변경하지 않는다. Studio/Create/Recent 경로는 수정하지 않는다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+## 688차 — 5/5 최종: PC 뮤직노트·라이브러리를 최근 생성곡과 동일한 Legacy 분할 소유자로 통합
+- 기준: 687차. 687 실사용에서 Music Note/Library 태블릿 direct geometry가 체감 약 15% 개선되어, 남은 차이를 `Recent=Legacy / Music Note·Library=Lite`라는 페이지별 엔진 분기로 좁혔다.
+- fine-pointer PC/트랙패드에서는 Create/Recent/Music Note/Library가 모두 동일한 `StudioSplitWorkspace` Legacy 엔진을 사용한다. 브라우저 폭이 Tablet 구간으로 줄어도 페이지 전환 때문에 split engine이 바뀌지 않는다.
+- coarse/no-hover 터치 환경은 기존처럼 adaptive Lite V2를 유지한다. 즉 실제 갤럭시탭 손가락 경로는 건드리지 않는다.
+- 관리자 명시 override `?splitEngine=lite|legacy`는 그대로 유지해서 비교 진단은 가능하다.
+- Music Note/Library가 Legacy 엔진 안에 들어왔을 때 페이지 자체 `ResizeObserver + getBoundingClientRect()`를 다시 만들지 않도록, Legacy split owner가 이미 계산한 result 폭의 PC/tablet/mobile 경계 변화만 `soridraw-studio-pane-width` 이벤트로 전달한다.
+- Legacy 결과 pane의 mobile breakpoint도 Music Note/Library 둘 다 동일하게 661px 기준을 사용한다.
+- 686 viewport windowing은 유지한다. 디자인/실시간 외부창 리사이즈/분할바 동작/Firestore·Auth·Functions 저장 구조는 변경하지 않는다.

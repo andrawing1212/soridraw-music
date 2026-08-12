@@ -47,6 +47,23 @@ export function attachSoridrawResponsiveContract(element: HTMLElement) {
     return () => litePane.removeEventListener('soridraw-lite-pane-width', handleLitePaneWidth as EventListener);
   }
 
+  // 688: fine-pointer PC Music Note/Library now share Recent's Legacy split
+  // owner. The parent already knows the exact result width on every layout
+  // commit, so consume only its PC/tablet/mobile boundary notifications. This
+  // removes the page-local ResizeObserver + synchronous geometry read that made
+  // these two pages behave differently from Recent during outer-window resize.
+  const legacyResultPane = element.closest<HTMLElement>('[data-soridraw-studio-pane="result"]');
+  if (legacyResultPane) {
+    applyWidth(readStableBorderWidth());
+    const handleLegacyPaneWidth = (event: Event) => {
+      const customEvent = event as CustomEvent<{ width?: number }>;
+      const width = Number(customEvent.detail?.width);
+      if (Number.isFinite(width) && width > 0) applyWidth(width);
+    };
+    legacyResultPane.addEventListener('soridraw-studio-pane-width', handleLegacyPaneWidth as EventListener);
+    return () => legacyResultPane.removeEventListener('soridraw-studio-pane-width', handleLegacyPaneWidth as EventListener);
+  }
+
   applyWidth(readStableBorderWidth());
 
   if (typeof ResizeObserver !== 'undefined') {

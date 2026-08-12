@@ -25,11 +25,15 @@ const TABLET_MIN_PANE_PX = 430;
 const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
+const CONTENT_MOBILE_MAX = 660;
+const CONTENT_TABLET_MAX = 1080;
+const LEGACY_PANE_WIDTH_EVENT = 'soridraw-studio-pane-width';
 const PANE_MODE_HYSTERESIS = 16;
 const WIDE_DESKTOP_ISOLATION_BREAKPOINT = 1100;
 const ISOLATED_WORKSPACE_BOTTOM_GAP = 0;
 
 type PaneMode = 'mobile' | 'desktop';
+type ContentResponsiveMode = 'mobile' | 'tablet' | 'pc';
 type SplitProfile = 'wide' | 'tablet';
 
 type SplitBounds = {
@@ -87,6 +91,10 @@ const getSplitBounds = (layoutWidth: number): SplitBounds => {
 
 const clampToBounds = (value: number, bounds: SplitBounds) => (
   Math.min(bounds.max, Math.max(bounds.min, value))
+);
+
+const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
+  width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
 );
 
 const readStoredCollapseState = (storageKey: string) => {
@@ -163,6 +171,11 @@ export default function StudioSplitWorkspace({
     builder: 'desktop',
     result: 'desktop',
   });
+  // 688: Music Note/Library running on the same Legacy engine as Recent still
+  // need their content-level PC/tablet/mobile contract. Publish only boundary
+  // changes from the split owner's already-known result width so those pages do
+  // not attach their own ResizeObserver + getBoundingClientRect loop.
+  const resultContentResponsiveModeRef = useRef<ContentResponsiveMode | null>(null);
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
@@ -885,7 +898,7 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           previousBuilderMode,
         );
-    const usesUnifiedContentBreakpoint = workspaceView === 'library';
+    const usesUnifiedContentBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(
@@ -945,6 +958,14 @@ export default function StudioSplitWorkspace({
     if (!resultCollapsedRef.current && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
+    }
+
+    if (!resultCollapsedRef.current && (workspaceView === 'music-note' || workspaceView === 'library')) {
+      const nextContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
+      if (resultContentResponsiveModeRef.current !== nextContentMode) {
+        resultContentResponsiveModeRef.current = nextContentMode;
+        result.dispatchEvent(new CustomEvent(LEGACY_PANE_WIDTH_EVENT, { detail: { width: Math.max(1, resultWidth) } }));
+      }
     }
 
     // 521 — The floating Generate bar is portaled directly under <body>, so it
@@ -1143,6 +1164,15 @@ export default function StudioSplitWorkspace({
       lastTopCardHeightRef.current = null;
     };
   }, [syncResultTitleHeight]);
+
+  useEffect(() => {
+    // Workspace changes can swap Recent <-> Music Note/Library while preserving
+    // the same split shell. Force the next legacy layout commit to publish the
+    // current content-width bucket to the newly mounted result page.
+    resultContentResponsiveModeRef.current = null;
+    const frame = window.requestAnimationFrame(() => refreshLayoutMetrics());
+    return () => window.cancelAnimationFrame(frame);
+  }, [refreshLayoutMetrics, workspaceView]);
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {

@@ -1,3 +1,10 @@
+## 651차 — PC 태블릿 네이티브 리사이즈 공통 paint/layout 충돌 제거
+- 기준: `SORIDRAW_650차_649완전롤백_외부창수평리사이즈_중복경로제거.zip`.
+- 650 실사용 영상에서 1600px 이상 PC는 상대적으로 정상이고 1100~1599px에서만 반복적으로 느려지는 공통점을 다시 추적했습니다. Studio/Recent는 Legacy, Music Note/Library는 Lite/library-590로 엔진이 다른데도 같은 구간에서 느려지므로 split engine 교체가 원인이 아니라 **태블릿 구간 공통 CSS/paint 경로**가 병목 후보였습니다.
+- 태블릿에만 적용되던 광범위 `content-visibility:auto + contain-intrinsic-size:auto 240px`가 네이티브 창 리사이즈 중 매 폭 프레임마다 메뉴/결과 블록의 visibility·intrinsic-size 판정을 다시 하게 만들 수 있어, `soridraw-window-resizing` 동안만 이 최적화를 정지하고 resize 종료 후 자동 복귀하도록 변경했습니다. 정지 상태는 1600px 이상 PC와 같은 일반 렌더 경로입니다.
+- 1100~1599px에서 wide PC 헤더 대신 활성화되는 `.soridraw-mobile-navigation`은 `position:fixed + backdrop-blur-xl + shadow`인 전체폭 paint surface입니다. 실제 Galaxy Tab처럼 viewport 폭이 고정된 상태에서는 문제가 작지만 PC에서 브라우저 폭을 연속 변경하면 blur surface 자체가 매 tick 재래스터됩니다. 네이티브 resize 동안만 이미 95% 불투명한 배경을 완전 불투명으로 바꾸고 blur/shadow를 정지하며, resize 종료 즉시 원래 디자인으로 복구합니다.
+- 분할바 엔진, 분할비율, Legacy/Lite 라우팅, pane-mode, 1100/1600 breakpoint, 좌우 rail, 모바일 단일 UI(646), 대문 정렬(641~644), Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
 ## 650차 — 649 완전 롤백 + 외부창 수평 리사이즈 중복경로 제거
 
 - 기준은 `SORIDRAW_648차_647롤백_PC태블릿_공통루트재렌더억제.zip`입니다. 649차에서 추가한 geometry-only fast path, Lite 전역 `soridraw-window-resizing` 마커, 110ms 지연 커밋은 전부 폐기했습니다.

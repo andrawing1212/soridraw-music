@@ -10899,18 +10899,44 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 
 }
 
-/* Tablet keeps the exact 486 rail/split geometry. Only off-screen sections
- * are allowed to skip rendering work, so crossing 1600/1100 cannot blank or
- * reposition either pane. */
+/* 651 — tablet native-resize paint/layout collision removal.
+ *
+ * 650 real-use video still slows only while the browser itself is resized inside
+ * 1100~1599px. The split engines are not the common denominator: Studio/Recent
+ * use Legacy while Music Note/Library use Lite/library-590, yet the slowdown is
+ * shared. The common tablet-only work is this broad content-visibility pass plus
+ * the fixed mobile navigation backdrop surface that replaces the wide PC header.
+ *
+ * Keep the approved tablet off-screen optimization while the viewport is resting,
+ * but suspend it for the native resize gesture. Re-evaluating content-visibility
+ * and remembered intrinsic heights for every menu/result block while their width
+ * changes continuously adds a second browser-owned layout decision on top of the
+ * split workspace geometry. The existing window-resize marker gives this work one
+ * owner: live resize uses normal rendering, then the optimization returns once on
+ * resize-end. No split ratio, pane mode or responsive breakpoint is changed. */
 @media (min-width: 1100px) and (max-width: 1599px) {
-  :root[data-soridraw-theme="studio-black"]
+  :root:not(.soridraw-window-resizing)[data-soridraw-theme="studio-black"]
   .soridraw-studio-builder-pane
   .soridraw-studio-menu-card,
-  :root[data-soridraw-theme="studio-black"]
+  :root:not(.soridraw-window-resizing)[data-soridraw-theme="studio-black"]
   .soridraw-studio-result-content
   > * {
     content-visibility: auto;
     contain-intrinsic-size: auto 240px;
+  }
+
+  /* The compact header is a fixed, full-width backdrop-filter surface. Unlike
+   * Galaxy Tab's fixed viewport, a desktop native resize changes that blur
+   * surface every tick and forces repaint across the whole page. The background
+   * is already 95% opaque, so during the gesture use the same solid surface and
+   * restore blur/shadow automatically when resizing ends. */
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  body #root .soridraw-app-root .soridraw-mobile-navigation {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    background: #111111 !important;
+    background-color: #111111 !important;
   }
 }
 

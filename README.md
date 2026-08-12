@@ -1,3 +1,11 @@
+## 661차 — 외부창 태블릿 리사이즈 PROD 로컬 geometry hot-path
+- 기준: 660차. 659의 pointer 직결 분할바와 657/658/660의 실제 pane 태블릿 최적화는 그대로 유지합니다.
+- 대상: fine-pointer PC에서 브라우저 전체창이 `1100~1599px`인 상태로 연속 리사이즈될 때만 적용합니다. 실제 Galaxy Tab/coarse pointer와 모바일 compact 구조는 변경하지 않습니다.
+- 원인: 외부창 수평 리사이즈는 workspace ResizeObserver 한 경로로 정리되어 있었지만, 매 프레임 `commitRootMeasurements()`가 `<html>`의 builder/result/splitter 관련 inherited CSS 변수 7개를 다시 써서 Vercel PROD에서 큰 style/layout cascade를 만들 수 있었습니다.
+- 수정: `soridraw-window-resizing` 동안에는 root 좌표를 매 프레임 커밋하지 않고, 이미 659에서 검증된 pane/portal local geometry 경로로 builder/result/splitter/검색/생성바를 따라가게 합니다. 리사이즈가 끝나 marker가 해제되면 기존 `refreshLayoutMetrics()`가 최종 root 좌표를 1회 커밋하고 local preview를 제거합니다.
+- 657에서 효과가 확인된 `layout/style/paint` 격리와 off-screen `content-visibility`도 외부창 리사이즈 marker에 동일 적용해 Studio 본문 reflow가 split frame 전체로 전파되지 않게 했습니다. 콘텐츠를 숨기거나 breakpoint/화면 디자인을 바꾸지 않습니다.
+- Firebase/Auth/Functions/Firestore/사용자 저장 구조 변경 없음. 배포 없음. 상태: 코드 반영 완료 · 실사용 검증 전.
+
 ## 660차 — Studio 태블릿 PROD 적응형 레이아웃 페이싱
 - 기준: 659차. 659의 pointer→분할바 직결 경로와 657/658의 실제 pane 661~1080px 최적화는 그대로 유지합니다.
 - AI Studio에서는 659가 매우 빠르지만 Vercel 테스트앱에서는 여전히 같은 태블릿 구간이 느린 실사용 결과를 기준으로, DEV/PROD를 hostname으로 나누지 않고 실제 한 번의 Studio layout commit 비용으로 다음 commit 간격을 자동 조절합니다.

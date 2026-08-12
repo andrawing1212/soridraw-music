@@ -12117,6 +12117,13 @@ html[data-soridraw-device="phone"] body > :is(
 }
 
 
+/* 661 — outer browser-resize PROD parity.
+ * 660 improved divider drag but full-window 1100~1599 resizing was still
+ * unusably slow in the Vercel test build. Reuse the exact 657-proven pane
+ * containment while the native resize marker is active, instead of limiting it
+ * to divider drag. No content is hidden and the same pane-width marker remains
+ * the owner of the heavy-body isolation. */
+
 /* 657 — real pane-width tablet drag fast path.
  * 656 proved the slowdown is inside the live pane body: removing only the body
  * while a fine-pointer pane was 661~1080px made the divider immediately fast.
@@ -12128,7 +12135,7 @@ html[data-soridraw-device="phone"] body > :is(
 
 /* Keep the page/body as one independent formatting context so width reflow in a
  * tablet pane cannot invalidate the surrounding split frame or sibling pane. */
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] :is(
   .soridraw-studio-main,
   .soridraw-responsive-content-page,
@@ -12147,7 +12154,7 @@ html[data-soridraw-theme="studio-black"]
 /* Builder cards are the expensive tablet reflow leaves. Preserve natural size
  * and wrapping, but prevent a card width change from cascading through the full
  * Studio tree. Off-screen cards may reuse their last measured block size. */
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] .soridraw-studio-menu-card,
 html[data-soridraw-theme="studio-black"]
 .soridraw-lite-studio-split-workspace.is-dragging
@@ -12160,7 +12167,7 @@ html[data-soridraw-theme="studio-black"]
 /* Music Note / Library top controls and list/group trees stay fully visible but
  * become local layout boundaries. Leaf rows already have the 380/576 isolation;
  * these parent boundaries stop their width reflow from invalidating the page. */
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] :is(
   .soridraw-musicnote-region-top,
   .soridraw-library-region-top,
@@ -12178,7 +12185,7 @@ html[data-soridraw-theme="studio-black"]
   contain: layout style !important;
 }
 
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] :is(
   .soridraw-list-perf-item:not(.soridraw-list-perf-item--active),
   .soridraw-library-workspace-track-row
@@ -12196,7 +12203,7 @@ html[data-soridraw-theme="studio-black"]
 /* Secondary container-query surfaces do not own the tablet composition. Their
  * continuous cqw/container recalculation was already safe to suspend in 519;
  * apply the same rule to the 656-confirmed pane band, including Lite V2. */
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] :is(
   .soridraw-menu-summary-box,
   .soridraw-live-keywords-fixed
@@ -12213,7 +12220,7 @@ html[data-soridraw-theme="studio-black"]
 
 /* Tablet fast path is geometry/layout only; decorative interpolation must not
  * consume frames while the pane width itself is changing. */
-html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+html:is(.soridraw-split-dragging, .soridraw-window-resizing)[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] *,
 html[data-soridraw-theme="studio-black"]
 .soridraw-lite-studio-split-workspace.is-dragging

@@ -12241,14 +12241,11 @@ html[data-soridraw-theme="studio-black"]
   animation-play-state: paused !important;
 }
 
-
-/* 676 — A/B pair probe: Recent Songs on the LEFT + Music Note/Library on the RIGHT.
- * The left pane intentionally reuses the existing result-pane presentation so
- * both sides are full real content surfaces. This removes Sori Studio from the
- * comparison without freezing, hiding, cloning the app, or changing Firebase. */
+/* 677 final control probe — the left pane is the real Recent Songs/result body.
+ * Only its grid placement/padding changes; both panes remain fully mounted and live. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-split-workspace > .soridraw-676-pair-probe-left-result {
+  .soridraw-studio-split-workspace > .soridraw-677-pair-probe-left-result {
     grid-column: 1 !important;
     width: 100% !important;
     max-width: 100% !important;

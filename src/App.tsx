@@ -14026,14 +14026,32 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
     });
   };
 
-  // 676 diagnostic: remove Sori Studio from the equation entirely.
-  // When Music Note or Library is selected in Studio Black, the left pane shows
-  // the exact existing Recent Songs/result body while the selected workspace stays
-  // mounted on the right. No body is hidden/frozen and no extra app instance is created.
-  const is676RecentPairProbe = isStudioBlackActionMode
+  // 677 final control probe: compare two fully mounted real content surfaces.
+  // Left = the existing Recent Songs/generated-result body.
+  // Right = Music Note or Library. No body is hidden, frozen, clipped, or cloned.
+  const is677RecentPairProbe = isStudioBlackActionMode
     && (studioWorkspaceView === 'music-note' || studioWorkspaceView === 'library');
 
-  const render676RecentSongsContent = () => (
+  // A user can enter Music Note/Library before the current result state has been
+  // restored even though the recent-song cache (`history`) is already present.
+  // For this diagnostic only, make sure the left control pane has a real recent
+  // song to render. This changes React view state only; it never writes user data.
+  useEffect(() => {
+    if (!is677RecentPairProbe || result || history.length === 0) return;
+    const fallbackIndex = historyIndex >= 0 && historyIndex < history.length ? historyIndex : 0;
+    const fallbackSong = history[fallbackIndex] ?? history[0];
+    if (!fallbackSong) return;
+
+    setHistoryIndex(fallbackIndex);
+    historyIndexRef.current = fallbackIndex;
+    setResult(fallbackSong);
+    setLatestGenerationBatchId((fallbackSong.appliedKeywords as any)?.generationBatchId || null);
+  }, [history, historyIndex, is677RecentPairProbe, result]);
+
+  // This is the exact pre-677 Recent Songs/result JSX extracted from the normal
+  // right pane and reused without duplication. In normal create/recent mode it
+  // still renders on the right; in the probe it renders on the left.
+  const render677RecentSongsContent = () => (
                       <>
                     {liveSelectedKeywordItems.length > 0 && (
                       <Portal>
@@ -16085,7 +16103,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   compactMobileMode={isStudioCompactMobileLayout}
-                  leftPanePresentation={is676RecentPairProbe ? 'result' : 'builder'}
+                  leftPanePresentation={is677RecentPairProbe ? 'result' : 'builder'}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
@@ -16107,8 +16125,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   }
                 >
                   <StudioBuilderPane>
-                    {is676RecentPairProbe ? (
-                      render676RecentSongsContent()
+                    {is677RecentPairProbe ? (
+                      render677RecentSongsContent()
                     ) : (
                       <>
                     {/* Selection Sections */}
@@ -17063,7 +17081,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </Suspense>
                       </section>
                     ) : (
-                      render676RecentSongsContent()
+                      render677RecentSongsContent()
                     )}
                   </StudioResultPane>
                 </StudioSplitEngineWorkspace>

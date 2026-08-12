@@ -1,15 +1,3 @@
-## 676차 — 최근 생성곡 + 뮤직노트/라이브러리 양면 실콘텐츠 A/B 진단
-- 기준 ZIP: `SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip`. 669~675 실험 코드는 누적하지 않는다.
-- 목적: Sori Studio를 완전히 제외한 상태에서도 두 개의 실제 무거운 화면을 좌우로 동시에 배치하면 외부 브라우저 리사이즈 병목이 재현되는지 확인한다.
-- Studio Black에서 WORKSPACE의 `뮤직노트` 또는 `라이브러리`를 선택하면 왼쪽 pane은 기존 **최근 생성곡(result) 본문을 그대로 재사용**하고, 오른쪽 pane은 각각 기존 **뮤직노트 / 라이브러리 실제 본문**을 그대로 유지한다.
-- 최근 생성곡 JSX는 새 복제품을 만들지 않고 기존 렌더 블록을 내부 renderer로 1회 추출해 일반 `recent` 화면과 676 진단 왼쪽 화면이 같은 소스를 사용한다. 앱/라우터/iframe을 이중 마운트하지 않는다.
-- 왼쪽 진단 pane은 기존 result-pane CSS/컨테이너 반응형 계약을 사용하되 실제 위치만 grid 1열로 고정한다. 오른쪽 뮤직노트/라이브러리는 기존 result pane 및 Lite/590 경로를 그대로 사용한다.
-- 본문 unmount, width freeze, `overflow: clip` 추가, 리사이즈 중 내용 숨김은 사용하지 않는다. 두 화면 모두 실제 콘텐츠가 계속 살아 있는 상태에서 속도만 비교한다.
-- `곡 만들기` / `최근 생성곡`을 다시 선택하면 원래 668 구조로 돌아간다. 1100px 미만 compact mobile 구조는 변경하지 않는다.
-- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
-- 판정: 이 조합이 Studio 분할보다 확실히 빠르면 Studio 본문이 주 병목. 비슷하게 느리면 두 개의 완전한 반응형 화면을 동시에 리사이즈하는 분할 구조/상호 reflow 비용이 주 병목 후보.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.
@@ -2031,3 +2019,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+## 677차 — 최종 대조실험: 최근 생성곡 + 뮤직노트/라이브러리 양면 실콘텐츠
+
+- 기준: 668차 clean ZIP. 676차의 빈 왼쪽 구현은 사용하지 않음.
+- 목적: Sori Studio 본문을 완전히 제외하고도 두 개의 실제 반응형 본문을 동시에 분할 렌더링할 때 외부 창 리사이즈 병목이 남는지 확인.
+- 왼쪽: 기존 `최근 생성곡`/생성 결과 본문 JSX를 **복제하지 않고 동일 렌더 함수로 재사용**.
+- 오른쪽: 기존 Music Note 또는 Library 본문을 그대로 유지.
+- Music Note/Library 진입 시 `result`가 비어 있어도 최근곡 `history`가 있으면 현재/첫 최근곡을 화면 상태에만 복구해 왼쪽이 빈 화면이 되지 않도록 보정. Firestore 저장/수정 없음.
+- 두 본문 모두 mount 상태 유지. unmount, hidden, width snapshot/freeze, clip 진단, content-visibility 추가 최적화 없음.
+- 분할바/비율/좌우 rail/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 테스트 판정: 이 조합이 Studio 조합보다 확실히 빠르면 Studio 본문이 주 병목. 비슷하게 느리면 두 실콘텐츠 동시 리사이즈/분할 경로 자체의 비용 비중이 큼.
+

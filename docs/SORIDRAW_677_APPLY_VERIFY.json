@@ -1,0 +1,29 @@
+{
+  "version": 677,
+  "baseline": "SORIDRAW_668차_외부창리사이즈_488원리복구_구조컨테이너일시정지(1).zip",
+  "purpose": "Final A/B control: fully mounted Recent Songs on left + Music Note/Library on right, with Sori Studio body removed from the comparison.",
+  "expected_conditions": {
+    "left": "existing Recent Songs/generated-result content; real mounted content",
+    "right": "existing Music Note or Library content; real mounted content",
+    "no_body_unmount": true,
+    "no_hidden_or_freeze": true,
+    "no_width_snapshot": true,
+    "no_new_diagnostic_ui": true,
+    "no_firebase_data_write_change": true
+  },
+  "implementation_checks": [
+    "is677RecentPairProbe only activates for Studio Black + music-note/library workspace",
+    "recent result JSX extracted once and reused by render677RecentSongsContent()",
+    "probe restores local result state from existing history when result is empty",
+    "leftPanePresentation=result makes the left host use result-pane responsive CSS",
+    "right Music Note/Library body remains unchanged"
+  ],
+  "sha256": {
+    "src/App.tsx": "6acda932d495c3182b3ce6207d3cda1a8cccf039f9e39087a90a25f055d115cc",
+    "src/components/studio/StudioSplitEngineWorkspace.tsx": "8a1628138fdc03fcc30fe9aebd3c9fafa67aebeedff87922119033beb47eb42e",
+    "src/components/studio/StudioSplitWorkspace.tsx": "e3f4cb9a752ce438ac9cddd035c8237b2b02528e029c35be5bdbba706c12fbfd",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx": "118d0b309f188df3753aed1eb0160da2eb354fbee8b5d90e7a0308be71cdd11e",
+    "src/components/studio/studioLayout.css": "2a4ff00ac3e4ebf22398caea503a742f5f58db8bad716b5a428023e555511183",
+    "README.md": "4c93eb46ae24458badb9279ed620ce279e23776be5a2ee79ddec47e949a534ec"
+  }
+}

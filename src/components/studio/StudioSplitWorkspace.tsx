@@ -1604,9 +1604,9 @@ export default function StudioSplitWorkspace({
           id="soridraw-studio-builder-pane"
           ref={builderRef}
           data-soridraw-studio-pane="builder"
-          data-soridraw-676-pane-presentation={leftPanePresentation}
+          data-soridraw-677-pane-presentation={leftPanePresentation}
           className={leftPanePresentation === 'result'
-            ? 'soridraw-studio-result-pane soridraw-676-pair-probe-left-result'
+            ? 'soridraw-studio-result-pane soridraw-677-pair-probe-left-result'
             : 'soridraw-studio-builder-pane'}
           aria-hidden={isBuilderCollapsed}
         >

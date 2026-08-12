@@ -1525,9 +1525,9 @@ export default function LiteStudioSplitWorkspace({
           ref={builderRef}
           data-soridraw-studio-pane="builder"
           data-soridraw-lite-pane="builder"
-          data-soridraw-676-pane-presentation={leftPanePresentation}
+          data-soridraw-677-pane-presentation={leftPanePresentation}
           className={leftPanePresentation === 'result'
-            ? 'soridraw-studio-result-pane soridraw-lite-studio-pane is-builder soridraw-676-pair-probe-left-result'
+            ? 'soridraw-studio-result-pane soridraw-lite-studio-pane is-builder soridraw-677-pair-probe-left-result'
             : 'soridraw-studio-builder-pane soridraw-lite-studio-pane is-builder'}
           aria-hidden={isBuilderCollapsed}
         >

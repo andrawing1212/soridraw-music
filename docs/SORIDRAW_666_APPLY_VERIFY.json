@@ -1,0 +1,13 @@
+{
+  "version": 666,
+  "basis": "SORIDRAW_665차_VercelPROD전용_Studio본문React언마운트_단일변수검증.zip",
+  "purpose": "Verify that AI Studio/GitHub main contains the exact 666 files before Vercel behavior testing.",
+  "required_marker": "SORIDRAW_VERIFY_666: 665_PROD_TABLET_SHELL_PROBE_EXACT",
+  "critical_sha256": {
+    "src/components/studio/StudioSplitWorkspace.tsx": "62c9ff02768cc1a0c033abd3db29ed42a582c07e0a548c7e4395eb1ab233772b",
+    "src/components/studio/studioLayout.css": "057de73c9b60ad46aef1c5dc8490b6944e29959144f9d6466ede8e374285c6b0",
+    "src/App.tsx": "a299e133feee82a0f2e46d8a090429854f0c4a52862e98711983682aeea7061c",
+    "vite.config.ts": "efa027eab7e6774f11f0716409520f2cfa0b229e484828b632f76e01f866368e",
+    "vercel.json": "0f1e8273d28bb4e4aa1e3587690889311c54b4a0de7951f25dfc139ece9e543e"
+  }
+}

@@ -140,6 +140,17 @@ export default function StudioSplitWorkspace({
   const [percent, setPercent] = useState(readStored);
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
+  // SORIDRAW_VERIFY_666: 665_PROD_TABLET_SHELL_PROBE_EXACT
+  // 665 PROD-only A/B: keep DEV completely unchanged, but in the deployed
+  // production build unmount the heavy Studio pane subtrees while a fine-pointer
+  // browser sits in the 1100~1599 tablet viewport. The media query only flips at
+  // the band edges, so there is no per-pixel React work during the resize itself.
+  const [prodTabletShellProbe, setProdTabletShellProbe] = useState(() => {
+    if (!import.meta.env.PROD || typeof window === 'undefined') return false;
+    return window.matchMedia(
+      '(min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine)',
+    ).matches;
+  });
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -205,6 +216,21 @@ export default function StudioSplitWorkspace({
   const isStudioBlack = useCallback(() =>
     typeof document !== 'undefined' && document.documentElement.dataset.soridrawTheme === 'studio-black', []);
 
+  useEffect(() => {
+    if (!import.meta.env.PROD || typeof window === 'undefined') {
+      setProdTabletShellProbe(false);
+      return;
+    }
+
+    const media = window.matchMedia(
+      '(min-width: 1100px) and (max-width: 1599.98px) and (hover: hover) and (pointer: fine)',
+    );
+    const sync = () => setProdTabletShellProbe(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+
   const syncCenterModalHostBounds = useCallback(() => {
     const host = modalHostRef.current;
     if (!host || typeof window === 'undefined') return;
@@ -223,9 +249,15 @@ export default function StudioSplitWorkspace({
     // Width dragging already owns the pane geometry for this frame. Running a
     // second ResizeObserver-driven measurement here forces another synchronous
     // layout of both large panes and is the main source of visible card stutter.
-    // Keep the last stable title height during the drag and refresh it once on
-    // pointer-up instead.
-    if (draggingRef.current) return;
+    // 664: native horizontal window resizing has the same ownership rule. In the
+    // 1100~1599 compact/tablet composition the Genre card rewraps repeatedly, so
+    // its observer can otherwise force a second full-tree layout on nearly every
+    // browser resize tick. Keep the last stable cross-pane title height until the
+    // existing resize-end path performs one final exact sync.
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+    ) return;
 
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -341,32 +373,10 @@ export default function StudioSplitWorkspace({
     // properties. 656/657 isolated the remaining slow state to a 661~1080px
     // pane. In that exact fine-pointer band, keep external live geometry local
     // to the element that consumes it, matching Lite V2's verified PROD path.
-    const root = document.documentElement;
-    const isOuterTabletWindowResize = finePointerFastPathRef.current
-      && root.classList.contains('soridraw-window-resizing')
-      && window.innerWidth >= TABLET_VIEWPORT_MIN
-      && window.innerWidth <= TABLET_VIEWPORT_MAX;
     const useTabletProdParityPath = finePointerFastPathRef.current && (
-      isOuterTabletWindowResize
-      || (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
       || (resultWidth > 660 && resultWidth <= 1080)
     );
-
-    // Outer-window resize has no pointer-down phase to seed the floating action
-    // bar's approved inner insets. Capture them once at the beginning of the
-    // resize gesture, then reuse the cached values for every following frame.
-    // This keeps the local PROD-parity geometry visually identical to resting
-    // geometry without adding repeated measurements to the hot path.
-    if (isOuterTabletWindowResize && actionAnchorInsetsRef.current === null) {
-      const builderRect = builderRef.current?.getBoundingClientRect();
-      const actionAnchorRect = controls.actionAnchor?.getBoundingClientRect();
-      if (builderRect && actionAnchorRect && builderRect.width > 0 && actionAnchorRect.width > 0) {
-        actionAnchorInsetsRef.current = {
-          left: Math.max(0, actionAnchorRect.left - builderRect.left),
-          right: Math.max(0, builderRect.right - actionAnchorRect.right),
-        };
-      }
-    }
 
     // The page masthead is outside the split layout and therefore cannot inherit
     // the builder pane's temporary inline width. Mirror the live builder width
@@ -552,7 +562,15 @@ export default function StudioSplitWorkspace({
   }, [isStudioBlack]);
 
   const scheduleFooterBoundaryRefresh = useCallback(() => {
-    if (draggingRef.current || footerFrameRef.current !== null) return;
+    // 664: footer position is vertical geometry. A horizontal native resize must
+    // not force footer.getBoundingClientRect() in parallel with the workspace
+    // width layout on every frame. The existing resize-end refresh commits the
+    // exact footer/splitter bottom once the gesture settles.
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+      || footerFrameRef.current !== null
+    ) return;
     footerFrameRef.current = window.requestAnimationFrame(() => {
       footerFrameRef.current = null;
       refreshSplitterFooterBoundary();
@@ -1024,28 +1042,10 @@ export default function StudioSplitWorkspace({
       : resultCollapsedRef.current
         ? metricsRef.current.width
         : metricsRef.current.width * (appliedPercent / 100);
-    const splitterLeft = metricsRef.current.left + builderWidth;
-    const root = document.documentElement;
-    const isOuterTabletWindowResize = finePointerFastPathRef.current
-      && root.classList.contains('soridraw-window-resizing')
-      && window.innerWidth >= TABLET_VIEWPORT_MIN
-      && window.innerWidth <= TABLET_VIEWPORT_MAX;
-
-    if (isOuterTabletWindowResize) {
-      // 661 — Browser-window resizing used to republish seven inherited root
-      // geometry variables on every ResizeObserver frame. PROD pays much more
-      // for that cascade than DEV. During the active 1100~1599 fine-pointer
-      // gesture, keep geometry local to the panes/portals (the same proven
-      // ownership used by the 659 divider path) and commit the root only once
-      // after `soridraw-window-resizing` clears. This preserves live geometry
-      // without forcing the entire Studio subtree to restyle each width tick.
-      syncExternalMeasurements(builderWidth, splitterLeft);
-    } else {
-      commitRootMeasurements(builderWidth, splitterLeft);
-      clearExternalMeasurements();
-      scheduleFooterBoundaryRefresh();
-    }
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds, syncExternalMeasurements]);
+    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+    clearExternalMeasurements();
+    scheduleFooterBoundaryRefresh();
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
     if (layoutRefreshFrameRef.current !== null) return;
@@ -1619,16 +1619,21 @@ export default function StudioSplitWorkspace({
 
   return (
     <>
-      <div ref={layoutRef} data-workspace-view-mode={viewMode} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
+      <div
+        ref={layoutRef}
+        data-workspace-view-mode={viewMode}
+        data-soridraw-prod-tablet-shell-probe={prodTabletShellProbe ? 'true' : 'false'}
+        className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+      >
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}
           </div>
-          {panes[0] ?? null}
+          {prodTabletShellProbe ? null : (panes[0] ?? null)}
         </div>
         <div id="soridraw-studio-result-pane" ref={resultRef} data-soridraw-studio-pane="result" className="soridraw-studio-result-pane" aria-hidden={isResultCollapsed}>
           <div id="soridraw-studio-result-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-result-pane-masthead-host" />
-          {panes[1] ?? null}
+          {prodTabletShellProbe ? null : (panes[1] ?? null)}
         </div>
       </div>
       {viewMode !== 'hidden' && (typeof document !== 'undefined' ? createPortal(centerModalHost, document.body) : centerModalHost)}

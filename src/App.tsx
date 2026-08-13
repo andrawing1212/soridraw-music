@@ -3753,9 +3753,10 @@ function Navigation({
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                  isExpanded && "bg-[#FFB400]/18 text-[#FFB400]"
+                  "soridraw-mobile-menu-trigger flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                  isExpanded && "is-active bg-[#FFB400]/18 text-[#FFB400]"
                 )}
+                aria-expanded={isExpanded}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
               >

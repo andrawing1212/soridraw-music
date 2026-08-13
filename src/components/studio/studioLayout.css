@@ -12912,11 +12912,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   align-items: center !important;
 }
 
-/* 735 — Tablet portrait Compact stage for Studio Black.
- * The existing compact workspace is kept, but the 768~1023px band (the same
- * range where Mood/Theme currently render four keyword buttons per row) gets
- * its own card composition instead of falling straight from tablet split into
- * the phone-like single-column builder.
+/* 737 — Tablet portrait Compact stage for Studio Black.
+ * Remove the obsolete 1024~1099px portrait-tablet bridge and let the new Compact
+ * composition own the entire 768~1099px pre-mobile band. The 768~1023px part (the same
+ * range where Mood/Theme currently render four keyword buttons per row) keeps
+ * the approved Compact arrangement, and 1024~1099px now uses that same layout
+ * instead of the old portrait-tablet single-column bridge.
  *
  * Layout contract:
  *   Genre           (full row)
@@ -12925,8 +12926,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  *   Storyboard      (full row)
  *   Vocal | Lyrics  (existing two columns)
  *
- * Phones below 768px and the 1024px+ tablet/desktop paths are untouched. */
-@media (min-width: 768px) and (max-width: 1023px) {
+ * Phones below 768px and the 1100px+ split tablet/desktop paths are untouched. */
+@media (min-width: 768px) and (max-width: 1099px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
   .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid {
@@ -13034,4 +13035,44 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     grid-column: auto !important;
     min-width: 0 !important;
   }
+}
+
+/* 737 — Keep the Studio Black compact top bar visually identical while the
+   viewport crosses split-tablet -> Compact -> phone. Earlier responsive owners
+   could leave different active/hover fills in different width bands. Use one
+   mobile-navigation palette for every <1600px Studio Black state. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation {
+  background: rgba(10, 10, 11, 0.98) !important;
+  background-color: rgba(10, 10, 11, 0.98) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #a9a9b0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger):hover {
+  background: rgba(255, 180, 0, 0.10) !important;
+  background-color: rgba(255, 180, 0, 0.10) !important;
+  color: #ffb400 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item.is-active, button.soridraw-mobile-menu-trigger.is-active) {
+  background: rgba(255, 180, 0, 0.16) !important;
+  background-color: rgba(255, 180, 0, 0.16) !important;
+  color: #ffb400 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) > svg {
+  color: inherit !important;
+  stroke: currentColor !important;
 }

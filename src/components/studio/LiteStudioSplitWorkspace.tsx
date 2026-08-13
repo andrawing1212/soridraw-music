@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { resetSplitPointerPrediction, resolveLowLatencySplitClientX } from './splitPointerLatency';
+import { resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX } from './splitPointerLatency';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -48,6 +48,9 @@ const PANE_MODE_HYSTERESIS = 16;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
+const RESPONSIVE_TRANSITION_HYSTERESIS_PX = 12;
+const RESPONSIVE_TRANSITION_GUARD_PX = 30;
+const RESPONSIVE_TRANSITION_VISUAL_LAG_PX = 2;
 const BENCHMARK_SURFACE_WIDTH = 1400;
 const BENCHMARK_SURFACE_HEIGHT = 900;
 type BenchmarkLayoutMode = 'css-var' | 'direct';
@@ -148,6 +151,41 @@ const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
   width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
 );
 
+const resolveContentResponsiveMode = (
+  currentMode: ContentResponsiveMode | null,
+  width: number,
+  hysteresisPx = 0,
+): ContentResponsiveMode => {
+  if (!currentMode || hysteresisPx <= 0) return readContentResponsiveMode(width);
+
+  if (currentMode === 'pc') {
+    if (width < CONTENT_TABLET_MAX - hysteresisPx) {
+      return width <= CONTENT_MOBILE_MAX - hysteresisPx ? 'mobile' : 'tablet';
+    }
+    return 'pc';
+  }
+
+  if (currentMode === 'tablet') {
+    if (width > CONTENT_TABLET_MAX + hysteresisPx) return 'pc';
+    if (width < CONTENT_MOBILE_MAX - hysteresisPx) return 'mobile';
+    return 'tablet';
+  }
+
+  if (width > CONTENT_MOBILE_MAX + hysteresisPx) {
+    return width > CONTENT_TABLET_MAX + hysteresisPx ? 'pc' : 'tablet';
+  }
+  return 'mobile';
+};
+
+const isNearResponsiveTransition = (builderWidth: number, resultWidth: number) => {
+  const near = (width: number, breakpoint: number) => Math.abs(width - breakpoint) <= RESPONSIVE_TRANSITION_GUARD_PX;
+  return near(builderWidth, CONTENT_MOBILE_MAX)
+    || near(builderWidth, BUILDER_MOBILE_BREAKPOINT)
+    || near(builderWidth, CONTENT_TABLET_MAX)
+    || near(resultWidth, CONTENT_MOBILE_MAX)
+    || near(resultWidth, CONTENT_TABLET_MAX);
+};
+
 // 609 stabilization rule from the user's real-hand verification:
 // - Result content in tablet/mobile mode: direct geometry is the confirmed smooth
 //   path across Music Note, Library and Recent.
@@ -186,8 +224,8 @@ const readInitialRuntimeLayoutMode = (
 // even when its own motion is regular. Keep the *distance* to the latest native
 // target bounded instead: slow movement is exact; fast movement is allowed to
 // cover the large native delta immediately while retaining only a small visual lag.
-const DRAG_MAX_VISUAL_LAG_PX = 6;
-const OUTER_MAX_VISUAL_LAG_PX = 8;
+const DRAG_MAX_VISUAL_LAG_PX = 4;
+const OUTER_MAX_VISUAL_LAG_PX = 6;
 
 const followWithBoundedGap = (current: number, target: number, maxLagPx: number): number => {
   const delta = target - current;
@@ -448,14 +486,16 @@ export default function LiteStudioSplitWorkspace({
     // committed outside a drag).
     const safeBuilderWidth = Math.max(1, builderWidth);
     const safeResultWidth = Math.max(1, resultWidth);
-    const builderMode = readContentResponsiveMode(safeBuilderWidth);
-    const resultMode = readContentResponsiveMode(safeResultWidth);
+    const root = document.documentElement;
+    const responsiveGestureActive = draggingRef.current || root.classList.contains('soridraw-window-resizing');
+    const responsiveHysteresis = responsiveGestureActive ? RESPONSIVE_TRANSITION_HYSTERESIS_PX : 0;
+    const builderMode = resolveContentResponsiveMode(contentResponsiveModeRef.current.builder, safeBuilderWidth, responsiveHysteresis);
+    const resultMode = resolveContentResponsiveMode(contentResponsiveModeRef.current.result, safeResultWidth, responsiveHysteresis);
 
     // 607: publish only the already-computed responsive ownership state. This
     // does not add another measurement or observer; App uses it solely to keep
     // the 606 rerender suppression scoped to Music Note's tablet state instead
     // of affecting every Lite V2 workspace.
-    const root = document.documentElement;
     if (root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
     if (root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
 
@@ -488,12 +528,13 @@ export default function LiteStudioSplitWorkspace({
       PANE_MODE_HYSTERESIS,
     );
     const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
+    const responsiveGestureActive = draggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing');
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,
       result.dataset.paneMode === 'desktop' || result.dataset.paneMode === 'mobile',
       resultWidth,
       unifiedResultBreakpoint ? CONTENT_RESULT_MOBILE_BREAKPOINT : RESULT_MOBILE_BREAKPOINT,
-      unifiedResultBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
+      unifiedResultBreakpoint ? (responsiveGestureActive ? RESPONSIVE_TRANSITION_HYSTERESIS_PX : 0) : PANE_MODE_HYSTERESIS,
     );
 
     if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
@@ -700,7 +741,12 @@ export default function LiteStudioSplitWorkspace({
     // itself changes. This keeps the visible PC/Tablet switch and the low-level
     // pane owner on the same boundary, eliminating the 608 16px disagreement.
     if (!benchmarkRunningRef.current) {
-      const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
+      const responsiveGestureActive = draggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing');
+      const nextResultContentMode = resolveContentResponsiveMode(
+        runtimeResultContentModeRef.current,
+        Math.max(1, resultWidth),
+        responsiveGestureActive ? RESPONSIVE_TRANSITION_HYSTERESIS_PX : 0,
+      );
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
         const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
@@ -805,8 +851,11 @@ export default function LiteStudioSplitWorkspace({
       const previousWidth = Math.max(1, previousMetricsWidth);
       const seedBuilderWidth = Math.round(previousWidth * (targetPercent / 100));
       const currentBuilderWidth = outerPacedBuilderWidthRef.current ?? seedBuilderWidth;
+      const targetResultWidth = Math.max(0, metricsRef.current.width - targetBuilderWidth);
+      const transitionGuardActive = isNearResponsiveTransition(targetBuilderWidth, targetResultWidth);
+      const outerVisualLag = transitionGuardActive ? RESPONSIVE_TRANSITION_VISUAL_LAG_PX : OUTER_MAX_VISUAL_LAG_PX;
       const now = performance.now();
-      const nextBuilderWidth = Math.round(followWithBoundedGap(currentBuilderWidth, targetBuilderWidth, OUTER_MAX_VISUAL_LAG_PX));
+      const nextBuilderWidth = Math.round(followWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
       outerPacingFrameTimeRef.current = now;
       outerPacedBuilderWidthRef.current = nextBuilderWidth;
       outerNeedsCatchUp = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
@@ -870,10 +919,13 @@ export default function LiteStudioSplitWorkspace({
 
     const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
     const currentPixel = dragPacedPixelRef.current ?? lastPixelRef.current ?? targetPixel;
+    const targetResultPixel = Math.max(0, width - targetPixel);
+    const transitionGuardActive = isNearResponsiveTransition(targetPixel, targetResultPixel);
+    const dragVisualLag = transitionGuardActive ? RESPONSIVE_TRANSITION_VISUAL_LAG_PX : DRAG_MAX_VISUAL_LAG_PX;
     const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
     const nextPixel = forceExact || !pacingEligible
       ? targetPixel
-      : Math.round(followWithBoundedGap(currentPixel, targetPixel, DRAG_MAX_VISUAL_LAG_PX));
+      : Math.round(followWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
     dragPacingFrameTimeRef.current = now;
     dragPacedPixelRef.current = nextPixel;
 
@@ -965,9 +1017,12 @@ export default function LiteStudioSplitWorkspace({
       manualPerfCaptureActiveRef.current = false;
       finishSplitPerfDrag();
     }
-    window.requestAnimationFrame(connectTopCardObserver);
+    window.requestAnimationFrame(() => {
+      refreshMetrics();
+      connectTopCardObserver();
+    });
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, refreshMetrics]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -1035,8 +1090,14 @@ export default function LiteStudioSplitWorkspace({
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
     const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
     const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
+    const confirmedClientX = pacingEligible ? resolveConfirmedSplitClientX(nativeEvent) : event.clientX;
+    const width = Math.max(1, metricsRef.current.width);
+    const bounds = getSplitBounds(width);
+    const confirmedBuilderPixel = Math.round(Math.min(width * (bounds.max / 100), Math.max(width * (bounds.min / 100), confirmedClientX - metricsRef.current.left)));
+    const confirmedResultPixel = Math.max(0, width - confirmedBuilderPixel);
+    const transitionGuardActive = pacingEligible && isNearResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
     const trackedClientX = pacingEligible
-      ? resolveLowLatencySplitClientX(nativeEvent, pointerPredictionRef.current)
+      ? resolveLowLatencySplitClientX(nativeEvent, pointerPredictionRef.current, !transitionGuardActive)
       : event.clientX;
     if (manualPerfCaptureActiveRef.current) {
       let coalescedCount = 1;

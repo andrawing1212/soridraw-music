@@ -2112,3 +2112,14 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 느린 이동/방향 전환/터치/펜은 예측을 사용하지 않는다.
 - 내부 분할의 허용 시각 lag를 14px→6px로 축소한다. 외부창 8px bounded-gap 정책은 그대로 유지한다.
 - 강제 layout, pointerrawupdate, transform 프록시, 진단 UI 추가 없음.
+
+### 707차 — 반응형 전환구간 밀착 추종 안정화
+- 기준: 706차. 최근 생성곡 / 뮤직노트 / 라이브러리의 공통 공간 간격 추종은 유지한다.
+- 706 영상에서 느린 이동은 거의 붙어 있지만 빠른 이동 중 PC↔Tablet↔Mobile UI 전환 시 간헐적으로 커서와 분할 경계가 벌어지는 체감이 남았다. 이번 차수는 그 전환 프레임만 별도로 안정화한다.
+- 내부 분할 기본 허용 lag를 6px→4px, 외부창 visual lag를 8px→6px로 한 단계 더 좁혔다.
+- 반응형 경계(660/661, builder 820, result 680, 1080) 주변 ±30px에서는 허용 lag를 2px로 더 좁혀 UI 전환 프레임에서 분할선/실제 pane 경계가 커서 또는 viewport 목표에서 멀어지지 않게 한다.
+- 마우스 예측은 그대로 유지하되, 반응형 경계 ±30px에서는 getPredictedEvents()를 사용하지 않고 마지막 coalesced **확정 좌표만** 사용한다. 예측 좌표가 실제 커서보다 먼저 breakpoint를 넘어 UI reflow를 조기 발생시키는 경우를 차단한다.
+- 일반 구간의 예측도 10ms/18px → 6ms/10px로 축소해, 최고속도보다 실제 커서와의 육안상 밀착을 우선한다.
+- Music Note/Library의 PC/tablet/mobile responsive mode와 geometry owner는 active drag/outer resize 동안 동일한 12px hysteresis를 공유한다. 경계 근처에서 mode가 앞뒤로 반복 전환되는 것을 줄이고, 드래그/resize 종료 후에는 기존 정확한 660/1080 기준으로 한 번 정합한다.
+- Recent의 기존 pane mode hysteresis는 유지하면서 동일한 breakpoint guard(±30px, lag 2px, 경계에서 prediction off)를 적용한다.
+- Studio Create / 실제 touch·pen adaptive 경로 / 디자인 / Firebase/Auth/Firestore/Functions/저장구조 변경 없음. 배포 없음.

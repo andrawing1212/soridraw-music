@@ -9,8 +9,8 @@ type PredictivePointerEvent = PointerEvent & {
 };
 
 const FAST_MOUSE_SPEED_PX_PER_MS = 0.55;
-const PREDICTION_LOOKAHEAD_MS = 10;
-const MAX_PREDICTED_LEAD_PX = 18;
+const PREDICTION_LOOKAHEAD_MS = 6;
+const MAX_PREDICTED_LEAD_PX = 10;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -21,9 +21,26 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
  *
  * This is deliberately mouse-only. Touch/pen keep their existing verified path.
  */
+export const resolveConfirmedSplitClientX = (nativeEvent: PointerEvent): number => {
+  const event = nativeEvent as PredictivePointerEvent;
+  let confirmedEvent: PointerEvent = event;
+
+  if (event.pointerType === 'mouse') {
+    try {
+      const coalesced = event.getCoalescedEvents?.() || [];
+      if (coalesced.length > 0) confirmedEvent = coalesced[coalesced.length - 1];
+    } catch {
+      // Browser support is optional. Confirmed parent event remains authoritative.
+    }
+  }
+
+  return confirmedEvent.clientX;
+};
+
 export const resolveLowLatencySplitClientX = (
   nativeEvent: PointerEvent,
   state: SplitPointerPredictionState,
+  allowPrediction = true,
 ): number => {
   const event = nativeEvent as PredictivePointerEvent;
   let confirmedEvent: PointerEvent = event;
@@ -46,7 +63,7 @@ export const resolveLowLatencySplitClientX = (
   state.x = confirmedX;
   state.timeStamp = confirmedTime;
 
-  if (event.pointerType !== 'mouse' || previousX === null || previousTime === null) {
+  if (!allowPrediction || event.pointerType !== 'mouse' || previousX === null || previousTime === null) {
     return confirmedX;
   }
 

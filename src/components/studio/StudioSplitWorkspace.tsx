@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { resetSplitPointerPrediction, resolveLowLatencySplitClientX } from './splitPointerLatency';
+import { resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX } from './splitPointerLatency';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -136,8 +136,20 @@ type StudioSplitWorkspaceProps = {
 // preserve a visually constant relationship between the native target and the
 // split boundary. Slow motion stays exact. Fast motion may jump as much as the
 // native target jumped, but the visible lag itself is capped to a small distance.
-const RECENT_DRAG_MAX_VISUAL_LAG_PX = 6;
-const RECENT_OUTER_MAX_VISUAL_LAG_PX = 8;
+const RECENT_DRAG_MAX_VISUAL_LAG_PX = 4;
+const RECENT_OUTER_MAX_VISUAL_LAG_PX = 6;
+const RECENT_RESPONSIVE_TRANSITION_GUARD_PX = 30;
+const RECENT_RESPONSIVE_TRANSITION_VISUAL_LAG_PX = 2;
+
+const isNearRecentResponsiveTransition = (builderWidth: number, resultWidth: number) => {
+  const near = (width: number, breakpoint: number) => Math.abs(width - breakpoint) <= RECENT_RESPONSIVE_TRANSITION_GUARD_PX;
+  return near(builderWidth, 660)
+    || near(builderWidth, BUILDER_MOBILE_BREAKPOINT)
+    || near(builderWidth, 1080)
+    || near(resultWidth, 660)
+    || near(resultWidth, RESULT_MOBILE_BREAKPOINT)
+    || near(resultWidth, 1080);
+};
 
 const followRecentWithBoundedGap = (current: number, target: number, maxLagPx: number): number => {
   const delta = target - current;
@@ -1047,8 +1059,11 @@ export default function StudioSplitWorkspace({
       const seedWidth = Math.max(1, previousMetricsWidth);
       const seedBuilderWidth = Math.round(seedWidth * (targetPercent / 100));
       const currentBuilderWidth = recentOuterPacedBuilderWidthRef.current ?? seedBuilderWidth;
+      const targetResultWidth = Math.max(0, metricsRef.current.width - targetBuilderWidth);
+      const transitionGuardActive = isNearRecentResponsiveTransition(targetBuilderWidth, targetResultWidth);
+      const outerVisualLag = transitionGuardActive ? RECENT_RESPONSIVE_TRANSITION_VISUAL_LAG_PX : RECENT_OUTER_MAX_VISUAL_LAG_PX;
       const now = performance.now();
-      const nextBuilderWidth = Math.round(followRecentWithBoundedGap(currentBuilderWidth, targetBuilderWidth, RECENT_OUTER_MAX_VISUAL_LAG_PX));
+      const nextBuilderWidth = Math.round(followRecentWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
       recentOuterPacingFrameTimeRef.current = now;
       recentOuterPacedBuilderWidthRef.current = nextBuilderWidth;
       recentOuterNeedsCatchUpRef.current = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
@@ -1342,10 +1357,13 @@ export default function StudioSplitWorkspace({
       const targetPixel = recentDragTargetPixelRef.current;
       if (targetPixel === null) return;
       const currentPixel = recentDragPacedPixelRef.current ?? lastDragBuilderPixelRef.current ?? targetPixel;
+      const targetResultPixel = Math.max(0, safeWidth - targetPixel);
+      const transitionGuardActive = isNearRecentResponsiveTransition(targetPixel, targetResultPixel);
+      const dragVisualLag = transitionGuardActive ? RECENT_RESPONSIVE_TRANSITION_VISUAL_LAG_PX : RECENT_DRAG_MAX_VISUAL_LAG_PX;
       const now = performance.now();
       const nextPixel = forceLayout
         ? targetPixel
-        : Math.round(followRecentWithBoundedGap(currentPixel, targetPixel, RECENT_DRAG_MAX_VISUAL_LAG_PX));
+        : Math.round(followRecentWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
       recentDragPacingFrameTimeRef.current = now;
       recentDragPacedPixelRef.current = nextPixel;
 
@@ -1534,8 +1552,17 @@ export default function StudioSplitWorkspace({
     if (!draggingRef.current || event.pointerId !== dragRef.current.pointerId) return;
     const nativeEvent = event.nativeEvent as PointerEvent;
     const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
+    const confirmedClientX = pacingEligible ? resolveConfirmedSplitClientX(nativeEvent) : event.clientX;
+    const { startX, startPercent, width } = dragRef.current;
+    const safeWidth = Math.max(width, 1);
+    const bounds = getSplitBounds(safeWidth);
+    const confirmedDeltaPercent = ((confirmedClientX - startX) / safeWidth) * 100;
+    const confirmedPercent = clampToBounds(startPercent + confirmedDeltaPercent, bounds);
+    const confirmedBuilderPixel = Math.round(safeWidth * (confirmedPercent / 100));
+    const confirmedResultPixel = Math.max(0, safeWidth - confirmedBuilderPixel);
+    const transitionGuardActive = pacingEligible && isNearRecentResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
     const trackedClientX = pacingEligible
-      ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current)
+      ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current, !transitionGuardActive)
       : event.clientX;
     if (!pacingEligible) previewSplitterAtClientX(trackedClientX);
     schedulePointerUpdate(trackedClientX);

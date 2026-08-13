@@ -24994,66 +24994,183 @@ interface TempoControlProps {
 
 function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
+  const activeRangeRef = useRef<HTMLDivElement>(null);
+  const minHandleRef = useRef<HTMLDivElement>(null);
+  const maxHandleRef = useRef<HTMLDivElement>(null);
+  const liveValueRootRef = useRef<HTMLDivElement>(null);
+  const dragTypeRef = useRef<'min' | 'max' | null>(null);
+  const dragRectRef = useRef<DOMRect | null>(null);
+  const liveMinRef = useRef(min);
+  const liveMaxRef = useRef(max);
+  const pendingClientXRef = useRef<number | null>(null);
+  const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
-  const handleStart = (type: 'min' | 'max') => {
-    if (enabled) return; // If random is enabled, slider is disabled
-    setIsDragging(type);
-    document.body.style.userSelect = 'none';
-  };
+  const bpmToPercent = useCallback((value: number) => (
+    ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100
+  ), []);
 
-  useEffect(() => {
-    const handleMove = (clientX: number) => {
-      if (!isDragging || !sliderRef.current) return;
+  const syncLiveBpmText = useCallback((nextMin: number, nextMax: number) => {
+    const root = liveValueRootRef.current;
+    if (!root) return;
+    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="min"]').forEach((input) => {
+      input.value = String(nextMin);
+    });
+    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="max"]').forEach((input) => {
+      input.value = String(nextMax);
+    });
+  }, []);
 
-      const rect = sliderRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-      const percent = x / rect.width;
-      const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
+  const paintSliderFrame = useCallback((nextMin: number, nextMax: number) => {
+    const minPercent = bpmToPercent(nextMin);
+    const maxPercent = bpmToPercent(nextMax);
 
-      if (isDragging === 'min') {
-        if (val <= max) onMinChange(val);
-      } else {
-        if (val >= min) onMaxChange(val);
-      }
-    };
+    if (minHandleRef.current) minHandleRef.current.style.left = `${minPercent}%`;
+    if (maxHandleRef.current) maxHandleRef.current.style.left = `${maxPercent}%`;
+    if (activeRangeRef.current) {
+      activeRangeRef.current.style.left = `${minPercent}%`;
+      activeRangeRef.current.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
+    }
+    syncLiveBpmText(nextMin, nextMax);
+  }, [bpmToPercent, syncLiveBpmText]);
 
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        handleMove(e.touches[0].clientX);
-      }
-    };
+  const applyPointerPosition = useCallback((clientX: number) => {
+    const dragType = dragTypeRef.current;
+    const rect = dragRectRef.current;
+    if (!dragType || !rect || rect.width <= 0) return;
 
-    const handleEnd = () => {
-      setIsDragging(null);
-      document.body.style.userSelect = '';
-    };
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const percent = x / rect.width;
+    const rawValue = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
 
-    if (isDragging) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', handleEnd);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', handleEnd);
+    if (dragType === 'min') {
+      liveMinRef.current = Math.min(rawValue, liveMaxRef.current);
+    } else {
+      liveMaxRef.current = Math.max(rawValue, liveMinRef.current);
     }
 
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', handleEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', handleEnd);
-    };
-  }, [isDragging, min, max, onMinChange, onMaxChange]);
+    paintSliderFrame(liveMinRef.current, liveMaxRef.current);
+  }, [paintSliderFrame]);
+
+  const flushPendingPointerFrame = useCallback(() => {
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+    const clientX = pendingClientXRef.current;
+    pendingClientXRef.current = null;
+    if (clientX !== null) applyPointerPosition(clientX);
+  }, [applyPointerPosition]);
+
+  const schedulePointerFrame = useCallback((clientX: number) => {
+    pendingClientXRef.current = clientX;
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const latestClientX = pendingClientXRef.current;
+      pendingClientXRef.current = null;
+      if (latestClientX !== null) applyPointerPosition(latestClientX);
+    });
+  }, [applyPointerPosition]);
+
+  const handlePointerStart = useCallback((type: 'min' | 'max', event: React.PointerEvent<HTMLDivElement>) => {
+    if (enabled || !sliderRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    liveMinRef.current = min;
+    liveMaxRef.current = max;
+    dragTypeRef.current = type;
+    dragRectRef.current = sliderRef.current.getBoundingClientRect();
+    pendingClientXRef.current = null;
+    setIsDragging(type);
+    document.body.style.userSelect = 'none';
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail only if the pointer already ended; dragging still
+      // remains safe because the final value is committed on pointer end.
+    }
+
+    // Paint the first position immediately so the handle attaches to the pointer
+    // on the same interaction frame instead of waiting for a React state round-trip.
+    applyPointerPosition(event.clientX);
+  }, [enabled, min, max, applyPointerPosition]);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragTypeRef.current) return;
+    event.preventDefault();
+    schedulePointerFrame(event.clientX);
+  }, [schedulePointerFrame]);
+
+  const commitPointerDrag = useCallback((dragType: 'min' | 'max') => {
+    const finalMin = liveMinRef.current;
+    const finalMax = liveMaxRef.current;
+    dragTypeRef.current = null;
+    dragRectRef.current = null;
+    setIsDragging(null);
+    document.body.style.userSelect = '';
+
+    // React state is committed once per drag. Visual movement above is direct DOM
+    // work, so all themes share the same low-latency slider path without re-rendering
+    // the Studio tree for every pointer event.
+    if (dragType === 'min') {
+      if (finalMin !== min) onMinChange(finalMin);
+    } else if (finalMax !== max) {
+      onMaxChange(finalMax);
+    }
+  }, [min, max, onMinChange, onMaxChange]);
+
+  const handlePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragType = dragTypeRef.current;
+    if (!dragType) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    pendingClientXRef.current = event.clientX;
+    flushPendingPointerFrame();
+
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // No-op: capture is already released by the browser.
+    }
+
+    commitPointerDrag(dragType);
+  }, [flushPendingPointerFrame, commitPointerDrag]);
+
+  const handlePointerCancel = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragType = dragTypeRef.current;
+    if (!dragType) return;
+    event.preventDefault();
+    event.stopPropagation();
+    flushPendingPointerFrame();
+    commitPointerDrag(dragType);
+  }, [flushPendingPointerFrame, commitPointerDrag]);
+
+  useEffect(() => {
+    if (dragTypeRef.current) return;
+    liveMinRef.current = min;
+    liveMaxRef.current = max;
+  }, [min, max]);
+
+  useEffect(() => () => {
+    if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
+    document.body.style.userSelect = '';
+  }, []);
 
   const displayMin = min;
   const displayMax = max;
-  const minPos = ((displayMin - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
-  const maxPos = ((displayMax - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
+  const minPos = bpmToPercent(displayMin);
+  const maxPos = bpmToPercent(displayMax);
   const isValid = (max - min <= TEMPO_MAX_ACTIVE_RANGE) && (min !== TEMPO_MIN_BPM || max !== TEMPO_MAX_BPM);
 
   return (
-    <div className={cn(
+    <div ref={liveValueRootRef} className={cn(
       "soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all"
     )}>
       <div className="soridraw-tempo-card-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -25092,6 +25209,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               onMouseLeave={() => onHover(null)}
             >
               <input
+                data-tempo-live="min"
                 type="number"
                 min={TEMPO_MIN_BPM}
                 max={max}
@@ -25109,6 +25227,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               />
               <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
+                data-tempo-live="max"
                 type="number"
                 min={min}
                 max={TEMPO_MAX_BPM}
@@ -25212,12 +25331,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           onMouseLeave={() => onHover(null)}
         >
           <input
+            data-tempo-live="min"
             type="number"
             min={TEMPO_MIN_BPM}
             max={max}
             value={min}
             readOnly={enabled}
-                aria-disabled={enabled}
+            aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -25229,12 +25349,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           />
           <span className="text-[var(--text-secondary)]/50 font-bold text-base">-</span>
           <input
+            data-tempo-live="max"
             type="number"
             min={min}
             max={TEMPO_MAX_BPM}
             value={max}
             readOnly={enabled}
-                aria-disabled={enabled}
+            aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -25260,13 +25381,11 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           ref={sliderRef}
           className="relative h-2 bg-[var(--hover-bg)] rounded-full cursor-pointer mx-0"
           onClick={(e) => {
-            if (enabled) return;
+            if (enabled || dragTypeRef.current) return;
             const rect = sliderRef.current!.getBoundingClientRect();
-            const x = e.clientX - rect.left;
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
             const percent = x / rect.width;
             const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
-            
-            // Snap to nearest handle but respect constraints
             if (Math.abs(val - min) < Math.abs(val - max)) {
               onMinChange(Math.min(val, max));
             } else {
@@ -25276,6 +25395,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
         >
           {/* Active Range Bar */}
           <div 
+            ref={activeRangeRef}
             className={cn(
               "absolute h-full rounded-full transition-colors",
               !enabled ? (isValid ? "bg-[#FFB400]" : "bg-[var(--text-secondary)]/30") : "bg-[#FFB400]/40"
@@ -25285,10 +25405,14 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Min Handle */}
           <div 
-            onMouseDown={(e) => { e.stopPropagation(); handleStart('min'); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleStart('min'); }}
+            ref={minHandleRef}
+            onPointerDown={(e) => handlePointerStart('min', e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/10 scale-100 cursor-not-allowed",
@@ -25301,10 +25425,14 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Max Handle */}
           <div 
-            onMouseDown={(e) => { e.stopPropagation(); handleStart('max'); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleStart('max'); }}
+            ref={maxHandleRef}
+            onPointerDown={(e) => handlePointerStart('max', e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-[#8AA35A] shadow-lg shadow-[#8AA35A]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-[#8AA35A]/40 shadow-lg shadow-[#8AA35A]/10 scale-100 cursor-not-allowed",

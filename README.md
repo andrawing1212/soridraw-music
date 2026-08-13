@@ -2045,3 +2045,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 715차에서 추가했던 Sori Studio 직접입력 연필 버튼의 투명 배경 강제 규칙을 제거해 714차 이전의 기존 배경 스타일로 복구.
 - 715차의 Music Note 썸네일 48×60px 고정은 유지.
 - 분할바, Lite V2, responsive geometry, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
+
+## 725차 — 템포 슬라이더 실시간 드래그 동기화
+- TempoControl 공통 경로를 Pointer Events + requestAnimationFrame 기반으로 변경했습니다.
+- 드래그 중 React 상태 갱신을 반복하지 않고 손잡이/활성 범위/BPM 숫자를 같은 프레임에 직접 갱신합니다.
+- 드래그 종료 시 최종 BPM 값만 React 상태로 확정합니다.
+- 공통 TempoControl이므로 분할/다크/라이트 테마 모두 동일하게 적용됩니다.

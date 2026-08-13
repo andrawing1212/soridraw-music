@@ -12467,14 +12467,15 @@ html[data-soridraw-theme="studio-black"]
 }
 
 
-/* 720 — Split-mode Direct Lyrics controls keep their explicit amber selected state.
- * The Studio Black neutral-button pass is intentionally broad, so these semantic
- * state controls expose stable selected hooks instead of relying on Tailwind color
- * utilities alone. Classic Dark/Light styling remains owned by the existing rules. */
+/* 720 — Split Studio direct-writing selection color restoration.
+ * Studio Black's neutral button pass can mask Tailwind-only selected fills in the
+ * command/lyric controls. Give these stateful controls an explicit semantic state
+ * so Direct Lyrics and AI-correct / Preserve always show the approved amber active
+ * color in split mode. Classic/light UI and layout geometry are untouched. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-main button.soridraw-direct-lyrics-toggle[data-soridraw-selected="true"],
+.soridraw-studio-main button.soridraw-direct-lyrics-toggle[aria-pressed="true"],
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-main button.soridraw-lyric-mode-option[data-soridraw-selected="true"] {
+.soridraw-studio-main button.soridraw-lyric-mode-option[aria-pressed="true"] {
   background: var(--sb-accent) !important;
   background-color: var(--sb-accent) !important;
   background-image: none !important;
@@ -12486,49 +12487,88 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-main button.soridraw-direct-lyrics-toggle[data-soridraw-selected="true"] :where(svg, span),
+.soridraw-studio-main button.soridraw-direct-lyrics-toggle[aria-pressed="true"] :where(span, svg),
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-.soridraw-studio-main button.soridraw-lyric-mode-option[data-soridraw-selected="true"] :where(svg, span) {
+.soridraw-studio-main button.soridraw-lyric-mode-option[aria-pressed="true"] :where(span, svg) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
   stroke: currentColor !important;
 }
 
-/* 720 — Classic Dark/Light collapsed Generate tab now uses the same half-exposed
- * silhouette as Split Studio. The non-split app has no left rail, so the shared
- * shape is anchored to the viewport's left edge while keeping the existing captured
- * vertical baseline. No theme colors or expanded action-bar geometry are changed. */
-html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-collapsed {
-  --soridraw-collapsed-action-width: clamp(60px, 18vw, 74px);
-  --soridraw-collapsed-action-half-width: clamp(30px, 9vw, 37px);
-  --soridraw-collapsed-action-height: clamp(70px, 20vw, 92px);
-  position: fixed !important;
-  right: auto !important;
-  left: calc(0px - var(--soridraw-collapsed-action-half-width)) !important;
-  width: var(--soridraw-collapsed-action-width) !important;
-  min-width: var(--soridraw-collapsed-action-width) !important;
-  max-width: var(--soridraw-collapsed-action-width) !important;
-  height: var(--soridraw-collapsed-action-height) !important;
-  min-height: var(--soridraw-collapsed-action-height) !important;
-  max-height: var(--soridraw-collapsed-action-height) !important;
-  padding: 0 !important;
-  translate: none !important;
-  clip-path: inset(-24px -24px -24px 50%) !important;
-  border-radius: clamp(17px, 5vw, 21px) !important;
-  justify-content: flex-end !important;
-  transition: width 120ms linear, height 120ms linear, background-color 150ms !important;
-  will-change: transform !important;
-  transform: translateZ(0);
-  backface-visibility: hidden;
+/* 721 — In split light mode, warm amber helper text/icons on beige surfaces
+   were too close in value and became hard to read. Keep the selected amber
+   fills, but move helper labels/icons/chips to a brown readable accent only in
+   the split light workspace. Dark split and non-split views stay unchanged. */
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace {
+  --soridraw-split-readable-amber: #8B6500;
+  --soridraw-split-readable-amber-soft: #A0731A;
+  --soridraw-split-readable-amber-surface: rgba(139, 101, 0, 0.10);
+  --soridraw-split-readable-amber-surface-strong: rgba(139, 101, 0, 0.16);
+  --soridraw-split-readable-amber-border: rgba(120, 88, 20, 0.24);
 }
 
-html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-collapsed
-> .soridraw-studio-action-collapsed-arrow {
-  position: absolute !important;
-  inset: 0 0 0 50% !important;
-  width: 50% !important;
-  height: 100% !important;
-  display: flex !important;
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-split-accent-label,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-split-accent-label,
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-split-accent-caption,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-split-accent-caption {
+  color: var(--soridraw-split-readable-amber) !important;
+  -webkit-text-fill-color: var(--soridraw-split-readable-amber) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-storyboard-trigger-icon,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-storyboard-trigger-icon {
+  background: var(--soridraw-split-readable-amber-surface-strong) !important;
+  border-color: var(--soridraw-split-readable-amber-border) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-storyboard-trigger-icon-glyph,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-storyboard-trigger-icon-glyph,
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-vocal-role-selected,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-vocal-role-selected,
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-tempo-status-pill,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-tempo-status-pill {
+  color: var(--soridraw-split-readable-amber) !important;
+  -webkit-text-fill-color: var(--soridraw-split-readable-amber) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-vocal-role-selected,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-vocal-role-selected {
+  background: var(--soridraw-split-readable-amber-surface) !important;
+  border-color: var(--soridraw-split-readable-amber-border) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-tempo-status-pill,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-tempo-status-pill {
+  background: var(--soridraw-split-readable-amber-surface) !important;
+  border-color: var(--soridraw-split-readable-amber-border) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-tempo-status-pill.is-valid,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-tempo-status-pill.is-valid {
+  background: rgba(139, 101, 0, 0.12) !important;
+}
+
+/* 722 — Match Classic Dark/Light title centering to the verified split layout.
+   The inline pencil is visual-only and must not consume title width. Keep the
+   title itself at the mathematical center while the edit control sits just to
+   its left. Studio Black already uses the same geometry above. */
+:root:not([data-soridraw-theme="studio-black"]) body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-primary-title-line {
+  position: relative !important;
+  display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
+}
+
+:root:not([data-soridraw-theme="studio-black"]) body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-primary-title-edit {
+  position: absolute !important;
+  top: 50% !important;
+  right: 100% !important;
+  left: auto !important;
+  margin-right: 6px !important;
+  transform: translateY(-50%) !important;
 }

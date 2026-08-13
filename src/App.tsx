@@ -14968,8 +14968,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   className="flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
+                    <div className="soridraw-storyboard-trigger-icon w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="soridraw-storyboard-trigger-icon-glyph w-[22px] h-[22px] text-[#FFD36A]" />
                     </div>
                     <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
@@ -15405,7 +15405,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
                 aria-pressed={isLyricMode}
-                data-soridraw-selected={isLyricMode ? 'true' : 'false'}
                 className={cn(
                   "soridraw-direct-lyrics-toggle flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
                   isLyricMode 
@@ -15443,7 +15442,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
                         <button
                           onClick={() => setLyricMode('assist')}
-                          data-soridraw-selected={lyricMode === 'assist' ? 'true' : 'false'}
+                          aria-pressed={lyricMode === 'assist'}
                           className={cn(
                             "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'assist' 
@@ -15455,7 +15454,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </button>
                         <button
                           onClick={() => setLyricMode('preserve')}
-                          data-soridraw-selected={lyricMode === 'preserve' ? 'true' : 'false'}
+                          aria-pressed={lyricMode === 'preserve'}
                           className={cn(
                             "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'preserve' 
@@ -21424,7 +21423,7 @@ function SongStructureIntegratedControlComponent({
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 공통 작사 스타일 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border border-btn-border bg-btn-bg p-1 shadow-btn">
                   {([
                     { id: 'default', label: '기본', description: 'Story Context와 장르에 맞춰 자유롭게 작사합니다.' },
@@ -21460,7 +21459,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
                 <div className="flex gap-2">
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
@@ -21498,7 +21497,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 3. 섹션 */}
               <div data-soridraw-scroll-anchor="lyrics-section-structure" className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -21533,7 +21532,7 @@ function SongStructureIntegratedControlComponent({
                 
                 {/* Structure Guide - Always Visible */}
                 <div data-soridraw-selectable-text="true" className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
-                  <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
+                  <p className="soridraw-split-accent-caption text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words whitespace-pre-line">
@@ -24539,7 +24538,7 @@ function VocalControlComponent({
                                 className={cn(
                                   "soridraw-vocal-role-button px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
                                   isActive
-                                    ? "bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
+                                    ? "soridraw-vocal-role-selected bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
                                     : isRoleLimitReached
                                       ? "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                                       : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -25327,12 +25326,12 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
       {/* Status Guidance Text - Repositioned to Bottom Center */}
       <div className="flex justify-center mt-2">
         {enabled ? (
-          <span className="text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
+          <span className="soridraw-tempo-status-pill is-enabled text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
             <Sparkles className="w-3 h-3 animate-pulse" /> 랜덤 템포 적용됨
           </span>
         ) : (
           isValid ? (
-            <span className="text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
+            <span className="soridraw-tempo-status-pill is-valid text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
               <Check className="w-3 h-3" /> 템포 지정됨
             </span>
           ) : (

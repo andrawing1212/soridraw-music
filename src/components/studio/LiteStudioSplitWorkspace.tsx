@@ -160,14 +160,12 @@ const resolveRuntimeLayoutMode = (
   workspaceView?: StudioWorkspaceView,
   runtimeProfile: RuntimeProfile = 'adaptive',
 ): BenchmarkLayoutMode => {
-  // 690 hybrid stabilization:
-  // Keep the exact 683 Lite interaction/drag engine, but retain the 687 outer-
-  // resize finding: once the real result content enters tablet/mobile, geometry
-  // is owned directly by the pane instead of the PC library-590 CSS-variable
-  // path. This deliberately separates internal splitter drag from outer-window
-  // resize behavior so improving one no longer replaces the other engine.
-  if (resultMode !== 'pc') return 'direct';
+  // 617 runtime policy:
+  // - `library-590` is the shared PC path for Library and Music Note. It keeps
+  //   the exact 590 CSS-variable geometry at every visual responsive width.
+  // - `adaptive` remains the verified Galaxy Tab/touch V2 path.
   if (runtimeProfile === 'library-590') return 'css-var';
+  if (resultMode !== 'pc') return 'direct';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 

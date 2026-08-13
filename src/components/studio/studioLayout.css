@@ -752,9 +752,16 @@
   height: auto !important;
 }
 
+/* Keep the mobile storyboard launcher at the existing 716 size. */
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-storyboard-card-inner {
   min-height: 72px !important;
   padding: 12px 16px !important;
+}
+
+/* 717: trim only the split Studio desktop storyboard launcher by about 25%. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-storyboard-card-inner {
+  min-height: 54px !important;
+  padding: 8px 16px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-storyboard-card-inner .w-11.h-11 {

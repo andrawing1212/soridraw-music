@@ -2019,3 +2019,63 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+
+## 685차 — 마우스/터치 입력 소유권 분리 · 태블릿 혼합 상태 제거 (2/5)
+- 기준: 683차 clean. 684의 강제 동기 레이아웃 실험은 체감 개선이 없어 이어받지 않았다.
+- 목적: PC 마우스 최적화가 실제 태블릿 손터치 경로에 침범하거나, 반대로 터치 주 입력 환경 변경이 실행 중 split engine을 바꾸는 혼합 상태를 제거한다.
+- `StudioSplitWorkspace`와 `LiteStudioSplitWorkspace`의 `(hover:hover) and (pointer:fine)` 사전 판정을 제거하고, 분할바 `pointerdown`에서 받은 실제 `event.pointerType`을 해당 제스처 동안만 고정한다.
+- 661~1080px 마우스 전용 tablet fast path / adaptive cadence / 로컬 floating-action geometry는 실제 `pointerType === 'mouse'` 드래그에서만 동작한다. 손가락/펜은 그 경로를 타지 않는다.
+- 마우스는 `getCoalescedEvents()`의 최신 좌표를 사용할 수 있지만, touch/pen은 기존 raw PointerEvent 좌표 경로를 유지한다. 두 입력은 한 드래그 도중 섞이지 않는다.
+- App의 자동 split-engine 주 입력 판정은 앱 마운트 시 한 번만 고정한다. 하이브리드 장치에서 마우스 연결/해제 등으로 pointer/hover media query가 바뀌어도 실행 중 split engine을 remount하지 않는다. 화면 폭 기반 PC/Tablet/Mobile 반응형 변화는 기존처럼 실시간 유지한다.
+- 외부창 리사이즈 중에는 활성 pointer gesture가 없으므로 마우스 전용 tablet fast path가 개입하지 않는다.
+- UI/디자인/테두리, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 686차 — 뮤직노트/라이브러리 외부창 리사이즈 뷰포트 윈도잉
+- 기준: 685차. Studio/분할 엔진/최근 생성곡은 수정하지 않고 `FavoritesPage`(뮤직노트), `SunoLibraryPage`, 공통 content responsive helper, 관련 CSS만 수정했다.
+- 사용자 A/B에서 왼쪽 pane이 빈 상태여도 오른쪽 뮤직노트/라이브러리만으로 태블릿 구간 외부창 리사이즈 버벅임이 동일하게 재현됐고, 최근 생성곡은 상대적으로 부드러웠다. 따라서 이번 차수는 오른쪽 두 페이지의 긴 리스트 렌더 비용만 대상으로 한다.
+- 평상시 IntersectionObserver로 현재 viewport ±900px 안의 리스트 항목만 `data-soridraw-resize-nearby=true`로 기록한다.
+- 외부창 리사이즈가 시작되면 IntersectionObserver를 즉시 끊어 resize 자체가 observer churn을 만들지 않게 하고, 마지막으로 기록된 visible/nearby 항목만 계속 실시간 렌더한다.
+- 화면 밖의 뮤직노트/라이브러리 리스트 항목은 리사이즈 동안만 `content-visibility:hidden`으로 내부 layout/paint를 완전히 건너뛴다. 기존 `contain-intrinsic-size`를 그대로 사용하므로 리스트의 세로 공간/스크롤 구조는 유지한다.
+- 리사이즈가 끝나면 윈도잉을 즉시 해제하고 observer를 다시 연결한다. 보이는 카드/검색/필터/대문/분할 폭과 PC↔Tablet↔Mobile 변화는 기존처럼 실시간이다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 688차 — 5/5 최종: PC 뮤직노트·라이브러리를 최근 생성곡과 동일한 Legacy 분할 소유자로 통합
+- 기준: 687차. 687 실사용에서 Music Note/Library 태블릿 direct geometry가 체감 약 15% 개선되어, 남은 차이를 `Recent=Legacy / Music Note·Library=Lite`라는 페이지별 엔진 분기로 좁혔다.
+- fine-pointer PC/트랙패드에서는 Create/Recent/Music Note/Library가 모두 동일한 `StudioSplitWorkspace` Legacy 엔진을 사용한다. 브라우저 폭이 Tablet 구간으로 줄어도 페이지 전환 때문에 split engine이 바뀌지 않는다.
+- coarse/no-hover 터치 환경은 기존처럼 adaptive Lite V2를 유지한다. 즉 실제 갤럭시탭 손가락 경로는 건드리지 않는다.
+- 관리자 명시 override `?splitEngine=lite|legacy`는 그대로 유지해서 비교 진단은 가능하다.
+- Music Note/Library가 Legacy 엔진 안에 들어왔을 때 페이지 자체 `ResizeObserver + getBoundingClientRect()`를 다시 만들지 않도록, Legacy split owner가 이미 계산한 result 폭의 PC/tablet/mobile 경계 변화만 `soridraw-studio-pane-width` 이벤트로 전달한다.
+- Legacy 결과 pane의 mobile breakpoint도 Music Note/Library 둘 다 동일하게 661px 기준을 사용한다.
+- 686 viewport windowing은 유지한다. 디자인/실시간 외부창 리사이즈/분할바 동작/Firestore·Auth·Functions 저장 구조는 변경하지 않는다.
+
+## 689차 — Music Note / Library 외부창 리사이즈 히트테스트 격리
+- 기준: 688차. 687/688 실사용에서 Music Note/Library를 Recent와 같은 PC Legacy geometry 소유권으로 맞추자 체감 개선이 누적되었으므로 그 경로를 그대로 유지한다.
+- 이번 추가 실험은 Studio/Create/Recent/분할 geometry를 더 수정하지 않는다.
+- 네이티브 **외부 브라우저 창 리사이즈 중에만** Music Note / Library 본문을 `pointer-events:none`, `user-select:none`으로 만들어 복잡한 카드/버튼/hover 트리에 대한 hit-test 및 hover invalidation을 차단한다.
+- 같은 구간에서 해당 두 페이지의 animation/transition 계산도 완전히 중지한다. 화면 크기, pane 폭, 텍스트 줄바꿈, PC↔Tablet↔Mobile 반응형 변화는 기존처럼 실시간이다.
+- 창 리사이즈가 끝나면 기존 `soridraw-window-resizing` marker 제거와 동시에 상호작용/애니메이션 상태도 즉시 원복된다.
+- 686 viewport windowing, 687 direct geometry, 688 PC Legacy 공통 엔진은 그대로 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 690차 — 내부 분할 683 복구 + 외부창 개선 경로 분리
+- 689에서 확인된 `외부창은 개선됐지만 내부 분할바가 느려진` 상쇄 현상을 분리한다.
+- PC Music Note/Library를 688의 Legacy 강제 공통화에서 되돌려 683의 Lite `library-590` 내부 분할 엔진으로 복구했다.
+- StudioSplitWorkspace와 App의 입력/엔진 선택도 683의 검증 상태로 복구하여 내부 분할 드래그 경로를 정확히 되돌렸다.
+- 단, 외부창 리사이즈 개선으로 반응이 있었던 686 리스트 viewport windowing, 687 tablet direct geometry, 689 외부창 전용 hit-test/transition 격리는 유지한다.
+- 즉 내부 분할과 외부창 리사이즈가 같은 최적화 소유권을 서로 덮어쓰지 않도록 두 경로를 분리한 균형본이다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 694차 — 고속 폭변화 1프레임 트랜잭션 + 강제 리플로 경로 정리
+- 기준: 690차. 692의 최신 포인터 좌표 실험과 693의 scaleX 프록시 실험은 포함하지 않는다. 690의 느린 이동 체감/외부창 균형을 그대로 기준으로 삼았다.
+- 자료 재검토 결과, Lite V2의 내부 분할 `pointermove`와 외부창 `ResizeObserver`는 이미 각각 `requestAnimationFrame`으로 1프레임 1회 coalescing 되어 있었다. 따라서 또 30fps/속도 임계값을 추가하는 방식은 615/616 및 693과 같은 계열을 반복하는 것으로 판단해 적용하지 않았다.
+- 대신 실제 코드 안에서 같은 프레임에 남아 있던 **write → geometry read / 중복 observer 부수작업**을 제거했다.
+  - 외부창 `refreshMetrics()`는 모든 `getBoundingClientRect()` 읽기를 먼저 수행하고, 그 뒤 pane/root/toggle 쓰기를 수행하는 단일 read→write 순서로 정리했다.
+  - CSS에서 이미 `position:fixed; width:100vw; height:100dvh !important`로 소유하는 중앙 모달 호스트에 JS가 매 resize 프레임마다 left/top/width/height를 다시 쓰던 경로를 제거했다.
+  - `applyPercent()`가 이미 PC/tablet/mobile 경계 변화만 pane-width event로 발행하는데 `refreshMetrics()`가 같은 프레임에 `force=true`로 두 번째 이벤트를 발행하던 중복을 제거했다.
+  - 외부창 resize 중 매 프레임 `querySelector`로 외부 컨트롤을 다시 찾고, floating/hero inline 변수를 썼다가 같은 task에서 즉시 제거하던 경로를 중단했다. resize 중에는 실제로 화면에 따라가야 하는 양쪽 접기 토글 위치만 write-only로 갱신하고, 나머지는 settle 후 기존 경로로 1회 복귀한다.
+- 내부 분할에서는 pane width를 쓴 직후 매 프레임 `scrollTop`을 다시 읽어 scroll lock을 판정하던 경로를 제거했다. 드래그 시작 때 기존 위치를 캡처하고, 드래그 중에는 `overflow-anchor:none`으로 브라우저 scroll anchoring 경쟁을 끈 뒤 pointer-up에서 기존 633 복구 로직으로 1회 확정한다.
+- 외부창 Music Note/Library result pane에도 native resize 동안만 `overflow-anchor:none`을 적용한다. 너비/줄바꿈/반응형 전환/목록 디자인은 그대로 실시간이다.
+- 전역 `SecondaryScrollControl`의 `documentElement ResizeObserver`는 외부창 resize 중 `scrollHeight/clientHeight`를 읽지 않도록 정지하고 `soridraw-window-resize-end`에서 1회 다시 계산한다. 내부 split drag에서 이미 사용하던 동일한 비필수 작업 정지 원칙을 outer resize에도 맞췄다.
+- 공식 참고 원칙: Chrome/web.dev의 forced reflow 가이드(스타일 write 뒤 geometry read 금지, reads/writes batching), ResizeObserver callback은 paint 전 실행되어 무거우면 다음 프레임을 지연할 수 있다는 가이드, `requestAnimationFrame`은 display refresh에 맞춘 1회 paint 직전 콜백이라는 MDN 설명, CSS scroll anchoring을 문제 구간에서 `overflow-anchor:none`으로 opt-out할 수 있다는 MDN 설명.
+- UI/테두리/페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

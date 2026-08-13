@@ -2144,12 +2144,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Recent의 빠른 구간에서 divider만 커서 앞으로 즉시 튀던 preview 경로를 제거해 divider와 pane이 같은 visual boundary를 유지한다.
 - UI / Firebase / Firestore / Auth / Functions / 저장 구조 변경 없음.
 
-
-### 711차 — 709 기준 시간보상 제거 / 균일 공간 스텝 추종
-- 기준: 709차. 710의 spring/velocity 상태는 전부 제외한다.
-- 709의 남은 `뚝 -> 큰 점프` 원인을 fast follower의 **dt 기반 보상**으로 좁혔다. 709는 정상 고주사율 프레임에서는 최소 18px, 프레임이 16ms 가까이 밀리면 약 48~50px까지 다음 프레임 보정량이 커질 수 있었다. 즉 이미 느려진 프레임 다음에 더 큰 시각 점프를 일부러 만드는 구조였다.
-- 711은 빠른 모드의 시각 이동량에서 **elapsed time을 완전히 제거**한다. 프레임이 늦었다고 다음 프레임에서 밀린 거리를 크게 상환하지 않는다.
-- 72px 하드 임계값도 제거했다. 대신 남은 거리 하나만 사용하는 연속 규칙으로 통일: 6px 이내는 정확히 정합, 그 이상은 거리의 45%를 사용하되 한 화면 프레임당 8~34px 범위로 제한한다.
-- 결과적으로 큰 gap에서는 34px 이하의 일정한 박자로 계속 따라오고, 가까워질수록 34→20→10px처럼 자연스럽게 줄어든다. spring/관성/반동/예측 애니메이션은 없다.
-- Recent / Music Note / Library 내부 분할과 외부창 fast lane에 동일 helper가 적용되므로 세 화면의 고속 추종 원칙이 동일하다.
-- 느린/보통 이동의 708 계열 정확 추종, 반응형 기준, Studio Create, touch/pen, UI, Firebase/Auth/Firestore/Functions/저장구조는 변경하지 않는다.
+## 712차 — 709 기준 빠른 드래그 668/683 저주사율·저지연 분리
+- 기준: 709차. 710/711의 스프링·균일스텝 실험은 포함하지 않음.
+- 느린/보통 이동: 709의 기존 밀착/점프 억제 동작을 그대로 유지.
+- 빠른 PC 마우스 이동: 668/683의 검증된 소유권 분리를 복구. 고정 분할바는 최신 확정 마우스 좌표를 즉시 따라가고, 무거운 pane/responsive 레이아웃만 16/20/28/36ms 적응형 cadence로 낮춰 처리.
+- 최근 생성곡(legacy)과 뮤직노트/라이브러리(Lite) 모두 동일 원리 적용. 중간 좌표 재생/스프링/예측 앞질러가기/강제 layout 없음.
+- 빠른 이동 중 pane 주사율을 일시적으로 낮추는 대신 pointer→divider 지연과 메인스레드 포화를 줄이는 것이 목적. pointerup에서는 최신 실제 위치로 정확히 정합.
+- 외부창 resize 경로와 Firebase/Auth/Firestore/Functions/저장구조는 변경하지 않음.

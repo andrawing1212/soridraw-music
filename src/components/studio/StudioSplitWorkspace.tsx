@@ -1356,7 +1356,7 @@ export default function StudioSplitWorkspace({
     const safeWidth = Math.max(width, 1);
     const bounds = getSplitBounds(safeWidth);
     const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
-    const fastJumpGuardActive = pacingEligible && recentFastLegacyDragRef.current;
+    const fast683LaneActive = pacingEligible && recentFastLegacyDragRef.current;
 
     if (pacingEligible) {
       if (clientX !== null) {
@@ -1366,6 +1366,48 @@ export default function StudioSplitWorkspace({
       }
       const targetPixel = recentDragTargetPixelRef.current;
       if (targetPixel === null) return;
+
+      // 712 — fast motion reuses the proven 668/683 split ownership instead of
+      // inventing another visual pacing curve. The fixed divider is previewed
+      // directly from pointermove, while the heavy pane tree is allowed to run
+      // at a lower adaptive cadence. This intentionally trades pane refresh rate
+      // for lower pointer->divider latency only while the hand is moving fast.
+      if (fast683LaneActive && !forceLayout) {
+        const now = performance.now();
+        const elapsed = now - lastDragLayoutCommitAtRef.current;
+        if (elapsed < dragLayoutIntervalRef.current) {
+          if (dragFrameRef.current === null) {
+            dragFrameRef.current = window.requestAnimationFrame(() => flushPendingPointer(false));
+          }
+          return;
+        }
+
+        lastDragBuilderPixelRef.current = targetPixel;
+        recentDragPacedPixelRef.current = targetPixel;
+        const commitStart = performance.now();
+        applyPercentToLayout((targetPixel / safeWidth) * 100);
+        const commitCost = Math.max(0, performance.now() - commitStart);
+        lastDragLayoutCommitAtRef.current = performance.now();
+        dragLayoutIntervalRef.current = commitCost >= 18
+          ? 36
+          : commitCost >= 12
+            ? 28
+            : commitCost >= 8
+              ? 20
+              : 16;
+
+        // applyPercentToLayout also writes the splitter boundary. Restore the
+        // newest pointer-owned divider immediately so a slower pane commit can
+        // never pull the visible handle away from the mouse between events.
+        const visualTarget = recentDragTargetPixelRef.current ?? targetPixel;
+        splitterRef.current?.style.setProperty(
+          'left',
+          `${Math.max(0, Math.round(metricsRef.current.left + visualTarget) - 8)}px`,
+          'important',
+        );
+        return;
+      }
+
       const currentPixel = recentDragPacedPixelRef.current ?? lastDragBuilderPixelRef.current ?? targetPixel;
       const targetResultPixel = Math.max(0, safeWidth - targetPixel);
       const transitionGuardActive = isNearRecentResponsiveTransition(targetPixel, targetResultPixel);
@@ -1373,9 +1415,7 @@ export default function StudioSplitWorkspace({
       const now = performance.now();
       const nextPixel = forceLayout
         ? targetPixel
-        : Math.round(fastJumpGuardActive
-          ? followSplitTargetWithJumpGuard(currentPixel, targetPixel, recentDragPacingFrameTimeRef.current, now)
-          : followRecentWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
+        : Math.round(followRecentWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
       recentDragPacingFrameTimeRef.current = now;
       recentDragPacedPixelRef.current = nextPixel;
 
@@ -1602,10 +1642,11 @@ export default function StudioSplitWorkspace({
         ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current, !transitionGuardActive)
         : event.clientX;
 
-    // 709: Recent keeps divider and pane on the same visual boundary. Fast
-    // movement is jump-guarded inside flushPendingPointer instead of previewing
-    // a far-ahead divider and letting the pane catch up later.
-    if (!recentEligible) previewSplitterAtClientX(trackedClientX);
+    // 712: on genuinely fast Recent motion, restore the 668/683 ownership split:
+    // the fixed divider stays pointer-owned immediately, while the pane tree is
+    // committed at an adaptive lower cadence inside flushPendingPointer.
+    if (fastLegacy) previewSplitterAtClientX(confirmedClientX);
+    else if (!recentEligible) previewSplitterAtClientX(trackedClientX);
     schedulePointerUpdate(trackedClientX);
   };
 

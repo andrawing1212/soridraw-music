@@ -166,45 +166,37 @@ export const resetSplitMotionFastMode = (state: SplitMotionFastState) => {
 };
 
 
-// 711 — uniform visual-step follower for fast split motion.
-//
-// Root cause isolated from the 709/710 path:
-// 709 scaled the catch-up step by elapsed frame time. At the user's ~165Hz
-// display a normal 6ms frame used the 18px minimum, but a layout-delayed
-// 16ms frame could jump close to 50px. That means the exact frame that
-// already stuttered was followed by a larger visual correction, producing
-// the visible "stop -> jump" rhythm. 710 then added spring velocity state,
-// which made the lane feel animated rather than directly manipulated.
-//
-// Fast motion now ignores elapsed time completely for *visual distance*.
-// Every painted catch-up frame advances through the same spatial envelope,
-// so a dropped frame is never repaid with a larger next jump. Slow/normal
-// motion remains on the existing exact/bounded-gap lane outside this helper.
-const UNIFORM_STEP_DIRECT_BAND_PX = 6;
-const UNIFORM_STEP_DISTANCE_GAIN = 0.45;
-const UNIFORM_STEP_MIN_PX = 8;
-const UNIFORM_STEP_MAX_PX = 34;
+// 709 — large-jump guard. Slow/normal motion should remain exact, but a sparse
+// fast pointer/resize burst must not be rendered as one 100~300px visual jump.
+// Cap only abnormally large single-frame corrections and keep ticking toward
+// the latest target. The frame delta is capped so a stalled frame cannot turn
+// into an even larger catch-up jump on the next paint.
+const JUMP_GUARD_THRESHOLD_PX = 72;
+const JUMP_GUARD_RATE_PX_PER_MS = 3.0; // ~= 3000px/s
+const JUMP_GUARD_MIN_STEP_PX = 18;
+const JUMP_GUARD_MAX_STEP_PX = 56;
+const JUMP_GUARD_MAX_FRAME_MS = 16.667;
+const JUMP_GUARD_TARGET_BAND_PX = 18;
 
 export const followSplitTargetWithJumpGuard = (
   current: number,
   target: number,
-  _previousFrameTime: number | null,
-  _frameTime: number,
+  previousFrameTime: number | null,
+  frameTime: number,
 ): number => {
   const delta = target - current;
   const distance = Math.abs(delta);
-  if (distance <= UNIFORM_STEP_DIRECT_BAND_PX) return target;
+  if (distance <= JUMP_GUARD_THRESHOLD_PX) return target;
 
-  // One continuous spatial rule: no 72px mode threshold and no dt-based
-  // catch-up multiplier. Large gaps move at a steady capped step; as the
-  // divider approaches the pointer the step naturally tapers down.
-  const step = Math.min(
-    distance,
-    clamp(
-      distance * UNIFORM_STEP_DISTANCE_GAIN,
-      UNIFORM_STEP_MIN_PX,
-      UNIFORM_STEP_MAX_PX,
-    ),
+  const dt = previousFrameTime === null
+    ? JUMP_GUARD_MAX_FRAME_MS
+    : clamp(frameTime - previousFrameTime, 1, JUMP_GUARD_MAX_FRAME_MS);
+  const cadenceStep = clamp(
+    JUMP_GUARD_RATE_PX_PER_MS * dt,
+    JUMP_GUARD_MIN_STEP_PX,
+    JUMP_GUARD_MAX_STEP_PX,
   );
+  const bandStep = Math.max(0, distance - JUMP_GUARD_TARGET_BAND_PX);
+  const step = Math.min(distance, Math.max(cadenceStep, Math.min(bandStep, JUMP_GUARD_MAX_STEP_PX)));
   return current + Math.sign(delta) * step;
 };

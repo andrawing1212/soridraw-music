@@ -288,6 +288,8 @@ export default function LiteStudioSplitWorkspace({
   const pointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
   const pointerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const fastLegacyDragRef = useRef(false);
+  const fastPaneCommitAtRef = useRef(0);
+  const fastPaneCommitIntervalRef = useRef(16);
   const outerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const outerPacedBuilderWidthRef = useRef<number | null>(null);
   const outerPacingFrameTimeRef = useRef<number | null>(null);
@@ -909,6 +911,22 @@ export default function LiteStudioSplitWorkspace({
     });
   }, [refreshMetrics]);
 
+  const previewFastSplitterAtClientX = useCallback((clientX: number) => {
+    if (!draggingRef.current) return;
+    const splitter = splitterRef.current;
+    if (!splitter) return;
+    const width = Math.max(1, metricsRef.current.width);
+    const bounds = getSplitBounds(width);
+    const minPx = width * (bounds.min / 100);
+    const maxPx = width * (bounds.max / 100);
+    const builderPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
+    splitter.style.setProperty(
+      'left',
+      `${Math.max(0, Math.round(metricsRef.current.left + builderPixel) - 8)}px`,
+      'important',
+    );
+  }, []);
+
   const flushPointer = useCallback((frameTime?: number, forceExact = false) => {
     const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
@@ -928,17 +946,59 @@ export default function LiteStudioSplitWorkspace({
 
     const pacingEligible = finePointerFastPathRef.current
       && (workspaceView === 'music-note' || workspaceView === 'library');
-    const fastJumpGuardActive = pacingEligible && fastLegacyDragRef.current;
+    const fast683LaneActive = pacingEligible && fastLegacyDragRef.current;
+    const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
+
+    // 712 — fast Music Note / Library movement now follows the same ownership
+    // principle as the verified 668/683 Recent lane: the body-level divider is
+    // pointer-owned immediately, while expensive pane/responsive work commits at
+    // a deliberately lower adaptive cadence. Keep only the newest target; never
+    // replay intermediate positions. Lower visual pane Hz is acceptable here
+    // because it prevents the main thread from starving subsequent pointer input.
+    if (fast683LaneActive && !forceExact) {
+      const elapsed = now - fastPaneCommitAtRef.current;
+      if (elapsed < fastPaneCommitIntervalRef.current) {
+        if (frameRef.current === null) {
+          frameRef.current = window.requestAnimationFrame((time) => flushPointer(time));
+        }
+        return;
+      }
+
+      lastPixelRef.current = targetPixel;
+      dragPacedPixelRef.current = targetPixel;
+      dragPacingFrameTimeRef.current = now;
+      const commitStart = performance.now();
+      applyPercent((targetPixel / width) * 100, true);
+      const commitCost = Math.max(0, performance.now() - commitStart);
+      fastPaneCommitAtRef.current = performance.now();
+      fastPaneCommitIntervalRef.current = commitCost >= 18
+        ? 36
+        : commitCost >= 12
+          ? 28
+          : commitCost >= 8
+            ? 20
+            : 16;
+      if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
+
+      // applyPercent also writes the fixed splitter. Put the handle back on the
+      // latest pointer-owned target so the lower-Hz pane lane never drags the
+      // visible divider away from the mouse.
+      const visualTarget = dragTargetPixelRef.current ?? targetPixel;
+      splitterRef.current?.style.setProperty(
+        'left',
+        `${Math.max(0, Math.round(metricsRef.current.left + visualTarget) - 8)}px`,
+        'important',
+      );
+      return;
+    }
+
     const currentPixel = dragPacedPixelRef.current ?? lastPixelRef.current ?? targetPixel;
     const targetResultPixel = Math.max(0, width - targetPixel);
     const transitionGuardActive = isNearResponsiveTransition(targetPixel, targetResultPixel);
     const dragVisualLag = transitionGuardActive ? RESPONSIVE_TRANSITION_VISUAL_LAG_PX : DRAG_MAX_VISUAL_LAG_PX;
-    const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
     const nextPixel = forceExact || !pacingEligible
       ? targetPixel
-      : Math.round(fastJumpGuardActive
-        ? followSplitTargetWithJumpGuard(currentPixel, targetPixel, dragPacingFrameTimeRef.current, now)
-        : followWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
+      : Math.round(followWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
     dragPacingFrameTimeRef.current = now;
     dragPacedPixelRef.current = nextPixel;
 
@@ -1011,6 +1071,8 @@ export default function LiteStudioSplitWorkspace({
     dragPacedPixelRef.current = null;
     dragPacingFrameTimeRef.current = null;
     fastLegacyDragRef.current = false;
+    fastPaneCommitAtRef.current = 0;
+    fastPaneCommitIntervalRef.current = 16;
     resetSplitMotionFastMode(pointerMotionRef.current);
     resetSplitPointerPrediction(pointerPredictionRef.current);
     pointerIdRef.current = -1;
@@ -1094,6 +1156,8 @@ export default function LiteStudioSplitWorkspace({
     dragPacingFrameTimeRef.current = performance.now();
     resetSplitMotionFastMode(pointerMotionRef.current);
     fastLegacyDragRef.current = false;
+    fastPaneCommitAtRef.current = 0;
+    fastPaneCommitIntervalRef.current = 16;
     resetSplitPointerPrediction(pointerPredictionRef.current);
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
@@ -1138,10 +1202,12 @@ export default function LiteStudioSplitWorkspace({
     const slowPacingEligible = recentEligible && !fastLegacy;
     const transitionGuardActive = slowPacingEligible && isNearResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
     const trackedClientX = fastLegacy
-      ? event.clientX
+      ? confirmedClientX
       : slowPacingEligible
         ? resolveLowLatencySplitClientX(nativeEvent, pointerPredictionRef.current, !transitionGuardActive)
         : event.clientX;
+
+    if (fastLegacy) previewFastSplitterAtClientX(confirmedClientX);
 
     if (manualPerfCaptureActiveRef.current) {
       let coalescedCount = 1;

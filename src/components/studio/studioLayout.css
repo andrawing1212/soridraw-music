@@ -12894,3 +12894,20 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   stroke: #FFD36A !important;
   opacity: 1 !important;
 }
+
+
+/* 734 — Library mobile workspace header metadata alignment.
+   The generated date/count row should sit on the visual centerline of the
+   40px music icon instead of being top-aligned. Mobile only; tablet/PC and
+   the public/status controls on the right keep their existing geometry. */
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-header-main {
+  align-items: center !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-header-main .soridraw-library-workspace-meta {
+  align-items: center !important;
+}

@@ -12824,3 +12824,73 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
 ):not(:disabled):active {
   filter: none !important;
 }
+
+/* 731 — Section cue switches: Studio Black's generic neutral button pass was
+   flattening the OFF state into the surrounding control surface. Use the same
+   darker OFF-track contrast as Classic Dark while keeping the existing amber ON
+   state. No geometry or non-split theme behavior changes. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-section-cue-toggle[aria-checked="false"] {
+  background: #4A4A4A !important;
+  background-color: #4A4A4A !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-section-cue-toggle[aria-checked="true"] {
+  background: var(--sb-accent) !important;
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-section-cue-toggle > span {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+}
+
+/* 732 — Vocal Character launcher press depth.
+   Keep Storyboard at the approved 730 shallow press (0.985), but let only the
+   Vocal Character launcher travel a touch deeper for clearer tactile feedback.
+   This remains theme-shared and does not change colors, layout, or popup styling. */
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher:not(:disabled):active {
+  scale: 0.98 !important;
+  transform: none !important;
+  translate: 0 0 !important;
+}
+
+/* 733 — Studio Black active reset state.
+   In Classic Dark, a reset button becomes a warm brown/amber soft button when
+   the section has something to clear. Studio Black's generic neutral-control
+   rule was flattening that state and leaving only the amber trash glyph. Restore
+   the same semantic active-reset surface in split mode without adding an outline. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane .soridraw-studio-menu-card button.soridraw-active-reset-button {
+  background: rgb(255 180 0 / 0.14) !important;
+  background-color: rgb(255 180 0 / 0.14) !important;
+  background-image: none !important;
+  color: #FFD36A !important;
+  -webkit-text-fill-color: #FFD36A !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane .soridraw-studio-menu-card button.soridraw-active-reset-button:hover {
+  background: rgb(255 180 0 / 0.20) !important;
+  background-color: rgb(255 180 0 / 0.20) !important;
+  color: #FFD36A !important;
+  -webkit-text-fill-color: #FFD36A !important;
+  border-color: transparent !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane .soridraw-studio-menu-card button.soridraw-active-reset-button svg.lucide-trash-2 {
+  color: #FFD36A !important;
+  stroke: #FFD36A !important;
+  opacity: 1 !important;
+}

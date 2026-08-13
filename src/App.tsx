@@ -21584,7 +21584,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionVocalCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -21640,7 +21640,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionInstrumentCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'

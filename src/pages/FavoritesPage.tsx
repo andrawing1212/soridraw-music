@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
-import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
+import { attachSoridrawResponsiveContract, attachSoridrawResizeViewportWindowing } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { translateLyrics } from '../services/geminiService';
 import MusicApiGenerateModal, { LanguageCode, SunoModelVersion } from '../components/MusicApiGenerateModal';
 import StudioCenterModalPortal from '../components/studio/StudioCenterModalPortal';
-import SoridrawVirtualMount from '../components/performance/SoridrawVirtualMount';
 import { GENRES, MOODS, THEMES, SOUND_STYLES, INSTRUMENT_SOUNDS } from '../constants';
 import {
   Music,
@@ -708,7 +707,9 @@ export default function FavoritesPage({
     const root = musicNotePageRootRef.current;
     if (!root) return;
     const detachResponsive = attachSoridrawResponsiveContract(root);
+    const detachResizeWindowing = attachSoridrawResizeViewportWindowing(root);
     return () => {
+      detachResizeWindowing();
       detachResponsive();
     };
   }, []);
@@ -5615,14 +5616,8 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                 : '';
 
               return (
-                <SoridrawVirtualMount
-                  key={song.id}
-                  itemKey={String(song.id)}
-                  estimatedHeight={116}
-                  overscanPx={280}
-                  forceMounted={activeFavoriteMenuId === song.id || activeFavoriteColorMenuId === song.id}
-                >
                 <div
+                  key={song.id}
                   data-selection-keep="true"
                   onMouseDown={(event) => {
                     handleSelectionDragStart(event, song.id);
@@ -5942,7 +5937,6 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                     </div>
                   </div>
                 </div>
-                </SoridrawVirtualMount>
               );
             })}
           </div>

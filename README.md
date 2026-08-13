@@ -1,15 +1,3 @@
-## 695차 — 690 기준 Music Note / Library 실제 DOM 가상화
-- 기준 ZIP: `SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip`. 691~694 실험은 포함하지 않습니다.
-- 실사용 결과는 내부 분할/외부창 모두 **천천히 폭을 바꾸면 매우 부드럽고, 빠르게 바꾸면 동일하게 큰 프레임 지연**이 발생했습니다. 입력 좌표, 컴포지터 scale 프록시, read/write 정리만으로는 개선되지 않았으므로 이번에는 폭 변화 때 브라우저가 실제로 재배치해야 하는 DOM 양 자체를 줄입니다.
-- Music Note 곡 카드와 Library workspace 그룹에 공통 `SoridrawVirtualMount`를 적용했습니다. 리스트의 가벼운 슬롯은 유지하되 화면 및 약 280px overscan 밖의 무거운 카드/행 subtree는 React DOM에서 실제 unmount합니다.
-- 기존 686의 `IntersectionObserver + content-visibility hidden` 방식은 페이지에서 분리했습니다. 695는 off-screen 카드의 자손 DOM 자체가 존재하지 않으므로 동일 목적의 observer를 이중으로 돌리지 않습니다.
-- 같은 스크롤 루트의 모든 virtual slot은 **IntersectionObserver 1개를 공유**합니다. 카드마다 observer를 만들지 않습니다.
-- 분할바 드래그 또는 외부 브라우저 창 리사이즈 중에는 virtual membership을 고정합니다. 따라서 수평 폭 변화 도중 mount/unmount가 반복되어 새로운 피드백 루프를 만들지 않습니다. 제스처가 끝난 뒤 현재 세로 viewport를 1회 다시 판정합니다.
-- off-screen slot은 마지막 실측 높이를 기억합니다. 아직 한 번도 표시되지 않은 항목은 기존 성능 CSS의 intrinsic-size와 맞춘 Music Note 116px / Library group 198px 추정값을 사용해 스크롤 전체 높이의 급격한 붕괴를 방지합니다.
-- 메뉴가 열린 Music Note 카드/Library 그룹은 강제로 mount 상태를 유지하여 메뉴가 virtualization 때문에 사라지지 않게 했습니다.
-- Studio/Create/Recent, 분할 geometry, PC/Tablet/Mobile breakpoint, 실제 Galaxy Tab touch 경로, Firebase/Auth/Firestore/Functions/사용자 저장 구조는 변경하지 않습니다.
-- 상태: 코드 반영 완료 · 실사용 검증 전.
-
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.

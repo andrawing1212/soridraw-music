@@ -7343,20 +7343,6 @@ h1.text-3xl.md\:text-5xl {
 
 
 
-/* 695 — true DOM virtualization slots.
- * Off-screen Music Note / Library rows keep only a lightweight neutral slot.
- * No border/background/visual chrome is introduced; the heavy card subtree is
- * physically absent until the slot enters the vertical overscan window. */
-.soridraw-virtual-list-slot {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  border: 0 !important;
-  outline: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
 /* 380: Music Note / Suno Library frame-rate pass.
  * Long lists skip layout/paint work while they are outside the viewport.
  * Inline menus opt back into normal rendering. During splitter dragging, all

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
-import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
+import { attachSoridrawResponsiveContract, attachSoridrawResizeViewportWindowing } from '../lib/contentResponsive';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +19,6 @@ import { downloadAudioWithTitle } from '../lib/songUtils';
 import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
-import SoridrawVirtualMount from '../components/performance/SoridrawVirtualMount';
 
 const fallbackNormalPlaylists: Playlist[] = [
   { id: "fallback-normal-0", title: "기본", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
@@ -697,7 +696,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     const root = libraryPageRootRef.current;
     if (!root) return;
     const detachResponsive = attachSoridrawResponsiveContract(root);
+    const detachResizeWindowing = attachSoridrawResizeViewportWindowing(root);
     return () => {
+      detachResizeWindowing();
       detachResponsive();
     };
   }, []);
@@ -6209,17 +6210,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               const dateStr = formatCreatedAt(group.createdAt);
               
               return (
-                <SoridrawVirtualMount
-                  key={group.id}
-                  itemKey={String(group.id)}
-                  estimatedHeight={198}
-                  overscanPx={280}
-                  forceMounted={Boolean(
-                    activeColorMenu?.startsWith(`workspace-${group.id}-`) ||
-                    activeMenuState?.group?.id === group.id
-                  )}
-                >
                 <div
+                  key={group.id}
                   className={`soridraw-library-workspace-group soridraw-list-perf-item soridraw-perf-layout-region-group bg-[#151515] rounded-2xl ${activeColorMenu?.startsWith(`workspace-${group.id}-`) ? 'soridraw-list-perf-item--active' : ''}`}
                 >
                   {/* Group Header */}
@@ -6486,7 +6478,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
                     })}
                   </div>
                 </div>
-                </SoridrawVirtualMount>
               );
             })}
             {hasMoreWorkspaceTracks && (

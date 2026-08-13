@@ -953,6 +953,21 @@ export default function StudioSplitWorkspace({
       root.dataset.soridrawResultMode = nextResultMode;
     }
 
+    // 696: once a split pane is already in its mobile composition, its edge
+    // control means "make this pane large again", not "hide this pane". Keep
+    // the accessible label synchronized with the live pane mode without adding
+    // React state to the drag path.
+    if (builderCollapseToggleRef.current && !builderCollapsedRef.current) {
+      const label = nextBuilderMode === 'mobile' ? '곡 만들기 영역 크게 펼치기' : '곡 만들기 영역 접기';
+      builderCollapseToggleRef.current.setAttribute('aria-label', label);
+      builderCollapseToggleRef.current.setAttribute('title', label);
+    }
+    if (resultCollapseToggleRef.current && !resultCollapsedRef.current) {
+      const label = nextResultMode === 'mobile' ? '생성 결과 영역 크게 펼치기' : '생성 결과 영역 접기';
+      resultCollapseToggleRef.current.setAttribute('aria-label', label);
+      resultCollapseToggleRef.current.setAttribute('title', label);
+    }
+
     // The Library credit shortcut is portaled into the hero and sits outside the
     // result pane. Copy the resolved pane mode to the host so its compact/mobile
     // size changes at the same breakpoint as the content below it.
@@ -1494,14 +1509,35 @@ export default function StudioSplitWorkspace({
     setPercent(nextPercent);
   };
 
+  const expandMobilePane = useCallback((pane: 'builder' | 'result') => {
+    if (builderCollapsedRef.current || resultCollapsedRef.current) return;
+    const bounds = getSplitBounds(metricsRef.current.width);
+    const requestedPercent = pane === 'builder' ? bounds.max : bounds.min;
+    const nextPercent = applyPercentToLayout(requestedPercent);
+    const builderWidth = metricsRef.current.width * (nextPercent / 100);
+    commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+    clearExternalMeasurements();
+    scheduleFooterBoundaryRefresh();
+    setPercent(nextPercent);
+  }, [applyPercentToLayout, clearExternalMeasurements, commitRootMeasurements, scheduleFooterBoundaryRefresh]);
+
   const builderCollapseControl = (
     <button
       ref={builderCollapseToggleRef}
       type="button"
       className={`soridraw-studio-builder-collapse-toggle${isBuilderCollapsed ? ' is-collapsed' : ''}`}
       onClick={() => {
+        if (isBuilderCollapsed) {
+          setIsBuilderCollapsed(false);
+          return;
+        }
+        if (modeRef.current.builder === 'mobile') {
+          setIsResultCollapsed(false);
+          expandMobilePane('builder');
+          return;
+        }
         setIsResultCollapsed(false);
-        setIsBuilderCollapsed((current) => !current);
+        setIsBuilderCollapsed(true);
       }}
       aria-label={isBuilderCollapsed ? '곡 만들기 영역 펼치기' : '곡 만들기 영역 접기'}
       title={isBuilderCollapsed ? '곡 만들기 영역 펼치기' : '곡 만들기 영역 접기'}
@@ -1518,8 +1554,17 @@ export default function StudioSplitWorkspace({
       type="button"
       className={`soridraw-studio-result-collapse-toggle${isResultCollapsed ? ' is-collapsed' : ''}`}
       onClick={() => {
+        if (isResultCollapsed) {
+          setIsResultCollapsed(false);
+          return;
+        }
+        if (modeRef.current.result === 'mobile') {
+          setIsBuilderCollapsed(false);
+          expandMobilePane('result');
+          return;
+        }
         setIsBuilderCollapsed(false);
-        setIsResultCollapsed((current) => !current);
+        setIsResultCollapsed(true);
       }}
       aria-label={isResultCollapsed ? '생성 결과 영역 펼치기' : '생성 결과 영역 접기'}
       title={isResultCollapsed ? '생성 결과 영역 펼치기' : '생성 결과 영역 접기'}

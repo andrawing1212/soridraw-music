@@ -2065,3 +2065,21 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 단, 외부창 리사이즈 개선으로 반응이 있었던 686 리스트 viewport windowing, 687 tablet direct geometry, 689 외부창 전용 hit-test/transition 격리는 유지한다.
 - 즉 내부 분할과 외부창 리사이즈가 같은 최적화 소유권을 서로 덮어쓰지 않도록 두 경로를 분리한 균형본이다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+### 696차 — 분할 모바일 영역 버튼 위치/역할 통일
+- 기준: 690차 성능 안정본. 691~695 실험은 포함하지 않음.
+- Studio split의 왼쪽/오른쪽 pane이 `mobile` 모드가 되는 순간, 해당 pane 버튼을 분할선 바로 옆 상단 밴드에 고정 표시.
+- 왼쪽 버튼은 splitter 왼쪽 8px 간격, 오른쪽 버튼은 splitter 오른쪽 8px 간격으로 통일하고 세로 위치를 상단 밴드 `top:64px` 기준으로 맞춤.
+- mobile pane 버튼은 더 이상 "접기"가 아니라 "이 pane을 크게 펼치기" 동작. 클릭하면 현재 split bounds에서 해당 pane이 가질 수 있는 가장 큰 폭으로 확장.
+- 아이콘 방향도 mobile 상태에서는 확장 방향을 가리키도록 반전.
+- 실제 1100px 미만 phone composition은 기존처럼 split 전용 버튼을 표시하지 않음.
+- Legacy/Lite 공통 클래스와 양쪽 split engine을 모두 수정하여 Create/Recent/Music Note/Library에 동일 적용.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+### 697차 — 분할 Music Note / Library 오른쪽 스크롤바 위치 고정
+- 기준: 696차.
+- 영상 확인 결과, Music Note/Library의 오른쪽 pane scrollbar가 분할바 이동 중 약 18px 좌우로 이동하는 구간을 확인했다.
+- 원인: Lite 분할 엔진이 result pane의 PC/tablet 경계에서 `css-var` ↔ `direct` geometry owner를 바꾸는데, `css-var` 경로는 Studio main의 18px 우측 gutter를 `right:-18px`로 넘겨 scrollbar를 rail 경계에 두는 반면 `direct` 경로는 `right:0`/논리 result width까지만 사용해 scrollbar가 18px 안쪽으로 들어왔다.
+- 수정: Music Note/Library에 한해 두 geometry owner 모두 동일한 18px scroll-shell extension을 사용한다. Direct 경로는 shell 폭만 +18px 확장하고 CSS `padding-right:18px`가 그 폭을 소비하므로 실제 콘텐츠 폭/PC·Tablet·Mobile 판정/카드 배치는 바뀌지 않는다.
+- Studio/Create/Recent, 분할바 위치·성능 경로, 696차 모바일 펼치기 버튼 동작은 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

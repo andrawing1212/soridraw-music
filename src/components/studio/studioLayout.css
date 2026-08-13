@@ -12309,3 +12309,98 @@ html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
   animation: none !important;
   transition: none !important;
 }
+
+/* 696 — Split-pane mobile expand controls.
+ * When either live pane enters its mobile composition, keep the control beside
+ * the real splitter and treat it as "expand this pane" rather than "collapse
+ * this pane". This rule is shared by Legacy and Lite workspaces, so Create,
+ * Recent, Music Note and Library use the same placement/visual contract.
+ * Actual phone composition below 1100px still removes split-only controls. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+  body > .soridraw-studio-builder-collapse-toggle,
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
+  body > .soridraw-studio-result-collapse-toggle {
+    display: inline-flex !important;
+    top: 64px !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    max-width: 34px !important;
+    max-height: 34px !important;
+    padding: 0 !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border: 0 !important;
+    border-radius: 9px !important;
+    background: #1c1c1e !important;
+    color: #b9b9bc !important;
+    box-shadow: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+  body > .soridraw-studio-builder-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) - 42px) !important;
+    right: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
+  body > .soridraw-studio-result-collapse-toggle {
+    left: calc(var(--soridraw-studio-splitter-left, 50vw) + 8px) !important;
+    right: auto !important;
+  }
+
+  /* Mobile pane = the icon points toward the space the pane will reclaim. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+  body > .soridraw-studio-builder-collapse-toggle .soridraw-studio-panel-toggle-icon {
+    transform: scaleX(-1) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
+  body > .soridraw-studio-result-collapse-toggle .soridraw-studio-panel-toggle-icon {
+    transform: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-mode="mobile"]
+  body > .soridraw-studio-builder-collapse-toggle:is(:hover, :focus-visible),
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-mode="mobile"]
+  body > .soridraw-studio-result-collapse-toggle:is(:hover, :focus-visible) {
+    border: 0 !important;
+    background: #242426 !important;
+    color: #ffb400 !important;
+    outline: none !important;
+  }
+}
+
+/* 697 — Music Note / Library result scrollbar edge ownership.
+ * Their Lite workspace can switch between css-var geometry on PC and direct
+ * geometry in tablet/mobile pane widths. The center main keeps an 18px right
+ * gutter, so the two geometry owners previously ended the scroll shell on
+ * different x-coordinates and the scrollbar jumped sideways at the mode
+ * boundary. Keep one scroll-shell edge at the right workspace/rail boundary
+ * in every split pane mode. Direct geometry adds the same 18px to the shell in
+ * LiteStudioSplitWorkspace; this padding consumes it so the visible page width
+ * and every PC/tablet/mobile responsive breakpoint remain unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane {
+    padding-right: 18px !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  )
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]:not([data-benchmark-layout-mode="direct"])
+  > .soridraw-studio-result-pane {
+    right: -18px !important;
+  }
+}

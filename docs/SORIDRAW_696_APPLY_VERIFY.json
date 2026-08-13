@@ -1,0 +1,23 @@
+{
+  "version": 696,
+  "baseline": "SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip",
+  "scope": "split pane mobile expand controls",
+  "changedFiles": [
+    "src/components/studio/StudioSplitWorkspace.tsx",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/studioLayout.css",
+    "README.md"
+  ],
+  "newFiles": ["docs/SORIDRAW_696_APPLY_VERIFY.json"],
+  "behavior": {
+    "mobilePaneControlVisible": true,
+    "mobilePaneControlAction": "expand-to-largest-allowed-pane",
+    "builderControlGapFromSplitterPx": 8,
+    "resultControlGapFromSplitterPx": 8,
+    "controlTopPx": 64,
+    "phoneUnder1100Unchanged": true,
+    "legacyAndLiteBothCovered": true
+  },
+  "firebaseDataModelChanged": false,
+  "deployed": false
+}

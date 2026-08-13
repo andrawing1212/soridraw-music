@@ -2090,3 +2090,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 새로운 pointer 이벤트 경로, `pointerrawupdate`, 강제 `getBoundingClientRect()` commit, scale/transform 프록시, 진단 UI는 추가하지 않았다.
 - 외부창 resize는 저장된 분할 비율을 바꾸지 않고 시각 경계만 pacing하며, resize 종료 시 정확한 비율로 즉시 정합한다.
 - Recent / Studio Create / 실제 터치 우선 adaptive / Firebase 데이터 구조는 변경하지 않았다.
+
+## 704차 — Recent + Music Note + Library pacing 공통 적용
+- 기준: 703차(694 성능 기준 + Music Note/Library pacing).
+- 703에서 누락됐던 PC 최근 생성곡(legacy `StudioSplitWorkspace`)까지 동일한 temporal pacing 계약을 적용.
+- 최근 생성곡 내부 분할: 느린 이동은 1:1, 큰 fast jump만 몇 display frame에 균일 분배. divider와 pane을 같은 좌표 owner로 함께 이동.
+- 최근 생성곡 외부창: stored split ratio는 보존하고, native viewport 목표를 향해 visual builder boundary만 동일 pacing으로 catch-up.
+- Music Note/Library의 703 Lite pacing은 그대로 유지.
+- Studio Create 및 실제 터치 우선 adaptive 경로는 변경하지 않음.

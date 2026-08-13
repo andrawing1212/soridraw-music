@@ -14965,7 +14965,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <button
                   type="button"
                   onClick={openStoryboardModal}
-                  className="flex-1 min-w-0 text-left"
+                  className="soridraw-storyboard-launcher flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
                     <div className="soridraw-storyboard-trigger-icon w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">

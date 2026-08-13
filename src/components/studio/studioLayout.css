@@ -847,7 +847,7 @@
 
 
 /* 185: explicit click feedback, tempo mobile fit, and result action colors. */
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):not(.soridraw-storyboard-launcher):not(.soridraw-vocal-character-launcher):active {
   background-color: var(--sb-accent) !important;
   background-image: none !important;
   color: var(--sb-selected-text) !important;
@@ -856,7 +856,7 @@
   transform: scale(.97);
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active :where(svg, span) {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):not(.soridraw-storyboard-launcher):not(.soridraw-vocal-character-launcher):active :where(svg, span) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
 }
@@ -12732,4 +12732,95 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   --sb-popup-control: #2e2e31;
   --sb-popup-control-hover: #343438;
   --sb-popup-input: #262628;
+}
+
+/* 729 — Storyboard only: in Studio Black split mode, use the exact Classic
+   Dark Storyboard palette. Vocal Character intentionally keeps the approved
+   728 split-only neutral palette. Values below mirror the current .dark
+   storyboard rules in src/index.css. */
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel {
+  background: #222222 !important;
+  background-color: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel > .sticky {
+  background: #242424 !important;
+  background-color: #242424 !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-body {
+  background: #202020 !important;
+  background-color: #202020 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-section-card {
+  background: #1c1c1c !important;
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-character-card {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-control-card {
+  background: #1c1c1c !important;
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel input,
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel textarea {
+  background: #343434 !important;
+  background-color: #343434 !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-section-card input,
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-section-card textarea {
+  border: 1px solid rgba(0, 0, 0, 0.42) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel button {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background: #353535 !important;
+  background-color: #353535 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-choice-button--selected {
+  border-color: transparent !important;
+}
+
+/* 730 — Storyboard / Vocal Character launch press feedback.
+   These two large launch targets should only give a shallow tactile press.
+   Apply the reduced depth to every theme, while Studio Black additionally
+   keeps the normal text/icon brightness during the pointer-down frame. */
+body #root .soridraw-app-root :is(
+  button.soridraw-storyboard-launcher,
+  button.soridraw-vocal-character-launcher
+):not(:disabled):active {
+  scale: 0.985 !important;
+  transform: none !important;
+  translate: 0 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
+  button.soridraw-storyboard-launcher,
+  button.soridraw-vocal-character-launcher
+):not(:disabled):active {
+  filter: none !important;
 }

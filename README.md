@@ -2080,12 +2080,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 공식 참고 원칙: Chrome/web.dev의 forced reflow 가이드(스타일 write 뒤 geometry read 금지, reads/writes batching), ResizeObserver callback은 paint 전 실행되어 무거우면 다음 프레임을 지연할 수 있다는 가이드, `requestAnimationFrame`은 display refresh에 맞춘 1회 paint 직전 콜백이라는 MDN 설명, CSS scroll anchoring을 문제 구간에서 `overflow-anchor:none`으로 opt-out할 수 있다는 MDN 설명.
 - UI/테두리/페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 
-## 702 — 694 기준 커서/분할바 + 외부창 추종 간격 균일화
+## 703차 — 694 기준 커서/분할바·외부창 일정 간격 pacing
 
-- 기준은 694차이며 698~701 진단/강제-layout 실험 코드는 포함하지 않는다.
-- 내부 분할(Lite / Music Note / Library): Chrome의 `pointermove` 지연·coalescing 가능성을 우회하기 위해 fine-pointer mouse에서만 `pointerrawupdate`를 최신 좌표 공급원으로 사용한다. raw event에서는 DOM을 건드리지 않고 최신 `clientX`만 저장하며, 실제 pane/분할바 geometry write는 기존 rAF 1회 소유권을 그대로 유지한다.
-- touch/pen은 기존 PointerEvent 경로를 그대로 유지한다.
-- 외부창 resize: `resize`/`ResizeObserver`의 불규칙한 burst cadence를 geometry clock으로 쓰지 않는다. native resize가 시작되면 display `requestAnimationFrame`이 매 프레임 현재 viewport를 샘플링하고, 실제 크기가 변한 프레임에만 `refreshMetrics()`를 1회 실행한다.
-- 외부 resize 중 ResizeObserver는 geometry commit을 하지 않아 같은 프레임 중복 commit을 막고, resize 종료 시 694 정확 geometry로 1회 정합한다.
-- 인위적 smoothing, px step 제한, transform/scale proxy, 강제 `getBoundingClientRect()` acknowledgement, FPS cap은 사용하지 않는다. 목표는 최고 처리량보다 `cursor -> divider -> pane`, `browser edge -> workspace -> pane`의 시간 간격을 일정하게 만드는 것이다.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+- 기준: `SORIDRAW_694차_690기준_고속폭변화_1프레임트랜잭션_강제리플로제거.zip`
+- 목표: 최고 처리량보다 `커서 → 분할바 → pane`, `외부창 → workspace → pane`의 이동 간격을 일정하게 유지한다.
+- Music Note / Library의 fine-pointer PC 경로에만 적용했다.
+- 천천히 움직이는 프레임(목표와 24px 이내)은 기존 694처럼 즉시 1:1 반영한다.
+- 빠른 입력/resize에서 한 프레임 목표가 크게 건너뛰면 60Hz/고주사율에서 비슷한 px/sec가 되도록 시간 정규화된 최대 이동량으로 몇 프레임에 나눠 따라간다.
+- 새로운 pointer 이벤트 경로, `pointerrawupdate`, 강제 `getBoundingClientRect()` commit, scale/transform 프록시, 진단 UI는 추가하지 않았다.
+- 외부창 resize는 저장된 분할 비율을 바꾸지 않고 시각 경계만 pacing하며, resize 종료 시 정확한 비율로 즉시 정합한다.
+- Recent / Studio Create / 실제 터치 우선 adaptive / Firebase 데이터 구조는 변경하지 않았다.

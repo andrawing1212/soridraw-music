@@ -1,0 +1,24 @@
+{
+  "version": 703,
+  "basis": "SORIDRAW_694차_690기준_고속폭변화_1프레임트랜잭션_강제리플로제거.zip",
+  "scope": "Music Note / Library fine-pointer split and outer-window pacing only",
+  "goal": "Preserve 694 throughput while preventing delayed frames from turning into 100-300px single-frame geometry jumps",
+  "changes": [
+    "Slow movement at <=24px frame distance remains exact 1:1",
+    "Large drag jumps are consumed with a time-normalized bounded step until the latest pointer target is reached",
+    "Outer-window resize keeps stored split ratio unchanged while pacing only the visual split boundary",
+    "Pacing continues on requestAnimationFrame even when ResizeObserver/pointer delivery becomes sparse",
+    "Pointer-up and resize-end reconcile to the exact final geometry"
+  ],
+  "protected": [
+    "Recent Songs",
+    "Studio Create",
+    "touch-priority adaptive path",
+    "Firebase/Auth/Firestore/Functions/storage schema",
+    "responsive breakpoint values",
+    "visual design/CSS"
+  ],
+  "diagnostic_ui_added": false,
+  "firebase_changed": false,
+  "deployment": "none"
+}

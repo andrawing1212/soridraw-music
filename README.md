@@ -2029,11 +2029,19 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 
 
-## SORIDRAW 714차 — 713 안정 기준 · 분할 리사이즈 카드 높이 고정 / 모바일 텍스트 완화
-- 기준: 713차. 분할바 이동 엔진, Lite V2 + library-590 경로, rAF/geometry 규칙은 변경하지 않음.
-- 최근 생성곡 상단 제목 카드는 split PC/tablet/mobile pane 전환 중에도 280px 고정 높이를 유지하고, compact pane에서도 세로 패딩을 desktop과 동일한 리듬으로 유지.
-- Music Note 곡 행과 Library workspace 곡 행은 84px 고정, Library playlist 곡 행은 72px 고정으로 통일해 660px 반응형 전환에서 리스트 전체 높이가 출렁이지 않도록 수정.
-- Music Note / Library mobile 텍스트 축소 폭을 완화: 제목/장르/메타/보조 텍스트를 한 단계 키우되 행 높이는 그대로 유지.
-- Music Note의 노트 플레이스/마이 노트/공유 노트와 Library의 뮤직 스페이스/마이 리스트/공유 리스트는 mobile에서도 tablet과 동일한 12px 라벨 크기 사용.
-- responsive tab의 transition-all을 색상 계열 transition만 남겨 font/padding 변경이 애니메이션처럼 느껴지지 않도록 제한.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+## SORIDRAW 715차 — 714 기준 Music Note 썸네일 고정 + 직접입력 아이콘 배경 제거
+
+- 기준: 714차 (분할 성능 안정 기준은 713차 유지)
+- Music Note 곡 목록 썸네일/재생 버튼을 모든 분할 폭에서 48×60px로 고정해 모바일/좁은 pane에서도 축소되지 않게 함.
+- Music Note 곡 목록의 `[장르]` 텍스트를 연회색(`#c8c8cc`)으로 통일.
+- Sori Studio 장르/스타일/사운드/분위기/주제 카드의 직접입력 연필 버튼 배경을 완전 투명 처리해 아이콘만 보이게 함.
+- 분할바, Lite V2, responsive geometry, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
+
+
+## SORIDRAW 716차 — 장르 텍스트 진회색 공통화 + 직접입력 버튼 배경 복구
+
+- 기준: 715차 (분할 성능 안정 기준은 713차 유지)
+- Music Note와 Library 곡 목록의 장르 텍스트를 동일한 진회색(`#9ca0a6`)으로 통일.
+- 715차에서 추가했던 Sori Studio 직접입력 연필 버튼의 투명 배경 강제 규칙을 제거해 714차 이전의 기존 배경 스타일로 복구.
+- 715차의 Music Note 썸네일 48×60px 고정은 유지.
+- 분할바, Lite V2, responsive geometry, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.

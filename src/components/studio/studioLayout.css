@@ -12398,3 +12398,30 @@ html[data-soridraw-theme="studio-black"]
   line-height: 1 !important;
   transition-property: background-color, color, opacity !important;
 }
+
+/* 715 — 713 split-stability baseline + 714 UI continuity: keep Music Note media size stable
+ * and remove the dark control tile behind Studio direct-input pencil buttons.
+ * Split/divider performance code is intentionally untouched. */
+
+/* Music Note song thumbnail/play button: do not shrink in compact/mobile split panes.
+ * Keep the same 48x60 geometry used by the tablet/desktop row so the media anchor stays stable. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-song-media {
+  width: 48px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  height: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  flex: 0 0 48px !important;
+}
+
+/* 716 — Music Note / Library genre labels use the same darker neutral gray. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-song-genre, .soridraw-library-item-genre) {
+  color: #9ca0a6 !important;
+  -webkit-text-fill-color: #9ca0a6 !important;
+}
+

@@ -180,24 +180,19 @@ const readInitialRuntimeLayoutMode = (
 };
 
 
-// 703 — pacing is about temporal regularity, not maximum throughput.
-// Slow motion stays 1:1. Only a large one-frame jump is divided into a few
-// bounded visual steps, so a delayed browser frame cannot teleport the split
-// boundary hundreds of pixels at once. The cap is time-normalized, therefore
-// 60 Hz and high-refresh displays converge at roughly the same px/sec rate.
-const PACING_SNAP_DISTANCE_PX = 24;
-const PACING_MIN_STEP_PX = 36;
-const PACING_STEP_AT_60HZ_PX = 96;
-const PACING_MAX_STEP_PX = 112;
+// 705 — spatial-gap pacing. Pointer Events may arrive coalesced during fast
+// motion, so a constant-speed catch-up path can accumulate a large visible gap
+// even when its own motion is regular. Keep the *distance* to the latest native
+// target bounded instead: slow movement is exact; fast movement is allowed to
+// cover the large native delta immediately while retaining only a small visual lag.
+const DRAG_MAX_VISUAL_LAG_PX = 14;
+const OUTER_MAX_VISUAL_LAG_PX = 8;
 
-const advancePacedPixel = (current: number, target: number, elapsedMs: number): number => {
+const followWithBoundedGap = (current: number, target: number, maxLagPx: number): number => {
   const delta = target - current;
   const distance = Math.abs(delta);
-  if (distance <= PACING_SNAP_DISTANCE_PX) return target;
-  const safeElapsed = Math.max(5, Math.min(34, Number.isFinite(elapsedMs) ? elapsedMs : 16.667));
-  const timeScaledStep = PACING_STEP_AT_60HZ_PX * (safeElapsed / 16.667);
-  const maxStep = Math.max(PACING_MIN_STEP_PX, Math.min(PACING_MAX_STEP_PX, timeScaledStep));
-  return current + Math.sign(delta) * Math.min(distance, maxStep);
+  if (distance <= maxLagPx) return target;
+  return target - Math.sign(delta) * maxLagPx;
 };
 
 export type LiteStudioSplitWorkspaceProps = {
@@ -809,8 +804,7 @@ export default function LiteStudioSplitWorkspace({
       const seedBuilderWidth = Math.round(previousWidth * (targetPercent / 100));
       const currentBuilderWidth = outerPacedBuilderWidthRef.current ?? seedBuilderWidth;
       const now = performance.now();
-      const elapsed = outerPacingFrameTimeRef.current === null ? 16.667 : now - outerPacingFrameTimeRef.current;
-      const nextBuilderWidth = Math.round(advancePacedPixel(currentBuilderWidth, targetBuilderWidth, elapsed));
+      const nextBuilderWidth = Math.round(followWithBoundedGap(currentBuilderWidth, targetBuilderWidth, OUTER_MAX_VISUAL_LAG_PX));
       outerPacingFrameTimeRef.current = now;
       outerPacedBuilderWidthRef.current = nextBuilderWidth;
       outerNeedsCatchUp = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
@@ -875,10 +869,9 @@ export default function LiteStudioSplitWorkspace({
     const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
     const currentPixel = dragPacedPixelRef.current ?? lastPixelRef.current ?? targetPixel;
     const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
-    const elapsed = dragPacingFrameTimeRef.current === null ? 16.667 : now - dragPacingFrameTimeRef.current;
     const nextPixel = forceExact || !pacingEligible
       ? targetPixel
-      : Math.round(advancePacedPixel(currentPixel, targetPixel, elapsed));
+      : Math.round(followWithBoundedGap(currentPixel, targetPixel, DRAG_MAX_VISUAL_LAG_PX));
     dragPacingFrameTimeRef.current = now;
     dragPacedPixelRef.current = nextPixel;
 
@@ -889,9 +882,8 @@ export default function LiteStudioSplitWorkspace({
       if (perfStart > 0) recordSplitPerfFlush(performance.now() - perfStart, true);
     }
 
-    // A large delayed input sample is consumed over a few display frames rather
-    // than one teleport. Keep ticking even if no new pointermove arrives; any new
-    // event simply replaces dragTargetPixelRef with the latest target.
+    // Keep ticking only while the bounded spatial gap still needs one more visual correction.
+    // New pointer input always replaces the target; no historical positions are replayed.
     if (!forceExact && pacingEligible && draggingRef.current && Math.abs(targetPixel - nextPixel) > 0.5 && frameRef.current === null) {
       frameRef.current = window.requestAnimationFrame((time) => flushPointer(time));
     }

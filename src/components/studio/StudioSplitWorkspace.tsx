@@ -129,25 +129,20 @@ type StudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
 };
 
-// 704 — Recent Songs must participate in the same pacing contract as
-// Music Note / Library. Keep slow movement effectively 1:1, but prevent a
-// sparse fast input/resize burst from becoming one 100~300px visual teleport.
-// The helper is intentionally identical to LiteStudioSplitWorkspace 703 so all
-// three result workspaces share one temporal rule while retaining their proven
-// renderer/geometry engines.
-const RECENT_PACING_SNAP_DISTANCE_PX = 24;
-const RECENT_PACING_MIN_STEP_PX = 36;
-const RECENT_PACING_STEP_AT_60HZ_PX = 96;
-const RECENT_PACING_MAX_STEP_PX = 112;
+// 705 — spatial-gap pacing. The previous constant-speed follower could look
+// smooth in isolation but allowed the cursor/viewport target to run hundreds of
+// pixels ahead during a sparse fast input burst. The product goal is different:
+// preserve a visually constant relationship between the native target and the
+// split boundary. Slow motion stays exact. Fast motion may jump as much as the
+// native target jumped, but the visible lag itself is capped to a small distance.
+const RECENT_DRAG_MAX_VISUAL_LAG_PX = 14;
+const RECENT_OUTER_MAX_VISUAL_LAG_PX = 8;
 
-const advanceRecentPacedPixel = (current: number, target: number, elapsedMs: number): number => {
+const followRecentWithBoundedGap = (current: number, target: number, maxLagPx: number): number => {
   const delta = target - current;
   const distance = Math.abs(delta);
-  if (distance <= RECENT_PACING_SNAP_DISTANCE_PX) return target;
-  const safeElapsed = Math.max(4, Math.min(33.334, Number.isFinite(elapsedMs) ? elapsedMs : 16.667));
-  const timeScaledStep = RECENT_PACING_STEP_AT_60HZ_PX * (safeElapsed / 16.667);
-  const maxStep = Math.max(RECENT_PACING_MIN_STEP_PX, Math.min(RECENT_PACING_MAX_STEP_PX, timeScaledStep));
-  return current + (Math.sign(delta) * Math.min(distance, maxStep));
+  if (distance <= maxLagPx) return target;
+  return target - (Math.sign(delta) * maxLagPx);
 };
 
 export default function StudioSplitWorkspace({
@@ -1051,13 +1046,12 @@ export default function StudioSplitWorkspace({
       const seedBuilderWidth = Math.round(seedWidth * (targetPercent / 100));
       const currentBuilderWidth = recentOuterPacedBuilderWidthRef.current ?? seedBuilderWidth;
       const now = performance.now();
-      const elapsed = recentOuterPacingFrameTimeRef.current === null ? 16.667 : now - recentOuterPacingFrameTimeRef.current;
-      const nextBuilderWidth = Math.round(advanceRecentPacedPixel(currentBuilderWidth, targetBuilderWidth, elapsed));
+      const nextBuilderWidth = Math.round(followRecentWithBoundedGap(currentBuilderWidth, targetBuilderWidth, RECENT_OUTER_MAX_VISUAL_LAG_PX));
       recentOuterPacingFrameTimeRef.current = now;
       recentOuterPacedBuilderWidthRef.current = nextBuilderWidth;
       recentOuterNeedsCatchUpRef.current = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
       appliedPercent = applyPercentToLayout((nextBuilderWidth / Math.max(1, metricsRef.current.width)) * 100);
-      // Visual pacing must never rewrite the user's stored split ratio.
+      // Spatial-gap pacing must never rewrite the user's stored split ratio.
       percentRef.current = targetPercent;
     } else {
       recentOuterPacedBuilderWidthRef.current = null;
@@ -1347,10 +1341,9 @@ export default function StudioSplitWorkspace({
       if (targetPixel === null) return;
       const currentPixel = recentDragPacedPixelRef.current ?? lastDragBuilderPixelRef.current ?? targetPixel;
       const now = performance.now();
-      const elapsed = recentDragPacingFrameTimeRef.current === null ? 16.667 : now - recentDragPacingFrameTimeRef.current;
       const nextPixel = forceLayout
         ? targetPixel
-        : Math.round(advanceRecentPacedPixel(currentPixel, targetPixel, elapsed));
+        : Math.round(followRecentWithBoundedGap(currentPixel, targetPixel, RECENT_DRAG_MAX_VISUAL_LAG_PX));
       recentDragPacingFrameTimeRef.current = now;
       recentDragPacedPixelRef.current = nextPixel;
 

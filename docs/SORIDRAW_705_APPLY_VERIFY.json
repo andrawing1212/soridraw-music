@@ -1,0 +1,10 @@
+{
+  "version": 705,
+  "base": 704,
+  "goal": "Keep cursor-to-divider and outer-window-to-pane spacing visually bounded and consistent instead of enforcing constant catch-up speed.",
+  "internalDividerMaxVisualLagPx": 14,
+  "outerWindowMaxVisualLagPx": 8,
+  "workspaces": ["recent", "music-note", "library"],
+  "preserved": ["694 performance baseline", "existing Legacy/Lite renderer ownership", "PC/Tablet/Mobile responsive rules", "touch adaptive path"],
+  "notChanged": ["Firebase", "Auth", "Firestore", "Functions", "storage schema", "visual design"]
+}

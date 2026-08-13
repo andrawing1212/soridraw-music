@@ -2098,3 +2098,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 최근 생성곡 외부창: stored split ratio는 보존하고, native viewport 목표를 향해 visual builder boundary만 동일 pacing으로 catch-up.
 - Music Note/Library의 703 Lite pacing은 그대로 유지.
 - Studio Create 및 실제 터치 우선 adaptive 경로는 변경하지 않음.
+
+### 705 — cursor/divider spatial-gap pacing
+- Base: 704 (which itself carries the 694 performance baseline and applies the same pacing contract to Recent Songs, Music Note and Library).
+- Replaced constant-speed catch-up with bounded spatial lag: internal divider max visual lag 14px, outer-window pane boundary max visual lag 8px.
+- Slow movement remains exact. Fast sparse pointer/resize updates no longer create a growing hundreds-of-pixels gap while the divider catches up at a fixed speed.
+- No pointerrawupdate, forced layout, transform proxy, new diagnostic UI, Firebase/Auth/Firestore/Functions/data changes.

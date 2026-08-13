@@ -231,6 +231,11 @@ export default function LiteStudioSplitWorkspace({
   const manualWindowPerfCaptureActiveRef = useRef(false);
   const manualWindowPerfBaselineGapRef = useRef<number | null>(null);
   const manualWindowPerfInitialWorkspaceRightRef = useRef<number | null>(null);
+  // 699 diagnostics-only: window resize listeners are intentionally long-lived.
+  // Keep the active workspace in a ref so the listener never compares against
+  // the workspace value captured when LiteStudioSplitWorkspace first mounted.
+  const workspaceViewRef = useRef<StudioWorkspaceView>(workspaceView || 'create');
+  workspaceViewRef.current = workspaceView || 'create';
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
@@ -1030,7 +1035,7 @@ export default function LiteStudioSplitWorkspace({
       const nextWorkspace = detail?.workspace;
       if (nextWorkspace === 'create' || nextWorkspace === 'recent' || nextWorkspace === 'music-note' || nextWorkspace === 'library') {
         manualWindowPerfArmedWorkspaceRef.current = nextWorkspace;
-        if ((workspaceView || 'create') === nextWorkspace) {
+        if (workspaceViewRef.current === nextWorkspace) {
           const rect = layoutRef.current?.getBoundingClientRect();
           if (rect && rect.width > 0) {
             manualWindowPerfInitialWorkspaceRightRef.current = rect.right;
@@ -1442,7 +1447,7 @@ export default function LiteStudioSplitWorkspace({
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
-        const activeWorkspace = workspaceView || 'create';
+        const activeWorkspace = workspaceViewRef.current;
         const captureWindowPerf = manualWindowPerfArmedWorkspaceRef.current === activeWorkspace;
         manualWindowPerfArmedWorkspaceRef.current = null;
         manualWindowPerfCaptureActiveRef.current = captureWindowPerf;
@@ -1450,8 +1455,8 @@ export default function LiteStudioSplitWorkspace({
           const builder = builderRef.current;
           const result = resultRef.current;
           beginSplitPerfDrag({
-            workspaceView,
-            engine: `Lite V2 · outer pacing diagnostic 698 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
+            workspaceView: activeWorkspace,
+            engine: `Lite V2 · outer pacing diagnostic 699 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
             builder,
             result,
             layoutMode: runtimeLayoutModeRef.current,

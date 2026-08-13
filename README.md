@@ -2089,3 +2089,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 전역 `SecondaryScrollControl`의 `documentElement ResizeObserver`는 외부창 resize 중 `scrollHeight/clientHeight`를 읽지 않도록 정지하고 `soridraw-window-resize-end`에서 1회 다시 계산한다. 내부 split drag에서 이미 사용하던 동일한 비필수 작업 정지 원칙을 outer resize에도 맞췄다.
 - 공식 참고 원칙: Chrome/web.dev의 forced reflow 가이드(스타일 write 뒤 geometry read 금지, reads/writes batching), ResizeObserver callback은 paint 전 실행되어 무거우면 다음 프레임을 지연할 수 있다는 가이드, `requestAnimationFrame`은 display refresh에 맞춘 1회 paint 직전 콜백이라는 MDN 설명, CSS scroll anchoring을 문제 구간에서 `overflow-anchor:none`으로 opt-out할 수 있다는 MDN 설명.
 - UI/테두리/페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+
+### 699차 — 698 외부창 추종 진단 수정
+- 기준: 698차 측정 전용본. 앱 성능/레이아웃 동작은 변경하지 않음.
+- 수정 1: Lite 외부창 resize listener가 최초 mount 시점의 workspaceView를 캡처해 Music Note/Library로 전환 후 arm을 놓치던 stale closure 제거. 현재 workspace는 ref로 읽음.
+- 수정 2: 너무 짧은 외부창 측정이 한 번 발생하면 one-shot arm이 소모된 채 65초 timeout으로 가던 문제를 동일 workspace 자동 re-arm으로 수정.
+- 수정 3: PERF 상단 버튼줄 설명 문구가 flex에서 폭 0에 가깝게 눌려 오른쪽 세로 기둥처럼 길어지던 UI를 버튼 wrap + 설명 100% 행으로 정리.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

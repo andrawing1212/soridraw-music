@@ -931,7 +931,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       if (!next || next.createdAt < startedAt || next.workspaceView !== workspace) return;
       if (next.captureKind !== 'window-resize' || next.benchmarkSurface !== null) return;
       if (next.durationMs < 700 || next.spatialSampleCount < 6 || next.viewportWidthDistancePx < 100) {
-        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 외부창 이동이 너무 짧습니다. PC↔태블릿 구간을 4~6초 계속 왕복한 뒤 놓아주세요.`);
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 외부창 이동이 너무 짧습니다. 같은 화면에서 PC↔태블릿 구간을 다시 4~6초 왕복한 뒤 놓아주세요.`);
+        // 699: a rejected one-shot capture used to consume the arm and then wait
+        // until the 65s timeout. Re-arm the same workspace automatically so the
+        // next browser-window drag is actually measured.
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: true, workspace } }));
         return;
       }
       finishResolve(next);

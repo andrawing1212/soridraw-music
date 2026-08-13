@@ -1,0 +1,18 @@
+{
+  "version": 699,
+  "base": "SORIDRAW_698차_694기준_커서분할바_pane_외부창간격_추종진단_측정전용.zip",
+  "purpose": "외부창 추종 측정 timeout 및 PERF 패널 세로형 UI 회귀 수정",
+  "changed_files": [
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/SplitPerformanceDiagnostics.tsx",
+    "src/components/studio/liteSplitWorkspace.css",
+    "README.md"
+  ],
+  "behavior_changes": [
+    "외부창 진단이 현재 workspace를 stale closure가 아닌 ref로 판정",
+    "짧은 측정 실패 시 같은 workspace 자동 re-arm",
+    "진단 버튼줄 설명을 별도 full-width 행으로 배치"
+  ],
+  "production_app_behavior_changed": false,
+  "firebase_data_changed": false
+}

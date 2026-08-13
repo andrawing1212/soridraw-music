@@ -165,6 +165,106 @@ export const resetSplitMotionFastMode = (state: SplitMotionFastState) => {
   state.slowSince = null;
 };
 
+export type SplitFluidSpringState = {
+  velocityPxPerSecond: number;
+  lastFrameTime: number | null;
+};
+
+// 710 — critically damped visual follower for fast split motion.
+// The goal is not "animation" for its own sake. It fills the visual frames
+// between sparse/coalesced pointer/resize updates with a continuous velocity
+// curve, while keeping slow/normal manipulation on the existing direct path.
+//
+// 100% damping (critical damping) means there is no bounce/oscillation.
+// A 100ms response is deliberately firm enough for a splitter, and the
+// integration delta is capped at 8ms so a dropped frame cannot be repaid as
+// one oversized catch-up jump on the next paint.
+const FLUID_SPRING_RESPONSE_SECONDS = 0.100;
+const FLUID_SPRING_MAX_INTEGRATION_MS = 8;
+const FLUID_SPRING_SETTLE_DISTANCE_PX = 0.35;
+const FLUID_SPRING_SETTLE_VELOCITY_PX_PER_SECOND = 18;
+const FLUID_SPRING_REVERSE_VELOCITY_RETAIN = 0.18;
+const FLUID_SPRING_MAX_SEEDED_VELOCITY_PX_PER_SECOND = 6000;
+
+export const primeSplitFluidSpring = (
+  state: SplitFluidSpringState,
+  current: number,
+  next: number,
+  frameTime: number,
+) => {
+  const now = Number.isFinite(frameTime) ? frameTime : performance.now();
+  const previousTime = state.lastFrameTime;
+  if (previousTime !== null) {
+    const dtMs = Math.max(1, Math.min(32, now - previousTime));
+    const measured = ((next - current) / dtMs) * 1000;
+    state.velocityPxPerSecond = clamp(
+      measured,
+      -FLUID_SPRING_MAX_SEEDED_VELOCITY_PX_PER_SECOND,
+      FLUID_SPRING_MAX_SEEDED_VELOCITY_PX_PER_SECOND,
+    );
+  } else {
+    state.velocityPxPerSecond = 0;
+  }
+  state.lastFrameTime = now;
+};
+
+export const followSplitTargetWithFluidSpring = (
+  current: number,
+  target: number,
+  state: SplitFluidSpringState,
+  frameTime: number,
+): number => {
+  const delta = target - current;
+  if (Math.abs(delta) <= FLUID_SPRING_SETTLE_DISTANCE_PX) {
+    state.velocityPxPerSecond = 0;
+    state.lastFrameTime = Number.isFinite(frameTime) ? frameTime : performance.now();
+    return target;
+  }
+
+  const now = Number.isFinite(frameTime) ? frameTime : performance.now();
+  const rawDtMs = state.lastFrameTime === null ? FLUID_SPRING_MAX_INTEGRATION_MS : now - state.lastFrameTime;
+  const dtMs = clamp(rawDtMs, 1, FLUID_SPRING_MAX_INTEGRATION_MS);
+  const dt = dtMs / 1000;
+  state.lastFrameTime = now;
+
+  if (
+    Math.abs(state.velocityPxPerSecond) > 1
+    && Math.sign(state.velocityPxPerSecond) !== Math.sign(delta)
+  ) {
+    state.velocityPxPerSecond *= FLUID_SPRING_REVERSE_VELOCITY_RETAIN;
+  }
+
+  const omega = (Math.PI * 2) / FLUID_SPRING_RESPONSE_SECONDS;
+  const y = current - target;
+  const c = state.velocityPxPerSecond + omega * y;
+  const decay = Math.exp(-omega * dt);
+  const nextY = (y + c * dt) * decay;
+  let nextVelocity = (state.velocityPxPerSecond - omega * c * dt) * decay;
+  let next = target + nextY;
+
+  if (Math.sign(target - current) !== Math.sign(target - next)) {
+    next = target;
+    nextVelocity = 0;
+  }
+
+  if (
+    Math.abs(target - next) <= FLUID_SPRING_SETTLE_DISTANCE_PX
+    && Math.abs(nextVelocity) <= FLUID_SPRING_SETTLE_VELOCITY_PX_PER_SECOND
+  ) {
+    next = target;
+    nextVelocity = 0;
+  }
+
+  state.velocityPxPerSecond = nextVelocity;
+  return next;
+};
+
+export const resetSplitFluidSpring = (state: SplitFluidSpringState) => {
+  state.velocityPxPerSecond = 0;
+  state.lastFrameTime = null;
+};
+
+
 
 // 709 — large-jump guard. Slow/normal motion should remain exact, but a sparse
 // fast pointer/resize burst must not be rendered as one 100~300px visual jump.

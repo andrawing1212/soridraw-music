@@ -2143,3 +2143,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 느린/보통 이동(72px 이하)은 기존처럼 즉시 목표 위치를 사용한다.
 - Recent의 빠른 구간에서 divider만 커서 앞으로 즉시 튀던 preview 경로를 제거해 divider와 pane이 같은 visual boundary를 유지한다.
 - UI / Firebase / Firestore / Auth / Functions / 저장 구조 변경 없음.
+
+## SORIDRAW 710차 — 709 기준 · 고속 분할 추종 Critically Damped Fluid Spring
+
+- 기준: `SORIDRAW_709차_708기준_큰점프억제_일정프레임이동량_Recent뮤직노트라이브러리.zip`
+- 대상: 최근 생성곡 / 뮤직노트 / 라이브러리의 PC fine-pointer 내부 분할 및 외부창 고속 추종.
+- 느린/일반 이동: 709의 기존 direct/bounded-gap 경로 유지.
+- 빠른 이동: 709의 hard step jump guard(72px 임계 / 최대 56px step) 대신 100% damping의 critically-damped spring follower를 사용.
+- response: 100ms. overshoot 없음.
+- 프레임 지연 catch-up 방지: spring integration dt를 최대 8ms로 제한. 프레임이 한 번 막혀도 다음 paint에서 밀린 시간을 큰 위치 점프로 상환하지 않는다.
+- 느림→빠름 전환: 기존 시각 이동속도를 spring initial velocity로 seed하여 속도가 갑자기 0에서 시작하지 않게 한다.
+- 방향 반전: 이전 방향 velocity를 18%만 보존해 부드럽게 감속·반전하되 반대방향 관성으로 멀어지는 현상은 제한한다.
+- 포인터 입력/반응형/Firebase/저장구조/UI 디자인 변경 없음.
+- 근거: 2026-08-14 업로드 trace에서 pointermove JS 자체는 매우 가벼웠지만(pointermove EventDispatch p95 약 0.27ms), Layout p95 약 29ms / UpdateLayoutTree p95 약 15ms였고 pointermove 전달 간격도 불규칙했다. 따라서 입력을 더 늘리기보다 rAF 사이 시각 위치를 연속 velocity로 연결하는 쪽을 선택했다.

@@ -1,0 +1,38 @@
+{
+  "version": 710,
+  "basis": "SORIDRAW_709차_708기준_큰점프억제_일정프레임이동량_Recent뮤직노트라이브러리.zip",
+  "goal": "Preserve 709 performance while replacing hard fast-motion steps with critically damped acceleration/deceleration pacing.",
+  "scope": [
+    "recent internal split",
+    "music-note internal split",
+    "library internal split",
+    "recent outer-window tracking",
+    "music-note outer-window tracking",
+    "library outer-window tracking"
+  ],
+  "motion": {
+    "slow_normal": "existing 709 direct/bounded-gap path",
+    "fast": "critically damped spring",
+    "response_ms": 100,
+    "damping_ratio": 1.0,
+    "overshoot": false,
+    "max_integration_dt_ms": 8,
+    "direction_reverse_velocity_retain": 0.18,
+    "seed_previous_visual_velocity": true
+  },
+  "trace_basis": {
+    "file": "Trace-20260814T011209.json.gz",
+    "app_renderer_pointermove_eventdispatch_p95_ms": 0.275,
+    "app_renderer_layout_p95_ms": 29.059,
+    "app_renderer_update_layout_tree_p95_ms": 15.025,
+    "pointermove_interval_median_ms": 7.964,
+    "pointermove_interval_p95_ms": 66.944
+  },
+  "synthetic_300px_jump_165hz": {
+    "first_steps_px": [27.3, 39.1, 41.7, 38.7, 33.4],
+    "max_step_px": 41.7,
+    "note": "Acceleration then deceleration; a simulated 50ms dropped frame is capped to an 8ms integration step instead of producing a catch-up jump."
+  },
+  "firebase_auth_firestore_functions_changed": false,
+  "deployment": "none"
+}

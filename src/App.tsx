@@ -15405,6 +15405,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onMouseEnter={() => setHoveredItem({ id: 'lyric-mode', label: '직접 작사', description: '가사 초안을 직접 입력하여 생성 결과에 우선 반영합니다.' })}
                 onMouseLeave={() => setHoveredItem(null)}
                 aria-pressed={isLyricMode}
+                data-soridraw-selected={isLyricMode ? 'true' : 'false'}
                 className={cn(
                   "soridraw-direct-lyrics-toggle flex items-center justify-center gap-2 px-4 md:px-5 py-2.5 rounded-xl text-[13px] md:text-sm font-extrabold transition-all border shadow-[0_8px_24px_rgba(0,0,0,0.28)] min-h-[42px]",
                   isLyricMode 
@@ -15442,8 +15443,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
                         <button
                           onClick={() => setLyricMode('assist')}
+                          data-soridraw-selected={lyricMode === 'assist' ? 'true' : 'false'}
                           className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'assist' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -15453,8 +15455,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </button>
                         <button
                           onClick={() => setLyricMode('preserve')}
+                          data-soridraw-selected={lyricMode === 'preserve' ? 'true' : 'false'}
                           className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'preserve' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -24423,6 +24426,7 @@ function VocalControlComponent({
             <div className="grid grid-cols-2 gap-2">
               <button
                 data-soridraw-selected={maleCount > 0 ? 'true' : 'false'}
+                data-vocal-gender="male"
                 aria-pressed={maleCount > 0}
                 onClick={() => handleGenderToggle('male')}
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
@@ -24442,6 +24446,7 @@ function VocalControlComponent({
               </button>
               <button
                 data-soridraw-selected={femaleCount > 0 ? 'true' : 'false'}
+                data-vocal-gender="female"
                 aria-pressed={femaleCount > 0}
                 onClick={() => handleGenderToggle('female')}
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}

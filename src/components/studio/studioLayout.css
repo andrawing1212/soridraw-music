@@ -406,6 +406,40 @@
   stroke: currentColor;
 }
 
+/* 718 — Preserve semantic vocal gender colors in Studio Black.
+ * The generic selected-state rule above intentionally paints normal selections amber,
+ * but male/female vocal buttons are semantic controls and should match the existing
+ * dark-mode gender palette instead of inheriting the global amber state. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="male"][data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="male"][aria-pressed="true"] {
+  background: rgb(37 99 235 / 0.20) !important;
+  background-color: rgb(37 99 235 / 0.20) !important;
+  color: rgb(96 165 250) !important;
+  -webkit-text-fill-color: rgb(96 165 250) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="female"][data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="female"][aria-pressed="true"] {
+  background: rgb(219 39 119 / 0.20) !important;
+  background-color: rgb(219 39 119 / 0.20) !important;
+  color: rgb(244 114 182) !important;
+  -webkit-text-fill-color: rgb(244 114 182) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="male"]:is([data-soridraw-selected="true"], [aria-pressed="true"]) :where(span, strong, small, p, div, label, svg) {
+  color: rgb(96 165 250) !important;
+  -webkit-text-fill-color: rgb(96 165 250) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="female"]:is([data-soridraw-selected="true"], [aria-pressed="true"]) :where(span, strong, small, p, div, label, svg) {
+  color: rgb(244 114 182) !important;
+  -webkit-text-fill-color: rgb(244 114 182) !important;
+}
+
 /*
  * Builder card flow owner.
  * The browser's md/lg classes must not create implicit columns inside a narrow split pane.
@@ -12432,3 +12466,69 @@ html[data-soridraw-theme="studio-black"]
   -webkit-text-fill-color: #9ca0a6 !important;
 }
 
+
+/* 720 — Split-mode Direct Lyrics controls keep their explicit amber selected state.
+ * The Studio Black neutral-button pass is intentionally broad, so these semantic
+ * state controls expose stable selected hooks instead of relying on Tailwind color
+ * utilities alone. Classic Dark/Light styling remains owned by the existing rules. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-direct-lyrics-toggle[data-soridraw-selected="true"],
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-lyric-mode-option[data-soridraw-selected="true"] {
+  background: var(--sb-accent) !important;
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-direct-lyrics-toggle[data-soridraw-selected="true"] :where(svg, span),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-lyric-mode-option[data-soridraw-selected="true"] :where(svg, span) {
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  stroke: currentColor !important;
+}
+
+/* 720 — Classic Dark/Light collapsed Generate tab now uses the same half-exposed
+ * silhouette as Split Studio. The non-split app has no left rail, so the shared
+ * shape is anchored to the viewport's left edge while keeping the existing captured
+ * vertical baseline. No theme colors or expanded action-bar geometry are changed. */
+html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-collapsed {
+  --soridraw-collapsed-action-width: clamp(60px, 18vw, 74px);
+  --soridraw-collapsed-action-half-width: clamp(30px, 9vw, 37px);
+  --soridraw-collapsed-action-height: clamp(70px, 20vw, 92px);
+  position: fixed !important;
+  right: auto !important;
+  left: calc(0px - var(--soridraw-collapsed-action-half-width)) !important;
+  width: var(--soridraw-collapsed-action-width) !important;
+  min-width: var(--soridraw-collapsed-action-width) !important;
+  max-width: var(--soridraw-collapsed-action-width) !important;
+  height: var(--soridraw-collapsed-action-height) !important;
+  min-height: var(--soridraw-collapsed-action-height) !important;
+  max-height: var(--soridraw-collapsed-action-height) !important;
+  padding: 0 !important;
+  translate: none !important;
+  clip-path: inset(-24px -24px -24px 50%) !important;
+  border-radius: clamp(17px, 5vw, 21px) !important;
+  justify-content: flex-end !important;
+  transition: width 120ms linear, height 120ms linear, background-color 150ms !important;
+  will-change: transform !important;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+html:not([data-soridraw-theme="studio-black"]) body > .soridraw-studio-action-collapsed
+> .soridraw-studio-action-collapsed-arrow {
+  position: absolute !important;
+  inset: 0 0 0 50% !important;
+  width: 50% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}

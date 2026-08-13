@@ -231,6 +231,8 @@ export default function LiteStudioSplitWorkspace({
   const manualWindowPerfCaptureActiveRef = useRef(false);
   const manualWindowPerfBaselineGapRef = useRef<number | null>(null);
   const manualWindowPerfInitialWorkspaceRightRef = useRef<number | null>(null);
+  const manualWindowPerfArmViewportWidthRef = useRef<number | null>(null);
+  const manualWindowPerfCaptureStartedAtRef = useRef<number | null>(null);
   // 699 diagnostics-only: window resize listeners are intentionally long-lived.
   // Keep the active workspace in a ref so the listener never compares against
   // the workspace value captured when LiteStudioSplitWorkspace first mounted.
@@ -1030,11 +1032,14 @@ export default function LiteStudioSplitWorkspace({
         manualWindowPerfArmedWorkspaceRef.current = null;
         manualWindowPerfBaselineGapRef.current = null;
         manualWindowPerfInitialWorkspaceRightRef.current = null;
+        manualWindowPerfArmViewportWidthRef.current = null;
+        manualWindowPerfCaptureStartedAtRef.current = null;
         return;
       }
       const nextWorkspace = detail?.workspace;
       if (nextWorkspace === 'create' || nextWorkspace === 'recent' || nextWorkspace === 'music-note' || nextWorkspace === 'library') {
         manualWindowPerfArmedWorkspaceRef.current = nextWorkspace;
+        manualWindowPerfArmViewportWidthRef.current = window.innerWidth;
         if (workspaceViewRef.current === nextWorkspace) {
           const rect = layoutRef.current?.getBoundingClientRect();
           if (rect && rect.width > 0) {
@@ -1442,21 +1447,52 @@ export default function LiteStudioSplitWorkspace({
     // continuously resized, then restore exact responsive detail once at settle.
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
+    let manualWindowHardStopTimer: number | null = null;
+    const MANUAL_WINDOW_MIN_CAPTURE_MS = 4000;
+    const MANUAL_WINDOW_HARD_STOP_MS = 6500;
+    const MANUAL_WINDOW_REAL_RESIZE_DELTA_PX = 3;
+
+    const finishManualWindowPerfCapture = () => {
+      if (!manualWindowPerfCaptureActiveRef.current) return;
+      manualWindowPerfCaptureActiveRef.current = false;
+      manualWindowPerfArmedWorkspaceRef.current = null;
+      manualWindowPerfArmViewportWidthRef.current = null;
+      manualWindowPerfCaptureStartedAtRef.current = null;
+      manualWindowPerfBaselineGapRef.current = null;
+      manualWindowPerfInitialWorkspaceRightRef.current = null;
+      if (manualWindowHardStopTimer !== null) {
+        window.clearTimeout(manualWindowHardStopTimer);
+        manualWindowHardStopTimer = null;
+      }
+      layoutAckObserverRef.current?.disconnect();
+      layoutAckObserverRef.current = null;
+      if (isSplitPerfDragActive()) finishSplitPerfDrag();
+    };
+
     const handleWindowResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
+      }
+
+      // 700 diagnostics-only: arming a workspace must not be consumed by an
+      // incidental resize signal from the workspace hand-off. Start only after
+      // the actual viewport width moved from the width captured at arm time.
+      if (!manualWindowPerfCaptureActiveRef.current) {
         const activeWorkspace = workspaceViewRef.current;
-        const captureWindowPerf = manualWindowPerfArmedWorkspaceRef.current === activeWorkspace;
-        manualWindowPerfArmedWorkspaceRef.current = null;
-        manualWindowPerfCaptureActiveRef.current = captureWindowPerf;
-        if (captureWindowPerf) {
+        const armedForWorkspace = manualWindowPerfArmedWorkspaceRef.current === activeWorkspace;
+        const armedViewportWidth = manualWindowPerfArmViewportWidthRef.current;
+        const viewportDelta = armedViewportWidth === null ? 0 : Math.abs(window.innerWidth - armedViewportWidth);
+        if (armedForWorkspace && viewportDelta >= MANUAL_WINDOW_REAL_RESIZE_DELTA_PX) {
+          manualWindowPerfArmedWorkspaceRef.current = null;
+          manualWindowPerfCaptureActiveRef.current = true;
+          manualWindowPerfCaptureStartedAtRef.current = performance.now();
           const builder = builderRef.current;
           const result = resultRef.current;
           beginSplitPerfDrag({
             workspaceView: activeWorkspace,
-            engine: `Lite V2 · outer pacing diagnostic 699 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
+            engine: `Lite V2 · outer pacing diagnostic 700 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
             builder,
             result,
             layoutMode: runtimeLayoutModeRef.current,
@@ -1465,6 +1501,11 @@ export default function LiteStudioSplitWorkspace({
             initialWorkspaceRight: manualWindowPerfInitialWorkspaceRightRef.current,
           });
           startLayoutAckObserver(builder?.getBoundingClientRect().width || 0, result?.getBoundingClientRect().width || 0);
+          if (manualWindowHardStopTimer !== null) window.clearTimeout(manualWindowHardStopTimer);
+          manualWindowHardStopTimer = window.setTimeout(() => {
+            manualWindowHardStopTimer = null;
+            window.requestAnimationFrame(finishManualWindowPerfCapture);
+          }, MANUAL_WINDOW_HARD_STOP_MS);
         }
       }
 
@@ -1487,15 +1528,14 @@ export default function LiteStudioSplitWorkspace({
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
         if (manualWindowPerfCaptureActiveRef.current) {
-          window.requestAnimationFrame(() => {
-            if (!manualWindowPerfCaptureActiveRef.current) return;
-            manualWindowPerfCaptureActiveRef.current = false;
-            manualWindowPerfBaselineGapRef.current = null;
-            manualWindowPerfInitialWorkspaceRightRef.current = null;
-            layoutAckObserverRef.current?.disconnect();
-            layoutAckObserverRef.current = null;
-            finishSplitPerfDrag();
-          });
+          const startedAt = manualWindowPerfCaptureStartedAtRef.current;
+          const elapsed = startedAt === null ? 0 : performance.now() - startedAt;
+          // Normal 110ms resize-settle must NOT end a 4–6 second tracking run.
+          // Keep the same capture alive across small pauses and finish only after
+          // the minimum observation window has actually elapsed.
+          if (elapsed >= MANUAL_WINDOW_MIN_CAPTURE_MS) {
+            window.requestAnimationFrame(finishManualWindowPerfCapture);
+          }
         }
       }, 110);
     };
@@ -1513,10 +1553,13 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
+      if (manualWindowHardStopTimer !== null) window.clearTimeout(manualWindowHardStopTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
       manualWindowPerfArmedWorkspaceRef.current = null;
       manualWindowPerfBaselineGapRef.current = null;
       manualWindowPerfInitialWorkspaceRightRef.current = null;
+      manualWindowPerfArmViewportWidthRef.current = null;
+      manualWindowPerfCaptureStartedAtRef.current = null;
       if (manualWindowPerfCaptureActiveRef.current) {
         manualWindowPerfCaptureActiveRef.current = false;
         layoutAckObserverRef.current?.disconnect();

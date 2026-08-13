@@ -868,6 +868,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     try {
       const rows: PairHandRow[] = [];
       for (const workspace of ['music-note', 'library'] as PairWorkspace[]) {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: false } }));
         window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: workspace } }));
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
         await waitForWorkspaceReady(workspace);
@@ -930,8 +931,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     const unsubscribe = subscribeSplitPerfResult((next) => {
       if (!next || next.createdAt < startedAt || next.workspaceView !== workspace) return;
       if (next.captureKind !== 'window-resize' || next.benchmarkSurface !== null) return;
-      if (next.durationMs < 700 || next.spatialSampleCount < 6 || next.viewportWidthDistancePx < 100) {
-        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 외부창 이동이 너무 짧습니다. 같은 화면에서 PC↔태블릿 구간을 다시 4~6초 왕복한 뒤 놓아주세요.`);
+      if (next.durationMs < 3800 || next.spatialSampleCount < 24 || next.viewportWidthDistancePx < 500) {
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 유효 측정이 아닙니다. 같은 화면에서 최소 4초 동안 PC↔태블릿 구간을 천천히→빠르게 왕복해 주세요.`);
         // 699: a rejected one-shot capture used to consume the arm and then wait
         // until the 65s timeout. Re-arm the same workspace automatically so the
         // next browser-window drag is actually measured.
@@ -970,15 +971,20 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     try {
       const rows: PairOuterRow[] = [];
       for (const workspace of ['music-note', 'library'] as PairWorkspace[]) {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: false } }));
         window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: workspace } }));
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
         await waitForWorkspaceReady(workspace);
-        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 외부 브라우저 창을 PC↔태블릿 구간으로 4~6초 계속 왕복한 뒤 놓아주세요.`);
+        // 700: let the workspace hand-off settle before arming so route/layout
+        // changes can never masquerade as the user's browser-edge drag.
+        await new Promise((resolve) => window.setTimeout(resolve, 650));
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 지금부터 외부 브라우저 창을 최소 4초 동안 PC↔태블릿 구간으로 천천히→빠르게 계속 왕복해 주세요.`);
         window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: true, workspace } }));
         const measured = await waitForManualWindowResizeResult(workspace);
         rows.push(toOuterPairRow(workspace, measured));
         setOuterPairRows([...rows]);
-        await new Promise((resolve) => window.setTimeout(resolve, 420));
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: false } }));
+        await new Promise((resolve) => window.setTimeout(resolve, 700));
       }
       setBenchmarkMessage('외부창 추종 비교 완료 · gap Δ/Jitter가 작고 일정할수록 외부창과 내부 workspace가 같은 간격으로 따라옵니다.');
     } catch (error) {

@@ -2097,3 +2097,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정 2: 너무 짧은 외부창 측정이 한 번 발생하면 one-shot arm이 소모된 채 65초 timeout으로 가던 문제를 동일 workspace 자동 re-arm으로 수정.
 - 수정 3: PERF 상단 버튼줄 설명 문구가 flex에서 폭 0에 가깝게 눌려 오른쪽 세로 기둥처럼 길어지던 UI를 버튼 wrap + 설명 100% 행으로 정리.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 700차 — 외부창 추종 진단 4초 고정 측정 / 단계 오검출 제거
+- 기준: 699차(실제 앱 성능 경로는 694와 동일).
+- 699의 외부창 진단은 native resize settle 110ms를 측정 종료로도 사용해서, 사용자가 잠깐 멈추면 1초대 샘플이 완료되고 다음 Library 단계가 잘못 소비될 수 있었다.
+- 실제 viewport width가 arm 시점보다 3px 이상 바뀐 첫 사용자 resize에서만 측정을 시작한다.
+- 측정은 작은 중간 pause를 허용하며 최소 4초 전에는 종료하지 않는다. 최대 6.5초에서 안전 종료한다.
+- 유효 샘플 기준을 duration 3.8s+, spatial sample 24+, 누적 viewport 이동 500px+로 강화했다.
+- Music Note → Library 전환 사이에 명시적 disarm + 650ms settle을 넣어 workspace 전환 신호가 다음 측정을 자동 완료하지 못하게 했다.
+- 진단 코드만 변경. 앱의 분할/리사이즈 성능 및 geometry 로직은 변경하지 않는다.

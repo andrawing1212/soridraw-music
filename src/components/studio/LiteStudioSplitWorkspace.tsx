@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { followSplitTargetWithFluidSpring, primeSplitFluidSpring, resetSplitFluidSpring, resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
+import { followSplitTargetWithJumpGuard, resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -285,14 +285,12 @@ export default function LiteStudioSplitWorkspace({
   const dragTargetPixelRef = useRef<number | null>(null);
   const dragPacedPixelRef = useRef<number | null>(null);
   const dragPacingFrameTimeRef = useRef<number | null>(null);
-  const dragFluidSpringRef = useRef({ velocityPxPerSecond: 0, lastFrameTime: null as number | null });
   const pointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
   const pointerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const fastLegacyDragRef = useRef(false);
   const outerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const outerPacedBuilderWidthRef = useRef<number | null>(null);
   const outerPacingFrameTimeRef = useRef<number | null>(null);
-  const outerFluidSpringRef = useRef({ velocityPxPerSecond: 0, lastFrameTime: null as number | null });
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastViewportHeightRef = useRef<number | null>(null);
@@ -849,10 +847,7 @@ export default function LiteStudioSplitWorkspace({
     const outerFastLegacy = outerResizeActive && pacingEligible
       ? updateSplitMotionFastMode(metricsRef.current.width, performance.now(), outerMotionRef.current)
       : false;
-    if (!outerResizeActive || !pacingEligible) {
-      resetSplitMotionFastMode(outerMotionRef.current);
-      resetSplitFluidSpring(outerFluidSpringRef.current);
-    }
+    if (!outerResizeActive || !pacingEligible) resetSplitMotionFastMode(outerMotionRef.current);
     const stablePercent = percentRef.current;
     let appliedPercent = stablePercent;
     let outerNeedsCatchUp = false;
@@ -868,11 +863,8 @@ export default function LiteStudioSplitWorkspace({
       const outerVisualLag = transitionGuardActive ? RESPONSIVE_TRANSITION_VISUAL_LAG_PX : OUTER_MAX_VISUAL_LAG_PX;
       const now = performance.now();
       const nextBuilderWidth = Math.round(outerFastLegacy
-        ? followSplitTargetWithFluidSpring(currentBuilderWidth, targetBuilderWidth, outerFluidSpringRef.current, now)
+        ? followSplitTargetWithJumpGuard(currentBuilderWidth, targetBuilderWidth, outerPacingFrameTimeRef.current, now)
         : followWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
-      if (!outerFastLegacy) {
-        primeSplitFluidSpring(outerFluidSpringRef.current, currentBuilderWidth, nextBuilderWidth, now);
-      }
       outerPacingFrameTimeRef.current = now;
       outerPacedBuilderWidthRef.current = nextBuilderWidth;
       outerNeedsCatchUp = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
@@ -936,7 +928,7 @@ export default function LiteStudioSplitWorkspace({
 
     const pacingEligible = finePointerFastPathRef.current
       && (workspaceView === 'music-note' || workspaceView === 'library');
-    const fastFluidActive = pacingEligible && fastLegacyDragRef.current;
+    const fastJumpGuardActive = pacingEligible && fastLegacyDragRef.current;
     const currentPixel = dragPacedPixelRef.current ?? lastPixelRef.current ?? targetPixel;
     const targetResultPixel = Math.max(0, width - targetPixel);
     const transitionGuardActive = isNearResponsiveTransition(targetPixel, targetResultPixel);
@@ -944,12 +936,9 @@ export default function LiteStudioSplitWorkspace({
     const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
     const nextPixel = forceExact || !pacingEligible
       ? targetPixel
-      : Math.round(fastFluidActive
-        ? followSplitTargetWithFluidSpring(currentPixel, targetPixel, dragFluidSpringRef.current, now)
+      : Math.round(fastJumpGuardActive
+        ? followSplitTargetWithJumpGuard(currentPixel, targetPixel, dragPacingFrameTimeRef.current, now)
         : followWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
-    if (!fastFluidActive) {
-      primeSplitFluidSpring(dragFluidSpringRef.current, currentPixel, nextPixel, now);
-    }
     dragPacingFrameTimeRef.current = now;
     dragPacedPixelRef.current = nextPixel;
 
@@ -1023,7 +1012,6 @@ export default function LiteStudioSplitWorkspace({
     dragPacingFrameTimeRef.current = null;
     fastLegacyDragRef.current = false;
     resetSplitMotionFastMode(pointerMotionRef.current);
-    resetSplitFluidSpring(dragFluidSpringRef.current);
     resetSplitPointerPrediction(pointerPredictionRef.current);
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
@@ -1105,7 +1093,6 @@ export default function LiteStudioSplitWorkspace({
     dragTargetPixelRef.current = initialBuilderPixel;
     dragPacingFrameTimeRef.current = performance.now();
     resetSplitMotionFastMode(pointerMotionRef.current);
-    resetSplitFluidSpring(dragFluidSpringRef.current);
     fastLegacyDragRef.current = false;
     resetSplitPointerPrediction(pointerPredictionRef.current);
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -1609,7 +1596,6 @@ export default function LiteStudioSplitWorkspace({
         root.classList.remove('soridraw-window-resizing');
         outerPacedBuilderWidthRef.current = null;
         outerPacingFrameTimeRef.current = null;
-        resetSplitFluidSpring(outerFluidSpringRef.current);
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1632,7 +1618,6 @@ export default function LiteStudioSplitWorkspace({
       document.documentElement.classList.remove('soridraw-window-resizing');
       outerPacedBuilderWidthRef.current = null;
       outerPacingFrameTimeRef.current = null;
-      resetSplitFluidSpring(outerFluidSpringRef.current);
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');

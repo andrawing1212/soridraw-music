@@ -2144,15 +2144,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Recent의 빠른 구간에서 divider만 커서 앞으로 즉시 튀던 preview 경로를 제거해 divider와 pane이 같은 visual boundary를 유지한다.
 - UI / Firebase / Firestore / Auth / Functions / 저장 구조 변경 없음.
 
-## SORIDRAW 710차 — 709 기준 · 고속 분할 추종 Critically Damped Fluid Spring
 
-- 기준: `SORIDRAW_709차_708기준_큰점프억제_일정프레임이동량_Recent뮤직노트라이브러리.zip`
-- 대상: 최근 생성곡 / 뮤직노트 / 라이브러리의 PC fine-pointer 내부 분할 및 외부창 고속 추종.
-- 느린/일반 이동: 709의 기존 direct/bounded-gap 경로 유지.
-- 빠른 이동: 709의 hard step jump guard(72px 임계 / 최대 56px step) 대신 100% damping의 critically-damped spring follower를 사용.
-- response: 100ms. overshoot 없음.
-- 프레임 지연 catch-up 방지: spring integration dt를 최대 8ms로 제한. 프레임이 한 번 막혀도 다음 paint에서 밀린 시간을 큰 위치 점프로 상환하지 않는다.
-- 느림→빠름 전환: 기존 시각 이동속도를 spring initial velocity로 seed하여 속도가 갑자기 0에서 시작하지 않게 한다.
-- 방향 반전: 이전 방향 velocity를 18%만 보존해 부드럽게 감속·반전하되 반대방향 관성으로 멀어지는 현상은 제한한다.
-- 포인터 입력/반응형/Firebase/저장구조/UI 디자인 변경 없음.
-- 근거: 2026-08-14 업로드 trace에서 pointermove JS 자체는 매우 가벼웠지만(pointermove EventDispatch p95 약 0.27ms), Layout p95 약 29ms / UpdateLayoutTree p95 약 15ms였고 pointermove 전달 간격도 불규칙했다. 따라서 입력을 더 늘리기보다 rAF 사이 시각 위치를 연속 velocity로 연결하는 쪽을 선택했다.
+### 711차 — 709 기준 시간보상 제거 / 균일 공간 스텝 추종
+- 기준: 709차. 710의 spring/velocity 상태는 전부 제외한다.
+- 709의 남은 `뚝 -> 큰 점프` 원인을 fast follower의 **dt 기반 보상**으로 좁혔다. 709는 정상 고주사율 프레임에서는 최소 18px, 프레임이 16ms 가까이 밀리면 약 48~50px까지 다음 프레임 보정량이 커질 수 있었다. 즉 이미 느려진 프레임 다음에 더 큰 시각 점프를 일부러 만드는 구조였다.
+- 711은 빠른 모드의 시각 이동량에서 **elapsed time을 완전히 제거**한다. 프레임이 늦었다고 다음 프레임에서 밀린 거리를 크게 상환하지 않는다.
+- 72px 하드 임계값도 제거했다. 대신 남은 거리 하나만 사용하는 연속 규칙으로 통일: 6px 이내는 정확히 정합, 그 이상은 거리의 45%를 사용하되 한 화면 프레임당 8~34px 범위로 제한한다.
+- 결과적으로 큰 gap에서는 34px 이하의 일정한 박자로 계속 따라오고, 가까워질수록 34→20→10px처럼 자연스럽게 줄어든다. spring/관성/반동/예측 애니메이션은 없다.
+- Recent / Music Note / Library 내부 분할과 외부창 fast lane에 동일 helper가 적용되므로 세 화면의 고속 추종 원칙이 동일하다.
+- 느린/보통 이동의 708 계열 정확 추종, 반응형 기준, Studio Create, touch/pen, UI, Firebase/Auth/Firestore/Functions/저장구조는 변경하지 않는다.

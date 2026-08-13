@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { followSplitTargetWithFluidSpring, primeSplitFluidSpring, resetSplitFluidSpring, resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
+import { followSplitTargetWithJumpGuard, resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -216,14 +216,12 @@ export default function StudioSplitWorkspace({
   const recentDragTargetPixelRef = useRef<number | null>(null);
   const recentDragPacedPixelRef = useRef<number | null>(null);
   const recentDragPacingFrameTimeRef = useRef<number | null>(null);
-  const recentDragFluidSpringRef = useRef({ velocityPxPerSecond: 0, lastFrameTime: null as number | null });
   const recentPointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
   const recentPointerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const recentFastLegacyDragRef = useRef(false);
   const recentOuterMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const recentOuterPacedBuilderWidthRef = useRef<number | null>(null);
   const recentOuterPacingFrameTimeRef = useRef<number | null>(null);
-  const recentOuterFluidSpringRef = useRef({ velocityPxPerSecond: 0, lastFrameTime: null as number | null });
   const recentOuterNeedsCatchUpRef = useRef(false);
   const lastAriaPercentRef = useRef<number | null>(null);
   const lastAriaBoundsRef = useRef<string | null>(null);
@@ -615,7 +613,6 @@ export default function StudioSplitWorkspace({
       lastIsolationViewportHeightRef.current = null;
       recentOuterPacedBuilderWidthRef.current = null;
       recentOuterPacingFrameTimeRef.current = null;
-      resetSplitFluidSpring(recentOuterFluidSpringRef.current);
       recentOuterNeedsCatchUpRef.current = false;
       return;
     }
@@ -1060,10 +1057,7 @@ export default function StudioSplitWorkspace({
     const outerFastLegacy = outerResizeActive && pacingEligible
       ? updateSplitMotionFastMode(metricsRef.current.width, performance.now(), recentOuterMotionRef.current)
       : false;
-    if (!outerResizeActive || !pacingEligible) {
-      resetSplitMotionFastMode(recentOuterMotionRef.current);
-      resetSplitFluidSpring(recentOuterFluidSpringRef.current);
-    }
+    if (!outerResizeActive || !pacingEligible) resetSplitMotionFastMode(recentOuterMotionRef.current);
     let appliedPercent = targetPercent;
     recentOuterNeedsCatchUpRef.current = false;
 
@@ -1077,11 +1071,8 @@ export default function StudioSplitWorkspace({
       const outerVisualLag = transitionGuardActive ? RECENT_RESPONSIVE_TRANSITION_VISUAL_LAG_PX : RECENT_OUTER_MAX_VISUAL_LAG_PX;
       const now = performance.now();
       const nextBuilderWidth = Math.round(outerFastLegacy
-        ? followSplitTargetWithFluidSpring(currentBuilderWidth, targetBuilderWidth, recentOuterFluidSpringRef.current, now)
+        ? followSplitTargetWithJumpGuard(currentBuilderWidth, targetBuilderWidth, recentOuterPacingFrameTimeRef.current, now)
         : followRecentWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
-      if (!outerFastLegacy) {
-        primeSplitFluidSpring(recentOuterFluidSpringRef.current, currentBuilderWidth, nextBuilderWidth, now);
-      }
       recentOuterPacingFrameTimeRef.current = now;
       recentOuterPacedBuilderWidthRef.current = nextBuilderWidth;
       recentOuterNeedsCatchUpRef.current = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
@@ -1365,7 +1356,7 @@ export default function StudioSplitWorkspace({
     const safeWidth = Math.max(width, 1);
     const bounds = getSplitBounds(safeWidth);
     const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
-    const fastFluidActive = pacingEligible && recentFastLegacyDragRef.current;
+    const fastJumpGuardActive = pacingEligible && recentFastLegacyDragRef.current;
 
     if (pacingEligible) {
       if (clientX !== null) {
@@ -1382,12 +1373,9 @@ export default function StudioSplitWorkspace({
       const now = performance.now();
       const nextPixel = forceLayout
         ? targetPixel
-        : Math.round(fastFluidActive
-          ? followSplitTargetWithFluidSpring(currentPixel, targetPixel, recentDragFluidSpringRef.current, now)
+        : Math.round(fastJumpGuardActive
+          ? followSplitTargetWithJumpGuard(currentPixel, targetPixel, recentDragPacingFrameTimeRef.current, now)
           : followRecentWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
-      if (!fastFluidActive) {
-        primeSplitFluidSpring(recentDragFluidSpringRef.current, currentPixel, nextPixel, now);
-      }
       recentDragPacingFrameTimeRef.current = now;
       recentDragPacedPixelRef.current = nextPixel;
 
@@ -1500,7 +1488,6 @@ export default function StudioSplitWorkspace({
       width: rect.width,
     };
     resetSplitMotionFastMode(recentPointerMotionRef.current);
-    resetSplitFluidSpring(recentDragFluidSpringRef.current);
     recentFastLegacyDragRef.current = false;
     if (finePointerFastPathRef.current && workspaceView === 'recent') {
       const seedPixel = Math.round(rect.width * (percentRef.current / 100));
@@ -1645,7 +1632,6 @@ export default function StudioSplitWorkspace({
     recentDragPacingFrameTimeRef.current = null;
     recentFastLegacyDragRef.current = false;
     resetSplitMotionFastMode(recentPointerMotionRef.current);
-    resetSplitFluidSpring(recentDragFluidSpringRef.current);
     resetSplitPointerPrediction(recentPointerPredictionRef.current);
     const builderWidth = builderCollapsedRef.current
       ? 0

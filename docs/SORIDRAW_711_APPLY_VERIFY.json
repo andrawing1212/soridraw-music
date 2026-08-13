@@ -1,0 +1,39 @@
+{
+  "version": 711,
+  "basis": "709",
+  "goal": "Remove spring and eliminate stop-then-jump caused by frame-time catch-up compensation",
+  "changedFiles": [
+    "src/components/studio/splitPointerLatency.ts",
+    "README.md"
+  ],
+  "rootCause": {
+    "previous709": "catch-up step scaled by frame dt: min 18px, up to ~50px around 16ms, max 56px",
+    "problem": "a delayed layout frame was followed by a larger visual correction, amplifying visible stutter",
+    "previous710": "spring velocity state added animation/inertia on top of an unstable lane"
+  },
+  "logic": {
+    "timeCompensation": "removed",
+    "hard72pxThreshold": "removed",
+    "directBandPx": 6,
+    "distanceGain": 0.45,
+    "minStepPx": 8,
+    "maxStepPx": 34,
+    "spring": "none",
+    "appliesTo": [
+      "recent internal split",
+      "music-note internal split",
+      "library internal split",
+      "recent outer resize",
+      "music-note outer resize",
+      "library outer resize"
+    ]
+  },
+  "notChanged": [
+    "slow/normal lane",
+    "Studio Create",
+    "touch/pen",
+    "responsive breakpoints",
+    "UI design",
+    "Firebase/Auth/Firestore/Functions/storage"
+  ]
+}

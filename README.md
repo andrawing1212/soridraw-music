@@ -2028,3 +2028,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Studio Create는 기존 683 Legacy 경로 그대로 유지. 터치/갤탭 adaptive Lite 경로도 변경 없음.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 
+
+## SORIDRAW 714차 — 713 안정 기준 · 분할 리사이즈 카드 높이 고정 / 모바일 텍스트 완화
+- 기준: 713차. 분할바 이동 엔진, Lite V2 + library-590 경로, rAF/geometry 규칙은 변경하지 않음.
+- 최근 생성곡 상단 제목 카드는 split PC/tablet/mobile pane 전환 중에도 280px 고정 높이를 유지하고, compact pane에서도 세로 패딩을 desktop과 동일한 리듬으로 유지.
+- Music Note 곡 행과 Library workspace 곡 행은 84px 고정, Library playlist 곡 행은 72px 고정으로 통일해 660px 반응형 전환에서 리스트 전체 높이가 출렁이지 않도록 수정.
+- Music Note / Library mobile 텍스트 축소 폭을 완화: 제목/장르/메타/보조 텍스트를 한 단계 키우되 행 높이는 그대로 유지.
+- Music Note의 노트 플레이스/마이 노트/공유 노트와 Library의 뮤직 스페이스/마이 리스트/공유 리스트는 mobile에서도 tablet과 동일한 12px 라벨 크기 사용.
+- responsive tab의 transition-all을 색상 계열 transition만 남겨 font/padding 변경이 애니메이션처럼 느껴지지 않도록 제한.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

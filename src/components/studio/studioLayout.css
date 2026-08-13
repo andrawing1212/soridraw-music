@@ -12241,3 +12241,160 @@ html[data-soridraw-theme="studio-black"]
   animation-play-state: paused !important;
 }
 
+
+/* 714 — 713 split-stability baseline: freeze responsive card heights and soften mobile type.
+ * Keep the 713 divider/Lite V2 movement engine untouched. This pass only removes visible
+ * vertical geometry changes when a pane crosses PC/tablet/mobile content modes. */
+
+/* Recent/result title: the mobile-pane rule used a smaller vertical padding, so the top card
+ * visibly shortened while the divider moved. Freeze one outer height and keep the same
+ * vertical breathing room in every split-pane mode; edit mode may still grow naturally. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  .soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+    box-sizing: border-box !important;
+    height: 280px !important;
+    min-height: 280px !important;
+    max-height: 280px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+    padding-top: 32px !important;
+    padding-right: 20px !important;
+    padding-bottom: 14px !important;
+    padding-left: 20px !important;
+  }
+}
+
+/* Music Note / Library rows: responsive typography can change, but the list rhythm must not.
+ * Fixed border-box heights stop the whole list from vertically reflowing when the result pane
+ * crosses 660px. Text stays single-line/ellipsis inside the stable row. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-song-row {
+  box-sizing: border-box !important;
+  height: 84px !important;
+  min-height: 84px !important;
+  max-height: 84px !important;
+  align-items: center !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page
+.soridraw-library-workspace-track-row {
+  box-sizing: border-box !important;
+  height: 84px !important;
+  min-height: 84px !important;
+  max-height: 84px !important;
+  align-items: center !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page
+.soridraw-library-playlist-row {
+  box-sizing: border-box !important;
+  height: 72px !important;
+  min-height: 72px !important;
+  max-height: 72px !important;
+  align-items: center !important;
+}
+
+/* Mobile mode keeps the same vertical row height as tablet. Only horizontal spacing compacts. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-row {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+/* Mobile text: reduce the old aggressive shrink, but stay clearly below tablet body type. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-genre {
+  font-size: 11.5px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-date {
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-title {
+  font-size: 13.5px !important;
+  line-height: 1.08 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-creator {
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-keywords {
+  height: 20px !important;
+  min-height: 20px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-keyword-chip {
+  height: 20px !important;
+  min-height: 20px !important;
+  font-size: 8.75px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-item-genre {
+  font-size: 11.5px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-item-name {
+  font-size: 13.5px !important;
+  line-height: 1.08 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-meta {
+  font-size: 10.5px !important;
+  line-height: 1.1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-track-row span[class*="text-[10px]"],
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-track-row span[class*="text-xs"] {
+  font-size: 9.5px !important;
+}
+
+/* Note Place / My Note / Shared Note and the three Library categories keep the exact tablet
+ * label size when the pane enters mobile mode. Geometry remains 40px high, so no vertical jump. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  min-height: 40px !important;
+  padding: 10px 9px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  transition-property: background-color, color, opacity !important;
+}

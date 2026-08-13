@@ -642,30 +642,6 @@ export default function LiteStudioSplitWorkspace({
     splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
   }, [clearDirectBenchmarkGeometry]);
 
-  // 701 — pacing-first visual commit barrier.
-  //
-  // 698 hand measurements showed that pointer input itself arrives quickly
-  // (`inputToCommit` sub-millisecond), while the browser can defer the actual
-  // pane geometry for ~55-60ms P95. That produces the exact visual symptom the
-  // user reported: the cursor keeps moving, then the divider/pane catches up in
-  // uneven jumps. 694 intentionally removed several synchronous layout reads to
-  // maximize throughput; keep those optimizations, but add back one *single*
-  // deterministic layout acknowledgement at the end of an active Music Note /
-  // Library geometry transaction. This is not a second geometry owner and does
-  // not change width, breakpoints or responsive rules — it only prevents several
-  // pending width writes from accumulating before Chromium decides to lay them
-  // out. Scope it to the two heavy result workspaces where the pacing issue is
-  // reproduced; Recent/Create remain untouched.
-  const forceVisualGeometryCommit = useCallback(() => {
-    if (workspaceView !== 'music-note' && workspaceView !== 'library') return;
-    const result = resultRef.current;
-    if (!result) return;
-    // Reading a post-write border box is intentional here. It is the one pacing
-    // barrier for the frame, replacing bursty deferred layout with one explicit
-    // acknowledgement before the browser paints.
-    void result.getBoundingClientRect().width;
-  }, [workspaceView]);
-
   const applyPercent = useCallback((rawPercent: number, live = false) => {
     const layout = layoutRef.current;
     const builder = builderRef.current;
@@ -747,13 +723,6 @@ export default function LiteStudioSplitWorkspace({
       lastAriaPercentRef.current = roundedPercent;
       splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
     }
-
-    // Internal splitter drag: finish this frame's visible geometry before the
-    // next pointer sample is consumed. The pointer/divider relationship is now
-    // paced by one completed layout per committed frame instead of a queue of
-    // deferred layouts.
-    if (live && draggingRef.current) forceVisualGeometryCommit();
-
     if (perfEnabled) {
       const perfEnd = performance.now();
       recordSplitPerfApply({
@@ -765,7 +734,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, forceVisualGeometryCommit, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
+  }, [broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -812,18 +781,12 @@ export default function LiteStudioSplitWorkspace({
       // once at resize-end. This avoids querySelector churn and temporary inline
       // writes that were immediately cleared before paint on every resize frame.
       syncExternalToggleGeometry(splitterLeft);
-
-      // Native outer-window resize uses the same pacing rule as the internal
-      // splitter: one completed visible geometry transaction per rAF. This keeps
-      // viewport -> workspace -> result-pane spacing deterministic instead of
-      // allowing multiple resize writes to be painted as one late jump.
-      forceVisualGeometryCommit();
     } else {
       readExternalControls();
       syncExternalGeometry(builderWidth, splitterLeft);
       clearLiveExternalGeometry();
     }
-  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, forceVisualGeometryCommit, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncExternalToggleGeometry]);
+  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncExternalToggleGeometry]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
@@ -989,16 +952,40 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
-    // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
-    // verified Lite V2 path; PC no longer uses this engine in automatic mode.
+    // 702 — Chrome is allowed to delay/coalesce pointermove during a busy drag.
+    // On fine-pointer mouse input, pointerrawupdate is the low-latency source and
+    // this pointermove becomes a compatibility/diagnostic path only. Touch/pen
+    // keep the existing PointerEvent path unchanged.
     if (manualPerfCaptureActiveRef.current) {
       const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
       let coalescedCount = 1;
       try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
       recordSplitPerfPointer(event.clientX, coalescedCount);
     }
-    schedulePointer(event.clientX);
+    const rawMouseSupported = event.pointerType === 'mouse' && 'onpointerrawupdate' in window;
+    if (!rawMouseSupported) schedulePointer(event.clientX);
   };
+
+  // 702 — keep input sampling and visual commit on separate clocks. The W3C
+  // Pointer Events model explicitly allows pointermove to be delayed/coalesced,
+  // while pointerrawupdate should be dispatched as soon/often as JS can handle.
+  // We do no DOM work here: only overwrite the latest coordinate. Existing rAF
+  // commit ownership stays intact, so there is still at most one pane write per
+  // display frame and no replay queue / catch-up jump.
+  useEffect(() => {
+    if (!('onpointerrawupdate' in window)) return;
+    const handlePointerRawUpdate = (event: PointerEvent) => {
+      if (!draggingRef.current || event.pointerId !== pointerIdRef.current || event.pointerType !== 'mouse') return;
+      let latestEvent: PointerEvent = event;
+      try {
+        const coalesced = event.getCoalescedEvents?.();
+        if (coalesced && coalesced.length > 0) latestEvent = coalesced[coalesced.length - 1];
+      } catch { /* optional browser API */ }
+      schedulePointer(latestEvent.clientX);
+    };
+    window.addEventListener('pointerrawupdate', handlePointerRawUpdate, { passive: true });
+    return () => window.removeEventListener('pointerrawupdate', handlePointerRawUpdate);
+  }, [schedulePointer]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current) return;
@@ -1414,7 +1401,13 @@ export default function LiteStudioSplitWorkspace({
     let observer: ResizeObserver | null = null;
     if (layout && typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => {
-        if (!draggingRef.current) scheduleMetricsRefresh();
+        // During a native window-resize gesture the 702 rAF clock is the single
+        // geometry owner. Ignore RO bursts there so one visual frame never gets
+        // two competing commits. Outside that gesture keep the verified 694 RO
+        // behavior unchanged.
+        if (!draggingRef.current && !document.documentElement.classList.contains('soridraw-window-resizing')) {
+          scheduleMetricsRefresh();
+        }
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
@@ -1423,27 +1416,57 @@ export default function LiteStudioSplitWorkspace({
     // event owns only the start/end marker. That marker lets CSS suspend the
     // expensive structural container-query layer while the browser is being
     // continuously resized, then restore exact responsive detail once at settle.
-    let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
+    let resizePacingFrame: number | null = null;
+    let lastPacedViewportWidth = window.innerWidth;
+    let lastPacedViewportHeight = window.innerHeight;
+
+    // 702 — native window resize events and ResizeObserver callbacks may arrive
+    // in uneven bursts even while the browser edge itself moves continuously.
+    // Once a resize gesture starts, use the display rAF as the single geometry
+    // clock and sample the current viewport every frame. This keeps
+    // browser-edge -> workspace -> pane spacing temporally uniform without any
+    // interpolation, transform proxy, forced layout acknowledgement or FPS cap.
+    const runResizePacingFrame = () => {
+      resizePacingFrame = null;
+      const root = document.documentElement;
+      if (!root.classList.contains('soridraw-window-resizing')) return;
+
+      const nextViewportWidth = window.innerWidth;
+      const nextViewportHeight = window.innerHeight;
+      if (nextViewportWidth !== lastPacedViewportWidth || nextViewportHeight !== lastPacedViewportHeight) {
+        lastPacedViewportWidth = nextViewportWidth;
+        lastPacedViewportHeight = nextViewportHeight;
+        if (!draggingRef.current) refreshMetrics();
+      }
+      resizePacingFrame = window.requestAnimationFrame(runResizePacingFrame);
+    };
+
+    const ensureResizePacingFrame = () => {
+      if (resizePacingFrame !== null) return;
+      resizePacingFrame = window.requestAnimationFrame(runResizePacingFrame);
+    };
+
     const handleWindowResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
+        lastPacedViewportWidth = window.innerWidth;
+        lastPacedViewportHeight = window.innerHeight;
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
 
+      ensureResizePacingFrame();
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
-
-      const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
-        lastViewportHeight = nextViewportHeight;
-        scheduleMetricsRefresh();
-      }
 
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
-        scheduleMetricsRefresh();
+        if (resizePacingFrame !== null) {
+          window.cancelAnimationFrame(resizePacingFrame);
+          resizePacingFrame = null;
+        }
+        refreshMetrics();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
       }, 110);
@@ -1462,6 +1485,7 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('resize', handleWindowResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
+      if (resizePacingFrame !== null) window.cancelAnimationFrame(resizePacingFrame);
       document.documentElement.classList.remove('soridraw-window-resizing');
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);

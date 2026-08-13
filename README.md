@@ -2080,9 +2080,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 공식 참고 원칙: Chrome/web.dev의 forced reflow 가이드(스타일 write 뒤 geometry read 금지, reads/writes batching), ResizeObserver callback은 paint 전 실행되어 무거우면 다음 프레임을 지연할 수 있다는 가이드, `requestAnimationFrame`은 display refresh에 맞춘 1회 paint 직전 콜백이라는 MDN 설명, CSS scroll anchoring을 문제 구간에서 `overflow-anchor:none`으로 opt-out할 수 있다는 MDN 설명.
 - UI/테두리/페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 
-### 701차 — 694 성능 유지 + Music Note/Library 추종 간격 안정화
-- 기준: 694차. 698~700 진단 실험 코드는 포함하지 않음.
-- 698 실손 데이터에서 입력 수집은 sub-ms인데 실제 pane layout acknowledgement가 약 55~60ms P95까지 밀리는 현상을 확인했다.
-- Music Note / Library의 내부 분할 드래그와 외부창 resize에만 프레임당 1회의 `post-write layout acknowledgement`를 추가했다.
-- 목적은 raw FPS 최대화가 아니라 `커서 → 분할바 → pane`, `외부창 → workspace → pane` 사이의 간격이 여러 프레임 누적됐다가 점프하지 않도록 한 프레임의 geometry transaction을 그 프레임 안에서 확정하는 것이다.
-- 694에서 제거한 중복 geometry owner, modal viewport write, 외부 control 전체 재계산은 복구하지 않았다. Recent/Create와 Firebase/Data 경로도 변경하지 않았다.
+## 702 — 694 기준 커서/분할바 + 외부창 추종 간격 균일화
+
+- 기준은 694차이며 698~701 진단/강제-layout 실험 코드는 포함하지 않는다.
+- 내부 분할(Lite / Music Note / Library): Chrome의 `pointermove` 지연·coalescing 가능성을 우회하기 위해 fine-pointer mouse에서만 `pointerrawupdate`를 최신 좌표 공급원으로 사용한다. raw event에서는 DOM을 건드리지 않고 최신 `clientX`만 저장하며, 실제 pane/분할바 geometry write는 기존 rAF 1회 소유권을 그대로 유지한다.
+- touch/pen은 기존 PointerEvent 경로를 그대로 유지한다.
+- 외부창 resize: `resize`/`ResizeObserver`의 불규칙한 burst cadence를 geometry clock으로 쓰지 않는다. native resize가 시작되면 display `requestAnimationFrame`이 매 프레임 현재 viewport를 샘플링하고, 실제 크기가 변한 프레임에만 `refreshMetrics()`를 1회 실행한다.
+- 외부 resize 중 ResizeObserver는 geometry commit을 하지 않아 같은 프레임 중복 commit을 막고, resize 종료 시 694 정확 geometry로 1회 정합한다.
+- 인위적 smoothing, px step 제한, transform/scale proxy, 강제 `getBoundingClientRect()` acknowledgement, FPS cap은 사용하지 않는다. 목표는 최고 처리량보다 `cursor -> divider -> pane`, `browser edge -> workspace -> pane`의 시간 간격을 일정하게 만드는 것이다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

@@ -12596,3 +12596,125 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   outline: 0 !important;
   box-shadow: none !important;
 }
+
+/* 726 — Studio Black popup palette separation.
+   Storyboard and Vocal Character editors are portals, so the normal dark-theme
+   popup rules can otherwise make them look identical to Classic Dark. Give only
+   Studio Black a cooler graphite hierarchy and remove the warm/amber cast from
+   large interior surfaces. These selectors intentionally start at body because both modals are mounted directly under document.body, outside #root/.soridraw-app-root. Brand accent text and sliders remain unchanged. */
+:root[data-soridraw-theme="studio-black"] {
+  --sb-popup-shell: #1B1D21;
+  --sb-popup-header: #22252A;
+  --sb-popup-body: #181A1E;
+  --sb-popup-card: #24272C;
+  --sb-popup-card-active: #292C31;
+  --sb-popup-control: #2B2E34;
+  --sb-popup-control-hover: #31353B;
+  --sb-popup-input: #30343A;
+}
+
+/* Vocal Character — cool graphite surfaces, no warm selected-card wash. */
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel {
+  background: var(--sb-popup-shell) !important;
+  background-color: var(--sb-popup-shell) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .px-5.py-4 {
+  background: var(--sb-popup-header) !important;
+  background-color: var(--sb-popup-header) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background: var(--sb-popup-body) !important;
+  background-color: var(--sb-popup-body) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\],
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
+  background: var(--sb-popup-card) !important;
+  background-color: var(--sb-popup-card) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
+  background: var(--sb-popup-card-active) !important;
+  background-color: var(--sb-popup-card-active) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel :where(input, textarea) {
+  background: var(--sb-popup-input) !important;
+  background-color: var(--sb-popup-input) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel button:not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]) {
+  border-color: transparent !important;
+}
+
+/* Storyboard — use the same Studio Black-only cool hierarchy. */
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel {
+  background: var(--sb-popup-shell) !important;
+  background-color: var(--sb-popup-shell) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel > .sticky {
+  background: var(--sb-popup-header) !important;
+  background-color: var(--sb-popup-header) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-body {
+  background: var(--sb-popup-body) !important;
+  background-color: var(--sb-popup-body) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel :is(.storyboard-section-card, .storyboard-control-card) {
+  background: var(--sb-popup-card) !important;
+  background-color: var(--sb-popup-card) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel :where(input, textarea) {
+  background: var(--sb-popup-input) !important;
+  background-color: var(--sb-popup-input) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background: var(--sb-popup-control) !important;
+  background-color: var(--sb-popup-control) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected):hover {
+  background: var(--sb-popup-control-hover) !important;
+  background-color: var(--sb-popup-control-hover) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel button {
+  border-color: transparent !important;
+}

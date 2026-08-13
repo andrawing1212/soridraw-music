@@ -47,6 +47,19 @@ const PANE_MODE_HYSTERESIS = 16;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
+// 693 — high-speed width-motion governor. There is no platform-standard
+// slow/fast pointer threshold, so these values are deliberately derived from
+// the browser frame budget instead of device type: 0.65px/ms is ~11px per
+// 60Hz frame, while the 0.26px/ms exit threshold gives enough hysteresis to
+// avoid mode flapping as the hand slows. Exact responsive layout is always
+// restored at breakpoints, on slow motion, and at gesture/resize end.
+const FAST_WIDTH_ENTER_PX_PER_MS = 0.65;
+const FAST_WIDTH_EXIT_PX_PER_MS = 0.26;
+const FAST_WIDTH_PRESSURE_FRAME_MS = 24;
+const FAST_WIDTH_PRESSURE_DELTA_PX = 8;
+const FAST_WIDTH_REBASE_MS = 50;
+const FAST_WIDTH_MAX_DRIFT_PX = 56;
+const FAST_WIDTH_MAX_SCALE_DELTA = 0.065;
 const BENCHMARK_SURFACE_WIDTH = 1400;
 const BENCHMARK_SURFACE_HEIGHT = 900;
 type BenchmarkLayoutMode = 'css-var' | 'direct';
@@ -77,6 +90,39 @@ type ExternalGeometryCache = {
   collapsedBuilderWidth: string;
   collapsedLeftRailEdge: string;
 };
+
+type FastWidthMotionState = {
+  lastWidth: number;
+  lastAt: number;
+  active: boolean;
+  anchorWidth: number;
+  lastReflowAt: number;
+  slowSamples: number;
+  lastMode: ContentResponsiveMode | null;
+};
+
+type FastContentStyleSnapshot = Array<{ property: string; value: string; priority: string }>;
+
+const FAST_CONTENT_STYLE_PROPERTIES = [
+  'width',
+  'max-width',
+  'margin-left',
+  'margin-right',
+  'transform-origin',
+  'transform',
+  'will-change',
+  'contain',
+] as const;
+
+const createFastWidthMotionState = (): FastWidthMotionState => ({
+  lastWidth: 0,
+  lastAt: 0,
+  active: false,
+  anchorWidth: 0,
+  lastReflowAt: 0,
+  slowSamples: 0,
+  lastMode: null,
+});
 
 const createEmptyExternalGeometryCache = (): ExternalGeometryCache => ({
   builderToggleLeft: '',
@@ -214,6 +260,7 @@ export default function LiteStudioSplitWorkspace({
   const percentRef = useRef(readStoredPercent());
   const splitProfileRef = useRef<SplitProfile>(getSplitProfile());
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
+  const resultContentInlineInsetRef = useRef(-1);
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
   const draggingRef = useRef(false);
@@ -252,6 +299,180 @@ export default function LiteStudioSplitWorkspace({
   const runtimeLayoutModeRef = useRef<BenchmarkLayoutMode>(readInitialRuntimeLayoutMode(workspaceView, runtimeProfile));
   const runtimeResultContentModeRef = useRef<ContentResponsiveMode | null>(null);
   const benchmarkLayoutModeRef = useRef<BenchmarkLayoutMode>(runtimeLayoutModeRef.current);
+  const fastWidthMotionRef = useRef<FastWidthMotionState>(createFastWidthMotionState());
+  const fastContentElementRef = useRef<HTMLElement | null>(null);
+  const fastContentStyleSnapshotRef = useRef<FastContentStyleSnapshot | null>(null);
+  const fastContentAppliedWidthRef = useRef('');
+  const fastContentAppliedTransformRef = useRef('');
+  const fastWidthSettleTimerRef = useRef<number | null>(null);
+
+  const clearFastResultContentProxy = useCallback(() => {
+    if (fastWidthSettleTimerRef.current !== null) {
+      window.clearTimeout(fastWidthSettleTimerRef.current);
+      fastWidthSettleTimerRef.current = null;
+    }
+    const content = fastContentElementRef.current;
+    const snapshot = fastContentStyleSnapshotRef.current;
+    if (content) {
+      delete content.dataset.soridrawFastWidthMotion;
+      if (snapshot) {
+        for (const item of snapshot) {
+          if (item.value) content.style.setProperty(item.property, item.value, item.priority);
+          else content.style.removeProperty(item.property);
+        }
+      } else {
+        for (const property of FAST_CONTENT_STYLE_PROPERTIES) content.style.removeProperty(property);
+      }
+    }
+    fastContentElementRef.current = null;
+    fastContentStyleSnapshotRef.current = null;
+    fastContentAppliedWidthRef.current = '';
+    fastContentAppliedTransformRef.current = '';
+    fastWidthMotionRef.current = createFastWidthMotionState();
+  }, []);
+
+  const syncFastResultContentProxy = useCallback((resultWidth: number, forceExact = false) => {
+    const result = resultRef.current;
+    const eligibleWorkspace = workspaceView === 'music-note' || workspaceView === 'library';
+    const eligibleWidthBand = getSplitProfile() === 'tablet' || resultWidth <= CONTENT_TABLET_MAX;
+    const eligible = Boolean(
+      result
+      && eligibleWorkspace
+      && finePointerFastPathRef.current
+      && !benchmarkRunningRef.current
+      && !resultCollapsedRef.current
+      && Number.isFinite(resultWidth)
+      && resultWidth > 0
+      && eligibleWidthBand
+    );
+
+    if (forceExact || !eligible) {
+      clearFastResultContentProxy();
+      return;
+    }
+
+    const now = performance.now();
+    const state = fastWidthMotionRef.current;
+    const currentMode = readContentResponsiveMode(resultWidth);
+
+    if (state.lastAt <= 0 || state.lastWidth <= 0) {
+      state.lastWidth = resultWidth;
+      state.lastAt = now;
+      state.lastMode = currentMode;
+      return;
+    }
+
+    const dt = Math.max(1, now - state.lastAt);
+    const delta = Math.abs(resultWidth - state.lastWidth);
+    const speed = delta / dt;
+    const frameUnderPressure = dt >= FAST_WIDTH_PRESSURE_FRAME_MS && delta >= FAST_WIDTH_PRESSURE_DELTA_PX;
+    const crossedResponsiveBoundary = state.lastMode !== null && state.lastMode !== currentMode;
+
+    if (!state.active) {
+      if (speed >= FAST_WIDTH_ENTER_PX_PER_MS || frameUnderPressure) {
+        state.active = true;
+        // Anchor to the width from the previous presented sample. The pane can
+        // move immediately, while Note/Library descendants avoid receiving the
+        // new inline-size until the controlled rebase below.
+        state.anchorWidth = Math.max(1, state.lastWidth);
+        state.lastReflowAt = now;
+        state.slowSamples = 0;
+      }
+    } else {
+      state.slowSamples = speed <= FAST_WIDTH_EXIT_PX_PER_MS && !frameUnderPressure
+        ? state.slowSamples + 1
+        : 0;
+    }
+
+    if (state.active) {
+      // Responsive boundaries are semantic UI changes, not optional visual
+      // detail. Rebase exactly on 660/1080 so mobile/tablet/PC ownership never
+      // disagrees with what the page is displaying.
+      const anchor = Math.max(1, state.anchorWidth || resultWidth);
+      const scaleDelta = Math.abs((resultWidth / anchor) - 1);
+      const drift = Math.abs(resultWidth - anchor);
+      const rebaseDue = crossedResponsiveBoundary
+        || now - state.lastReflowAt >= FAST_WIDTH_REBASE_MS
+        || drift >= FAST_WIDTH_MAX_DRIFT_PX
+        || scaleDelta >= FAST_WIDTH_MAX_SCALE_DELTA;
+
+      if (rebaseDue) {
+        state.anchorWidth = resultWidth;
+        state.lastReflowAt = now;
+      }
+
+      const stableAnchor = Math.max(1, state.anchorWidth || resultWidth);
+      const contentInset = Math.max(0, resultContentInlineInsetRef.current);
+      const stableContentWidth = Math.max(1, stableAnchor - contentInset);
+      const liveContentWidth = Math.max(1, resultWidth - contentInset);
+      const scaleX = liveContentWidth / stableContentWidth;
+      let content = fastContentElementRef.current;
+      let contentWasAttached = false;
+      if (!content || !content.isConnected || !result.contains(content)) {
+        content = result.querySelector<HTMLElement>(
+          '.soridraw-studio-workspace-page--music-note, .soridraw-studio-workspace-page--library',
+        );
+        fastContentElementRef.current = content;
+        fastContentStyleSnapshotRef.current = content
+          ? FAST_CONTENT_STYLE_PROPERTIES.map((property) => ({
+              property,
+              value: content!.style.getPropertyValue(property),
+              priority: content!.style.getPropertyPriority(property),
+            }))
+          : null;
+        fastContentAppliedWidthRef.current = '';
+        fastContentAppliedTransformRef.current = '';
+        contentWasAttached = Boolean(content);
+      }
+
+      if (content) {
+        if (contentWasAttached) {
+          content.dataset.soridrawFastWidthMotion = 'true';
+          content.style.setProperty('max-width', 'none', 'important');
+          content.style.setProperty('margin-left', '0px', 'important');
+          content.style.setProperty('margin-right', '0px', 'important');
+          content.style.setProperty('transform-origin', '0 0', 'important');
+          content.style.setProperty('will-change', 'transform', 'important');
+          content.style.setProperty('contain', 'layout style paint', 'important');
+        }
+
+        // Keep the expensive descendant inline-size fixed between rebases.
+        // The width style changes only on a controlled exact rebase; only the
+        // compositor transform changes on intermediate visual frames.
+        const widthStyle = `${stableContentWidth.toFixed(2)}px`;
+        if (fastContentAppliedWidthRef.current !== widthStyle) {
+          fastContentAppliedWidthRef.current = widthStyle;
+          content.style.setProperty('width', widthStyle, 'important');
+        }
+        const transformStyle = `scaleX(${scaleX.toFixed(6)})`;
+        if (fastContentAppliedTransformRef.current !== transformStyle) {
+          fastContentAppliedTransformRef.current = transformStyle;
+          content.style.setProperty('transform', transformStyle, 'important');
+        }
+      }
+
+      // Geometry can also change because a rail/collapse action fires once,
+      // without a pointer-up or native resize-end event. Never leave the proxy
+      // armed after an isolated change: 90ms without another width sample is a
+      // hard settle and restores the exact page automatically.
+      if (fastWidthSettleTimerRef.current !== null) window.clearTimeout(fastWidthSettleTimerRef.current);
+      fastWidthSettleTimerRef.current = window.setTimeout(() => {
+        fastWidthSettleTimerRef.current = null;
+        clearFastResultContentProxy();
+      }, 90);
+
+      // Two genuinely slow samples mean the browser can afford exact layout
+      // again. This keeps 690's excellent slow-drag feel completely native.
+      if (state.slowSamples >= 2) {
+        clearFastResultContentProxy();
+        return;
+      }
+    }
+
+    state.lastWidth = resultWidth;
+    state.lastAt = now;
+    state.lastMode = currentMode;
+  }, [clearFastResultContentProxy, workspaceView]);
 
   const readExternalControls = useCallback(() => {
     const current = externalRef.current;
@@ -675,6 +896,11 @@ export default function LiteStudioSplitWorkspace({
       }
     }
 
+    // 693: when a fine-pointer user changes Note/Library width quickly, keep
+    // the pane boundary fully live but let the heavy page reflow at a bounded
+    // cadence. Between exact rebases the page visually follows via compositor
+    // scale; slow movement never enters this path.
+    syncFastResultContentProxy(resultWidth);
     writeLiveSplitGeometry(builderWidth, resultWidth);
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
@@ -722,7 +948,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncFastResultContentProxy, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -737,6 +963,16 @@ export default function LiteStudioSplitWorkspace({
       width: Math.max(1, rect.width),
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
+
+    // Measure the result pane's stable split-mode padding once outside the hot
+    // per-frame path. The high-speed proxy then fixes the workspace page to the
+    // real content-box width rather than the pane border-box width.
+    if (resultContentInlineInsetRef.current < 0 && resultRef.current && typeof window.getComputedStyle === 'function') {
+      const style = window.getComputedStyle(resultRef.current);
+      const leftPadding = Number.parseFloat(style.paddingLeft) || 0;
+      const rightPadding = Number.parseFloat(style.paddingRight) || 0;
+      resultContentInlineInsetRef.current = Math.max(0, leftPadding + rightPadding);
+    }
 
     const nextProfile = getSplitProfile();
     if (splitProfileRef.current !== nextProfile) {
@@ -786,33 +1022,10 @@ export default function LiteStudioSplitWorkspace({
   }, [applyPercent]);
 
   const schedulePointer = useCallback((clientX: number) => {
-    // 692: retain only the newest pointer coordinate. Pane geometry is allowed
-    // to commit at most once per animation frame, so a fast mouse sweep cannot
-    // build a queue of stale positions that are replayed after the pointer has
-    // already moved elsewhere.
     pendingClientXRef.current = clientX;
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(flushPointer);
   }, [flushPointer]);
-
-  // 692: the body-level divider gets its own tiny visual lane, matching the
-  // responsive feel that already worked well in Recent Songs. This write uses
-  // only the drag-start cached layout metrics, so it never performs a DOM read
-  // and never waits for Music Note / Library pane reflow. The panes still use
-  // the existing single-rAF latest-coordinate path above.
-  const previewSplitterAtClientX = useCallback((clientX: number) => {
-    const splitter = splitterRef.current;
-    if (!splitter || !draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return;
-
-    const width = Math.max(1, metricsRef.current.width);
-    const bounds = getSplitBounds(width);
-    const minPx = width * (bounds.min / 100);
-    const maxPx = width * (bounds.max / 100);
-    const builderPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
-    const viewportSplitterLeft = Math.max(0, Math.round(metricsRef.current.left + builderPixel - 8));
-
-    splitter.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
-  }, []);
 
   const startLayoutAckObserver = useCallback((builderWidth: number, resultWidth: number) => {
     layoutAckObserverRef.current?.disconnect();
@@ -858,6 +1071,7 @@ export default function LiteStudioSplitWorkspace({
       frameRef.current = null;
     }
     flushPointer();
+    clearFastResultContentProxy();
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
@@ -880,7 +1094,7 @@ export default function LiteStudioSplitWorkspace({
     }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls]);
+  }, [clearFastResultContentProxy, clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -941,28 +1155,15 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
-
-    // 692: when the browser batches high-frequency pointer samples, consume only
-    // the newest sample. Older samples are intentionally discarded; replaying
-    // them is exactly what makes a fast sweep feel one step behind the mouse.
-    const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-    let latestClientX = event.clientX;
-    let coalescedCount = 1;
-    try {
-      const coalesced = nativeEvent.getCoalescedEvents?.() || [];
-      coalescedCount = Math.max(1, coalesced.length || 1);
-      if (coalesced.length > 0) latestClientX = coalesced[coalesced.length - 1].clientX;
-    } catch {
-      latestClientX = event.clientX;
-      coalescedCount = 1;
-    }
-
-    // Divider first, pane tree second. Both consume the exact same newest X.
-    previewSplitterAtClientX(latestClientX);
+    // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
+    // verified Lite V2 path; PC no longer uses this engine in automatic mode.
     if (manualPerfCaptureActiveRef.current) {
-      recordSplitPerfPointer(latestClientX, coalescedCount);
+      const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+      let coalescedCount = 1;
+      try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
+      recordSplitPerfPointer(event.clientX, coalescedCount);
     }
-    schedulePointer(latestClientX);
+    schedulePointer(event.clientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -1007,6 +1208,7 @@ export default function LiteStudioSplitWorkspace({
 
   useLayoutEffect(() => {
     if (benchmarkRunningRef.current) return;
+    clearFastResultContentProxy();
 
     // 612: workspace/profile changes can alter the geometry owner. Reset the
     // cached content mode so the next refresh resolves exactly one owner from
@@ -1018,7 +1220,7 @@ export default function LiteStudioSplitWorkspace({
     if (nextLayoutMode === 'css-var') clearDirectBenchmarkGeometry();
     const frame = window.requestAnimationFrame(() => refreshMetrics());
     return () => window.cancelAnimationFrame(frame);
-  }, [clearDirectBenchmarkGeometry, refreshMetrics, runtimeProfile, workspaceView]);
+  }, [clearDirectBenchmarkGeometry, clearFastResultContentProxy, refreshMetrics, runtimeProfile, workspaceView]);
 
   useEffect(() => {
     const emitBenchmarkStatus = (state: 'running' | 'done' | 'error', message: string) => {
@@ -1408,6 +1610,7 @@ export default function LiteStudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        clearFastResultContentProxy();
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1431,6 +1634,7 @@ export default function LiteStudioSplitWorkspace({
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
+      clearFastResultContentProxy();
       document.body.style.removeProperty('cursor');
       document.body.style.removeProperty('user-select');
       if (dragScrollRestoreFrameRef.current !== null) {
@@ -1457,7 +1661,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
+  }, [clearFastResultContentProxy, clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

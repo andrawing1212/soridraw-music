@@ -1,0 +1,36 @@
+{
+  "version": 693,
+  "baseline": "SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip",
+  "scope": [
+    "Music Note",
+    "Library",
+    "PC/fine pointer",
+    "high-speed internal split drag",
+    "high-speed outer-window resize"
+  ],
+  "unchanged": [
+    "Recent Songs",
+    "Create/Studio",
+    "touch-primary Lite adaptive behavior",
+    "Firebase/Auth/Firestore/Functions/data model"
+  ],
+  "pacing": {
+    "enter_px_per_ms": 0.65,
+    "exit_px_per_ms": 0.26,
+    "pressure_frame_ms": 24,
+    "pressure_delta_px": 8,
+    "max_exact_rebase_ms": 50,
+    "max_visual_drift_px": 56,
+    "max_scale_delta": 0.065,
+    "responsive_boundaries_exact": [
+      660,
+      1080
+    ]
+  },
+  "principle": "Keep pane geometry live; bound only heavy Note/Library descendant reflow during fast width motion using a compositor scale proxy, then restore exact layout as soon as motion slows or ends.",
+  "sources": [
+    "W3C Pointer Events Level 3: pointermove may be coalesced/delayed for performance; getCoalescedEvents exposes samples but does not remove main-thread layout cost.",
+    "web.dev Avoid large complex layouts/layout thrashing: layout cost directly affects interaction latency; ~16ms is the 60Hz frame budget example.",
+    "web.dev High-performance animations / Chrome compositor guidance: transform can resize visually without triggering layout/paint every frame."
+  ]
+}

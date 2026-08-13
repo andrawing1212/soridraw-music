@@ -1,3 +1,14 @@
+# SORIDRAW 693차 — 690 기준 고속 폭변화 프레임 페이싱
+
+- 기준: 690차 균형본. 691/692 입력 경로 실험은 포함하지 않음.
+- 대상: PC fine-pointer의 Music Note / Library만. Recent/Create/실제 touch-primary 경로는 변경하지 않음.
+- 느린 폭 변화: 690의 매 프레임 exact layout을 그대로 사용.
+- 빠른 폭 변화: result pane/splitter는 매 프레임 실제 폭을 유지하고, 무거운 페이지 내부 width reflow만 velocity-aware cadence로 rebase. 중간 프레임은 `transform: scaleX()` compositor proxy로 현재 pane 폭을 시각적으로 추종.
+- 진입 기준: 0.65 px/ms 이상 또는 이미 24ms+ 지연된 프레임에서 8px+ 폭 변화. 종료 기준: 0.26 px/ms 이하 2회 연속.
+- exact rebase: 최대 50ms, 56px drift, 6.5% scale drift 중 가장 먼저 도달하는 시점. 660/1080 responsive 경계는 무조건 즉시 exact rebase.
+- drag 종료 / outer resize settle / workspace 변경 시 proxy 즉시 제거하고 exact layout 복귀.
+- Firebase/Auth/Firestore/Functions/저장구조 변경 없음.
+
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.
@@ -2065,13 +2076,3 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 단, 외부창 리사이즈 개선으로 반응이 있었던 686 리스트 viewport windowing, 687 tablet direct geometry, 689 외부창 전용 hit-test/transition 격리는 유지한다.
 - 즉 내부 분할과 외부창 리사이즈가 같은 최적화 소유권을 서로 덮어쓰지 않도록 두 경로를 분리한 균형본이다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
-
-## 692차 — 690 기준 · 내부 분할 최신 포인터 샘플 우선 + 분할선 즉시 추종
-
-- 기준: `SORIDRAW_690차_689기준_내부분할683복구_외부창개선분리_균형본.zip`
-- 691차 태블릿 강제 경로는 폐기하고 690차 균형본에서 다시 시작.
-- Music Note / Library가 사용하는 Lite 분할에서 빠른 마우스 이동 시 브라우저가 coalesced pointer sample을 묶어 전달하면 **가장 최신 좌표 1개만 사용**한다.
-- body portal 분할선은 pane reflow를 기다리지 않고 최신 좌표로 즉시 이동한다.
-- pane 폭/반응형 계산은 기존처럼 `requestAnimationFrame`당 최대 1회만 실행하며, pending 좌표는 항상 최신 값으로 덮어쓴다.
-- 내부 분할 외의 Studio 구조, 외부창 resize 경로, 686/687/689 개선, Firebase/Auth/Firestore/Functions는 변경하지 않았다.
-- 목표: 690의 느린 드래그 부드러움은 유지하면서 빠른 드래그에서 한 번씩 뒤처지는 체감만 줄이는 좁은 수정.

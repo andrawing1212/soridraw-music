@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
+import { followSplitTargetWithJumpGuard, resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -1061,7 +1061,7 @@ export default function StudioSplitWorkspace({
     let appliedPercent = targetPercent;
     recentOuterNeedsCatchUpRef.current = false;
 
-    if (outerResizeActive && pacingEligible && !outerFastLegacy && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+    if (outerResizeActive && pacingEligible && !builderCollapsedRef.current && !resultCollapsedRef.current) {
       const targetBuilderWidth = Math.round(metricsRef.current.width * (targetPercent / 100));
       const seedWidth = Math.max(1, previousMetricsWidth);
       const seedBuilderWidth = Math.round(seedWidth * (targetPercent / 100));
@@ -1070,12 +1070,14 @@ export default function StudioSplitWorkspace({
       const transitionGuardActive = isNearRecentResponsiveTransition(targetBuilderWidth, targetResultWidth);
       const outerVisualLag = transitionGuardActive ? RECENT_RESPONSIVE_TRANSITION_VISUAL_LAG_PX : RECENT_OUTER_MAX_VISUAL_LAG_PX;
       const now = performance.now();
-      const nextBuilderWidth = Math.round(followRecentWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
+      const nextBuilderWidth = Math.round(outerFastLegacy
+        ? followSplitTargetWithJumpGuard(currentBuilderWidth, targetBuilderWidth, recentOuterPacingFrameTimeRef.current, now)
+        : followRecentWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
       recentOuterPacingFrameTimeRef.current = now;
       recentOuterPacedBuilderWidthRef.current = nextBuilderWidth;
       recentOuterNeedsCatchUpRef.current = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
       appliedPercent = applyPercentToLayout((nextBuilderWidth / Math.max(1, metricsRef.current.width)) * 100);
-      // Spatial-gap pacing must never rewrite the user's stored split ratio.
+      // Visual pacing never rewrites the user's stored split ratio.
       percentRef.current = targetPercent;
     } else {
       recentOuterPacedBuilderWidthRef.current = null;
@@ -1353,7 +1355,8 @@ export default function StudioSplitWorkspace({
     const { startX, startPercent, width } = dragRef.current;
     const safeWidth = Math.max(width, 1);
     const bounds = getSplitBounds(safeWidth);
-    const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent' && !recentFastLegacyDragRef.current;
+    const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
+    const fastJumpGuardActive = pacingEligible && recentFastLegacyDragRef.current;
 
     if (pacingEligible) {
       if (clientX !== null) {
@@ -1370,7 +1373,9 @@ export default function StudioSplitWorkspace({
       const now = performance.now();
       const nextPixel = forceLayout
         ? targetPixel
-        : Math.round(followRecentWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
+        : Math.round(fastJumpGuardActive
+          ? followSplitTargetWithJumpGuard(currentPixel, targetPixel, recentDragPacingFrameTimeRef.current, now)
+          : followRecentWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
       recentDragPacingFrameTimeRef.current = now;
       recentDragPacedPixelRef.current = nextPixel;
 
@@ -1597,10 +1602,10 @@ export default function StudioSplitWorkspace({
         ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current, !transitionGuardActive)
         : event.clientX;
 
-    // 668/683 fast lane: divider preview is allowed to follow the confirmed
-    // cursor immediately; the pane layout self-paces separately. Slow motion
-    // keeps the current close-gap path that already feels good to the user.
-    if (!slowPacingEligible) previewSplitterAtClientX(trackedClientX);
+    // 709: Recent keeps divider and pane on the same visual boundary. Fast
+    // movement is jump-guarded inside flushPendingPointer instead of previewing
+    // a far-ahead divider and letting the pane catch up later.
+    if (!recentEligible) previewSplitterAtClientX(trackedClientX);
     schedulePointerUpdate(trackedClientX);
   };
 

@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
+import { followSplitTargetWithJumpGuard, resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -851,7 +851,7 @@ export default function LiteStudioSplitWorkspace({
     const stablePercent = percentRef.current;
     let appliedPercent = stablePercent;
     let outerNeedsCatchUp = false;
-    if (outerResizeActive && pacingEligible && !outerFastLegacy && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+    if (outerResizeActive && pacingEligible && !builderCollapsedRef.current && !resultCollapsedRef.current) {
       const bounds = getSplitBounds(metricsRef.current.width);
       const targetPercent = clampToBounds(stablePercent, bounds);
       const targetBuilderWidth = Math.round(metricsRef.current.width * (targetPercent / 100));
@@ -862,7 +862,9 @@ export default function LiteStudioSplitWorkspace({
       const transitionGuardActive = isNearResponsiveTransition(targetBuilderWidth, targetResultWidth);
       const outerVisualLag = transitionGuardActive ? RESPONSIVE_TRANSITION_VISUAL_LAG_PX : OUTER_MAX_VISUAL_LAG_PX;
       const now = performance.now();
-      const nextBuilderWidth = Math.round(followWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
+      const nextBuilderWidth = Math.round(outerFastLegacy
+        ? followSplitTargetWithJumpGuard(currentBuilderWidth, targetBuilderWidth, outerPacingFrameTimeRef.current, now)
+        : followWithBoundedGap(currentBuilderWidth, targetBuilderWidth, outerVisualLag));
       outerPacingFrameTimeRef.current = now;
       outerPacedBuilderWidthRef.current = nextBuilderWidth;
       outerNeedsCatchUp = Math.abs(targetBuilderWidth - nextBuilderWidth) > 0.5;
@@ -925,8 +927,8 @@ export default function LiteStudioSplitWorkspace({
     if (targetPixel === null) return;
 
     const pacingEligible = finePointerFastPathRef.current
-      && (workspaceView === 'music-note' || workspaceView === 'library')
-      && !fastLegacyDragRef.current;
+      && (workspaceView === 'music-note' || workspaceView === 'library');
+    const fastJumpGuardActive = pacingEligible && fastLegacyDragRef.current;
     const currentPixel = dragPacedPixelRef.current ?? lastPixelRef.current ?? targetPixel;
     const targetResultPixel = Math.max(0, width - targetPixel);
     const transitionGuardActive = isNearResponsiveTransition(targetPixel, targetResultPixel);
@@ -934,7 +936,9 @@ export default function LiteStudioSplitWorkspace({
     const now = Number.isFinite(frameTime) ? Number(frameTime) : performance.now();
     const nextPixel = forceExact || !pacingEligible
       ? targetPixel
-      : Math.round(followWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
+      : Math.round(fastJumpGuardActive
+        ? followSplitTargetWithJumpGuard(currentPixel, targetPixel, dragPacingFrameTimeRef.current, now)
+        : followWithBoundedGap(currentPixel, targetPixel, dragVisualLag));
     dragPacingFrameTimeRef.current = now;
     dragPacedPixelRef.current = nextPixel;
 

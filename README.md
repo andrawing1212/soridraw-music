@@ -2132,3 +2132,14 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note/Library fast lane: 668/683 Lite V2처럼 parent pointermove의 clientX 하나를 최신 target으로 보관하고, 한 rAF에 한 번 실제 divider+pane boundary를 직접 반영한다. prediction/bounded-gap catch-up 프레임은 fast lane에서 사용하지 않는다.
 - 외부창 fast lane: 707의 bounded-gap visual pacing을 우회하고 668/683처럼 현재 실제 workspace width에 저장된 split ratio를 즉시 적용한다. 느린 외부창 resize에서는 707의 가까운 gap 경로를 유지한다.
 - 터치/펜, Studio Create, Firebase/Auth/Firestore/Functions/저장구조/디자인 변경 없음. 배포 없음.
+
+
+### 709차 — 큰 점프 억제 / 일정한 프레임 이동량
+- 기준: 708차
+- 목표: 느린 이동의 기존 밀착감은 유지하고, 빠른 이동에서 분할바/내부 pane이 100~300px 단위로 갑자기 튀는 현상만 억제.
+- Recent / Music Note / Library 내부 분할과 외부창 resize에 동일한 large-jump guard 적용.
+- 빠른 모드에서도 최신 확정 좌표는 그대로 목표로 유지하되, 72px를 넘는 단일 프레임 보정은 display-frame 기준 최대 56px씩 분산해 따라간다.
+- 프레임이 오래 막힌 뒤 다음 프레임에서 큰 폭으로 순간이동하지 않도록 dt를 16.667ms로 상한 처리.
+- 느린/보통 이동(72px 이하)은 기존처럼 즉시 목표 위치를 사용한다.
+- Recent의 빠른 구간에서 divider만 커서 앞으로 즉시 튀던 preview 경로를 제거해 divider와 pane이 같은 visual boundary를 유지한다.
+- UI / Firebase / Firestore / Auth / Functions / 저장 구조 변경 없음.

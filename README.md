@@ -1,13 +1,3 @@
-## 698차 — 694 성능 기준 / 커서·분할바·pane·외부창 간격 추종 측정 전용
-- 기준 ZIP: `SORIDRAW_694차_690기준_고속폭변화_1프레임트랜잭션_강제리플로제거.zip`.
-- 목적은 성능을 더 높이는 것이 아니라 **위치 추종의 일정함과 지연을 숫자로 분리**하는 것입니다. 일반 사용자 동작, 분할 geometry, 반응형 breakpoint, CSS 디자인은 변경하지 않습니다.
-- 기존 관리자 `품질·성능 진단` 패널을 최소 확장했습니다. 새 진단 패널은 만들지 않습니다.
-- `실손 드래그 비교`에서 기존 pointer/commit/layout-ack 값에 다음을 추가합니다: 커서↔분할바 commit gap 평균/P95/최대, gap 지터, pointer event 시점에 커서가 마지막 분할바보다 앞선 거리 평균/P95/최대와 6px 이상 비율, 커서↔실제 pane 경계 P95/최대와 지터.
-- `외부창 추종 비교`를 기존 관리자 진단 패널 안에 추가했습니다. 뮤직노트와 라이브러리를 순서대로 열고 사용자가 외부 브라우저 창을 PC↔Tablet 구간으로 4~6초 왕복하면 viewport 오른쪽↔workspace 오른쪽 gap의 평균, 기준점 대비 Δ P95/최대, 프레임간 지터 P95/최대, viewport 이동량, layout ack 지연, responsive 전환 횟수를 기록합니다.
-- 측정 instrumentation은 `PERF ON` + 명시적으로 해당 실손 테스트를 arm한 경우에만 활성화됩니다. 평상시 drag/resize hot-path에는 새 DOM 측정이나 observer를 추가하지 않습니다.
-- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
-- 상태: 측정 전용 코드 반영 완료 · 실사용 데이터 수집 전.
-
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.
@@ -2090,20 +2080,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 공식 참고 원칙: Chrome/web.dev의 forced reflow 가이드(스타일 write 뒤 geometry read 금지, reads/writes batching), ResizeObserver callback은 paint 전 실행되어 무거우면 다음 프레임을 지연할 수 있다는 가이드, `requestAnimationFrame`은 display refresh에 맞춘 1회 paint 직전 콜백이라는 MDN 설명, CSS scroll anchoring을 문제 구간에서 `overflow-anchor:none`으로 opt-out할 수 있다는 MDN 설명.
 - UI/테두리/페이지 구조, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 
-
-### 699차 — 698 외부창 추종 진단 수정
-- 기준: 698차 측정 전용본. 앱 성능/레이아웃 동작은 변경하지 않음.
-- 수정 1: Lite 외부창 resize listener가 최초 mount 시점의 workspaceView를 캡처해 Music Note/Library로 전환 후 arm을 놓치던 stale closure 제거. 현재 workspace는 ref로 읽음.
-- 수정 2: 너무 짧은 외부창 측정이 한 번 발생하면 one-shot arm이 소모된 채 65초 timeout으로 가던 문제를 동일 workspace 자동 re-arm으로 수정.
-- 수정 3: PERF 상단 버튼줄 설명 문구가 flex에서 폭 0에 가깝게 눌려 오른쪽 세로 기둥처럼 길어지던 UI를 버튼 wrap + 설명 100% 행으로 정리.
-- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
-
-
-## 700차 — 외부창 추종 진단 4초 고정 측정 / 단계 오검출 제거
-- 기준: 699차(실제 앱 성능 경로는 694와 동일).
-- 699의 외부창 진단은 native resize settle 110ms를 측정 종료로도 사용해서, 사용자가 잠깐 멈추면 1초대 샘플이 완료되고 다음 Library 단계가 잘못 소비될 수 있었다.
-- 실제 viewport width가 arm 시점보다 3px 이상 바뀐 첫 사용자 resize에서만 측정을 시작한다.
-- 측정은 작은 중간 pause를 허용하며 최소 4초 전에는 종료하지 않는다. 최대 6.5초에서 안전 종료한다.
-- 유효 샘플 기준을 duration 3.8s+, spatial sample 24+, 누적 viewport 이동 500px+로 강화했다.
-- Music Note → Library 전환 사이에 명시적 disarm + 650ms settle을 넣어 workspace 전환 신호가 다음 측정을 자동 완료하지 못하게 했다.
-- 진단 코드만 변경. 앱의 분할/리사이즈 성능 및 geometry 로직은 변경하지 않는다.
+### 701차 — 694 성능 유지 + Music Note/Library 추종 간격 안정화
+- 기준: 694차. 698~700 진단 실험 코드는 포함하지 않음.
+- 698 실손 데이터에서 입력 수집은 sub-ms인데 실제 pane layout acknowledgement가 약 55~60ms P95까지 밀리는 현상을 확인했다.
+- Music Note / Library의 내부 분할 드래그와 외부창 resize에만 프레임당 1회의 `post-write layout acknowledgement`를 추가했다.
+- 목적은 raw FPS 최대화가 아니라 `커서 → 분할바 → pane`, `외부창 → workspace → pane` 사이의 간격이 여러 프레임 누적됐다가 점프하지 않도록 한 프레임의 geometry transaction을 그 프레임 안에서 확정하는 것이다.
+- 694에서 제거한 중복 geometry owner, modal viewport write, 외부 control 전체 재계산은 복구하지 않았다. Recent/Create와 Firebase/Data 경로도 변경하지 않았다.

@@ -25,7 +25,6 @@ export type SplitPerfRegionNodes = {
 
 export type SplitPerfResult = {
   host: string;
-  captureKind: 'drag' | 'window-resize';
   workspaceView: string;
   engine: string;
   viewport: string;
@@ -83,28 +82,6 @@ export type SplitPerfResult = {
   layoutAckWidthErrorAvgPx: number;
   layoutAckWidthErrorMaxPx: number;
   layoutAckPerCommitPct: number;
-  spatialSampleCount: number;
-  spatialSampleRate: number;
-  cursorDividerGapAvgPx: number;
-  cursorDividerGapP95Px: number;
-  cursorDividerGapMaxPx: number;
-  cursorDividerGapJitterP95Px: number;
-  cursorDividerGapJitterMaxPx: number;
-  cursorDividerLeadAvgPx: number;
-  cursorDividerLeadP95Px: number;
-  cursorDividerLeadMaxPx: number;
-  cursorDividerLeadOver6Pct: number;
-  cursorPaneGapAvgPx: number;
-  cursorPaneGapP95Px: number;
-  cursorPaneGapMaxPx: number;
-  cursorPaneGapJitterP95Px: number;
-  cursorPaneGapJitterMaxPx: number;
-  outerRightGapAvgPx: number;
-  outerRightGapDeltaP95Px: number;
-  outerRightGapDeltaMaxPx: number;
-  outerRightGapJitterP95Px: number;
-  outerRightGapJitterMaxPx: number;
-  viewportWidthDistancePx: number;
   paneModeSwitchCount: number;
   contentModeSwitchCount: number;
   hotspots: SplitPerfHotspot[];
@@ -147,7 +124,6 @@ type HotspotAccumulator = {
 
 type ActiveDrag = {
   workspaceView: string;
-  captureKind: 'drag' | 'window-resize';
   engine: string;
   startedAt: number;
   frameTimes: number[];
@@ -164,23 +140,6 @@ type ActiveDrag = {
   pointerEventTimes: number[];
   pointerXs: number[];
   pointerSampleCount: number;
-  latestPointerX: number | null;
-  spatialSampleTimes: number[];
-  cursorDividerGaps: number[];
-  cursorDividerSignedGaps: number[];
-  cursorDividerGapJitters: number[];
-  cursorPaneGaps: number[];
-  cursorPaneSignedGaps: number[];
-  cursorPaneGapJitters: number[];
-  cursorDividerLeadGaps: number[];
-  cursorDividerLeadOver6Count: number;
-  latestDividerX: number | null;
-  outerRightGaps: number[];
-  outerRightGapDeltas: number[];
-  outerRightGapJitters: number[];
-  outerRightGapBaseline: number | null;
-  latestWorkspaceRight: number | null;
-  viewportWidths: number[];
   commitTimes: number[];
   inputToCommitLatencies: number[];
   lastPointerAt: number | null;
@@ -213,7 +172,6 @@ export const SPLIT_PERF_BENCHMARK_REQUEST_EVENT = 'soridraw:split-perf-benchmark
 export const SPLIT_PERF_BENCHMARK_STATUS_EVENT = 'soridraw:split-perf-benchmark-status';
 export const SPLIT_PERF_WORKSPACE_REQUEST_EVENT = 'soridraw:split-perf-workspace-request';
 export const SPLIT_PERF_MANUAL_DRAG_ARM_EVENT = 'soridraw:split-perf-manual-drag-arm';
-export const SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT = 'soridraw:split-perf-manual-window-resize-arm';
 
 export const readSplitPerfToolVisibility = () => {
   // 622: diagnostic UI is opt-in. A fresh install/update starts hidden and
@@ -478,9 +436,6 @@ export const beginSplitPerfDrag = ({
   benchmarkSurface = null,
   benchmarkSurfacePass = null,
   layoutMode = null,
-  captureKind = 'drag',
-  outerRightGapBaseline = null,
-  initialWorkspaceRight = null,
 }: {
   workspaceView?: string;
   engine: string;
@@ -489,9 +444,6 @@ export const beginSplitPerfDrag = ({
   benchmarkSurface?: string | null;
   benchmarkSurfacePass?: boolean | null;
   layoutMode?: 'css-var' | 'direct' | null;
-  captureKind?: 'drag' | 'window-resize';
-  outerRightGapBaseline?: number | null;
-  initialWorkspaceRight?: number | null;
 }) => {
   if (!enabled || typeof window === 'undefined' || typeof document === 'undefined') return;
   if (active?.rafId !== null && active?.rafId !== undefined) window.cancelAnimationFrame(active.rafId);
@@ -502,7 +454,6 @@ export const beginSplitPerfDrag = ({
   const regionNodes = collectRegionNodeCounts(domNodes);
   active = {
     workspaceView: workspaceView || 'create',
-    captureKind,
     engine,
     startedAt: now(),
     frameTimes: [],
@@ -519,23 +470,6 @@ export const beginSplitPerfDrag = ({
     pointerEventTimes: [],
     pointerXs: [],
     pointerSampleCount: 0,
-    latestPointerX: null,
-    spatialSampleTimes: [],
-    cursorDividerGaps: [],
-    cursorDividerSignedGaps: [],
-    cursorDividerGapJitters: [],
-    cursorPaneGaps: [],
-    cursorPaneSignedGaps: [],
-    cursorPaneGapJitters: [],
-    cursorDividerLeadGaps: [],
-    cursorDividerLeadOver6Count: 0,
-    latestDividerX: null,
-    outerRightGaps: [],
-    outerRightGapDeltas: [],
-    outerRightGapJitters: [],
-    outerRightGapBaseline: Number.isFinite(outerRightGapBaseline) ? Number(outerRightGapBaseline) : null,
-    latestWorkspaceRight: Number.isFinite(initialWorkspaceRight) ? Number(initialWorkspaceRight) : null,
-    viewportWidths: [],
     commitTimes: [],
     inputToCommitLatencies: [],
     lastPointerAt: null,
@@ -568,12 +502,6 @@ export const recordSplitPerfPointer = (clientX: number, coalescedCount = 1) => {
   active.pointerEventTimes.push(timestamp);
   active.pointerXs.push(clientX);
   active.pointerSampleCount += Math.max(1, Math.round(coalescedCount || 1));
-  active.latestPointerX = clientX;
-  if (active.captureKind === 'drag' && active.latestDividerX !== null) {
-    const leadGap = Math.abs(clientX - active.latestDividerX);
-    active.cursorDividerLeadGaps.push(leadGap);
-    if (leadGap >= 6) active.cursorDividerLeadOver6Count += 1;
-  }
   active.lastPointerAt = timestamp;
 };
 
@@ -593,74 +521,6 @@ export const recordSplitPerfLayoutAck = (builderWidth: number, resultWidth: numb
   const builderError = active.expectedBuilderWidth === null ? 0 : Math.abs(builderWidth - active.expectedBuilderWidth);
   const resultError = active.expectedResultWidth === null ? 0 : Math.abs(resultWidth - active.expectedResultWidth);
   active.layoutAckWidthErrors.push(Math.max(builderError, resultError));
-};
-
-export const recordSplitPerfDividerSample = (dividerX: number) => {
-  if (!enabled || !active || active.captureKind !== 'drag' || active.latestPointerX === null) return;
-  const safeDividerX = Number.isFinite(dividerX) ? dividerX : 0;
-  const signedGap = active.latestPointerX - safeDividerX;
-  active.cursorDividerGaps.push(Math.abs(signedGap));
-  active.cursorDividerSignedGaps.push(signedGap);
-  if (active.cursorDividerSignedGaps.length > 1) {
-    const previousGap = active.cursorDividerSignedGaps[active.cursorDividerSignedGaps.length - 2];
-    active.cursorDividerGapJitters.push(Math.abs(signedGap - previousGap));
-  }
-  active.latestDividerX = safeDividerX;
-};
-
-const pushOuterRightGap = (target: ActiveDrag, rightGap: number) => {
-  if (!Number.isFinite(rightGap)) return;
-  target.outerRightGaps.push(rightGap);
-  if (target.outerRightGapBaseline === null) target.outerRightGapBaseline = rightGap;
-  target.outerRightGapDeltas.push(Math.abs(rightGap - target.outerRightGapBaseline));
-  if (target.outerRightGaps.length > 1) {
-    const previousGap = target.outerRightGaps[target.outerRightGaps.length - 2];
-    target.outerRightGapJitters.push(Math.abs(rightGap - previousGap));
-  }
-};
-
-export const recordSplitPerfViewportSample = (viewportWidth: number) => {
-  if (!enabled || !active || active.captureKind !== 'window-resize') return;
-  const safeViewport = Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0;
-  active.viewportWidths.push(safeViewport);
-  if (active.latestWorkspaceRight !== null) pushOuterRightGap(active, safeViewport - active.latestWorkspaceRight);
-};
-
-export const recordSplitPerfSpatialSample = ({
-  workspaceLeft,
-  builderWidth,
-  resultWidth,
-  viewportWidth,
-}: {
-  workspaceLeft: number;
-  builderWidth: number;
-  resultWidth: number;
-  viewportWidth: number;
-}) => {
-  if (!enabled || !active) return;
-  const safeLeft = Number.isFinite(workspaceLeft) ? workspaceLeft : 0;
-  const safeBuilder = Number.isFinite(builderWidth) ? Math.max(0, builderWidth) : 0;
-  const safeResult = Number.isFinite(resultWidth) ? Math.max(0, resultWidth) : 0;
-  const safeViewport = Number.isFinite(viewportWidth) ? Math.max(0, viewportWidth) : 0;
-  const dividerX = safeLeft + safeBuilder;
-  const timestamp = now();
-  active.spatialSampleTimes.push(timestamp);
-
-  if (active.captureKind === 'drag' && active.latestPointerX !== null) {
-    const signedGap = active.latestPointerX - dividerX;
-    active.cursorPaneGaps.push(Math.abs(signedGap));
-    active.cursorPaneSignedGaps.push(signedGap);
-    if (active.cursorPaneSignedGaps.length > 1) {
-      const previousGap = active.cursorPaneSignedGaps[active.cursorPaneSignedGaps.length - 2];
-      active.cursorPaneGapJitters.push(Math.abs(signedGap - previousGap));
-    }
-  }
-
-  if (active.captureKind === 'window-resize') {
-    const workspaceRight = safeLeft + safeBuilder + safeResult;
-    active.latestWorkspaceRight = workspaceRight;
-    pushOuterRightGap(active, safeViewport - workspaceRight);
-  }
 };
 
 export const recordSplitPerfResponsiveSwitch = (kind: 'pane' | 'content') => {
@@ -712,8 +572,6 @@ export const finishSplitPerfDrag = () => {
   for (let index = 1; index < active.layoutAckTimes.length; index += 1) layoutAckGaps.push(active.layoutAckTimes[index] - active.layoutAckTimes[index - 1]);
   let pointerDistancePx = 0;
   for (let index = 1; index < active.pointerXs.length; index += 1) pointerDistancePx += Math.abs(active.pointerXs[index] - active.pointerXs[index - 1]);
-  let viewportWidthDistancePx = 0;
-  for (let index = 1; index < active.viewportWidths.length; index += 1) viewportWidthDistancePx += Math.abs(active.viewportWidths[index] - active.viewportWidths[index - 1]);
 
   const hotspotRows: SplitPerfHotspot[] = Array.from(active.hotspots.entries())
     .map(([label, value]) => ({
@@ -728,7 +586,6 @@ export const finishSplitPerfDrag = () => {
 
   lastResult = {
     host: window.location.host || 'local-preview',
-    captureKind: active.captureKind,
     workspaceView: active.workspaceView,
     engine: active.engine,
     viewport: `${window.innerWidth}×${window.innerHeight}`,
@@ -786,28 +643,6 @@ export const finishSplitPerfDrag = () => {
     layoutAckWidthErrorAvgPx: round(mean(active.layoutAckWidthErrors), 2),
     layoutAckWidthErrorMaxPx: round(max(active.layoutAckWidthErrors), 2),
     layoutAckPerCommitPct: round((active.layoutAckTimes.length / Math.max(1, active.geometryWriteCount)) * 100, 1),
-    spatialSampleCount: active.spatialSampleTimes.length,
-    spatialSampleRate: round((active.spatialSampleTimes.length * 1000) / durationMs, 1),
-    cursorDividerGapAvgPx: round(mean(active.cursorDividerGaps), 2),
-    cursorDividerGapP95Px: round(percentile(active.cursorDividerGaps, 0.95), 2),
-    cursorDividerGapMaxPx: round(max(active.cursorDividerGaps), 2),
-    cursorDividerGapJitterP95Px: round(percentile(active.cursorDividerGapJitters, 0.95), 2),
-    cursorDividerGapJitterMaxPx: round(max(active.cursorDividerGapJitters), 2),
-    cursorDividerLeadAvgPx: round(mean(active.cursorDividerLeadGaps), 2),
-    cursorDividerLeadP95Px: round(percentile(active.cursorDividerLeadGaps, 0.95), 2),
-    cursorDividerLeadMaxPx: round(max(active.cursorDividerLeadGaps), 2),
-    cursorDividerLeadOver6Pct: round((active.cursorDividerLeadOver6Count / Math.max(1, active.cursorDividerLeadGaps.length)) * 100, 1),
-    cursorPaneGapAvgPx: round(mean(active.cursorPaneGaps), 2),
-    cursorPaneGapP95Px: round(percentile(active.cursorPaneGaps, 0.95), 2),
-    cursorPaneGapMaxPx: round(max(active.cursorPaneGaps), 2),
-    cursorPaneGapJitterP95Px: round(percentile(active.cursorPaneGapJitters, 0.95), 2),
-    cursorPaneGapJitterMaxPx: round(max(active.cursorPaneGapJitters), 2),
-    outerRightGapAvgPx: round(mean(active.outerRightGaps), 2),
-    outerRightGapDeltaP95Px: round(percentile(active.outerRightGapDeltas, 0.95), 2),
-    outerRightGapDeltaMaxPx: round(max(active.outerRightGapDeltas), 2),
-    outerRightGapJitterP95Px: round(percentile(active.outerRightGapJitters, 0.95), 2),
-    outerRightGapJitterMaxPx: round(max(active.outerRightGapJitters), 2),
-    viewportWidthDistancePx: round(viewportWidthDistancePx, 0),
     paneModeSwitchCount: active.paneModeSwitchCount,
     contentModeSwitchCount: active.contentModeSwitchCount,
     hotspots: hotspotRows,
@@ -913,28 +748,6 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
     layoutAckWidthErrorAvgPx: number('layoutAckWidthErrorAvgPx', 2),
     layoutAckWidthErrorMaxPx: number('layoutAckWidthErrorMaxPx', 2),
     layoutAckPerCommitPct: number('layoutAckPerCommitPct', 1),
-    spatialSampleCount: Math.round(number('spatialSampleCount', 0)),
-    spatialSampleRate: number('spatialSampleRate', 1),
-    cursorDividerGapAvgPx: number('cursorDividerGapAvgPx', 2),
-    cursorDividerGapP95Px: number('cursorDividerGapP95Px', 2),
-    cursorDividerGapMaxPx: number('cursorDividerGapMaxPx', 2),
-    cursorDividerGapJitterP95Px: number('cursorDividerGapJitterP95Px', 2),
-    cursorDividerGapJitterMaxPx: number('cursorDividerGapJitterMaxPx', 2),
-    cursorDividerLeadAvgPx: number('cursorDividerLeadAvgPx', 2),
-    cursorDividerLeadP95Px: number('cursorDividerLeadP95Px', 2),
-    cursorDividerLeadMaxPx: number('cursorDividerLeadMaxPx', 2),
-    cursorDividerLeadOver6Pct: number('cursorDividerLeadOver6Pct', 1),
-    cursorPaneGapAvgPx: number('cursorPaneGapAvgPx', 2),
-    cursorPaneGapP95Px: number('cursorPaneGapP95Px', 2),
-    cursorPaneGapMaxPx: number('cursorPaneGapMaxPx', 2),
-    cursorPaneGapJitterP95Px: number('cursorPaneGapJitterP95Px', 2),
-    cursorPaneGapJitterMaxPx: number('cursorPaneGapJitterMaxPx', 2),
-    outerRightGapAvgPx: number('outerRightGapAvgPx', 2),
-    outerRightGapDeltaP95Px: number('outerRightGapDeltaP95Px', 2),
-    outerRightGapDeltaMaxPx: number('outerRightGapDeltaMaxPx', 2),
-    outerRightGapJitterP95Px: number('outerRightGapJitterP95Px', 2),
-    outerRightGapJitterMaxPx: number('outerRightGapJitterMaxPx', 2),
-    viewportWidthDistancePx: number('viewportWidthDistancePx', 0),
     paneModeSwitchCount: Math.round(number('paneModeSwitchCount', 0)),
     contentModeSwitchCount: Math.round(number('contentModeSwitchCount', 0)),
     hotspots: aggregateHotspots(results),

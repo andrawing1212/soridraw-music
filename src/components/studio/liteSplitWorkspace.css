@@ -490,8 +490,7 @@
 /* 579 — admin-only repeatable split benchmark controls. */
 .soridraw-split-perf-benchmark-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   margin-bottom: 8px;
 }
@@ -516,15 +515,10 @@
 }
 
 .soridraw-split-perf-benchmark-row span {
-  flex: 1 0 100%;
-  width: 100%;
   min-width: 0;
-  max-width: 100%;
   color: #8f8f94;
   font-size: 10px;
   line-height: 1.3;
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 
 .soridraw-split-perf-benchmark-message {

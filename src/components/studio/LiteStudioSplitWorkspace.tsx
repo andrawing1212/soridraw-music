@@ -160,14 +160,12 @@ const resolveRuntimeLayoutMode = (
   workspaceView?: StudioWorkspaceView,
   runtimeProfile: RuntimeProfile = 'adaptive',
 ): BenchmarkLayoutMode => {
-  // 690 hybrid stabilization:
-  // Keep the exact 683 Lite interaction/drag engine, but retain the 687 outer-
-  // resize finding: once the real result content enters tablet/mobile, geometry
-  // is owned directly by the pane instead of the PC library-590 CSS-variable
-  // path. This deliberately separates internal splitter drag from outer-window
-  // resize behavior so improving one no longer replaces the other engine.
-  if (resultMode !== 'pc') return 'direct';
+  // 617 runtime policy:
+  // - `library-590` is the shared PC path for Library and Music Note. It keeps
+  //   the exact 590 CSS-variable geometry at every visual responsive width.
+  // - `adaptive` remains the verified Galaxy Tab/touch V2 path.
   if (runtimeProfile === 'library-590') return 'css-var';
+  if (resultMode !== 'pc') return 'direct';
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
@@ -497,21 +495,6 @@ export default function LiteStudioSplitWorkspace({
       const host = externalRef.current.workspaceHeroHost || document.getElementById('soridraw-studio-workspace-hero-host');
       if (host) host.dataset.paneMode = nextResultMode;
     }
-
-
-    // 696: mobile-width split panes expose an "expand this pane" control.
-    // Update the portal button labels directly in this already-existing mode
-    // synchronization path so divider dragging does not gain React renders.
-    if (builderToggleRef.current && !builderCollapsedRef.current) {
-      const label = nextBuilderMode === 'mobile' ? '곡 만들기 영역 크게 펼치기' : '곡 만들기 영역 접기';
-      builderToggleRef.current.setAttribute('aria-label', label);
-      builderToggleRef.current.setAttribute('title', label);
-    }
-    if (resultToggleRef.current && !resultCollapsedRef.current) {
-      const label = nextResultMode === 'mobile' ? '생성 결과 영역 크게 펼치기' : '생성 결과 영역 접기';
-      resultToggleRef.current.setAttribute('aria-label', label);
-      resultToggleRef.current.setAttribute('title', label);
-    }
   }, [workspaceView]);
 
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
@@ -628,20 +611,9 @@ export default function LiteStudioSplitWorkspace({
       builder.style.setProperty('left', '0px', 'important');
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
-
-      // 697: Music Note / Library keep their result scrollbar on one physical
-      // right edge while geometry ownership switches between css-var and direct.
-      // The Studio main owns an 18px right gutter. css-var already reaches across
-      // that gutter with right:-18px; direct previously stopped at right:0, so the
-      // scrollbar visibly jumped inward exactly when the result pane crossed its
-      // PC/tablet boundary. Extend only the scroll shell by the same 18px and let
-      // the CSS padding consume that extension, keeping the page's usable/content
-      // width and responsive breakpoint calculations unchanged.
-      const pinWorkspaceScrollbarToRightEdge = workspaceView === 'music-note' || workspaceView === 'library';
-      const resultScrollShellExtension = pinWorkspaceScrollbarToRightEdge ? 18 : 0;
       result.style.setProperty('left', `${builderWidth}px`, 'important');
-      result.style.setProperty('right', 'auto', 'important');
-      result.style.setProperty('width', `${resultWidth + resultScrollShellExtension}px`, 'important');
+      result.style.setProperty('right', '0px', 'important');
+      result.style.setProperty('width', `${resultWidth}px`, 'important');
       // 622: splitter is now the same body-level fixed control as Recent Songs,
       // so its live x-coordinate must be viewport-relative rather than local.
       splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
@@ -653,7 +625,7 @@ export default function LiteStudioSplitWorkspace({
     // CSS-variable 590 geometry keeps pane width ownership local, while the
     // shared body splitter follows the same boundary with one tiny fixed write.
     splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
-  }, [clearDirectBenchmarkGeometry, workspaceView]);
+  }, [clearDirectBenchmarkGeometry]);
 
   const applyPercent = useCallback((rawPercent: number, live = false) => {
     const layout = layoutRef.current;
@@ -964,21 +936,6 @@ export default function LiteStudioSplitWorkspace({
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(next)); } catch { /* optional */ }
   };
-
-  const expandMobilePane = useCallback((pane: 'builder' | 'result') => {
-    if (builderCollapsedRef.current || resultCollapsedRef.current) return;
-    const bounds = getSplitBounds(metricsRef.current.width);
-    const requestedPercent = pane === 'builder' ? bounds.max : bounds.min;
-    const next = applyPercent(requestedPercent, false);
-    const builderWidth = Math.round(metricsRef.current.width * (next / 100));
-    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
-    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
-    const splitterLeft = metricsRef.current.left + builderWidth;
-    commitRootMeasurements(builderWidth, splitterLeft);
-    syncExternalGeometry(builderWidth, splitterLeft);
-    clearLiveExternalGeometry();
-    try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(next)); } catch { /* optional */ }
-  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, syncExternalGeometry]);
 
   useEffect(() => () => {
     layoutAckObserverRef.current?.disconnect();
@@ -1518,17 +1475,8 @@ export default function LiteStudioSplitWorkspace({
       type="button"
       className={`soridraw-studio-builder-collapse-toggle soridraw-lite-studio-builder-toggle${isBuilderCollapsed ? ' is-collapsed' : ''}`}
       onClick={() => {
-        if (isBuilderCollapsed) {
-          setIsBuilderCollapsed(false);
-          return;
-        }
-        if (modeRef.current.builder === 'mobile') {
-          setIsResultCollapsed(false);
-          expandMobilePane('builder');
-          return;
-        }
         setIsResultCollapsed(false);
-        setIsBuilderCollapsed(true);
+        setIsBuilderCollapsed((current) => !current);
       }}
       aria-label={isBuilderCollapsed ? '곡 만들기 영역 펼치기' : '곡 만들기 영역 접기'}
       title={isBuilderCollapsed ? '곡 만들기 영역 펼치기' : '곡 만들기 영역 접기'}
@@ -1545,17 +1493,8 @@ export default function LiteStudioSplitWorkspace({
       type="button"
       className={`soridraw-studio-result-collapse-toggle soridraw-lite-studio-result-toggle${isResultCollapsed ? ' is-collapsed' : ''}`}
       onClick={() => {
-        if (isResultCollapsed) {
-          setIsResultCollapsed(false);
-          return;
-        }
-        if (modeRef.current.result === 'mobile') {
-          setIsBuilderCollapsed(false);
-          expandMobilePane('result');
-          return;
-        }
         setIsBuilderCollapsed(false);
-        setIsResultCollapsed(true);
+        setIsResultCollapsed((current) => !current);
       }}
       aria-label={isResultCollapsed ? '생성 결과 영역 펼치기' : '생성 결과 영역 접기'}
       title={isResultCollapsed ? '생성 결과 영역 펼치기' : '생성 결과 영역 접기'}

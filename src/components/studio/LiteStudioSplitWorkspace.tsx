@@ -660,24 +660,18 @@ export default function LiteStudioSplitWorkspace({
     syncPaneTabletProbe(builder, builderWidth);
     syncPaneTabletProbe(result, resultWidth);
 
-    // 691: keep one geometry owner for the *whole internal divider gesture*.
-    // 690 proved the PC/library-590 css-var drag lane is fast, while the same
-    // gesture hitches when result width crosses into tablet and ownership flips
-    // to `direct` mid-drag. On fine-pointer PC Music Note/Library, therefore,
-    // internal splitter drag stays on the PC css-var lane across PC/tablet/mobile
-    // pane widths. Outside the gesture (native outer-window resize / resting
-    // layout), 687's direct tablet ownership is restored exactly as before.
+    // 609: geometry ownership changes only when the *published content mode*
+    // itself changes. This keeps the visible PC/Tablet switch and the low-level
+    // pane owner on the same boundary, eliminating the 608 16px disagreement.
     if (!benchmarkRunningRef.current) {
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
-      }
-      const nextRuntimeLayoutMode: BenchmarkLayoutMode = draggingRef.current && runtimeProfile === 'library-590'
-        ? 'css-var'
-        : resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
-      if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode || benchmarkLayoutModeRef.current !== nextRuntimeLayoutMode) {
-        runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
-        benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
+        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
+        if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
+          runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
+          benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
+        }
       }
     }
 
@@ -850,20 +844,6 @@ export default function LiteStudioSplitWorkspace({
 
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (percentRef.current / 100));
-    const resultWidth = Math.max(0, safeWidth - builderWidth);
-
-    // 691: the gesture is over, so hand ownership back to the normal resting /
-    // outer-resize policy immediately. Tablet/mobile result panes return to
-    // direct geometry; PC stays on library-590 css-var. Width does not change.
-    if (!benchmarkRunningRef.current) {
-      const settledResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
-      runtimeResultContentModeRef.current = settledResultContentMode;
-      const settledLayoutMode = resolveRuntimeLayoutMode(settledResultContentMode, workspaceView, runtimeProfile);
-      runtimeLayoutModeRef.current = settledLayoutMode;
-      benchmarkLayoutModeRef.current = settledLayoutMode;
-      writeLiveSplitGeometry(builderWidth, resultWidth);
-    }
-
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
     clearLiveExternalGeometry();
     readExternalControls();
@@ -877,7 +857,7 @@ export default function LiteStudioSplitWorkspace({
     }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, runtimeProfile, workspaceView, writeLiveSplitGeometry]);
+  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -908,24 +888,6 @@ export default function LiteStudioSplitWorkspace({
     topCardObserverRef.current = null;
     captureDragScrollLocks();
     draggingRef.current = true;
-
-    // 691: pre-enter the verified PC css-var drag lane before the first pointer
-    // move when Music Note/Library is already sitting in a tablet-width pane.
-    // Without this prewarm, the first fast mouse move pays a one-shot
-    // direct -> css-var owner swap and feels like a single hard hitch.
-    if (!benchmarkRunningRef.current && runtimeProfile === 'library-590') {
-      runtimeLayoutModeRef.current = 'css-var';
-      benchmarkLayoutModeRef.current = 'css-var';
-      const safeWidth = Math.max(1, metricsRef.current.width);
-      const currentBuilderWidth = builderCollapsedRef.current
-        ? 0
-        : resultCollapsedRef.current
-          ? safeWidth
-          : Math.round(safeWidth * (percentRef.current / 100));
-      const currentResultWidth = Math.max(0, safeWidth - currentBuilderWidth);
-      writeLiveSplitGeometry(currentBuilderWidth, currentResultWidth);
-    }
-
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
     // 611: real hand dragging is intentionally uninstrumented unless the admin

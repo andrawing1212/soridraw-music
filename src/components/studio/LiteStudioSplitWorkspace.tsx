@@ -786,10 +786,33 @@ export default function LiteStudioSplitWorkspace({
   }, [applyPercent]);
 
   const schedulePointer = useCallback((clientX: number) => {
+    // 692: retain only the newest pointer coordinate. Pane geometry is allowed
+    // to commit at most once per animation frame, so a fast mouse sweep cannot
+    // build a queue of stale positions that are replayed after the pointer has
+    // already moved elsewhere.
     pendingClientXRef.current = clientX;
     if (frameRef.current !== null) return;
     frameRef.current = window.requestAnimationFrame(flushPointer);
   }, [flushPointer]);
+
+  // 692: the body-level divider gets its own tiny visual lane, matching the
+  // responsive feel that already worked well in Recent Songs. This write uses
+  // only the drag-start cached layout metrics, so it never performs a DOM read
+  // and never waits for Music Note / Library pane reflow. The panes still use
+  // the existing single-rAF latest-coordinate path above.
+  const previewSplitterAtClientX = useCallback((clientX: number) => {
+    const splitter = splitterRef.current;
+    if (!splitter || !draggingRef.current || builderCollapsedRef.current || resultCollapsedRef.current) return;
+
+    const width = Math.max(1, metricsRef.current.width);
+    const bounds = getSplitBounds(width);
+    const minPx = width * (bounds.min / 100);
+    const maxPx = width * (bounds.max / 100);
+    const builderPixel = Math.round(Math.min(maxPx, Math.max(minPx, clientX - metricsRef.current.left)));
+    const viewportSplitterLeft = Math.max(0, Math.round(metricsRef.current.left + builderPixel - 8));
+
+    splitter.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
+  }, []);
 
   const startLayoutAckObserver = useCallback((builderWidth: number, resultWidth: number) => {
     layoutAckObserverRef.current?.disconnect();
@@ -918,15 +941,28 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
-    // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
-    // verified Lite V2 path; PC no longer uses this engine in automatic mode.
-    if (manualPerfCaptureActiveRef.current) {
-      const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-      let coalescedCount = 1;
-      try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
-      recordSplitPerfPointer(event.clientX, coalescedCount);
+
+    // 692: when the browser batches high-frequency pointer samples, consume only
+    // the newest sample. Older samples are intentionally discarded; replaying
+    // them is exactly what makes a fast sweep feel one step behind the mouse.
+    const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+    let latestClientX = event.clientX;
+    let coalescedCount = 1;
+    try {
+      const coalesced = nativeEvent.getCoalescedEvents?.() || [];
+      coalescedCount = Math.max(1, coalesced.length || 1);
+      if (coalesced.length > 0) latestClientX = coalesced[coalesced.length - 1].clientX;
+    } catch {
+      latestClientX = event.clientX;
+      coalescedCount = 1;
     }
-    schedulePointer(event.clientX);
+
+    // Divider first, pane tree second. Both consume the exact same newest X.
+    previewSplitterAtClientX(latestClientX);
+    if (manualPerfCaptureActiveRef.current) {
+      recordSplitPerfPointer(latestClientX, coalescedCount);
+    }
+    schedulePointer(latestClientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {

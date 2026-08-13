@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX } from './splitPointerLatency';
+import { resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -286,6 +286,9 @@ export default function LiteStudioSplitWorkspace({
   const dragPacedPixelRef = useRef<number | null>(null);
   const dragPacingFrameTimeRef = useRef<number | null>(null);
   const pointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
+  const pointerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
+  const fastLegacyDragRef = useRef(false);
+  const outerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const outerPacedBuilderWidthRef = useRef<number | null>(null);
   const outerPacingFrameTimeRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
@@ -841,10 +844,14 @@ export default function LiteStudioSplitWorkspace({
     // jump. Normal/slow resize remains 1:1 because <=24px snaps directly.
     const outerResizeActive = document.documentElement.classList.contains('soridraw-window-resizing');
     const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
+    const outerFastLegacy = outerResizeActive && pacingEligible
+      ? updateSplitMotionFastMode(metricsRef.current.width, performance.now(), outerMotionRef.current)
+      : false;
+    if (!outerResizeActive || !pacingEligible) resetSplitMotionFastMode(outerMotionRef.current);
     const stablePercent = percentRef.current;
     let appliedPercent = stablePercent;
     let outerNeedsCatchUp = false;
-    if (outerResizeActive && pacingEligible && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+    if (outerResizeActive && pacingEligible && !outerFastLegacy && !builderCollapsedRef.current && !resultCollapsedRef.current) {
       const bounds = getSplitBounds(metricsRef.current.width);
       const targetPercent = clampToBounds(stablePercent, bounds);
       const targetBuilderWidth = Math.round(metricsRef.current.width * (targetPercent / 100));
@@ -917,7 +924,9 @@ export default function LiteStudioSplitWorkspace({
     const targetPixel = dragTargetPixelRef.current;
     if (targetPixel === null) return;
 
-    const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
+    const pacingEligible = finePointerFastPathRef.current
+      && (workspaceView === 'music-note' || workspaceView === 'library')
+      && !fastLegacyDragRef.current;
     const currentPixel = dragPacedPixelRef.current ?? lastPixelRef.current ?? targetPixel;
     const targetResultPixel = Math.max(0, width - targetPixel);
     const transitionGuardActive = isNearResponsiveTransition(targetPixel, targetResultPixel);
@@ -997,6 +1006,8 @@ export default function LiteStudioSplitWorkspace({
     dragTargetPixelRef.current = null;
     dragPacedPixelRef.current = null;
     dragPacingFrameTimeRef.current = null;
+    fastLegacyDragRef.current = false;
+    resetSplitMotionFastMode(pointerMotionRef.current);
     resetSplitPointerPrediction(pointerPredictionRef.current);
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
@@ -1077,6 +1088,8 @@ export default function LiteStudioSplitWorkspace({
     dragPacedPixelRef.current = initialBuilderPixel;
     dragTargetPixelRef.current = initialBuilderPixel;
     dragPacingFrameTimeRef.current = performance.now();
+    resetSplitMotionFastMode(pointerMotionRef.current);
+    fastLegacyDragRef.current = false;
     resetSplitPointerPrediction(pointerPredictionRef.current);
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
@@ -1089,16 +1102,43 @@ export default function LiteStudioSplitWorkspace({
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
     const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-    const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
-    const confirmedClientX = pacingEligible ? resolveConfirmedSplitClientX(nativeEvent) : event.clientX;
+    const recentEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
+    const confirmedClientX = recentEligible ? resolveConfirmedSplitClientX(nativeEvent) : event.clientX;
+    const wasFastLegacy = fastLegacyDragRef.current;
+    const fastLegacy = recentEligible
+      ? updateSplitMotionFastMode(confirmedClientX, nativeEvent.timeStamp, pointerMotionRef.current)
+      : false;
+    fastLegacyDragRef.current = fastLegacy;
+
     const width = Math.max(1, metricsRef.current.width);
     const bounds = getSplitBounds(width);
-    const confirmedBuilderPixel = Math.round(Math.min(width * (bounds.max / 100), Math.max(width * (bounds.min / 100), confirmedClientX - metricsRef.current.left)));
+    const confirmedBuilderPixel = Math.round(Math.min(
+      width * (bounds.max / 100),
+      Math.max(width * (bounds.min / 100), confirmedClientX - metricsRef.current.left),
+    ));
     const confirmedResultPixel = Math.max(0, width - confirmedBuilderPixel);
-    const transitionGuardActive = pacingEligible && isNearResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
-    const trackedClientX = pacingEligible
-      ? resolveLowLatencySplitClientX(nativeEvent, pointerPredictionRef.current, !transitionGuardActive)
-      : event.clientX;
+
+    if (wasFastLegacy && !fastLegacy) {
+      const seedPixel = lastPixelRef.current ?? confirmedBuilderPixel;
+      dragTargetPixelRef.current = seedPixel;
+      dragPacedPixelRef.current = seedPixel;
+      dragPacingFrameTimeRef.current = performance.now();
+      resetSplitPointerPrediction(pointerPredictionRef.current);
+    } else if (!wasFastLegacy && fastLegacy) {
+      // Fast movement reuses the exact 668/683 ownership: one native
+      // pointermove target, one rAF, one real pane/divider boundary. Do not
+      // predict ahead and do not manufacture a synthetic 2/4px gap.
+      resetSplitPointerPrediction(pointerPredictionRef.current);
+    }
+
+    const slowPacingEligible = recentEligible && !fastLegacy;
+    const transitionGuardActive = slowPacingEligible && isNearResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
+    const trackedClientX = fastLegacy
+      ? event.clientX
+      : slowPacingEligible
+        ? resolveLowLatencySplitClientX(nativeEvent, pointerPredictionRef.current, !transitionGuardActive)
+        : event.clientX;
+
     if (manualPerfCaptureActiveRef.current) {
       let coalescedCount = 1;
       try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }

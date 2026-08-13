@@ -104,3 +104,63 @@ export const resetSplitPointerPrediction = (state: SplitPointerPredictionState) 
   state.x = null;
   state.timeStamp = null;
 };
+
+
+export type SplitMotionFastState = {
+  value: number | null;
+  timeStamp: number | null;
+  fast: boolean;
+  slowSince: number | null;
+};
+
+// 708 — velocity hysteresis for hybrid drag ownership. The old 668/683 path
+// looked more even during genuinely fast motion, while the 705~707 close-gap
+// path feels better at normal/slow speeds. Keep a wide neutral band so the
+// engine does not flap between the two paths on every small speed change.
+const FAST_MODE_ENTER_PX_PER_MS = 0.85;
+const FAST_MODE_EXIT_PX_PER_MS = 0.38;
+const FAST_MODE_EXIT_HOLD_MS = 90;
+
+export const updateSplitMotionFastMode = (
+  value: number,
+  timeStamp: number,
+  state: SplitMotionFastState,
+): boolean => {
+  const now = Number.isFinite(timeStamp) ? timeStamp : performance.now();
+  const previousValue = state.value;
+  const previousTime = state.timeStamp;
+  state.value = value;
+  state.timeStamp = now;
+
+  if (previousValue === null || previousTime === null) return state.fast;
+
+  const dt = Math.max(1, now - previousTime);
+  const speed = Math.abs(value - previousValue) / dt;
+
+  if (!state.fast) {
+    if (speed >= FAST_MODE_ENTER_PX_PER_MS) {
+      state.fast = true;
+      state.slowSince = null;
+    }
+    return state.fast;
+  }
+
+  if (speed <= FAST_MODE_EXIT_PX_PER_MS) {
+    if (state.slowSince === null) state.slowSince = now;
+    if (now - state.slowSince >= FAST_MODE_EXIT_HOLD_MS) {
+      state.fast = false;
+      state.slowSince = null;
+    }
+  } else {
+    state.slowSince = null;
+  }
+
+  return state.fast;
+};
+
+export const resetSplitMotionFastMode = (state: SplitMotionFastState) => {
+  state.value = null;
+  state.timeStamp = null;
+  state.fast = false;
+  state.slowSince = null;
+};

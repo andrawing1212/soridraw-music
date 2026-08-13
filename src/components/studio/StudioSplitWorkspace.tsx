@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
-import { resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX } from './splitPointerLatency';
+import { resetSplitMotionFastMode, resetSplitPointerPrediction, resolveConfirmedSplitClientX, resolveLowLatencySplitClientX, updateSplitMotionFastMode } from './splitPointerLatency';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -217,6 +217,9 @@ export default function StudioSplitWorkspace({
   const recentDragPacedPixelRef = useRef<number | null>(null);
   const recentDragPacingFrameTimeRef = useRef<number | null>(null);
   const recentPointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
+  const recentPointerMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
+  const recentFastLegacyDragRef = useRef(false);
+  const recentOuterMotionRef = useRef({ value: null as number | null, timeStamp: null as number | null, fast: false, slowSince: null as number | null });
   const recentOuterPacedBuilderWidthRef = useRef<number | null>(null);
   const recentOuterPacingFrameTimeRef = useRef<number | null>(null);
   const recentOuterNeedsCatchUpRef = useRef(false);
@@ -1051,10 +1054,14 @@ export default function StudioSplitWorkspace({
     const targetPercent = clampToBounds(requestedPercent, bounds);
     const outerResizeActive = document.documentElement.classList.contains('soridraw-window-resizing');
     const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
+    const outerFastLegacy = outerResizeActive && pacingEligible
+      ? updateSplitMotionFastMode(metricsRef.current.width, performance.now(), recentOuterMotionRef.current)
+      : false;
+    if (!outerResizeActive || !pacingEligible) resetSplitMotionFastMode(recentOuterMotionRef.current);
     let appliedPercent = targetPercent;
     recentOuterNeedsCatchUpRef.current = false;
 
-    if (outerResizeActive && pacingEligible && !builderCollapsedRef.current && !resultCollapsedRef.current) {
+    if (outerResizeActive && pacingEligible && !outerFastLegacy && !builderCollapsedRef.current && !resultCollapsedRef.current) {
       const targetBuilderWidth = Math.round(metricsRef.current.width * (targetPercent / 100));
       const seedWidth = Math.max(1, previousMetricsWidth);
       const seedBuilderWidth = Math.round(seedWidth * (targetPercent / 100));
@@ -1346,7 +1353,7 @@ export default function StudioSplitWorkspace({
     const { startX, startPercent, width } = dragRef.current;
     const safeWidth = Math.max(width, 1);
     const bounds = getSplitBounds(safeWidth);
-    const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
+    const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent' && !recentFastLegacyDragRef.current;
 
     if (pacingEligible) {
       if (clientX !== null) {
@@ -1475,6 +1482,8 @@ export default function StudioSplitWorkspace({
       startPercent: percentRef.current,
       width: rect.width,
     };
+    resetSplitMotionFastMode(recentPointerMotionRef.current);
+    recentFastLegacyDragRef.current = false;
     if (finePointerFastPathRef.current && workspaceView === 'recent') {
       const seedPixel = Math.round(rect.width * (percentRef.current / 100));
       recentDragTargetPixelRef.current = seedPixel;
@@ -1551,8 +1560,14 @@ export default function StudioSplitWorkspace({
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== dragRef.current.pointerId) return;
     const nativeEvent = event.nativeEvent as PointerEvent;
-    const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
-    const confirmedClientX = pacingEligible ? resolveConfirmedSplitClientX(nativeEvent) : event.clientX;
+    const recentEligible = finePointerFastPathRef.current && workspaceView === 'recent';
+    const confirmedClientX = recentEligible ? resolveConfirmedSplitClientX(nativeEvent) : event.clientX;
+    const wasFastLegacy = recentFastLegacyDragRef.current;
+    const fastLegacy = recentEligible
+      ? updateSplitMotionFastMode(confirmedClientX, nativeEvent.timeStamp, recentPointerMotionRef.current)
+      : false;
+    recentFastLegacyDragRef.current = fastLegacy;
+
     const { startX, startPercent, width } = dragRef.current;
     const safeWidth = Math.max(width, 1);
     const bounds = getSplitBounds(safeWidth);
@@ -1560,11 +1575,32 @@ export default function StudioSplitWorkspace({
     const confirmedPercent = clampToBounds(startPercent + confirmedDeltaPercent, bounds);
     const confirmedBuilderPixel = Math.round(safeWidth * (confirmedPercent / 100));
     const confirmedResultPixel = Math.max(0, safeWidth - confirmedBuilderPixel);
-    const transitionGuardActive = pacingEligible && isNearRecentResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
-    const trackedClientX = pacingEligible
-      ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current, !transitionGuardActive)
-      : event.clientX;
-    if (!pacingEligible) previewSplitterAtClientX(trackedClientX);
+
+    if (wasFastLegacy && !fastLegacy) {
+      const seedPixel = lastDragBuilderPixelRef.current ?? confirmedBuilderPixel;
+      recentDragTargetPixelRef.current = seedPixel;
+      recentDragPacedPixelRef.current = seedPixel;
+      recentDragPacingFrameTimeRef.current = performance.now();
+      resetSplitPointerPrediction(recentPointerPredictionRef.current);
+    } else if (!wasFastLegacy && fastLegacy) {
+      // Fast motion returns to the exact 668/683 lane: no prediction and no
+      // synthetic gap follower. The fixed divider previews the confirmed X
+      // immediately while the pane tree keeps the old adaptive commit cadence.
+      resetSplitPointerPrediction(recentPointerPredictionRef.current);
+    }
+
+    const slowPacingEligible = recentEligible && !fastLegacy;
+    const transitionGuardActive = slowPacingEligible && isNearRecentResponsiveTransition(confirmedBuilderPixel, confirmedResultPixel);
+    const trackedClientX = fastLegacy
+      ? confirmedClientX
+      : slowPacingEligible
+        ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current, !transitionGuardActive)
+        : event.clientX;
+
+    // 668/683 fast lane: divider preview is allowed to follow the confirmed
+    // cursor immediately; the pane layout self-paces separately. Slow motion
+    // keeps the current close-gap path that already feels good to the user.
+    if (!slowPacingEligible) previewSplitterAtClientX(trackedClientX);
     schedulePointerUpdate(trackedClientX);
   };
 
@@ -1589,6 +1625,8 @@ export default function StudioSplitWorkspace({
     recentDragTargetPixelRef.current = null;
     recentDragPacedPixelRef.current = null;
     recentDragPacingFrameTimeRef.current = null;
+    recentFastLegacyDragRef.current = false;
+    resetSplitMotionFastMode(recentPointerMotionRef.current);
     resetSplitPointerPrediction(recentPointerPredictionRef.current);
     const builderWidth = builderCollapsedRef.current
       ? 0

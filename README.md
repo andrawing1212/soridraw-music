@@ -2123,3 +2123,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Music Note/Library의 PC/tablet/mobile responsive mode와 geometry owner는 active drag/outer resize 동안 동일한 12px hysteresis를 공유한다. 경계 근처에서 mode가 앞뒤로 반복 전환되는 것을 줄이고, 드래그/resize 종료 후에는 기존 정확한 660/1080 기준으로 한 번 정합한다.
 - Recent의 기존 pane mode hysteresis는 유지하면서 동일한 breakpoint guard(±30px, lag 2px, 경계에서 prediction off)를 적용한다.
 - Studio Create / 실제 touch·pen adaptive 경로 / 디자인 / Firebase/Auth/Firestore/Functions/저장구조 변경 없음. 배포 없음.
+
+### 708차 — 느림=707 / 빠름=668·683 하이브리드 추종
+- 기준: 707차. 694 계열의 처리 성능 최적화와 707의 느린 이동 밀착감은 유지한다.
+- 핵심 판단 변경: 빠른 이동에서 `2px/4px로 무조건 밀착`시키는 것이 목표가 아니라, 668/683에서 육안상 더 일정했던 **기존 pointer→rAF→real boundary 경로**를 그대로 재사용한다.
+- 속도 전환에는 히스테리시스를 둔다. 약 0.85px/ms 이상에서 fast lane 진입, 0.38px/ms 이하가 약 90ms 지속될 때만 slow lane 복귀. 중간 속도 구간에서는 현재 lane을 유지해 매 이벤트마다 경로가 흔들리지 않는다.
+- Recent fast lane: 668/683처럼 confirmed/coalesced 최신 좌표로 fixed divider를 즉시 preview하고, 실제 pane layout은 기존 measured commit-cost adaptive cadence를 재사용한다. prediction/bounded-gap follower는 fast lane에서 사용하지 않는다.
+- Music Note/Library fast lane: 668/683 Lite V2처럼 parent pointermove의 clientX 하나를 최신 target으로 보관하고, 한 rAF에 한 번 실제 divider+pane boundary를 직접 반영한다. prediction/bounded-gap catch-up 프레임은 fast lane에서 사용하지 않는다.
+- 외부창 fast lane: 707의 bounded-gap visual pacing을 우회하고 668/683처럼 현재 실제 workspace width에 저장된 split ratio를 즉시 적용한다. 느린 외부창 resize에서는 707의 가까운 gap 경로를 유지한다.
+- 터치/펜, Studio Create, Firebase/Auth/Firestore/Functions/저장구조/디자인 변경 없음. 배포 없음.

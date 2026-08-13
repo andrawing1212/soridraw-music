@@ -12911,3 +12911,71 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-library-workspace-header-main .soridraw-library-workspace-meta {
   align-items: center !important;
 }
+
+/* 735 — Tablet portrait Compact stage for Studio Black.
+ * The existing compact workspace is kept, but the 768~1023px band (the same
+ * range where Mood/Theme currently render four keyword buttons per row) gets
+ * its own card composition instead of falling straight from tablet split into
+ * the phone-like single-column builder.
+ *
+ * Layout contract:
+ *   Genre           (full row)
+ *   Style | Sound   (two columns)
+ *   Mood  | Theme   (existing two columns)
+ *   Storyboard      (full row)
+ *   Vocal | Lyrics  (existing two columns)
+ *
+ * Phones below 768px and the 1024px+ tablet/desktop paths are untouched. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
+  > [data-studio-menu="genre"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0 !important;
+  }
+
+  /* Keep the rest of the compact builder explicitly on the intended 2-column
+   * tablet portrait composition. Storyboard remains the only full-width row. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid
+  > .soridraw-storyboard-card {
+    grid-column: 1 / -1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder
+  :is(.soridraw-studio-vocal-slot, .soridraw-studio-lyrics-slot) {
+    grid-column: auto !important;
+    min-width: 0 !important;
+  }
+}

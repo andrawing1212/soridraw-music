@@ -13076,3 +13076,72 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   color: inherit !important;
   stroke: currentColor !important;
 }
+
+/* 738 — Compact/mobile top navigation must use the exact PC Studio Black
+   navigation palette. Do not invent a separate amber mobile palette.
+   PC source of truth (214):
+     default = --sb-nav-muted (#acacb3)
+     hover   = --sb-nav-hover (#f2f2f4)
+     active  = --sb-nav-current (#ffffff)
+     active underline/accent remains --sb-accent (#ffb400) on PC only.
+   Smaller widths keep their icon-only geometry, but use the same colors and
+   transparent button surfaces in default / hover / active states. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation {
+  background: rgba(7, 7, 9, 0.985) !important;
+  background-color: rgba(7, 7, 9, 0.985) !important;
+  border-bottom-color: #1f1f25 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: var(--sb-nav-muted, #acacb3) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item:hover,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-hover, #f2f2f4) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item.is-active,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger.is-active,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item.is-active:is(:hover, :active, :focus, :focus-visible),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger.is-active:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-current, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) > svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Profile/login controls should also avoid the separate amber mobile fill so
+   the whole compact header stays in the PC neutral navigation family. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}

@@ -12572,3 +12572,27 @@ html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .so
   margin-right: 6px !important;
   transform: translateY(-50%) !important;
 }
+
+/* 723 — Split mode section helper colors.
+   In Studio Black split mode, keep the subsection labels in the same warm yellow
+   family as the vocal-character launcher, while the structure-guide caption uses
+   a darker brown for contrast hierarchy. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace .soridraw-split-accent-label,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lite-studio-split-workspace .soridraw-split-accent-label {
+  color: #D89A00 !important;
+  -webkit-text-fill-color: #D89A00 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace .soridraw-split-accent-caption,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lite-studio-split-workspace .soridraw-split-accent-caption {
+  color: #A0731A !important;
+  -webkit-text-fill-color: #A0731A !important;
+}
+
+/* 724 — Tempo status pill: no outline/border in any theme or workspace. */
+.soridraw-tempo-status-pill,
+.soridraw-tempo-status-pill:is(:hover, :active, :focus, :focus-visible) {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}

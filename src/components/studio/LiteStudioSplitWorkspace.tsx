@@ -18,14 +18,18 @@ import {
   isSplitPerfDragActive,
   publishSplitPerfBenchmarkSummary,
   recordSplitPerfApply,
+  recordSplitPerfDividerSample,
   recordSplitPerfFlush,
   recordSplitPerfGeometryWrite,
   recordSplitPerfLayoutAck,
   recordSplitPerfPointer,
   recordSplitPerfResponsiveSwitch,
+  recordSplitPerfSpatialSample,
+  recordSplitPerfViewportSample,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
   SPLIT_PERF_MANUAL_DRAG_ARM_EVENT,
+  SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT,
 } from './splitPerfDiagnostics';
 
 const WIDE_STORAGE_KEY = 'soridraw_lite_studio_split_percent_v2';
@@ -223,6 +227,10 @@ export default function LiteStudioSplitWorkspace({
   const pointerIdRef = useRef(-1);
   const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
   const manualPerfCaptureActiveRef = useRef(false);
+  const manualWindowPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
+  const manualWindowPerfCaptureActiveRef = useRef(false);
+  const manualWindowPerfBaselineGapRef = useRef<number | null>(null);
+  const manualWindowPerfInitialWorkspaceRightRef = useRef<number | null>(null);
   const pendingClientXRef = useRef<number | null>(null);
   const frameRef = useRef<number | null>(null);
   const refreshFrameRef = useRef<number | null>(null);
@@ -438,14 +446,14 @@ export default function LiteStudioSplitWorkspace({
 
     if (force || contentResponsiveModeRef.current.builder !== builderMode) {
       if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
-        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
+        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current || manualWindowPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
       }
       contentResponsiveModeRef.current.builder = builderMode;
       builder.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeBuilderWidth } }));
     }
     if (force || contentResponsiveModeRef.current.result !== resultMode) {
       if (!force && contentResponsiveModeRef.current.result !== null && contentResponsiveModeRef.current.result !== resultMode) {
-        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
+        if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current || manualWindowPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
       }
       contentResponsiveModeRef.current.result = resultMode;
       result.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeResultWidth } }));
@@ -474,13 +482,13 @@ export default function LiteStudioSplitWorkspace({
     );
 
     if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
-      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
+      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current || manualWindowPerfCaptureActiveRef.current) && isSplitPerfDragActive() && builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
       document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
     }
     if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
-      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
+      if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current || manualWindowPerfCaptureActiveRef.current) && isSplitPerfDragActive() && result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
       document.documentElement.dataset.soridrawResultMode = nextResultMode;
@@ -651,7 +659,7 @@ export default function LiteStudioSplitWorkspace({
     // 611: normal hand dragging never samples PERF instrumentation. Only the
     // synthetic benchmark or an explicitly armed one-shot admin hand test can
     // enter the measurement branch below.
-    const perfEnabled = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive();
+    const perfEnabled = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current || manualWindowPerfCaptureActiveRef.current) && isSplitPerfDragActive();
     const perfStart = perfEnabled ? performance.now() : 0;
     const bounds = getSplitBounds(metricsRef.current.width);
     const nextPercent = clampToBounds(rawPercent, bounds);
@@ -689,7 +697,8 @@ export default function LiteStudioSplitWorkspace({
     }
 
     writeLiveSplitGeometry(builderWidth, resultWidth);
-    if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
+    if (perfEnabled && live) recordSplitPerfDividerSample(splitterLeft);
+    if (perfEnabled && (live || manualWindowPerfCaptureActiveRef.current)) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     syncPaneModes(builderWidth, resultWidth);
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
@@ -773,6 +782,14 @@ export default function LiteStudioSplitWorkspace({
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
+    if (manualWindowPerfCaptureActiveRef.current && isSplitPerfDragActive()) {
+      recordSplitPerfSpatialSample({
+        workspaceLeft: metricsRef.current.left,
+        builderWidth,
+        resultWidth: Math.max(0, metricsRef.current.width - builderWidth),
+        viewportWidth: window.innerWidth,
+      });
+    }
 
     const outerResizeActive = document.documentElement.classList.contains('soridraw-window-resizing');
     if (outerResizeActive) {
@@ -797,7 +814,7 @@ export default function LiteStudioSplitWorkspace({
   }, [refreshMetrics]);
 
   const flushPointer = useCallback(() => {
-    const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
+    const perfStart = (benchmarkRunningRef.current || manualPerfCaptureActiveRef.current || manualWindowPerfCaptureActiveRef.current) && isSplitPerfDragActive() ? performance.now() : 0;
     frameRef.current = null;
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
@@ -852,6 +869,12 @@ export default function LiteStudioSplitWorkspace({
           layoutAckObservedRef.current.builder,
           layoutAckObservedRef.current.result,
         );
+        recordSplitPerfSpatialSample({
+          workspaceLeft: metricsRef.current.left,
+          builderWidth: layoutAckObservedRef.current.builder,
+          resultWidth: layoutAckObservedRef.current.result,
+          viewportWidth: window.innerWidth,
+        });
       }
     });
 
@@ -992,6 +1015,32 @@ export default function LiteStudioSplitWorkspace({
     };
     window.addEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
     return () => window.removeEventListener(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, handleManualPerfArm as EventListener);
+  }, []);
+
+
+  useEffect(() => {
+    const handleManualWindowPerfArm = (event: Event) => {
+      const detail = (event as CustomEvent<{ armed?: boolean; workspace?: StudioWorkspaceView }>).detail;
+      if (detail?.armed === false) {
+        manualWindowPerfArmedWorkspaceRef.current = null;
+        manualWindowPerfBaselineGapRef.current = null;
+        manualWindowPerfInitialWorkspaceRightRef.current = null;
+        return;
+      }
+      const nextWorkspace = detail?.workspace;
+      if (nextWorkspace === 'create' || nextWorkspace === 'recent' || nextWorkspace === 'music-note' || nextWorkspace === 'library') {
+        manualWindowPerfArmedWorkspaceRef.current = nextWorkspace;
+        if ((workspaceView || 'create') === nextWorkspace) {
+          const rect = layoutRef.current?.getBoundingClientRect();
+          if (rect && rect.width > 0) {
+            manualWindowPerfInitialWorkspaceRightRef.current = rect.right;
+            manualWindowPerfBaselineGapRef.current = window.innerWidth - rect.right;
+          }
+        }
+      }
+    };
+    window.addEventListener(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, handleManualWindowPerfArm as EventListener);
+    return () => window.removeEventListener(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, handleManualWindowPerfArm as EventListener);
   }, []);
 
   useEffect(() => {
@@ -1393,6 +1442,29 @@ export default function LiteStudioSplitWorkspace({
       if (!root.classList.contains('soridraw-window-resizing')) {
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
+        const activeWorkspace = workspaceView || 'create';
+        const captureWindowPerf = manualWindowPerfArmedWorkspaceRef.current === activeWorkspace;
+        manualWindowPerfArmedWorkspaceRef.current = null;
+        manualWindowPerfCaptureActiveRef.current = captureWindowPerf;
+        if (captureWindowPerf) {
+          const builder = builderRef.current;
+          const result = resultRef.current;
+          beginSplitPerfDrag({
+            workspaceView,
+            engine: `Lite V2 · outer pacing diagnostic 698 · ${runtimeResultContentModeRef.current || 'unknown'}/${runtimeLayoutModeRef.current}`,
+            builder,
+            result,
+            layoutMode: runtimeLayoutModeRef.current,
+            captureKind: 'window-resize',
+            outerRightGapBaseline: manualWindowPerfBaselineGapRef.current,
+            initialWorkspaceRight: manualWindowPerfInitialWorkspaceRightRef.current,
+          });
+          startLayoutAckObserver(builder?.getBoundingClientRect().width || 0, result?.getBoundingClientRect().width || 0);
+        }
+      }
+
+      if (manualWindowPerfCaptureActiveRef.current && isSplitPerfDragActive()) {
+        recordSplitPerfViewportSample(window.innerWidth);
       }
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
@@ -1409,6 +1481,17 @@ export default function LiteStudioSplitWorkspace({
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
+        if (manualWindowPerfCaptureActiveRef.current) {
+          window.requestAnimationFrame(() => {
+            if (!manualWindowPerfCaptureActiveRef.current) return;
+            manualWindowPerfCaptureActiveRef.current = false;
+            manualWindowPerfBaselineGapRef.current = null;
+            manualWindowPerfInitialWorkspaceRightRef.current = null;
+            layoutAckObserverRef.current?.disconnect();
+            layoutAckObserverRef.current = null;
+            finishSplitPerfDrag();
+          });
+        }
       }, 110);
     };
     // A rail toggle changes the Studio grid width immediately. Refresh the Lite
@@ -1426,6 +1509,15 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
+      manualWindowPerfArmedWorkspaceRef.current = null;
+      manualWindowPerfBaselineGapRef.current = null;
+      manualWindowPerfInitialWorkspaceRightRef.current = null;
+      if (manualWindowPerfCaptureActiveRef.current) {
+        manualWindowPerfCaptureActiveRef.current = false;
+        layoutAckObserverRef.current?.disconnect();
+        layoutAckObserverRef.current = null;
+        if (isSplitPerfDragActive()) finishSplitPerfDrag();
+      }
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');

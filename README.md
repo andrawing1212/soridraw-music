@@ -1,3 +1,13 @@
+## 698차 — 694 성능 기준 / 커서·분할바·pane·외부창 간격 추종 측정 전용
+- 기준 ZIP: `SORIDRAW_694차_690기준_고속폭변화_1프레임트랜잭션_강제리플로제거.zip`.
+- 목적은 성능을 더 높이는 것이 아니라 **위치 추종의 일정함과 지연을 숫자로 분리**하는 것입니다. 일반 사용자 동작, 분할 geometry, 반응형 breakpoint, CSS 디자인은 변경하지 않습니다.
+- 기존 관리자 `품질·성능 진단` 패널을 최소 확장했습니다. 새 진단 패널은 만들지 않습니다.
+- `실손 드래그 비교`에서 기존 pointer/commit/layout-ack 값에 다음을 추가합니다: 커서↔분할바 commit gap 평균/P95/최대, gap 지터, pointer event 시점에 커서가 마지막 분할바보다 앞선 거리 평균/P95/최대와 6px 이상 비율, 커서↔실제 pane 경계 P95/최대와 지터.
+- `외부창 추종 비교`를 기존 관리자 진단 패널 안에 추가했습니다. 뮤직노트와 라이브러리를 순서대로 열고 사용자가 외부 브라우저 창을 PC↔Tablet 구간으로 4~6초 왕복하면 viewport 오른쪽↔workspace 오른쪽 gap의 평균, 기준점 대비 Δ P95/최대, 프레임간 지터 P95/최대, viewport 이동량, layout ack 지연, responsive 전환 횟수를 기록합니다.
+- 측정 instrumentation은 `PERF ON` + 명시적으로 해당 실손 테스트를 arm한 경우에만 활성화됩니다. 평상시 drag/resize hot-path에는 새 DOM 측정이나 observer를 추가하지 않습니다.
+- Firebase/Auth/Firestore/Functions/사용자 저장 구조 변경 없음. 배포 없음.
+- 상태: 측정 전용 코드 반영 완료 · 실사용 데이터 수집 전.
+
 ## 668차 — 외부창 리사이즈 488 원리 복구 / 구조 container-query 일시정지
 - 기준: 667차.
 - 667 실사용에서 곡 만들기/최근 생성곡의 무거운 pane 본문을 제거하면 테스트앱 리사이즈가 즉시 빨라지는 것을 확인했습니다. 따라서 병목이 split shell이 아니라 pane 내부 responsive/reflow 트리에 있다는 근거를 확보했습니다.

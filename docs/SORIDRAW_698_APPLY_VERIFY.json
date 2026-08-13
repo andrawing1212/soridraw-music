@@ -1,0 +1,40 @@
+{
+  "version": 698,
+  "basis": "SORIDRAW_694차_690기준_고속폭변화_1프레임트랜잭션_강제리플로제거.zip",
+  "purpose": "measurement-only pointer/divider/pane/window tracking diagnostics",
+  "changedFiles": [
+    "src/components/studio/splitPerfDiagnostics.ts",
+    "src/components/studio/LiteStudioSplitWorkspace.tsx",
+    "src/components/studio/SplitPerformanceDiagnostics.tsx",
+    "README.md"
+  ],
+  "newFiles": [
+    "docs/SORIDRAW_698_APPLY_VERIFY.json"
+  ],
+  "behaviorChanges": {
+    "normalUserRuntime": false,
+    "splitGeometry": false,
+    "responsiveBreakpoints": false,
+    "design": false,
+    "firebaseData": false
+  },
+  "diagnostics": {
+    "existingAdminPanelOnly": true,
+    "manualDrag": [
+      "cursor-to-divider commit gap avg/p95/max",
+      "cursor-to-divider gap jitter p95/max",
+      "pointer-event lead over last divider avg/p95/max and >=6px ratio",
+      "cursor-to-actual-pane-boundary p95/max and jitter"
+    ],
+    "outerWindow": [
+      "viewport-right to workspace-right gap avg",
+      "gap delta from starting baseline p95/max",
+      "gap jitter p95/max",
+      "viewport width travel distance",
+      "layout ack timing",
+      "responsive switch counts"
+    ]
+  },
+  "activation": "Admin App Settings > 품질·성능 진단 > PERF ON > 실손 드래그 비교 / 외부창 추종 비교",
+  "deployment": false
+}

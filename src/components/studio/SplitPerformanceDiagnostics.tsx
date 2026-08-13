@@ -9,6 +9,7 @@ import {
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
   SPLIT_PERF_MANUAL_DRAG_ARM_EVENT,
+  SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT,
   SPLIT_PERF_TOOL_VISIBILITY_EVENT,
   SPLIT_PERF_WORKSPACE_REQUEST_EVENT,
   subscribeSplitPerfBenchmarkSummary,
@@ -80,6 +81,36 @@ type PairHandRow = {
   layoutAckErrorAvg: number;
   layoutAckErrorMax: number;
   layoutAckPerCommit: number;
+  paneModeSwitches: number;
+  contentModeSwitches: number;
+  cursorDividerGapP95: number;
+  cursorDividerGapMax: number;
+  cursorDividerGapJitterP95: number;
+  cursorDividerGapJitterMax: number;
+  cursorDividerLeadP95: number;
+  cursorDividerLeadMax: number;
+  cursorDividerLeadOver6Pct: number;
+  cursorPaneGapP95: number;
+  cursorPaneGapMax: number;
+  cursorPaneGapJitterP95: number;
+  cursorPaneGapJitterMax: number;
+};
+
+type PairOuterRow = {
+  workspace: PairWorkspace;
+  result: SplitPerfResult;
+  fps: number;
+  p95: number;
+  layoutMode: 'css-var' | 'direct' | null;
+  spatialRate: number;
+  outerGapAvg: number;
+  outerGapDeltaP95: number;
+  outerGapDeltaMax: number;
+  outerGapJitterP95: number;
+  outerGapJitterMax: number;
+  viewportDistance: number;
+  layoutAckGapP95: number;
+  layoutAckToWriteP95: number;
   paneModeSwitches: number;
   contentModeSwitches: number;
 };
@@ -454,6 +485,8 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   const [pairRows, setPairRows] = useState<PairBenchmarkRow[]>([]);
   const [handPairRunning, setHandPairRunning] = useState(false);
   const [handPairRows, setHandPairRows] = useState<PairHandRow[]>([]);
+  const [outerPairRunning, setOuterPairRunning] = useState(false);
+  const [outerPairRows, setOuterPairRows] = useState<PairOuterRow[]>([]);
   const [pairBaseline, setPairBaseline] = useState<PairBenchmarkRow[]>(() => {
     try {
       const raw = window.localStorage.getItem(PERF_PAIR_BASELINE_STORAGE_KEY);
@@ -712,7 +745,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
   };
 
   const runPairBenchmark = async () => {
-    if (!ensureBenchmarkReady() || pairRunning || benchmarkRunning || probeRunningRef.current) return;
+    if (!ensureBenchmarkReady() || pairRunning || handPairRunning || outerPairRunning || benchmarkRunning || probeRunningRef.current) return;
     const originalWorkspace = getCurrentStudioWorkspace();
     setPairRunning(true);
     setPairRows([]);
@@ -773,7 +806,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     };
     const unsubscribe = subscribeSplitPerfResult((next) => {
       if (!next || next.createdAt < startedAt || next.workspaceView !== workspace) return;
-      if (next.benchmarkSurface !== null) return;
+      if (next.captureKind !== 'drag' || next.benchmarkSurface !== null) return;
       if (next.durationMs < 1200 || next.pointerEventCount < 10 || next.pointerDistancePx < 120) {
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 너무 짧습니다. 분할바를 4~6초 계속 좌우로 움직인 뒤 놓아주세요.`);
         return;
@@ -813,11 +846,22 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       layoutAckPerCommit: next.layoutAckPerCommitPct,
       paneModeSwitches: next.paneModeSwitchCount,
       contentModeSwitches: next.contentModeSwitchCount,
+      cursorDividerGapP95: next.cursorDividerGapP95Px,
+      cursorDividerGapMax: next.cursorDividerGapMaxPx,
+      cursorDividerGapJitterP95: next.cursorDividerGapJitterP95Px,
+      cursorDividerGapJitterMax: next.cursorDividerGapJitterMaxPx,
+      cursorDividerLeadP95: next.cursorDividerLeadP95Px,
+      cursorDividerLeadMax: next.cursorDividerLeadMaxPx,
+      cursorDividerLeadOver6Pct: next.cursorDividerLeadOver6Pct,
+      cursorPaneGapP95: next.cursorPaneGapP95Px,
+      cursorPaneGapMax: next.cursorPaneGapMaxPx,
+      cursorPaneGapJitterP95: next.cursorPaneGapJitterP95Px,
+      cursorPaneGapJitterMax: next.cursorPaneGapJitterMaxPx,
     };
   };
 
   const runHandPairBenchmark = async () => {
-    if (!ensureBenchmarkReady() || handPairRunning || pairRunning || benchmarkRunning || probeRunningRef.current) return;
+    if (!ensureBenchmarkReady() || handPairRunning || outerPairRunning || pairRunning || benchmarkRunning || probeRunningRef.current) return;
     const originalWorkspace = getCurrentStudioWorkspace();
     setHandPairRunning(true);
     setHandPairRows([]);
@@ -863,8 +907,89 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     }
   };
 
+  const waitForManualWindowResizeResult = (workspace: PairWorkspace) => new Promise<SplitPerfResult>((resolve, reject) => {
+    const startedAt = Date.now();
+    let settled = false;
+    let timeoutId: number | null = null;
+    const cleanup = () => {
+      unsubscribe();
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+    const finishResolve = (next: SplitPerfResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(next);
+    };
+    const finishReject = (message: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(message));
+    };
+    const unsubscribe = subscribeSplitPerfResult((next) => {
+      if (!next || next.createdAt < startedAt || next.workspaceView !== workspace) return;
+      if (next.captureKind !== 'window-resize' || next.benchmarkSurface !== null) return;
+      if (next.durationMs < 700 || next.spatialSampleCount < 6 || next.viewportWidthDistancePx < 100) {
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 외부창 이동이 너무 짧습니다. PC↔태블릿 구간을 4~6초 계속 왕복한 뒤 놓아주세요.`);
+        return;
+      }
+      finishResolve(next);
+    });
+    timeoutId = window.setTimeout(() => finishReject('외부창 추종 입력 대기 시간 초과'), 65000);
+  });
+
+  const toOuterPairRow = (workspace: PairWorkspace, next: SplitPerfResult): PairOuterRow => ({
+    workspace,
+    result: next,
+    fps: next.estimatedFps,
+    p95: next.p95FrameMs,
+    layoutMode: next.layoutMode,
+    spatialRate: next.spatialSampleRate,
+    outerGapAvg: next.outerRightGapAvgPx,
+    outerGapDeltaP95: next.outerRightGapDeltaP95Px,
+    outerGapDeltaMax: next.outerRightGapDeltaMaxPx,
+    outerGapJitterP95: next.outerRightGapJitterP95Px,
+    outerGapJitterMax: next.outerRightGapJitterMaxPx,
+    viewportDistance: next.viewportWidthDistancePx,
+    layoutAckGapP95: next.layoutAckGapP95Ms,
+    layoutAckToWriteP95: next.layoutAckToWriteP95Ms,
+    paneModeSwitches: next.paneModeSwitchCount,
+    contentModeSwitches: next.contentModeSwitchCount,
+  });
+
+  const runOuterPairBenchmark = async () => {
+    if (!ensureBenchmarkReady() || outerPairRunning || handPairRunning || pairRunning || benchmarkRunning || probeRunningRef.current) return;
+    const originalWorkspace = getCurrentStudioWorkspace();
+    setOuterPairRunning(true);
+    setOuterPairRows([]);
+    try {
+      const rows: PairOuterRow[] = [];
+      for (const workspace of ['music-note', 'library'] as PairWorkspace[]) {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: workspace } }));
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
+        await waitForWorkspaceReady(workspace);
+        setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 외부 브라우저 창을 PC↔태블릿 구간으로 4~6초 계속 왕복한 뒤 놓아주세요.`);
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: true, workspace } }));
+        const measured = await waitForManualWindowResizeResult(workspace);
+        rows.push(toOuterPairRow(workspace, measured));
+        setOuterPairRows([...rows]);
+        await new Promise((resolve) => window.setTimeout(resolve, 420));
+      }
+      setBenchmarkMessage('외부창 추종 비교 완료 · gap Δ/Jitter가 작고 일정할수록 외부창과 내부 workspace가 같은 간격으로 따라옵니다.');
+    } catch (error) {
+      setBenchmarkMessage(`외부창 추종 비교 중단 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_WINDOW_RESIZE_ARM_EVENT, { detail: { armed: false } }));
+    } finally {
+      if (originalWorkspace === 'music-note' || originalWorkspace === 'library' || originalWorkspace === 'recent' || originalWorkspace === 'create') {
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: originalWorkspace } }));
+      }
+      setOuterPairRunning(false);
+    }
+  };
+
   const runBenchmark = () => {
-    if (!ensureBenchmarkReady()) return;
+    if (!ensureBenchmarkReady() || handPairRunning || outerPairRunning || pairRunning) return;
     setPerfProbeProfile('baseline');
     setBenchmarkRunning(true);
     setBenchmarkMessage('워밍업 후 같은 조건을 3세트 측정해 중앙값으로 판정합니다.');
@@ -873,7 +998,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
 
   const runProbeScan = (kind: 'render' | 'area' | 'layout') => {
     if (!ensureBenchmarkReady()) return;
-    if (benchmarkRunning || probeRunningRef.current) return;
+    if (benchmarkRunning || probeRunningRef.current || handPairRunning || outerPairRunning || pairRunning) return;
     const profiles = kind === 'area' ? PERF_AREA_PROBE_PROFILES : kind === 'layout' ? PERF_LAYOUT_PROBE_PROFILES : PERF_RENDER_PROBE_PROFILES;
     probeProfilesRef.current = profiles;
     probeRowsRef.current = [];
@@ -986,6 +1111,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           `flush=${current.flushAvgMs}/${current.flushMaxMs}ms apply=${current.applyAvgMs}/${current.applyMaxMs}ms contentCommit/divider=${current.contentCommitCount}/${current.dividerOnlyCount}`,
           `hand pointerRate=${current.pointerEventRate}/s samples=${current.pointerSampleRate}/s distance=${current.pointerDistancePx}px pointerGapP95/max=${current.pointerGapP95Ms}/${current.pointerGapMaxMs}ms commitRate=${current.commitRate}/s commitPerPointer=${current.commitPerPointerPct}% commitGapAvg/P95/max=${current.commitGapAvgMs}/${current.commitGapP95Ms}/${current.commitGapMaxMs}ms coverage=${current.commitCoveragePct}% inputToCommitP95/max=${current.inputToCommitP95Ms}/${current.inputToCommitMaxMs}ms`,
           `layoutAck rate=${current.layoutAckRate}/s ackPerCommit=${current.layoutAckPerCommitPct}% gapAvg/P95/max=${current.layoutAckGapAvgMs}/${current.layoutAckGapP95Ms}/${current.layoutAckGapMaxMs}ms writeToAckP95/max=${current.layoutAckToWriteP95Ms}/${current.layoutAckToWriteMaxMs}ms widthErrorAvg/max=${current.layoutAckWidthErrorAvgPx}/${current.layoutAckWidthErrorMaxPx}px responsiveSwitch pane/content=${current.paneModeSwitchCount}/${current.contentModeSwitchCount}`,
+          `tracking kind=${current.captureKind} spatial=${current.spatialSampleRate}/s cursorGapAvg/P95/max=${current.cursorDividerGapAvgPx}/${current.cursorDividerGapP95Px}/${current.cursorDividerGapMaxPx}px cursorJitterP95/max=${current.cursorDividerGapJitterP95Px}/${current.cursorDividerGapJitterMaxPx}px cursorLeadAvg/P95/max=${current.cursorDividerLeadAvgPx}/${current.cursorDividerLeadP95Px}/${current.cursorDividerLeadMaxPx}px cursorLeadOver6=${current.cursorDividerLeadOver6Pct}% cursorPaneGapAvg/P95/max=${current.cursorPaneGapAvgPx}/${current.cursorPaneGapP95Px}/${current.cursorPaneGapMaxPx}px cursorPaneJitterP95/max=${current.cursorPaneGapJitterP95Px}/${current.cursorPaneGapJitterMaxPx}px outerGapAvg=${current.outerRightGapAvgPx}px outerDeltaP95/max=${current.outerRightGapDeltaP95Px}/${current.outerRightGapDeltaMaxPx}px outerJitterP95/max=${current.outerRightGapJitterP95Px}/${current.outerRightGapJitterMaxPx}px viewportDistance=${current.viewportWidthDistancePx}px`,
           `DOM total=${current.domNodes} builder=${current.builderNodes} result=${current.resultNodes} heapMB=${current.heapMb ?? '-'}`,
           `regions musicNoteControls=${current.regionNodes.musicNoteControls} musicNoteList=${current.regionNodes.musicNoteList} libraryControls=${current.regionNodes.libraryControls} libraryList=${current.regionNodes.libraryList} externalStudioUi=${current.regionNodes.externalStudioUi} other=${current.regionNodes.other}`,
         );
@@ -1014,7 +1140,13 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       if (handPairRows.length) {
         lines.push('', '[MUSIC NOTE / LIBRARY REAL HAND DRAG]');
         handPairRows.forEach((row) => {
-          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms pointerRate=${row.pointerEventRate}/s samples=${row.pointerSampleRate}/s pointerGapP95/max=${row.pointerGapP95}/${row.pointerGapMax}ms commitRate=${row.commitRate}/s commitPerPointer=${row.commitPerPointer}% commitGapP95/max=${row.commitGapP95}/${row.commitGapMax}ms coverage=${row.commitCoverage}% inputToCommitP95=${row.inputToCommitP95}ms layoutAck=${row.layoutAckRate}/s ackPerCommit=${row.layoutAckPerCommit}% ackGapP95/max=${row.layoutAckGapP95}/${row.layoutAckGapMax}ms writeToAckP95/max=${row.layoutAckToWriteP95}/${row.layoutAckToWriteMax}ms widthErrorAvg/max=${row.layoutAckErrorAvg}/${row.layoutAckErrorMax}px responsiveSwitch=${row.paneModeSwitches}/${row.contentModeSwitches} render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s`);
+          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms pointerRate=${row.pointerEventRate}/s samples=${row.pointerSampleRate}/s pointerGapP95/max=${row.pointerGapP95}/${row.pointerGapMax}ms commitRate=${row.commitRate}/s commitPerPointer=${row.commitPerPointer}% commitGapP95/max=${row.commitGapP95}/${row.commitGapMax}ms coverage=${row.commitCoverage}% inputToCommitP95=${row.inputToCommitP95}ms cursorDividerGapP95/max=${row.cursorDividerGapP95}/${row.cursorDividerGapMax}px cursorJitterP95/max=${row.cursorDividerGapJitterP95}/${row.cursorDividerGapJitterMax}px cursorLeadP95/max=${row.cursorDividerLeadP95}/${row.cursorDividerLeadMax}px cursorLeadOver6=${row.cursorDividerLeadOver6Pct}% cursorPaneGapP95/max=${row.cursorPaneGapP95}/${row.cursorPaneGapMax}px cursorPaneJitterP95/max=${row.cursorPaneGapJitterP95}/${row.cursorPaneGapJitterMax}px layoutAck=${row.layoutAckRate}/s ackPerCommit=${row.layoutAckPerCommit}% ackGapP95/max=${row.layoutAckGapP95}/${row.layoutAckGapMax}ms writeToAckP95/max=${row.layoutAckToWriteP95}/${row.layoutAckToWriteMax}ms widthErrorAvg/max=${row.layoutAckErrorAvg}/${row.layoutAckErrorMax}px responsiveSwitch=${row.paneModeSwitches}/${row.contentModeSwitches} render=${row.renderPerSecond}ms/s longTask=${row.longTaskPerSecond}ms/s`);
+        });
+      }
+      if (outerPairRows.length) {
+        lines.push('', '[MUSIC NOTE / LIBRARY OUTER WINDOW TRACKING]');
+        outerPairRows.forEach((row) => {
+          lines.push(`${row.workspace} mode=${row.layoutMode ?? '-'} fps=${row.fps} p95=${row.p95}ms spatial=${row.spatialRate}/s viewportDistance=${row.viewportDistance}px outerGapAvg=${row.outerGapAvg}px outerGapDeltaP95/max=${row.outerGapDeltaP95}/${row.outerGapDeltaMax}px outerGapJitterP95/max=${row.outerGapJitterP95}/${row.outerGapJitterMax}px ackGapP95=${row.layoutAckGapP95}ms writeToAckP95=${row.layoutAckToWriteP95}ms responsiveSwitch=${row.paneModeSwitches}/${row.contentModeSwitches}`);
         });
       }
       lines.push('', ...formatProbeLines('RENDER A/B', renderProbeRows), '', ...formatProbeLines('AREA A/B', areaProbeRows), '', ...formatProbeLines('LAYOUT A/B', layoutProbeRows));
@@ -1043,31 +1175,34 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
       {!collapsed && (
         <div className="soridraw-split-perf-body">
           <div className="soridraw-split-perf-benchmark-row">
-            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || handPairRunning || !enabled}>
+            <button type="button" onClick={runBenchmark} disabled={benchmarkRunning || probeRunning || handPairRunning || outerPairRunning || !enabled}>
               {benchmarkRunning && !probeRunning ? '자동 테스트 중…' : '자동 테스트'}
             </button>
-            <button type="button" className="is-secondary" onClick={runPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning || !enabled}>
               {pairRunning ? '2화면 비교 중…' : '뮤직노트↔라이브러리 비교'}
             </button>
-            <button type="button" className="is-secondary" onClick={runHandPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runHandPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning || !enabled}>
               {handPairRunning ? '실손 비교 중…' : '실손 드래그 비교'}
             </button>
-            <button type="button" className="is-secondary" onClick={() => runProbeScan('render')} disabled={benchmarkRunning || probeRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={runOuterPairBenchmark} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning || !enabled}>
+              {outerPairRunning ? '외부창 추종 중…' : '외부창 추종 비교'}
+            </button>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('render')} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning || !enabled}>
               {probeRunning && probeKind === 'render' ? '렌더 스캔 중…' : '렌더 스캔'}
             </button>
-            <button type="button" className="is-secondary" onClick={() => runProbeScan('area')} disabled={benchmarkRunning || probeRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('area')} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning || !enabled}>
               {probeRunning && probeKind === 'area' ? '영역 스캔 중…' : '영역 스캔'}
             </button>
-            <button type="button" className="is-secondary" onClick={() => runProbeScan('layout')} disabled={benchmarkRunning || probeRunning || !enabled}>
+            <button type="button" className="is-secondary" onClick={() => runProbeScan('layout')} disabled={benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning || !enabled}>
               {probeRunning && probeKind === 'layout' ? '좌표 A/B 중…' : '좌표 A/B'}
             </button>
-            <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning}>
+            <button type="button" className="is-secondary" onClick={runEnvironmentDiagnostics} disabled={environmentRunning || benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning}>
               {environmentRunning ? '환경 진단 중…' : '환경 진단'}
             </button>
-            <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning}>
+            <button type="button" className="is-secondary" onClick={copyComprehensiveReport} disabled={environmentRunning || benchmarkRunning || probeRunning || pairRunning || handPairRunning || outerPairRunning}>
               종합 진단서 복사
             </button>
-            <span>자동: 1400×900 동일조건 · 실손: 실제 마우스 입력률/폭 반영률/긴 프레임을 뮤직노트↔라이브러리로 직접 비교</span>
+            <span>자동: 1400×900 동일조건 · 실손: 커서↔분할바 간격 · 외부창: viewport↔workspace 간격/지터를 뮤직노트↔라이브러리로 직접 비교</span>
           </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {pairRows.length > 0 && (
@@ -1096,7 +1231,20 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                   <i>{row.layoutMode === 'direct' ? 'direct' : 'css-var'}</i>
                   <strong>반영 {row.commitRate}/s</strong>
                   <em>gap P95 {row.commitGapP95}ms · layout ack {row.layoutAckRate}/s</em>
-                  <small>입력 {row.pointerEventRate}/s · commit {row.commitRate}/s · ack P95 {row.layoutAckGapP95}ms · write→ack {row.layoutAckToWriteP95}ms · 전환 {row.paneModeSwitches}/{row.contentModeSwitches}</small>
+                  <small>커서↔선 P95/max {row.cursorDividerGapP95}/{row.cursorDividerGapMax}px · 선 지터 P95 {row.cursorDividerGapJitterP95}px · 커서 선행 P95/max {row.cursorDividerLeadP95}/{row.cursorDividerLeadMax}px · 6px+ {row.cursorDividerLeadOver6Pct}% · 커서↔pane P95/max {row.cursorPaneGapP95}/{row.cursorPaneGapMax}px · 입력 {row.pointerEventRate}/s · ack P95 {row.layoutAckGapP95}ms · 전환 {row.paneModeSwitches}/{row.contentModeSwitches}</small>
+                </span>
+              ))}
+            </div>
+          )}
+          {outerPairRows.length > 0 && (
+            <div className="soridraw-split-perf-pair" aria-label="뮤직노트 라이브러리 외부창 추종 비교">
+              {outerPairRows.map((row) => (
+                <span key={`outer-${row.workspace}`}>
+                  <b>{row.workspace === 'music-note' ? '뮤직노트 외부창' : '라이브러리 외부창'}</b>
+                  <i>{row.layoutMode === 'direct' ? 'direct' : 'css-var'}</i>
+                  <strong>gap Δ P95 {row.outerGapDeltaP95}px</strong>
+                  <em>지터 P95/max {row.outerGapJitterP95}/{row.outerGapJitterMax}px</em>
+                  <small>평균 gap {row.outerGapAvg}px · 이동 {row.viewportDistance}px · sample {row.spatialRate}/s · ack P95 {row.layoutAckGapP95}ms · 전환 {row.paneModeSwitches}/{row.contentModeSwitches}</small>
                 </span>
               ))}
             </div>
@@ -1109,7 +1257,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                 <section className="soridraw-split-perf-column is-summary">
                   <div className="soridraw-split-perf-source">
                     <span>{displayResult.host}</span>
-                    <span>{displayResult.workspaceView}</span>
+                    <span>{displayResult.workspaceView} · {displayResult.captureKind === 'window-resize' ? '외부창 추종' : '내부 분할 추종'}</span>
                     <span>{displayResult.viewport} · DPR {displayResult.dpr}</span>
                     {displayResult.benchmarkSurface && <span>Benchmark Surface {displayResult.benchmarkSurface} · {displayResult.benchmarkSurfacePass ? 'PASS' : 'FAIL'} · {displayResult.layoutMode === 'direct' ? '직접 좌표' : 'CSS 변수'}</span>}
                   </div>
@@ -1144,6 +1292,16 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     <span>실제 pane layout 확인</span><b>{displayResult.layoutAckRate}/s · {displayResult.layoutAckPerCommitPct}%</b>
                     <span>layout ack P95 / write→ack</span><b>{displayResult.layoutAckGapP95Ms} / {displayResult.layoutAckToWriteP95Ms}ms</b>
                     <span>폭 오차 평균/최대</span><b>{displayResult.layoutAckWidthErrorAvgPx}/{displayResult.layoutAckWidthErrorMaxPx}px</b>
+                    <span>커서↔분할바 gap 평균/P95/최대</span><b>{displayResult.cursorDividerGapAvgPx}/{displayResult.cursorDividerGapP95Px}/{displayResult.cursorDividerGapMaxPx}px</b>
+                    <span>커서↔분할바 지터 P95/최대</span><b>{displayResult.cursorDividerGapJitterP95Px}/{displayResult.cursorDividerGapJitterMaxPx}px</b>
+                    <span>커서가 선보다 앞선 거리 평균/P95/최대</span><b>{displayResult.cursorDividerLeadAvgPx}/{displayResult.cursorDividerLeadP95Px}/{displayResult.cursorDividerLeadMaxPx}px</b>
+                    <span>커서 선행 6px 이상 비율</span><b>{displayResult.cursorDividerLeadOver6Pct}%</b>
+                    <span>커서↔실제 pane 경계 P95/최대</span><b>{displayResult.cursorPaneGapP95Px}/{displayResult.cursorPaneGapMaxPx}px</b>
+                    <span>pane 경계 지터 P95/최대</span><b>{displayResult.cursorPaneGapJitterP95Px}/{displayResult.cursorPaneGapJitterMaxPx}px</b>
+                    <span>외부창↔workspace gap 평균</span><b>{displayResult.outerRightGapAvgPx}px</b>
+                    <span>외부 gap Δ P95/최대</span><b>{displayResult.outerRightGapDeltaP95Px}/{displayResult.outerRightGapDeltaMaxPx}px</b>
+                    <span>외부 gap 지터 P95/최대</span><b>{displayResult.outerRightGapJitterP95Px}/{displayResult.outerRightGapJitterMaxPx}px</b>
+                    <span>공간 sample / viewport 이동량</span><b>{displayResult.spatialSampleRate}/s · {displayResult.viewportWidthDistancePx}px</b>
                     <span>반응형 전환 pane/content</span><b>{displayResult.paneModeSwitchCount}/{displayResult.contentModeSwitchCount}</b>
                     <span>입력→반영 P95/최대</span><b>{displayResult.inputToCommitP95Ms}/{displayResult.inputToCommitMaxMs}ms</b>
                     <span>apply 평균/최대</span><b>{displayResult.applyAvgMs}/{displayResult.applyMaxMs}ms</b>

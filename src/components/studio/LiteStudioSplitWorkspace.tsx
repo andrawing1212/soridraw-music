@@ -321,6 +321,16 @@ export default function LiteStudioSplitWorkspace({
     root.style.setProperty('--soridraw-studio-result-right', `${workspaceRight}px`);
   }, []);
 
+  const syncModalHost = useCallback(() => {
+    const host = modalHostRef.current;
+    if (!host) return;
+    host.style.left = '0px';
+    host.style.top = '0px';
+    host.style.width = `${Math.max(0, Math.round(window.innerWidth))}px`;
+    host.style.height = `${Math.max(0, Math.round(window.innerHeight))}px`;
+  }, []);
+
+
   // 633 — A horizontal split drag must never become a vertical scroll action.
   // The old Lite path captured a visible card and, on pointer-up, moved scrollTop
   // by that card's reflow delta. Repeating left/right drags therefore accumulated
@@ -381,7 +391,7 @@ export default function LiteStudioSplitWorkspace({
     });
   }, [applyDragScrollLocks]);
 
-  const refreshIsolationHeight = useCallback((preReadTop?: number) => {
+  const refreshIsolationHeight = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout || window.innerWidth < 1100) {
       if (layout) {
@@ -399,8 +409,8 @@ export default function LiteStudioSplitWorkspace({
       && lastIsolatedHeightRef.current !== null
     ) return;
 
-    const layoutTop = Number.isFinite(preReadTop) ? Number(preReadTop) : layout.getBoundingClientRect().top;
-    const visibleTop = Math.max(58, Math.min(window.innerHeight - 1, layoutTop));
+    const rect = layout.getBoundingClientRect();
+    const visibleTop = Math.max(58, Math.min(window.innerHeight - 1, rect.top));
     const parentBottomPadding = layout.parentElement
       ? Number.parseFloat(window.getComputedStyle(layout.parentElement).paddingBottom) || 0
       : 0;
@@ -557,29 +567,6 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  // 694: outer-window resize does not need the full floating-action geometry
-  // transaction on every frame. The body-level collapse toggles are the only
-  // external controls that must visibly track the live splitter boundary during
-  // native resize. Keep this write-only helper separate so refreshMetrics never
-  // does querySelector/cache reset + temporary writes that are removed in the
-  // same task before paint.
-  const syncExternalToggleGeometry = useCallback((splitterLeft: number) => {
-    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
-    const cache = externalGeometryCacheRef.current;
-
-    const builderToggleLeft = `${Math.max(0, roundedSplitterLeft - 43)}px`;
-    if (cache.builderToggleLeft !== builderToggleLeft) {
-      cache.builderToggleLeft = builderToggleLeft;
-      builderToggleRef.current?.style.setProperty('--soridraw-lite-studio-builder-toggle-left', builderToggleLeft);
-    }
-
-    const resultToggleLeft = `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`;
-    if (cache.resultToggleLeft !== resultToggleLeft) {
-      cache.resultToggleLeft = resultToggleLeft;
-      resultToggleRef.current?.style.setProperty('--soridraw-lite-studio-result-toggle-left', resultToggleLeft);
-    }
-  }, []);
-
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
@@ -723,6 +710,7 @@ export default function LiteStudioSplitWorkspace({
       lastAriaPercentRef.current = roundedPercent;
       splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
     }
+    if (live && draggingRef.current) applyDragScrollLocks();
     if (perfEnabled) {
       const perfEnd = performance.now();
       recordSplitPerfApply({
@@ -734,18 +722,13 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout) return;
-
-    // 694 frame transaction: every geometry read happens before live geometry
-    // writes. Chrome's forced-reflow guidance explicitly recommends batching
-    // reads before writes; the previous order wrote modal-host styles and then
-    // immediately read layout.getBoundingClientRect(), which could force a sync
-    // layout during rapid native resize. The modal host is already owned by
-    // fixed 100vw/100dvh !important CSS, so no JS viewport-size write is needed.
+    refreshIsolationHeight();
+    syncModalHost();
     const rect = layout.getBoundingClientRect();
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
@@ -755,38 +738,21 @@ export default function LiteStudioSplitWorkspace({
       leftRailEdge: leftRailRect && leftRailRect.width > 0 ? leftRailRect.right : rect.left,
     };
 
-    // Reuse the already-read top edge if vertical viewport geometry really changed.
-    // Horizontal resize exits refreshIsolationHeight early without another DOM read.
-    refreshIsolationHeight(rect.top);
-
     const nextProfile = getSplitProfile();
     if (splitProfileRef.current !== nextProfile) {
       splitProfileRef.current = nextProfile;
       percentRef.current = readStoredPercent(nextProfile);
     }
-
-    // applyPercent is the single owner of pane geometry + responsive mode for this
-    // frame. Do not force a second pane-width event afterwards: the page contract
-    // only changes at PC/tablet/mobile boundaries and applyPercent already emits
-    // exactly those crossings.
     const appliedPercent = applyPercent(percentRef.current, false);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? metricsRef.current.width : Math.round(metricsRef.current.width * (appliedPercent / 100));
+    const resultWidth = Math.max(0, metricsRef.current.width - builderWidth);
+    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
-
-    const outerResizeActive = document.documentElement.classList.contains('soridraw-window-resizing');
-    if (outerResizeActive) {
-      // Keep only the body-level split toggles tracking live. All other external
-      // controls already resolve from local/root CSS geometry and are reconciled
-      // once at resize-end. This avoids querySelector churn and temporary inline
-      // writes that were immediately cleared before paint on every resize frame.
-      syncExternalToggleGeometry(splitterLeft);
-    } else {
-      readExternalControls();
-      syncExternalGeometry(builderWidth, splitterLeft);
-      clearLiveExternalGeometry();
-    }
-  }, [applyPercent, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncExternalToggleGeometry]);
+    readExternalControls();
+    syncExternalGeometry(builderWidth, splitterLeft);
+    clearLiveExternalGeometry();
+  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;

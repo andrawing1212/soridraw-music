@@ -2192,11 +2192,7 @@ function SecondaryScrollControl() {
     let visibilityFrame: number | null = null;
     const updateVisibility = () => {
       visibilityFrame = null;
-      if (
-        splitDraggingRef.current
-        || document.documentElement.classList.contains('soridraw-lite-split-dragging')
-        || document.documentElement.classList.contains('soridraw-window-resizing')
-      ) return;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const scrollHeight = document.documentElement.scrollHeight;
       const clientHeight = document.documentElement.clientHeight;
       setIsVisible((current) => {
@@ -2205,11 +2201,7 @@ function SecondaryScrollControl() {
       });
     };
     const scheduleVisibilityUpdate = () => {
-      if (
-        splitDraggingRef.current
-        || document.documentElement.classList.contains('soridraw-lite-split-dragging')
-        || document.documentElement.classList.contains('soridraw-window-resizing')
-      ) return;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       if (visibilityFrame !== null) return;
       visibilityFrame = window.requestAnimationFrame(updateVisibility);
     };
@@ -2221,11 +2213,7 @@ function SecondaryScrollControl() {
     };
 
     const checkModal = () => {
-      if (
-        splitDraggingRef.current
-        || document.documentElement.classList.contains('soridraw-lite-split-dragging')
-        || document.documentElement.classList.contains('soridraw-window-resizing')
-      ) return;
+      if (splitDraggingRef.current || document.documentElement.classList.contains('soridraw-lite-split-dragging')) return;
       const modal = document.querySelector('.z-\\[100\\]');
       const next = Boolean(modal);
       setIsModalOpen((current) => current === next ? current : next);
@@ -2244,22 +2232,6 @@ function SecondaryScrollControl() {
       checkModal();
     };
 
-    // 694: the documentElement ResizeObserver fires continuously while the native
-    // browser window is being resized. Reading document scrollHeight/clientHeight
-    // from that callback can force layout after the split workspace has just
-    // changed widths. Suspend this non-critical visibility probe for the gesture
-    // and reconcile it once when the shared resize owner signals settle.
-    const handleWindowResizeStart = () => {
-      if (visibilityFrame !== null) {
-        window.cancelAnimationFrame(visibilityFrame);
-        visibilityFrame = null;
-      }
-    };
-    const handleWindowResizeEnd = () => {
-      scheduleVisibilityUpdate();
-      checkModal();
-    };
-
     const documentResizeObserver = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(scheduleVisibilityUpdate)
       : null;
@@ -2267,8 +2239,6 @@ function SecondaryScrollControl() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
     window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
-    window.addEventListener('soridraw-window-resize-start', handleWindowResizeStart as EventListener);
-    window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
     const modalInterval = setInterval(checkModal, 500);
 
     scheduleVisibilityUpdate();
@@ -2277,8 +2247,6 @@ function SecondaryScrollControl() {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('soridraw-split-drag-start', handleSplitDragStart as EventListener);
       window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
-      window.removeEventListener('soridraw-window-resize-start', handleWindowResizeStart as EventListener);
-      window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
       clearInterval(modalInterval);
       if (visibilityFrame !== null) window.cancelAnimationFrame(visibilityFrame);
       if (activeTimerRef.current) clearTimeout(activeTimerRef.current);

@@ -7343,6 +7343,20 @@ h1.text-3xl.md\:text-5xl {
 
 
 
+/* 695 — true DOM virtualization slots.
+ * Off-screen Music Note / Library rows keep only a lightweight neutral slot.
+ * No border/background/visual chrome is introduced; the heavy card subtree is
+ * physically absent until the slot enters the vertical overscan window. */
+.soridraw-virtual-list-slot {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 /* 380: Music Note / Suno Library frame-rate pass.
  * Long lists skip layout/paint work while they are outside the viewport.
  * Inline menus opt back into normal rendering. During splitter dragging, all
@@ -12308,26 +12322,4 @@ html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
 ) *::after {
   animation: none !important;
   transition: none !important;
-}
-
-/* 694 — high-speed width-change scroll-anchor suppression.
- * Chrome scroll anchoring is useful for ordinary content changes, but during a
- * horizontal split/window resize it may inspect reflowed descendants and adjust
- * scroll position while the pane width is changing every frame. Lite V2 already
- * captures the user's vertical position at gesture start and restores it once on
- * release, so the browser does not need a second competing anchor owner here.
- * This changes no width, paint proxy, breakpoint or visible layout. */
-html[data-soridraw-theme="studio-black"]
-.soridraw-lite-studio-split-workspace.is-dragging
-.soridraw-lite-studio-pane {
-  overflow-anchor: none !important;
-}
-
-html.soridraw-window-resizing[data-soridraw-theme="studio-black"]:is(
-  [data-soridraw-studio-workspace-view="music-note"],
-  [data-soridraw-studio-workspace-view="library"]
-)
-.soridraw-lite-studio-split-workspace
-.soridraw-studio-result-pane {
-  overflow-anchor: none !important;
 }

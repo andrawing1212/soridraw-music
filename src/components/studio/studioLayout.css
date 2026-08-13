@@ -12979,3 +12979,59 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     min-width: 0 !important;
   }
 }
+
+/* 736 — Promote the 4-keyword tablet portrait band to one shared Compact stage.
+ * 735 scoped the new card arrangement only to Studio Black's compact wrapper,
+ * so Classic Dark/Light kept the old tablet layout. The same 768~1023px
+ * arrangement now applies to the normal Classic Studio as well:
+ *   Genre           (full row)
+ *   Style | Sound   (two columns)
+ *   Mood  | Theme   (two columns)
+ *   Storyboard      (full row)
+ *   Vocal | Lyrics  (two columns)
+ * This is layout-only; card/button typography and the existing four-keyword
+ * Mood/Theme grid are intentionally preserved. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid > [data-studio-menu="genre"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-mood-theme-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
+    grid-column: 1 / -1 !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main :is(.soridraw-studio-vocal-slot, .soridraw-studio-lyrics-slot) {
+    grid-column: auto !important;
+    min-width: 0 !important;
+  }
+}

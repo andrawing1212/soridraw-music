@@ -12718,3 +12718,18 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
 .storyboard-tone-flat-panel button {
   border-color: transparent !important;
 }
+
+/* 728 — Match Storyboard/Vocal Character popup neutral surfaces to the already
+   approved Split Mode Section Custom palette exactly. 727 used a blue-leaning
+   graphite (#24272c family), which made these two portals visibly different.
+   Keep their own accent colors; only the large neutral surfaces are unified. */
+:root[data-soridraw-theme="studio-black"] {
+  --sb-popup-shell: #1b1b1c;
+  --sb-popup-header: #1b1b1c;
+  --sb-popup-body: #232325;
+  --sb-popup-card: #2b2b2d;
+  --sb-popup-card-active: #2e2e31;
+  --sb-popup-control: #2e2e31;
+  --sb-popup-control-hover: #343438;
+  --sb-popup-input: #262628;
+}

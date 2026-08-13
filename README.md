@@ -2019,3 +2019,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+## SORIDRAW 713차 — 683 안정 기준 · 최근 생성곡 분할 이동 룰 통일
+- 기준: 683차 안정 ZIP. 684~712의 pacing/spring/예측 실험은 포함하지 않음.
+- PC fine-pointer에서 `recent`를 기존 Legacy 분할 엔진 대신 Music Note / Library와 동일한 `Lite V2 + library-590` 경로로 라우팅.
+- 최근 생성곡도 분할선과 양 pane이 같은 rAF의 단일 실제 경계로 움직이도록 통일. Legacy의 `분할선 선행 preview + pane adaptive cadence` 분리를 최근 생성곡에서 사용하지 않음.
+- 최근 생성곡의 result pane breakpoint 판정도 Music Note / Library와 동일한 unified result breakpoint 규칙을 사용.
+- Studio Create는 기존 683 Legacy 경로 그대로 유지. 터치/갤탭 adaptive Lite 경로도 변경 없음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+

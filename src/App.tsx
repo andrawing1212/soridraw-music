@@ -4248,25 +4248,33 @@ function App() {
     ? requestedStudioSplitEngineOverride
     : null;
 
-  // 617: remove the accumulated Music-Note-only split experiments. The user's
-  // real-hand comparison is now the source of truth: Recent is best on the
-  // legacy path, Library is best on the 590 Lite/CSS-variable path, and Galaxy
-  // Tab is best on adaptive Lite V2. On fine-pointer PC, Music Note now borrows
-  // Library's exact 590 split geometry instead of maintaining a separate path.
+  // 617 baseline kept Music Note / Library on Lite V2 while Recent stayed on
+  // Legacy. 713 preserves the 683 codebase but updates only that routing choice:
+  // Recent now shares the same result-workspace movement owner as Music Note /
+  // Library so pointer/divider/pane spacing follows one common rule.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
+  // 713: Recent Songs now uses the exact same fine-pointer split engine and
+  // runtime profile as Music Note / Library. The 683 Legacy Recent path drove
+  // the fixed divider ahead of the pane tree and adaptively throttled pane
+  // commits, which made pointer-to-divider spacing feel different even when
+  // throughput was high. Keep Create on Legacy; unify only the three result
+  // workspaces whose drag feel should match.
+  const usesSharedResultSplitEngine = studioWorkspaceView === 'recent'
+    || studioWorkspaceView === 'library'
+    || studioWorkspaceView === 'music-note';
   const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
     ? 'lite'
-    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+    : usesSharedResultSplitEngine
       ? 'lite'
       : 'legacy';
   const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
     ? 'adaptive'
-    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+    : usesSharedResultSplitEngine
       ? 'library-590'
       : 'adaptive';
   const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
   const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
-    ? (!isTouchPrimaryStudioEnvironment && (studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note')
+    ? (!isTouchPrimaryStudioEnvironment && usesSharedResultSplitEngine
       ? 'library-590'
       : 'adaptive')
     : automaticLiteRuntimeProfile;
@@ -4276,7 +4284,9 @@ function App() {
       ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
       : studioWorkspaceView === 'music-note'
         ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-        : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
+        : studioWorkspaceView === 'recent'
+          ? '자동 선택 · PC 최근 생성곡: 뮤직노트/라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+          : '자동 선택 · PC 스튜디오: 기존 방식';
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');

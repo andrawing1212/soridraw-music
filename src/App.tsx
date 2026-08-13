@@ -3603,7 +3603,12 @@ function Navigation({
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl min-[1600px]:hidden"
+        className={cn(
+          "soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center px-3 py-2.5 min-[1600px]:hidden",
+          displayMode === 'studio-black'
+            ? "bg-[#0f0f10] shadow-none"
+            : "bg-[#111111]/95 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl"
+        )}
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
@@ -3615,8 +3620,13 @@ function Navigation({
                   type="button"
                   onClick={() => goToCompactMobileNav(item)}
                   className={cn(
-                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                    isCompactStudioMobileItemActive(item) && "is-active bg-[#FFB400]/18 text-[#FFB400]"
+                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent transition-all",
+                    displayMode === 'studio-black'
+                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                    isCompactStudioMobileItemActive(item) && (displayMode === 'studio-black'
+                      ? "is-active bg-transparent text-white"
+                      : "is-active bg-[#FFB400]/18 text-[#FFB400]")
                   )}
                   aria-current={isCompactStudioMobileItemActive(item) ? 'page' : undefined}
                   aria-label={item.label}
@@ -3642,8 +3652,9 @@ function Navigation({
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
-                    isProfileOpen && "bg-[#FFB400]/18"
+                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all",
+                    displayMode === 'studio-black' ? "hover:bg-transparent" : "hover:bg-[#FFB400]/15",
+                    isProfileOpen && (displayMode === 'studio-black' ? "bg-transparent" : "bg-[#FFB400]/18")
                   )}
                   aria-label="계정 메뉴"
                   title="계정 메뉴"
@@ -3661,7 +3672,12 @@ function Navigation({
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400] disabled:opacity-50"
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all disabled:opacity-50",
+                    displayMode === 'studio-black'
+                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]"
+                  )}
                   aria-label="로그인"
                   title="로그인"
                 >
@@ -3753,8 +3769,13 @@ function Navigation({
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "soridraw-mobile-menu-trigger flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                  isExpanded && "is-active bg-[#FFB400]/18 text-[#FFB400]"
+                  "soridraw-mobile-menu-trigger flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all",
+                  displayMode === 'studio-black'
+                    ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                    : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                  isExpanded && (displayMode === 'studio-black'
+                    ? "is-active bg-transparent text-white"
+                    : "is-active bg-[#FFB400]/18 text-[#FFB400]")
                 )}
                 aria-expanded={isExpanded}
                 aria-label="외부 앱 메뉴"

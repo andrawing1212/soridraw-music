@@ -13145,3 +13145,56 @@ button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
   background-color: transparent !important;
   box-shadow: none !important;
 }
+
+/* 739 — Tablet/compact Studio Black navigation must inherit the real PC
+   navigation surface. 738 copied the old PC index.css color (#070709), but the
+   later canonical Studio layout overrides the actual PC bar to --sb-page
+   (#0f0f10). That mismatch was the blue-black jump exactly when the desktop
+   nav DOM switches to the compact nav below 1600px. Use the canonical PC
+   variables here and keep all compact buttons on the same neutral color scale. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation {
+  background: var(--sb-page, #0f0f10) !important;
+  background-color: var(--sb-page, #0f0f10) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--sb-divider, rgba(255,255,255,.105)) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: var(--sb-nav-muted, #acacb3) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger):hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-hover, #f2f2f4) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item.is-active, button.soridraw-mobile-menu-trigger.is-active),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item.is-active, button.soridraw-mobile-menu-trigger.is-active):is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-current, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}

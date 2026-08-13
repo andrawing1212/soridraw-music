@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
+import { resetSplitPointerPrediction, resolveLowLatencySplitClientX } from './splitPointerLatency';
 import './liteSplitWorkspace.css';
 import {
   beginSplitPerfDrag,
@@ -185,7 +186,7 @@ const readInitialRuntimeLayoutMode = (
 // even when its own motion is regular. Keep the *distance* to the latest native
 // target bounded instead: slow movement is exact; fast movement is allowed to
 // cover the large native delta immediately while retaining only a small visual lag.
-const DRAG_MAX_VISUAL_LAG_PX = 14;
+const DRAG_MAX_VISUAL_LAG_PX = 6;
 const OUTER_MAX_VISUAL_LAG_PX = 8;
 
 const followWithBoundedGap = (current: number, target: number, maxLagPx: number): number => {
@@ -246,6 +247,7 @@ export default function LiteStudioSplitWorkspace({
   const dragTargetPixelRef = useRef<number | null>(null);
   const dragPacedPixelRef = useRef<number | null>(null);
   const dragPacingFrameTimeRef = useRef<number | null>(null);
+  const pointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
   const outerPacedBuilderWidthRef = useRef<number | null>(null);
   const outerPacingFrameTimeRef = useRef<number | null>(null);
   const lastAriaPercentRef = useRef<number | null>(null);
@@ -943,6 +945,7 @@ export default function LiteStudioSplitWorkspace({
     dragTargetPixelRef.current = null;
     dragPacedPixelRef.current = null;
     dragPacingFrameTimeRef.current = null;
+    resetSplitPointerPrediction(pointerPredictionRef.current);
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -1019,6 +1022,7 @@ export default function LiteStudioSplitWorkspace({
     dragPacedPixelRef.current = initialBuilderPixel;
     dragTargetPixelRef.current = initialBuilderPixel;
     dragPacingFrameTimeRef.current = performance.now();
+    resetSplitPointerPrediction(pointerPredictionRef.current);
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
     document.documentElement.classList.add('soridraw-lite-split-dragging');
@@ -1029,15 +1033,17 @@ export default function LiteStudioSplitWorkspace({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== pointerIdRef.current) return;
-    // 611: remove the 610 mouse-only coalesced-event correction. Touch keeps the
-    // verified Lite V2 path; PC no longer uses this engine in automatic mode.
+    const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
+    const pacingEligible = finePointerFastPathRef.current && (workspaceView === 'music-note' || workspaceView === 'library');
+    const trackedClientX = pacingEligible
+      ? resolveLowLatencySplitClientX(nativeEvent, pointerPredictionRef.current)
+      : event.clientX;
     if (manualPerfCaptureActiveRef.current) {
-      const nativeEvent = event.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
       let coalescedCount = 1;
       try { coalescedCount = Math.max(1, nativeEvent.getCoalescedEvents?.().length || 1); } catch { coalescedCount = 1; }
-      recordSplitPerfPointer(event.clientX, coalescedCount);
+      recordSplitPerfPointer(trackedClientX, coalescedCount);
     }
-    schedulePointer(event.clientX);
+    schedulePointer(trackedClientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {

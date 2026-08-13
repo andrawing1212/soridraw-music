@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from '../../lib/studioActionBarGeometry';
+import { resetSplitPointerPrediction, resolveLowLatencySplitClientX } from './splitPointerLatency';
 
 const STORAGE_KEY = 'soridraw_studio_black_split_percent_v1';
 const TABLET_STORAGE_KEY = 'soridraw_studio_black_tablet_split_percent_v1';
@@ -135,7 +136,7 @@ type StudioSplitWorkspaceProps = {
 // preserve a visually constant relationship between the native target and the
 // split boundary. Slow motion stays exact. Fast motion may jump as much as the
 // native target jumped, but the visible lag itself is capped to a small distance.
-const RECENT_DRAG_MAX_VISUAL_LAG_PX = 14;
+const RECENT_DRAG_MAX_VISUAL_LAG_PX = 6;
 const RECENT_OUTER_MAX_VISUAL_LAG_PX = 8;
 
 const followRecentWithBoundedGap = (current: number, target: number, maxLagPx: number): number => {
@@ -203,6 +204,7 @@ export default function StudioSplitWorkspace({
   const recentDragTargetPixelRef = useRef<number | null>(null);
   const recentDragPacedPixelRef = useRef<number | null>(null);
   const recentDragPacingFrameTimeRef = useRef<number | null>(null);
+  const recentPointerPredictionRef = useRef({ x: null as number | null, timeStamp: null as number | null });
   const recentOuterPacedBuilderWidthRef = useRef<number | null>(null);
   const recentOuterPacingFrameTimeRef = useRef<number | null>(null);
   const recentOuterNeedsCatchUpRef = useRef(false);
@@ -1518,6 +1520,7 @@ export default function StudioSplitWorkspace({
       lastActionControlPixelRef.current = null;
     }
 
+    resetSplitPointerPrediction(recentPointerPredictionRef.current);
     event.currentTarget.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';
@@ -1530,13 +1533,12 @@ export default function StudioSplitWorkspace({
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!draggingRef.current || event.pointerId !== dragRef.current.pointerId) return;
     const nativeEvent = event.nativeEvent as PointerEvent;
-    const coalesced = typeof nativeEvent.getCoalescedEvents === 'function'
-      ? nativeEvent.getCoalescedEvents()
-      : [];
-    const latestEvent = coalesced.length > 0 ? coalesced[coalesced.length - 1] : nativeEvent;
     const pacingEligible = finePointerFastPathRef.current && workspaceView === 'recent';
-    if (!pacingEligible) previewSplitterAtClientX(latestEvent.clientX);
-    schedulePointerUpdate(latestEvent.clientX);
+    const trackedClientX = pacingEligible
+      ? resolveLowLatencySplitClientX(nativeEvent, recentPointerPredictionRef.current)
+      : event.clientX;
+    if (!pacingEligible) previewSplitterAtClientX(trackedClientX);
+    schedulePointerUpdate(trackedClientX);
   };
 
   const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -1560,6 +1562,7 @@ export default function StudioSplitWorkspace({
     recentDragTargetPixelRef.current = null;
     recentDragPacedPixelRef.current = null;
     recentDragPacingFrameTimeRef.current = null;
+    resetSplitPointerPrediction(recentPointerPredictionRef.current);
     const builderWidth = builderCollapsedRef.current
       ? 0
       : resultCollapsedRef.current

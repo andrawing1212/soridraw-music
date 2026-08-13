@@ -2104,3 +2104,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Replaced constant-speed catch-up with bounded spatial lag: internal divider max visual lag 14px, outer-window pane boundary max visual lag 8px.
 - Slow movement remains exact. Fast sparse pointer/resize updates no longer create a growing hundreds-of-pixels gap while the divider catches up at a fixed speed.
 - No pointerrawupdate, forced layout, transform proxy, new diagnostic UI, Firebase/Auth/Firestore/Functions/data changes.
+
+
+### 706차 — 고속 마우스 예측 보정 + 6px 공간 간격
+- 기준: 705차. 최근 생성곡/뮤직노트/라이브러리 공통 내부 분할 추종만 보정.
+- 빠른 mouse pointermove에서 마지막 coalesced 확정 좌표를 우선하고, 브라우저 getPredictedEvents()가 제공되면 약 10ms 앞의 같은 진행 방향 예측값을 최대 18px까지만 사용한다.
+- 느린 이동/방향 전환/터치/펜은 예측을 사용하지 않는다.
+- 내부 분할의 허용 시각 lag를 14px→6px로 축소한다. 외부창 8px bounded-gap 정책은 그대로 유지한다.
+- 강제 layout, pointerrawupdate, transform 프록시, 진단 UI 추가 없음.

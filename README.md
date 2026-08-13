@@ -2019,3 +2019,58 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+
+## 685차 — 마우스/터치 입력 소유권 분리 · 태블릿 혼합 상태 제거 (2/5)
+- 기준: 683차 clean. 684의 강제 동기 레이아웃 실험은 체감 개선이 없어 이어받지 않았다.
+- 목적: PC 마우스 최적화가 실제 태블릿 손터치 경로에 침범하거나, 반대로 터치 주 입력 환경 변경이 실행 중 split engine을 바꾸는 혼합 상태를 제거한다.
+- `StudioSplitWorkspace`와 `LiteStudioSplitWorkspace`의 `(hover:hover) and (pointer:fine)` 사전 판정을 제거하고, 분할바 `pointerdown`에서 받은 실제 `event.pointerType`을 해당 제스처 동안만 고정한다.
+- 661~1080px 마우스 전용 tablet fast path / adaptive cadence / 로컬 floating-action geometry는 실제 `pointerType === 'mouse'` 드래그에서만 동작한다. 손가락/펜은 그 경로를 타지 않는다.
+- 마우스는 `getCoalescedEvents()`의 최신 좌표를 사용할 수 있지만, touch/pen은 기존 raw PointerEvent 좌표 경로를 유지한다. 두 입력은 한 드래그 도중 섞이지 않는다.
+- App의 자동 split-engine 주 입력 판정은 앱 마운트 시 한 번만 고정한다. 하이브리드 장치에서 마우스 연결/해제 등으로 pointer/hover media query가 바뀌어도 실행 중 split engine을 remount하지 않는다. 화면 폭 기반 PC/Tablet/Mobile 반응형 변화는 기존처럼 실시간 유지한다.
+- 외부창 리사이즈 중에는 활성 pointer gesture가 없으므로 마우스 전용 tablet fast path가 개입하지 않는다.
+- UI/디자인/테두리, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 686차 — 뮤직노트/라이브러리 외부창 리사이즈 뷰포트 윈도잉
+- 기준: 685차. Studio/분할 엔진/최근 생성곡은 수정하지 않고 `FavoritesPage`(뮤직노트), `SunoLibraryPage`, 공통 content responsive helper, 관련 CSS만 수정했다.
+- 사용자 A/B에서 왼쪽 pane이 빈 상태여도 오른쪽 뮤직노트/라이브러리만으로 태블릿 구간 외부창 리사이즈 버벅임이 동일하게 재현됐고, 최근 생성곡은 상대적으로 부드러웠다. 따라서 이번 차수는 오른쪽 두 페이지의 긴 리스트 렌더 비용만 대상으로 한다.
+- 평상시 IntersectionObserver로 현재 viewport ±900px 안의 리스트 항목만 `data-soridraw-resize-nearby=true`로 기록한다.
+- 외부창 리사이즈가 시작되면 IntersectionObserver를 즉시 끊어 resize 자체가 observer churn을 만들지 않게 하고, 마지막으로 기록된 visible/nearby 항목만 계속 실시간 렌더한다.
+- 화면 밖의 뮤직노트/라이브러리 리스트 항목은 리사이즈 동안만 `content-visibility:hidden`으로 내부 layout/paint를 완전히 건너뛴다. 기존 `contain-intrinsic-size`를 그대로 사용하므로 리스트의 세로 공간/스크롤 구조는 유지한다.
+- 리사이즈가 끝나면 윈도잉을 즉시 해제하고 observer를 다시 연결한다. 보이는 카드/검색/필터/대문/분할 폭과 PC↔Tablet↔Mobile 변화는 기존처럼 실시간이다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 688차 — 5/5 최종: PC 뮤직노트·라이브러리를 최근 생성곡과 동일한 Legacy 분할 소유자로 통합
+- 기준: 687차. 687 실사용에서 Music Note/Library 태블릿 direct geometry가 체감 약 15% 개선되어, 남은 차이를 `Recent=Legacy / Music Note·Library=Lite`라는 페이지별 엔진 분기로 좁혔다.
+- fine-pointer PC/트랙패드에서는 Create/Recent/Music Note/Library가 모두 동일한 `StudioSplitWorkspace` Legacy 엔진을 사용한다. 브라우저 폭이 Tablet 구간으로 줄어도 페이지 전환 때문에 split engine이 바뀌지 않는다.
+- coarse/no-hover 터치 환경은 기존처럼 adaptive Lite V2를 유지한다. 즉 실제 갤럭시탭 손가락 경로는 건드리지 않는다.
+- 관리자 명시 override `?splitEngine=lite|legacy`는 그대로 유지해서 비교 진단은 가능하다.
+- Music Note/Library가 Legacy 엔진 안에 들어왔을 때 페이지 자체 `ResizeObserver + getBoundingClientRect()`를 다시 만들지 않도록, Legacy split owner가 이미 계산한 result 폭의 PC/tablet/mobile 경계 변화만 `soridraw-studio-pane-width` 이벤트로 전달한다.
+- Legacy 결과 pane의 mobile breakpoint도 Music Note/Library 둘 다 동일하게 661px 기준을 사용한다.
+- 686 viewport windowing은 유지한다. 디자인/실시간 외부창 리사이즈/분할바 동작/Firestore·Auth·Functions 저장 구조는 변경하지 않는다.
+
+## 689차 — Music Note / Library 외부창 리사이즈 히트테스트 격리
+- 기준: 688차. 687/688 실사용에서 Music Note/Library를 Recent와 같은 PC Legacy geometry 소유권으로 맞추자 체감 개선이 누적되었으므로 그 경로를 그대로 유지한다.
+- 이번 추가 실험은 Studio/Create/Recent/분할 geometry를 더 수정하지 않는다.
+- 네이티브 **외부 브라우저 창 리사이즈 중에만** Music Note / Library 본문을 `pointer-events:none`, `user-select:none`으로 만들어 복잡한 카드/버튼/hover 트리에 대한 hit-test 및 hover invalidation을 차단한다.
+- 같은 구간에서 해당 두 페이지의 animation/transition 계산도 완전히 중지한다. 화면 크기, pane 폭, 텍스트 줄바꿈, PC↔Tablet↔Mobile 반응형 변화는 기존처럼 실시간이다.
+- 창 리사이즈가 끝나면 기존 `soridraw-window-resizing` marker 제거와 동시에 상호작용/애니메이션 상태도 즉시 원복된다.
+- 686 viewport windowing, 687 direct geometry, 688 PC Legacy 공통 엔진은 그대로 유지한다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 690차 — 내부 분할 683 복구 + 외부창 개선 경로 분리
+- 689에서 확인된 `외부창은 개선됐지만 내부 분할바가 느려진` 상쇄 현상을 분리한다.
+- PC Music Note/Library를 688의 Legacy 강제 공통화에서 되돌려 683의 Lite `library-590` 내부 분할 엔진으로 복구했다.
+- StudioSplitWorkspace와 App의 입력/엔진 선택도 683의 검증 상태로 복구하여 내부 분할 드래그 경로를 정확히 되돌렸다.
+- 단, 외부창 리사이즈 개선으로 반응이 있었던 686 리스트 viewport windowing, 687 tablet direct geometry, 689 외부창 전용 hit-test/transition 격리는 유지한다.
+- 즉 내부 분할과 외부창 리사이즈가 같은 최적화 소유권을 서로 덮어쓰지 않도록 두 경로를 분리한 균형본이다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## 691차 — 태블릿 내부 분할바를 PC 빠른 drag lane으로 고정 · 외부창 direct 경로 유지
+- 기준: 690차. 690 실사용에서 PC 내부 분할바는 유의미하게 빨라졌지만, result pane이 1080px 이하 태블릿 폭으로 들어가면 내부 분할바가 다시 둔해지고 빠르게 움직일 때 한 번씩 뚝 끊기는 체감이 남았다.
+- 원인 후보를 `내부 drag 도중 geometry owner가 PC css-var → tablet direct로 바뀌는 1회 전환`으로 좁혔다. 이 전환은 화면 responsive 모드 변경과 동시에 일어나므로 빠른 마우스 이동에서 한 프레임 이상의 큰 작업으로 보일 수 있다.
+- PC Music Note / Library의 `library-590` 내부 분할 제스처는 pointerdown부터 pointerup까지 **한 가지 css-var geometry owner로 고정**한다. pane 내용의 PC/Tablet/Mobile 반응형 전환 자체는 기존처럼 실시간으로 계속 일어난다.
+- 이미 태블릿 폭에서 drag를 시작한 경우 첫 pointermove 전에 css-var owner를 미리 적용해 `direct → css-var` 최초 전환 비용도 제거한다.
+- pointerup 직후에는 690의 정상 resting/외부창 정책으로 즉시 복귀한다. 즉 result pane이 tablet/mobile이면 다시 direct geometry, PC이면 library-590 css-var가 된다. 외부 브라우저 창 resize는 기존 686/687/689/690 개선 경로를 그대로 유지한다.
+- 실제 터치 우선 환경의 adaptive Lite V2 / Galaxy Tab 경로는 강제로 library-590에 합치지 않아 기존 손가락 동작을 보호한다.
+- UI/디자인/테두리, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

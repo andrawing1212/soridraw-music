@@ -40,10 +40,7 @@ const MAX_PERCENT = 76;
 const TABLET_VIEWPORT_MIN = 1100;
 const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
-// 741 — Preserve desktop above 820px; Compact replaces the former upper-mobile
-// band and true Builder mobile starts only at the shared 660px narrow-content floor.
-const BUILDER_MOBILE_BREAKPOINT = 660;
-const BUILDER_COMPACT_MAX = 820;
+const BUILDER_MOBILE_BREAKPOINT = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
@@ -475,20 +472,6 @@ export default function LiteStudioSplitWorkspace({
       BUILDER_MOBILE_BREAKPOINT,
       PANE_MODE_HYSTERESIS,
     );
-    // 741 — Match Legacy: Compact consumes only the former upper-mobile band.
-    // Desktop remains unchanged above 820px, Compact owns 661~820px, and the
-    // existing one-column Builder mobile composition begins at the 660px floor.
-    const builderCompactActive = !builderCollapsedRef.current
-      && nextBuilderMode === 'desktop'
-      && builderWidth <= BUILDER_COMPACT_MAX;
-    if (builderCompactActive) {
-      if (builder.dataset.soridrawPaneCompact !== 'true') {
-        builder.dataset.soridrawPaneCompact = 'true';
-      }
-    } else if (builder.dataset.soridrawPaneCompact) {
-      delete builder.dataset.soridrawPaneCompact;
-    }
-
     const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library' || workspaceView === 'recent';
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,

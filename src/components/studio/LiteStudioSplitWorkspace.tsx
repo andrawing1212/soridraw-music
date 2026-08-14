@@ -150,6 +150,29 @@ const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
   width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
 );
 
+const readDragBoundarySignature = (
+  builderWidth: number,
+  resultWidth: number,
+  workspaceView?: StudioWorkspaceView,
+) => {
+  const safeBuilderWidth = Math.max(1, builderWidth);
+  const safeResultWidth = Math.max(1, resultWidth);
+  const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library' || workspaceView === 'recent';
+  const resultMobileBreakpoint = unifiedResultBreakpoint ? CONTENT_RESULT_MOBILE_BREAKPOINT : RESULT_MOBILE_BREAKPOINT;
+  const builderPaneBand = safeBuilderWidth < BUILDER_MOBILE_BREAKPOINT
+    ? 'mobile'
+    : safeBuilderWidth <= BUILDER_COMPACT_MAX
+      ? 'compact'
+      : 'desktop';
+  const resultPaneBand = safeResultWidth < resultMobileBreakpoint ? 'mobile' : 'desktop';
+  return [
+    readContentResponsiveMode(safeBuilderWidth),
+    builderPaneBand,
+    readContentResponsiveMode(safeResultWidth),
+    resultPaneBand,
+  ].join(':');
+};
+
 // 609 stabilization rule from the user's real-hand verification:
 // - Result content in tablet/mobile mode: direct geometry is the confirmed smooth
 //   path across Music Note, Library and Recent.
@@ -188,7 +211,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-freeze' | 'aux-freeze';
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -221,6 +244,11 @@ export default function LiteStudioSplitWorkspace({
   const metricsRef = useRef<LayoutMetrics>({ left: 0, width: 1, leftRailEdge: 0 });
   const modeRef = useRef<{ builder: PaneMode; result: PaneMode }>({ builder: 'desktop', result: 'desktop' });
   const contentResponsiveModeRef = useRef<{ builder: ContentResponsiveMode | null; result: ContentResponsiveMode | null }>({ builder: null, result: null });
+  // 754: boundary-only auxiliary sync keeps the V2 pane/divider hot path clean,
+  // but still publishes the visible responsive UI at the exact thresholds while
+  // dragging. The signature is pure math from already-known pane widths; it adds
+  // no DOM read, observer, or React state to pointermove.
+  const dragBoundarySignatureRef = useRef<string | null>(null);
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -681,17 +709,25 @@ export default function LiteStudioSplitWorkspace({
     const bounds = getSplitBounds(metricsRef.current.width);
     const nextPercent = clampToBounds(rawPercent, bounds);
     const auxFreezeLive = live && draggingRef.current && v2DragPerfMode === 'aux-freeze';
+    const auxBoundaryLive = live && draggingRef.current && v2DragPerfMode === 'aux-boundary';
     percentRef.current = nextPercent;
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
+    const boundarySignature = auxBoundaryLive
+      ? readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current)
+      : null;
+    const boundaryChanged = auxBoundaryLive && dragBoundarySignatureRef.current !== boundarySignature;
+    if (boundaryChanged) dragBoundarySignatureRef.current = boundarySignature;
+    const deferAuxLive = auxFreezeLive || auxBoundaryLive;
+    const allowResponsiveSync = !auxFreezeLive && (!auxBoundaryLive || boundaryChanged);
 
     // 657: the 656 test confirmed the slow state is owned by pane width.
     // Reuse the engine's already-known geometry and mark each fine-pointer pane
     // while its live width sits in the shared 661~1080px tablet band. The marker
     // activates only drag-time CSS isolation; normal tablet rendering is untouched.
-    if (!auxFreezeLive) {
+    if (!deferAuxLive || boundaryChanged) {
       const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
         const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
         if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
@@ -704,7 +740,7 @@ export default function LiteStudioSplitWorkspace({
     // 609: geometry ownership changes only when the *published content mode*
     // itself changes. This keeps the visible PC/Tablet switch and the low-level
     // pane owner on the same boundary, eliminating the 608 16px disagreement.
-    if (!benchmarkRunningRef.current && !auxFreezeLive) {
+    if (!benchmarkRunningRef.current && (!deferAuxLive || boundaryChanged)) {
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
@@ -719,15 +755,15 @@ export default function LiteStudioSplitWorkspace({
     writeLiveSplitGeometry(builderWidth, resultWidth);
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
-    if (!auxFreezeLive) {
+    if (allowResponsiveSync) {
       syncPaneModes(builderWidth, resultWidth);
       broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
     }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
-    if (live && !auxFreezeLive) syncExternalGeometry(builderWidth, splitterLeft);
+    if (live && !deferAuxLive) syncExternalGeometry(builderWidth, splitterLeft);
     const perfAfterExternal = perfEnabled ? performance.now() : 0;
 
-    if (!auxFreezeLive) {
+    if (!deferAuxLive) {
       const root = document.documentElement;
       const edgeTolerancePercent = (1.5 / safeWidth) * 100;
       const builderAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent <= bounds.min + edgeTolerancePercent;
@@ -893,11 +929,12 @@ export default function LiteStudioSplitWorkspace({
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
     clearV2DragContentFreeze();
-    if (v2DragPerfMode === 'aux-freeze') {
-      // Reconcile every deferred responsive/external state exactly once after
-      // the pointer is released. Core geometry already sits at the final pixel.
+    if (v2DragPerfMode === 'aux-freeze' || v2DragPerfMode === 'aux-boundary') {
+      // Reconcile deferred external/misc state exactly once after pointer-up.
+      // `aux-boundary` has already published responsive UI only at real boundaries.
       applyPercent(percentRef.current, false);
     }
+    dragBoundarySignatureRef.current = null;
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
@@ -948,12 +985,16 @@ export default function LiteStudioSplitWorkspace({
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
     captureDragScrollLocks();
-    if (v2DragPerfMode === 'content-freeze') {
+    clearV2DragContentFreeze();
+    if (v2DragPerfMode === 'content-left-freeze' || v2DragPerfMode === 'content-freeze') {
       if (builderRect?.width) builderRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(builderRect.width))}px`);
-      if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
-    } else {
-      clearV2DragContentFreeze();
     }
+    if (v2DragPerfMode === 'content-right-freeze' || v2DragPerfMode === 'content-freeze') {
+      if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
+    }
+    dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary'
+      ? readDragBoundarySignature(builderRect?.width || 1, resultRect?.width || 1, workspaceViewRef.current)
+      : null;
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;

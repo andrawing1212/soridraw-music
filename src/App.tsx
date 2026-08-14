@@ -4262,17 +4262,22 @@ function App() {
   const studioGenerationBarPerfMode: StudioGenerationBarPerfMode = generationBarPerfParam === 'freeze' || generationBarPerfParam === 'off'
     ? generationBarPerfParam
     : 'normal';
-  // 753: Lite V2 drag hot-path A/B probe. `content-freeze` keeps the pane
-  // shells moving while their current child widths stay frozen during the drag;
-  // `aux-freeze` keeps only the core pane/divider geometry live and defers
-  // responsive broadcasts, external geometry, aria/edge markers and scroll locks
-  // until pointer-up. Admin-only and URL-scoped, so normal runtime is untouched.
+  // 754: split the V2 content-reflow probe into left/right/both and add a
+  // boundary-only auxiliary mode. This keeps the verified V2 geometry owner
+  // untouched while identifying which pane causes reflow cost and whether
+  // responsive state can update only when a real PC/tablet/mobile boundary is crossed.
   const v2DragPerfParam = studioTestParams.get('v2DragPerf');
-  const studioV2DragPerfMode: StudioV2DragPerfMode = v2DragPerfParam === 'content'
-    ? 'content-freeze'
-    : v2DragPerfParam === 'aux'
-      ? 'aux-freeze'
-      : 'normal';
+  const studioV2DragPerfMode: StudioV2DragPerfMode = v2DragPerfParam === 'content-left'
+    ? 'content-left-freeze'
+    : v2DragPerfParam === 'content-right'
+      ? 'content-right-freeze'
+      : v2DragPerfParam === 'content'
+        ? 'content-freeze'
+        : v2DragPerfParam === 'boundary'
+          ? 'aux-boundary'
+          : v2DragPerfParam === 'aux'
+            ? 'aux-freeze'
+            : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4367,7 +4372,18 @@ function App() {
   const setStudioV2DragPerfMode = useCallback((mode: StudioV2DragPerfMode) => {
     const nextParams = new URLSearchParams(location.search);
     if (mode === 'normal') nextParams.delete('v2DragPerf');
-    else nextParams.set('v2DragPerf', mode === 'content-freeze' ? 'content' : 'aux');
+    else {
+      const param = mode === 'content-left-freeze'
+        ? 'content-left'
+        : mode === 'content-right-freeze'
+          ? 'content-right'
+          : mode === 'content-freeze'
+            ? 'content'
+            : mode === 'aux-boundary'
+              ? 'boundary'
+              : 'aux';
+      nextParams.set('v2DragPerf', param);
+    }
     const query = nextParams.toString();
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
@@ -14732,11 +14748,38 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'content-left-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('content-left-freeze')}
+                      title="왼쪽 곡 만들기 콘텐츠 폭만 드래그 시작값으로 고정 · 오른쪽은 정상 reflow"
+                    >
+                      좌 콘텐츠 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'content-right-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('content-right-freeze')}
+                      title="오른쪽 결과 콘텐츠 폭만 드래그 시작값으로 고정 · 왼쪽은 정상 reflow"
+                    >
+                      우 콘텐츠 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
                       className={studioV2DragPerfMode === 'content-freeze' ? 'is-active' : ''}
                       onClick={() => setStudioV2DragPerfMode('content-freeze')}
-                      title="분할선/Pane 외곽은 실시간 이동하고, 드래그 시작 시점의 내부 콘텐츠 폭을 고정해 width reflow 영향을 비교"
+                      title="좌우 콘텐츠 폭을 모두 고정해 전체 width reflow 비용 비교"
                     >
-                      콘텐츠 고정
+                      양쪽 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'aux-boundary' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('aux-boundary')}
+                      title="드래그 중 부가 동기화는 정지하되 PC/Tablet/Compact/Mobile 실제 경계가 바뀔 때만 responsive UI를 즉시 갱신"
+                    >
+                      경계만 동기
                     </button>
                     <button
                       type="button"

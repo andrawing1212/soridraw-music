@@ -2051,3 +2051,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 드래그 중 React 상태 갱신을 반복하지 않고 손잡이/활성 범위/BPM 숫자를 같은 프레임에 직접 갱신합니다.
 - 드래그 종료 시 최종 BPM 값만 React 상태로 확정합니다.
 - 공통 TempoControl이므로 분할/다크/라이트 테마 모두 동일하게 적용됩니다.
+
+## SORIDRAW 754차 — Lite V2 좌/우 콘텐츠 + 경계전용 부가동기 A/B
+- 기준: 753차.
+- 관리자 Lite V2 드래그 비교를 `좌 콘텐츠 고정 / 우 콘텐츠 고정 / 양쪽 고정`으로 분리해 어느 pane의 width reflow가 더 큰지 비교 가능하게 함.
+- `경계만 동기` 모드를 추가해 드래그 매 프레임의 부가동기 작업은 정지하되, 이미 계산된 pane 폭이 PC/Tablet/Compact/Mobile 실제 경계를 넘을 때만 responsive 상태를 즉시 반영하도록 함.
+- 경계 판정은 기존 V2의 pane 폭 숫자만 재사용하며 새 ResizeObserver/DOM 측정/React state를 추가하지 않음.
+- 기존 `부가동기 정지`와 생성바 A/B, Lite V2/기존 방식 비교는 유지.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

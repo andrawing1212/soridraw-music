@@ -962,6 +962,12 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
  * second layout observer. The variables are written once at pointer-down and
  * removed once at pointer-up. */
 @media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="content-left-freeze"]
+  > .soridraw-studio-builder-pane
+  > *,
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="content-right-freeze"]
+  > .soridraw-studio-result-pane
+  > *,
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="content-freeze"]
   > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane)
   > * {

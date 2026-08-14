@@ -2092,3 +2092,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `Left Pane Only`, `Right Pane Only`: 한쪽 pane만 실제 resize하여 어느 pane의 layout/reflow가 고속 드래그 비용을 주도하는지 분리합니다.
 - 모든 진단 모드는 pointer-up에서 758차 정상 runtime geometry/responsive 상태로 1회 정합화합니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+
+## SORIDRAW 760차 — Pure Pane 실시간 경계 판정 + 분할창 높이 고정 후보
+- 기준: 759차
+- 759차에서 체감이 가장 좋았던 `Pure Pane` geometry hot path를 그대로 유지하면서, 실제 PC/Tablet/Compact/Mobile 경계를 넘는 순간에만 해당 pane의 responsive UI를 1회 실시간 반영하는 `Pure Pane 실시간` 관리자 비교 모드를 추가했습니다.
+- 경계 사이의 일반 pointer/rAF 프레임에는 Builder/Result/Splitter geometry 외 responsive broadcast, root dataset, 외부 geometry, ARIA, scroll lock을 실행하지 않습니다.
+- Builder 경계와 Result 경계를 분리 비교해 실제로 변경된 pane만 responsive publication을 수행합니다.
+- responsive typography/button density가 바뀌어도 드래그 중 visible split-window의 세로 높이가 변하지 않도록 pointer-down 시 기존 workspace 높이를 1회 캡처해 shell/pane scrollport 높이를 고정하고 pointer-up에서 즉시 해제합니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.

@@ -1002,3 +1002,35 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
 .soridraw-split-engine-test-switch--v2-responsive {
   top: 232px;
 }
+
+
+/* 760 — Pure Pane + boundary-only responsive candidate.
+ * Keep the 759 geometry-only hot path between real responsive boundaries.
+ * Typography/button density may switch at PC/tablet/Compact/mobile boundaries,
+ * but those content changes must never resize the visible split window itself.
+ * The height value is captured once on pointer-down from the existing layout
+ * measurement; there is no drag-frame DOM read or new observer. */
+.soridraw-split-engine-test-switch--v2-pure {
+  top: 272px;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"][data-v2-pure-pane-height-lock="true"] {
+    height: var(--soridraw-v2-pure-pane-fixed-height) !important;
+    min-height: var(--soridraw-v2-pure-pane-fixed-height) !important;
+    max-height: var(--soridraw-v2-pure-pane-fixed-height) !important;
+    align-items: stretch !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"][data-v2-pure-pane-height-lock="true"]
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+}

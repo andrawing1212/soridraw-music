@@ -4291,7 +4291,9 @@ function App() {
                         ? 'local-responsive'
                         : v2DragPerfParam === 'pure-pane'
                           ? 'pure-pane'
-                          : v2DragPerfParam === 'splitter-only'
+                          : v2DragPerfParam === 'pure-pane-live'
+                            ? 'pure-pane-live'
+                            : v2DragPerfParam === 'splitter-only'
                             ? 'splitter-only'
                             : v2DragPerfParam === 'left-pane-only'
                               ? 'left-pane-only'
@@ -4417,7 +4419,9 @@ function App() {
                             ? 'local-responsive'
                             : mode === 'pure-pane'
                               ? 'pure-pane'
-                              : mode === 'splitter-only'
+                              : mode === 'pure-pane-live'
+                                ? 'pure-pane-live'
+                                : mode === 'splitter-only'
                                 ? 'splitter-only'
                                 : mode === 'left-pane-only'
                                   ? 'left-pane-only'
@@ -14916,6 +14920,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       title="드래그 중 Builder + Result + Splitter geometry만 갱신. responsive/external/ARIA/broadcast/scroll sync는 pointer-up까지 정지"
                     >
                       Pure Pane
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-live' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-live')}
+                      title="Pure Pane 속도를 유지하면서 PC/Tablet/Compact/Mobile 실제 경계를 넘는 순간에만 해당 pane의 responsive UI를 1회 실시간 반영. 드래그 중 split-window 높이는 고정"
+                    >
+                      Pure Pane 실시간
                     </button>
                     <button
                       type="button"

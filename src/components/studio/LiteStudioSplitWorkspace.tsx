@@ -234,7 +234,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'splitter-only' | 'left-pane-only' | 'right-pane-only';
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -805,10 +805,15 @@ export default function LiteStudioSplitWorkspace({
     // 759 diagnostic isolation: these modes intentionally bypass every non-essential
     // drag-time sync so we can measure the raw cost of splitter/pane geometry.
     const purePaneLive = live && draggingRef.current && v2DragPerfMode === 'pure-pane';
+    // 760 candidate: keep the verified Pure Pane geometry hot path, but publish
+    // responsive UI only when the already-known pane widths actually cross a
+    // real PC/tablet/Compact/mobile boundary. No DOM read, observer or React
+    // state is added to pointermove.
+    const purePaneResponsiveLive = live && draggingRef.current && v2DragPerfMode === 'pure-pane-live';
     const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
     const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
     const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
-    const pureGeometryDiagnosticLive = purePaneLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive;
+    const pureGeometryDiagnosticLive = purePaneLive || purePaneResponsiveLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive;
     const deferScrollLockLive = live && draggingRef.current
       && (v2DragPerfMode === 'scroll-defer'
         || v2DragPerfMode === 'direct-scroll-defer'
@@ -844,17 +849,45 @@ export default function LiteStudioSplitWorkspace({
         // remove all diagnostic inline geometry before restoring the runtime owner.
         layout.dataset.v2TraceDirectGeometry = 'true';
 
-        if (purePaneLive || leftPaneOnlyLive) {
+        if (purePaneLive || purePaneResponsiveLive || leftPaneOnlyLive) {
           builder.style.setProperty('left', '0px', 'important');
           builder.style.setProperty('right', 'auto', 'important');
           builder.style.setProperty('width', `${builderWidth}px`, 'important');
         }
-        if (purePaneLive || rightPaneOnlyLive) {
+        if (purePaneLive || purePaneResponsiveLive || rightPaneOnlyLive) {
           result.style.setProperty('left', `${builderWidth}px`, 'important');
           result.style.setProperty('right', '0px', 'important');
           result.style.removeProperty('width');
         }
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
+      }
+
+      if (purePaneResponsiveLive) {
+        const nextBoundarySignature = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
+        if (dragBoundarySignatureRef.current !== nextBoundarySignature) {
+          const previousParts = dragBoundarySignatureRef.current?.split(':') ?? [];
+          const nextParts = nextBoundarySignature.split(':');
+          const builderBoundaryChanged = previousParts.length < 4
+            || previousParts[0] !== nextParts[0]
+            || previousParts[1] !== nextParts[1];
+          const resultBoundaryChanged = previousParts.length < 4
+            || previousParts[2] !== nextParts[2]
+            || previousParts[3] !== nextParts[3];
+
+          dragBoundarySignatureRef.current = nextBoundarySignature;
+
+          // Publish only the pane that actually crossed a visible responsive
+          // boundary. Root/html mirrors, external geometry, scroll locks, ARIA
+          // and persistence remain deferred to pointer-up so the Pure Pane frame
+          // stays essentially geometry-only between boundaries.
+          const responsiveOptions = {
+            skipBuilder: !builderBoundaryChanged,
+            skipResult: !resultBoundaryChanged,
+            rootSync: false,
+          };
+          syncPaneModes(builderWidth, resultWidth, responsiveOptions);
+          broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
+        }
       }
 
       if (perfEnabled && live) {
@@ -1113,6 +1146,7 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'responsive-hysteresis'
       || v2DragPerfMode === 'local-responsive'
       || v2DragPerfMode === 'pure-pane'
+      || v2DragPerfMode === 'pure-pane-live'
       || v2DragPerfMode === 'splitter-only'
       || v2DragPerfMode === 'left-pane-only'
       || v2DragPerfMode === 'right-pane-only'
@@ -1123,6 +1157,9 @@ export default function LiteStudioSplitWorkspace({
       // pane's responsive contract as well as its formatting width.
       applyPercent(percentRef.current, false);
     }
+    const dragLayout = layoutRef.current;
+    if (dragLayout?.dataset.v2PurePaneHeightLock) delete dragLayout.dataset.v2PurePaneHeightLock;
+    dragLayout?.style.removeProperty('--soridraw-v2-pure-pane-fixed-height');
     dragBoundarySignatureRef.current = null;
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
@@ -1151,6 +1188,20 @@ export default function LiteStudioSplitWorkspace({
     if (!layout) return;
     const rect = layout.getBoundingClientRect();
     if (rect.width <= 0) return;
+
+    // 760: responsive typography/control density may change at a boundary, but
+    // the visible split-window height must not breathe with that reflow. Capture
+    // the already-measured workspace height once at pointer-down and keep the
+    // two scrollports inside that fixed shell for the whole Pure Pane live drag.
+    // This adds no drag-frame measurement and is removed immediately on release.
+    if (v2DragPerfMode === 'pure-pane-live') {
+      layout.dataset.v2PurePaneHeightLock = 'true';
+      layout.style.setProperty('--soridraw-v2-pure-pane-fixed-height', `${Math.max(1, Math.round(rect.height))}px`);
+    } else {
+      if (layout.dataset.v2PurePaneHeightLock) delete layout.dataset.v2PurePaneHeightLock;
+      layout.style.removeProperty('--soridraw-v2-pure-pane-fixed-height');
+    }
+
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
     metricsRef.current = {
@@ -1181,7 +1232,7 @@ export default function LiteStudioSplitWorkspace({
     if (v2DragPerfMode === 'content-right-freeze' || v2DragPerfMode === 'content-freeze') {
       if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
     }
-    dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary'
+    dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary' || v2DragPerfMode === 'pure-pane-live'
       ? readDragBoundarySignature(builderRect?.width || 1, resultRect?.width || 1, workspaceViewRef.current)
       : null;
     draggingRef.current = true;

@@ -190,6 +190,11 @@ export default function StudioSplitWorkspace({
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastActionControlPixelRef = useRef<string | null>(null);
   const actionAnchorInsetsRef = useRef<{ left: number; right: number } | null>(null);
+  // 749 — Workspace navigation must not rebuild the live resize/split geometry
+  // listeners just because the result page changes. Keep the latest view in a
+  // ref so the hot geometry callbacks stay stable across Recent/Music Note/Library.
+  const workspaceViewRef = useRef<StudioWorkspaceView | undefined>(workspaceView);
+  workspaceViewRef.current = workspaceView;
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastIsolationViewportHeightRef = useRef<number | null>(null);
@@ -885,7 +890,7 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           previousBuilderMode,
         );
-    const usesUnifiedContentBreakpoint = workspaceView === 'library';
+    const usesUnifiedContentBreakpoint = workspaceViewRef.current === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(
@@ -1001,7 +1006,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
+  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -1605,6 +1610,15 @@ export default function StudioSplitWorkspace({
       setIsResultCollapsed(false);
     }
   }, [viewMode, workspaceRequestId, workspaceView]);
+
+  // 749 — Result-page navigation can keep the same collapsed state, so no state
+  // transition is guaranteed to wake the geometry path. Refresh once in layout
+  // phase without tearing down observers/listeners; this republishes the current
+  // builder mode before the portaled Generate bar paints.
+  useLayoutEffect(() => {
+    if (viewMode !== 'split' || !workspaceView) return;
+    refreshLayoutMetrics();
+  }, [refreshLayoutMetrics, viewMode, workspaceRequestId, workspaceView]);
 
   const renderedBounds = getSplitBounds(metricsRef.current.width);
 

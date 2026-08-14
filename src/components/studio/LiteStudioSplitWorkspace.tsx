@@ -233,6 +233,11 @@ export default function LiteStudioSplitWorkspace({
   const lastViewportHeightRef = useRef<number | null>(null);
   const lastIsolatedHeightRef = useRef<number | null>(null);
   const actionInsetsRef = useRef<{ left: number; right: number } | null>(null);
+  // 749 — Keep geometry callbacks stable while only the workspace result page
+  // changes. The latest page is read through this ref; dedicated view effects
+  // still request one exact resting refresh outside any drag gesture.
+  const workspaceViewRef = useRef<StudioWorkspaceView | undefined>(workspaceView);
+  workspaceViewRef.current = workspaceView;
   const topCardObserverRef = useRef<ResizeObserver | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
   const externalRef = useRef<ExternalControls>({
@@ -489,7 +494,8 @@ export default function LiteStudioSplitWorkspace({
       delete builder.dataset.soridrawPaneCompact;
     }
 
-    const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library' || workspaceView === 'recent';
+    const activeWorkspaceView = workspaceViewRef.current;
+    const unifiedResultBreakpoint = activeWorkspaceView === 'music-note' || activeWorkspaceView === 'library' || activeWorkspaceView === 'recent';
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,
       result.dataset.paneMode === 'desktop' || result.dataset.paneMode === 'mobile',
@@ -512,7 +518,7 @@ export default function LiteStudioSplitWorkspace({
       const host = externalRef.current.workspaceHeroHost || document.getElementById('soridraw-studio-workspace-hero-host');
       if (host) host.dataset.paneMode = nextResultMode;
     }
-  }, [workspaceView]);
+  }, []);
 
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
     const { left, leftRailEdge } = metricsRef.current;
@@ -682,7 +688,7 @@ export default function LiteStudioSplitWorkspace({
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
-        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
+        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceViewRef.current, runtimeProfile);
         if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
           runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
           benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
@@ -737,7 +743,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;

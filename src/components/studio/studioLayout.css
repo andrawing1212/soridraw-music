@@ -13260,30 +13260,48 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 
-/* 748 — Generate bar/native-resize ownership fix.
- * 746/747 kept a second JS geometry path for the body-portaled Generate bar
- * while the split workspace was already publishing builder left/width. At the
- * split-tablet -> Compact hand-off that owner disappeared mid-gesture, leaving
- * stale fixed geometry; while it was stale the window/split motion also felt
- * faster because the large action row stopped relaying out on every extra JS
- * write. Reuse the split geometry already committed on <html> and contain the
- * action-row layout locally. No new observer or per-pixel state is added. */
+/* 749 — Generate bar native-resize geometry must match its resting anchor.
+ * 748 reused the Builder width directly. On the real split shell (>=1100px)
+ * the command/action anchor ends 18px before the splitter because the Builder
+ * owns an 18px right inset; below 1100px that inset/gutter does not exist.
+ * Mirror the same geometry contract used by studioActionBarGeometry.ts so live
+ * resize and resting X/width stay pixel-identical without any per-frame JS. */
+html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"]) {
+  --soridraw-action-resize-anchor-width: max(
+    0px,
+    var(--soridraw-studio-builder-width, 100vw)
+  );
+  --soridraw-action-resize-track-max: 896px;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"]) {
+    --soridraw-action-resize-anchor-width: max(
+      0px,
+      calc(var(--soridraw-studio-builder-width, 100vw) - 18px)
+    );
+    --soridraw-action-resize-track-max: 932px;
+  }
+
+  html[data-soridraw-theme="studio-black"].soridraw-window-resizing[data-soridraw-builder-mode="mobile"]:not([data-soridraw-compact-workspace="true"]) {
+    --soridraw-action-resize-track-max: 912px;
+  }
+}
+
 html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"])
 body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
   left: calc(
     var(--soridraw-studio-builder-left, 0px)
     + max(
       0px,
-      (var(--soridraw-studio-builder-width, 100vw) - min(var(--soridraw-studio-builder-width, 100vw), 932px)) / 2
+      (
+        var(--soridraw-action-resize-anchor-width)
+        - min(var(--soridraw-action-resize-anchor-width), var(--soridraw-action-resize-track-max))
+      ) / 2
     )
   ) !important;
-  width: min(var(--soridraw-studio-builder-width, 100vw), 932px) !important;
-}
-
-html[data-soridraw-theme="studio-black"]:is(
-  .soridraw-window-resizing,
-  .soridraw-split-dragging,
-  .soridraw-lite-split-dragging
-) body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
-  contain: layout style !important;
+  width: min(
+    var(--soridraw-action-resize-anchor-width),
+    var(--soridraw-action-resize-track-max)
+  ) !important;
 }

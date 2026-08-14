@@ -4045,10 +4045,23 @@ function App() {
       if (!force && (tabletSplitDragActive || musicNoteDragActive)) return;
 
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
+      const builderMode = root.dataset.soridrawBuilderMode;
       setIsStudioBlackActionMode(isStudioBlack);
-      setIsSplitBuilderActionMobile(
-        isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
-      );
+
+      // 749 — Split workspace callbacks used to clear data-soridraw-builder-mode
+      // for a moment while Recent/Music Note/Library changed. Treating that
+      // transient missing value as desktop inserted the PC collapse arrow and
+      // desktop side-button widths into a narrow mobile Builder, visibly
+      // crushing the expanded Generate bar. Missing means "not committed yet":
+      // keep the last responsive state until the split engine publishes an
+      // explicit mobile/desktop value.
+      if (!isStudioBlack) {
+        setIsSplitBuilderActionMobile(false);
+      } else if (builderMode === 'mobile') {
+        setIsSplitBuilderActionMobile(true);
+      } else if (builderMode === 'desktop') {
+        setIsSplitBuilderActionMobile(false);
+      }
     };
 
     syncBuilderActionMode(true);

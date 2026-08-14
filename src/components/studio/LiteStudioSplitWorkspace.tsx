@@ -472,6 +472,21 @@ export default function LiteStudioSplitWorkspace({
       BUILDER_MOBILE_BREAKPOINT,
       PANE_MODE_HYSTERESIS,
     );
+    // 740 — Use the same pane-owned Compact marker as the Legacy Create path.
+    // Lite already knows builderWidth here, so this adds no measurement, observer,
+    // React state or per-frame DOM read. The marker changes only when the 1080px
+    // Compact edge or the existing builder-mobile mode is crossed.
+    const builderCompactActive = !builderCollapsedRef.current
+      && nextBuilderMode === 'desktop'
+      && builderWidth <= CONTENT_TABLET_MAX;
+    if (builderCompactActive) {
+      if (builder.dataset.soridrawPaneCompact !== 'true') {
+        builder.dataset.soridrawPaneCompact = 'true';
+      }
+    } else if (builder.dataset.soridrawPaneCompact) {
+      delete builder.dataset.soridrawPaneCompact;
+    }
+
     const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library' || workspaceView === 'recent';
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,

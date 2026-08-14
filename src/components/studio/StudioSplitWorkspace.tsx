@@ -888,6 +888,22 @@ export default function StudioSplitWorkspace({
           modeRef.current.result,
           usesUnifiedContentBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
         );
+    // 740 — Pane-owned portrait Compact stage. Reuse the split engine's already-known
+    // builder width instead of adding a viewport listener/observer. While the builder
+    // is still on the desktop composition, the 1080px-and-under tablet band gets one
+    // lightweight marker; the existing 820px mobile mode (including its hysteresis)
+    // remains the sole owner of the final one-column phone transition.
+    const builderCompactActive = !builderCollapsedRef.current
+      && nextBuilderMode === 'desktop'
+      && builderWidth <= 1080;
+    if (builderCompactActive) {
+      if (builder.dataset.soridrawPaneCompact !== 'true') {
+        builder.dataset.soridrawPaneCompact = 'true';
+      }
+    } else if (builder.dataset.soridrawPaneCompact) {
+      delete builder.dataset.soridrawPaneCompact;
+    }
+
     const externalControls = readExternalControls();
     const builderModeChanged = !builderCollapsedRef.current
       && previousBuilderMode !== nextBuilderMode;

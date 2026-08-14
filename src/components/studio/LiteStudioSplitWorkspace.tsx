@@ -764,31 +764,6 @@ export default function LiteStudioSplitWorkspace({
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
-
-    // 746 — Keep the fixed Generate bar on the same live native-resize owner as
-    // the Lite split panes. App pauses its action-anchor observer during a
-    // native window resize, so without this tiny bridge the portaled bar keeps
-    // stale left/width values until resize-end and visibly collapses/clips while
-    // the window edge is moving. Reuse the real command anchor once per already
-    // coalesced resize frame; no second ResizeObserver or React state is added.
-    if (document.documentElement.classList.contains('soridraw-window-resizing')) {
-      const actionAnchor = builderRef.current?.querySelector<HTMLElement>('.soridraw-studio-action-geometry-anchor');
-      if (actionAnchor) {
-        const anchorRect = actionAnchor.getBoundingClientRect();
-        const actionGutter = getStudioActionFloatingGutter(
-          window.innerWidth,
-          document.documentElement.dataset.soridrawBuilderMode,
-        );
-        const actionGeometry = resolveStudioActionFloatingGeometry(
-          anchorRect.left,
-          anchorRect.width,
-          actionGutter,
-        );
-        document.documentElement.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-        document.documentElement.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
-      }
-    }
-
     readExternalControls();
     syncExternalGeometry(builderWidth, splitterLeft);
     clearLiveExternalGeometry();

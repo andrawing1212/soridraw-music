@@ -12949,9 +12949,15 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 @media (min-width: 768px) and (max-width: 1099px) {
+  /* 745 — Recent Songs reuses the same compact builder DOM below 1100px.
+   * 744 scoped the new portrait-Compact hierarchy to Create only, so switching
+   * to Recent exposed the older one-column tablet portrait rules again. Keep
+   * every other workspace/theme untouched and let only Create + Recent share
+   * this already-approved external-window Compact arrangement. */
+
   /* Studio Black external-window Compact shell. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
   .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid,
   /* Classic Dark/Light use the same card arrangement directly. */
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
@@ -12964,7 +12970,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
   .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid > [data-studio-menu="genre"],
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid > [data-studio-menu="genre"] {
@@ -12973,7 +12979,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
   .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
   > :is([data-studio-menu="style"], [data-studio-menu="sound"]),
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
@@ -12985,7 +12991,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
   .soridraw-studio-compact-mobile-builder :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid),
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
@@ -12997,7 +13003,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
   .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card,
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
@@ -13005,7 +13011,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
   .soridraw-studio-compact-mobile-builder
   :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid,
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root

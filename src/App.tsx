@@ -84,7 +84,7 @@ import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
 import { readSplitPerfToolVisibility, SPLIT_PERF_TOOL_VISIBILITY_EVENT } from './components/studio/splitPerfDiagnostics';
-import StudioSplitEngineWorkspace, { type StudioGenerationBarPerfMode, type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
+import StudioSplitEngineWorkspace, { type StudioGenerationBarPerfMode, type StudioLiteRuntimeProfile, type StudioSplitEngine, type StudioV2DragPerfMode } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
 // so switching between fixed and anchored coordinates never remounts them.
@@ -4262,6 +4262,17 @@ function App() {
   const studioGenerationBarPerfMode: StudioGenerationBarPerfMode = generationBarPerfParam === 'freeze' || generationBarPerfParam === 'off'
     ? generationBarPerfParam
     : 'normal';
+  // 753: Lite V2 drag hot-path A/B probe. `content-freeze` keeps the pane
+  // shells moving while their current child widths stay frozen during the drag;
+  // `aux-freeze` keeps only the core pane/divider geometry live and defers
+  // responsive broadcasts, external geometry, aria/edge markers and scroll locks
+  // until pointer-up. Admin-only and URL-scoped, so normal runtime is untouched.
+  const v2DragPerfParam = studioTestParams.get('v2DragPerf');
+  const studioV2DragPerfMode: StudioV2DragPerfMode = v2DragPerfParam === 'content'
+    ? 'content-freeze'
+    : v2DragPerfParam === 'aux'
+      ? 'aux-freeze'
+      : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4350,6 +4361,13 @@ function App() {
     const nextParams = new URLSearchParams(location.search);
     if (mode === 'normal') nextParams.delete('genBarPerf');
     else nextParams.set('genBarPerf', mode);
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  const setStudioV2DragPerfMode = useCallback((mode: StudioV2DragPerfMode) => {
+    const nextParams = new URLSearchParams(location.search);
+    if (mode === 'normal') nextParams.delete('v2DragPerf');
+    else nextParams.set('v2DragPerf', mode === 'content-freeze' ? 'content' : 'aux');
     const query = nextParams.toString();
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
@@ -14701,6 +14719,35 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       생성바 OFF
                     </button>
                   </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-drag" aria-label="Lite V2 드래그 병목 비교 전환">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'normal' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('normal')}
+                      title="Lite V2 현재 드래그 경로 전체 사용"
+                    >
+                      V2 정상
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'content-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('content-freeze')}
+                      title="분할선/Pane 외곽은 실시간 이동하고, 드래그 시작 시점의 내부 콘텐츠 폭을 고정해 width reflow 영향을 비교"
+                    >
+                      콘텐츠 고정
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'aux-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('aux-freeze')}
+                      title="드래그 중 Pane/분할선 geometry만 갱신하고 responsive broadcast·외부 geometry·scroll lock·상태 마커는 놓을 때 반영"
+                    >
+                      부가동기 정지
+                    </button>
+                  </div>
                 </>
               )}
               {/* Header */}
@@ -14751,6 +14798,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   compactMobileMode={isStudioCompactMobileLayout}
                   generationBarPerfMode={studioGenerationBarPerfMode}
+                  v2DragPerfMode={studioV2DragPerfMode}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">

@@ -6,6 +6,7 @@ import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
 export type StudioSplitEngine = 'lite' | 'legacy';
 export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590';
 export type StudioGenerationBarPerfMode = 'normal' | 'freeze' | 'off';
+export type StudioV2DragPerfMode = 'normal' | 'content-freeze' | 'aux-freeze';
 
 type Props = {
   engine: StudioSplitEngine;
@@ -17,6 +18,7 @@ type Props = {
   workspaceRequestId?: number;
   compactMobileMode?: boolean;
   generationBarPerfMode?: StudioGenerationBarPerfMode;
+  v2DragPerfMode?: StudioV2DragPerfMode;
 };
 
 export default function StudioSplitEngineWorkspace({
@@ -24,6 +26,7 @@ export default function StudioSplitEngineWorkspace({
   liteRuntimeProfile = 'adaptive',
   compactMobileMode = false,
   generationBarPerfMode = 'normal',
+  v2DragPerfMode = 'normal',
   ...props
 }: Props) {
   // 646: below the mobile threshold Studio Black is no longer a squeezed split
@@ -38,5 +41,5 @@ export default function StudioSplitEngineWorkspace({
   }
 
   if (engine === 'legacy') return <StudioSplitWorkspace {...props} generationBarPerfMode={generationBarPerfMode} />;
-  return <LiteStudioSplitWorkspace {...props} runtimeProfile={liteRuntimeProfile} generationBarPerfMode={generationBarPerfMode} />;
+  return <LiteStudioSplitWorkspace {...props} runtimeProfile={liteRuntimeProfile} generationBarPerfMode={generationBarPerfMode} v2DragPerfMode={v2DragPerfMode} />;
 }

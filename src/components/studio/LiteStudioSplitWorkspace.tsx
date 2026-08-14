@@ -188,6 +188,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
+  v2DragPerfMode?: 'normal' | 'content-freeze' | 'aux-freeze';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -198,6 +199,7 @@ export default function LiteStudioSplitWorkspace({
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
   generationBarPerfMode = 'normal',
+  v2DragPerfMode = 'normal',
 }: LiteStudioSplitWorkspaceProps) {
   // 617: PC Music Note no longer owns a special geometry path. App routes it
   // through the same `library-590` profile as Library. Adaptive mode is kept for
@@ -613,6 +615,11 @@ export default function LiteStudioSplitWorkspace({
     actionInsetsRef.current = null;
   }, []);
 
+  const clearV2DragContentFreeze = useCallback(() => {
+    builderRef.current?.style.removeProperty('--soridraw-v2-drag-content-width');
+    resultRef.current?.style.removeProperty('--soridraw-v2-drag-content-width');
+  }, []);
+
   const clearDirectBenchmarkGeometry = useCallback(() => {
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -673,6 +680,7 @@ export default function LiteStudioSplitWorkspace({
     const perfStart = perfEnabled ? performance.now() : 0;
     const bounds = getSplitBounds(metricsRef.current.width);
     const nextPercent = clampToBounds(rawPercent, bounds);
+    const auxFreezeLive = live && draggingRef.current && v2DragPerfMode === 'aux-freeze';
     percentRef.current = nextPercent;
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
@@ -683,18 +691,20 @@ export default function LiteStudioSplitWorkspace({
     // Reuse the engine's already-known geometry and mark each fine-pointer pane
     // while its live width sits in the shared 661~1080px tablet band. The marker
     // activates only drag-time CSS isolation; normal tablet rendering is untouched.
-    const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-      const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
-      if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
-      else delete pane.dataset.soridrawPaneTabletFastpath;
-    };
-    syncPaneTabletProbe(builder, builderWidth);
-    syncPaneTabletProbe(result, resultWidth);
+    if (!auxFreezeLive) {
+      const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
+        const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+        if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
+        else delete pane.dataset.soridrawPaneTabletFastpath;
+      };
+      syncPaneTabletProbe(builder, builderWidth);
+      syncPaneTabletProbe(result, resultWidth);
+    }
 
     // 609: geometry ownership changes only when the *published content mode*
     // itself changes. This keeps the visible PC/Tablet switch and the low-level
     // pane owner on the same boundary, eliminating the 608 16px disagreement.
-    if (!benchmarkRunningRef.current) {
+    if (!benchmarkRunningRef.current && !auxFreezeLive) {
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
@@ -709,39 +719,43 @@ export default function LiteStudioSplitWorkspace({
     writeLiveSplitGeometry(builderWidth, resultWidth);
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
-    syncPaneModes(builderWidth, resultWidth);
-    broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
+    if (!auxFreezeLive) {
+      syncPaneModes(builderWidth, resultWidth);
+      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
+    }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
-    if (live) syncExternalGeometry(builderWidth, splitterLeft);
+    if (live && !auxFreezeLive) syncExternalGeometry(builderWidth, splitterLeft);
     const perfAfterExternal = perfEnabled ? performance.now() : 0;
 
-    const root = document.documentElement;
-    const edgeTolerancePercent = (1.5 / safeWidth) * 100;
-    const builderAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent <= bounds.min + edgeTolerancePercent;
-    const resultAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent >= bounds.max - edgeTolerancePercent;
-    if (builderAtMinimum) {
-      if (root.dataset.soridrawBuilderAtMinimum !== 'true') root.dataset.soridrawBuilderAtMinimum = 'true';
-    } else if (root.dataset.soridrawBuilderAtMinimum) {
-      delete root.dataset.soridrawBuilderAtMinimum;
-    }
-    if (resultAtMinimum) {
-      if (root.dataset.soridrawResultAtMinimum !== 'true') root.dataset.soridrawResultAtMinimum = 'true';
-    } else if (root.dataset.soridrawResultAtMinimum) {
-      delete root.dataset.soridrawResultAtMinimum;
-    }
+    if (!auxFreezeLive) {
+      const root = document.documentElement;
+      const edgeTolerancePercent = (1.5 / safeWidth) * 100;
+      const builderAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent <= bounds.min + edgeTolerancePercent;
+      const resultAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent >= bounds.max - edgeTolerancePercent;
+      if (builderAtMinimum) {
+        if (root.dataset.soridrawBuilderAtMinimum !== 'true') root.dataset.soridrawBuilderAtMinimum = 'true';
+      } else if (root.dataset.soridrawBuilderAtMinimum) {
+        delete root.dataset.soridrawBuilderAtMinimum;
+      }
+      if (resultAtMinimum) {
+        if (root.dataset.soridrawResultAtMinimum !== 'true') root.dataset.soridrawResultAtMinimum = 'true';
+      } else if (root.dataset.soridrawResultAtMinimum) {
+        delete root.dataset.soridrawResultAtMinimum;
+      }
 
-    const boundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
-    if (lastAriaBoundsRef.current !== boundsKey) {
-      lastAriaBoundsRef.current = boundsKey;
-      splitterRef.current?.setAttribute('aria-valuemin', bounds.min.toFixed(1));
-      splitterRef.current?.setAttribute('aria-valuemax', bounds.max.toFixed(1));
+      const boundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
+      if (lastAriaBoundsRef.current !== boundsKey) {
+        lastAriaBoundsRef.current = boundsKey;
+        splitterRef.current?.setAttribute('aria-valuemin', bounds.min.toFixed(1));
+        splitterRef.current?.setAttribute('aria-valuemax', bounds.max.toFixed(1));
+      }
+      const roundedPercent = Math.round(nextPercent);
+      if (lastAriaPercentRef.current !== roundedPercent) {
+        lastAriaPercentRef.current = roundedPercent;
+        splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
+      }
+      if (live && draggingRef.current) applyDragScrollLocks();
     }
-    const roundedPercent = Math.round(nextPercent);
-    if (lastAriaPercentRef.current !== roundedPercent) {
-      lastAriaPercentRef.current = roundedPercent;
-      splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
-    }
-    if (live && draggingRef.current) applyDragScrollLocks();
     if (perfEnabled) {
       const perfEnd = performance.now();
       recordSplitPerfApply({
@@ -753,7 +767,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, v2DragPerfMode, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -878,6 +892,12 @@ export default function LiteStudioSplitWorkspace({
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
+    clearV2DragContentFreeze();
+    if (v2DragPerfMode === 'aux-freeze') {
+      // Reconcile every deferred responsive/external state exactly once after
+      // the pointer is released. Core geometry already sits at the final pixel.
+      applyPercent(percentRef.current, false);
+    }
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
     document.body.style.removeProperty('user-select');
@@ -897,7 +917,7 @@ export default function LiteStudioSplitWorkspace({
     }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [clearLiveExternalGeometry, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls]);
+  }, [applyPercent, clearLiveExternalGeometry, clearV2DragContentFreeze, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, v2DragPerfMode]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -914,6 +934,7 @@ export default function LiteStudioSplitWorkspace({
     };
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
+    const resultRect = resultRef.current?.getBoundingClientRect();
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {
@@ -927,6 +948,12 @@ export default function LiteStudioSplitWorkspace({
     topCardObserverRef.current?.disconnect();
     topCardObserverRef.current = null;
     captureDragScrollLocks();
+    if (v2DragPerfMode === 'content-freeze') {
+      if (builderRect?.width) builderRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(builderRect.width))}px`);
+      if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
+    } else {
+      clearV2DragContentFreeze();
+    }
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
     pendingClientXRef.current = null;
@@ -945,7 +972,7 @@ export default function LiteStudioSplitWorkspace({
         result: resultRef.current,
         layoutMode: runtimeLayoutModeRef.current,
       });
-      startLayoutAckObserver(builderRect?.width || 0, resultRef.current?.getBoundingClientRect().width || 0);
+      startLayoutAckObserver(builderRect?.width || 0, resultRect?.width || 0);
     }
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -982,7 +1009,8 @@ export default function LiteStudioSplitWorkspace({
   useEffect(() => () => {
     layoutAckObserverRef.current?.disconnect();
     layoutAckObserverRef.current = null;
-  }, []);
+    clearV2DragContentFreeze();
+  }, [clearV2DragContentFreeze]);
 
   useEffect(() => {
     const handleManualPerfArm = (event: Event) => {
@@ -1590,6 +1618,7 @@ export default function LiteStudioSplitWorkspace({
         data-split-engine="lite-v2-studio"
         data-lite-runtime-layout="content-mode-aligned"
         data-lite-runtime-profile={runtimeProfile}
+        data-v2-drag-perf-mode={v2DragPerfMode}
         className={`soridraw-studio-split-workspace soridraw-lite-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
         style={{
           '--soridraw-studio-builder-width': `${percentRef.current}%`,

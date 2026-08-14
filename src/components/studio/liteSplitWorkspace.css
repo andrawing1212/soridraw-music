@@ -955,12 +955,12 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   top: 112px;
 }
 
-/* 753 — admin-only Lite V2 drag hot-path A/B.
- * `content-freeze` moves the real pane shells and divider every rAF, but keeps
- * each pane's child formatting width at the pointer-down width. This isolates
- * width-driven card/list reflow without hiding the content or creating a
- * second layout observer. The variables are written once at pointer-down and
- * removed once at pointer-up. */
+/* 755 — admin-only Lite V2 content-freeze A/B correction.
+ * The selected pane keeps BOTH its child formatting width and its published
+ * responsive mode at pointer-down state. Shell/divider geometry still moves
+ * every rAF, but Genre/Style/Sound and the corresponding result content no
+ * longer switch responsive layouts during the probe. Final responsive state
+ * is reconciled once on pointer-up. */
 @media (min-width: 1100px) {
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="content-left-freeze"]
   > .soridraw-studio-builder-pane

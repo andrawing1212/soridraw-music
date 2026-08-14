@@ -460,7 +460,12 @@ export default function LiteStudioSplitWorkspace({
     layout.style.height = `${nextHeight}px`;
   }, []);
 
-  const broadcastLitePaneResponsiveWidths = useCallback((builderWidth: number, resultWidth: number, force = false) => {
+  const broadcastLitePaneResponsiveWidths = useCallback((
+    builderWidth: number,
+    resultWidth: number,
+    force = false,
+    options?: { skipBuilder?: boolean; skipResult?: boolean },
+  ) => {
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result) return;
@@ -475,23 +480,28 @@ export default function LiteStudioSplitWorkspace({
     const safeResultWidth = Math.max(1, resultWidth);
     const builderMode = readContentResponsiveMode(safeBuilderWidth);
     const resultMode = readContentResponsiveMode(safeResultWidth);
+    const skipBuilder = options?.skipBuilder === true;
+    const skipResult = options?.skipResult === true;
 
     // 607: publish only the already-computed responsive ownership state. This
     // does not add another measurement or observer; App uses it solely to keep
     // the 606 rerender suppression scoped to Music Note's tablet state instead
     // of affecting every Lite V2 workspace.
+    // 755: a content-freeze probe must freeze the responsive contract too.
+    // Otherwise the pane shell is fixed while its children still switch
+    // PC/tablet/mobile modes, which invalidates the A/B result.
     const root = document.documentElement;
-    if (root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
-    if (root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
+    if (!skipBuilder && root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
+    if (!skipResult && root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
 
-    if (force || contentResponsiveModeRef.current.builder !== builderMode) {
+    if (!skipBuilder && (force || contentResponsiveModeRef.current.builder !== builderMode)) {
       if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
         if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
       }
       contentResponsiveModeRef.current.builder = builderMode;
       builder.dispatchEvent(new CustomEvent(PANE_WIDTH_EVENT, { detail: { width: safeBuilderWidth } }));
     }
-    if (force || contentResponsiveModeRef.current.result !== resultMode) {
+    if (!skipResult && (force || contentResponsiveModeRef.current.result !== resultMode)) {
       if (!force && contentResponsiveModeRef.current.result !== null && contentResponsiveModeRef.current.result !== resultMode) {
         if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive()) recordSplitPerfResponsiveSwitch('content');
       }
@@ -500,10 +510,16 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  const syncPaneModes = useCallback((builderWidth: number, resultWidth: number) => {
+  const syncPaneModes = useCallback((
+    builderWidth: number,
+    resultWidth: number,
+    options?: { skipBuilder?: boolean; skipResult?: boolean },
+  ) => {
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result) return;
+    const skipBuilder = options?.skipBuilder === true;
+    const skipResult = options?.skipResult === true;
 
     const nextBuilderMode = resolvePaneMode(
       modeRef.current.builder,
@@ -515,15 +531,17 @@ export default function LiteStudioSplitWorkspace({
     // 741 — Match Legacy: Compact consumes only the former upper-mobile band.
     // Desktop remains unchanged above 820px, Compact owns 661~820px, and the
     // existing one-column Builder mobile composition begins at the 660px floor.
-    const builderCompactActive = !builderCollapsedRef.current
-      && nextBuilderMode === 'desktop'
-      && builderWidth <= BUILDER_COMPACT_MAX;
-    if (builderCompactActive) {
-      if (builder.dataset.soridrawPaneCompact !== 'true') {
-        builder.dataset.soridrawPaneCompact = 'true';
+    if (!skipBuilder) {
+      const builderCompactActive = !builderCollapsedRef.current
+        && nextBuilderMode === 'desktop'
+        && builderWidth <= BUILDER_COMPACT_MAX;
+      if (builderCompactActive) {
+        if (builder.dataset.soridrawPaneCompact !== 'true') {
+          builder.dataset.soridrawPaneCompact = 'true';
+        }
+      } else if (builder.dataset.soridrawPaneCompact) {
+        delete builder.dataset.soridrawPaneCompact;
       }
-    } else if (builder.dataset.soridrawPaneCompact) {
-      delete builder.dataset.soridrawPaneCompact;
     }
 
     const activeWorkspaceView = workspaceViewRef.current;
@@ -536,13 +554,13 @@ export default function LiteStudioSplitWorkspace({
       unifiedResultBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
     );
 
-    if (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode) {
+    if (!skipBuilder && (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
       if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
       document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
     }
-    if (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode) {
+    if (!skipResult && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
@@ -710,6 +728,10 @@ export default function LiteStudioSplitWorkspace({
     const nextPercent = clampToBounds(rawPercent, bounds);
     const auxFreezeLive = live && draggingRef.current && v2DragPerfMode === 'aux-freeze';
     const auxBoundaryLive = live && draggingRef.current && v2DragPerfMode === 'aux-boundary';
+    const freezeBuilderResponsiveLive = live && draggingRef.current
+      && (v2DragPerfMode === 'content-left-freeze' || v2DragPerfMode === 'content-freeze');
+    const freezeResultResponsiveLive = live && draggingRef.current
+      && (v2DragPerfMode === 'content-right-freeze' || v2DragPerfMode === 'content-freeze');
     percentRef.current = nextPercent;
     const safeWidth = Math.max(1, metricsRef.current.width);
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
@@ -733,14 +755,14 @@ export default function LiteStudioSplitWorkspace({
         if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
         else delete pane.dataset.soridrawPaneTabletFastpath;
       };
-      syncPaneTabletProbe(builder, builderWidth);
-      syncPaneTabletProbe(result, resultWidth);
+      if (!freezeBuilderResponsiveLive) syncPaneTabletProbe(builder, builderWidth);
+      if (!freezeResultResponsiveLive) syncPaneTabletProbe(result, resultWidth);
     }
 
     // 609: geometry ownership changes only when the *published content mode*
     // itself changes. This keeps the visible PC/Tablet switch and the low-level
     // pane owner on the same boundary, eliminating the 608 16px disagreement.
-    if (!benchmarkRunningRef.current && (!deferAuxLive || boundaryChanged)) {
+    if (!benchmarkRunningRef.current && !freezeResultResponsiveLive && (!deferAuxLive || boundaryChanged)) {
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
@@ -756,8 +778,12 @@ export default function LiteStudioSplitWorkspace({
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     if (allowResponsiveSync) {
-      syncPaneModes(builderWidth, resultWidth);
-      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth);
+      const responsiveFreeze = {
+        skipBuilder: freezeBuilderResponsiveLive,
+        skipResult: freezeResultResponsiveLive,
+      };
+      syncPaneModes(builderWidth, resultWidth, responsiveFreeze);
+      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveFreeze);
     }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live && !deferAuxLive) syncExternalGeometry(builderWidth, splitterLeft);
@@ -929,9 +955,16 @@ export default function LiteStudioSplitWorkspace({
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
     clearV2DragContentFreeze();
-    if (v2DragPerfMode === 'aux-freeze' || v2DragPerfMode === 'aux-boundary') {
-      // Reconcile deferred external/misc state exactly once after pointer-up.
-      // `aux-boundary` has already published responsive UI only at real boundaries.
+    if (
+      v2DragPerfMode === 'aux-freeze'
+      || v2DragPerfMode === 'aux-boundary'
+      || v2DragPerfMode === 'content-left-freeze'
+      || v2DragPerfMode === 'content-right-freeze'
+      || v2DragPerfMode === 'content-freeze'
+    ) {
+      // Reconcile any intentionally deferred responsive/external state exactly
+      // once after pointer-up. Content-freeze modes now defer their selected
+      // pane's responsive contract as well as its formatting width.
       applyPercent(percentRef.current, false);
     }
     dragBoundarySignatureRef.current = null;

@@ -1034,6 +1034,33 @@ export default function StudioSplitWorkspace({
         ? metricsRef.current.width
         : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+
+    // 746 — Native outer-window resize must move the fixed Generate bar in the
+    // same live frame as the builder pane. 744 made the pane layout responsive
+    // during the gesture, but App.tsx intentionally pauses its anchor observer
+    // while `soridraw-window-resizing` is active. That left the body-portal bar
+    // at the previous left/width until resize-end, so it progressively clipped
+    // to a thin yellow strip and then snapped back. The split workspace is the
+    // sole native-resize geometry owner, so publish only the bar's two resting
+    // coordinates here from the real command anchor. No extra observer/state.
+    if (document.documentElement.classList.contains('soridraw-window-resizing')) {
+      const actionAnchor = builderRef.current?.querySelector<HTMLElement>('.soridraw-studio-action-geometry-anchor');
+      if (actionAnchor) {
+        const anchorRect = actionAnchor.getBoundingClientRect();
+        const actionGutter = getStudioActionFloatingGutter(
+          window.innerWidth,
+          document.documentElement.dataset.soridrawBuilderMode,
+        );
+        const actionGeometry = resolveStudioActionFloatingGeometry(
+          anchorRect.left,
+          anchorRect.width,
+          actionGutter,
+        );
+        document.documentElement.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+        document.documentElement.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+      }
+    }
+
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
   }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);

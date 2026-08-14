@@ -13974,7 +13974,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 ) : item.status === 'failed' ? (
                   <AlertCircle className="h-4 w-4" />
                 ) : (
-                  <span>{index + 1}</span>
+                  <span>{indicatorIndex + 1}</span>
                 )}
                 {item.status === 'running' && (
                   <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9px] text-[#FFD36A]">

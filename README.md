@@ -2072,3 +2072,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Added admin-only Direct+ comparison modes: responsive freeze, 28px hysteresis, and pane-local responsive publication.
 - Normal app behavior is unchanged unless the diagnostic query mode is selected.
 - No Firebase/Auth/Firestore/Functions data contract changes.
+
+## SORIDRAW 758차 — Lite V2 드래그 성능 최적화 엔진 기본 적용 (Direct Geometry + Deferred Scroll-Locks + Local Responsive)
+- 기준: 757차
+- 754~757차 A/B 진단 결과를 바탕으로 분할바 드래그 실시간 프레임 성능 최적화를 기본 일반(normal) 드래그 경로에 적용했습니다.
+- **Direct Geometry**: 드래그 매 프레임마다 상위 컨테이너 CSS 변수(`--soridraw-studio-builder-width`)를 갱신해 전체 트리 스타일을 무효화하는 대신, `builder`, `result`, `splitter` 요소에 직접 픽셀 조정을 수행하여 하위 DOM 스타일 재계산을 차단합니다.
+- **Deferred Scroll-Locks**: 드래그 중 매 프레임마다 발생하던 `scrollTop` 강제 쓰기 및 layout thrashing을 제거하고, 포인터를 뗄 때(`pointer-up`) 1회 복원합니다.
+- **Local Responsive Publication**: 드래그 중 `document.documentElement` 전역 데이터 속성 변경을 유예하고, pane 로컬 속성만 직결하여 루트 DOM 재계산 부하를 최소화합니다.
+- **Pointer Release Reconciliation**: 마우스 버튼을 떼면(`finishDrag`) 최종 상위 CSS 변수, 루트 dataset, 스크롤 위치 및 외부 UI를 1회 정밀 동기화하여 완벽한 상태 정합성을 유지합니다.
+- 기존 UI 디자인, 레이아웃, 모바일/태블릿 브레이크포인트, Firebase / Auth / Firestore / Functions / 데이터 구조는 절대 변경하지 않았습니다.
+

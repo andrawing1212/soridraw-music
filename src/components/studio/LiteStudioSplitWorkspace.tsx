@@ -800,20 +800,22 @@ export default function LiteStudioSplitWorkspace({
     const auxFreezeLive = live && draggingRef.current && v2DragPerfMode === 'aux-freeze';
     const auxBoundaryLive = live && draggingRef.current && v2DragPerfMode === 'aux-boundary';
     const traceResponsiveFreezeLive = live && draggingRef.current && v2DragPerfMode === 'responsive-freeze';
-    const traceResponsiveHysteresisLive = live && draggingRef.current && v2DragPerfMode === 'responsive-hysteresis';
-    const traceLocalResponsiveLive = live && draggingRef.current && v2DragPerfMode === 'local-responsive';
+    const traceResponsiveHysteresisLive = live && draggingRef.current && (v2DragPerfMode === 'responsive-hysteresis' || v2DragPerfMode === 'normal');
+    const traceLocalResponsiveLive = live && draggingRef.current && (v2DragPerfMode === 'local-responsive' || v2DragPerfMode === 'normal');
     const deferScrollLockLive = live && draggingRef.current
       && (v2DragPerfMode === 'scroll-defer'
         || v2DragPerfMode === 'direct-scroll-defer'
         || traceResponsiveFreezeLive
         || traceResponsiveHysteresisLive
-        || traceLocalResponsiveLive);
+        || traceLocalResponsiveLive
+        || v2DragPerfMode === 'normal');
     const directGeometryLive = live && draggingRef.current
       && (v2DragPerfMode === 'direct-geometry'
         || v2DragPerfMode === 'direct-scroll-defer'
         || traceResponsiveFreezeLive
         || traceResponsiveHysteresisLive
-        || traceLocalResponsiveLive);
+        || traceLocalResponsiveLive
+        || v2DragPerfMode === 'normal');
     const freezeBuilderResponsiveLive = live && draggingRef.current
       && (v2DragPerfMode === 'content-left-freeze' || v2DragPerfMode === 'content-freeze');
     const freezeResultResponsiveLive = live && draggingRef.current
@@ -1065,6 +1067,7 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'responsive-freeze'
       || v2DragPerfMode === 'responsive-hysteresis'
       || v2DragPerfMode === 'local-responsive'
+      || v2DragPerfMode === 'normal'
     ) {
       // Reconcile any intentionally deferred responsive/external state exactly
       // once after pointer-up. Content-freeze modes now defer their selected

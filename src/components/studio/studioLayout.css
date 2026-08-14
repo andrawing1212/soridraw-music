@@ -12912,22 +12912,21 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   align-items: center !important;
 }
 
-/* 737 — Tablet portrait Compact stage for Studio Black.
- * Remove the obsolete 1024~1099px portrait-tablet bridge and let the new Compact
- * composition own the entire 768~1099px pre-mobile band. The 768~1023px part (the same
- * range where Mood/Theme currently render four keyword buttons per row) keeps
- * the approved Compact arrangement, and 1024~1099px now uses that same layout
- * instead of the old portrait-tablet single-column bridge.
+/* 742 — Canonical external-window portrait Compact stage for Studio Black.
+ * The latest responsive flow is now shared with the pane-owned Compact intent:
+ *   1100px+     = existing tablet/PC composition
+ *   661~1099px  = portrait Compact
+ *   <=660px     = existing real mobile composition
  *
- * Layout contract:
+ * This removes both obsolete gaps: 1024~1099 no longer falls back to the old
+ * portrait-tablet bridge, and 661~767 no longer enters the phone layout early.
+ * The Compact card hierarchy stays exactly the approved version:
  *   Genre           (full row)
  *   Style | Sound   (two columns)
- *   Mood  | Theme   (existing two columns)
+ *   Mood  | Theme   (two columns / four keywords per row)
  *   Storyboard      (full row)
- *   Vocal | Lyrics  (existing two columns)
- *
- * Phones below 768px and the 1100px+ split tablet/desktop paths are untouched. */
-@media (min-width: 768px) and (max-width: 1099px) {
+ *   Vocal | Lyrics  (two columns). */
+@media (min-width: 661px) and (max-width: 1099px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
   .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid {
@@ -12981,18 +12980,13 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
-/* 736 — Promote the 4-keyword tablet portrait band to one shared Compact stage.
- * 735 scoped the new card arrangement only to Studio Black's compact wrapper,
- * so Classic Dark/Light kept the old tablet layout. The same 768~1023px
- * arrangement now applies to the normal Classic Studio as well:
- *   Genre           (full row)
- *   Style | Sound   (two columns)
- *   Mood  | Theme   (two columns)
- *   Storyboard      (full row)
- *   Vocal | Lyrics  (two columns)
- * This is layout-only; card/button typography and the existing four-keyword
- * Mood/Theme grid are intentionally preserved. */
-@media (min-width: 768px) and (max-width: 1023px) {
+/* 742 — Classic Dark/Light uses the same external-window portrait Compact band.
+ * The old 736 owner stopped at 1023px, so 1024~1099px fell back to the previous
+ * tablet layout in Dark/Light. It also left 661~767 inside the phone layout.
+ * Use one 661~1099px Compact owner for both color modes so the outer-window
+ * sequence matches Studio Black: tablet/PC -> portrait Compact -> mobile.
+ * Card/button typography is untouched; only the approved card arrangement is owned here. */
+@media (min-width: 661px) and (max-width: 1099px) {
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid {
     display: grid !important;

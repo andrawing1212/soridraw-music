@@ -13258,3 +13258,32 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-category-keyword-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
+
+
+/* 748 — Generate bar/native-resize ownership fix.
+ * 746/747 kept a second JS geometry path for the body-portaled Generate bar
+ * while the split workspace was already publishing builder left/width. At the
+ * split-tablet -> Compact hand-off that owner disappeared mid-gesture, leaving
+ * stale fixed geometry; while it was stale the window/split motion also felt
+ * faster because the large action row stopped relaying out on every extra JS
+ * write. Reuse the split geometry already committed on <html> and contain the
+ * action-row layout locally. No new observer or per-pixel state is added. */
+html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"])
+body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  left: calc(
+    var(--soridraw-studio-builder-left, 0px)
+    + max(
+      0px,
+      (var(--soridraw-studio-builder-width, 100vw) - min(var(--soridraw-studio-builder-width, 100vw), 932px)) / 2
+    )
+  ) !important;
+  width: min(var(--soridraw-studio-builder-width, 100vw), 932px) !important;
+}
+
+html[data-soridraw-theme="studio-black"]:is(
+  .soridraw-window-resizing,
+  .soridraw-split-dragging,
+  .soridraw-lite-split-dragging
+) body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  contain: layout style !important;
+}

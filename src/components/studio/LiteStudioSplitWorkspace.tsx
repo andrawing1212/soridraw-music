@@ -233,10 +233,6 @@ export default function LiteStudioSplitWorkspace({
   const lastViewportHeightRef = useRef<number | null>(null);
   const lastIsolatedHeightRef = useRef<number | null>(null);
   const actionInsetsRef = useRef<{ left: number; right: number } | null>(null);
-  // 747 — One native-resize anchor snapshot replaces the 746 per-frame DOM
-  // measurement/root-variable path.
-  const nativeResizeActionInsetsRef = useRef<{ left: number; right: number } | null>(null);
-  const nativeResizeActionGeometryKeyRef = useRef<string | null>(null);
   const topCardObserverRef = useRef<ResizeObserver | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
   const externalRef = useRef<ExternalControls>({
@@ -586,40 +582,6 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  const captureNativeResizeActionInsets = useCallback(() => {
-    const controls = readExternalControls();
-    const builderRect = builderRef.current?.getBoundingClientRect();
-    const actionRect = controls.actionAnchor?.getBoundingClientRect();
-    if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
-      nativeResizeActionInsetsRef.current = {
-        left: Math.max(0, actionRect.left - builderRect.left),
-        right: Math.max(0, builderRect.right - actionRect.right),
-      };
-    } else {
-      nativeResizeActionInsetsRef.current = { left: 0, right: 0 };
-    }
-    nativeResizeActionGeometryKeyRef.current = null;
-  }, [readExternalControls]);
-
-  const syncNativeResizeActionGeometry = useCallback((builderWidth: number) => {
-    if (!document.documentElement.classList.contains('soridraw-window-resizing')) return;
-    const floatingActionBar = externalRef.current.floatingActionBar;
-    if (!floatingActionBar) return;
-
-    const insets = nativeResizeActionInsetsRef.current ?? { left: 0, right: 0 };
-    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
-    const anchorLeft = Math.max(0, Math.round(metricsRef.current.left + insets.left));
-    const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - insets.left - insets.right));
-    const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
-    const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
-    const key = `${actionGeometry.left}:${actionGeometry.width}`;
-    if (nativeResizeActionGeometryKeyRef.current === key) return;
-    nativeResizeActionGeometryKeyRef.current = key;
-
-    floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-    floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
-  }, []);
-
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
@@ -805,17 +767,16 @@ export default function LiteStudioSplitWorkspace({
 
     const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
     if (nativeWindowResize) {
-      // 747 — No selector scan, no post-write layout read, no root custom-property
-      // mutation in the live resize frame. Only the body-portal Generate bar is
-      // updated from the split metrics already in memory.
+      // 748 — The native-resize Generate bar consumes the builder geometry that
+      // was committed above. Do not publish a second pair of action-bar custom
+      // properties from JS on every frame.
       clearLiveExternalGeometry();
-      syncNativeResizeActionGeometry(builderWidth);
     } else {
       readExternalControls();
       syncExternalGeometry(builderWidth, splitterLeft);
       clearLiveExternalGeometry();
     }
-  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost, syncNativeResizeActionGeometry]);
+  }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
     if (draggingRef.current || refreshFrameRef.current !== null) return;
@@ -1425,7 +1386,9 @@ export default function LiteStudioSplitWorkspace({
     const handleWindowResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
-        captureNativeResizeActionInsets();
+        // 748 — Native resize starts with no Generate-bar anchor measurement.
+        // CSS reuses the same builder left/width geometry already committed by
+        // this workspace, avoiding a second live geometry owner.
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
@@ -1450,8 +1413,6 @@ export default function LiteStudioSplitWorkspace({
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
-        nativeResizeActionInsetsRef.current = null;
-        nativeResizeActionGeometryKeyRef.current = null;
       }, 110);
     };
     // A rail toggle changes the Studio grid width immediately. Refresh the Lite
@@ -1498,7 +1459,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [captureNativeResizeActionInsets, clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
+  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

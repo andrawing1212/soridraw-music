@@ -190,11 +190,6 @@ export default function StudioSplitWorkspace({
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastActionControlPixelRef = useRef<string | null>(null);
   const actionAnchorInsetsRef = useRef<{ left: number; right: number } | null>(null);
-  // 747 — Native outer-window resize keeps a one-time anchor inset snapshot.
-  // Live resize frames derive the Generate bar geometry from already-known split
-  // metrics instead of forcing a DOM read after layout writes.
-  const nativeResizeActionInsetsRef = useRef<{ left: number; right: number } | null>(null);
-  const nativeResizeActionGeometryKeyRef = useRef<string | null>(null);
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastIsolationViewportHeightRef = useRef<number | null>(null);
@@ -305,44 +300,6 @@ export default function StudioSplitWorkspace({
       externalControlsReadyRef.current = true;
     }
     return current;
-  }, []);
-
-  const captureNativeResizeActionInsets = useCallback(() => {
-    const controls = readExternalControls(true);
-    const builderRect = builderRef.current?.getBoundingClientRect();
-    const actionRect = controls.actionAnchor?.getBoundingClientRect();
-    if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
-      nativeResizeActionInsetsRef.current = {
-        left: Math.max(0, actionRect.left - builderRect.left),
-        right: Math.max(0, builderRect.right - actionRect.right),
-      };
-    } else {
-      nativeResizeActionInsetsRef.current = { left: 0, right: 0 };
-    }
-    nativeResizeActionGeometryKeyRef.current = null;
-  }, [readExternalControls]);
-
-  const syncNativeResizeActionGeometry = useCallback((builderWidth: number) => {
-    if (!document.documentElement.classList.contains('soridraw-window-resizing')) return;
-    const floatingActionBar = externalControlsRef.current.floatingActionBar;
-    if (!floatingActionBar) return;
-
-    const insets = nativeResizeActionInsetsRef.current ?? { left: 0, right: 0 };
-    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
-    const anchorLeft = Math.max(0, Math.round(metricsRef.current.left + insets.left));
-    const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - insets.left - insets.right));
-    const actionGutter = getStudioActionFloatingGutter(
-      window.innerWidth,
-      document.documentElement.dataset.soridrawBuilderMode,
-    );
-    const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
-    const key = `${actionGeometry.left}:${actionGeometry.width}`;
-    if (nativeResizeActionGeometryKeyRef.current === key) return;
-    nativeResizeActionGeometryKeyRef.current = key;
-
-    // Element-local custom properties avoid invalidating the whole document.
-    floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-    floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
   }, []);
 
   const clearExternalMeasurements = useCallback(() => {
@@ -1083,13 +1040,13 @@ export default function StudioSplitWorkspace({
         : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
 
-    // 747 — Keep the Generate bar live without the 746 hot-path reflow.
-    // Clear ordinary preview geometry first, then update only the portaled bar
-    // from cached anchor insets + the split metrics already computed above.
+    // 748 — Native resize no longer gives the Generate bar a second JS geometry
+    // owner. The bar consumes the builder left/width variables committed above
+    // through a resize-only CSS rule, so there are no extra per-frame action-bar
+    // writes and no geometry hand-off race at the Compact breakpoint.
     clearExternalMeasurements();
-    syncNativeResizeActionGeometry(builderWidth);
     scheduleFooterBoundaryRefresh();
-  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds, syncNativeResizeActionGeometry]);
+  }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
 
   const scheduleLayoutMetricsRefresh = useCallback(() => {
     if (layoutRefreshFrameRef.current !== null) return;
@@ -1235,10 +1192,9 @@ export default function StudioSplitWorkspace({
     const handleViewportResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
-        // 747 — One layout read at gesture start is enough. Every following
-        // frame reuses these insets and never calls getBoundingClientRect for
-        // the Generate bar after split layout writes.
-        captureNativeResizeActionInsets();
+        // 748 — Mark the gesture only. Generate-bar X/width now follows the
+        // already-published builder geometry in CSS, so no action-anchor read is
+        // needed when the native resize starts.
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
@@ -1264,8 +1220,6 @@ export default function StudioSplitWorkspace({
         scheduleLayoutMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
-        nativeResizeActionInsetsRef.current = null;
-        nativeResizeActionGeometryKeyRef.current = null;
       }, 110);
     };
 
@@ -1334,7 +1288,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [captureNativeResizeActionInsets, clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
   // 660 — keep the pointer/divider lane independent from an expensive PROD
   // Studio tablet reflow. 659 already proved that the fixed splitter can follow

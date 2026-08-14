@@ -2067,3 +2067,8 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `Direct Geometry`: live frame에서 workspace `--soridraw-studio-builder-width` 갱신을 피하고 builder width / result left / splitter left의 직접 geometry만 사용.
 - `Direct + 지연`: 두 실험을 결합.
 - 진단 전용이며 정상 V2, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
+
+### 757 — Lite V2 responsive invalidation A/B
+- Added admin-only Direct+ comparison modes: responsive freeze, 28px hysteresis, and pane-local responsive publication.
+- Normal app behavior is unchanged unless the diagnostic query mode is selected.
+- No Firebase/Auth/Firestore/Functions data contract changes.

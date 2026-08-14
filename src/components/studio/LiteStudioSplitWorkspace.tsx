@@ -47,6 +47,7 @@ const BUILDER_COMPACT_MAX = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
+const TRACE_RESPONSIVE_HYSTERESIS = 28;
 const PANE_WIDTH_EVENT = 'soridraw-lite-pane-width';
 const CONTENT_MOBILE_MAX = 660;
 const CONTENT_TABLET_MAX = 1080;
@@ -150,6 +151,28 @@ const readContentResponsiveMode = (width: number): ContentResponsiveMode => (
   width <= CONTENT_MOBILE_MAX ? 'mobile' : width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc'
 );
 
+// 757 Trace A/B — keep the current responsive mode inside a small dead-band
+// around the 660/1080 content boundaries. This is diagnostic-only and lets us
+// measure how much repeated threshold churn contributes to style invalidation.
+const resolveContentResponsiveMode = (
+  currentMode: ContentResponsiveMode | null,
+  width: number,
+  hysteresis = 0,
+): ContentResponsiveMode => {
+  if (!currentMode || hysteresis <= 0) return readContentResponsiveMode(width);
+  if (currentMode === 'mobile') {
+    if (width <= CONTENT_MOBILE_MAX + hysteresis) return 'mobile';
+    return width <= CONTENT_TABLET_MAX ? 'tablet' : 'pc';
+  }
+  if (currentMode === 'tablet') {
+    if (width < CONTENT_MOBILE_MAX - hysteresis) return 'mobile';
+    if (width > CONTENT_TABLET_MAX + hysteresis) return 'pc';
+    return 'tablet';
+  }
+  if (width >= CONTENT_TABLET_MAX - hysteresis) return 'pc';
+  return width <= CONTENT_MOBILE_MAX ? 'mobile' : 'tablet';
+};
+
 const readDragBoundarySignature = (
   builderWidth: number,
   resultWidth: number,
@@ -211,7 +234,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer';
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -464,7 +487,7 @@ export default function LiteStudioSplitWorkspace({
     builderWidth: number,
     resultWidth: number,
     force = false,
-    options?: { skipBuilder?: boolean; skipResult?: boolean },
+    options?: { skipBuilder?: boolean; skipResult?: boolean; rootSync?: boolean; hysteresisPx?: number },
   ) => {
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -478,10 +501,12 @@ export default function LiteStudioSplitWorkspace({
     // committed outside a drag).
     const safeBuilderWidth = Math.max(1, builderWidth);
     const safeResultWidth = Math.max(1, resultWidth);
-    const builderMode = readContentResponsiveMode(safeBuilderWidth);
-    const resultMode = readContentResponsiveMode(safeResultWidth);
+    const hysteresisPx = Math.max(0, options?.hysteresisPx ?? 0);
+    const builderMode = resolveContentResponsiveMode(contentResponsiveModeRef.current.builder, safeBuilderWidth, hysteresisPx);
+    const resultMode = resolveContentResponsiveMode(contentResponsiveModeRef.current.result, safeResultWidth, hysteresisPx);
     const skipBuilder = options?.skipBuilder === true;
     const skipResult = options?.skipResult === true;
+    const rootSync = options?.rootSync !== false;
 
     // 607: publish only the already-computed responsive ownership state. This
     // does not add another measurement or observer; App uses it solely to keep
@@ -491,8 +516,8 @@ export default function LiteStudioSplitWorkspace({
     // Otherwise the pane shell is fixed while its children still switch
     // PC/tablet/mobile modes, which invalidates the A/B result.
     const root = document.documentElement;
-    if (!skipBuilder && root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
-    if (!skipResult && root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
+    if (rootSync && !skipBuilder && root.dataset.soridrawBuilderContentMode !== builderMode) root.dataset.soridrawBuilderContentMode = builderMode;
+    if (rootSync && !skipResult && root.dataset.soridrawResultContentMode !== resultMode) root.dataset.soridrawResultContentMode = resultMode;
 
     if (!skipBuilder && (force || contentResponsiveModeRef.current.builder !== builderMode)) {
       if (!force && contentResponsiveModeRef.current.builder !== null && contentResponsiveModeRef.current.builder !== builderMode) {
@@ -513,28 +538,38 @@ export default function LiteStudioSplitWorkspace({
   const syncPaneModes = useCallback((
     builderWidth: number,
     resultWidth: number,
-    options?: { skipBuilder?: boolean; skipResult?: boolean },
+    options?: { skipBuilder?: boolean; skipResult?: boolean; rootSync?: boolean; hysteresisPx?: number },
   ) => {
     const builder = builderRef.current;
     const result = resultRef.current;
     if (!builder || !result) return;
     const skipBuilder = options?.skipBuilder === true;
     const skipResult = options?.skipResult === true;
+    const rootSync = options?.rootSync !== false;
+    const hysteresisOverride = typeof options?.hysteresisPx === 'number'
+      ? Math.max(0, options.hysteresisPx)
+      : null;
+    const builderHysteresis = hysteresisOverride ?? PANE_MODE_HYSTERESIS;
 
     const nextBuilderMode = resolvePaneMode(
       modeRef.current.builder,
       builder.dataset.paneMode === 'desktop' || builder.dataset.paneMode === 'mobile',
       builderWidth,
       BUILDER_MOBILE_BREAKPOINT,
-      PANE_MODE_HYSTERESIS,
+      builderHysteresis,
     );
     // 741 — Match Legacy: Compact consumes only the former upper-mobile band.
     // Desktop remains unchanged above 820px, Compact owns 661~820px, and the
     // existing one-column Builder mobile composition begins at the 660px floor.
     if (!skipBuilder) {
+      const compactHysteresis = hysteresisOverride ?? 0;
+      const compactWasActive = builder.dataset.soridrawPaneCompact === 'true';
+      const compactThreshold = compactWasActive
+        ? BUILDER_COMPACT_MAX + compactHysteresis
+        : BUILDER_COMPACT_MAX - compactHysteresis;
       const builderCompactActive = !builderCollapsedRef.current
         && nextBuilderMode === 'desktop'
-        && builderWidth <= BUILDER_COMPACT_MAX;
+        && builderWidth <= compactThreshold;
       if (builderCompactActive) {
         if (builder.dataset.soridrawPaneCompact !== 'true') {
           builder.dataset.soridrawPaneCompact = 'true';
@@ -546,27 +581,41 @@ export default function LiteStudioSplitWorkspace({
 
     const activeWorkspaceView = workspaceViewRef.current;
     const unifiedResultBreakpoint = activeWorkspaceView === 'music-note' || activeWorkspaceView === 'library' || activeWorkspaceView === 'recent';
+    const resultHysteresis = hysteresisOverride ?? (unifiedResultBreakpoint ? 0 : PANE_MODE_HYSTERESIS);
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,
       result.dataset.paneMode === 'desktop' || result.dataset.paneMode === 'mobile',
       resultWidth,
       unifiedResultBreakpoint ? CONTENT_RESULT_MOBILE_BREAKPOINT : RESULT_MOBILE_BREAKPOINT,
-      unifiedResultBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
+      resultHysteresis,
     );
 
     if (!skipBuilder && (modeRef.current.builder !== nextBuilderMode || builder.dataset.paneMode !== nextBuilderMode)) {
       if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && builder.dataset.paneMode && builder.dataset.paneMode !== nextBuilderMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.builder = nextBuilderMode;
       builder.dataset.paneMode = nextBuilderMode;
-      document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
+      if (rootSync) document.documentElement.dataset.soridrawBuilderMode = nextBuilderMode;
     }
     if (!skipResult && (modeRef.current.result !== nextResultMode || result.dataset.paneMode !== nextResultMode)) {
       if ((benchmarkRunningRef.current || manualPerfCaptureActiveRef.current) && isSplitPerfDragActive() && result.dataset.paneMode && result.dataset.paneMode !== nextResultMode) recordSplitPerfResponsiveSwitch('pane');
       modeRef.current.result = nextResultMode;
       result.dataset.paneMode = nextResultMode;
-      document.documentElement.dataset.soridrawResultMode = nextResultMode;
+      if (rootSync) document.documentElement.dataset.soridrawResultMode = nextResultMode;
       const host = externalRef.current.workspaceHeroHost || document.getElementById('soridraw-studio-workspace-hero-host');
       if (host) host.dataset.paneMode = nextResultMode;
+    }
+
+    // 757 Local Responsive keeps <html> untouched during drag. On pointer-up
+    // the pane-local state may already equal the final mode, so mirror that
+    // committed local state to root independently of a local mode change.
+    if (rootSync) {
+      const root = document.documentElement;
+      if (!skipBuilder && root.dataset.soridrawBuilderMode !== modeRef.current.builder) {
+        root.dataset.soridrawBuilderMode = modeRef.current.builder;
+      }
+      if (!skipResult && root.dataset.soridrawResultMode !== modeRef.current.result) {
+        root.dataset.soridrawResultMode = modeRef.current.result;
+      }
     }
   }, []);
 
@@ -750,10 +799,21 @@ export default function LiteStudioSplitWorkspace({
     const nextPercent = clampToBounds(rawPercent, bounds);
     const auxFreezeLive = live && draggingRef.current && v2DragPerfMode === 'aux-freeze';
     const auxBoundaryLive = live && draggingRef.current && v2DragPerfMode === 'aux-boundary';
+    const traceResponsiveFreezeLive = live && draggingRef.current && v2DragPerfMode === 'responsive-freeze';
+    const traceResponsiveHysteresisLive = live && draggingRef.current && v2DragPerfMode === 'responsive-hysteresis';
+    const traceLocalResponsiveLive = live && draggingRef.current && v2DragPerfMode === 'local-responsive';
     const deferScrollLockLive = live && draggingRef.current
-      && (v2DragPerfMode === 'scroll-defer' || v2DragPerfMode === 'direct-scroll-defer');
+      && (v2DragPerfMode === 'scroll-defer'
+        || v2DragPerfMode === 'direct-scroll-defer'
+        || traceResponsiveFreezeLive
+        || traceResponsiveHysteresisLive
+        || traceLocalResponsiveLive);
     const directGeometryLive = live && draggingRef.current
-      && (v2DragPerfMode === 'direct-geometry' || v2DragPerfMode === 'direct-scroll-defer');
+      && (v2DragPerfMode === 'direct-geometry'
+        || v2DragPerfMode === 'direct-scroll-defer'
+        || traceResponsiveFreezeLive
+        || traceResponsiveHysteresisLive
+        || traceLocalResponsiveLive);
     const freezeBuilderResponsiveLive = live && draggingRef.current
       && (v2DragPerfMode === 'content-left-freeze' || v2DragPerfMode === 'content-freeze');
     const freezeResultResponsiveLive = live && draggingRef.current
@@ -769,15 +829,23 @@ export default function LiteStudioSplitWorkspace({
     const boundaryChanged = auxBoundaryLive && dragBoundarySignatureRef.current !== boundarySignature;
     if (boundaryChanged) dragBoundarySignatureRef.current = boundarySignature;
     const deferAuxLive = auxFreezeLive || auxBoundaryLive;
-    const allowResponsiveSync = !auxFreezeLive && (!auxBoundaryLive || boundaryChanged);
+    const allowResponsiveSync = !traceResponsiveFreezeLive && !auxFreezeLive && (!auxBoundaryLive || boundaryChanged);
 
     // 657: the 656 test confirmed the slow state is owned by pane width.
     // Reuse the engine's already-known geometry and mark each fine-pointer pane
     // while its live width sits in the shared 661~1080px tablet band. The marker
     // activates only drag-time CSS isolation; normal tablet rendering is untouched.
-    if (!deferAuxLive || boundaryChanged) {
+    if (!traceResponsiveFreezeLive && (!deferAuxLive || boundaryChanged)) {
       const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
-        const active = finePointerFastPathRef.current && paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+        const wasActive = pane.dataset.soridrawPaneTabletFastpath === 'true';
+        const tabletBandActive = traceResponsiveHysteresisLive
+          ? wasActive
+            ? paneWidth > CONTENT_MOBILE_MAX - TRACE_RESPONSIVE_HYSTERESIS
+              && paneWidth <= CONTENT_TABLET_MAX + TRACE_RESPONSIVE_HYSTERESIS
+            : paneWidth > CONTENT_MOBILE_MAX + TRACE_RESPONSIVE_HYSTERESIS
+              && paneWidth <= CONTENT_TABLET_MAX - TRACE_RESPONSIVE_HYSTERESIS
+          : paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+        const active = finePointerFastPathRef.current && tabletBandActive;
         if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
         else delete pane.dataset.soridrawPaneTabletFastpath;
       };
@@ -788,8 +856,10 @@ export default function LiteStudioSplitWorkspace({
     // 609: geometry ownership changes only when the *published content mode*
     // itself changes. This keeps the visible PC/Tablet switch and the low-level
     // pane owner on the same boundary, eliminating the 608 16px disagreement.
-    if (!benchmarkRunningRef.current && !freezeResultResponsiveLive && (!deferAuxLive || boundaryChanged)) {
-      const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
+    if (!benchmarkRunningRef.current && !traceResponsiveFreezeLive && !freezeResultResponsiveLive && (!deferAuxLive || boundaryChanged)) {
+      const nextResultContentMode = traceResponsiveHysteresisLive
+        ? resolveContentResponsiveMode(runtimeResultContentModeRef.current, Math.max(1, resultWidth), TRACE_RESPONSIVE_HYSTERESIS)
+        : readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
         const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceViewRef.current, runtimeProfile);
@@ -804,12 +874,14 @@ export default function LiteStudioSplitWorkspace({
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     if (allowResponsiveSync) {
-      const responsiveFreeze = {
+      const responsiveOptions = {
         skipBuilder: freezeBuilderResponsiveLive,
         skipResult: freezeResultResponsiveLive,
+        rootSync: !traceLocalResponsiveLive,
+        hysteresisPx: traceResponsiveHysteresisLive ? TRACE_RESPONSIVE_HYSTERESIS : undefined,
       };
-      syncPaneModes(builderWidth, resultWidth, responsiveFreeze);
-      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveFreeze);
+      syncPaneModes(builderWidth, resultWidth, responsiveOptions);
+      broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
     }
     const perfAfterResponsive = perfEnabled ? performance.now() : 0;
     if (live && !deferAuxLive) syncExternalGeometry(builderWidth, splitterLeft);
@@ -990,6 +1062,9 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'scroll-defer'
       || v2DragPerfMode === 'direct-geometry'
       || v2DragPerfMode === 'direct-scroll-defer'
+      || v2DragPerfMode === 'responsive-freeze'
+      || v2DragPerfMode === 'responsive-hysteresis'
+      || v2DragPerfMode === 'local-responsive'
     ) {
       // Reconcile any intentionally deferred responsive/external state exactly
       // once after pointer-up. Content-freeze modes now defer their selected

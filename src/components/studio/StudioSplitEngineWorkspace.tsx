@@ -6,7 +6,7 @@ import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
 export type StudioSplitEngine = 'lite' | 'legacy';
 export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590';
 export type StudioGenerationBarPerfMode = 'normal' | 'freeze' | 'off';
-export type StudioV2DragPerfMode = 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer';
+export type StudioV2DragPerfMode = 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive';
 
 type Props = {
   engine: StudioSplitEngine;

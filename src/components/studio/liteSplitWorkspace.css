@@ -995,3 +995,10 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
 .soridraw-split-engine-test-switch--v2-trace {
   top: 192px;
 }
+
+/* 757 — fifth admin-only A/B row for responsive-switch style invalidation.
+ * Direct+ remains the geometry baseline; only responsive publication policy
+ * changes between freeze / dead-band hysteresis / pane-local publication. */
+.soridraw-split-engine-test-switch--v2-responsive {
+  top: 232px;
+}

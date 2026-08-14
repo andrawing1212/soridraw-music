@@ -4283,7 +4283,13 @@ function App() {
                 ? 'direct-geometry'
                 : v2DragPerfParam === 'direct-scroll'
                   ? 'direct-scroll-defer'
-                  : 'normal';
+                  : v2DragPerfParam === 'responsive-freeze'
+                    ? 'responsive-freeze'
+                    : v2DragPerfParam === 'responsive-hysteresis'
+                      ? 'responsive-hysteresis'
+                      : v2DragPerfParam === 'local-responsive'
+                        ? 'local-responsive'
+                        : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4393,7 +4399,13 @@ function App() {
                   ? 'scroll-defer'
                   : mode === 'direct-geometry'
                     ? 'direct'
-                    : 'direct-scroll';
+                    : mode === 'direct-scroll-defer'
+                      ? 'direct-scroll'
+                      : mode === 'responsive-freeze'
+                        ? 'responsive-freeze'
+                        : mode === 'responsive-hysteresis'
+                          ? 'responsive-hysteresis'
+                          : 'local-responsive';
       nextParams.set('v2DragPerf', param);
     }
     const query = nextParams.toString();
@@ -14839,6 +14851,44 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       title="Direct Geometry와 스크롤락 지연을 동시에 적용"
                     >
                       Direct + 지연
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-responsive" aria-label="Lite V2 반응형 전환 병목 비교">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'direct-scroll-defer' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('direct-scroll-defer')}
+                      title="756 최적 비교점 · Direct Geometry + 스크롤락 지연"
+                    >
+                      Direct+ 현재
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'responsive-freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('responsive-freeze')}
+                      title="Direct+를 유지하고 드래그 중 PC/Tablet/Mobile responsive 동기만 완전히 정지 · 놓을 때 1회 반영"
+                    >
+                      반응형 정지
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'responsive-hysteresis' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('responsive-hysteresis')}
+                      title="Direct+ 유지 · responsive 경계에 28px dead-band를 둬 경계 왕복 재계산을 억제"
+                    >
+                      Hysteresis
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'local-responsive' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('local-responsive')}
+                      title="Direct+ 유지 · pane/page 내부 responsive는 실시간 반영하되 html 전역 responsive dataset 갱신은 드래그 종료까지 지연"
+                    >
+                      Local Responsive
                     </button>
                   </div>
                 </>

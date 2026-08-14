@@ -211,7 +211,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze';
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -680,7 +680,7 @@ export default function LiteStudioSplitWorkspace({
     layoutRef.current?.removeAttribute('data-benchmark-layout-mode');
   }, []);
 
-  const writeLiveSplitGeometry = useCallback((builderWidth: number, resultWidth: number) => {
+  const writeLiveSplitGeometry = useCallback((builderWidth: number, resultWidth: number, forceSingleDirect = false) => {
     const layout = layoutRef.current;
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -689,6 +689,28 @@ export default function LiteStudioSplitWorkspace({
 
     layout.dataset.liteRuntimeLayout = benchmarkLayoutModeRef.current;
     const viewportSplitterLeft = Math.max(0, Math.round(metricsRef.current.left + builderWidth - 8));
+
+    // 756 Trace A/B — keep the verified V2 rAF owner, but remove the inherited
+    // workspace custom-property write from the live frame. Only the actual pane
+    // boundary and body splitter receive direct geometry. Result width is owned
+    // by left + right rather than another width write. This is diagnostic-only;
+    // pointer-up reconciles back to the normal runtime geometry owner.
+    if (forceSingleDirect) {
+      layout.dataset.v2TraceDirectGeometry = 'true';
+      builder.style.setProperty('left', '0px', 'important');
+      builder.style.setProperty('right', 'auto', 'important');
+      builder.style.setProperty('width', `${builderWidth}px`, 'important');
+      result.style.setProperty('left', `${builderWidth}px`, 'important');
+      result.style.setProperty('right', '0px', 'important');
+      result.style.removeProperty('width');
+      splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
+      return;
+    }
+
+    if (layout.dataset.v2TraceDirectGeometry === 'true') {
+      delete layout.dataset.v2TraceDirectGeometry;
+      clearDirectBenchmarkGeometry();
+    }
 
     if (benchmarkLayoutModeRef.current === 'direct') {
       layout.dataset.benchmarkLayoutMode = 'direct';
@@ -728,6 +750,10 @@ export default function LiteStudioSplitWorkspace({
     const nextPercent = clampToBounds(rawPercent, bounds);
     const auxFreezeLive = live && draggingRef.current && v2DragPerfMode === 'aux-freeze';
     const auxBoundaryLive = live && draggingRef.current && v2DragPerfMode === 'aux-boundary';
+    const deferScrollLockLive = live && draggingRef.current
+      && (v2DragPerfMode === 'scroll-defer' || v2DragPerfMode === 'direct-scroll-defer');
+    const directGeometryLive = live && draggingRef.current
+      && (v2DragPerfMode === 'direct-geometry' || v2DragPerfMode === 'direct-scroll-defer');
     const freezeBuilderResponsiveLive = live && draggingRef.current
       && (v2DragPerfMode === 'content-left-freeze' || v2DragPerfMode === 'content-freeze');
     const freezeResultResponsiveLive = live && draggingRef.current
@@ -774,7 +800,7 @@ export default function LiteStudioSplitWorkspace({
       }
     }
 
-    writeLiveSplitGeometry(builderWidth, resultWidth);
+    writeLiveSplitGeometry(builderWidth, resultWidth, directGeometryLive);
     if (perfEnabled && live) recordSplitPerfGeometryWrite(builderWidth, resultWidth);
     const perfAfterLayoutWrite = perfEnabled ? performance.now() : 0;
     if (allowResponsiveSync) {
@@ -816,7 +842,7 @@ export default function LiteStudioSplitWorkspace({
         lastAriaPercentRef.current = roundedPercent;
         splitterRef.current?.setAttribute('aria-valuenow', String(roundedPercent));
       }
-      if (live && draggingRef.current) applyDragScrollLocks();
+      if (live && draggingRef.current && !deferScrollLockLive) applyDragScrollLocks();
     }
     if (perfEnabled) {
       const perfEnd = performance.now();
@@ -961,6 +987,9 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'content-left-freeze'
       || v2DragPerfMode === 'content-right-freeze'
       || v2DragPerfMode === 'content-freeze'
+      || v2DragPerfMode === 'scroll-defer'
+      || v2DragPerfMode === 'direct-geometry'
+      || v2DragPerfMode === 'direct-scroll-defer'
     ) {
       // Reconcile any intentionally deferred responsive/external state exactly
       // once after pointer-up. Content-freeze modes now defer their selected
@@ -1597,6 +1626,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-splitter-left');
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
+      layoutRef.current?.removeAttribute('data-v2-trace-direct-geometry');
     };
   }, [clearLiveExternalGeometry, readExternalControls, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 

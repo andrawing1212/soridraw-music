@@ -4277,7 +4277,13 @@ function App() {
           ? 'aux-boundary'
           : v2DragPerfParam === 'aux'
             ? 'aux-freeze'
-            : 'normal';
+            : v2DragPerfParam === 'scroll-defer'
+              ? 'scroll-defer'
+              : v2DragPerfParam === 'direct'
+                ? 'direct-geometry'
+                : v2DragPerfParam === 'direct-scroll'
+                  ? 'direct-scroll-defer'
+                  : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4381,7 +4387,13 @@ function App() {
             ? 'content'
             : mode === 'aux-boundary'
               ? 'boundary'
-              : 'aux';
+              : mode === 'aux-freeze'
+                ? 'aux'
+                : mode === 'scroll-defer'
+                  ? 'scroll-defer'
+                  : mode === 'direct-geometry'
+                    ? 'direct'
+                    : 'direct-scroll';
       nextParams.set('v2DragPerf', param);
     }
     const query = nextParams.toString();
@@ -14789,6 +14801,44 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       title="드래그 중 Pane/분할선 geometry만 갱신하고 responsive broadcast·외부 geometry·scroll lock·상태 마커는 놓을 때 반영"
                     >
                       부가동기 정지
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-trace" aria-label="Lite V2 Trace 원인 검증 전환">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'normal' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('normal')}
+                      title="Trace 기준 비교점 · 현재 Lite V2 전체 경로"
+                    >
+                      Trace 정상
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'scroll-defer' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('scroll-defer')}
+                      title="드래그 중 pane scrollTop 재고정만 생략하고 pointer-up 후 1회 복원"
+                    >
+                      스크롤락 지연
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'direct-geometry' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('direct-geometry')}
+                      title="드래그 중 workspace builder-width CSS 변수 갱신 대신 builder width + result left + splitter left만 직접 갱신"
+                    >
+                      Direct Geometry
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'direct-scroll-defer' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('direct-scroll-defer')}
+                      title="Direct Geometry와 스크롤락 지연을 동시에 적용"
+                    >
+                      Direct + 지연
                     </button>
                   </div>
                 </>

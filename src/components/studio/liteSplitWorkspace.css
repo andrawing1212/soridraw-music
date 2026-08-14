@@ -987,3 +987,11 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   cursor: default;
   opacity: .42;
 }
+
+
+/* 756 — fourth admin-only A/B row for the Chrome Trace findings.
+ * Tests forced-layout pressure (scroll-lock writes after width changes) and
+ * inherited workspace custom-property invalidation without changing normal V2. */
+.soridraw-split-engine-test-switch--v2-trace {
+  top: 192px;
+}

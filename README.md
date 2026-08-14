@@ -2059,3 +2059,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 경계 판정은 기존 V2의 pane 폭 숫자만 재사용하며 새 ResizeObserver/DOM 측정/React state를 추가하지 않음.
 - 기존 `부가동기 정지`와 생성바 A/B, Lite V2/기존 방식 비교는 유지.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+### 756차 — V2 Trace 원인 A/B
+- 관리자 비교 버튼에 `Trace 정상 / 스크롤락 지연 / Direct Geometry / Direct + 지연` 추가.
+- `스크롤락 지연`: 드래그 프레임의 scrollTop 재고정을 생략하고 pointer-up 후 1회만 복원.
+- `Direct Geometry`: live frame에서 workspace `--soridraw-studio-builder-width` 갱신을 피하고 builder width / result left / splitter left의 직접 geometry만 사용.
+- `Direct + 지연`: 두 실험을 결합.
+- 진단 전용이며 정상 V2, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.

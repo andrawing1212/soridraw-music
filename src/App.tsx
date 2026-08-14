@@ -84,7 +84,7 @@ import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
 import { readSplitPerfToolVisibility, SPLIT_PERF_TOOL_VISIBILITY_EVENT } from './components/studio/splitPerfDiagnostics';
-import StudioSplitEngineWorkspace, { type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
+import StudioSplitEngineWorkspace, { type StudioGenerationBarPerfMode, type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
 // so switching between fixed and anchored coordinates never remounts them.
@@ -4249,10 +4249,19 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
-  const splitEngineParam = new URLSearchParams(location.search).get('splitEngine');
+  const studioTestParams = new URLSearchParams(location.search);
+  const splitEngineParam = studioTestParams.get('splitEngine');
   const requestedStudioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
     ? splitEngineParam
     : null;
+  // 752: lightweight A/B probe for the bottom Generate bar. `freeze` keeps the
+  // exact visible bar but removes only its divider-frame geometry writes;
+  // `off` removes the rendered bar as well. This lets admin testing distinguish
+  // tracking cost from render/paint cost without changing the split engine.
+  const generationBarPerfParam = studioTestParams.get('genBarPerf');
+  const studioGenerationBarPerfMode: StudioGenerationBarPerfMode = generationBarPerfParam === 'freeze' || generationBarPerfParam === 'off'
+    ? generationBarPerfParam
+    : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4334,6 +4343,13 @@ function App() {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');
     else nextParams.set('splitEngine', engine);
+    const query = nextParams.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
+  }, [location.pathname, location.search, navigate]);
+  const setStudioGenerationBarPerfMode = useCallback((mode: StudioGenerationBarPerfMode) => {
+    const nextParams = new URLSearchParams(location.search);
+    if (mode === 'normal') nextParams.delete('genBarPerf');
+    else nextParams.set('genBarPerf', mode);
     const query = nextParams.toString();
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
@@ -7516,7 +7532,9 @@ const toggleCycleVariantSelection = (
   const actionBarModalReleaseTimerRef = useRef<number | null>(null);
   const isAnyModalOpen = isGenreModalOpen || isGenreHierarchyModalOpen || isGuideModalOpen || isStructureModalOpen || isCycleKeywordPopupOpen || isVocalCharacterModalOpen || isGlobalSearchOpen || isGlobalSearchOpening || isSituationExpanded || isStoryboardOpening;
   const shouldShowActionButtons = !isActionBarBlockedByModal && !isAnyModalOpen;
-  const studioActionOwner = !shouldShowActionButtons
+  const isGenerationBarPerfHidden = isStudioBlackActionMode && studioGenerationBarPerfMode === 'off';
+  const shouldRenderActionButtons = shouldShowActionButtons && !isGenerationBarPerfHidden;
+  const studioActionOwner = !shouldRenderActionButtons
     ? 'hidden'
     : isActionButtonsCollapsed
       ? 'collapsed'
@@ -7551,7 +7569,7 @@ const toggleCycleVariantSelection = (
   }, []);
 
   useLayoutEffect(() => {
-    if (!shouldShowActionButtons || isActionButtonsCollapsed) return;
+    if (!shouldRenderActionButtons || isActionButtonsCollapsed) return;
 
     if (isStudioBlackActionMode) {
       // 535 — one lightweight mount sync only. Geometry changes after this are
@@ -7593,7 +7611,7 @@ const toggleCycleVariantSelection = (
     isActionButtonsCollapsed,
     isActionsFloating,
     isStudioBlackActionMode,
-    shouldShowActionButtons,
+    shouldRenderActionButtons,
     syncActionBarLayoutMetrics,
     updateActionBarPlacement,
   ]);
@@ -14630,32 +14648,60 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             }
           >
               {isStudioBlackActionMode && isAdminMenuUser && (
-                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교 전환">
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === null ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('auto')}
-                    title={studioSplitAutoTitle}
-                  >
-                    자동
-                  </button>
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('lite')}
-                    title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
-                  >
-                    Lite V2
-                  </button>
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('legacy')}
-                    title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
-                  >
-                    기존 방식
-                  </button>
-                </div>
+                <>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교 전환">
+                    <button
+                      type="button"
+                      className={studioSplitEngineOverride === null ? 'is-active' : ''}
+                      onClick={() => setStudioSplitEngine('auto')}
+                      title={studioSplitAutoTitle}
+                    >
+                      자동
+                    </button>
+                    <button
+                      type="button"
+                      className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
+                      onClick={() => setStudioSplitEngine('lite')}
+                      title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
+                    >
+                      Lite V2
+                    </button>
+                    <button
+                      type="button"
+                      className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
+                      onClick={() => setStudioSplitEngine('legacy')}
+                      title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
+                    >
+                      기존 방식
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--generation" aria-label="생성바 성능 비교 전환">
+                    <button
+                      type="button"
+                      className={studioGenerationBarPerfMode === 'normal' ? 'is-active' : ''}
+                      onClick={() => setStudioGenerationBarPerfMode('normal')}
+                      title="현재 생성바 · 분할 드래그 중 위치를 실시간 추적"
+                    >
+                      생성바 정상
+                    </button>
+                    <button
+                      type="button"
+                      className={studioGenerationBarPerfMode === 'freeze' ? 'is-active' : ''}
+                      onClick={() => setStudioGenerationBarPerfMode('freeze')}
+                      title="생성바는 그대로 표시하고 드래그 중 위치 추적 쓰기만 중지 · 놓으면 최종 위치 동기화"
+                    >
+                      추적 정지
+                    </button>
+                    <button
+                      type="button"
+                      className={studioGenerationBarPerfMode === 'off' ? 'is-active' : ''}
+                      onClick={() => setStudioGenerationBarPerfMode('off')}
+                      title="생성바 렌더 자체를 제외해 paint/render 비용까지 비교"
+                    >
+                      생성바 OFF
+                    </button>
+                  </div>
+                </>
               )}
               {/* Header */}
               <header className="soridraw-studio-hero studio-hero-tone pt-20 pb-0 md:pt-24 md:pb-0 bg-transparent relative">
@@ -14704,6 +14750,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
                   compactMobileMode={isStudioCompactMobileLayout}
+                  generationBarPerfMode={studioGenerationBarPerfMode}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
@@ -15547,7 +15594,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               // probe. It never reserves a second expanded-row slot, so collapse,
               // expand and PC/mobile pane changes cannot alter the scroll range.
               !isStudioBlackActionMode
-                && shouldShowActionButtons
+                && shouldRenderActionButtons
                 && !isActionButtonsCollapsed
                 && !isActionsFloating
                 ? "soridraw-studio-action-anchor-expanded"
@@ -15555,7 +15602,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             )}
             data-soridraw-docked={!isStudioBlackActionMode && !isActionsFloating ? "true" : "false"}
           >
-            {shouldShowActionButtons
+            {shouldRenderActionButtons
               && !isStudioBlackActionMode
               && !isActionButtonsCollapsed
               && !isActionsFloating
@@ -15564,7 +15611,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
 
           {/* Floating / Collapsible Action Buttons */}
           <AnimatePresence initial={false} mode="wait">
-            {shouldShowActionButtons && (
+            {shouldRenderActionButtons && (
               isActionButtonsCollapsed ? (
                 <Portal>
                   <motion.button
@@ -17316,7 +17363,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
             className={cn(
               "soridraw-studio-description-overlay fixed z-[200] px-5 py-3 rounded-2xl bg-[var(--card-bg)]/90 backdrop-blur-xl border border-brand-orange/40 shadow-[0_0_30px_rgba(242,125,38,0.1)] pointer-events-auto cursor-default text-center transition-all duration-300",
               location.pathname === '/studio' 
-                ? (!isActionButtonsCollapsed && shouldShowActionButtons
+                ? (!isActionButtonsCollapsed && shouldRenderActionButtons
                     ? "bottom-[6.75rem] md:bottom-[8.5rem]" 
                     : "bottom-10")
                 : (typeof document !== 'undefined' && document.querySelector('[data-selection-action-bar="true"]')

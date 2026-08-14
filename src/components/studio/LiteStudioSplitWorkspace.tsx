@@ -187,6 +187,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
+  generationBarPerfMode?: 'normal' | 'freeze' | 'off';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -196,6 +197,7 @@ export default function LiteStudioSplitWorkspace({
   workspaceView,
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
+  generationBarPerfMode = 'normal',
 }: LiteStudioSplitWorkspaceProps) {
   // 617: PC Music Note no longer owns a special geometry path. App routes it
   // through the same `library-590` profile as Library. Adaptive mode is kept for
@@ -555,38 +557,46 @@ export default function LiteStudioSplitWorkspace({
     // the old left/right writes were pure drag-time work and are intentionally
     // omitted in Lite V2.
 
-    const actionInsets = actionInsetsRef.current ?? { left: 0, right: 0 };
-    const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
-    const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
-    const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
-    const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
-    if (controls.floatingActionBar) {
-      const floatingLeft = `${actionGeometry.left}px`;
-      if (cache.floatingLeft !== floatingLeft) {
-        cache.floatingLeft = floatingLeft;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
+    // 752 A/B probe: in `freeze`, keep the Generate bar rendered exactly as-is
+    // but remove only its divider-frame geometry writes. App's existing drag-end
+    // sync still moves it to the final resting position. `off` also enters this
+    // branch because App removes the rendered bar entirely. This isolates the
+    // bar from the rest of the external UI without weakening pane/search/toggle
+    // synchronization.
+    if (generationBarPerfMode === 'normal') {
+      const actionInsets = actionInsetsRef.current ?? { left: 0, right: 0 };
+      const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
+      const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
+      const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
+      const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
+      if (controls.floatingActionBar) {
+        const floatingLeft = `${actionGeometry.left}px`;
+        if (cache.floatingLeft !== floatingLeft) {
+          cache.floatingLeft = floatingLeft;
+          controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
+        }
+        const floatingWidth = `${actionGeometry.width}px`;
+        if (cache.floatingWidth !== floatingWidth) {
+          cache.floatingWidth = floatingWidth;
+          controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
+        }
+        // No Studio CSS consumes --soridraw-studio-builder-width from the
+        // expanded floating bar, so the former third write was redundant.
       }
-      const floatingWidth = `${actionGeometry.width}px`;
-      if (cache.floatingWidth !== floatingWidth) {
-        cache.floatingWidth = floatingWidth;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
+      if (controls.collapsedActionButton) {
+        const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
+        if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
+          cache.collapsedBuilderWidth = collapsedBuilderWidth;
+          controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
+        }
+        const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
+        if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
+          cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
+          controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
+        }
       }
-      // No Studio CSS consumes --soridraw-studio-builder-width from the
-      // expanded floating bar, so the former third write was redundant.
     }
-    if (controls.collapsedActionButton) {
-      const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
-      if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
-        cache.collapsedBuilderWidth = collapsedBuilderWidth;
-        controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
-      }
-      const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
-      if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
-        cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
-        controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
-      }
-    }
-  }, []);
+  }, [generationBarPerfMode]);
 
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;

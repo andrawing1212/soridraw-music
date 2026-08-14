@@ -948,3 +948,9 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     overflow-anchor: none !important;
   }
 }
+
+/* 752 — second admin-only A/B row: Generate bar influence on split drag.
+ * Reuses the existing compact switch visual; no new diagnostics panel. */
+.soridraw-split-engine-test-switch--generation {
+  top: 112px;
+}

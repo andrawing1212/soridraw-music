@@ -129,6 +129,7 @@ type StudioSplitWorkspaceProps = {
   viewMode?: 'split' | 'result-only' | 'hidden';
   workspaceView?: StudioWorkspaceView;
   workspaceRequestId?: number;
+  generationBarPerfMode?: 'normal' | 'freeze' | 'off';
 };
 
 export default function StudioSplitWorkspace({
@@ -137,6 +138,7 @@ export default function StudioSplitWorkspace({
   viewMode = 'split',
   workspaceView,
   workspaceRequestId = 0,
+  generationBarPerfMode = 'normal',
 }: StudioSplitWorkspaceProps) {
   const panes = Children.toArray(children);
   const [percent, setPercent] = useState(readStored);
@@ -441,6 +443,14 @@ export default function StudioSplitWorkspace({
       );
     }
 
+    // 752 A/B probe: keep every non-Generate external control live, but let
+    // admins freeze only Generate-bar divider tracking. Pointer-up/resting sync
+    // remains unchanged, so the comparison isolates per-frame bar ownership.
+    if (generationBarPerfMode !== 'normal') {
+      lastActionControlPixelRef.current = null;
+      return;
+    }
+
     // The floating action bar lives in a body portal, so it does not inherit
     // the builder pane width automatically. Keep its outer box and responsive
     // controls on the exact same builder width in this animation frame. The
@@ -483,7 +493,7 @@ export default function StudioSplitWorkspace({
       controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', `${roundedBuilderWidth}px`);
       controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', `${Math.max(0, Math.round(leftRailEdge))}px`);
     }
-  }, [readExternalControls]);
+  }, [generationBarPerfMode, readExternalControls]);
 
   const commitRootMeasurements = useCallback((builderWidth: number, splitterLeft: number) => {
     const root = document.documentElement;

@@ -4289,7 +4289,15 @@ function App() {
                       ? 'responsive-hysteresis'
                       : v2DragPerfParam === 'local-responsive'
                         ? 'local-responsive'
-                        : 'normal';
+                        : v2DragPerfParam === 'pure-pane'
+                          ? 'pure-pane'
+                          : v2DragPerfParam === 'splitter-only'
+                            ? 'splitter-only'
+                            : v2DragPerfParam === 'left-pane-only'
+                              ? 'left-pane-only'
+                              : v2DragPerfParam === 'right-pane-only'
+                                ? 'right-pane-only'
+                                : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4405,7 +4413,15 @@ function App() {
                         ? 'responsive-freeze'
                         : mode === 'responsive-hysteresis'
                           ? 'responsive-hysteresis'
-                          : 'local-responsive';
+                          : mode === 'local-responsive'
+                            ? 'local-responsive'
+                            : mode === 'pure-pane'
+                              ? 'pure-pane'
+                              : mode === 'splitter-only'
+                                ? 'splitter-only'
+                                : mode === 'left-pane-only'
+                                  ? 'left-pane-only'
+                                  : 'right-pane-only';
       nextParams.set('v2DragPerf', param);
     }
     const query = nextParams.toString();
@@ -14889,6 +14905,44 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       title="Direct+ 유지 · pane/page 내부 responsive는 실시간 반영하되 html 전역 responsive dataset 갱신은 드래그 종료까지 지연"
                     >
                       Local Responsive
+                    </button>
+                  </div>
+                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-pure" aria-label="Lite V2 순수 pane layout 진단">
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane')}
+                      title="드래그 중 Builder + Result + Splitter geometry만 갱신. responsive/external/ARIA/broadcast/scroll sync는 pointer-up까지 정지"
+                    >
+                      Pure Pane
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'splitter-only' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('splitter-only')}
+                      title="진단용: 실제 pane은 고정하고 분할선만 pointer/rAF를 따라 이동. 입력 엔진 자체 속도 확인"
+                    >
+                      Splitter Only
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'left-pane-only' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('left-pane-only')}
+                      title="진단용: Builder pane + Splitter만 실제 resize. 오른쪽 pane layout 비용 제외"
+                    >
+                      Left Pane Only
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'right-pane-only' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('right-pane-only')}
+                      title="진단용: Result pane + Splitter만 실제 resize. 왼쪽 pane layout 비용 제외"
+                    >
+                      Right Pane Only
                     </button>
                   </div>
                 </>

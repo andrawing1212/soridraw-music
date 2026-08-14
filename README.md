@@ -2073,6 +2073,7 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Normal app behavior is unchanged unless the diagnostic query mode is selected.
 - No Firebase/Auth/Firestore/Functions data contract changes.
 
+
 ## SORIDRAW 758차 — Lite V2 드래그 성능 최적화 엔진 기본 적용 (Direct Geometry + Deferred Scroll-Locks + Local Responsive)
 - 기준: 757차
 - 754~757차 A/B 진단 결과를 바탕으로 분할바 드래그 실시간 프레임 성능 최적화를 기본 일반(normal) 드래그 경로에 적용했습니다.
@@ -2082,3 +2083,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - **Pointer Release Reconciliation**: 마우스 버튼을 떼면(`finishDrag`) 최종 상위 CSS 변수, 루트 dataset, 스크롤 위치 및 외부 UI를 1회 정밀 동기화하여 완벽한 상태 정합성을 유지합니다.
 - 기존 UI 디자인, 레이아웃, 모바일/태블릿 브레이크포인트, Firebase / Auth / Firestore / Functions / 데이터 구조는 절대 변경하지 않았습니다.
 
+
+## SORIDRAW 759차 — Lite V2 순수 pane layout 병목 진단
+- 기준: GitHub main 758차 (`616cd7383985f707bf36d8fe3989e1243004a3eb`)
+- 758차 일반(normal) 경로는 변경하지 않고 관리자 Lite V2 A/B 진단에 `Pure Pane`, `Splitter Only`, `Left Pane Only`, `Right Pane Only`를 추가했습니다.
+- `Pure Pane`: 드래그 중 Builder/Result/Splitter geometry만 갱신하고 responsive/external geometry/ARIA/root marker/broadcast/scroll-lock 동기화는 pointer-up까지 정지합니다.
+- `Splitter Only`: 실제 pane 폭은 고정하고 body splitter만 pointer/rAF를 따라가 입력/rAF 엔진 자체의 체감 한계를 확인합니다.
+- `Left Pane Only`, `Right Pane Only`: 한쪽 pane만 실제 resize하여 어느 pane의 layout/reflow가 고속 드래그 비용을 주도하는지 분리합니다.
+- 모든 진단 모드는 pointer-up에서 758차 정상 runtime geometry/responsive 상태로 1회 정합화합니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.

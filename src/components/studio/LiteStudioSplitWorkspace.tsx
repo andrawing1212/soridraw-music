@@ -234,7 +234,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive';
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'splitter-only' | 'left-pane-only' | 'right-pane-only';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -802,6 +802,13 @@ export default function LiteStudioSplitWorkspace({
     const traceResponsiveFreezeLive = live && draggingRef.current && v2DragPerfMode === 'responsive-freeze';
     const traceResponsiveHysteresisLive = live && draggingRef.current && (v2DragPerfMode === 'responsive-hysteresis' || v2DragPerfMode === 'normal');
     const traceLocalResponsiveLive = live && draggingRef.current && (v2DragPerfMode === 'local-responsive' || v2DragPerfMode === 'normal');
+    // 759 diagnostic isolation: these modes intentionally bypass every non-essential
+    // drag-time sync so we can measure the raw cost of splitter/pane geometry.
+    const purePaneLive = live && draggingRef.current && v2DragPerfMode === 'pure-pane';
+    const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
+    const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
+    const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
+    const pureGeometryDiagnosticLive = purePaneLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive;
     const deferScrollLockLive = live && draggingRef.current
       && (v2DragPerfMode === 'scroll-defer'
         || v2DragPerfMode === 'direct-scroll-defer'
@@ -825,6 +832,44 @@ export default function LiteStudioSplitWorkspace({
     const builderWidth = builderCollapsedRef.current ? 0 : resultCollapsedRef.current ? safeWidth : Math.round(safeWidth * (nextPercent / 100));
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = metricsRef.current.left + builderWidth;
+
+    if (pureGeometryDiagnosticLive) {
+      const viewportSplitterLeft = Math.max(0, Math.round(splitterLeft - 8));
+
+      // Splitter-only proves whether pointer/rAF itself is fast when pane layout is absent.
+      if (splitterOnlyLive) {
+        splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
+      } else {
+        // Mark temporary direct geometry so the normal pointer-up reconciliation can
+        // remove all diagnostic inline geometry before restoring the runtime owner.
+        layout.dataset.v2TraceDirectGeometry = 'true';
+
+        if (purePaneLive || leftPaneOnlyLive) {
+          builder.style.setProperty('left', '0px', 'important');
+          builder.style.setProperty('right', 'auto', 'important');
+          builder.style.setProperty('width', `${builderWidth}px`, 'important');
+        }
+        if (purePaneLive || rightPaneOnlyLive) {
+          result.style.setProperty('left', `${builderWidth}px`, 'important');
+          result.style.setProperty('right', '0px', 'important');
+          result.style.removeProperty('width');
+        }
+        splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
+      }
+
+      if (perfEnabled && live) {
+        recordSplitPerfGeometryWrite(builderWidth, resultWidth);
+        const perfEnd = performance.now();
+        recordSplitPerfApply({
+          totalMs: perfEnd - perfStart,
+          layoutWriteMs: perfEnd - perfStart,
+          responsiveMs: 0,
+          externalMs: 0,
+          miscMs: 0,
+        });
+      }
+      return nextPercent;
+    }
     const boundarySignature = auxBoundaryLive
       ? readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current)
       : null;
@@ -1067,6 +1112,10 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'responsive-freeze'
       || v2DragPerfMode === 'responsive-hysteresis'
       || v2DragPerfMode === 'local-responsive'
+      || v2DragPerfMode === 'pure-pane'
+      || v2DragPerfMode === 'splitter-only'
+      || v2DragPerfMode === 'left-pane-only'
+      || v2DragPerfMode === 'right-pane-only'
       || v2DragPerfMode === 'normal'
     ) {
       // Reconcile any intentionally deferred responsive/external state exactly

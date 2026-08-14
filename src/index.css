@@ -108,37 +108,42 @@ body,
 html {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: #626266 transparent;
+  scrollbar-color: rgba(205, 140, 49, 0.42) rgba(10, 10, 10, 0.35);
 }
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 7px;
+  height: 7px;
 }
 
 html::-webkit-scrollbar-track,
 body::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(10, 10, 10, 0.45);
 }
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb {
-  background: #626266;
+  background: rgba(205, 140, 49, 0.42);
   border-radius: 999px;
-  border: 0;
+  border: 2px solid rgba(10, 10, 10, 0.45);
 }
 
 html::-webkit-scrollbar-thumb:hover,
 body::-webkit-scrollbar-thumb:hover {
-  background: #77777b;
+  background: rgba(205, 140, 49, 0.68);
 }
 
 @media (max-width: 640px) {
   html::-webkit-scrollbar,
   body::-webkit-scrollbar {
-    width: 3px;
-    height: 3px;
+    width: 5px;
+    height: 5px;
+  }
+
+  html::-webkit-scrollbar-thumb,
+  body::-webkit-scrollbar-thumb {
+    border-width: 1px;
   }
 }
 
@@ -178,8 +183,7 @@ body::-webkit-scrollbar-thumb:hover {
 
 /* Custom Scrollbar for Textarea */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -187,17 +191,17 @@ body::-webkit-scrollbar-thumb:hover {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #626266;
-  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #77777b;
+  background: rgba(255, 130, 0, 0.4);
 }
 
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: #626266 transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 
@@ -4644,15 +4648,15 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
  * controls stay a touch lighter than their section titles. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .studio-tone-down {
-  --soridraw-studio-card-bg: #E2DDD6;
+  --soridraw-studio-card-bg: #E8E3DC;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface::before,
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .studio-tone-down .soridraw-studio-command-card textarea {
-  background: #E2DDD6 !important;
-  background-color: #E2DDD6 !important;
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
@@ -4738,8 +4742,8 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 :is(.soridraw-responsive-color-filter, .soridraw-responsive-filter-button),
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 :is(.soridraw-musicnote-song-card, .soridraw-library-workspace-group) {
-  background: #E2DDD6 !important;
-  background-color: #E2DDD6 !important;
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
@@ -4748,8 +4752,8 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .soridraw-library-workspace-group :where([class*="bg-white/"]),
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .soridraw-musicnote-song-card :where([class*="bg-white/"]) {
-  background: #E9E5DF !important;
-  background-color: #E9E5DF !important;
+  background: #EEEAE4 !important;
+  background-color: #EEEAE4 !important;
 }
 
 /* Remove the remaining rectangular outline around the Music Note search area. */
@@ -4776,8 +4780,8 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
 .soridraw-musicnote-theme .soridraw-responsive-search-input {
   appearance: none !important;
   -webkit-appearance: none !important;
-  background: #E2DDD6 !important;
-  background-color: #E2DDD6 !important;
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
 }
 
 
@@ -4820,8 +4824,8 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
   height: 46px !important;
   min-height: 46px !important;
   border-radius: 16px !important;
-  background: #E2DDD6 !important;
-  background-color: #E2DDD6 !important;
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
 }
 
 

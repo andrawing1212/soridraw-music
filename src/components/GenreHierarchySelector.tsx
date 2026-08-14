@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CategoryItem, GenreGroupItem } from "../types";
 import { GENRE_HIERARCHY, GENRES } from "../constants";
 import {
@@ -16,7 +16,6 @@ import { motion, AnimatePresence } from "motion/react";
 import { createPortal } from "react-dom";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { resolveExpandedHeight, useStableContentHeight } from "../lib/stableContentHeight";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -472,12 +471,15 @@ function GenreHierarchySelectorComponent({
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | string>(0);
 
-  useStableContentHeight(
-    contentRef,
-    setContentHeight,
-    [groups],
-    onHeightChange,
-  );
+  useLayoutEffect(() => {
+    if (contentRef.current) {
+      const height = contentRef.current.scrollHeight;
+      setContentHeight(height);
+      if (onHeightChange) {
+        onHeightChange(height);
+      }
+    }
+  }, [groups, onHeightChange]);
 
   const totalCount = useMemo(() => {
     return groups.reduce((count, group) => {
@@ -1106,20 +1108,9 @@ function GenreHierarchySelectorComponent({
         </div>
 
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
+          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
           style={{
-            // 637: if this selector remounts while Genre is already expanded (for example
-            // when the split result page changes), the stable-height observer has not
-            // measured yet. Starting from the collapsed 76px fallback made the card
-            // visibly fold once and then reopen on the next frame. Keep the content
-            // naturally open until the first real height arrives; normal user-triggered
-            // collapse/expand still uses the measured numeric height and the shared motion.
-            maxHeight: isExpanded
-              ? ((typeof forcedHeight === 'number' && forcedHeight > 0)
-                  || (typeof contentHeight === 'number' && contentHeight > 0)
-                    ? resolveExpandedHeight(forcedHeight, contentHeight, 76)
-                    : 'none')
-              : 76,
+            maxHeight: isExpanded ? forcedHeight || contentHeight || 320 : 76,
             opacity: 1
           }}
         >

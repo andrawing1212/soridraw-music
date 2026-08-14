@@ -13,27 +13,13 @@ export const isSoridrawPhoneDevice = (): boolean => {
   if (typeof navigator === 'undefined') return false;
 
   const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
-
-  // 631: `userAgentData.mobile === false` is not strong enough to classify a
-  // Samsung/Android device as a tablet. Some browser/PWA combinations report
-  // false while the legacy UA still carries the Android `Mobile` token. Treat
-  // only an explicit `true` as decisive, then fall through to the UA and a
-  // conservative physical-screen fallback. This keeps a real phone classified
-  // as a phone even when it is rotated to landscape.
-  if (nav.userAgentData?.mobile === true) return true;
+  if (typeof nav.userAgentData?.mobile === 'boolean') {
+    return nav.userAgentData.mobile;
+  }
 
   const ua = navigator.userAgent || '';
   if (/iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)) return true;
-  if (/Android/i.test(ua) && /Mobile/i.test(ua)) return true;
-
-  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-    const coarsePrimary = window.matchMedia('(pointer: coarse)').matches;
-    const noHover = window.matchMedia('(hover: none)').matches;
-    const screenShortSide = Math.min(window.screen?.width || 9999, window.screen?.height || 9999);
-    if ((coarsePrimary || noHover) && screenShortSide <= 600) return true;
-  }
-
-  return false;
+  return /Android/i.test(ua) && /Mobile/i.test(ua);
 };
 
 export const readSoridrawTheme = (): SoridrawTheme => {
@@ -44,27 +30,15 @@ export const readSoridrawTheme = (): SoridrawTheme => {
   }
 };
 
-const normalizeDisplayModeForDevice = (mode: SoridrawDisplayMode, isPhone: boolean): SoridrawDisplayMode => {
-  // 630: physical phones never enter the split workspace. The phone/large-screen
-  // distinction comes from the device UA, not viewport width, so rotating a
-  // phone to landscape cannot accidentally promote it into the tablet split UI.
-  // Tablets (Galaxy Tab/iPad/etc.) keep the existing split-capable path.
-  if (isPhone && mode === 'studio-black') return 'dark';
-  return mode;
-};
-
 const readStoredDisplayMode = (isPhone: boolean): SoridrawDisplayMode => {
   try {
     const stored = localStorage.getItem(isPhone ? PHONE_MODE_STORAGE_KEY : LARGE_MODE_STORAGE_KEY);
-    if (stored === 'light' || stored === 'dark' || stored === 'studio-black') {
-      return normalizeDisplayModeForDevice(stored, isPhone);
-    }
+    if (stored === 'light' || stored === 'dark' || stored === 'studio-black') return stored;
 
-    const legacyThemeMode: SoridrawDisplayMode = readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
-    return normalizeDisplayModeForDevice(legacyThemeMode, isPhone);
+    if (readSoridrawTheme() === 'studio-black') return 'studio-black';
+    return 'dark';
   } catch {
-    const fallbackMode: SoridrawDisplayMode = readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
-    return normalizeDisplayModeForDevice(fallbackMode, isPhone);
+    return readSoridrawTheme() === 'studio-black' ? 'studio-black' : 'dark';
   }
 };
 
@@ -87,7 +61,7 @@ export const applySoridrawDisplayMode = (requestedMode: SoridrawDisplayMode) => 
   if (typeof document === 'undefined') return requestedMode;
 
   const isPhone = isSoridrawPhoneDevice();
-  const mode: SoridrawDisplayMode = normalizeDisplayModeForDevice(requestedMode, isPhone);
+  const mode: SoridrawDisplayMode = requestedMode;
   const theme: SoridrawTheme = mode === 'studio-black' ? 'studio-black' : 'classic';
   const colorMode: SoridrawColorMode = mode === 'light' ? 'light' : 'dark';
 
@@ -111,9 +85,7 @@ export const applyStoredSoridrawDisplayMode = () =>
 
 export const cycleSoridrawDisplayMode = () => {
   const isPhone = isSoridrawPhoneDevice();
-  const sequence: SoridrawDisplayMode[] = isPhone
-    ? ['dark', 'light']
-    : ['dark', 'light', 'studio-black'];
+  const sequence: SoridrawDisplayMode[] = ['dark', 'light', 'studio-black'];
   const current = readStoredDisplayMode(isPhone);
   const currentIndex = sequence.indexOf(current);
   const next = sequence[(currentIndex < 0 ? 0 : currentIndex + 1) % sequence.length];

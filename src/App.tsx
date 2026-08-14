@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, Component, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useMediaQuery } from './lib/mediaQueryStore';
 import { getStudioActionFloatingGutter, resolveStudioActionFloatingGeometry } from './lib/studioActionBarGeometry';
-import { resolveExpandedHeight, useStableContentHeight } from './lib/stableContentHeight';
 import { 
   BrowserRouter as Router, 
   Routes, 
@@ -83,8 +82,7 @@ import StudioLeftRail, { type StudioWorkspaceView } from './components/studio/St
 import StudioRightRail from './components/studio/StudioRightRail';
 import StudioSplitWorkspace, { StudioBuilderPane, StudioResultPane } from './components/studio/StudioSplitWorkspace';
 import SplitPerformanceDiagnostics from './components/studio/SplitPerformanceDiagnostics';
-import { readSplitPerfToolVisibility, SPLIT_PERF_TOOL_VISIBILITY_EVENT } from './components/studio/splitPerfDiagnostics';
-import StudioSplitEngineWorkspace, { type StudioLiteRuntimeProfile, type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
+import StudioSplitEngineWorkspace, { type StudioSplitEngine } from './components/studio/StudioSplitEngineWorkspace';
 
 // Portal component for top-level rendering. Action controls keep one DOM owner
 // so switching between fixed and anchored coordinates never remounts them.
@@ -313,7 +311,6 @@ import {
   applyStoredSoridrawDisplayMode,
   cycleSoridrawDisplayMode,
   getSoridrawDisplayModeLabel,
-  isSoridrawPhoneDevice,
   readSoridrawDisplayMode,
   type SoridrawDisplayMode,
 } from './services/themePreferences';
@@ -531,7 +528,6 @@ import { startUserPresence } from './services/presenceService';
 import { writeGeminiAutoModelFallback } from './services/geminiModelPreferences';
 import { buildEmailVerificationActionSettings } from './constants/emailVerification';
 import { sanitizeForFirestore } from './lib/utils';
-import { FIRESTORE_READ_CACHE_KEYS, FIRESTORE_READ_CACHE_TTL_MS, readFirestoreReadCache, writeFirestoreReadCache } from './lib/firestoreReadCache';
 import GenreHierarchySelector from './components/GenreHierarchySelector';
 import MusicApiGenerateModal, { LanguageCode, MusicApiTargetOption, SunoModelVersion, RapMode, GenerationEngineVersion, V1LyricWritingStyle, readStoredV1LyricWritingStyle, writeStoredV1LyricWritingStyle } from './components/MusicApiGenerateModal';
 
@@ -967,6 +963,90 @@ function handleExpandableToggle(
     });
   });
 }
+
+function useStableContentHeight(
+  contentRef: React.RefObject<HTMLElement>,
+  setHeight: (value: number | string | ((prev: number | string) => number | string)) => void,
+  deps: React.DependencyList,
+  onHeightChange?: (height: number) => void,
+  enabled = true
+) {
+  useLayoutEffect(() => {
+    if (!enabled) return;
+    let frameId: number | null = null;
+    let settleTimerId: number | null = null;
+    let lastObservedWidth = -1;
+    let lastMeasuredHeight: number | null = null;
+
+    const measure = () => {
+      frameId = null;
+      const el = contentRef.current;
+      if (!el) return;
+      const nextHeight = el.scrollHeight || el.offsetHeight || 0;
+      if (nextHeight <= 0 || lastMeasuredHeight === nextHeight) return;
+      lastMeasuredHeight = nextHeight;
+      setHeight(nextHeight);
+      onHeightChange?.(nextHeight);
+    };
+
+    const scheduleMeasure = () => {
+      if (frameId !== null) return;
+      frameId = requestAnimationFrame(measure);
+    };
+
+    const isContinuousResize = () => {
+      const root = document.documentElement;
+      return root.classList.contains('soridraw-split-dragging')
+        || root.classList.contains('soridraw-lite-split-dragging')
+        || root.classList.contains('soridraw-window-resizing');
+    };
+
+    const scheduleSettledMeasure = () => {
+      if (isContinuousResize()) return;
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId);
+      // Expanded-card height is a settled-layout concern. The split divider and
+      // native browser edge must stay on the lightweight width path instead of
+      // re-reading scrollHeight for several cards on every intermediate frame.
+      settleTimerId = window.setTimeout(() => {
+        settleTimerId = null;
+        scheduleMeasure();
+      }, 90);
+    };
+
+    const handleContinuousResizeEnd = () => scheduleSettledMeasure();
+
+    scheduleMeasure();
+    scheduleSettledMeasure();
+
+    const element = contentRef.current;
+    const observer = element && typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver((entries) => {
+          const width = entries[0]?.contentRect.width ?? lastObservedWidth;
+          if (Math.abs(width - lastObservedWidth) < 0.5) return;
+          lastObservedWidth = width;
+          scheduleSettledMeasure();
+        })
+      : null;
+    if (observer && element) observer.observe(element);
+    window.addEventListener('soridraw-split-drag-end', handleContinuousResizeEnd as EventListener);
+    window.addEventListener('soridraw-window-resize-end', handleContinuousResizeEnd as EventListener);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('soridraw-split-drag-end', handleContinuousResizeEnd as EventListener);
+      window.removeEventListener('soridraw-window-resize-end', handleContinuousResizeEnd as EventListener);
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      if (settleTimerId !== null) window.clearTimeout(settleTimerId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, ...deps]);
+}
+
+const resolveExpandedHeight = (preferredHeight: number | undefined, measuredHeight: number | string, fallbackHeight: number) => {
+  if (typeof preferredHeight === 'number' && preferredHeight > 0) return preferredHeight;
+  if (typeof measuredHeight === 'number' && measuredHeight > 0) return measuredHeight;
+  return fallbackHeight;
+};
 
 const getVocalToneDisplayLabel = (toneId: string | undefined, vocalTones: VocalTone[]) => {
   if (!toneId) return '';
@@ -3210,9 +3290,6 @@ function Navigation({
   sunoLibrarySignal,
   sunoLibrarySignalDotClass,
   clearSunoLibrarySignal,
-  studioCompactMobileLayout = false,
-  studioWorkspaceView = 'create',
-  onStudioWorkspaceSelect,
 }: {
   user: User | null;
   cachedHeaderIdentity: CachedHeaderIdentity | null;
@@ -3226,9 +3303,6 @@ function Navigation({
   sunoLibrarySignal: 'generating' | 'completed' | null;
   sunoLibrarySignalDotClass: string;
   clearSunoLibrarySignal: () => void;
-  studioCompactMobileLayout?: boolean;
-  studioWorkspaceView?: StudioWorkspaceView;
-  onStudioWorkspaceSelect?: (view: StudioWorkspaceView) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -3283,56 +3357,6 @@ function Navigation({
   const preferredLandingPath = menuVisibility.home
     ? '/'
     : topNavItems[0]?.path || (isAdminUser ? '/admin/users' : '/');
-
-  const isCompactStudioMobileNavigation = studioCompactMobileLayout && Boolean(onStudioWorkspaceSelect);
-  const isCompactStudioRoute = isCompactStudioMobileNavigation && location.pathname === '/studio';
-  const isCompactStudioMobileItemActive = (item: (typeof allTopNavItems)[number]) => {
-    if (!isCompactStudioRoute) return isActivePath(item.path);
-    if (item.key === 'studio') return studioWorkspaceView === 'create' || studioWorkspaceView === 'recent';
-    if (item.key === 'musicNote') return studioWorkspaceView === 'music-note';
-    if (item.key === 'library') return studioWorkspaceView === 'library';
-    return isActivePath(item.path);
-  };
-
-  const goToCompactMobileNav = (item: (typeof allTopNavItems)[number]) => {
-    if (!isAuthReady) return;
-    if (!user) {
-      handleLogin();
-      return;
-    }
-    if (!isCompactStudioMobileNavigation || !onStudioWorkspaceSelect) {
-      goToTopNav(item.path, { clearSuno: item.clearSuno });
-      return;
-    }
-
-    const openCompactStudioWorkspace = (view: StudioWorkspaceView) => {
-      onStudioWorkspaceSelect(view);
-      if (location.pathname !== '/studio') navigate('/studio');
-      else scrollToTop();
-    };
-
-    if (item.key === 'studio') {
-      openCompactStudioWorkspace('create');
-      setIsExpanded(false);
-      setIsProfileOpen(false);
-      return;
-    }
-    if (item.key === 'musicNote') {
-      openCompactStudioWorkspace('music-note');
-      setIsExpanded(false);
-      setIsProfileOpen(false);
-      return;
-    }
-    if (item.key === 'library') {
-      if (item.clearSuno) clearSunoLibrarySignal();
-      openCompactStudioWorkspace('library');
-      setIsExpanded(false);
-      setIsProfileOpen(false);
-      return;
-    }
-
-    goToTopNav(item.path, { clearSuno: item.clearSuno });
-  };
 
   // Collapse menu when clicking outside
   useEffect(() => {
@@ -3392,9 +3416,7 @@ function Navigation({
     setDisplayMode(cycleSoridrawDisplayMode());
   };
 
-  const displayModeCycleText = isSoridrawPhoneDevice()
-    ? '다크 · 라이트'
-    : '다크 · 라이트 · 분할';
+  const displayModeCycleText = '다크 · 라이트 · 분할';
 
   // Collapse menu on scroll
   useEffect(() => {
@@ -3603,12 +3625,7 @@ function Navigation({
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className={cn(
-          "soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center px-3 py-2.5 min-[1600px]:hidden",
-          displayMode === 'studio-black'
-            ? "bg-[#0f0f10] shadow-none"
-            : "bg-[#111111]/95 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl"
-        )}
+        className="soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl min-[1600px]:hidden"
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
@@ -3618,17 +3635,12 @@ function Navigation({
                 <button
                   key={item.path}
                   type="button"
-                  onClick={() => goToCompactMobileNav(item)}
+                  onClick={() => goToTopNav(item.path, { clearSuno: item.clearSuno })}
                   className={cn(
-                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent transition-all",
-                    displayMode === 'studio-black'
-                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
-                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                    isCompactStudioMobileItemActive(item) && (displayMode === 'studio-black'
-                      ? "is-active bg-transparent text-white"
-                      : "is-active bg-[#FFB400]/18 text-[#FFB400]")
+                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                    isActivePath(item.path) && "is-active bg-[#FFB400]/18 text-[#FFB400]"
                   )}
-                  aria-current={isCompactStudioMobileItemActive(item) ? 'page' : undefined}
+                  aria-current={isActivePath(item.path) ? 'page' : undefined}
                   aria-label={item.label}
                   title={item.label}
                 >
@@ -3652,9 +3664,8 @@ function Navigation({
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all",
-                    displayMode === 'studio-black' ? "hover:bg-transparent" : "hover:bg-[#FFB400]/15",
-                    isProfileOpen && (displayMode === 'studio-black' ? "bg-transparent" : "bg-[#FFB400]/18")
+                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
+                    isProfileOpen && "bg-[#FFB400]/18"
                   )}
                   aria-label="계정 메뉴"
                   title="계정 메뉴"
@@ -3672,12 +3683,7 @@ function Navigation({
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all disabled:opacity-50",
-                    displayMode === 'studio-black'
-                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
-                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]"
-                  )}
+                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400] disabled:opacity-50"
                   aria-label="로그인"
                   title="로그인"
                 >
@@ -3769,15 +3775,9 @@ function Navigation({
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "soridraw-mobile-menu-trigger flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all",
-                  displayMode === 'studio-black'
-                    ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
-                    : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                  isExpanded && (displayMode === 'studio-black'
-                    ? "is-active bg-transparent text-white"
-                    : "is-active bg-[#FFB400]/18 text-[#FFB400]")
+                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                  isExpanded && "bg-[#FFB400]/18 text-[#FFB400]"
                 )}
-                aria-expanded={isExpanded}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
               >
@@ -3985,32 +3985,12 @@ const getGeminiUsedModelLabel = (song?: SongResult | null): string => {
   return rawModel ? (GEMINI_MODEL_LABELS[rawModel] || rawModel) : '';
 };
 
-const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'legacy';
-  // 611: choose by the active interaction environment, not by viewport width.
-  // A coarse/no-hover primary pointer matches the verified Galaxy Tab/touch
-  // path. Fine hover pointers (normal PC mouse/trackpad) use the verified
-  // legacy split engine even when the browser window itself is narrow.
-  const coarsePrimaryPointer = window.matchMedia('(pointer: coarse)').matches;
-  const noPrimaryHover = window.matchMedia('(hover: none)').matches;
-  return coarsePrimaryPointer || noPrimaryHover ? 'lite' : 'legacy';
-};
-
 function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
-  // 744 — One stable external responsive contract for the builder.
-  // Wide/tablet stays 3-column from 1100px upward; the dedicated portrait
-  // Compact band is 768~1099px; <=767px keeps the existing phone layout.
-  // matchMedia only wakes React when a breakpoint actually changes, so native
-  // window resizing stays live without rerendering on every pixel.
-  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1100px)', true);
-  const isStudioTwoColumnSelectionLayout = useMediaQuery('(min-width: 768px)', true);
-  const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
+  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
-  const isStudioCompactMobileLayout = isStudioCompactViewport
-    && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
 
   useEffect(() => {
     applyStoredSoridrawDisplayMode();
@@ -4019,50 +3999,28 @@ function App() {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const root = document.documentElement;
-    const syncBuilderActionMode = (force = false) => {
-      // 624: 623 intended to defer the App-root responsive mirror while Music
-      // Note is being dragged, but automatic PC Music Note uses the shared 590
-      // Lite runtime and therefore marks `soridraw-lite-split-dragging`, not the
-      // legacy `soridraw-split-dragging` class. Include both verified drag
-      // markers and return before either React state setter. CSS/root datasets
-      // continue reacting live; React mirrors catch up once on pointer-up.
-      const splitDragActive = root.classList.contains('soridraw-lite-split-dragging')
-        || root.classList.contains('soridraw-split-dragging');
-      const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1600;
-      const tabletSplitDragActive = splitDragActive && viewportWidth >= 1100 && viewportWidth < 1600;
-      const musicNoteDragActive = root.dataset.soridrawStudioWorkspaceView === 'music-note'
-        && splitDragActive;
 
-      // 648: do not mirror pane-mode changes into App-level React state while
-      // the divider is actively moving inside the shared 1100~1599 tablet band.
-      // The root data-soridraw-builder-mode attribute still changes immediately,
-      // so CSS keeps the live compact/desktop visual response. Only the expensive
-      // App-root React mirror waits until soridraw-split-drag-end, where it is
-      // synchronized once. This is the same already-verified rerender-suppression
-      // principle used by 623/624, now applied to the shared tablet band rather
-      // than swapping PC to the Galaxy Tab split engine. Wide PC behavior and
-      // the existing Music Note protection remain unchanged.
-      if (!force && (tabletSplitDragActive || musicNoteDragActive)) return;
-
+    // 606 — the builder's mobile/desktop attribute is a visual split-pane
+    // signal and can cross its breakpoint many times during one divider drag.
+    // CSS already switches the floating Generate bar immediately from that
+    // root attribute, so mirroring every crossing back into App React state is
+    // redundant while the pointer is held. Doing so re-rendered the very large
+    // App tree during the hottest drag path and made the pane feel as if it was
+    // being pulled from behind even when Lite V2 geometry itself was fast.
+    // Keep the live CSS state, defer only the React gesture-state mirror, and
+    // commit it once after the split drag ends. Outside a drag, resize/theme
+    // changes still synchronize immediately.
+    const syncBuilderActionMode = (forceBuilderSync = false) => {
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
-      const builderMode = root.dataset.soridrawBuilderMode;
-      setIsStudioBlackActionMode(isStudioBlack);
+      setIsStudioBlackActionMode((current) => current === isStudioBlack ? current : isStudioBlack);
 
-      // 749 — Split workspace callbacks used to clear data-soridraw-builder-mode
-      // for a moment while Recent/Music Note/Library changed. Treating that
-      // transient missing value as desktop inserted the PC collapse arrow and
-      // desktop side-button widths into a narrow mobile Builder, visibly
-      // crushing the expanded Generate bar. Missing means "not committed yet":
-      // keep the last responsive state until the split engine publishes an
-      // explicit mobile/desktop value.
-      if (!isStudioBlack) {
-        setIsSplitBuilderActionMobile(false);
-      } else if (builderMode === 'mobile') {
-        setIsSplitBuilderActionMobile(true);
-      } else if (builderMode === 'desktop') {
-        setIsSplitBuilderActionMobile(false);
-      }
+      if (!forceBuilderSync && root.classList.contains('soridraw-lite-split-dragging')) return;
+
+      const nextBuilderActionMobile = isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile';
+      setIsSplitBuilderActionMobile((current) => current === nextBuilderActionMobile ? current : nextBuilderActionMobile);
     };
+
+    const handleSplitDragEnd = () => syncBuilderActionMode(true);
 
     syncBuilderActionMode(true);
     const observer = new MutationObserver(() => syncBuilderActionMode(false));
@@ -4070,12 +4028,10 @@ function App() {
       attributes: true,
       attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
     });
-
-    const handleSplitDragEnd = () => syncBuilderActionMode(true);
-    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+    window.addEventListener('soridraw-split-drag-end', handleSplitDragEnd);
     return () => {
       observer.disconnect();
-      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd as EventListener);
+      window.removeEventListener('soridraw-split-drag-end', handleSplitDragEnd);
     };
   }, []);
 
@@ -4249,92 +4205,17 @@ function App() {
   };
   const navigate = useNavigate();
   const location = useLocation();
-  const splitEngineParam = new URLSearchParams(location.search).get('splitEngine');
-  const requestedStudioSplitEngineOverride: StudioSplitEngine | null = splitEngineParam === 'lite' || splitEngineParam === 'legacy'
-    ? splitEngineParam
-    : null;
-  const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const pointerQuery = window.matchMedia('(pointer: coarse)');
-    const hoverQuery = window.matchMedia('(hover: none)');
-    const syncAutomaticSplitEngine = () => setAutomaticStudioSplitEngine(detectAutomaticStudioSplitEngine());
-    syncAutomaticSplitEngine();
-    pointerQuery.addEventListener('change', syncAutomaticSplitEngine);
-    hoverQuery.addEventListener('change', syncAutomaticSplitEngine);
-    return () => {
-      pointerQuery.removeEventListener('change', syncAutomaticSplitEngine);
-      hoverQuery.removeEventListener('change', syncAutomaticSplitEngine);
-    };
-  }, []);
-
-  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
-    readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
-  );
-
-  // 622: all split diagnostic UI is controlled by the existing Admin Settings
-  // toggle and starts OFF. This includes the floating diagnostics panel and the
-  // Auto/Lite/Legacy engine switch; normal Studio users never see or run it.
-  const [splitPerfToolsVisible, setSplitPerfToolsVisible] = useState(() => readSplitPerfToolVisibility());
-  useEffect(() => {
-    const handleSplitPerfVisibility = (event: Event) => {
-      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
-      setSplitPerfToolsVisible(typeof detail?.enabled === 'boolean' ? detail.enabled : readSplitPerfToolVisibility());
-    };
-    window.addEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
-    return () => window.removeEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
-  }, []);
-  const studioSplitEngineOverride: StudioSplitEngine | null = splitPerfToolsVisible
-    ? requestedStudioSplitEngineOverride
-    : null;
-
-  // 617 baseline kept Music Note / Library on Lite V2 while Recent stayed on
-  // Legacy. 713 preserves the 683 codebase but updates only that routing choice:
-  // Recent now shares the same result-workspace movement owner as Music Note /
-  // Library so pointer/divider/pane spacing follows one common rule.
-  const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
-  // 713: Recent Songs now uses the exact same fine-pointer split engine and
-  // runtime profile as Music Note / Library. The 683 Legacy Recent path drove
-  // the fixed divider ahead of the pane tree and adaptively throttled pane
-  // commits, which made pointer-to-divider spacing feel different even when
-  // throughput was high. Keep Create on Legacy; unify only the three result
-  // workspaces whose drag feel should match.
-  const usesSharedResultSplitEngine = studioWorkspaceView === 'recent'
-    || studioWorkspaceView === 'library'
-    || studioWorkspaceView === 'music-note';
-  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
-    ? 'lite'
-    : usesSharedResultSplitEngine
-      ? 'lite'
-      : 'legacy';
-  const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
-    ? 'adaptive'
-    : usesSharedResultSplitEngine
-      ? 'library-590'
-      : 'adaptive';
-  const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
-  const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
-    ? (!isTouchPrimaryStudioEnvironment && usesSharedResultSplitEngine
-      ? 'library-590'
-      : 'adaptive')
-    : automaticLiteRuntimeProfile;
-  const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
-    ? '자동 선택 · 갤탭/터치: Lite V2'
-    : studioWorkspaceView === 'library'
-      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
-      : studioWorkspaceView === 'music-note'
-        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-        : studioWorkspaceView === 'recent'
-          ? '자동 선택 · PC 최근 생성곡: 뮤직노트/라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-          : '자동 선택 · PC 스튜디오: 기존 방식';
-  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
+  const studioSplitEngine: StudioSplitEngine = new URLSearchParams(location.search).get('splitEngine') === 'legacy' ? 'legacy' : 'lite';
+  const setStudioSplitEngine = useCallback((engine: StudioSplitEngine) => {
     const nextParams = new URLSearchParams(location.search);
-    if (engine === 'auto') nextParams.delete('splitEngine');
-    else nextParams.set('splitEngine', engine);
+    if (engine === 'lite') nextParams.delete('splitEngine');
+    else nextParams.set('splitEngine', 'legacy');
     const query = nextParams.toString();
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
+  const [studioWorkspaceView, setStudioWorkspaceView] = useState<StudioWorkspaceView>(() =>
+    readSoridrawDisplayMode() === 'studio-black' ? 'create' : 'recent',
+  );
   const [studioWorkspaceLayoutRequestId, setStudioWorkspaceLayoutRequestId] = useState(0);
   const selectStudioWorkspaceView = useCallback((view: StudioWorkspaceView) => {
     setStudioWorkspaceView(view);
@@ -4365,18 +4246,9 @@ function App() {
       if (location.pathname !== '/studio') return;
 
       const nextMode = (event as CustomEvent<{ mode?: SoridrawDisplayMode }>).detail?.mode;
-      if (nextMode === 'dark' || nextMode === 'light') {
-        selectStudioWorkspaceView('recent');
-        return;
-      }
+      if (nextMode !== 'dark' && nextMode !== 'light') return;
 
-      // Returning to Split mode must restore Split's own workspace target.
-      // Dark/light intentionally uses the normal recent/result composition;
-      // keeping that `recent` target after switching back was what left the
-      // phone with two split panes squeezed into the old geometry.
-      if (nextMode === 'studio-black') {
-        selectStudioWorkspaceView('create');
-      }
+      selectStudioWorkspaceView('recent');
     };
 
     window.addEventListener('soridraw-theme-change', handleStudioThemeChange as EventListener);
@@ -5129,93 +5001,45 @@ function App() {
   });
 
 
-  const cachedNavigationVisibility = readFirestoreReadCache<NavigationVisibilitySettings>(
-    FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
-    FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
-  );
-  const cachedGlobalLyricClicheGuard = readFirestoreReadCache<LyricClicheGuardSettings>(
-    FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
-    FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
-  );
-  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(() =>
-    cachedNavigationVisibility?.data || readStoredNavigationVisibilitySettings(),
+  const [navigationVisibilitySettings, setNavigationVisibilitySettings] = useState<NavigationVisibilitySettings>(
+    readStoredNavigationVisibilitySettings,
   );
   const menuVisibility = navigationVisibilitySettings.menuVisibility;
   const menuAdminOnly = navigationVisibilitySettings.menuAdminOnly;
-  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>(() =>
-    cachedGlobalLyricClicheGuard?.data || { hardBanTerms: [], softBanTerms: [] },
-  );
+  const [globalLyricClicheGuard, setGlobalLyricClicheGuard] = useState<LyricClicheGuardSettings>({
+    hardBanTerms: [],
+    softBanTerms: [],
+  });
   const [userLyricClicheGuard, setUserLyricClicheGuard] = useState<LyricClicheGuardSettings | null>(null);
-  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(Boolean(cachedGlobalLyricClicheGuard));
+  const [isGlobalLyricClicheGuardReady, setIsGlobalLyricClicheGuardReady] = useState(false);
   const [isUserLyricClicheGuardReady, setIsUserLyricClicheGuardReady] = useState(false);
   const isLyricClicheGuardReady = isGlobalLyricClicheGuardReady && isUserLyricClicheGuardReady;
 
   useEffect(() => {
-    if (location.pathname !== '/studio') return;
-    let isMounted = true;
-
-    const loadGlobalLyricClicheGuard = async (force = false) => {
-      const cached = readFirestoreReadCache<LyricClicheGuardSettings>(
-        FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard,
-        FIRESTORE_READ_CACHE_TTL_MS.lyricClicheGuard,
-      );
-      if (cached?.data) {
-        setGlobalLyricClicheGuard(cached.data);
-        setIsGlobalLyricClicheGuardReady(true);
-        if (cached.isFresh && !force) return;
-      }
-
-      try {
-        const snapshot = await getDoc(doc(db, 'app_settings', 'lyric_cliche_guard'));
-        if (!isMounted) return;
+    const unsubscribe = onSnapshot(
+      doc(db, 'app_settings', 'lyric_cliche_guard'),
+      (snapshot) => {
         const data = snapshot.exists() ? snapshot.data() : null;
-        const nextSettings: LyricClicheGuardSettings = {
+        setGlobalLyricClicheGuard({
           hardBanTerms: Array.isArray(data?.hardBanTerms) ? data.hardBanTerms : [],
           softBanTerms: Array.isArray(data?.softBanTerms) ? data.softBanTerms : [],
-        };
-        setGlobalLyricClicheGuard(nextSettings);
-        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextSettings);
-      } catch (error) {
-        console.warn('Lyric cliche guard setting read failed. Keeping cached/built-in defaults:', error);
-      } finally {
-        if (isMounted) setIsGlobalLyricClicheGuardReady(true);
-      }
-    };
+        });
+        setIsGlobalLyricClicheGuardReady(true);
+      },
+      (error) => {
+        console.warn('Lyric cliche guard setting read failed. Keeping built-in defaults:', error);
+        setGlobalLyricClicheGuard({ hardBanTerms: [], softBanTerms: [] });
+        setIsGlobalLyricClicheGuardReady(true);
+      },
+    );
 
-    const handleLocalClicheGuardUpdate = (event: Event) => {
-      const detail = (event as CustomEvent<LyricClicheGuardSettings>).detail;
-      if (!detail) return;
-      setGlobalLyricClicheGuard(detail);
-      setIsGlobalLyricClicheGuardReady(true);
-      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, detail);
-    };
-
-    window.addEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
-    void loadGlobalLyricClicheGuard();
-    return () => {
-      isMounted = false;
-      window.removeEventListener('soridraw:lyric-cliche-guard-updated', handleLocalClicheGuardUpdate as EventListener);
-    };
-  }, [location.pathname]);
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadNavigationVisibility = async () => {
-      const cached = readFirestoreReadCache<NavigationVisibilitySettings>(
-        FIRESTORE_READ_CACHE_KEYS.navigationVisibility,
-        FIRESTORE_READ_CACHE_TTL_MS.navigationVisibility,
-      );
-      if (cached?.data) {
-        const nextCachedSettings = normalizeNavigationVisibilitySettings(
-          cached.data,
-          readStoredNavigationVisibilitySettings(),
-        );
-        setNavigationVisibilitySettings(nextCachedSettings);
-        writeStoredNavigationVisibilitySettings(nextCachedSettings);
-        if (cached.isFresh) return;
-      }
-
       try {
         const snapshot = await getDoc(doc(db, 'app_settings', 'navigation_visibility'));
         if (!isMounted) return;
@@ -5226,7 +5050,6 @@ function App() {
         );
         setNavigationVisibilitySettings(nextSettings);
         writeStoredNavigationVisibilitySettings(nextSettings);
-        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
       } catch (error) {
         console.warn('Navigation visibility setting read failed. Keeping cached fallback:', error);
         if (isMounted) {
@@ -5243,11 +5066,10 @@ function App() {
       );
       setNavigationVisibilitySettings(nextSettings);
       writeStoredNavigationVisibilitySettings(nextSettings);
-      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
     };
 
     window.addEventListener('soridraw:navigation-visibility-updated', handleLocalVisibilityUpdate);
-    void loadNavigationVisibility();
+    loadNavigationVisibility();
 
     return () => {
       isMounted = false;
@@ -5494,13 +5316,6 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    const pendingTrackIdsAtAttach = getPendingSunoCreditTrackIds();
-    const needsGlobalTrackListener = sunoLibrarySignal === 'generating' || pendingTrackIdsAtAttach.length > 0;
-    if (!needsGlobalTrackListener) {
-      setRecentSunoTracksForPolling([]);
-      return;
-    }
-
     const q = query(
       collection(db, 'suno_tracks', user.uid, 'tracks'),
       orderBy('createdAt', 'desc'),
@@ -5537,7 +5352,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, sunoRemainingCreditsUpdatedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
+  }, [user?.uid, sunoLibrarySignal, sunoLibrarySignalStartedAt, checkSunoRemainingCreditsAfterCompletedTrack, getPendingSunoCreditTrackIds, removePendingSunoCreditTrackId]);
 
   const shouldPollSunoTrackGlobally = useCallback((track: any, now: number): boolean => {
     if (!track || typeof track !== 'object') return false;
@@ -6558,52 +6373,26 @@ function App() {
   const [isThemeExpanded, setIsThemeExpanded] = useState(false);
   const [isSituationExpanded, setIsSituationExpanded] = useState(false);
   const [draftSituation, setDraftSituation] = useState<SituationConfig>(createEmptySituation);
-  const [sectionTags, setSectionTags] = useState<SectionTag[]>(() =>
-    readFirestoreReadCache<SectionTag[]>(
-      FIRESTORE_READ_CACHE_KEYS.sectionTags,
-      FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
-    )?.data || [],
-  );
+  const [sectionTags, setSectionTags] = useState<SectionTag[]>([]);
 
-  // Section tags are static configuration, not live user data. Hydrate from the
-  // free local cache and refresh from Firestore only when Studio actually needs
-  // them and the cache is stale. This removes the always-on full-collection
-  // listener that used to re-read every tag after each development reload.
+  // Load section tags from Firestore
   useEffect(() => {
-    if (location.pathname !== '/studio') return;
-    let isMounted = true;
+    const q = query(
+      collection(db, 'section_tags'),
+      orderBy('label', 'asc')
+    );
 
-    const loadSectionTags = async () => {
-      const cached = readFirestoreReadCache<SectionTag[]>(
-        FIRESTORE_READ_CACHE_KEYS.sectionTags,
-        FIRESTORE_READ_CACHE_TTL_MS.sectionTags,
-      );
-      if (Array.isArray(cached?.data) && cached.data.length > 0) {
-        setSectionTags(cached.data);
-        if (cached.isFresh) return;
-      }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedTags = snapshot.docs.map(doc => ({
+        ...doc.data()
+      })) as SectionTag[];
+      setSectionTags(fetchedTags);
+    }, (err) => {
+      console.error("Error fetching section tags for user UI:", err);
+    });
 
-      try {
-        const snapshot = await getDocs(query(
-          collection(db, 'section_tags'),
-          orderBy('label', 'asc'),
-        ));
-        if (!isMounted) return;
-        const fetchedTags = snapshot.docs.map((snapshotDoc) => ({
-          ...snapshotDoc.data(),
-        })) as SectionTag[];
-        setSectionTags(fetchedTags);
-        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.sectionTags, fetchedTags);
-      } catch (err) {
-        console.error('Error fetching section tags for user UI. Keeping cache:', err);
-      }
-    };
-
-    void loadSectionTags();
-    return () => {
-      isMounted = false;
-    };
-  }, [location.pathname]);
+    return () => unsubscribe();
+  }, []);
 
   const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
     if (section === 'genre') setIsGenreExpanded(prev => !prev);
@@ -8029,61 +7818,62 @@ const toggleCycleVariantSelection = (
         }
         const userRef = doc(db, 'users', currentUser.uid);
 
-        let hasSyncedSessionDoc = false;
-        let hasCreatedMissingUserDoc = false;
-
-        const syncSessionFieldsOnce = async () => {
-          if (hasSyncedSessionDoc) return;
-          hasSyncedSessionDoc = true;
+        const runInitialForceLogoutCheck = async () => {
           try {
-            await updateDoc(userRef, {
-              uid: currentUser.uid,
-              email: currentUser.email ?? '',
-              displayName: currentUser.displayName ?? '',
-              lastLoginAt: Date.now(),
-              lastSeenAt: Date.now(),
-              isOnline: true,
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+              setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+              setIsEmailVerificationCycleReady(true);
+              setUserLyricClicheGuard(null);
+              writeGeminiAutoModelFallback(true, currentUser.uid);
+              setIsUserLyricClicheGuardReady(true);
+              hasCompletedForceLogoutReentryCheckRef.current = true;
+              return;
+            }
+
+            const data = userSnap.data();
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
+            setIsEmailVerificationCycleReady(true);
+            setUserLyricClicheGuard({
+              hardBanTerms: Array.isArray(data.lyricClicheGuard?.hardBanTerms) ? data.lyricClicheGuard.hardBanTerms : [],
+              softBanTerms: Array.isArray(data.lyricClicheGuard?.softBanTerms) ? data.lyricClicheGuard.softBanTerms : [],
             });
+            writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
+            setIsUserLyricClicheGuardReady(true);
+            {
+              const verifiedRole = (data.role || 'free') as UserRole;
+              setUserRole(verifiedRole);
+              setStaffRole(normalizeStaffRole(data));
+              setAdminPermissions(normalizeAdminPermissions(data));
+              setIsUserRoleReady(true);
+              const roleCache = { uid: currentUser.uid, role: verifiedRole };
+              setCachedUserRoleHint(roleCache);
+              writeCachedUserRole(currentUser.uid, verifiedRole);
+            }
+            if (data.accountStatus) {
+              const status = data.accountStatus as AccountStatus;
+              setUserStatus(status);
+              if (status === 'banned') setIsBanModalOpen(true);
+            }
+
+            if (shouldProcessForceLogout(data, currentUser)) {
+              await performForcedLogout({ silent: true });
+              return;
+            }
           } catch (error) {
-            console.error('Failed to sync user document:', error);
+            console.error('[Auth] Initial force logout check failed:', error);
+            setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
+            setIsEmailVerificationCycleReady(true);
+          } finally {
+            setIsUserRoleReady(true);
+            hasCompletedForceLogoutReentryCheckRef.current = true;
           }
         };
 
-        const createMissingUserDocOnce = async () => {
-          if (hasCreatedMissingUserDoc) return;
-          hasCreatedMissingUserDoc = true;
-          try {
-            const favsSnap = await getDocs(
-              query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
-            );
-            const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
-            const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
-            await setDoc(userRef, {
-              uid: currentUser.uid,
-              email: currentUser.email ?? '',
-              displayName: currentUser.displayName ?? '',
-              lastLoginAt: Date.now(),
-              lastSeenAt: Date.now(),
-              isOnline: true,
-              favoriteCount: favsSnap.size,
-              songGeneratedCount: songCount,
-              createdAt: Date.now(),
-              role: 'free',
-              accountStatus: 'active',
-              paymentStatus: 'none',
-            });
-          } catch (error) {
-            console.error('Failed to create user document:', error);
-          }
-        };
+        runInitialForceLogoutCheck();
 
-        // One listener is now the single source for role/status/force-logout. Its
-        // first server snapshot replaces the two extra getDoc(userRef) calls that
-        // previously ran on every login/reload. Cached snapshots may hydrate the UI
-        // immediately, but force-logout and session writes wait for the server copy.
-        unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
-          const isServerSnapshot = !docSnap.metadata.fromCache;
-
+        // Sync user role in real-time
+        unsubUserDoc = onSnapshot(userRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser, data));
@@ -8105,28 +7895,25 @@ const toggleCycleVariantSelection = (
             writeGeminiAutoModelFallback(data.generationPreferences?.autoModelFallback !== false, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
             applyFavoriteSyncSignal(currentUser.uid, data.favoriteSyncSignal);
-
+            
+            // Check for Banned status
             if (data.accountStatus) {
               const status = data.accountStatus as AccountStatus;
               setUserStatus(status);
-              if (status === 'banned') setIsBanModalOpen(true);
+              if (status === 'banned') {
+                setIsBanModalOpen(true);
+              }
             }
 
-            if (isServerSnapshot && !hasCompletedForceLogoutReentryCheckRef.current) {
-              if (shouldProcessForceLogout(data, currentUser)) {
-                hasCompletedForceLogoutReentryCheckRef.current = true;
-                void performForcedLogout({ silent: true });
-                return;
-              }
-              hasCompletedForceLogoutReentryCheckRef.current = true;
-              void syncSessionFieldsOnce();
+            if (!hasCompletedForceLogoutReentryCheckRef.current) {
               return;
             }
 
-            if (isServerSnapshot && hasCompletedForceLogoutReentryCheckRef.current && shouldProcessForceLogout(data, currentUser)) {
+            if (shouldProcessForceLogout(data, currentUser)) {
               setIsForcedLogoutModalOpen(true);
             }
           } else {
+            // Initial signup fallback
             setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
             setIsEmailVerificationCycleReady(true);
             setUserRole('free');
@@ -8140,11 +7927,6 @@ const toggleCycleVariantSelection = (
             setUserLyricClicheGuard(null);
             writeGeminiAutoModelFallback(true, currentUser.uid);
             setIsUserLyricClicheGuardReady(true);
-
-            if (isServerSnapshot) {
-              hasCompletedForceLogoutReentryCheckRef.current = true;
-              void createMissingUserDocOnce();
-            }
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
@@ -8154,6 +7936,53 @@ const toggleCycleVariantSelection = (
           setUserLyricClicheGuard(null);
           setIsUserLyricClicheGuardReady(true);
         });
+
+        const syncUserDoc = async () => {
+          try {
+            const userRef = doc(db, 'users', currentUser.uid);
+            const userSnap = await getDoc(userRef);
+
+            const safeSessionData = {
+              uid: currentUser.uid,
+              email: currentUser.email ?? '',
+              displayName: currentUser.displayName ?? '',
+              lastLoginAt: Date.now(),
+              lastSeenAt: Date.now(),
+              isOnline: true,
+            };
+
+            if (!userSnap.exists()) {
+              const favsSnap = await getDocs(
+                query(collection(db, 'favorites'), where('uid', '==', currentUser.uid))
+              );
+              const songsSnap = await getDoc(doc(db, 'user_recent_songs', currentUser.uid));
+              const songCount = songsSnap.exists() ? (songsSnap.data().songs?.length || 0) : 0;
+
+              await setDoc(userRef, {
+                ...safeSessionData,
+                favoriteCount: favsSnap.size,
+                songGeneratedCount: songCount,
+                createdAt: Date.now(),
+                role: 'free',
+                accountStatus: 'active',
+                paymentStatus: 'none',
+              });
+            } else {
+              const currentData = userSnap.data();
+
+              if (currentData.accountStatus === 'banned') {
+                setIsBanModalOpen(true);
+              }
+
+              // Existing users: never touch role/plan/account status from the client.
+              await updateDoc(userRef, safeSessionData);
+            }
+          } catch (error) {
+            console.error('Failed to sync user document:', error);
+          }
+        };
+
+        syncUserDoc();
 
         // Fetch favorites for the user.
         // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
@@ -14558,9 +14387,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         sunoLibrarySignal={sunoLibrarySignal}
         sunoLibrarySignalDotClass={sunoLibrarySignalDotClass}
         clearSunoLibrarySignal={clearSunoLibrarySignal}
-        studioCompactMobileLayout={isStudioCompactMobileLayout}
-        studioWorkspaceView={studioWorkspaceView}
-        onStudioWorkspaceSelect={selectStudioWorkspaceView}
       />
 
       <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
@@ -14579,7 +14405,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
           canAccessNavigationMenu('studio') ? (
           <StudioPageFrame
             workspaceView={studioWorkspaceView}
-            compactMobileLayout={isStudioCompactMobileLayout}
             leftRail={
               <StudioLeftRail
                 activeWorkspace={studioWorkspaceView}
@@ -14627,29 +14452,21 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && isAdminMenuUser && splitPerfToolsVisible && (
-                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
+              {isStudioBlackActionMode && (
+                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교">
                   <button
                     type="button"
-                    className={studioSplitEngineOverride === null ? 'is-active' : ''}
-                    onClick={() => setStudioSplitEngine('auto')}
-                    title={studioSplitAutoTitle}
-                  >
-                    자동
-                  </button>
-                  <button
-                    type="button"
-                    className={studioSplitEngineOverride === 'lite' ? 'is-active' : ''}
+                    className={studioSplitEngine === 'lite' ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('lite')}
-                    title="진단용 강제 선택 · 초경량 Studio 분할 엔진 V2"
+                    title="초경량 Studio 분할 엔진 V2"
                   >
                     Lite V2
                   </button>
                   <button
                     type="button"
-                    className={studioSplitEngineOverride === 'legacy' ? 'is-active' : ''}
+                    className={studioSplitEngine === 'legacy' ? 'is-active' : ''}
                     onClick={() => setStudioSplitEngine('legacy')}
-                    title="진단용 강제 선택 · 기존 StudioSplitWorkspace"
+                    title="기존 StudioSplitWorkspace"
                   >
                     기존 방식
                   </button>
@@ -14697,11 +14514,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               {isStudioLoaded && (
                 <StudioSplitEngineWorkspace
                   engine={studioSplitEngine}
-                  liteRuntimeProfile={studioLiteRuntimeProfile}
                   viewMode="split"
                   workspaceView={studioWorkspaceView}
                   workspaceRequestId={studioWorkspaceLayoutRequestId}
-                  compactMobileMode={isStudioCompactMobileLayout}
                   builderMasthead={
                     <div className="soridraw-studio-scroll-builder-masthead">
                       <h1 className="soridraw-studio-title inline-flex items-center justify-start gap-2.5 text-[37px] md:text-[52px] font-black tracking-tight text-[var(--text-primary)] mb-0 font-display sori-studio-logo-text text-left w-full">
@@ -14724,7 +14539,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 >
                   <StudioBuilderPane>
                     {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 gap-5 items-start">
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -14792,7 +14607,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
                 onHeightChange={setGenreHeight}
-                forcedHeight={!isStudioBlackActionMode && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
+                forcedHeight={isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
                 directInput={{
                   selectedText: subGenre.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || selectedGenres.map((id) => getCustomKeywordText(id, CUSTOM_GENRE_PREFIX)).find(Boolean) || '',
@@ -14960,7 +14775,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -14990,7 +14805,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}
@@ -15002,15 +14817,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               }}
             />
             <div className="soridraw-storyboard-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface md:col-span-2 rounded-[26px] bg-[var(--card-bg)] overflow-visible relative">
-              <div className="soridraw-storyboard-card-inner px-5 md:px-6 py-3.5 md:py-4 flex items-center justify-between gap-4">
+              <div className="soridraw-storyboard-card-inner p-5 md:p-6 flex items-center justify-between gap-4">
                 <button
                   type="button"
                   onClick={openStoryboardModal}
-                  className="soridraw-storyboard-launcher flex-1 min-w-0 text-left"
+                  className="flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="soridraw-storyboard-trigger-icon w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="soridraw-storyboard-trigger-icon-glyph w-[22px] h-[22px] text-[#FFD36A]" />
+                    <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
                     </div>
                     <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
@@ -15483,9 +15298,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
                         <button
                           onClick={() => setLyricMode('assist')}
-                          aria-pressed={lyricMode === 'assist'}
                           className={cn(
-                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'assist' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -15495,9 +15309,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </button>
                         <button
                           onClick={() => setLyricMode('preserve')}
-                          aria-pressed={lyricMode === 'preserve'}
                           className={cn(
-                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'preserve' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -18981,7 +18794,7 @@ function CycleSectionComponent({
         </div>
 
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
+          className="soridraw-expand-content overflow-hidden min-h-[76px] transition-[max-height,opacity] duration-300 ease-out"
           style={{
             maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
@@ -19845,7 +19658,7 @@ function CategorySectionComponent({
         </div>
         
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
+          className="soridraw-expand-content overflow-hidden min-h-[48px] md:min-h-[96px] transition-[max-height,opacity] duration-300 ease-out"
           style={{
             maxHeight: isExpanded
               ? resolveExpandedHeight(forcedHeight, contentHeight, 96)
@@ -21464,7 +21277,7 @@ function SongStructureIntegratedControlComponent({
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 공통 작사 스타일 */}
               <div className="space-y-2">
-                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
+                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border border-btn-border bg-btn-bg p-1 shadow-btn">
                   {([
                     { id: 'default', label: '기본', description: 'Story Context와 장르에 맞춰 자유롭게 작사합니다.' },
@@ -21500,7 +21313,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
-                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
+                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
                 <div className="flex gap-2">
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
@@ -21538,7 +21351,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 3. 섹션 */}
               <div data-soridraw-scroll-anchor="lyrics-section-structure" className="space-y-2">
-                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
+                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -21573,7 +21386,7 @@ function SongStructureIntegratedControlComponent({
                 
                 {/* Structure Guide - Always Visible */}
                 <div data-soridraw-selectable-text="true" className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
-                  <p className="soridraw-split-accent-caption text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
+                  <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words whitespace-pre-line">
@@ -21625,7 +21438,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionVocalCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -21681,7 +21494,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionInstrumentCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -24466,7 +24279,6 @@ function VocalControlComponent({
             <div className="grid grid-cols-2 gap-2">
               <button
                 data-soridraw-selected={maleCount > 0 ? 'true' : 'false'}
-                data-vocal-gender="male"
                 aria-pressed={maleCount > 0}
                 onClick={() => handleGenderToggle('male')}
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
@@ -24486,7 +24298,6 @@ function VocalControlComponent({
               </button>
               <button
                 data-soridraw-selected={femaleCount > 0 ? 'true' : 'false'}
-                data-vocal-gender="female"
                 aria-pressed={femaleCount > 0}
                 onClick={() => handleGenderToggle('female')}
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
@@ -24579,7 +24390,7 @@ function VocalControlComponent({
                                 className={cn(
                                   "soridraw-vocal-role-button px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
                                   isActive
-                                    ? "soridraw-vocal-role-selected bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
+                                    ? "bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
                                     : isRoleLimitReached
                                       ? "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                                       : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -25035,183 +24846,66 @@ interface TempoControlProps {
 
 function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
-  const activeRangeRef = useRef<HTMLDivElement>(null);
-  const minHandleRef = useRef<HTMLDivElement>(null);
-  const maxHandleRef = useRef<HTMLDivElement>(null);
-  const liveValueRootRef = useRef<HTMLDivElement>(null);
-  const dragTypeRef = useRef<'min' | 'max' | null>(null);
-  const dragRectRef = useRef<DOMRect | null>(null);
-  const liveMinRef = useRef(min);
-  const liveMaxRef = useRef(max);
-  const pendingClientXRef = useRef<number | null>(null);
-  const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
-  const bpmToPercent = useCallback((value: number) => (
-    ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100
-  ), []);
-
-  const syncLiveBpmText = useCallback((nextMin: number, nextMax: number) => {
-    const root = liveValueRootRef.current;
-    if (!root) return;
-    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="min"]').forEach((input) => {
-      input.value = String(nextMin);
-    });
-    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="max"]').forEach((input) => {
-      input.value = String(nextMax);
-    });
-  }, []);
-
-  const paintSliderFrame = useCallback((nextMin: number, nextMax: number) => {
-    const minPercent = bpmToPercent(nextMin);
-    const maxPercent = bpmToPercent(nextMax);
-
-    if (minHandleRef.current) minHandleRef.current.style.left = `${minPercent}%`;
-    if (maxHandleRef.current) maxHandleRef.current.style.left = `${maxPercent}%`;
-    if (activeRangeRef.current) {
-      activeRangeRef.current.style.left = `${minPercent}%`;
-      activeRangeRef.current.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
-    }
-    syncLiveBpmText(nextMin, nextMax);
-  }, [bpmToPercent, syncLiveBpmText]);
-
-  const applyPointerPosition = useCallback((clientX: number) => {
-    const dragType = dragTypeRef.current;
-    const rect = dragRectRef.current;
-    if (!dragType || !rect || rect.width <= 0) return;
-
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const percent = x / rect.width;
-    const rawValue = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
-
-    if (dragType === 'min') {
-      liveMinRef.current = Math.min(rawValue, liveMaxRef.current);
-    } else {
-      liveMaxRef.current = Math.max(rawValue, liveMinRef.current);
-    }
-
-    paintSliderFrame(liveMinRef.current, liveMaxRef.current);
-  }, [paintSliderFrame]);
-
-  const flushPendingPointerFrame = useCallback(() => {
-    if (dragRafRef.current !== null) {
-      cancelAnimationFrame(dragRafRef.current);
-      dragRafRef.current = null;
-    }
-    const clientX = pendingClientXRef.current;
-    pendingClientXRef.current = null;
-    if (clientX !== null) applyPointerPosition(clientX);
-  }, [applyPointerPosition]);
-
-  const schedulePointerFrame = useCallback((clientX: number) => {
-    pendingClientXRef.current = clientX;
-    if (dragRafRef.current !== null) return;
-    dragRafRef.current = requestAnimationFrame(() => {
-      dragRafRef.current = null;
-      const latestClientX = pendingClientXRef.current;
-      pendingClientXRef.current = null;
-      if (latestClientX !== null) applyPointerPosition(latestClientX);
-    });
-  }, [applyPointerPosition]);
-
-  const handlePointerStart = useCallback((type: 'min' | 'max', event: React.PointerEvent<HTMLDivElement>) => {
-    if (enabled || !sliderRef.current) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    liveMinRef.current = min;
-    liveMaxRef.current = max;
-    dragTypeRef.current = type;
-    dragRectRef.current = sliderRef.current.getBoundingClientRect();
-    pendingClientXRef.current = null;
+  const handleStart = (type: 'min' | 'max') => {
+    if (enabled) return; // If random is enabled, slider is disabled
     setIsDragging(type);
     document.body.style.userSelect = 'none';
-
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture can fail only if the pointer already ended; dragging still
-      // remains safe because the final value is committed on pointer end.
-    }
-
-    // Paint the first position immediately so the handle attaches to the pointer
-    // on the same interaction frame instead of waiting for a React state round-trip.
-    applyPointerPosition(event.clientX);
-  }, [enabled, min, max, applyPointerPosition]);
-
-  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragTypeRef.current) return;
-    event.preventDefault();
-    schedulePointerFrame(event.clientX);
-  }, [schedulePointerFrame]);
-
-  const commitPointerDrag = useCallback((dragType: 'min' | 'max') => {
-    const finalMin = liveMinRef.current;
-    const finalMax = liveMaxRef.current;
-    dragTypeRef.current = null;
-    dragRectRef.current = null;
-    setIsDragging(null);
-    document.body.style.userSelect = '';
-
-    // React state is committed once per drag. Visual movement above is direct DOM
-    // work, so all themes share the same low-latency slider path without re-rendering
-    // the Studio tree for every pointer event.
-    if (dragType === 'min') {
-      if (finalMin !== min) onMinChange(finalMin);
-    } else if (finalMax !== max) {
-      onMaxChange(finalMax);
-    }
-  }, [min, max, onMinChange, onMaxChange]);
-
-  const handlePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const dragType = dragTypeRef.current;
-    if (!dragType) return;
-    event.preventDefault();
-    event.stopPropagation();
-
-    pendingClientXRef.current = event.clientX;
-    flushPendingPointerFrame();
-
-    try {
-      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-    } catch {
-      // No-op: capture is already released by the browser.
-    }
-
-    commitPointerDrag(dragType);
-  }, [flushPendingPointerFrame, commitPointerDrag]);
-
-  const handlePointerCancel = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const dragType = dragTypeRef.current;
-    if (!dragType) return;
-    event.preventDefault();
-    event.stopPropagation();
-    flushPendingPointerFrame();
-    commitPointerDrag(dragType);
-  }, [flushPendingPointerFrame, commitPointerDrag]);
+  };
 
   useEffect(() => {
-    if (dragTypeRef.current) return;
-    liveMinRef.current = min;
-    liveMaxRef.current = max;
-  }, [min, max]);
+    const handleMove = (clientX: number) => {
+      if (!isDragging || !sliderRef.current) return;
 
-  useEffect(() => () => {
-    if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
-    document.body.style.userSelect = '';
-  }, []);
+      const rect = sliderRef.current.getBoundingClientRect();
+      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+      const percent = x / rect.width;
+      const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
+
+      if (isDragging === 'min') {
+        if (val <= max) onMinChange(val);
+      } else {
+        if (val >= min) onMaxChange(val);
+      }
+    };
+
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handleMove(e.touches[0].clientX);
+      }
+    };
+
+    const handleEnd = () => {
+      setIsDragging(null);
+      document.body.style.userSelect = '';
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', handleEnd);
+      window.addEventListener('touchmove', onTouchMove, { passive: false });
+      window.addEventListener('touchend', handleEnd);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+  }, [isDragging, min, max, onMinChange, onMaxChange]);
 
   const displayMin = min;
   const displayMax = max;
-  const minPos = bpmToPercent(displayMin);
-  const maxPos = bpmToPercent(displayMax);
+  const minPos = ((displayMin - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
+  const maxPos = ((displayMax - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
   const isValid = (max - min <= TEMPO_MAX_ACTIVE_RANGE) && (min !== TEMPO_MIN_BPM || max !== TEMPO_MAX_BPM);
 
   return (
-    <div ref={liveValueRootRef} className={cn(
+    <div className={cn(
       "soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all"
     )}>
       <div className="soridraw-tempo-card-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -25250,7 +24944,6 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               onMouseLeave={() => onHover(null)}
             >
               <input
-                data-tempo-live="min"
                 type="number"
                 min={TEMPO_MIN_BPM}
                 max={max}
@@ -25268,7 +24961,6 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               />
               <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
-                data-tempo-live="max"
                 type="number"
                 min={min}
                 max={TEMPO_MAX_BPM}
@@ -25372,13 +25064,12 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           onMouseLeave={() => onHover(null)}
         >
           <input
-            data-tempo-live="min"
             type="number"
             min={TEMPO_MIN_BPM}
             max={max}
             value={min}
             readOnly={enabled}
-            aria-disabled={enabled}
+                aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -25390,13 +25081,12 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           />
           <span className="text-[var(--text-secondary)]/50 font-bold text-base">-</span>
           <input
-            data-tempo-live="max"
             type="number"
             min={min}
             max={TEMPO_MAX_BPM}
             value={max}
             readOnly={enabled}
-            aria-disabled={enabled}
+                aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -25422,11 +25112,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           ref={sliderRef}
           className="relative h-2 bg-[var(--hover-bg)] rounded-full cursor-pointer mx-0"
           onClick={(e) => {
-            if (enabled || dragTypeRef.current) return;
+            if (enabled) return;
             const rect = sliderRef.current!.getBoundingClientRect();
-            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+            const x = e.clientX - rect.left;
             const percent = x / rect.width;
             const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
+            
+            // Snap to nearest handle but respect constraints
             if (Math.abs(val - min) < Math.abs(val - max)) {
               onMinChange(Math.min(val, max));
             } else {
@@ -25436,7 +25128,6 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
         >
           {/* Active Range Bar */}
           <div 
-            ref={activeRangeRef}
             className={cn(
               "absolute h-full rounded-full transition-colors",
               !enabled ? (isValid ? "bg-[#FFB400]" : "bg-[var(--text-secondary)]/30") : "bg-[#FFB400]/40"
@@ -25446,14 +25137,10 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Min Handle */}
           <div 
-            ref={minHandleRef}
-            onPointerDown={(e) => handlePointerStart('min', e)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerEnd}
-            onPointerCancel={handlePointerCancel}
-            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => { e.stopPropagation(); handleStart('min'); }}
+            onTouchStart={(e) => { e.stopPropagation(); handleStart('min'); }}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/10 scale-100 cursor-not-allowed",
@@ -25466,14 +25153,10 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Max Handle */}
           <div 
-            ref={maxHandleRef}
-            onPointerDown={(e) => handlePointerStart('max', e)}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerEnd}
-            onPointerCancel={handlePointerCancel}
-            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => { e.stopPropagation(); handleStart('max'); }}
+            onTouchStart={(e) => { e.stopPropagation(); handleStart('max'); }}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-[#8AA35A] shadow-lg shadow-[#8AA35A]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-[#8AA35A]/40 shadow-lg shadow-[#8AA35A]/10 scale-100 cursor-not-allowed",
@@ -25495,12 +25178,12 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
       {/* Status Guidance Text - Repositioned to Bottom Center */}
       <div className="flex justify-center mt-2">
         {enabled ? (
-          <span className="soridraw-tempo-status-pill is-enabled text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
+          <span className="text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
             <Sparkles className="w-3 h-3 animate-pulse" /> 랜덤 템포 적용됨
           </span>
         ) : (
           isValid ? (
-            <span className="soridraw-tempo-status-pill is-valid text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
+            <span className="text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
               <Check className="w-3 h-3" /> 템포 지정됨
             </span>
           ) : (

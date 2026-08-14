@@ -41,17 +41,12 @@ type StudioPageFrameProps = {
   rightRail: ReactNode;
   children: ReactNode;
   lockViewport?: boolean;
-  compactMobileLayout?: boolean;
 };
 
-export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children, lockViewport = true, compactMobileLayout = false }: StudioPageFrameProps) {
+export default function StudioPageFrame({ workspaceView = 'create', leftRail, rightRail, children, lockViewport = true }: StudioPageFrameProps) {
   const isMobileViewport = useMediaQuery('(max-width: 1099px)');
   const isWideViewport = useMediaQuery('(min-width: 1600px)', true);
   const railViewport: RailViewport = isMobileViewport ? 'mobile' : isWideViewport ? 'wide' : 'compact';
-  // 646: compact mobile composition is a split-theme presentation choice, not
-  // a generic viewport rule. Dark/light phone layouts keep their existing frame
-  // behavior; only Studio Black explicitly opts into the single-page mobile shell.
-  const isCompactWorkspace = compactMobileLayout && railViewport === 'mobile';
   const [isLeftRailCollapsed, setIsLeftRailCollapsed] = useState(readInitialLeftRailState);
   const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(readInitialRightRailState);
 
@@ -77,11 +72,11 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
     document.documentElement.dataset.soridrawStudioWorkspaceView = workspaceView;
   }, [workspaceView]);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (railViewport === 'compact') {
-      // The rail geometry is part of the center workspace width. Commit the
-      // compact rail state before paint so the builder never renders one frame
-      // with the old 214px rail width and the new 64px center origin.
+      // Tablet/compact landscape always enters with both auxiliary rails in
+      // their space-saving state. This runs only when the 1600/1100 breakpoint
+      // is crossed, never for every pixel of native window resizing.
       setIsLeftRailCollapsed(true);
       setIsRightRailCollapsed(true);
       return;
@@ -89,7 +84,6 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
 
     if (railViewport === 'wide') {
       // Compact-session choices do not overwrite the user's PC preference.
-      // Restore the wide-PC rail contract before paint for the same reason.
       setIsLeftRailCollapsed(readStoredRailState(LEFT_RAIL_STORAGE_KEY, false));
       setIsRightRailCollapsed(readStoredRailState(RIGHT_RAIL_STORAGE_KEY, false));
     }
@@ -105,13 +99,14 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
     }
   }, [isLeftRailCollapsed, isRightRailCollapsed, railViewport]);
 
-  useLayoutEffect(() => {
-    // The grid columns have already changed in this commit. Notify the split
-    // geometry owner synchronously, before paint, so its pixel builder width,
-    // masthead and search coordinates are recalculated against the new center
-    // width in the same frame. A deferred rAF here caused the visible
-    // left/right overshoot when a rail was collapsed or expanded.
-    window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      // Studio owns a dedicated layout signal. Do not synthesize a second
+      // native `resize` event here; doing so used to wake every global resize
+      // listener again whenever either rail changed.
+      window.dispatchEvent(new CustomEvent('soridraw-studio-frame-resize'));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [isLeftRailCollapsed, isRightRailCollapsed]);
 
   return (
@@ -119,38 +114,33 @@ export default function StudioPageFrame({ workspaceView = 'create', leftRail, ri
       className={`soridraw-studio-page-frame${isLeftRailCollapsed ? ' is-left-rail-collapsed' : ''}${isRightRailCollapsed ? ' is-right-rail-collapsed' : ''}`}
       data-rail-viewport={railViewport}
       data-workspace-view={workspaceView}
-      data-compact-workspace={isCompactWorkspace ? 'true' : 'false'}
     >
       <div className="soridraw-studio-masthead-divider" aria-hidden="true" />
-      {!isCompactWorkspace && leftRail}
-      {!isCompactWorkspace && (
-        <button
-          type="button"
-          className="soridraw-studio-left-rail-collapse-toggle"
-          onClick={() => setIsLeftRailCollapsed((current) => !current)}
-          aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
-          title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
-          aria-expanded={!isLeftRailCollapsed}
-        >
-          <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
-        </button>
-      )}
+      {leftRail}
+      <button
+        type="button"
+        className="soridraw-studio-left-rail-collapse-toggle"
+        onClick={() => setIsLeftRailCollapsed((current) => !current)}
+        aria-label={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+        title={isLeftRailCollapsed ? '왼쪽 메뉴 펼치기' : '왼쪽 메뉴 접기'}
+        aria-expanded={!isLeftRailCollapsed}
+      >
+        <span className="soridraw-studio-panel-toggle-icon" aria-hidden="true" />
+      </button>
 
       <div className="soridraw-studio-page-center">{children}</div>
 
-      {!isCompactWorkspace && rightRail}
-      {!isCompactWorkspace && (
-        <button
-          type="button"
-          className="soridraw-studio-right-rail-collapse-toggle"
-          onClick={() => setIsRightRailCollapsed((current) => !current)}
-          aria-label={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
-          title={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
-          aria-expanded={!isRightRailCollapsed}
-        >
-          <span className="soridraw-studio-panel-toggle-icon is-right" aria-hidden="true" />
-        </button>
-      )}
+      {rightRail}
+      <button
+        type="button"
+        className="soridraw-studio-right-rail-collapse-toggle"
+        onClick={() => setIsRightRailCollapsed((current) => !current)}
+        aria-label={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
+        title={isRightRailCollapsed ? '오른쪽 메뉴 펼치기' : '오른쪽 메뉴 접기'}
+        aria-expanded={!isRightRailCollapsed}
+      >
+        <span className="soridraw-studio-panel-toggle-icon is-right" aria-hidden="true" />
+      </button>
     </div>
   );
 }

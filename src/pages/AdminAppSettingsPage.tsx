@@ -5,7 +5,6 @@ import AdminPageLayout from '../components/AdminPageLayout';
 import { db } from '../firebase';
 import { normalizeClicheTermList } from '../constants/lyricClicheGuard';
 import { readSplitPerfToolVisibility, writeSplitPerfToolVisibility } from '../components/studio/splitPerfDiagnostics';
-import { FIRESTORE_READ_CACHE_KEYS, writeFirestoreReadCache } from '../lib/firestoreReadCache';
 import {
   DEFAULT_NAVIGATION_VISIBILITY_SETTINGS,
   getNavigationFirestorePayload,
@@ -106,7 +105,6 @@ export default function AdminAppSettingsPage() {
         setSavedSettings(nextSettings);
         setDraftSettings(nextSettings);
         writeStoredNavigationVisibilitySettings(nextSettings);
-        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, nextSettings);
       } catch (error) {
         console.error('Failed to load app settings:', error);
         if (isMounted) {
@@ -134,15 +132,10 @@ export default function AdminAppSettingsPage() {
         const snapshot = await getDoc(LYRIC_CLICHE_GUARD_DOC);
         if (!isMounted) return;
         const data = snapshot.exists() ? snapshot.data() : null;
-        const nextClicheGuard = {
-          hardBanTerms: parseTerms(formatTerms(data?.hardBanTerms)),
-          softBanTerms: parseTerms(formatTerms(data?.softBanTerms)),
-        };
         setClicheDraft({
-          hardBanText: nextClicheGuard.hardBanTerms.join('\n'),
-          softBanText: nextClicheGuard.softBanTerms.join('\n'),
+          hardBanText: formatTerms(data?.hardBanTerms),
+          softBanText: formatTerms(data?.softBanTerms),
         });
-        writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextClicheGuard);
       } catch (error) {
         console.error('Failed to load lyric cliche guard settings:', error);
         if (isMounted) setClicheMessage('클리셰 설정을 불러오지 못했습니다. Firestore 권한을 확인해주세요.');
@@ -180,7 +173,6 @@ export default function AdminAppSettingsPage() {
       );
       setSavedSettings(draftSettings);
       writeStoredNavigationVisibilitySettings(draftSettings);
-      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.navigationVisibility, draftSettings);
       window.dispatchEvent(new CustomEvent('soridraw:navigation-visibility-updated', {
         detail: draftSettings,
       }));
@@ -208,13 +200,10 @@ export default function AdminAppSettingsPage() {
         },
         { merge: true },
       );
-      const nextClicheGuard = { hardBanTerms, softBanTerms };
       setClicheDraft({
         hardBanText: hardBanTerms.join('\n'),
         softBanText: softBanTerms.join('\n'),
       });
-      writeFirestoreReadCache(FIRESTORE_READ_CACHE_KEYS.lyricClicheGuard, nextClicheGuard);
-      window.dispatchEvent(new CustomEvent('soridraw:lyric-cliche-guard-updated', { detail: nextClicheGuard }));
       setClicheMessage('전체 클리셰 설정을 저장했습니다.');
     } catch (error) {
       console.error('Failed to save lyric cliche guard settings:', error);
@@ -335,7 +324,7 @@ export default function AdminAppSettingsPage() {
                   : 'bg-black/25 text-[var(--text-secondary)] hover:bg-white/[0.06] hover:text-[var(--text-primary)]'
               }`}
             >
-              진단 {perfToolsVisible ? 'ON' : 'OFF'}
+              진단 {perfToolsVisible ? '표시' : '숨김'}
             </button>
           </div>
         </div>

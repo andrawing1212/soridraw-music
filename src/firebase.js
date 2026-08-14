@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -98,27 +98,7 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
-let firestoreDb;
-try {
-  // Persistent multi-tab cache is enabled on local/AI-Studio development hosts,
-  // and on user devices only when "remember login" marks the browser as trusted.
-  // This lets short development reloads/reconnects reuse IndexedDB instead of
-  // behaving like brand-new listener queries, while session-only user logins keep
-  // the default memory cache.
-  const shouldUsePersistentFirestoreCache = readRememberLoginPreference()
-    || isAiStudioPreview
-    || currentHostname === "localhost"
-    || currentHostname === "127.0.0.1";
-  firestoreDb = shouldUsePersistentFirestoreCache
-    ? initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      })
-    : getFirestore(app);
-} catch (error) {
-  console.warn("[Firestore] persistent cache unavailable; using memory cache:", error);
-  firestoreDb = getFirestore(app);
-}
-export const db = firestoreDb;
+export const db = getFirestore(app);
 export const realtimeDb = getDatabase(app);
 export const functions = getFunctions(app, "us-central1");
 export { httpsCallable };

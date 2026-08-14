@@ -3998,7 +3998,13 @@ const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
 
 function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
-  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
+  // 744 — One stable external responsive contract for the builder.
+  // Wide/tablet stays 3-column from 1100px upward; the dedicated portrait
+  // Compact band is 768~1099px; <=767px keeps the existing phone layout.
+  // matchMedia only wakes React when a breakpoint actually changes, so native
+  // window resizing stays live without rerendering on every pixel.
+  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1100px)', true);
+  const isStudioTwoColumnSelectionLayout = useMediaQuery('(min-width: 768px)', true);
   const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
@@ -14705,7 +14711,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 >
                   <StudioBuilderPane>
                     {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -14941,7 +14947,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -14971,7 +14977,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}

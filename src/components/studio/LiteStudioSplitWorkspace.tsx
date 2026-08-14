@@ -40,7 +40,10 @@ const MAX_PERCENT = 76;
 const TABLET_VIEWPORT_MIN = 1100;
 const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
-const BUILDER_MOBILE_BREAKPOINT = 820;
+// 741 — Preserve desktop above 820px; Compact replaces the former upper-mobile
+// band and true Builder mobile starts only at the shared 660px narrow-content floor.
+const BUILDER_MOBILE_BREAKPOINT = 660;
+const BUILDER_COMPACT_MAX = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
@@ -472,6 +475,20 @@ export default function LiteStudioSplitWorkspace({
       BUILDER_MOBILE_BREAKPOINT,
       PANE_MODE_HYSTERESIS,
     );
+    // 741 — Match Legacy: Compact consumes only the former upper-mobile band.
+    // Desktop remains unchanged above 820px, Compact owns 661~820px, and the
+    // existing one-column Builder mobile composition begins at the 660px floor.
+    const builderCompactActive = !builderCollapsedRef.current
+      && nextBuilderMode === 'desktop'
+      && builderWidth <= BUILDER_COMPACT_MAX;
+    if (builderCompactActive) {
+      if (builder.dataset.soridrawPaneCompact !== 'true') {
+        builder.dataset.soridrawPaneCompact = 'true';
+      }
+    } else if (builder.dataset.soridrawPaneCompact) {
+      delete builder.dataset.soridrawPaneCompact;
+    }
+
     const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library' || workspaceView === 'recent';
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,
@@ -1341,15 +1358,20 @@ export default function LiteStudioSplitWorkspace({
     let observer: ResizeObserver | null = null;
     if (layout && typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => {
-        if (!draggingRef.current) scheduleMetricsRefresh();
+        // 744 — Native window resize has one live geometry owner below. Avoid a
+        // second observer commit in the same frame; keep the observer for rails
+        // and non-window layout changes.
+        if (!draggingRef.current && !document.documentElement.classList.contains('soridraw-window-resizing')) {
+          scheduleMetricsRefresh();
+        }
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
-    // 668 — one shared outer-window resize contract for Legacy and Lite.
-    // Horizontal geometry still belongs to ResizeObserver, but the native resize
-    // event owns only the start/end marker. That marker lets CSS suspend the
-    // expensive structural container-query layer while the browser is being
-    // continuously resized, then restore exact responsive detail once at settle.
+    // 744 — Same one-owner native resize contract as Legacy. The native resize
+    // event publishes width/height changes live in one rAF path; ResizeObserver
+    // stands down during that gesture and resumes for ordinary non-window layout
+    // changes. Structural pane containers remain responsive while resizing.
+    let lastViewportWidth = window.innerWidth;
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
     const handleWindowResize = () => {
@@ -1361,8 +1383,14 @@ export default function LiteStudioSplitWorkspace({
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
 
+      // 744 — Publish outer-window width changes every animation frame so the
+      // visible Builder stage can cross desktop/Compact/mobile while the edge is
+      // still being dragged. ResizeObserver is paused for the same native gesture,
+      // preventing the old duplicate geometry path.
+      const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
+      if (nextViewportWidth !== lastViewportWidth || nextViewportHeight !== lastViewportHeight) {
+        lastViewportWidth = nextViewportWidth;
         lastViewportHeight = nextViewportHeight;
         scheduleMetricsRefresh();
       }

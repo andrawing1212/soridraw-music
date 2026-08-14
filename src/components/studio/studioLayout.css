@@ -10915,14 +10915,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * responsive layout resolves once. Divider dragging intentionally keeps 519's
  * live container behavior, so the already-approved splitter interaction is not
  * changed by this fix. */
-@media (min-width: 1100px) {
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    container-type: normal !important;
-    container-name: none !important;
-  }
-}
+/* 744 — Keep the two structural pane containers live during native window resize.
+ * The old 668 freeze intentionally resolved responsive detail only after resize-end,
+ * which is exactly the visible "UI changes only after release" behavior reported in
+ * the installed app. Secondary summary/live-keyword containers are still suspended
+ * by the shared fast path below, so live responsiveness returns without restoring
+ * the full duplicate resize workload. */
 
 /* 519 — continuous-resize fast path without a temporary "PC/default" UI.
  * 488 disabled the builder pane, result pane and Generate panel containers while
@@ -12912,87 +12910,50 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   align-items: center !important;
 }
 
-/* 737 — Tablet portrait Compact stage for Studio Black.
- * Remove the obsolete 1024~1099px portrait-tablet bridge and let the new Compact
- * composition own the entire 768~1099px pre-mobile band. The 768~1023px part (the same
- * range where Mood/Theme currently render four keyword buttons per row) keeps
- * the approved Compact arrangement, and 1024~1099px now uses that same layout
- * instead of the old portrait-tablet single-column bridge.
+/* 744 — Canonical external-window builder stages.
+ * One viewport contract only:
+ *   >=1100px   = existing tablet/PC layout
+ *   768~1099px = portrait Compact
+ *   <=767px    = existing mobile layout
  *
- * Layout contract:
- *   Genre           (full row)
- *   Style | Sound   (two columns)
- *   Mood  | Theme   (existing two columns)
- *   Storyboard      (full row)
- *   Vocal | Lyrics  (existing two columns)
- *
- * Phones below 768px and the 1100px+ split tablet/desktop paths are untouched. */
-@media (min-width: 768px) and (max-width: 1099px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
-  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid {
+ * This replaces the layered 742/743 portrait fixes. The old orientation-driven
+ * single-column tablet bridge is no longer allowed to participate, so Classic
+ * Dark/Light cannot mix old and new tablet layouts while the window is resized.
+ * Studio Black uses the same Compact card hierarchy inside its compact workspace.
+ */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid {
     display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    column-gap: 16px !important;
-    row-gap: 16px !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    column-gap: 20px !important;
+    row-gap: 20px !important;
     align-items: start !important;
   }
 
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
-  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
-  > [data-studio-menu="genre"] {
-    grid-column: 1 / -1 !important;
-    grid-row: auto !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
-  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
-  > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid > * {
     grid-column: auto !important;
     grid-row: auto !important;
     min-width: 0 !important;
   }
 
-  /* Keep the rest of the compact builder explicitly on the intended 2-column
-   * tablet portrait composition. Storyboard remains the only full-width row. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
-  .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
+    display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    column-gap: 16px !important;
-    row-gap: 16px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
-  .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid
-  > .soridraw-storyboard-card {
-    grid-column: 1 / -1 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
-  .soridraw-studio-compact-mobile-builder
-  :is(.soridraw-studio-vocal-slot, .soridraw-studio-lyrics-slot) {
-    grid-column: auto !important;
-    min-width: 0 !important;
+    column-gap: 20px !important;
+    row-gap: 20px !important;
+    align-items: start !important;
   }
 }
 
-/* 736 — Promote the 4-keyword tablet portrait band to one shared Compact stage.
- * 735 scoped the new card arrangement only to Studio Black's compact wrapper,
- * so Classic Dark/Light kept the old tablet layout. The same 768~1023px
- * arrangement now applies to the normal Classic Studio as well:
- *   Genre           (full row)
- *   Style | Sound   (two columns)
- *   Mood  | Theme   (two columns)
- *   Storyboard      (full row)
- *   Vocal | Lyrics  (two columns)
- * This is layout-only; card/button typography and the existing four-keyword
- * Mood/Theme grid are intentionally preserved. */
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (min-width: 768px) and (max-width: 1099px) {
+  /* Studio Black external-window Compact shell. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid,
+  /* Classic Dark/Light use the same card arrangement directly. */
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid {
     display: grid !important;
@@ -13002,12 +12963,19 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     align-items: start !important;
   }
 
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid > [data-studio-menu="genre"],
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid > [data-studio-menu="genre"] {
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
   }
 
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]),
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid
   > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
@@ -13016,8 +12984,11 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     min-width: 0 !important;
   }
 
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid),
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
-  .soridraw-studio-main .soridraw-studio-mood-theme-grid {
+  .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     column-gap: 16px !important;
@@ -13025,15 +12996,22 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
     align-items: start !important;
   }
 
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card,
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
     grid-column: 1 / -1 !important;
   }
 
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"][data-workspace-view="create"]
+  .soridraw-studio-compact-mobile-builder
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid,
   html[data-soridraw-theme="classic"] body #root .soridraw-app-root
-  .soridraw-studio-main :is(.soridraw-studio-vocal-slot, .soridraw-studio-lyrics-slot) {
-    grid-column: auto !important;
-    min-width: 0 !important;
+  .soridraw-studio-main
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 }
 
@@ -13197,4 +13175,80 @@ button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
   background-color: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
+}
+
+
+/* 740 — Split-builder portrait Compact stage driven by the pane width itself.
+ * This closes the missing middle state when a wide desktop window keeps the
+ * Studio split shell but the divider makes only the Builder pane tablet-narrow.
+ * The split engines publish data-soridraw-pane-compact from their already-known
+ * builderWidth; there is no new ResizeObserver, viewport breakpoint or React
+ * render path.
+ *
+ * 741 corrected flow while the split Builder narrows:
+ *   >820px                    = existing desktop composition unchanged
+ *   661~820px                 = Compact (Genre full / Style+Sound / Mood+Theme)
+ *   <=660px                   = existing one-column mobile composition
+ * Compact now reduces the mobile territory instead of reducing the desktop territory.
+ *
+ * Compact intentionally copies the approved portrait-tablet hierarchy and keeps
+ * Mood/Theme at four keyword buttons per row. Storyboard remains full-width and
+ * Vocal/Lyrics remain a two-card pair. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-selection-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 16px !important;
+  row-gap: 16px !important;
+  align-items: start !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-selection-grid > [data-studio-menu="genre"] {
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-selection-grid > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  min-width: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+:is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 16px !important;
+  row-gap: 16px !important;
+  align-items: start !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
+  grid-column: 1 / -1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+:is(.soridraw-studio-vocal-slot, .soridraw-studio-lyrics-slot) {
+  grid-column: auto !important;
+  min-width: 0 !important;
+}
+
+/* The portrait-tablet reference uses four Mood/Theme keywords per row. This
+ * rule applies only in the pane-owned 661~820px Compact band; desktop above
+ * 820px keeps its existing keyword geometry and mobile below 660px keeps its
+ * existing one-column composition. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+:is([data-studio-menu="mood"], [data-studio-menu="theme"])
+.soridraw-category-keyword-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }

@@ -20,9 +20,11 @@ const MAX_PERCENT = 76;
 const TABLET_VIEWPORT_MIN = 1100;
 const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
-// Align the builder's mobile composition with the top-nav "라이브러리" label:
-// the split line reaches the first "라" at roughly an 820px builder width.
-const BUILDER_MOBILE_BREAKPOINT = 820;
+// 741 — Keep the proven desktop Builder range intact and make Compact consume
+// the former upper-mobile band instead. Mobile now begins only at the shared
+// narrow-content floor; Compact owns 661~820px without shrinking desktop.
+const BUILDER_MOBILE_BREAKPOINT = 660;
+const BUILDER_COMPACT_MAX = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
@@ -888,6 +890,21 @@ export default function StudioSplitWorkspace({
           modeRef.current.result,
           usesUnifiedContentBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
         );
+    // 741 — Compact no longer steals space from the desktop composition. It only
+    // replaces the former upper-mobile band: desktop stays unchanged above 820px,
+    // Compact owns the middle 661~820px range, and the final one-column mobile
+    // composition is delayed to the narrow 660px floor. No extra measurement path.
+    const builderCompactActive = !builderCollapsedRef.current
+      && nextBuilderMode === 'desktop'
+      && builderWidth <= BUILDER_COMPACT_MAX;
+    if (builderCompactActive) {
+      if (builder.dataset.soridrawPaneCompact !== 'true') {
+        builder.dataset.soridrawPaneCompact = 'true';
+      }
+    } else if (builder.dataset.soridrawPaneCompact) {
+      delete builder.dataset.soridrawPaneCompact;
+    }
+
     const externalControls = readExternalControls();
     const builderModeChanged = !builderCollapsedRef.current
       && previousBuilderMode !== nextBuilderMode;
@@ -1139,10 +1156,13 @@ export default function StudioSplitWorkspace({
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      // Browser resize and rail/layout changes can produce several observer
-      // callbacks in the same frame. The Studio geometry owner commits at most
-      // once per animation frame.
-      if (!draggingRef.current) scheduleLayoutMetricsRefresh();
+      // 744 — During a native outer-window resize, the window listener below is
+      // the sole geometry owner. Skipping the parallel ResizeObserver path keeps
+      // one rAF commit per frame while still letting ordinary rail/layout changes
+      // use the observer as before.
+      if (!draggingRef.current && !document.documentElement.classList.contains('soridraw-window-resizing')) {
+        scheduleLayoutMetricsRefresh();
+      }
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
@@ -1151,14 +1171,12 @@ export default function StudioSplitWorkspace({
     const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
 
-    // 650 — restore the verified 488/637 resize ownership. Horizontal browser
-    // resizing is already emitted by the workspace ResizeObserver and coalesced
-    // to one rAF. Listening to the same width change again on window.resize made
-    // the split tree run two geometry refresh paths per native resize tick, which
-    // became especially expensive in the 1100~1599 compact/tablet composition.
-    // Keep the native listener only for viewport-height changes; still retain the
-    // resize marker so secondary transitions/container work stays suspended until
-    // the native resize gesture settles.
+    // 744 — Native outer-window resize is the single live geometry owner.
+    // Width and height changes are coalesced into one rAF refresh here while the
+    // workspace ResizeObserver stands down for the same gesture. This preserves
+    // the no-duplicate-work principle from 650, but unlike the old height-only
+    // listener it lets responsive pane/UI stages switch before mouse release.
+    let lastViewportWidth = window.innerWidth;
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
     const handleViewportResize = () => {
@@ -1170,8 +1188,15 @@ export default function StudioSplitWorkspace({
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
 
+      // 744 — Outer-window width changes must publish pane width/mode in real time.
+      // The previous height-only listener intentionally waited for resize-end, so
+      // Builder Compact/mobile UI could remain visually stale until mouse release.
+      // This path is rAF-coalesced and owns native resize exclusively; the observer
+      // above stands down while the resize marker is active.
+      const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
+      if (nextViewportWidth !== lastViewportWidth || nextViewportHeight !== lastViewportHeight) {
+        lastViewportWidth = nextViewportWidth;
         lastViewportHeight = nextViewportHeight;
         scheduleLayoutMetricsRefresh();
       }

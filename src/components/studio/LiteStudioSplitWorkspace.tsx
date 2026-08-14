@@ -40,7 +40,10 @@ const MAX_PERCENT = 76;
 const TABLET_VIEWPORT_MIN = 1100;
 const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
-const BUILDER_MOBILE_BREAKPOINT = 820;
+// 741 — Preserve desktop above 820px; Compact replaces the former upper-mobile
+// band and true Builder mobile starts only at the shared 660px narrow-content floor.
+const BUILDER_MOBILE_BREAKPOINT = 660;
+const BUILDER_COMPACT_MAX = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
@@ -230,6 +233,11 @@ export default function LiteStudioSplitWorkspace({
   const lastViewportHeightRef = useRef<number | null>(null);
   const lastIsolatedHeightRef = useRef<number | null>(null);
   const actionInsetsRef = useRef<{ left: number; right: number } | null>(null);
+  // 749 — Keep geometry callbacks stable while only the workspace result page
+  // changes. The latest page is read through this ref; dedicated view effects
+  // still request one exact resting refresh outside any drag gesture.
+  const workspaceViewRef = useRef<StudioWorkspaceView | undefined>(workspaceView);
+  workspaceViewRef.current = workspaceView;
   const topCardObserverRef = useRef<ResizeObserver | null>(null);
   const lastTopCardHeightRef = useRef<number | null>(null);
   const externalRef = useRef<ExternalControls>({
@@ -472,7 +480,22 @@ export default function LiteStudioSplitWorkspace({
       BUILDER_MOBILE_BREAKPOINT,
       PANE_MODE_HYSTERESIS,
     );
-    const unifiedResultBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
+    // 741 — Match Legacy: Compact consumes only the former upper-mobile band.
+    // Desktop remains unchanged above 820px, Compact owns 661~820px, and the
+    // existing one-column Builder mobile composition begins at the 660px floor.
+    const builderCompactActive = !builderCollapsedRef.current
+      && nextBuilderMode === 'desktop'
+      && builderWidth <= BUILDER_COMPACT_MAX;
+    if (builderCompactActive) {
+      if (builder.dataset.soridrawPaneCompact !== 'true') {
+        builder.dataset.soridrawPaneCompact = 'true';
+      }
+    } else if (builder.dataset.soridrawPaneCompact) {
+      delete builder.dataset.soridrawPaneCompact;
+    }
+
+    const activeWorkspaceView = workspaceViewRef.current;
+    const unifiedResultBreakpoint = activeWorkspaceView === 'music-note' || activeWorkspaceView === 'library' || activeWorkspaceView === 'recent';
     const nextResultMode = resolvePaneMode(
       modeRef.current.result,
       result.dataset.paneMode === 'desktop' || result.dataset.paneMode === 'mobile',
@@ -495,7 +518,7 @@ export default function LiteStudioSplitWorkspace({
       const host = externalRef.current.workspaceHeroHost || document.getElementById('soridraw-studio-workspace-hero-host');
       if (host) host.dataset.paneMode = nextResultMode;
     }
-  }, [workspaceView]);
+  }, []);
 
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
     const { left, leftRailEdge } = metricsRef.current;
@@ -568,7 +591,7 @@ export default function LiteStudioSplitWorkspace({
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
-    if (controls.floatingActionBar) {
+    if (controls.floatingActionBar && !document.documentElement.classList.contains('soridraw-window-resizing')) {
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }
@@ -665,7 +688,7 @@ export default function LiteStudioSplitWorkspace({
       const nextResultContentMode = readContentResponsiveMode(Math.max(1, resultWidth));
       if (runtimeResultContentModeRef.current !== nextResultContentMode) {
         runtimeResultContentModeRef.current = nextResultContentMode;
-        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceView, runtimeProfile);
+        const nextRuntimeLayoutMode = resolveRuntimeLayoutMode(nextResultContentMode, workspaceViewRef.current, runtimeProfile);
         if (runtimeLayoutModeRef.current !== nextRuntimeLayoutMode) {
           runtimeLayoutModeRef.current = nextRuntimeLayoutMode;
           benchmarkLayoutModeRef.current = nextRuntimeLayoutMode;
@@ -720,7 +743,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, workspaceView, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -747,9 +770,18 @@ export default function LiteStudioSplitWorkspace({
     broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, true);
     const splitterLeft = metricsRef.current.left + builderWidth;
     commitRootMeasurements(builderWidth, splitterLeft);
-    readExternalControls();
-    syncExternalGeometry(builderWidth, splitterLeft);
-    clearLiveExternalGeometry();
+
+    const nativeWindowResize = document.documentElement.classList.contains('soridraw-window-resizing');
+    if (nativeWindowResize) {
+      // 748 — The native-resize Generate bar consumes the builder geometry that
+      // was committed above. Do not publish a second pair of action-bar custom
+      // properties from JS on every frame.
+      clearLiveExternalGeometry();
+    } else {
+      readExternalControls();
+      syncExternalGeometry(builderWidth, splitterLeft);
+      clearLiveExternalGeometry();
+    }
   }, [applyPercent, broadcastLitePaneResponsiveWidths, clearLiveExternalGeometry, commitRootMeasurements, readExternalControls, refreshIsolationHeight, syncExternalGeometry, syncModalHost]);
 
   const scheduleMetricsRefresh = useCallback(() => {
@@ -1341,28 +1373,59 @@ export default function LiteStudioSplitWorkspace({
     let observer: ResizeObserver | null = null;
     if (layout && typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(() => {
-        if (!draggingRef.current) scheduleMetricsRefresh();
+        // 744 — Native window resize has one live geometry owner below. Avoid a
+        // second observer commit in the same frame; keep the observer for rails
+        // and non-window layout changes.
+        if (!draggingRef.current && !document.documentElement.classList.contains('soridraw-window-resizing')) {
+          scheduleMetricsRefresh();
+        }
       });
       try { observer.observe(layout, { box: 'border-box' }); } catch { observer.observe(layout); }
     }
-    // 668 — one shared outer-window resize contract for Legacy and Lite.
-    // Horizontal geometry still belongs to ResizeObserver, but the native resize
-    // event owns only the start/end marker. That marker lets CSS suspend the
-    // expensive structural container-query layer while the browser is being
-    // continuously resized, then restore exact responsive detail once at settle.
+    // 744 — Same one-owner native resize contract as Legacy. The native resize
+    // event publishes width/height changes live in one rAF path; ResizeObserver
+    // stands down during that gesture and resumes for ordinary non-window layout
+    // changes. Structural pane containers remain responsive while resizing.
+    let lastViewportWidth = window.innerWidth;
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
     const handleWindowResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
+        // 750 — Same one-read contract as Legacy. Capture the exact resting
+        // command-anchor insets only when the native resize gesture starts;
+        // every live frame still reuses the split engine's existing Builder
+        // geometry, so this does not reintroduce the 746 per-frame reflow path.
+        readExternalControls();
+        const builderRect = builderRef.current?.getBoundingClientRect();
+        const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
+        if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
+          root.style.setProperty(
+            '--soridraw-action-resize-measured-inset-left',
+            `${Math.max(0, Math.round(actionRect.left - builderRect.left))}px`,
+          );
+          root.style.setProperty(
+            '--soridraw-action-resize-measured-inset-right',
+            `${Math.max(0, Math.round(builderRect.right - actionRect.right))}px`,
+          );
+        } else {
+          root.style.removeProperty('--soridraw-action-resize-measured-inset-left');
+          root.style.removeProperty('--soridraw-action-resize-measured-inset-right');
+        }
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
 
+      // 744 — Publish outer-window width changes every animation frame so the
+      // visible Builder stage can cross desktop/Compact/mobile while the edge is
+      // still being dragged. ResizeObserver is paused for the same native gesture,
+      // preventing the old duplicate geometry path.
+      const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
+      if (nextViewportWidth !== lastViewportWidth || nextViewportHeight !== lastViewportHeight) {
+        lastViewportWidth = nextViewportWidth;
         lastViewportHeight = nextViewportHeight;
         scheduleMetricsRefresh();
       }
@@ -1370,6 +1433,8 @@ export default function LiteStudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        root.style.removeProperty('--soridraw-action-resize-measured-inset-left');
+        root.style.removeProperty('--soridraw-action-resize-measured-inset-right');
         scheduleMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1390,6 +1455,8 @@ export default function LiteStudioSplitWorkspace({
       window.removeEventListener('soridraw-studio-frame-resize', handleFrameResize as EventListener);
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
+      document.documentElement.style.removeProperty('--soridraw-action-resize-measured-inset-left');
+      document.documentElement.style.removeProperty('--soridraw-action-resize-measured-inset-right');
       if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
       if (refreshFrameRef.current !== null) window.cancelAnimationFrame(refreshFrameRef.current);
       document.documentElement.classList.remove('soridraw-lite-split-dragging');
@@ -1419,7 +1486,7 @@ export default function LiteStudioSplitWorkspace({
       root.style.removeProperty('--soridraw-studio-result-left');
       root.style.removeProperty('--soridraw-studio-result-right');
     };
-  }, [clearLiveExternalGeometry, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
+  }, [clearLiveExternalGeometry, readExternalControls, refreshMetrics, scheduleMetricsRefresh, syncResultTitleHeight]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(connectTopCardObserver);

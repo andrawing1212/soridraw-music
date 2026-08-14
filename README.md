@@ -2019,3 +2019,35 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 카드들은 >=1600px에서 `min(100% - 84px, 1500px)` 공통 가이드를 사용하지만, 후속 masthead 규칙이 `.soridraw-studio-builder-pane-masthead-host`만 `width:100%`로 다시 덮어써 Sori Studio/검색만 카드보다 약 42px씩 바깥 가이드를 사용했다.
 - masthead host만 카드와 동일한 기존 84px/1500px 가이드에 다시 연결했다. 1600px 아래에서는 둘 다 기존 100% 폭으로 동시에 전환된다.
 - 왼쪽 메뉴 접기/펼치기 638차 수정은 그대로 유지. 분할바, 분할비율, rail 로직, 라이브러리/뮤직노트, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않음.
+
+## SORIDRAW 713차 — 683 안정 기준 · 최근 생성곡 분할 이동 룰 통일
+- 기준: 683차 안정 ZIP. 684~712의 pacing/spring/예측 실험은 포함하지 않음.
+- PC fine-pointer에서 `recent`를 기존 Legacy 분할 엔진 대신 Music Note / Library와 동일한 `Lite V2 + library-590` 경로로 라우팅.
+- 최근 생성곡도 분할선과 양 pane이 같은 rAF의 단일 실제 경계로 움직이도록 통일. Legacy의 `분할선 선행 preview + pane adaptive cadence` 분리를 최근 생성곡에서 사용하지 않음.
+- 최근 생성곡의 result pane breakpoint 판정도 Music Note / Library와 동일한 unified result breakpoint 규칙을 사용.
+- Studio Create는 기존 683 Legacy 경로 그대로 유지. 터치/갤탭 adaptive Lite 경로도 변경 없음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## SORIDRAW 715차 — 714 기준 Music Note 썸네일 고정 + 직접입력 아이콘 배경 제거
+
+- 기준: 714차 (분할 성능 안정 기준은 713차 유지)
+- Music Note 곡 목록 썸네일/재생 버튼을 모든 분할 폭에서 48×60px로 고정해 모바일/좁은 pane에서도 축소되지 않게 함.
+- Music Note 곡 목록의 `[장르]` 텍스트를 연회색(`#c8c8cc`)으로 통일.
+- Sori Studio 장르/스타일/사운드/분위기/주제 카드의 직접입력 연필 버튼 배경을 완전 투명 처리해 아이콘만 보이게 함.
+- 분할바, Lite V2, responsive geometry, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
+
+
+## SORIDRAW 716차 — 장르 텍스트 진회색 공통화 + 직접입력 버튼 배경 복구
+
+- 기준: 715차 (분할 성능 안정 기준은 713차 유지)
+- Music Note와 Library 곡 목록의 장르 텍스트를 동일한 진회색(`#9ca0a6`)으로 통일.
+- 715차에서 추가했던 Sori Studio 직접입력 연필 버튼의 투명 배경 강제 규칙을 제거해 714차 이전의 기존 배경 스타일로 복구.
+- 715차의 Music Note 썸네일 48×60px 고정은 유지.
+- 분할바, Lite V2, responsive geometry, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
+
+## 725차 — 템포 슬라이더 실시간 드래그 동기화
+- TempoControl 공통 경로를 Pointer Events + requestAnimationFrame 기반으로 변경했습니다.
+- 드래그 중 React 상태 갱신을 반복하지 않고 손잡이/활성 범위/BPM 숫자를 같은 프레임에 직접 갱신합니다.
+- 드래그 종료 시 최종 BPM 값만 React 상태로 확정합니다.
+- 공통 TempoControl이므로 분할/다크/라이트 테마 모두 동일하게 적용됩니다.

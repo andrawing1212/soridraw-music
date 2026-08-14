@@ -3603,7 +3603,12 @@ function Navigation({
       {/* Mobile Top Icon Bar */}
       <div
         ref={menuRef}
-        className="soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center bg-[#111111]/95 px-3 py-2.5 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl min-[1600px]:hidden"
+        className={cn(
+          "soridraw-mobile-navigation fixed inset-x-0 top-0 z-[70] flex w-full items-center px-3 py-2.5 min-[1600px]:hidden",
+          displayMode === 'studio-black'
+            ? "bg-[#0f0f10] shadow-none"
+            : "bg-[#111111]/95 shadow-[0_8px_22px_rgba(0,0,0,0.34)] backdrop-blur-xl"
+        )}
       >
         <div className="flex w-full min-w-0 items-center gap-1 overflow-visible">
           <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
@@ -3615,8 +3620,13 @@ function Navigation({
                   type="button"
                   onClick={() => goToCompactMobileNav(item)}
                   className={cn(
-                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                    isCompactStudioMobileItemActive(item) && "is-active bg-[#FFB400]/18 text-[#FFB400]"
+                    "soridraw-mobile-nav-item relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-transparent transition-all",
+                    displayMode === 'studio-black'
+                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                    isCompactStudioMobileItemActive(item) && (displayMode === 'studio-black'
+                      ? "is-active bg-transparent text-white"
+                      : "is-active bg-[#FFB400]/18 text-[#FFB400]")
                   )}
                   aria-current={isCompactStudioMobileItemActive(item) ? 'page' : undefined}
                   aria-label={item.label}
@@ -3642,8 +3652,9 @@ function Navigation({
                     setIsExpanded(false);
                   }}
                   className={cn(
-                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all hover:bg-[#FFB400]/15",
-                    isProfileOpen && "bg-[#FFB400]/18"
+                    "soridraw-profile-trigger flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-transparent transition-all",
+                    displayMode === 'studio-black' ? "hover:bg-transparent" : "hover:bg-[#FFB400]/15",
+                    isProfileOpen && (displayMode === 'studio-black' ? "bg-transparent" : "bg-[#FFB400]/18")
                   )}
                   aria-label="계정 메뉴"
                   title="계정 메뉴"
@@ -3661,7 +3672,12 @@ function Navigation({
                   type="button"
                   onClick={handleLogin}
                   disabled={isLoggingIn}
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400] disabled:opacity-50"
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all disabled:opacity-50",
+                    displayMode === 'studio-black'
+                      ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                      : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]"
+                  )}
                   aria-label="로그인"
                   title="로그인"
                 >
@@ -3753,9 +3769,15 @@ function Navigation({
                   setIsProfileOpen(false);
                 }}
                 className={cn(
-                  "flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent text-white/72 transition-all hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
-                  isExpanded && "bg-[#FFB400]/18 text-[#FFB400]"
+                  "soridraw-mobile-menu-trigger flex h-11 w-11 items-center justify-center rounded-2xl bg-transparent transition-all",
+                  displayMode === 'studio-black'
+                    ? "text-[#acacb3] hover:bg-transparent hover:text-[#f2f2f4]"
+                    : "text-white/72 hover:bg-[#FFB400]/15 hover:text-[#FFB400]",
+                  isExpanded && (displayMode === 'studio-black'
+                    ? "is-active bg-transparent text-white"
+                    : "is-active bg-[#FFB400]/18 text-[#FFB400]")
                 )}
+                aria-expanded={isExpanded}
                 aria-label="외부 앱 메뉴"
                 title="메뉴"
               >
@@ -3976,7 +3998,13 @@ const detectAutomaticStudioSplitEngine = (): StudioSplitEngine => {
 
 function App() {
   const isDesktopViewport = useMediaQuery('(min-width: 1024px)', true);
-  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1024px) and (orientation: landscape)', true);
+  // 744 — One stable external responsive contract for the builder.
+  // Wide/tablet stays 3-column from 1100px upward; the dedicated portrait
+  // Compact band is 768~1099px; <=767px keeps the existing phone layout.
+  // matchMedia only wakes React when a breakpoint actually changes, so native
+  // window resizing stays live without rerendering on every pixel.
+  const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1100px)', true);
+  const isStudioTwoColumnSelectionLayout = useMediaQuery('(min-width: 768px)', true);
   const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
   const isActionDragMobile = useMediaQuery('(max-width: 767px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
@@ -4017,10 +4045,23 @@ function App() {
       if (!force && (tabletSplitDragActive || musicNoteDragActive)) return;
 
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
+      const builderMode = root.dataset.soridrawBuilderMode;
       setIsStudioBlackActionMode(isStudioBlack);
-      setIsSplitBuilderActionMobile(
-        isStudioBlack && root.dataset.soridrawBuilderMode === 'mobile',
-      );
+
+      // 749 — Split workspace callbacks used to clear data-soridraw-builder-mode
+      // for a moment while Recent/Music Note/Library changed. Treating that
+      // transient missing value as desktop inserted the PC collapse arrow and
+      // desktop side-button widths into a narrow mobile Builder, visibly
+      // crushing the expanded Generate bar. Missing means "not committed yet":
+      // keep the last responsive state until the split engine publishes an
+      // explicit mobile/desktop value.
+      if (!isStudioBlack) {
+        setIsSplitBuilderActionMobile(false);
+      } else if (builderMode === 'mobile') {
+        setIsSplitBuilderActionMobile(true);
+      } else if (builderMode === 'desktop') {
+        setIsSplitBuilderActionMobile(false);
+      }
     };
 
     syncBuilderActionMode(true);
@@ -4248,25 +4289,33 @@ function App() {
     ? requestedStudioSplitEngineOverride
     : null;
 
-  // 617: remove the accumulated Music-Note-only split experiments. The user's
-  // real-hand comparison is now the source of truth: Recent is best on the
-  // legacy path, Library is best on the 590 Lite/CSS-variable path, and Galaxy
-  // Tab is best on adaptive Lite V2. On fine-pointer PC, Music Note now borrows
-  // Library's exact 590 split geometry instead of maintaining a separate path.
+  // 617 baseline kept Music Note / Library on Lite V2 while Recent stayed on
+  // Legacy. 713 preserves the 683 codebase but updates only that routing choice:
+  // Recent now shares the same result-workspace movement owner as Music Note /
+  // Library so pointer/divider/pane spacing follows one common rule.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
+  // 713: Recent Songs now uses the exact same fine-pointer split engine and
+  // runtime profile as Music Note / Library. The 683 Legacy Recent path drove
+  // the fixed divider ahead of the pane tree and adaptively throttled pane
+  // commits, which made pointer-to-divider spacing feel different even when
+  // throughput was high. Keep Create on Legacy; unify only the three result
+  // workspaces whose drag feel should match.
+  const usesSharedResultSplitEngine = studioWorkspaceView === 'recent'
+    || studioWorkspaceView === 'library'
+    || studioWorkspaceView === 'music-note';
   const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
     ? 'lite'
-    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+    : usesSharedResultSplitEngine
       ? 'lite'
       : 'legacy';
   const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
     ? 'adaptive'
-    : studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note'
+    : usesSharedResultSplitEngine
       ? 'library-590'
       : 'adaptive';
   const studioSplitEngine: StudioSplitEngine = studioSplitEngineOverride ?? automaticWorkspaceSplitEngine;
   const studioLiteRuntimeProfile: StudioLiteRuntimeProfile = studioSplitEngineOverride === 'lite'
-    ? (!isTouchPrimaryStudioEnvironment && (studioWorkspaceView === 'library' || studioWorkspaceView === 'music-note')
+    ? (!isTouchPrimaryStudioEnvironment && usesSharedResultSplitEngine
       ? 'library-590'
       : 'adaptive')
     : automaticLiteRuntimeProfile;
@@ -4276,7 +4325,9 @@ function App() {
       ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
       : studioWorkspaceView === 'music-note'
         ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-        : `자동 선택 · PC ${studioWorkspaceView === 'recent' ? '최근 생성곡' : '스튜디오'}: 기존 방식`;
+        : studioWorkspaceView === 'recent'
+          ? '자동 선택 · PC 최근 생성곡: 뮤직노트/라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+          : '자동 선택 · PC 스튜디오: 기존 방식';
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');
@@ -14673,7 +14724,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 >
                   <StudioBuilderPane>
                     {/* Selection Sections */}
-                  <div className="soridraw-studio-selection-grid grid grid-cols-1 [@media_(min-width:1024px)_and_(orientation:landscape)]:grid-cols-3 gap-5 items-start">
+                  <div className="soridraw-studio-selection-grid grid grid-cols-1 gap-5 items-start">
               <GenreHierarchySelector
                 selectedGenre={selectedGenres}
                 selectedSubGenre={subGenre}
@@ -14909,7 +14960,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isExpanded={isMoodExpanded}
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
@@ -14939,7 +14990,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               isExpanded={isThemeExpanded}
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
-              forcedHeight={window.innerWidth >= 768 && row2MaxHeight > 0 ? row2MaxHeight : undefined}
+              forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
               allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}
@@ -14955,11 +15006,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 <button
                   type="button"
                   onClick={openStoryboardModal}
-                  className="flex-1 min-w-0 text-left"
+                  className="soridraw-storyboard-launcher flex-1 min-w-0 text-left"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
-                      <Users className="w-[22px] h-[22px] text-[#FFD36A]" />
+                    <div className="soridraw-storyboard-trigger-icon w-11 h-11 rounded-2xl bg-[#FFB400]/14 border border-black/20 flex items-center justify-center shrink-0">
+                      <Users className="soridraw-storyboard-trigger-icon-glyph w-[22px] h-[22px] text-[#FFD36A]" />
                     </div>
                     <div className="soridraw-card-title-anchor relative min-w-0">
                       <div className="flex items-center gap-2">
@@ -15432,8 +15483,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       <div className="flex items-center bg-btn-bg rounded-lg p-0.5 border border-btn-border shadow-btn">
                         <button
                           onClick={() => setLyricMode('assist')}
+                          aria-pressed={lyricMode === 'assist'}
                           className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'assist' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -15443,8 +15495,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                         </button>
                         <button
                           onClick={() => setLyricMode('preserve')}
+                          aria-pressed={lyricMode === 'preserve'}
                           className={cn(
-                            "px-2 py-1 rounded-md text-[10px] font-bold transition-all",
+                            "soridraw-lyric-mode-option px-2 py-1 rounded-md text-[10px] font-bold transition-all",
                             lyricMode === 'preserve' 
                               ? "bg-[#F4A900] text-[#18110A] shadow-sm" 
                               : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -21411,7 +21464,7 @@ function SongStructureIntegratedControlComponent({
             <div ref={contentRef} className="space-y-3 flex-1 flex flex-col justify-start">
               {/* 공통 작사 스타일 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│작사 스타일</p>
                 <div className="grid grid-cols-2 gap-2 rounded-2xl border border-btn-border bg-btn-bg p-1 shadow-btn">
                   {([
                     { id: 'default', label: '기본', description: 'Story Context와 장르에 맞춰 자유롭게 작사합니다.' },
@@ -21447,7 +21500,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 1. 가사 길이 */}
               <div className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│가사 길이</p>
                 <div className="flex gap-2">
                   {lyricsOptions.map((opt) => (
                     <div key={opt.id} className="relative flex-1">
@@ -21485,7 +21538,7 @@ function SongStructureIntegratedControlComponent({
 
               {/* 3. 섹션 */}
               <div data-soridraw-scroll-anchor="lyrics-section-structure" className="space-y-2">
-                <p className="text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
+                <p className="soridraw-split-accent-label text-[14px] md:text-[15px] font-bold text-[#FFD36A] uppercase tracking-wider">│섹션 구조</p>
                 <div className="grid grid-cols-4 gap-2">
                   {structureOptions.map((opt) => {
                     const isCustomLocked = opt.id === 'custom' && userTier === 'free';
@@ -21520,7 +21573,7 @@ function SongStructureIntegratedControlComponent({
                 
                 {/* Structure Guide - Always Visible */}
                 <div data-soridraw-selectable-text="true" className="soridraw-structure-guide mt-2 rounded-2xl border border-dashed border-black/20/30 px-3 py-3 bg-[#FFB400]/5">
-                  <p className="text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
+                  <p className="soridraw-split-accent-caption text-[10px] font-bold text-[#FFD36A] mb-1 uppercase tracking-tight">
                     {songStructure === 'custom' ? '커스텀 상세 가이드' : `${structureOptions.find((opt) => opt.id === songStructure)?.label ?? '추천'} 상세 가이드`}
                   </p>
                   <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed break-words whitespace-pre-line">
@@ -21572,7 +21625,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionVocalCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -21628,7 +21681,7 @@ function SongStructureIntegratedControlComponent({
                       })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
+                        'soridraw-section-cue-toggle relative h-6 w-11 shrink-0 rounded-full border transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FFB400]/70',
                         sectionInstrumentCueEnabled
                           ? 'border-[#FFB400] bg-[#FFB400]'
                           : 'border-black/15 bg-[#CFCFCF] dark:border-white/10 dark:bg-[#4A4A4A]'
@@ -24413,6 +24466,7 @@ function VocalControlComponent({
             <div className="grid grid-cols-2 gap-2">
               <button
                 data-soridraw-selected={maleCount > 0 ? 'true' : 'false'}
+                data-vocal-gender="male"
                 aria-pressed={maleCount > 0}
                 onClick={() => handleGenderToggle('male')}
                 onMouseEnter={() => onHover({ id: 'male', label: 'Male', labelKo: '남성', description: '남성 보컬을 선택합니다.' })}
@@ -24432,6 +24486,7 @@ function VocalControlComponent({
               </button>
               <button
                 data-soridraw-selected={femaleCount > 0 ? 'true' : 'false'}
+                data-vocal-gender="female"
                 aria-pressed={femaleCount > 0}
                 onClick={() => handleGenderToggle('female')}
                 onMouseEnter={() => onHover({ id: 'female', label: 'Female', labelKo: '여성', description: '여성 보컬을 선택합니다.' })}
@@ -24524,7 +24579,7 @@ function VocalControlComponent({
                                 className={cn(
                                   "soridraw-vocal-role-button px-1.5 py-0.5 rounded-md text-[10px] leading-4 whitespace-nowrap font-bold transition-all border",
                                   isActive
-                                    ? "bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
+                                    ? "soridraw-vocal-role-selected bg-[#FFB400]/20 border-black/20 text-[#FFD36A]"
                                     : isRoleLimitReached
                                       ? "bg-btn-bg border-btn-border text-[var(--text-secondary)] opacity-45 cursor-not-allowed"
                                       : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
@@ -24980,66 +25035,183 @@ interface TempoControlProps {
 
 function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange, onMaxChange, onClear, onHover, onLongPressStart, onLongPressEnd }: TempoControlProps) {
   const sliderRef = useRef<HTMLDivElement>(null);
+  const activeRangeRef = useRef<HTMLDivElement>(null);
+  const minHandleRef = useRef<HTMLDivElement>(null);
+  const maxHandleRef = useRef<HTMLDivElement>(null);
+  const liveValueRootRef = useRef<HTMLDivElement>(null);
+  const dragTypeRef = useRef<'min' | 'max' | null>(null);
+  const dragRectRef = useRef<DOMRect | null>(null);
+  const liveMinRef = useRef(min);
+  const liveMaxRef = useRef(max);
+  const pendingClientXRef = useRef<number | null>(null);
+  const dragRafRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState<'min' | 'max' | null>(null);
   const [showTitleTooltip, setShowTitleTooltip] = useState(false);
 
-  const handleStart = (type: 'min' | 'max') => {
-    if (enabled) return; // If random is enabled, slider is disabled
-    setIsDragging(type);
-    document.body.style.userSelect = 'none';
-  };
+  const bpmToPercent = useCallback((value: number) => (
+    ((value - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100
+  ), []);
 
-  useEffect(() => {
-    const handleMove = (clientX: number) => {
-      if (!isDragging || !sliderRef.current) return;
+  const syncLiveBpmText = useCallback((nextMin: number, nextMax: number) => {
+    const root = liveValueRootRef.current;
+    if (!root) return;
+    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="min"]').forEach((input) => {
+      input.value = String(nextMin);
+    });
+    root.querySelectorAll<HTMLInputElement>('[data-tempo-live="max"]').forEach((input) => {
+      input.value = String(nextMax);
+    });
+  }, []);
 
-      const rect = sliderRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-      const percent = x / rect.width;
-      const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
+  const paintSliderFrame = useCallback((nextMin: number, nextMax: number) => {
+    const minPercent = bpmToPercent(nextMin);
+    const maxPercent = bpmToPercent(nextMax);
 
-      if (isDragging === 'min') {
-        if (val <= max) onMinChange(val);
-      } else {
-        if (val >= min) onMaxChange(val);
-      }
-    };
+    if (minHandleRef.current) minHandleRef.current.style.left = `${minPercent}%`;
+    if (maxHandleRef.current) maxHandleRef.current.style.left = `${maxPercent}%`;
+    if (activeRangeRef.current) {
+      activeRangeRef.current.style.left = `${minPercent}%`;
+      activeRangeRef.current.style.width = `${Math.max(0, maxPercent - minPercent)}%`;
+    }
+    syncLiveBpmText(nextMin, nextMax);
+  }, [bpmToPercent, syncLiveBpmText]);
 
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
-    const onTouchMove = (e: TouchEvent) => {
-      if (e.touches.length > 0) {
-        handleMove(e.touches[0].clientX);
-      }
-    };
+  const applyPointerPosition = useCallback((clientX: number) => {
+    const dragType = dragTypeRef.current;
+    const rect = dragRectRef.current;
+    if (!dragType || !rect || rect.width <= 0) return;
 
-    const handleEnd = () => {
-      setIsDragging(null);
-      document.body.style.userSelect = '';
-    };
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    const percent = x / rect.width;
+    const rawValue = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
 
-    if (isDragging) {
-      window.addEventListener('mousemove', onMouseMove);
-      window.addEventListener('mouseup', handleEnd);
-      window.addEventListener('touchmove', onTouchMove, { passive: false });
-      window.addEventListener('touchend', handleEnd);
+    if (dragType === 'min') {
+      liveMinRef.current = Math.min(rawValue, liveMaxRef.current);
+    } else {
+      liveMaxRef.current = Math.max(rawValue, liveMinRef.current);
     }
 
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', handleEnd);
-      window.removeEventListener('touchmove', onTouchMove);
-      window.removeEventListener('touchend', handleEnd);
-    };
-  }, [isDragging, min, max, onMinChange, onMaxChange]);
+    paintSliderFrame(liveMinRef.current, liveMaxRef.current);
+  }, [paintSliderFrame]);
+
+  const flushPendingPointerFrame = useCallback(() => {
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
+    const clientX = pendingClientXRef.current;
+    pendingClientXRef.current = null;
+    if (clientX !== null) applyPointerPosition(clientX);
+  }, [applyPointerPosition]);
+
+  const schedulePointerFrame = useCallback((clientX: number) => {
+    pendingClientXRef.current = clientX;
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const latestClientX = pendingClientXRef.current;
+      pendingClientXRef.current = null;
+      if (latestClientX !== null) applyPointerPosition(latestClientX);
+    });
+  }, [applyPointerPosition]);
+
+  const handlePointerStart = useCallback((type: 'min' | 'max', event: React.PointerEvent<HTMLDivElement>) => {
+    if (enabled || !sliderRef.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    liveMinRef.current = min;
+    liveMaxRef.current = max;
+    dragTypeRef.current = type;
+    dragRectRef.current = sliderRef.current.getBoundingClientRect();
+    pendingClientXRef.current = null;
+    setIsDragging(type);
+    document.body.style.userSelect = 'none';
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture can fail only if the pointer already ended; dragging still
+      // remains safe because the final value is committed on pointer end.
+    }
+
+    // Paint the first position immediately so the handle attaches to the pointer
+    // on the same interaction frame instead of waiting for a React state round-trip.
+    applyPointerPosition(event.clientX);
+  }, [enabled, min, max, applyPointerPosition]);
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragTypeRef.current) return;
+    event.preventDefault();
+    schedulePointerFrame(event.clientX);
+  }, [schedulePointerFrame]);
+
+  const commitPointerDrag = useCallback((dragType: 'min' | 'max') => {
+    const finalMin = liveMinRef.current;
+    const finalMax = liveMaxRef.current;
+    dragTypeRef.current = null;
+    dragRectRef.current = null;
+    setIsDragging(null);
+    document.body.style.userSelect = '';
+
+    // React state is committed once per drag. Visual movement above is direct DOM
+    // work, so all themes share the same low-latency slider path without re-rendering
+    // the Studio tree for every pointer event.
+    if (dragType === 'min') {
+      if (finalMin !== min) onMinChange(finalMin);
+    } else if (finalMax !== max) {
+      onMaxChange(finalMax);
+    }
+  }, [min, max, onMinChange, onMaxChange]);
+
+  const handlePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragType = dragTypeRef.current;
+    if (!dragType) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    pendingClientXRef.current = event.clientX;
+    flushPendingPointerFrame();
+
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // No-op: capture is already released by the browser.
+    }
+
+    commitPointerDrag(dragType);
+  }, [flushPendingPointerFrame, commitPointerDrag]);
+
+  const handlePointerCancel = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const dragType = dragTypeRef.current;
+    if (!dragType) return;
+    event.preventDefault();
+    event.stopPropagation();
+    flushPendingPointerFrame();
+    commitPointerDrag(dragType);
+  }, [flushPendingPointerFrame, commitPointerDrag]);
+
+  useEffect(() => {
+    if (dragTypeRef.current) return;
+    liveMinRef.current = min;
+    liveMaxRef.current = max;
+  }, [min, max]);
+
+  useEffect(() => () => {
+    if (dragRafRef.current !== null) cancelAnimationFrame(dragRafRef.current);
+    document.body.style.userSelect = '';
+  }, []);
 
   const displayMin = min;
   const displayMax = max;
-  const minPos = ((displayMin - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
-  const maxPos = ((displayMax - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM)) * 100;
+  const minPos = bpmToPercent(displayMin);
+  const maxPos = bpmToPercent(displayMax);
   const isValid = (max - min <= TEMPO_MAX_ACTIVE_RANGE) && (min !== TEMPO_MIN_BPM || max !== TEMPO_MAX_BPM);
 
   return (
-    <div className={cn(
+    <div ref={liveValueRootRef} className={cn(
       "soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl px-6 py-4 border border-[var(--home-card-border)] transition-all"
     )}>
       <div className="soridraw-tempo-card-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
@@ -25078,6 +25250,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               onMouseLeave={() => onHover(null)}
             >
               <input
+                data-tempo-live="min"
                 type="number"
                 min={TEMPO_MIN_BPM}
                 max={max}
@@ -25095,6 +25268,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               />
               <span className="text-[var(--text-secondary)]/50 font-bold text-sm">-</span>
               <input
+                data-tempo-live="max"
                 type="number"
                 min={min}
                 max={TEMPO_MAX_BPM}
@@ -25198,12 +25372,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           onMouseLeave={() => onHover(null)}
         >
           <input
+            data-tempo-live="min"
             type="number"
             min={TEMPO_MIN_BPM}
             max={max}
             value={min}
             readOnly={enabled}
-                aria-disabled={enabled}
+            aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -25215,12 +25390,13 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           />
           <span className="text-[var(--text-secondary)]/50 font-bold text-base">-</span>
           <input
+            data-tempo-live="max"
             type="number"
             min={min}
             max={TEMPO_MAX_BPM}
             value={max}
             readOnly={enabled}
-                aria-disabled={enabled}
+            aria-disabled={enabled}
             onChange={(e) => {
               const val = parseInt(e.target.value);
               if (!isNaN(val)) {
@@ -25246,13 +25422,11 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
           ref={sliderRef}
           className="relative h-2 bg-[var(--hover-bg)] rounded-full cursor-pointer mx-0"
           onClick={(e) => {
-            if (enabled) return;
+            if (enabled || dragTypeRef.current) return;
             const rect = sliderRef.current!.getBoundingClientRect();
-            const x = e.clientX - rect.left;
+            const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
             const percent = x / rect.width;
             const val = Math.round(TEMPO_MIN_BPM + percent * (TEMPO_MAX_BPM - TEMPO_MIN_BPM));
-            
-            // Snap to nearest handle but respect constraints
             if (Math.abs(val - min) < Math.abs(val - max)) {
               onMinChange(Math.min(val, max));
             } else {
@@ -25262,6 +25436,7 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
         >
           {/* Active Range Bar */}
           <div 
+            ref={activeRangeRef}
             className={cn(
               "absolute h-full rounded-full transition-colors",
               !enabled ? (isValid ? "bg-[#FFB400]" : "bg-[var(--text-secondary)]/30") : "bg-[#FFB400]/40"
@@ -25271,10 +25446,14 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Min Handle */}
           <div 
-            onMouseDown={(e) => { e.stopPropagation(); handleStart('min'); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleStart('min'); }}
+            ref={minHandleRef}
+            onPointerDown={(e) => handlePointerStart('min', e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-black/20 shadow-lg shadow-[#FFB400]/10 scale-100 cursor-not-allowed",
@@ -25287,10 +25466,14 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
 
           {/* Max Handle */}
           <div 
-            onMouseDown={(e) => { e.stopPropagation(); handleStart('max'); }}
-            onTouchStart={(e) => { e.stopPropagation(); handleStart('max'); }}
+            ref={maxHandleRef}
+            onPointerDown={(e) => handlePointerStart('max', e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
+            onClick={(e) => e.stopPropagation()}
             className={cn(
-              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
+              "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-5 h-5 rounded-full border-2 transition-[transform,border-color,box-shadow] flex items-center justify-center cursor-grab active:cursor-grabbing touch-none z-20",
               !enabled 
                 ? "bg-[var(--card-bg)] border-[#8AA35A] shadow-lg shadow-[#8AA35A]/20 scale-110" 
                 : "bg-[var(--card-bg)] border-[#8AA35A]/40 shadow-lg shadow-[#8AA35A]/10 scale-100 cursor-not-allowed",
@@ -25312,12 +25495,12 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
       {/* Status Guidance Text - Repositioned to Bottom Center */}
       <div className="flex justify-center mt-2">
         {enabled ? (
-          <span className="text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
+          <span className="soridraw-tempo-status-pill is-enabled text-[#FFD36A] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/10 px-3 py-0.5 rounded-full border border-black/20/20">
             <Sparkles className="w-3 h-3 animate-pulse" /> 랜덤 템포 적용됨
           </span>
         ) : (
           isValid ? (
-            <span className="text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
+            <span className="soridraw-tempo-status-pill is-valid text-[#FFE3A0] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-[#FFB400]/12 px-3 py-0.5 rounded-full border border-black/20/24">
               <Check className="w-3 h-3" /> 템포 지정됨
             </span>
           ) : (

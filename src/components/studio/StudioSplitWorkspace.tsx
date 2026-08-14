@@ -20,9 +20,11 @@ const MAX_PERCENT = 76;
 const TABLET_VIEWPORT_MIN = 1100;
 const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
-// Align the builder's mobile composition with the top-nav "라이브러리" label:
-// the split line reaches the first "라" at roughly an 820px builder width.
-const BUILDER_MOBILE_BREAKPOINT = 820;
+// 741 — Keep the proven desktop Builder range intact and make Compact consume
+// the former upper-mobile band instead. Mobile now begins only at the shared
+// narrow-content floor; Compact owns 661~820px without shrinking desktop.
+const BUILDER_MOBILE_BREAKPOINT = 660;
+const BUILDER_COMPACT_MAX = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
@@ -188,6 +190,11 @@ export default function StudioSplitWorkspace({
   const lastAriaBoundsRef = useRef<string | null>(null);
   const lastActionControlPixelRef = useRef<string | null>(null);
   const actionAnchorInsetsRef = useRef<{ left: number; right: number } | null>(null);
+  // 749 — Workspace navigation must not rebuild the live resize/split geometry
+  // listeners just because the result page changes. Keep the latest view in a
+  // ref so the hot geometry callbacks stay stable across Recent/Music Note/Library.
+  const workspaceViewRef = useRef<StudioWorkspaceView | undefined>(workspaceView);
+  workspaceViewRef.current = workspaceView;
   const externalControlsReadyRef = useRef(false);
   const lastIsolatedWorkspaceHeightRef = useRef<number | null>(null);
   const lastIsolationViewportHeightRef = useRef<number | null>(null);
@@ -310,8 +317,13 @@ export default function StudioSplitWorkspace({
       floatingActionBar.style.removeProperty('left');
       floatingActionBar.style.removeProperty('width');
       floatingActionBar.style.removeProperty('--soridraw-studio-builder-width');
-      floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
-      floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
+      // 747 — During a native resize these two element-local variables are the
+      // cheap live owner. Do not erase/re-add them every frame; resize-end clears
+      // them after App commits the exact resting root geometry.
+      if (!document.documentElement.classList.contains('soridraw-window-resizing')) {
+        floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
+        floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
+      }
     }
     if (collapsedActionButton) {
       collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
@@ -878,7 +890,7 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           previousBuilderMode,
         );
-    const usesUnifiedContentBreakpoint = workspaceView === 'library';
+    const usesUnifiedContentBreakpoint = workspaceViewRef.current === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(
@@ -888,6 +900,21 @@ export default function StudioSplitWorkspace({
           modeRef.current.result,
           usesUnifiedContentBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
         );
+    // 741 — Compact no longer steals space from the desktop composition. It only
+    // replaces the former upper-mobile band: desktop stays unchanged above 820px,
+    // Compact owns the middle 661~820px range, and the final one-column mobile
+    // composition is delayed to the narrow 660px floor. No extra measurement path.
+    const builderCompactActive = !builderCollapsedRef.current
+      && nextBuilderMode === 'desktop'
+      && builderWidth <= BUILDER_COMPACT_MAX;
+    if (builderCompactActive) {
+      if (builder.dataset.soridrawPaneCompact !== 'true') {
+        builder.dataset.soridrawPaneCompact = 'true';
+      }
+    } else if (builder.dataset.soridrawPaneCompact) {
+      delete builder.dataset.soridrawPaneCompact;
+    }
+
     const externalControls = readExternalControls();
     const builderModeChanged = !builderCollapsedRef.current
       && previousBuilderMode !== nextBuilderMode;
@@ -979,7 +1006,7 @@ export default function StudioSplitWorkspace({
       splitter?.setAttribute('aria-valuenow', String(roundedPercent));
     }
     return nextPercent;
-  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements, workspaceView]);
+  }, [captureBuilderContentAnchor, clearRootMeasurements, isStudioBlack, readExternalControls, resolvePaneMode, restoreBuilderDragScrollAnchor, restoreBuilderModeScrollAnchor, scheduleBuilderModeScrollAnchorRestore, syncExternalMeasurements]);
 
   const refreshLayoutMetrics = useCallback(() => {
     const layout = layoutRef.current;
@@ -1017,6 +1044,11 @@ export default function StudioSplitWorkspace({
         ? metricsRef.current.width
         : metricsRef.current.width * (appliedPercent / 100);
     commitRootMeasurements(builderWidth, metricsRef.current.left + builderWidth);
+
+    // 748 — Native resize no longer gives the Generate bar a second JS geometry
+    // owner. The bar consumes the builder left/width variables committed above
+    // through a resize-only CSS rule, so there are no extra per-frame action-bar
+    // writes and no geometry hand-off race at the Compact breakpoint.
     clearExternalMeasurements();
     scheduleFooterBoundaryRefresh();
   }, [applyPercentToLayout, clearExternalMeasurements, clearRootMeasurements, commitRootMeasurements, isStudioBlack, refreshWorkspaceIsolation, scheduleFooterBoundaryRefresh, syncCenterModalHostBounds]);
@@ -1139,10 +1171,13 @@ export default function StudioSplitWorkspace({
 
   useEffect(() => {
     const observer = new ResizeObserver(() => {
-      // Browser resize and rail/layout changes can produce several observer
-      // callbacks in the same frame. The Studio geometry owner commits at most
-      // once per animation frame.
-      if (!draggingRef.current) scheduleLayoutMetricsRefresh();
+      // 744 — During a native outer-window resize, the window listener below is
+      // the sole geometry owner. Skipping the parallel ResizeObserver path keeps
+      // one rAF commit per frame while still letting ordinary rail/layout changes
+      // use the observer as before.
+      if (!draggingRef.current && !document.documentElement.classList.contains('soridraw-window-resizing')) {
+        scheduleLayoutMetricsRefresh();
+      }
     });
     if (layoutRef.current) observer.observe(layoutRef.current);
     const footer = document.querySelector<HTMLElement>('.soridraw-app-footer');
@@ -1151,27 +1186,54 @@ export default function StudioSplitWorkspace({
     const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
 
-    // 650 — restore the verified 488/637 resize ownership. Horizontal browser
-    // resizing is already emitted by the workspace ResizeObserver and coalesced
-    // to one rAF. Listening to the same width change again on window.resize made
-    // the split tree run two geometry refresh paths per native resize tick, which
-    // became especially expensive in the 1100~1599 compact/tablet composition.
-    // Keep the native listener only for viewport-height changes; still retain the
-    // resize marker so secondary transitions/container work stays suspended until
-    // the native resize gesture settles.
+    // 744 — Native outer-window resize is the single live geometry owner.
+    // Width and height changes are coalesced into one rAF refresh here while the
+    // workspace ResizeObserver stands down for the same gesture. This preserves
+    // the no-duplicate-work principle from 650, but unlike the old height-only
+    // listener it lets responsive pane/UI stages switch before mouse release.
+    let lastViewportWidth = window.innerWidth;
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
     const handleViewportResize = () => {
       const root = document.documentElement;
       if (!root.classList.contains('soridraw-window-resizing')) {
+        // 750 — Seed the Generate bar's *real* anchor insets once per native
+        // resize gesture. 749 used a fixed 0/18px assumption, which was close
+        // but not pixel-identical to the resting command anchor and left the bar
+        // drifting a few pixels toward the divider. This is one read at gesture
+        // start only; the live frames still consume the already-published Builder
+        // geometry in CSS and perform no extra DOM measurement.
+        const controls = readExternalControls();
+        const builderRect = builderRef.current?.getBoundingClientRect();
+        const actionAnchorRect = controls.actionAnchor?.getBoundingClientRect();
+        if (builderRect && actionAnchorRect && builderRect.width > 0 && actionAnchorRect.width > 0) {
+          root.style.setProperty(
+            '--soridraw-action-resize-measured-inset-left',
+            `${Math.max(0, Math.round(actionAnchorRect.left - builderRect.left))}px`,
+          );
+          root.style.setProperty(
+            '--soridraw-action-resize-measured-inset-right',
+            `${Math.max(0, Math.round(builderRect.right - actionAnchorRect.right))}px`,
+          );
+        } else {
+          root.style.removeProperty('--soridraw-action-resize-measured-inset-left');
+          root.style.removeProperty('--soridraw-action-resize-measured-inset-right');
+        }
         root.classList.add('soridraw-window-resizing');
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-start'));
       }
 
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
 
+      // 744 — Outer-window width changes must publish pane width/mode in real time.
+      // The previous height-only listener intentionally waited for resize-end, so
+      // Builder Compact/mobile UI could remain visually stale until mouse release.
+      // This path is rAF-coalesced and owns native resize exclusively; the observer
+      // above stands down while the resize marker is active.
+      const nextViewportWidth = window.innerWidth;
       const nextViewportHeight = window.innerHeight;
-      if (nextViewportHeight !== lastViewportHeight) {
+      if (nextViewportWidth !== lastViewportWidth || nextViewportHeight !== lastViewportHeight) {
+        lastViewportWidth = nextViewportWidth;
         lastViewportHeight = nextViewportHeight;
         scheduleLayoutMetricsRefresh();
       }
@@ -1179,6 +1241,8 @@ export default function StudioSplitWorkspace({
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
+        root.style.removeProperty('--soridraw-action-resize-measured-inset-left');
+        root.style.removeProperty('--soridraw-action-resize-measured-inset-right');
         scheduleLayoutMetricsRefresh();
         syncResultTitleHeight();
         window.dispatchEvent(new CustomEvent('soridraw-window-resize-end'));
@@ -1204,6 +1268,8 @@ export default function StudioSplitWorkspace({
       themeObserver.disconnect();
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
+      document.documentElement.style.removeProperty('--soridraw-action-resize-measured-inset-left');
+      document.documentElement.style.removeProperty('--soridraw-action-resize-measured-inset-right');
       window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
@@ -1250,7 +1316,7 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearRootMeasurements, readExternalControls, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
   // 660 — keep the pointer/divider lane independent from an expensive PROD
   // Studio tablet reflow. 659 already proved that the fixed splitter can follow
@@ -1567,6 +1633,15 @@ export default function StudioSplitWorkspace({
       setIsResultCollapsed(false);
     }
   }, [viewMode, workspaceRequestId, workspaceView]);
+
+  // 749 — Result-page navigation can keep the same collapsed state, so no state
+  // transition is guaranteed to wake the geometry path. Refresh once in layout
+  // phase without tearing down observers/listeners; this republishes the current
+  // builder mode before the portaled Generate bar paints.
+  useLayoutEffect(() => {
+    if (viewMode !== 'split' || !workspaceView) return;
+    refreshLayoutMetrics();
+  }, [refreshLayoutMetrics, viewMode, workspaceRequestId, workspaceView]);
 
   const renderedBounds = getSplitBounds(metricsRef.current.width);
 

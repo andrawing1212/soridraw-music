@@ -406,6 +406,40 @@
   stroke: currentColor;
 }
 
+/* 718 — Preserve semantic vocal gender colors in Studio Black.
+ * The generic selected-state rule above intentionally paints normal selections amber,
+ * but male/female vocal buttons are semantic controls and should match the existing
+ * dark-mode gender palette instead of inheriting the global amber state. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="male"][data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="male"][aria-pressed="true"] {
+  background: rgb(37 99 235 / 0.20) !important;
+  background-color: rgb(37 99 235 / 0.20) !important;
+  color: rgb(96 165 250) !important;
+  -webkit-text-fill-color: rgb(96 165 250) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="female"][data-soridraw-selected="true"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="female"][aria-pressed="true"] {
+  background: rgb(219 39 119 / 0.20) !important;
+  background-color: rgb(219 39 119 / 0.20) !important;
+  color: rgb(244 114 182) !important;
+  -webkit-text-fill-color: rgb(244 114 182) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="male"]:is([data-soridraw-selected="true"], [aria-pressed="true"]) :where(span, strong, small, p, div, label, svg) {
+  color: rgb(96 165 250) !important;
+  -webkit-text-fill-color: rgb(96 165 250) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-studio-menu-card button[data-vocal-gender="female"]:is([data-soridraw-selected="true"], [aria-pressed="true"]) :where(span, strong, small, p, div, label, svg) {
+  color: rgb(244 114 182) !important;
+  -webkit-text-fill-color: rgb(244 114 182) !important;
+}
+
 /*
  * Builder card flow owner.
  * The browser's md/lg classes must not create implicit columns inside a narrow split pane.
@@ -752,9 +786,16 @@
   height: auto !important;
 }
 
+/* Keep the mobile storyboard launcher at the existing 716 size. */
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-storyboard-card-inner {
   min-height: 72px !important;
   padding: 12px 16px !important;
+}
+
+/* 717: trim only the split Studio desktop storyboard launcher by about 25%. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="desktop"] .soridraw-storyboard-card-inner {
+  min-height: 54px !important;
+  padding: 8px 16px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane .soridraw-storyboard-card-inner .w-11.h-11 {
@@ -806,7 +847,7 @@
 
 
 /* 185: explicit click feedback, tempo mobile fit, and result action colors. */
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):not(.soridraw-storyboard-launcher):not(.soridraw-vocal-character-launcher):active {
   background-color: var(--sb-accent) !important;
   background-image: none !important;
   color: var(--sb-selected-text) !important;
@@ -815,7 +856,7 @@
   transform: scale(.97);
 }
 
-:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):active :where(svg, span) {
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(button):not(:disabled):not(.soridraw-studio-splitter):not(.soridraw-storyboard-launcher):not(.soridraw-vocal-character-launcher):active :where(svg, span) {
   color: var(--sb-selected-text) !important;
   -webkit-text-fill-color: var(--sb-selected-text) !important;
 }
@@ -10874,14 +10915,12 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
  * responsive layout resolves once. Divider dragging intentionally keeps 519's
  * live container behavior, so the already-approved splitter interaction is not
  * changed by this fix. */
-@media (min-width: 1100px) {
-  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
-  .soridraw-studio-split-workspace
-  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    container-type: normal !important;
-    container-name: none !important;
-  }
-}
+/* 744 — Keep the two structural pane containers live during native window resize.
+ * The old 668 freeze intentionally resolved responsive detail only after resize-end,
+ * which is exactly the visible "UI changes only after release" behavior reported in
+ * the installed app. Secondary summary/live-keyword containers are still suspended
+ * by the shared fast path below, so live responsiveness returns without restoring
+ * the full duplicate resize workload. */
 
 /* 519 — continuous-resize fast path without a temporary "PC/default" UI.
  * 488 disabled the builder pane, result pane and Generate panel containers while
@@ -12239,5 +12278,1058 @@ html[data-soridraw-theme="studio-black"]
 [data-soridraw-pane-tablet-fastpath="true"] * {
   transition: none !important;
   animation-play-state: paused !important;
+}
+
+
+/* 714 — 713 split-stability baseline: freeze responsive card heights and soften mobile type.
+ * Keep the 713 divider/Lite V2 movement engine untouched. This pass only removes visible
+ * vertical geometry changes when a pane crosses PC/tablet/mobile content modes. */
+
+/* Recent/result title: the mobile-pane rule used a smaller vertical padding, so the top card
+ * visibly shortened while the divider moved. Freeze one outer height and keep the same
+ * vertical breathing room in every split-pane mode; edit mode may still grow naturally. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane
+  .soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+    box-sizing: border-box !important;
+    height: 280px !important;
+    min-height: 280px !important;
+    max-height: 280px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-result-pane[data-pane-mode="mobile"]
+  .soridraw-result-title-card:not(.soridraw-result-title-card--editing) {
+    padding-top: 32px !important;
+    padding-right: 20px !important;
+    padding-bottom: 14px !important;
+    padding-left: 20px !important;
+  }
+}
+
+/* Music Note / Library rows: responsive typography can change, but the list rhythm must not.
+ * Fixed border-box heights stop the whole list from vertically reflowing when the result pane
+ * crosses 660px. Text stays single-line/ellipsis inside the stable row. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-song-row {
+  box-sizing: border-box !important;
+  height: 84px !important;
+  min-height: 84px !important;
+  max-height: 84px !important;
+  align-items: center !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page
+.soridraw-library-workspace-track-row {
+  box-sizing: border-box !important;
+  height: 84px !important;
+  min-height: 84px !important;
+  max-height: 84px !important;
+  align-items: center !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page
+.soridraw-library-playlist-row {
+  box-sizing: border-box !important;
+  height: 72px !important;
+  min-height: 72px !important;
+  max-height: 72px !important;
+  align-items: center !important;
+}
+
+/* Mobile mode keeps the same vertical row height as tablet. Only horizontal spacing compacts. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-row {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+/* Mobile text: reduce the old aggressive shrink, but stay clearly below tablet body type. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-genre {
+  font-size: 11.5px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-date {
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-title {
+  font-size: 13.5px !important;
+  line-height: 1.08 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-creator {
+  font-size: 9px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-song-keywords {
+  height: 20px !important;
+  min-height: 20px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-musicnote-keyword-chip {
+  height: 20px !important;
+  min-height: 20px !important;
+  font-size: 8.75px !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-item-genre {
+  font-size: 11.5px !important;
+  line-height: 1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-item-name {
+  font-size: 13.5px !important;
+  line-height: 1.08 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-meta {
+  font-size: 10.5px !important;
+  line-height: 1.1 !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-track-row span[class*="text-[10px]"],
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-track-row span[class*="text-xs"] {
+  font-size: 9.5px !important;
+}
+
+/* Note Place / My Note / Shared Note and the three Library categories keep the exact tablet
+ * label size when the pane enters mobile mode. Geometry remains 40px high, so no vertical jump. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab) {
+  min-height: 40px !important;
+  padding: 10px 9px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  transition-property: background-color, color, opacity !important;
+}
+
+/* 715 — 713 split-stability baseline + 714 UI continuity: keep Music Note media size stable
+ * and remove the dark control tile behind Studio direct-input pencil buttons.
+ * Split/divider performance code is intentionally untouched. */
+
+/* Music Note song thumbnail/play button: do not shrink in compact/mobile split panes.
+ * Keep the same 48x60 geometry used by the tablet/desktop row so the media anchor stays stable. */
+:root body #root .soridraw-app-root
+.soridraw-musicnote-theme.soridraw-responsive-content-page
+.soridraw-musicnote-song-media {
+  width: 48px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  height: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  flex: 0 0 48px !important;
+}
+
+/* 716 — Music Note / Library genre labels use the same darker neutral gray. */
+:root body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme).soridraw-responsive-content-page
+:is(.soridraw-musicnote-song-genre, .soridraw-library-item-genre) {
+  color: #9ca0a6 !important;
+  -webkit-text-fill-color: #9ca0a6 !important;
+}
+
+
+/* 720 — Split Studio direct-writing selection color restoration.
+ * Studio Black's neutral button pass can mask Tailwind-only selected fills in the
+ * command/lyric controls. Give these stateful controls an explicit semantic state
+ * so Direct Lyrics and AI-correct / Preserve always show the approved amber active
+ * color in split mode. Classic/light UI and layout geometry are untouched. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-direct-lyrics-toggle[aria-pressed="true"],
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-lyric-mode-option[aria-pressed="true"] {
+  background: var(--sb-accent) !important;
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-direct-lyrics-toggle[aria-pressed="true"] :where(span, svg),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-lyric-mode-option[aria-pressed="true"] :where(span, svg) {
+  color: var(--sb-selected-text) !important;
+  -webkit-text-fill-color: var(--sb-selected-text) !important;
+  stroke: currentColor !important;
+}
+
+/* 721 — In split light mode, warm amber helper text/icons on beige surfaces
+   were too close in value and became hard to read. Keep the selected amber
+   fills, but move helper labels/icons/chips to a brown readable accent only in
+   the split light workspace. Dark split and non-split views stay unchanged. */
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace {
+  --soridraw-split-readable-amber: #8B6500;
+  --soridraw-split-readable-amber-soft: #A0731A;
+  --soridraw-split-readable-amber-surface: rgba(139, 101, 0, 0.10);
+  --soridraw-split-readable-amber-surface-strong: rgba(139, 101, 0, 0.16);
+  --soridraw-split-readable-amber-border: rgba(120, 88, 20, 0.24);
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-split-accent-label,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-split-accent-label,
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-split-accent-caption,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-split-accent-caption {
+  color: var(--soridraw-split-readable-amber) !important;
+  -webkit-text-fill-color: var(--soridraw-split-readable-amber) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-storyboard-trigger-icon,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-storyboard-trigger-icon {
+  background: var(--soridraw-split-readable-amber-surface-strong) !important;
+  border-color: var(--soridraw-split-readable-amber-border) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-storyboard-trigger-icon-glyph,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-storyboard-trigger-icon-glyph,
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-vocal-role-selected,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-vocal-role-selected,
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-tempo-status-pill,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-tempo-status-pill {
+  color: var(--soridraw-split-readable-amber) !important;
+  -webkit-text-fill-color: var(--soridraw-split-readable-amber) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-vocal-role-selected,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-vocal-role-selected {
+  background: var(--soridraw-split-readable-amber-surface) !important;
+  border-color: var(--soridraw-split-readable-amber-border) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-tempo-status-pill,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-tempo-status-pill {
+  background: var(--soridraw-split-readable-amber-surface) !important;
+  border-color: var(--soridraw-split-readable-amber-border) !important;
+}
+
+html[data-soridraw-color-mode="light"] .soridraw-studio-split-workspace .soridraw-tempo-status-pill.is-valid,
+html[data-soridraw-color-mode="light"] .soridraw-lite-studio-split-workspace .soridraw-tempo-status-pill.is-valid {
+  background: rgba(139, 101, 0, 0.12) !important;
+}
+
+/* 722 — Match Classic Dark/Light title centering to the verified split layout.
+   The inline pencil is visual-only and must not consume title width. Keep the
+   title itself at the mathematical center while the edit control sits just to
+   its left. Studio Black already uses the same geometry above. */
+:root:not([data-soridraw-theme="studio-black"]) body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-primary-title-line {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+:root:not([data-soridraw-theme="studio-black"]) body #root .soridraw-app-root
+.soridraw-result-title-card:not(.soridraw-result-title-card--editing)
+.soridraw-result-primary-title-edit {
+  position: absolute !important;
+  top: 50% !important;
+  right: 100% !important;
+  left: auto !important;
+  margin-right: 6px !important;
+  transform: translateY(-50%) !important;
+}
+
+/* 723 — Split mode section helper colors.
+   In Studio Black split mode, keep the subsection labels in the same warm yellow
+   family as the vocal-character launcher, while the structure-guide caption uses
+   a darker brown for contrast hierarchy. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace .soridraw-split-accent-label,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lite-studio-split-workspace .soridraw-split-accent-label {
+  color: #D89A00 !important;
+  -webkit-text-fill-color: #D89A00 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace .soridraw-split-accent-caption,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-lite-studio-split-workspace .soridraw-split-accent-caption {
+  color: #A0731A !important;
+  -webkit-text-fill-color: #A0731A !important;
+}
+
+/* 724 — Tempo status pill: no outline/border in any theme or workspace. */
+.soridraw-tempo-status-pill,
+.soridraw-tempo-status-pill:is(:hover, :active, :focus, :focus-visible) {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+/* 726 — Studio Black popup palette separation.
+   Storyboard and Vocal Character editors are portals, so the normal dark-theme
+   popup rules can otherwise make them look identical to Classic Dark. Give only
+   Studio Black a cooler graphite hierarchy and remove the warm/amber cast from
+   large interior surfaces. These selectors intentionally start at body because both modals are mounted directly under document.body, outside #root/.soridraw-app-root. Brand accent text and sliders remain unchanged. */
+:root[data-soridraw-theme="studio-black"] {
+  --sb-popup-shell: #1B1D21;
+  --sb-popup-header: #22252A;
+  --sb-popup-body: #181A1E;
+  --sb-popup-card: #24272C;
+  --sb-popup-card-active: #292C31;
+  --sb-popup-control: #2B2E34;
+  --sb-popup-control-hover: #31353B;
+  --sb-popup-input: #30343A;
+}
+
+/* Vocal Character — cool graphite surfaces, no warm selected-card wash. */
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel {
+  background: var(--sb-popup-shell) !important;
+  background-color: var(--sb-popup-shell) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .px-5.py-4 {
+  background: var(--sb-popup-header) !important;
+  background-color: var(--sb-popup-header) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background: var(--sb-popup-body) !important;
+  background-color: var(--sb-popup-body) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\],
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
+  background: var(--sb-popup-card) !important;
+  background-color: var(--sb-popup-card) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
+  background: var(--sb-popup-card-active) !important;
+  background-color: var(--sb-popup-card-active) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel :where(input, textarea) {
+  background: var(--sb-popup-input) !important;
+  background-color: var(--sb-popup-input) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.soridraw-studio-vocal-modal-panel button:not(.soridraw-selected-strong):not([data-soridraw-selected="true"]):not([aria-pressed="true"]) {
+  border-color: transparent !important;
+}
+
+/* Storyboard — use the same Studio Black-only cool hierarchy. */
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel {
+  background: var(--sb-popup-shell) !important;
+  background-color: var(--sb-popup-shell) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel > .sticky {
+  background: var(--sb-popup-header) !important;
+  background-color: var(--sb-popup-header) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-body {
+  background: var(--sb-popup-body) !important;
+  background-color: var(--sb-popup-body) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel :is(.storyboard-section-card, .storyboard-control-card) {
+  background: var(--sb-popup-card) !important;
+  background-color: var(--sb-popup-card) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel :where(input, textarea) {
+  background: var(--sb-popup-input) !important;
+  background-color: var(--sb-popup-input) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background: var(--sb-popup-control) !important;
+  background-color: var(--sb-popup-control) !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected):hover {
+  background: var(--sb-popup-control-hover) !important;
+  background-color: var(--sb-popup-control-hover) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body
+.storyboard-tone-flat-panel button {
+  border-color: transparent !important;
+}
+
+/* 728 — Match Storyboard/Vocal Character popup neutral surfaces to the already
+   approved Split Mode Section Custom palette exactly. 727 used a blue-leaning
+   graphite (#24272c family), which made these two portals visibly different.
+   Keep their own accent colors; only the large neutral surfaces are unified. */
+:root[data-soridraw-theme="studio-black"] {
+  --sb-popup-shell: #1b1b1c;
+  --sb-popup-header: #1b1b1c;
+  --sb-popup-body: #232325;
+  --sb-popup-card: #2b2b2d;
+  --sb-popup-card-active: #2e2e31;
+  --sb-popup-control: #2e2e31;
+  --sb-popup-control-hover: #343438;
+  --sb-popup-input: #262628;
+}
+
+/* 729 — Storyboard only: in Studio Black split mode, use the exact Classic
+   Dark Storyboard palette. Vocal Character intentionally keeps the approved
+   728 split-only neutral palette. Values below mirror the current .dark
+   storyboard rules in src/index.css. */
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel {
+  background: #222222 !important;
+  background-color: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel > .sticky {
+  background: #242424 !important;
+  background-color: #242424 !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-body {
+  background: #202020 !important;
+  background-color: #202020 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-section-card {
+  background: #1c1c1c !important;
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-character-card {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-control-card {
+  background: #1c1c1c !important;
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel input,
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel textarea {
+  background: #343434 !important;
+  background-color: #343434 !important;
+  border-color: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-section-card input,
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-section-card textarea {
+  border: 1px solid rgba(0, 0, 0, 0.42) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel button {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background: #353535 !important;
+  background-color: #353535 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] body .storyboard-tone-flat-panel .storyboard-choice-button--selected {
+  border-color: transparent !important;
+}
+
+/* 730 — Storyboard / Vocal Character launch press feedback.
+   These two large launch targets should only give a shallow tactile press.
+   Apply the reduced depth to every theme, while Studio Black additionally
+   keeps the normal text/icon brightness during the pointer-down frame. */
+body #root .soridraw-app-root :is(
+  button.soridraw-storyboard-launcher,
+  button.soridraw-vocal-character-launcher
+):not(:disabled):active {
+  scale: 0.985 !important;
+  transform: none !important;
+  translate: 0 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root :is(
+  button.soridraw-storyboard-launcher,
+  button.soridraw-vocal-character-launcher
+):not(:disabled):active {
+  filter: none !important;
+}
+
+/* 731 — Section cue switches: Studio Black's generic neutral button pass was
+   flattening the OFF state into the surrounding control surface. Use the same
+   darker OFF-track contrast as Classic Dark while keeping the existing amber ON
+   state. No geometry or non-split theme behavior changes. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-section-cue-toggle[aria-checked="false"] {
+  background: #4A4A4A !important;
+  background-color: #4A4A4A !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-section-cue-toggle[aria-checked="true"] {
+  background: var(--sb-accent) !important;
+  background-color: var(--sb-accent) !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-section-cue-toggle > span {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+}
+
+/* 732 — Vocal Character launcher press depth.
+   Keep Storyboard at the approved 730 shallow press (0.985), but let only the
+   Vocal Character launcher travel a touch deeper for clearer tactile feedback.
+   This remains theme-shared and does not change colors, layout, or popup styling. */
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher:not(:disabled):active {
+  scale: 0.98 !important;
+  transform: none !important;
+  translate: 0 0 !important;
+}
+
+/* 733 — Studio Black active reset state.
+   In Classic Dark, a reset button becomes a warm brown/amber soft button when
+   the section has something to clear. Studio Black's generic neutral-control
+   rule was flattening that state and leaving only the amber trash glyph. Restore
+   the same semantic active-reset surface in split mode without adding an outline. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane .soridraw-studio-menu-card button.soridraw-active-reset-button {
+  background: rgb(255 180 0 / 0.14) !important;
+  background-color: rgb(255 180 0 / 0.14) !important;
+  background-image: none !important;
+  color: #FFD36A !important;
+  -webkit-text-fill-color: #FFD36A !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane .soridraw-studio-menu-card button.soridraw-active-reset-button:hover {
+  background: rgb(255 180 0 / 0.20) !important;
+  background-color: rgb(255 180 0 / 0.20) !important;
+  color: #FFD36A !important;
+  -webkit-text-fill-color: #FFD36A !important;
+  border-color: transparent !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane .soridraw-studio-menu-card button.soridraw-active-reset-button svg.lucide-trash-2 {
+  color: #FFD36A !important;
+  stroke: #FFD36A !important;
+  opacity: 1 !important;
+}
+
+
+/* 734 — Library mobile workspace header metadata alignment.
+   The generated date/count row should sit on the visual centerline of the
+   40px music icon instead of being top-aligned. Mobile only; tablet/PC and
+   the public/status controls on the right keep their existing geometry. */
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-header-main {
+  align-items: center !important;
+}
+
+:root body #root .soridraw-app-root
+.soridraw-library-theme.soridraw-responsive-content-page[data-soridraw-responsive-mode="mobile"]
+.soridraw-library-workspace-header-main .soridraw-library-workspace-meta {
+  align-items: center !important;
+}
+
+/* 744 — Canonical external-window builder stages.
+ * One viewport contract only:
+ *   >=1100px   = existing tablet/PC layout
+ *   768~1099px = portrait Compact
+ *   <=767px    = existing mobile layout
+ *
+ * This replaces the layered 742/743 portrait fixes. The old orientation-driven
+ * single-column tablet bridge is no longer allowed to participate, so Classic
+ * Dark/Light cannot mix old and new tablet layouts while the window is resized.
+ * Studio Black uses the same Compact card hierarchy inside its compact workspace.
+ */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    column-gap: 20px !important;
+    row-gap: 20px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid > * {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 20px !important;
+    row-gap: 20px !important;
+    align-items: start !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  /* 745 — Recent Songs reuses the same compact builder DOM below 1100px.
+   * 744 scoped the new portrait-Compact hierarchy to Create only, so switching
+   * to Recent exposed the older one-column tablet portrait rules again. Keep
+   * every other workspace/theme untouched and let only Create + Recent share
+   * this already-approved external-window Compact arrangement. */
+
+  /* Studio Black external-window Compact shell. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid,
+  /* Classic Dark/Light use the same card arrangement directly. */
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid > [data-studio-menu="genre"],
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid > [data-studio-menu="genre"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]),
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-compact-mobile-builder :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid),
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-compact-mobile-builder .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card,
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
+    grid-column: 1 / -1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-compact-mobile-builder
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid,
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-main
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+/* 737 — Keep the Studio Black compact top bar visually identical while the
+   viewport crosses split-tablet -> Compact -> phone. Earlier responsive owners
+   could leave different active/hover fills in different width bands. Use one
+   mobile-navigation palette for every <1600px Studio Black state. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation {
+  background: rgba(10, 10, 11, 0.98) !important;
+  background-color: rgba(10, 10, 11, 0.98) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #a9a9b0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger):hover {
+  background: rgba(255, 180, 0, 0.10) !important;
+  background-color: rgba(255, 180, 0, 0.10) !important;
+  color: #ffb400 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item.is-active, button.soridraw-mobile-menu-trigger.is-active) {
+  background: rgba(255, 180, 0, 0.16) !important;
+  background-color: rgba(255, 180, 0, 0.16) !important;
+  color: #ffb400 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) > svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
+/* 738 — Compact/mobile top navigation must use the exact PC Studio Black
+   navigation palette. Do not invent a separate amber mobile palette.
+   PC source of truth (214):
+     default = --sb-nav-muted (#acacb3)
+     hover   = --sb-nav-hover (#f2f2f4)
+     active  = --sb-nav-current (#ffffff)
+     active underline/accent remains --sb-accent (#ffb400) on PC only.
+   Smaller widths keep their icon-only geometry, but use the same colors and
+   transparent button surfaces in default / hover / active states. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation {
+  background: rgba(7, 7, 9, 0.985) !important;
+  background-color: rgba(7, 7, 9, 0.985) !important;
+  border-bottom-color: #1f1f25 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: var(--sb-nav-muted, #acacb3) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item:hover,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-hover, #f2f2f4) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item.is-active,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger.is-active,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-nav-item.is-active:is(:hover, :active, :focus, :focus-visible),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-mobile-menu-trigger.is-active:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-current, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) > svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+/* Profile/login controls should also avoid the separate amber mobile fill so
+   the whole compact header stays in the PC neutral navigation family. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 739 — Tablet/compact Studio Black navigation must inherit the real PC
+   navigation surface. 738 copied the old PC index.css color (#070709), but the
+   later canonical Studio layout overrides the actual PC bar to --sb-page
+   (#0f0f10). That mismatch was the blue-black jump exactly when the desktop
+   nav DOM switches to the compact nav below 1600px. Use the canonical PC
+   variables here and keep all compact buttons on the same neutral color scale. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation {
+  background: var(--sb-page, #0f0f10) !important;
+  background-color: var(--sb-page, #0f0f10) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--sb-divider, rgba(255,255,255,.105)) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: var(--sb-nav-muted, #acacb3) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item, button.soridraw-mobile-menu-trigger):hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-hover, #f2f2f4) !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item.is-active, button.soridraw-mobile-menu-trigger.is-active),
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+:is(button.soridraw-mobile-nav-item.is-active, button.soridraw-mobile-menu-trigger.is-active):is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--sb-nav-current, #ffffff) !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger,
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-mobile-navigation
+button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+
+/* 740 — Split-builder portrait Compact stage driven by the pane width itself.
+ * This closes the missing middle state when a wide desktop window keeps the
+ * Studio split shell but the divider makes only the Builder pane tablet-narrow.
+ * The split engines publish data-soridraw-pane-compact from their already-known
+ * builderWidth; there is no new ResizeObserver, viewport breakpoint or React
+ * render path.
+ *
+ * 741 corrected flow while the split Builder narrows:
+ *   >820px                    = existing desktop composition unchanged
+ *   661~820px                 = Compact (Genre full / Style+Sound / Mood+Theme)
+ *   <=660px                   = existing one-column mobile composition
+ * Compact now reduces the mobile territory instead of reducing the desktop territory.
+ *
+ * Compact intentionally copies the approved portrait-tablet hierarchy and keeps
+ * Mood/Theme at four keyword buttons per row. Storyboard remains full-width and
+ * Vocal/Lyrics remain a two-card pair. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-selection-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 16px !important;
+  row-gap: 16px !important;
+  align-items: start !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-selection-grid > [data-studio-menu="genre"] {
+  grid-column: 1 / -1 !important;
+  grid-row: auto !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-selection-grid > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+  grid-column: auto !important;
+  grid-row: auto !important;
+  min-width: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+:is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  column-gap: 16px !important;
+  row-gap: 16px !important;
+  align-items: start !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+.soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
+  grid-column: 1 / -1 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+:is(.soridraw-studio-vocal-slot, .soridraw-studio-lyrics-slot) {
+  grid-column: auto !important;
+  min-width: 0 !important;
+}
+
+/* The portrait-tablet reference uses four Mood/Theme keywords per row. This
+ * rule applies only in the pane-owned 661~820px Compact band; desktop above
+ * 820px keeps its existing keyword geometry and mobile below 660px keeps its
+ * existing one-column composition. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
+:is([data-studio-menu="mood"], [data-studio-menu="theme"])
+.soridraw-category-keyword-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+
+/* 750 — Generate bar resize geometry has one exact contract.
+ * 749 was still using a hard-coded 0/18px anchor assumption while the resting
+ * bar is positioned from the real command anchor. During native resize that
+ * small mismatch made the row drift toward the splitter. Legacy/Lite now seed
+ * the real left/right anchor insets once at resize-start; every live frame keeps
+ * using the already-published Builder geometry, with no per-frame DOM read.
+ *
+ * Below 1100px the split shell hands ownership to the real Compact/mobile page.
+ * The portal bar must therefore span the layout viewport via left+right rather
+ * than `100vw` (which can include the scrollbar and leak a few pixels past the
+ * right edge). The same rule also bridges the one-frame split->Compact handoff. */
+html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"]) {
+  --soridraw-action-resize-default-inset-left: 0px;
+  --soridraw-action-resize-default-inset-right: 0px;
+  --soridraw-action-resize-anchor-left: calc(
+    var(--soridraw-studio-builder-left, 0px)
+    + var(--soridraw-action-resize-measured-inset-left, var(--soridraw-action-resize-default-inset-left))
+  );
+  --soridraw-action-resize-anchor-width: max(
+    0px,
+    calc(
+      var(--soridraw-studio-builder-width, 100vw)
+      - var(--soridraw-action-resize-measured-inset-left, var(--soridraw-action-resize-default-inset-left))
+      - var(--soridraw-action-resize-measured-inset-right, var(--soridraw-action-resize-default-inset-right))
+    )
+  );
+  --soridraw-action-resize-track-max: 896px;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"]) {
+    /* Fallback mirrors the existing split-pane 18px right inset only if a
+     * resize begins before the one-shot anchor probe is available. */
+    --soridraw-action-resize-default-inset-right: 18px;
+    --soridraw-action-resize-track-max: 932px;
+  }
+
+  html[data-soridraw-theme="studio-black"].soridraw-window-resizing[data-soridraw-builder-mode="mobile"]:not([data-soridraw-compact-workspace="true"]) {
+    --soridraw-action-resize-track-max: 912px;
+  }
+}
+
+html[data-soridraw-theme="studio-black"].soridraw-window-resizing:not([data-soridraw-compact-workspace="true"])
+body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  left: calc(
+    var(--soridraw-action-resize-anchor-left)
+    + max(
+      0px,
+      (
+        var(--soridraw-action-resize-anchor-width)
+        - min(var(--soridraw-action-resize-anchor-width), var(--soridraw-action-resize-track-max))
+      ) / 2
+    )
+  ) !important;
+  width: min(
+    var(--soridraw-action-resize-anchor-width),
+    var(--soridraw-action-resize-track-max)
+  ) !important;
+}
+
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"].soridraw-window-resizing
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"],
+  html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"]
+  body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    box-sizing: border-box !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+  }
 }
 

@@ -20,6 +20,24 @@ export default function StudioCompactMobileWorkspace({ children, workspaceView =
     // while the stored desktop/tablet split ratio and collapse preferences stay
     // untouched because neither split engine is mounted in this mode.
     root.dataset.soridrawCompactWorkspace = 'true';
+
+    // 748 — The floating Generate bar is a body portal. When the outer window
+    // crosses from split-tablet into this Compact/mobile workspace, the split
+    // engine unmounts in the same commit. Remove its last fixed X/width geometry
+    // immediately so the bar falls back to the native full-width mobile rule
+    // instead of keeping a stale tablet track until resize-end.
+    root.style.removeProperty('--soridraw-action-fixed-left');
+    root.style.removeProperty('--soridraw-action-fixed-width');
+    const floatingActionBar = document.querySelector<HTMLElement>(
+      'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
+    );
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-left');
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-width');
+    floatingActionBar?.style.removeProperty('--soridraw-studio-builder-width');
+    const collapsedActionButton = document.querySelector<HTMLElement>('body > .soridraw-studio-action-collapsed');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-builder-width');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-left-rail-edge');
+
     root.dataset.soridrawBuilderMode = 'mobile';
     root.dataset.soridrawResultMode = 'mobile';
     root.dataset.soridrawBuilderContentMode = 'mobile';

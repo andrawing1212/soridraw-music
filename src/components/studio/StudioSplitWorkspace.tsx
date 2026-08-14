@@ -20,9 +20,11 @@ const MAX_PERCENT = 76;
 const TABLET_VIEWPORT_MIN = 1100;
 const TABLET_VIEWPORT_MAX = 1599;
 const TABLET_MIN_PANE_PX = 430;
-// Align the builder's mobile composition with the top-nav "라이브러리" label:
-// the split line reaches the first "라" at roughly an 820px builder width.
-const BUILDER_MOBILE_BREAKPOINT = 820;
+// 741 — Keep the proven desktop Builder range intact and make Compact consume
+// the former upper-mobile band instead. Mobile now begins only at the shared
+// narrow-content floor; Compact owns 661~820px without shrinking desktop.
+const BUILDER_MOBILE_BREAKPOINT = 660;
+const BUILDER_COMPACT_MAX = 820;
 const RESULT_MOBILE_BREAKPOINT = 680;
 const CONTENT_RESULT_MOBILE_BREAKPOINT = 661;
 const PANE_MODE_HYSTERESIS = 16;
@@ -888,14 +890,13 @@ export default function StudioSplitWorkspace({
           modeRef.current.result,
           usesUnifiedContentBreakpoint ? 0 : PANE_MODE_HYSTERESIS,
         );
-    // 740 — Pane-owned portrait Compact stage. Reuse the split engine's already-known
-    // builder width instead of adding a viewport listener/observer. While the builder
-    // is still on the desktop composition, the 1080px-and-under tablet band gets one
-    // lightweight marker; the existing 820px mobile mode (including its hysteresis)
-    // remains the sole owner of the final one-column phone transition.
+    // 741 — Compact no longer steals space from the desktop composition. It only
+    // replaces the former upper-mobile band: desktop stays unchanged above 820px,
+    // Compact owns the middle 661~820px range, and the final one-column mobile
+    // composition is delayed to the narrow 660px floor. No extra measurement path.
     const builderCompactActive = !builderCollapsedRef.current
       && nextBuilderMode === 'desktop'
-      && builderWidth <= 1080;
+      && builderWidth <= BUILDER_COMPACT_MAX;
     if (builderCompactActive) {
       if (builder.dataset.soridrawPaneCompact !== 'true') {
         builder.dataset.soridrawPaneCompact = 'true';

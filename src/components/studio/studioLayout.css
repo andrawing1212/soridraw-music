@@ -13207,10 +13207,11 @@ button.soridraw-profile-trigger:is(:hover, :active, :focus, :focus-visible) {
  * builderWidth; there is no new ResizeObserver, viewport breakpoint or React
  * render path.
  *
- * Flow while the split Builder narrows:
- *   >1080px                   = existing 3-column desktop
- *   <=1080px + desktop mode   = Compact (Genre full / Style+Sound / Mood+Theme)
- *   existing ~820px mobile    = existing one-column mobile composition
+ * 741 corrected flow while the split Builder narrows:
+ *   >820px                    = existing desktop composition unchanged
+ *   661~820px                 = Compact (Genre full / Style+Sound / Mood+Theme)
+ *   <=660px                   = existing one-column mobile composition
+ * Compact now reduces the mobile territory instead of reducing the desktop territory.
  *
  * Compact intentionally copies the approved portrait-tablet hierarchy and keeps
  * Mood/Theme at four keyword buttons per row. Storyboard remains full-width and
@@ -13264,8 +13265,9 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 }
 
 /* The portrait-tablet reference uses four Mood/Theme keywords per row. This
- * later rule intentionally overrides the older <=1074px five-column split rule
- * only while the new Compact marker is active. */
+ * rule applies only in the pane-owned 661~820px Compact band; desktop above
+ * 820px keeps its existing keyword geometry and mobile below 660px keeps its
+ * existing one-column composition. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-builder-pane[data-pane-mode="desktop"][data-soridraw-pane-compact="true"]
 :is([data-studio-menu="mood"], [data-studio-menu="theme"])

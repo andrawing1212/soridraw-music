@@ -166,19 +166,22 @@ type ActiveDrag = {
 type Listener = (result: SplitPerfResult | null) => void;
 type BenchmarkListener = (summary: SplitPerfBenchmarkSummary | null) => void;
 
-export const SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY = 'soridraw_admin_split_perf_tools_enabled_v1';
+export const SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY = 'soridraw_admin_split_perf_tools_enabled_v2';
 export const SPLIT_PERF_TOOL_VISIBILITY_EVENT = 'soridraw:split-perf-tool-visibility';
 export const SPLIT_PERF_BENCHMARK_REQUEST_EVENT = 'soridraw:split-perf-benchmark-request';
 export const SPLIT_PERF_BENCHMARK_STATUS_EVENT = 'soridraw:split-perf-benchmark-status';
 export const SPLIT_PERF_WORKSPACE_REQUEST_EVENT = 'soridraw:split-perf-workspace-request';
+export const SPLIT_PERF_MANUAL_DRAG_ARM_EVENT = 'soridraw:split-perf-manual-drag-arm';
 
 export const readSplitPerfToolVisibility = () => {
-  if (typeof window === 'undefined') return true;
+  // 622: diagnostic UI is opt-in. A fresh install/update starts hidden and
+  // inactive; admins can explicitly enable it from Admin > App Settings.
+  if (typeof window === 'undefined') return false;
   try {
     const stored = window.localStorage.getItem(SPLIT_PERF_TOOL_VISIBILITY_STORAGE_KEY);
-    return stored === null ? true : stored === 'true';
+    return stored === 'true';
   } catch {
-    return true;
+    return false;
   }
 };
 
@@ -188,7 +191,7 @@ export const writeSplitPerfToolVisibility = (next: boolean) => {
   window.dispatchEvent(new CustomEvent(SPLIT_PERF_TOOL_VISIBILITY_EVENT, { detail: { enabled: next } }));
 };
 
-let enabled = true; // Collection only runs while the admin diagnostic tool is enabled.
+let enabled = readSplitPerfToolVisibility(); // Opt-in only; off by default.
 let active: ActiveDrag | null = null;
 let lastResult: SplitPerfResult | null = null;
 let lastBenchmarkSummary: SplitPerfBenchmarkSummary | null = null;
@@ -691,7 +694,7 @@ export const publishSplitPerfBenchmarkSummary = (results: SplitPerfResult[]) => 
   const heapValues = results.map((result) => result.heapMb).filter((value): value is number => value !== null);
   const median: SplitPerfResult = {
     ...first,
-    engine: `Lite V2 · auto benchmark 606 · ${results.length}세트 중앙값`,
+    engine: `Lite V2 · auto benchmark 610 · ${results.length}세트 중앙값`,
     durationMs: number('durationMs', 0),
     rafFrames: Math.round(number('rafFrames', 0)),
     estimatedFps: number('estimatedFps', 1),

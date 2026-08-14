@@ -910,3 +910,41 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+
+
+
+/* 617 admin-only Music Note render probes. Kept for diagnostics, but they are
+ * completely inactive during normal use. */
+html[data-soridraw-perf-probe="musicnote-title-off"]
+.soridraw-lite-studio-split-workspace .soridraw-musicnote-song-title {
+  content-visibility: hidden !important;
+  contain: strict !important;
+  min-height: 19px !important;
+  height: 19px !important;
+}
+
+html[data-soridraw-perf-probe="musicnote-keywords-off"]
+.soridraw-lite-studio-split-workspace .soridraw-musicnote-song-keywords {
+  content-visibility: hidden !important;
+  contain: strict !important;
+  min-height: 20px !important;
+  height: 20px !important;
+}
+
+html[data-soridraw-perf-probe="musicnote-text-off"]
+.soridraw-lite-studio-split-workspace
+:is(.soridraw-musicnote-song-title, .soridraw-musicnote-song-keywords) {
+  content-visibility: hidden !important;
+  contain: strict !important;
+}
+
+/* 633 — horizontal split movement must not trigger native vertical scroll anchoring.
+ * Library/Music Note share this Lite workspace, so one common drag-only rule keeps
+ * both pane scroll positions owned by the split component while width reflow runs. */
+@media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace.is-dragging
+  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    overflow-anchor: none !important;
+  }
+}

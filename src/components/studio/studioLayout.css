@@ -520,6 +520,16 @@
   grid-row: auto !important;
 }
 
+/* 634 — Keep one shared expand/collapse motion owner for all five keyword menus,
+ * but shorten the full-card motion. Genre / Style / Sound contain much denser
+ * keyword grids, so the previous 300ms max-height motion felt noticeably heavy.
+ * Mood / Theme use the same timing as before: all five stay perfectly matched. */
+.soridraw-keyword-expand-motion {
+  transition-property: max-height, opacity;
+  transition-duration: 220ms;
+  transition-timing-function: ease-out;
+}
+
 /* 519 — collapsed keyword-card height follows the builder pane itself.
  * The old App.tsx fallback used window.innerWidth, so a narrow split pane inside
  * a desktop browser could retain desktop height until a later React render. */
@@ -926,24 +936,24 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw
   overflow-y: scroll !important;
   scrollbar-gutter: stable !important;
   scrollbar-width: thin !important;
-  scrollbar-color: rgba(255, 180, 0, 0.48) rgba(255, 255, 255, 0.035) !important;
+  scrollbar-color: #626266 transparent !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar {
-  width: 6px !important;
+  width: 4px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.035) !important;
+  background: transparent !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 180, 0, 0.48) !important;
+  background: #626266 !important;
   border-radius: 999px !important;
 }
 
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-result-content .soridraw-result-lyrics-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 180, 0, 0.72) !important;
+  background: #77777b !important;
 }
 
 /* overflow-x:hidden promoted this card to overflow-y:auto and created the unwanted side scrollbar. */
@@ -7601,10 +7611,11 @@ html.soridraw-split-dragging :is(.soridraw-musicnote-theme, .soridraw-library-th
 }
 
 
-/* 388 — Keep only the first keyword row visible when Genre / Style / Sound
- * cards are collapsed. Do not add spacing or move the header/summary apart:
- * clip only the keyword viewport to the exact 58px button-row height.
- * Expanded cards keep their existing measured height and full keyword list. */
+/* 627 — Genre / Style / Sound collapse uses the same smooth max-height path
+ * as Mood / Theme. Keep one keyword row visible, but never force `height:58px`
+ * because that bypasses the existing 300ms max-height transition and makes the
+ * card snap shut. `max-height` alone clips to the first row while preserving the
+ * shared smooth collapse animation. */
 html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-builder-pane :is(
   [data-studio-menu="genre"],
@@ -7612,7 +7623,7 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   [data-studio-menu="sound"]
 ).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"])
 .soridraw-expand-content {
-  height: 58px !important;
+  height: auto !important;
   min-height: 58px !important;
   max-height: 58px !important;
   overflow: hidden !important;
@@ -10853,6 +10864,25 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   }
 }
 
+/* 668 — external browser-window resize restores the proven 488 principle.
+ * 667 proved that removing the heavy pane bodies makes the Vercel resize path
+ * immediately fast. The remaining high-cost work is therefore inside the pane
+ * responsive trees. For the OUTER browser resize only, suspend the two structural
+ * pane containers so their large @container rule sets do not recalculate for every
+ * pixel. Geometry, pane DOM, mastheads, splitter and content all stay mounted.
+ * When native resize settles, `soridraw-window-resizing` is removed and the exact
+ * responsive layout resolves once. Divider dragging intentionally keeps 519's
+ * live container behavior, so the already-approved splitter interaction is not
+ * changed by this fix. */
+@media (min-width: 1100px) {
+  html.soridraw-window-resizing[data-soridraw-theme="studio-black"]
+  .soridraw-studio-split-workspace
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    container-type: normal !important;
+    container-name: none !important;
+  }
+}
+
 /* 519 — continuous-resize fast path without a temporary "PC/default" UI.
  * 488 disabled the builder pane, result pane and Generate panel containers while
  * the divider was held. Their @container rules therefore disappeared during the
@@ -11750,3 +11780,464 @@ html[data-soridraw-theme="studio-black"] {
     padding-bottom: 136px !important;
   }
 }
+
+
+/* 631 — Phones use Classic dark/light only.
+ * Never allow the old Split auxiliary rails to appear below the normal Studio,
+ * even during an initial-theme correction or a stale stored Split preference. */
+html[data-soridraw-device="phone"] .soridraw-studio-left-panel,
+html[data-soridraw-device="phone"] .soridraw-studio-dashboard-panel,
+html[data-soridraw-device="phone"] .soridraw-studio-left-rail-collapse-toggle,
+html[data-soridraw-device="phone"] .soridraw-studio-right-rail-collapse-toggle,
+html[data-soridraw-device="phone"] body > :is(
+  .soridraw-studio-splitter,
+  .soridraw-studio-builder-collapse-toggle,
+  .soridraw-studio-result-collapse-toggle
+) {
+  display: none !important;
+}
+
+/* 626 — Narrow Split stacked geometry, retained for large-screen touch devices.
+ * 631 scopes this legacy fallback to `data-soridraw-device=large-screen` only.
+ * Physical phones now use Classic dark/light and never enter this path. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"],
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] > .soridraw-studio-page-center,
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-hero,
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-shell,
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-main,
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-split-workspace {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] {
+    display: block !important;
+    grid-template-columns: none !important;
+    overflow-x: clip !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"] .soridraw-studio-split-workspace {
+    --soridraw-studio-builder-width: 100% !important;
+    --soridraw-studio-builder-px: 100% !important;
+    display: block !important;
+    grid-template-columns: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  .soridraw-studio-split-workspace > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    display: block !important;
+    position: relative !important;
+    inset: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Mobile keeps the desktop right-rail DOM instead of inventing a second
+   * recent-song implementation. Stack it below the center workspace at full
+   * width so generation state / Recent Songs / credits stay reachable. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  > .soridraw-studio-dashboard-panel {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    border-left: 0 !important;
+    border-top: 1px solid var(--sb-divider) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  > .soridraw-studio-dashboard-panel > .soridraw-studio-dashboard-inner {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 12px 14px 28px !important;
+  }
+
+  /* The React collapse state is a desktop concern. On mobile the center panes
+   * stack, so honor create/recent state explicitly and never let an old 64px
+   * rail state squeeze the mobile layout. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  .soridraw-studio-split-workspace.is-result-collapsed > .soridraw-studio-result-pane,
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  .soridraw-studio-split-workspace.is-builder-collapsed > .soridraw-studio-builder-pane {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-rail-viewport="mobile"]
+  > .soridraw-studio-left-panel,
+  html[data-soridraw-theme="studio-black"][data-soridraw-device="large-screen"] body > :is(
+    .soridraw-studio-splitter,
+    .soridraw-studio-builder-collapse-toggle,
+    .soridraw-studio-result-collapse-toggle
+  ) {
+    display: none !important;
+  }
+}
+
+/* 641 — Builder-only wide masthead uses the exact same horizontal owner as the cards.
+ * In the approved one-pane wide layout, the builder's direct content children are
+ * centered at `min(100% - 84px, 1500px)`. Later masthead normalization rules reset
+ * only `.soridraw-studio-builder-pane-masthead-host` back to `width:100%`, so during
+ * native window resizing the Sori Studio wordmark/search crossed the 1600px boundary
+ * at a different horizontal guide than Genre/Style/Sound and the rows below.
+ * Re-apply the existing card guide to the masthead host only in the same >=1600px
+ * one-pane state. Below 1600px both cards and masthead naturally return to 100%
+ * together. No split percent/rail/drag geometry is changed. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]:not([data-soridraw-builder-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane
+  > .soridraw-studio-builder-pane-masthead-host {
+    width: min(calc(100% - 84px), var(--soridraw-studio-full-pane-max-width)) !important;
+    max-width: var(--soridraw-studio-full-pane-max-width) !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* 642 — Music Note / Suno Library result-only mastheads follow the same
+ * horizontal gutter transition as the controls below when the native browser
+ * window crosses below the >=1600 one-pane composition.
+ *
+ * At >=1600, rule 334 gives the result body an outer 24px one-pane gutter and
+ * rule 508 gives the page itself 12px/10px inner gutters. Rule 478 therefore
+ * correctly uses 36px/34px for the title/action row (24+12 / 24+10).
+ * Below 1600, rule 334 no longer owns that outer 24px gutter, but rule 478
+ * continues because it starts at 1100px. The cards/search/folders immediately
+ * move to the page's 12px/10px guides while the title/action row stays at
+ * 36px/34px, so the masthead appears to stop early during native resize.
+ * Match the exact page-content guides only in 1100-1599px result-only mode.
+ * Split geometry, rails, divider, page responsive modes and >=1600 alignment
+ * remain unchanged. */
+@media (min-width: 1100px) and (max-width: 1599.98px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
+    padding-left: 12px !important;
+    padding-right: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
+    right: 10px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    right: 10px !important;
+  }
+}
+
+/* 644 — PC result-only Music Note / Suno Library masthead keeps moving through
+ * the last wide-PC resize segment instead of stopping 24px early.
+ *
+ * The body below and the masthead use two approved shells: the page row can grow
+ * to 1548px while the visible body composition is 1500px. At the widest PC size,
+ * the 48px shell difference contributes a 24px centered offset, so the old
+ * 36px/34px masthead insets correctly land on the body's 12px/10px guides.
+ * As the native window narrows through 1548px -> 1500px, that centered offset
+ * disappears continuously. Keeping 36px/34px fixed makes the wordmark/action
+ * stop while the tabs/search/list continue another 24px.
+ *
+ * Keep the existing 1548px masthead shell and make only its inner guide consume
+ * that disappearing 24px continuously. This mirrors the exact movement of the
+ * lower 1500px body owner. 642 continues to own compact 1100-1599px. Split ratio,
+ * rails, divider and pane-mode are unchanged. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-result-pane
+  > .soridraw-studio-result-pane-masthead-host {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-pane-masthead-host
+  > .soridraw-studio-result-masthead {
+    width: 100% !important;
+    max-width: 1548px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: clamp(12px, calc(50% - 738px), 36px) !important;
+    padding-right: clamp(10px, calc(50% - 740px), 34px) !important;
+    box-sizing: border-box !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-musicnote-hero-sync {
+    right: clamp(10px, calc(50% - 740px), 34px) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"][data-soridraw-builder-collapsed="true"]:not([data-soridraw-result-collapsed="true"])
+  body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="music-note"], [data-workspace-view="library"])
+  .soridraw-studio-result-masthead .soridraw-studio-result-masthead-actions {
+    right: clamp(10px, calc(50% - 740px), 34px) !important;
+  }
+}
+
+/* 646 — Studio Black mobile-width composition is a real mobile page, not a
+ * squeezed split canvas. PC remains the primary split workspace and 1100~1599px
+ * remains the tablet compromise. Below 1100px only the current mobile page
+ * hierarchy is rendered by StudioCompactMobileWorkspace. */
+@media (max-width: 1099px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"] {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    overflow-x: clip !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  > .soridraw-studio-masthead-divider {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  > .soridraw-studio-page-center {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  .soridraw-studio-compact-mobile-workspace,
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  :is(.soridraw-studio-compact-mobile-builder, .soridraw-studio-compact-mobile-result) {
+    display: block !important;
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    overflow: visible !important;
+  }
+
+  /* Music Note / Library own the whole mobile screen. The Sori Studio hero is
+   * not part of those pages, matching the real phone navigation model. */
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-hero {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]:is(
+    [data-workspace-view="music-note"],
+    [data-workspace-view="library"]
+  ) .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-compact-workspace="true"]
+  .soridraw-studio-compact-mobile-result
+  > .soridraw-studio-workspace-page {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+
+  /* No split-only controls survive the mobile composition. This is structural
+   * cleanup, not a visual hide of an otherwise active split engine. */
+  html[data-soridraw-theme="studio-black"][data-soridraw-compact-workspace="true"] body > :is(
+    .soridraw-studio-splitter,
+    .soridraw-studio-builder-collapse-toggle,
+    .soridraw-studio-result-collapse-toggle
+  ) {
+    display: none !important;
+  }
+}
+
+
+/* 657 — real pane-width tablet drag fast path.
+ * 656 proved the slowdown is inside the live pane body: removing only the body
+ * while a fine-pointer pane was 661~1080px made the divider immediately fast.
+ * Keep the complete UI visible now. During an active divider drag only, isolate
+ * the expensive body regions into independent layout/style/paint boundaries and
+ * let Chromium skip off-screen cards using their last measured intrinsic size.
+ * No pane is hidden, no split geometry is delayed, and resting tablet layout is
+ * unchanged. This is driven by the already-known pane width, never window width. */
+
+/* Keep the page/body as one independent formatting context so width reflow in a
+ * tablet pane cannot invalidate the surrounding split frame or sibling pane. */
+html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-studio-main,
+  .soridraw-responsive-content-page,
+  .soridraw-studio-result-content
+),
+html[data-soridraw-theme="studio-black"]
+.soridraw-lite-studio-split-workspace.is-dragging
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-studio-main,
+  .soridraw-responsive-content-page,
+  .soridraw-studio-result-content
+) {
+  contain: layout style !important;
+}
+
+/* Builder cards are the expensive tablet reflow leaves. Preserve natural size
+ * and wrapping, but prevent a card width change from cascading through the full
+ * Studio tree. Off-screen cards may reuse their last measured block size. */
+html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+[data-soridraw-pane-tablet-fastpath="true"] .soridraw-studio-menu-card,
+html[data-soridraw-theme="studio-black"]
+.soridraw-lite-studio-split-workspace.is-dragging
+[data-soridraw-pane-tablet-fastpath="true"] .soridraw-studio-menu-card {
+  contain: layout style paint !important;
+  content-visibility: auto !important;
+  contain-intrinsic-size: auto 220px !important;
+}
+
+/* Music Note / Library top controls and list/group trees stay fully visible but
+ * become local layout boundaries. Leaf rows already have the 380/576 isolation;
+ * these parent boundaries stop their width reflow from invalidating the page. */
+html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-musicnote-region-top,
+  .soridraw-library-region-top,
+  .soridraw-perf-layout-region-list,
+  .soridraw-perf-layout-region-group
+),
+html[data-soridraw-theme="studio-black"]
+.soridraw-lite-studio-split-workspace.is-dragging
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-musicnote-region-top,
+  .soridraw-library-region-top,
+  .soridraw-perf-layout-region-list,
+  .soridraw-perf-layout-region-group
+) {
+  contain: layout style !important;
+}
+
+html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-list-perf-item:not(.soridraw-list-perf-item--active),
+  .soridraw-library-workspace-track-row
+),
+html[data-soridraw-theme="studio-black"]
+.soridraw-lite-studio-split-workspace.is-dragging
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-list-perf-item:not(.soridraw-list-perf-item--active),
+  .soridraw-library-workspace-track-row
+) {
+  contain: layout style paint !important;
+  content-visibility: auto !important;
+}
+
+/* Secondary container-query surfaces do not own the tablet composition. Their
+ * continuous cqw/container recalculation was already safe to suspend in 519;
+ * apply the same rule to the 656-confirmed pane band, including Lite V2. */
+html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-menu-summary-box,
+  .soridraw-live-keywords-fixed
+),
+html[data-soridraw-theme="studio-black"]
+.soridraw-lite-studio-split-workspace.is-dragging
+[data-soridraw-pane-tablet-fastpath="true"] :is(
+  .soridraw-menu-summary-box,
+  .soridraw-live-keywords-fixed
+) {
+  container-type: normal !important;
+  container-name: none !important;
+}
+
+/* Tablet fast path is geometry/layout only; decorative interpolation must not
+ * consume frames while the pane width itself is changing. */
+html.soridraw-split-dragging[data-soridraw-theme="studio-black"]
+[data-soridraw-pane-tablet-fastpath="true"] *,
+html[data-soridraw-theme="studio-black"]
+.soridraw-lite-studio-split-workspace.is-dragging
+[data-soridraw-pane-tablet-fastpath="true"] * {
+  transition: none !important;
+  animation-play-state: paused !important;
+}
+

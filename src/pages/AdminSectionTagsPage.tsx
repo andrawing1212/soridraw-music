@@ -31,6 +31,7 @@ import {
   Settings
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { FIRESTORE_READ_CACHE_KEYS, writeFirestoreReadCache } from '../lib/firestoreReadCache';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AdminPageLayout from '../components/AdminPageLayout';
 import { normalizeStaffRole } from '../constants/adminPermissions';
@@ -177,6 +178,10 @@ export default function AdminSectionTagsPage({ isAdmin: isAdminProp }: { isAdmin
 
         console.log(`Fetched ${fetchedTags.length} tags from Firestore`);
         setTags(fetchedTags);
+        writeFirestoreReadCache(
+          FIRESTORE_READ_CACHE_KEYS.sectionTags,
+          fetchedTags.map(({ docId: _docId, ...tag }) => tag),
+        );
         setIsLoading(false);
       },
       (err) => {

@@ -32,10 +32,15 @@
         try {
           var nav = navigator || {};
           var ua = nav.userAgent || '';
-          var isPhone = typeof nav.userAgentData?.mobile === 'boolean'
-            ? nav.userAgentData.mobile
-            : /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)
-              || (/Android/i.test(ua) && /Mobile/i.test(ua));
+          var uaPhone = /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)
+            || (/Android/i.test(ua) && /Mobile/i.test(ua));
+          var shortSide = Math.min((screen && screen.width) || 9999, (screen && screen.height) || 9999);
+          var touchPhoneFallback = typeof matchMedia === 'function'
+            && (matchMedia('(pointer: coarse)').matches || matchMedia('(hover: none)').matches)
+            && shortSide <= 600;
+          // 631: only UA-CH `mobile:true` is decisive. Some Android
+          // browser/PWA combinations can report false even on a real phone.
+          var isPhone = nav.userAgentData?.mobile === true || uaPhone || touchPhoneFallback;
           var requestedTheme = localStorage.getItem('soridraw_app_theme') === 'studio-black' ? 'studio-black' : 'classic';
           var displayKey = isPhone ? 'soridraw_phone_display_mode' : 'soridraw_large_display_mode';
           var storedDisplay = localStorage.getItem(displayKey);
@@ -49,6 +54,10 @@
             : requestedTheme === 'studio-black'
               ? 'studio-black'
               : legacyColor === 'light' ? 'light' : 'dark';
+          // 631: actual phones never first-paint the split workspace. Use the
+          // same robust physical-device rule as the React runtime so a stale Split
+          // preference cannot expose the desktop dashboard under the Classic page.
+          if (isPhone && requestedDisplay === 'studio-black') requestedDisplay = 'dark';
           var effectiveTheme = requestedDisplay === 'studio-black' ? 'studio-black' : 'classic';
           var effectiveColor = requestedDisplay === 'light' ? 'light' : 'dark';
           document.documentElement.dataset.soridrawTheme = effectiveTheme;

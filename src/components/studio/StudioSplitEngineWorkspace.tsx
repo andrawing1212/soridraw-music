@@ -1,19 +1,39 @@
 import React, { type ReactNode } from 'react';
 import StudioSplitWorkspace from './StudioSplitWorkspace';
 import LiteStudioSplitWorkspace from './LiteStudioSplitWorkspace';
+import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
 
 export type StudioSplitEngine = 'lite' | 'legacy';
+export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590';
 
 type Props = {
   engine: StudioSplitEngine;
+  liteRuntimeProfile?: StudioLiteRuntimeProfile;
   children: ReactNode;
   builderMasthead?: ReactNode;
   viewMode?: 'split' | 'result-only' | 'hidden';
   workspaceView?: 'create' | 'recent' | 'music-note' | 'library';
   workspaceRequestId?: number;
+  compactMobileMode?: boolean;
 };
 
-export default function StudioSplitEngineWorkspace({ engine, ...props }: Props) {
+export default function StudioSplitEngineWorkspace({
+  engine,
+  liteRuntimeProfile = 'adaptive',
+  compactMobileMode = false,
+  ...props
+}: Props) {
+  // 646: below the mobile threshold Studio Black is no longer a squeezed split
+  // canvas. It renders the same information hierarchy as the phone UI and does
+  // not mount either split engine, so no divider/rail geometry can leak into it.
+  if (compactMobileMode && props.viewMode === 'split') {
+    return (
+      <StudioCompactMobileWorkspace workspaceView={props.workspaceView}>
+        {props.children}
+      </StudioCompactMobileWorkspace>
+    );
+  }
+
   if (engine === 'legacy') return <StudioSplitWorkspace {...props} />;
-  return <LiteStudioSplitWorkspace {...props} />;
+  return <LiteStudioSplitWorkspace {...props} runtimeProfile={liteRuntimeProfile} />;
 }

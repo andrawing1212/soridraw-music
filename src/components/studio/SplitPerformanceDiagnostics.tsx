@@ -8,6 +8,7 @@ import {
   setSplitPerfDiagnosticsEnabled,
   SPLIT_PERF_BENCHMARK_REQUEST_EVENT,
   SPLIT_PERF_BENCHMARK_STATUS_EVENT,
+  SPLIT_PERF_MANUAL_DRAG_ARM_EVENT,
   SPLIT_PERF_TOOL_VISIBILITY_EVENT,
   SPLIT_PERF_WORKSPACE_REQUEST_EVENT,
   subscribeSplitPerfBenchmarkSummary,
@@ -24,6 +25,9 @@ type PerfProbeProfileId =
   | 'media-off'
   | 'list-paint-off'
   | 'container-off'
+  | 'musicnote-title-off'
+  | 'musicnote-keywords-off'
+  | 'musicnote-text-off'
   | 'area-list-off'
   | 'area-builder-off'
   | 'area-result-off'
@@ -84,6 +88,9 @@ const PERF_PAIR_BASELINE_STORAGE_KEY = 'soridraw_perf_pair_baseline_603_v1';
 
 const PERF_RENDER_PROBE_PROFILES: Array<{ id: PerfProbeProfileId; label: string }> = [
   { id: 'baseline', label: '기준' },
+  { id: 'musicnote-title-off', label: '뮤직노트 제목 OFF' },
+  { id: 'musicnote-keywords-off', label: '뮤직노트 키워드 OFF' },
+  { id: 'musicnote-text-off', label: '뮤직노트 제목+키워드 OFF' },
   { id: 'effects-off', label: '효과 OFF' },
   { id: 'media-off', label: '이미지 OFF' },
   { id: 'list-paint-off', label: '리스트 Paint OFF' },
@@ -419,7 +426,7 @@ const collectPerfEnvironmentSnapshot = async (): Promise<PerfEnvironmentSnapshot
     fontStatus: fonts?.status || '미지원',
     fontCount: fonts ? fonts.size : null,
     assetMode: prodBundle ? 'prod-bundle' : devModules ? 'dev-modules' : 'unknown',
-    buildProfile: '606 · 602 stable runtime + drag-time App rerender suppression',
+    buildProfile: '610 · mouse-touch parity: latest coalesced mouse sample + drag hit-test shield',
     cssMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     jsMinifyMode: (viteEnv?.PROD ?? prodBundle) ? 'ON (정상)' : 'DEV · 비적용',
     computedStyles: collectComputedStyleDiagnostics(),
@@ -616,6 +623,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     }
     if (window.location.pathname !== '/studio') {
       setBenchmarkMessage('스튜디오의 분할 화면에서 자동 테스트를 실행하세요.');
+      return false;
+    }
+    if (!document.querySelector('.soridraw-lite-studio-split-workspace')) {
+      setBenchmarkMessage('612 자동 모드는 화면별 검증 엔진을 사용합니다. 현재 화면이 기존 방식이면 우측 상단에서 Lite V2를 강제 선택한 뒤 PERF 진단을 실행하세요.');
       return false;
     }
     return true;
@@ -817,6 +828,10 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} 준비 중…`);
         await waitForWorkspaceReady(workspace);
         setBenchmarkMessage(`${workspace === 'music-note' ? '뮤직노트' : '라이브러리'} · 분할바를 4~6초 동안 계속 좌우로 실제 드래그한 뒤 놓아주세요.`);
+        // 611: normal hand dragging is never instrumented. Arm PERF only for
+        // this explicit admin hand-comparison request; Lite V2 consumes the arm
+        // once on the next matching pointer-down and disarms after pointer-up.
+        window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, { detail: { armed: true, workspace } }));
         const measured = await waitForManualDragResult(workspace);
         rows.push(toHandPairRow(workspace, measured));
         setHandPairRows([...rows]);
@@ -840,6 +855,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
     } catch (error) {
       setBenchmarkMessage(`실손 비교 중단 · ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
     } finally {
+      window.dispatchEvent(new CustomEvent(SPLIT_PERF_MANUAL_DRAG_ARM_EVENT, { detail: { armed: false } }));
       if (originalWorkspace === 'music-note' || originalWorkspace === 'library' || originalWorkspace === 'recent' || originalWorkspace === 'create') {
         window.dispatchEvent(new CustomEvent(SPLIT_PERF_WORKSPACE_REQUEST_EVENT, { detail: { view: originalWorkspace } }));
       }

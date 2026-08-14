@@ -141,6 +141,9 @@ export default function StudioSplitWorkspace({
   const [isBuilderCollapsed, setIsBuilderCollapsed] = useState(readStoredBuilderCollapsed);
   const [isResultCollapsed, setIsResultCollapsed] = useState(readStoredResultCollapsed);
   const draggingRef = useRef(false);
+  const finePointerFastPathRef = useRef(
+    typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
+  );
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const modalHostRef = useRef<HTMLDivElement | null>(null);
   const builderRef = useRef<HTMLDivElement | null>(null);
@@ -161,6 +164,8 @@ export default function StudioSplitWorkspace({
   const dragRef = useRef({ pointerId: -1, startX: 0, startPercent: DEFAULT_PERCENT, width: 1 });
   const pendingClientXRef = useRef<number | null>(null);
   const dragFrameRef = useRef<number | null>(null);
+  const lastDragLayoutCommitAtRef = useRef(0);
+  const dragLayoutIntervalRef = useRef(16);
   const footerFrameRef = useRef<number | null>(null);
   const layoutRefreshFrameRef = useRef<number | null>(null);
   const builderModeAnchorFrameRef = useRef<number | null>(null);
@@ -218,9 +223,15 @@ export default function StudioSplitWorkspace({
     // Width dragging already owns the pane geometry for this frame. Running a
     // second ResizeObserver-driven measurement here forces another synchronous
     // layout of both large panes and is the main source of visible card stutter.
-    // Keep the last stable title height during the drag and refresh it once on
-    // pointer-up instead.
-    if (draggingRef.current) return;
+    // 664: native horizontal window resizing has the same ownership rule. In the
+    // 1100~1599 compact/tablet composition the Genre card rewraps repeatedly, so
+    // its observer can otherwise force a second full-tree layout on nearly every
+    // browser resize tick. Keep the last stable cross-pane title height until the
+    // existing resize-end path performs one final exact sync.
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+    ) return;
 
     const builder = builderRef.current;
     const result = resultRef.current;
@@ -299,6 +310,8 @@ export default function StudioSplitWorkspace({
       floatingActionBar.style.removeProperty('left');
       floatingActionBar.style.removeProperty('width');
       floatingActionBar.style.removeProperty('--soridraw-studio-builder-width');
+      floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
+      floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }
     if (collapsedActionButton) {
       collapsedActionButton.style.removeProperty('--soridraw-studio-builder-width');
@@ -328,6 +341,16 @@ export default function StudioSplitWorkspace({
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
     const workspaceRight = Math.max(0, window.innerWidth - (left + metricsRef.current.width));
+    const resultWidth = Math.max(0, metricsRef.current.width - roundedBuilderWidth);
+    // 658: 590/591 proved that production can pay a much larger style/layout
+    // cost when live geometry is published through inherited root custom
+    // properties. 656/657 isolated the remaining slow state to a 661~1080px
+    // pane. In that exact fine-pointer band, keep external live geometry local
+    // to the element that consumes it, matching Lite V2's verified PROD path.
+    const useTabletProdParityPath = finePointerFastPathRef.current && (
+      (roundedBuilderWidth > 660 && roundedBuilderWidth <= 1080)
+      || (resultWidth > 660 && resultWidth <= 1080)
+    );
 
     // The page masthead is outside the split layout and therefore cannot inherit
     // the builder pane's temporary inline width. Mirror the live builder width
@@ -374,7 +397,7 @@ export default function StudioSplitWorkspace({
         'important',
       );
     }
-    if (controls.liveKeywords) {
+    if (controls.liveKeywords && !useTabletProdParityPath) {
       controls.liveKeywords.style.setProperty(
         'left',
         `${Math.max(0, roundedSplitterLeft + 18)}px`,
@@ -385,6 +408,11 @@ export default function StudioSplitWorkspace({
         `${Math.max(0, Math.round(workspaceRight))}px`,
         'important',
       );
+    } else if (controls.liveKeywords) {
+      // Desktop Studio Black hides this body portal. Avoid two dead layout
+      // writes per pointer frame in the 656-confirmed hot band.
+      controls.liveKeywords.style.removeProperty('left');
+      controls.liveKeywords.style.removeProperty('right');
     }
     if (controls.searchButton) {
       // Search is absolutely positioned inside the same 1500px Studio shell as
@@ -417,13 +445,22 @@ export default function StudioSplitWorkspace({
     if (lastActionControlPixelRef.current === actionGeometryKey) return;
     lastActionControlPixelRef.current = actionGeometryKey;
 
-    // 535 — publish the action geometry even while the control is collapsed.
-    // The old code updated these root variables only when the expanded portal
-    // existed, so resizing the split while collapsed left stale coordinates for
-    // the next expand. Root CSS variables are now the single geometry hand-off.
+    // 535 keeps resting geometry on the root, but 658 must not mutate inherited
+    // root custom properties on every pointer frame inside the confirmed tablet
+    // hot band. Publish directly on the floating portal there (same mechanism as
+    // Lite V2); pointer-up still commits the final root values once.
     const rootStyle = document.documentElement.style;
-    rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
-    rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+    if (useTabletProdParityPath) {
+      if (controls.floatingActionBar) {
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+      }
+    } else {
+      controls.floatingActionBar?.style.removeProperty('--soridraw-action-fixed-left');
+      controls.floatingActionBar?.style.removeProperty('--soridraw-action-fixed-width');
+      rootStyle.setProperty('--soridraw-action-fixed-left', `${actionGeometry.left}px`);
+      rootStyle.setProperty('--soridraw-action-fixed-width', `${actionGeometry.width}px`);
+    }
 
     if (controls.floatingActionBar) {
       controls.floatingActionBar.style.removeProperty('left');
@@ -499,7 +536,15 @@ export default function StudioSplitWorkspace({
   }, [isStudioBlack]);
 
   const scheduleFooterBoundaryRefresh = useCallback(() => {
-    if (draggingRef.current || footerFrameRef.current !== null) return;
+    // 664: footer position is vertical geometry. A horizontal native resize must
+    // not force footer.getBoundingClientRect() in parallel with the workspace
+    // width layout on every frame. The existing resize-end refresh commits the
+    // exact footer/splitter bottom once the gesture settles.
+    if (
+      draggingRef.current
+      || document.documentElement.classList.contains('soridraw-window-resizing')
+      || footerFrameRef.current !== null
+    ) return;
     footerFrameRef.current = window.requestAnimationFrame(() => {
       footerFrameRef.current = null;
       refreshSplitterFooterBoundary();
@@ -781,6 +826,18 @@ export default function StudioSplitWorkspace({
     const resultWidth = Math.max(0, safeWidth - builderWidth);
     const splitterLeft = left + builderWidth;
 
+    // 657: reuse the 656-proven pane-owned tablet band as a real drag fast path.
+    // The split engine already knows both pane widths, so mark only a fine-pointer
+    // pane whose live width is 661~1080px. CSS uses this marker only while an
+    // active divider drag is in progress; resting tablet UI remains unchanged.
+    const syncPaneTabletProbe = (pane: HTMLElement, paneWidth: number) => {
+      const active = finePointerFastPathRef.current && paneWidth > 660 && paneWidth <= 1080;
+      if (active) pane.dataset.soridrawPaneTabletFastpath = 'true';
+      else delete pane.dataset.soridrawPaneTabletFastpath;
+    };
+    syncPaneTabletProbe(builder, builderWidth);
+    syncPaneTabletProbe(result, resultWidth);
+
     const isIsolatedWorkspace = layout.dataset.scrollIsolated === 'true';
 
     // Wide desktop uses two absolutely positioned scroll panes inside a fixed
@@ -821,7 +878,7 @@ export default function StudioSplitWorkspace({
           BUILDER_MOBILE_BREAKPOINT,
           previousBuilderMode,
         );
-    const usesUnifiedContentBreakpoint = workspaceView === 'music-note' || workspaceView === 'library';
+    const usesUnifiedContentBreakpoint = workspaceView === 'library';
     const nextResultMode = resultCollapsedRef.current
       ? modeRef.current.result
       : resolvePaneMode(
@@ -1094,10 +1151,14 @@ export default function StudioSplitWorkspace({
     const themeObserver = new MutationObserver(scheduleLayoutMetricsRefresh);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-soridraw-theme'] });
 
-    // Width changes are already owned by the workspace ResizeObserver. Keep a
-    // tiny native listener only for vertical viewport changes, because the
-    // isolated workspace height must then be recalculated even if its current
-    // fixed-size box has not emitted a ResizeObserver callback yet.
+    // 650 — restore the verified 488/637 resize ownership. Horizontal browser
+    // resizing is already emitted by the workspace ResizeObserver and coalesced
+    // to one rAF. Listening to the same width change again on window.resize made
+    // the split tree run two geometry refresh paths per native resize tick, which
+    // became especially expensive in the 1100~1599 compact/tablet composition.
+    // Keep the native listener only for viewport-height changes; still retain the
+    // resize marker so secondary transitions/container work stays suspended until
+    // the native resize gesture settles.
     let lastViewportHeight = window.innerHeight;
     let resizeEndTimer: number | null = null;
     const handleViewportResize = () => {
@@ -1115,10 +1176,6 @@ export default function StudioSplitWorkspace({
         scheduleLayoutMetricsRefresh();
       }
 
-      // Do not replace the verified viewport/pane geometry path while the user
-      // drags the browser edge. This class only lets heavy descendants suspend
-      // container-query/animation work. Once native resizing settles, restore
-      // the full responsive detail and perform one final geometry sync.
       resizeEndTimer = window.setTimeout(() => {
         resizeEndTimer = null;
         root.classList.remove('soridraw-window-resizing');
@@ -1128,8 +1185,15 @@ export default function StudioSplitWorkspace({
       }, 110);
     };
 
+    // Rail collapse/expand is not a continuous resize gesture. Recalculate the
+    // new grid width synchronously when StudioPageFrame signals it so the
+    // builder pixel width cannot spend one paint at the previous rail geometry.
+    const handleStudioFrameResize = () => {
+      if (!draggingRef.current) refreshLayoutMetrics();
+    };
+
     window.addEventListener('resize', handleViewportResize, { passive: true });
-    window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
+    window.addEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
     window.addEventListener('scroll', scheduleFooterBoundaryRefresh, { passive: true });
     window.addEventListener('scroll', syncCenterModalHostBounds, { passive: true });
     scheduleFooterBoundaryRefresh();
@@ -1141,7 +1205,7 @@ export default function StudioSplitWorkspace({
       if (resizeEndTimer !== null) window.clearTimeout(resizeEndTimer);
       document.documentElement.classList.remove('soridraw-window-resizing');
       window.removeEventListener('resize', handleViewportResize);
-      window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutMetricsRefresh as EventListener);
+      window.removeEventListener('soridraw-studio-frame-resize', handleStudioFrameResize as EventListener);
       window.removeEventListener('scroll', scheduleFooterBoundaryRefresh);
       window.removeEventListener('scroll', syncCenterModalHostBounds);
       if (dragFrameRef.current !== null) {
@@ -1186,9 +1250,18 @@ export default function StudioSplitWorkspace({
       delete document.documentElement.dataset.soridrawBuilderAtMinimum;
       delete document.documentElement.dataset.soridrawResultAtMinimum;
     };
-  }, [clearExternalMeasurements, clearRootMeasurements, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
+  }, [clearExternalMeasurements, clearRootMeasurements, refreshLayoutMetrics, scheduleFooterBoundaryRefresh, scheduleLayoutMetricsRefresh, syncCenterModalHostBounds, syncResultTitleHeight]);
 
-  const flushPendingPointer = useCallback(() => {
+  // 660 — keep the pointer/divider lane independent from an expensive PROD
+  // Studio tablet reflow. 659 already proved that the fixed splitter can follow
+  // the pointer directly. The remaining DEV/PROD gap comes from immediately
+  // committing every rAF to the large Studio pane tree even when one live pane
+  // sits in the confirmed 661~1080px tablet band. Let that layout lane self-pace
+  // from its *measured* commit cost while always retaining only the newest X.
+  // Fast environments keep ~60fps commits; expensive production frames back off
+  // just enough to give pointer delivery/paint breathing room. No hostname/build
+  // branch is used, so DEV and PROD run the exact same code.
+  const flushPendingPointer = useCallback((forceLayout = false) => {
     dragFrameRef.current = null;
     const clientX = pendingClientXRef.current;
     pendingClientXRef.current = null;
@@ -1205,16 +1278,82 @@ export default function StudioSplitWorkspace({
     // Preserve one-pixel pointer fidelity. The former 2px quantization made a
     // healthy frame rate still look like stepping on wide desktop screens.
     const nextBuilderPixel = Math.round(rawBuilderPixel);
-    if (lastDragBuilderPixelRef.current === nextBuilderPixel) return;
+    if (lastDragBuilderPixelRef.current === nextBuilderPixel && !forceLayout) return;
+
+    const nextResultPixel = Math.max(0, safeWidth - nextBuilderPixel);
+    const inConfirmedTabletHotBand = finePointerFastPathRef.current && (
+      (nextBuilderPixel > 660 && nextBuilderPixel <= 1080)
+      || (nextResultPixel > 660 && nextResultPixel <= 1080)
+    );
+
+    if (inConfirmedTabletHotBand && !forceLayout) {
+      const now = performance.now();
+      const elapsed = now - lastDragLayoutCommitAtRef.current;
+      if (elapsed < dragLayoutIntervalRef.current) {
+        // Do not replay old positions. Keep only the latest pointer X and try
+        // again on the next animation frame; the splitter itself already moved
+        // immediately in handlePointerMove.
+        pendingClientXRef.current = clientX;
+        if (dragFrameRef.current === null) {
+          dragFrameRef.current = window.requestAnimationFrame(() => {
+            flushPendingPointer(false);
+          });
+        }
+        return;
+      }
+    }
+
     lastDragBuilderPixelRef.current = nextBuilderPixel;
+    const commitStart = performance.now();
     applyPercentToLayout((nextBuilderPixel / safeWidth) * 100);
+    const commitCost = Math.max(0, performance.now() - commitStart);
+    lastDragLayoutCommitAtRef.current = performance.now();
+
+    if (inConfirmedTabletHotBand) {
+      // Adaptive cadence: cheap layouts stay at the native frame cadence.
+      // Expensive PROD frames back off progressively instead of monopolising the
+      // main thread and starving subsequent pointer events.
+      dragLayoutIntervalRef.current = commitCost >= 18
+        ? 36
+        : commitCost >= 12
+          ? 28
+          : commitCost >= 8
+            ? 20
+            : 16;
+    } else {
+      dragLayoutIntervalRef.current = 16;
+    }
   }, [applyPercentToLayout]);
 
   const schedulePointerUpdate = useCallback((clientX: number) => {
     pendingClientXRef.current = clientX;
     if (dragFrameRef.current !== null) return;
-    dragFrameRef.current = window.requestAnimationFrame(flushPendingPointer);
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      flushPendingPointer(false);
+    });
   }, [flushPendingPointer]);
+
+  // 659 — The fixed splitter must never wait for the Studio pane reflow path.
+  // In the 661~1080px builder/result tablet band the inner Studio DOM can still
+  // need more than one frame to settle even after the 657/658 paint isolation.
+  // Drive the body-portal divider directly from the latest pointer coordinate
+  // first, then let the existing rAF layout path consume the exact same X value.
+  // This keeps pointer -> divider latency independent from pane responsive work.
+  const previewSplitterAtClientX = useCallback((clientX: number) => {
+    const splitter = splitterRef.current;
+    if (!splitter || !draggingRef.current) return;
+
+    const { startX, startPercent, width } = dragRef.current;
+    const safeWidth = Math.max(width, 1);
+    const bounds = getSplitBounds(safeWidth);
+    const deltaPercent = ((clientX - startX) / safeWidth) * 100;
+    const rawPercent = clampToBounds(startPercent + deltaPercent, bounds);
+    const builderPixel = Math.round(safeWidth * (rawPercent / 100));
+    const viewportLeft = metricsRef.current.left + builderPixel;
+
+    splitter.style.removeProperty('transform');
+    splitter.style.setProperty('left', `${Math.max(0, Math.round(viewportLeft) - 8)}px`, 'important');
+  }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (!isStudioBlack() || builderCollapsedRef.current || resultCollapsedRef.current) return;
@@ -1234,6 +1373,8 @@ export default function StudioSplitWorkspace({
     };
     pendingClientXRef.current = null;
     lastDragBuilderPixelRef.current = null;
+    lastDragLayoutCommitAtRef.current = 0;
+    dragLayoutIntervalRef.current = 16;
     builderModeScrollAnchorRef.current = null;
     captureBuilderDragScrollAnchor();
     if (builderModeAnchorFrameRef.current !== null) {
@@ -1265,8 +1406,18 @@ export default function StudioSplitWorkspace({
         actionAnchorRect.width,
         actionGutter,
       );
-      rootStyle.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
-      rootStyle.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      const currentResultWidth = Math.max(0, metricsRef.current.width - builderRect.width);
+      const seedTabletProdParityPath = finePointerFastPathRef.current && (
+        (builderRect.width > 660 && builderRect.width <= 1080)
+        || (currentResultWidth > 660 && currentResultWidth <= 1080)
+      );
+      if (seedTabletProdParityPath && controls.floatingActionBar) {
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      } else {
+        rootStyle.setProperty('--soridraw-action-fixed-left', `${restingActionGeometry.left}px`);
+        rootStyle.setProperty('--soridraw-action-fixed-width', `${restingActionGeometry.width}px`);
+      }
       lastActionControlPixelRef.current = `${restingActionGeometry.left}:${restingActionGeometry.width}`;
     } else {
       actionAnchorInsetsRef.current = null;
@@ -1289,6 +1440,7 @@ export default function StudioSplitWorkspace({
       ? nativeEvent.getCoalescedEvents()
       : [];
     const latestEvent = coalesced.length > 0 ? coalesced[coalesced.length - 1] : nativeEvent;
+    previewSplitterAtClientX(latestEvent.clientX);
     schedulePointerUpdate(latestEvent.clientX);
   };
 
@@ -1300,7 +1452,7 @@ export default function StudioSplitWorkspace({
       window.cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
     }
-    flushPendingPointer();
+    flushPendingPointer(true);
 
     try { event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* ignore */ }
     document.body.style.removeProperty('cursor');
@@ -1441,7 +1593,11 @@ export default function StudioSplitWorkspace({
 
   return (
     <>
-      <div ref={layoutRef} data-workspace-view-mode={viewMode} className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}>
+      <div
+        ref={layoutRef}
+        data-workspace-view-mode={viewMode}
+        className={`soridraw-studio-split-workspace${isBuilderCollapsed ? ' is-builder-collapsed' : ''}${isResultCollapsed ? ' is-result-collapsed' : ''}`}
+      >
         <div id="soridraw-studio-builder-pane" ref={builderRef} data-soridraw-studio-pane="builder" className="soridraw-studio-builder-pane" aria-hidden={isBuilderCollapsed}>
           <div id="soridraw-studio-builder-pane-masthead-host" className="soridraw-studio-pane-masthead-host soridraw-studio-builder-pane-masthead-host">
             {builderMasthead}

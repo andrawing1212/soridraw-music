@@ -13268,3 +13268,75 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-category-keyword-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
+
+/* 743 — Remove the obsolete portrait-tablet single-column bridge.
+ * Root cause: the base Studio selection grid intentionally uses three columns only
+ * for `(min-width: 1024px) and (orientation: landscape)`. When the external window
+ * crosses into portrait while it is still inside the app's 1100~1599 tablet band,
+ * that Tailwind rule falls back to `grid-cols-1`, producing the old stacked
+ * Genre -> Style -> Sound layout before the <1100 Compact workspace takes over.
+ *
+ * Keep the existing landscape tablet/PC layout untouched. In portrait only, reuse
+ * the approved Compact hierarchy so external-window resize and pane-width Compact
+ * now follow the same visual sequence. A builder pane that has already entered the
+ * real mobile mode remains excluded and keeps its one-column mobile composition. */
+@media (min-width: 1100px) and (max-width: 1599px) and (orientation: portrait) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-selection-grid,
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-selection-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-selection-grid > [data-studio-menu="genre"],
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-selection-grid > [data-studio-menu="genre"] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]),
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-selection-grid
+  > :is([data-studio-menu="style"], [data-studio-menu="sound"]) {
+    grid-column: auto !important;
+    grid-row: auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"])
+  :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid),
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"])
+  :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
+    align-items: start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card,
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"]) .soridraw-studio-mood-theme-grid > .soridraw-storyboard-card {
+    grid-column: 1 / -1 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"])
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid,
+  html[data-soridraw-theme="classic"] body #root .soridraw-app-root
+  .soridraw-studio-builder-pane:not([data-pane-mode="mobile"])
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-category-keyword-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}

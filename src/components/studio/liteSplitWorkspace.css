@@ -1004,33 +1004,29 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
 }
 
 
-/* 760 — Pure Pane + boundary-only responsive candidate.
- * Keep the 759 geometry-only hot path between real responsive boundaries.
- * Typography/button density may switch at PC/tablet/Compact/mobile boundaries,
- * but those content changes must never resize the visible split window itself.
- * The height value is captured once on pointer-down from the existing layout
- * measurement; there is no drag-frame DOM read or new observer. */
+/* 761 — Pure Pane live: exact responsive boundaries + stable menu-card shells.
+ * Do NOT lock the whole split workspace height. The 760 shell lock changed the
+ * scroll owner while dragging and made the right-side scrollbar jump inward.
+ * Instead, only the five collapsed Builder keyword cards keep the height that
+ * was measured once at pointer-down. Inner typography/button density may still
+ * switch live; expanded cards keep their natural height. */
 .soridraw-split-engine-test-switch--v2-pure {
   top: 272px;
 }
 
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"][data-v2-pure-pane-height-lock="true"] {
-    height: var(--soridraw-v2-pure-pane-fixed-height) !important;
-    min-height: var(--soridraw-v2-pure-pane-fixed-height) !important;
-    max-height: var(--soridraw-v2-pure-pane-fixed-height) !important;
-    align-items: stretch !important;
-    overflow: hidden !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"][data-v2-pure-pane-height-lock="true"]
-  > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
-    height: 100% !important;
-    min-height: 0 !important;
-    max-height: 100% !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
+  .soridraw-lite-studio-split-workspace[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-studio-builder-pane
+  :is(
+    .soridraw-genre-card,
+    [data-studio-menu="style"],
+    [data-studio-menu="sound"],
+    [data-studio-menu="mood"],
+    [data-studio-menu="theme"]
+  ).soridraw-studio-menu-card[data-soridraw-pure-pane-menu-height="true"]:has(> .soridraw-expand-summary[data-expanded="false"]) {
+    height: var(--soridraw-pure-pane-menu-height) !important;
+    min-height: var(--soridraw-pure-pane-menu-height) !important;
+    max-height: var(--soridraw-pure-pane-menu-height) !important;
   }
 }

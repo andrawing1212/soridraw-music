@@ -2101,3 +2101,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Builder 경계와 Result 경계를 분리 비교해 실제로 변경된 pane만 responsive publication을 수행합니다.
 - responsive typography/button density가 바뀌어도 드래그 중 visible split-window의 세로 높이가 변하지 않도록 pointer-down 시 기존 workspace 높이를 1회 캡처해 shell/pane scrollport 높이를 고정하고 pointer-up에서 즉시 해제합니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+## SORIDRAW 761차 — Pure Pane 실시간 판정 신뢰성 + 메뉴 높이/스크롤바 보정
+- 기준: 760차
+- Pure Pane 실시간 경계 판정에서 기존 16px pane hysteresis가 실제 660/680/820 경계 이벤트를 놓치던 충돌을 제거하고, 해당 모드에서는 정확한 경계값으로 즉시 전환합니다.
+- 760차의 전체 split-workspace 높이 잠금을 제거했습니다. 이 잠금은 사용자가 원한 메뉴 카드 높이 고정 대상이 아니었고, drag 중 scroll owner/scrollbar geometry를 바꾸는 부작용이 있었습니다.
+- 대신 장르/스타일/사운드/분위기/주제 collapsed 카드의 현재 높이를 pointer-down에서 1회 측정해 Pure Pane 실시간 모드 동안 카드 외곽 높이를 유지합니다. 텍스트/버튼 밀도는 실시간 변경되지만 카드 창 높이는 흔들리지 않습니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.

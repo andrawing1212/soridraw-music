@@ -4285,9 +4285,11 @@ function App() {
     window.addEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
     return () => window.removeEventListener(SPLIT_PERF_TOOL_VISIBILITY_EVENT, handleSplitPerfVisibility as EventListener);
   }, []);
-  const studioSplitEngineOverride: StudioSplitEngine | null = splitPerfToolsVisible
-    ? requestedStudioSplitEngineOverride
-    : null;
+  // 751: keep the old Lite V2 / Legacy hand-comparison route available even
+  // when the heavier PERF diagnostics panel is OFF. The switch itself remains
+  // admin-only in the Studio Black UI, but its URL override must be honored so
+  // the two split engines can be compared under the exact same viewport/pane.
+  const studioSplitEngineOverride: StudioSplitEngine | null = requestedStudioSplitEngineOverride;
 
   // 617 baseline kept Music Note / Library on Lite V2 while Recent stayed on
   // Legacy. 713 preserves the 683 codebase but updates only that routing choice:
@@ -14627,8 +14629,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && isAdminMenuUser && splitPerfToolsVisible && (
-                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 진단 전환">
+              {isStudioBlackActionMode && isAdminMenuUser && (
+                <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교 전환">
                   <button
                     type="button"
                     className={studioSplitEngineOverride === null ? 'is-active' : ''}

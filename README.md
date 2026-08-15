@@ -2255,3 +2255,22 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Lyrics는 별도 하단 카드이므로 기존 763 전용 drag lock만 유지.
 - 분할 성능 hot path, pane width 판정, 키워드 열 전환(모바일/4/5/7), 텍스트 크기, 펼침 동작은 변경하지 않음.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+
+## SORIDRAW 789차 — 분할 Vocal/Lyrics 대문 크기 전환 세로 고정
+- 기준: 788차(787 동일 코드 + ZIP 루트 구조 정상화).
+- 증상: 분할바를 1074px 전후로 움직일 때 실시간 이동 중에는 보컬/가사 행이 안정적이지만, 마우스를 놓는 순간 가사 대문/헤더 크기 전환과 함께 카드 행 및 아래 영역이 몇 px 이동함.
+- 실제 원인: 공통 Compact 규칙이 헤더 제목을 22px→18px, 아이콘 버튼을 36px→30px로 바꾸는 동시에, 763의 Lyrics 전용 drag snapshot이 드래그 중 높이를 별도로 고정하고 pointer-up에서 해제하고 있었음. 즉 `드래그 높이`와 `resting 높이`가 서로 다른 이중 소유권이 남아 있었음.
+- 수정 1: Lyrics의 drag-start 카드/헤더/body 높이 snapshot을 제거하고, 남아 있을 수 있는 legacy vertical-lock 속성만 시작 시 정리하도록 변경.
+- 수정 2: Vocal과 Lyrics의 헤더 layout slot을 분할 전 구간에서 36px 하나로 고정. 제목/아이콘의 시각 크기 변화는 유지하지만 부모 카드 높이와 다음 콘텐츠 시작점에는 반영되지 않음.
+- 수정 3: `liteSplitWorkspace.css`의 763 Lyrics drag-only `!important` 높이 규칙 제거. 드래그 중/후가 같은 CSS 소유권을 사용함.
+- 미변경: 키워드 카드, 분위기/주제 282px 규칙, 4/5/7칸 전환, 실제 모바일/Classic 다크·라이트, Firebase/Auth/Firestore/Functions/저장 구조. 배포 없음.
+
+## SORIDRAW 790차 — 분할 생성바 실시간 분할선 추적
+- 기준: 789차.
+- 증상: Lite V2 분할바는 pointermove/rAF 동안 실시간으로 이동하지만 하단 생성바는 같은 위치를 유지하다가 pointer-up에서 최종 Builder 폭으로 한 번에 이동함.
+- 실제 원인: 764차부터 기본 생산 경로가 된 Pure Pane hot path가 성능을 위해 `syncExternalGeometry` 호출 전에 return하고 있었음. 생성바의 실시간 geometry writer가 `syncExternalGeometry` 안에만 있어서 관리자 설명상 `normal`이어도 실제 일반 사용자 Pure Pane 경로에서는 drag-end 동기화만 수행되고 있었음.
+- 수정: 생성바 전용 `syncGenerationBarGeometry`를 분리하고, Pure Pane의 이미 계산된 `builderWidth`를 같은 rAF 프레임에서 바로 전달하도록 변경. pointermove에 DOM read/ResizeObserver/React state/root dataset 동기화는 추가하지 않고 expanded 생성바의 left/width와 collapsed 생성버튼에 필요한 최소 CSS 변수만 갱신함.
+- 결과 목표: 분할선 이동 중 생성바가 같은 프레임으로 실시간 추적하고, 마우스를 놓는 순간 별도 위치 점프가 없어야 함. PC/태블릿/Builder 모바일 판정 시에도 현재 pane mode의 기존 gutter 규칙을 그대로 사용함.
+- 관리자 A/B `genBarPerf=freeze/off` 동작은 유지. 일반 사용자는 기본 `normal` 경로로 실시간 추적 적용.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

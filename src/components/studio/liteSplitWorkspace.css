@@ -1346,12 +1346,18 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   overflow-wrap: break-word;
 }
 
-/* 774 — Tablet split frame alignment cleanup.
+/* 775 — Tablet split frame / result scrollbar owner correction.
  * Keep the successful Lite V2 / Tablet Touch Pure performance path untouched.
- * This only fixes the tablet visual frame: the splitter starts at the masthead
- * divider, the pane collapse controls are centered in the real 64→110px header
- * band and use the same canonical splitter coordinate, and the result scrollbar
- * reaches the outer right boundary without changing the visible content width. */
+ * 774 mistakenly started the portal splitter at the LOWER 110px masthead divider;
+ * the approved vertical divider must start at the UPPER top-navigation line (58px).
+ * The collapse buttons stay at their already-approved 774 position.
+ *
+ * Tablet result scrolling also had two owners fighting the intended -18px
+ * reach-through: the isolated workspace still clipped overflow, and Lite V2's
+ * direct geometry could keep an inline `right: 0`. The CSS side now matches the
+ * proven wide-PC scroll-shell contract by allowing only the 18px result gutter
+ * to remain visible outside the workspace. TypeScript seeds the same -18px edge
+ * before direct geometry writes, so no later inline style can pull it inward. */
 @media (min-width: 1100px) and (max-width: 1599.98px) {
   html[data-soridraw-theme="studio-black"]
   body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter,
@@ -1363,11 +1369,12 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus,
   html[data-soridraw-theme="studio-black"]
   body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus-visible {
-    top: 110px !important;
+    top: 58px !important;
   }
 
-  /* The real Studio top navigation is 64px high. A 34px collapse button fits
-   * exactly in the 64→110px masthead band with a 6px gap above and below. */
+  /* 774's collapse-button position was user-verified as correct.
+   * Keep that 70px top unchanged while only the vertical divider returns to
+   * the upper 58px navigation line. */
   html[data-soridraw-theme="studio-black"]
   body > .soridraw-studio-builder-collapse-toggle.soridraw-lite-studio-builder-toggle,
   html[data-soridraw-theme="studio-black"]
@@ -1404,10 +1411,17 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     right: calc(var(--soridraw-studio-result-right, 0px) + 6px) !important;
   }
 
-  /* `.soridraw-studio-main` keeps an 18px right content inset in tablet split.
-   * Extend only the result scroll shell through that inset and return the same
-   * 18px as inner padding. The visible cards stay where they are, while the
-   * native scrollbar itself lands on the right frame divider. */
+  /* The workspace's older `overflow:hidden` clipped the 18px reach-through,
+   * so 774 could not move the native result scrollbar even though the result
+   * pane itself had `right:-18px`. Match the already-proven wide-PC shell:
+   * preserve size/layout/style containment, drop only paint clipping, and let
+   * the result pane occupy the main's existing 18px right gutter. */
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace[data-scroll-isolated="true"] {
+    overflow: visible !important;
+    contain: size layout style !important;
+  }
+
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace[data-scroll-isolated="true"]
   > .soridraw-studio-result-pane {

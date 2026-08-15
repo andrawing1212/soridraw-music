@@ -299,7 +299,14 @@ export default function LiteStudioSplitWorkspace({
   // 762: preserve the result scroll-shell's resting right edge during direct/Pure Pane drag.
   // Wide split mode intentionally reaches 18px past the workspace so its scrollbar
   // sits on the outer rail boundary; forcing right:0 during drag made it jump left.
-  const dragResultRightRef = useRef('0px');
+  // 775: tablet split uses the same 18px result-scrollbar reach-through as
+  // wide PC. Seeding the direct-geometry owner here prevents an inline `right:0`
+  // from overriding the CSS edge alignment before the first pointer gesture.
+  const dragResultRightRef = useRef(
+    typeof window !== 'undefined' && window.innerWidth >= 1100 && window.innerWidth < 1600
+      ? '-18px'
+      : '0px',
+  );
   // 749 — Keep geometry callbacks stable while only the workspace result page
   // changes. The latest page is read through this ref; dedicated view effects
   // still request one exact resting refresh outside any drag gesture.
@@ -1059,6 +1066,12 @@ export default function LiteStudioSplitWorkspace({
     if (!layout) return;
     refreshIsolationHeight();
     syncModalHost();
+    // 775: refresh is outside the drag hot path. Keep the tablet result scroll
+    // shell extended through Studio main's 18px right gutter before any direct
+    // geometry write runs, so the native scrollbar sits on the outer divider.
+    if (window.innerWidth >= 1100 && window.innerWidth < 1600) {
+      dragResultRightRef.current = '-18px';
+    }
     const rect = layout.getBoundingClientRect();
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
@@ -1319,10 +1332,17 @@ export default function LiteStudioSplitWorkspace({
     // starts. No geometry read is added to pointermove. This preserves the wide-PC
     // -18px scrollbar reach-through instead of overriding it with right:0.
     if (resultRef.current) {
-      const restingRight = window.getComputedStyle(resultRef.current).right;
-      dragResultRightRef.current = restingRight && restingRight !== 'auto' ? restingRight : '0px';
+      // 775: tablet direct geometry must not re-capture a stale inline `right:0`
+      // and pull the result scrollbar back inside. Wide PC keeps its existing
+      // computed-style behavior; tablet split has one canonical -18px edge.
+      if (window.innerWidth >= 1100 && window.innerWidth < 1600) {
+        dragResultRightRef.current = '-18px';
+      } else {
+        const restingRight = window.getComputedStyle(resultRef.current).right;
+        dragResultRightRef.current = restingRight && restingRight !== 'auto' ? restingRight : '0px';
+      }
     } else {
-      dragResultRightRef.current = '0px';
+      dragResultRightRef.current = window.innerWidth >= 1100 && window.innerWidth < 1600 ? '-18px' : '0px';
     }
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {

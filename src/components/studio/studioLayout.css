@@ -12987,8 +12987,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    column-gap: 16px !important;
-    row-gap: 16px !important;
+    column-gap: 20px !important;
+    row-gap: 20px !important;
     align-items: start !important;
   }
 
@@ -13020,8 +13020,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    column-gap: 16px !important;
-    row-gap: 16px !important;
+    column-gap: 20px !important;
+    row-gap: 20px !important;
     align-items: start !important;
   }
 
@@ -13228,8 +13228,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-selection-grid {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  column-gap: 16px !important;
-  row-gap: 16px !important;
+  column-gap: 20px !important;
+  row-gap: 20px !important;
   align-items: start !important;
 }
 
@@ -13253,8 +13253,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  column-gap: 16px !important;
-  row-gap: 16px !important;
+  column-gap: 20px !important;
+  row-gap: 20px !important;
   align-items: start !important;
 }
 
@@ -13282,6 +13282,16 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
 
+
+
+/* 783 — Tablet-portrait menu spacing uses the same 20px card rhythm as PC/mobile.
+ * The Compact rules had 16px grid gaps while the boundary between the primary
+ * and secondary groups already stayed at 20px. That produced exactly one normal
+ * row boundary (Style/Sound -> Mood/Theme) and tighter Genre -> Style/Sound,
+ * Mood/Theme -> Storyboard, Storyboard -> Vocal/Lyrics, plus tighter horizontal
+ * two-card gaps. Both external 768~1099 Compact (Classic dark/light + Studio
+ * Black compact workspace) and pane-owned 661~820 split Compact now use 20px.
+ * Internal keyword/button gaps are intentionally unchanged. */
 
 /* 750 — Generate bar resize geometry has one exact contract.
  * 749 was still using a hard-coded 0/18px anchor assumption while the resting

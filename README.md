@@ -2214,3 +2214,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 일반 모바일 viewport 규칙으로 Classic 다크/라이트를 함께 적용하고, `data-pane-mode="mobile"` pane 규칙으로 넓은 화면 안에서 분할 Builder가 모바일 폭이 되는 Studio Black 경로까지 동일하게 적용했습니다.
 - 키워드 개수/선택 로직/카드 폭/버튼 디자인/펼치기 동작은 변경하지 않았습니다. Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 작업 없음.
 
+
+## SORIDRAW 783차 — 태블릿 세로 메뉴 간격 PC·모바일 공통화
+
+- 기준: 782차.
+- 원인: 태블릿 세로 Compact 구간만 메뉴 카드 grid 간격이 16px으로 별도 지정되어 있었습니다. 반면 PC/모바일 공통 간격과 `스타일·사운드 → 분위기·주제` 그룹 경계는 20px이라, 해당 한 구간만 정상으로 보이고 `장르 → 스타일·사운드`, `분위기·주제 → 스토리보드`, `스토리보드 → 보컬·가사` 및 2열 좌우 간격은 더 좁게 보였습니다.
+- 수정: 768~1099px 외부 태블릿 세로 Compact와 분할 Builder의 661~820px pane Compact 모두 메뉴 카드 `column-gap` / `row-gap`을 20px으로 통일했습니다.
+- 적용 범위: Studio Black 분할모드 + Compact 화면, Classic 다크/라이트 태블릿 세로. PC와 모바일의 기존 20px 기준은 그대로 유지합니다.
+- 메뉴 내부 키워드/버튼 간격, 카드 크기, 반응형 열 구성, 분할바/접기버튼, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다. 배포 작업 없음.

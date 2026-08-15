@@ -2125,3 +2125,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 제목 크기 변화 때문에 `작사 스타일 → 가사 길이 → 섹션 구조`가 위아래로 밀리거나 가사 카드 외곽 높이가 출렁이는 현상을 차단합니다.
 - 드래그 종료 시 모든 임시 세로 잠금을 즉시 해제하여 정상 responsive 높이 소유권을 복원합니다.
 - Pure Pane geometry/실시간 경계 판정, 우측 스크롤바 보정, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 764차 — Lite V2 Pure Pane 실시간 기본 엔진 승격
+- 기준: 763차. 외부창 리사이즈 최적화는 이번 차수에서 건드리지 않고 내부 분할 엔진 기본화만 진행했습니다.
+- 관리자 진단에서 검증된 `Pure Pane 실시간` hot path를 Lite V2의 `normal` 드래그 경로로 승격했습니다. 일반 사용자는 별도 테스트 버튼이나 URL 파라미터 없이 동일한 Builder/Result/Splitter 직결 geometry와 실시간 경계 판정을 사용합니다.
+- PC `곡 만들기`도 자동 엔진을 Legacy에서 Lite V2로 전환했습니다. 최근 생성곡/뮤직노트/라이브러리와 함께 Studio 분할 화면 전체가 Lite V2를 기본으로 사용하며, 관리자 `기존 방식` 강제 선택은 비교/롤백 진단용으로 그대로 보존합니다.
+- 갤럭시탭/터치 환경은 기존부터 Lite V2 `adaptive` 프로필을 사용하고 있었지만 `normal`은 과거 경로였습니다. 이제 같은 `normal = Pure Pane 실시간` hot path를 공유하므로 분할 엔진이 마운트되는 태블릿 구간에서도 동일한 최적화 구조를 사용합니다. 기기 자체 성능/주사율/터치 샘플링 차이 때문에 절대 체감 속도가 PC와 완전히 같다고 보장하지는 않습니다.
+- 762~763의 우측 스크롤바 위치 보존, 장르/스타일/사운드/분위기/주제/가사 메뉴 세로 슬롯 안정화도 `normal` 기본 드래그에 함께 적용했습니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.

@@ -809,11 +809,13 @@ export default function LiteStudioSplitWorkspace({
     // 759 diagnostic isolation: these modes intentionally bypass every non-essential
     // drag-time sync so we can measure the raw cost of splitter/pane geometry.
     const purePaneLive = live && draggingRef.current && v2DragPerfMode === 'pure-pane';
-    // 760 candidate: keep the verified Pure Pane geometry hot path, but publish
-    // responsive UI only when the already-known pane widths actually cross a
-    // real PC/tablet/Compact/mobile boundary. No DOM read, observer or React
-    // state is added to pointermove.
-    const purePaneResponsiveLive = live && draggingRef.current && v2DragPerfMode === 'pure-pane-live';
+    // 764 production path: the verified Pure Pane geometry hot path is now the
+    // normal Lite V2 drag behavior. Responsive UI is published only from the
+    // already-known pane widths, with no DOM read, observer or React state added
+    // to pointermove. The explicit `pure-pane-live` mode remains as an admin A/B
+    // alias so the proven candidate can still be compared directly.
+    const purePaneResponsiveLive = live && draggingRef.current
+      && (v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal');
     const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
     const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
     const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
@@ -1212,7 +1214,7 @@ export default function LiteStudioSplitWorkspace({
       card.style.removeProperty('--soridraw-pure-pane-body-height');
       card.style.removeProperty('--soridraw-pure-pane-summary-height');
     }
-    if (v2DragPerfMode === 'pure-pane-live' && purePaneMenuCards.length > 0) {
+    if ((v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal') && purePaneMenuCards.length > 0) {
       // Batch every measurement before any style write. The hot drag path still
       // performs no DOM measurement. Expanded cards keep their natural height.
       const verticalSnapshots = purePaneMenuCards.map((card) => {
@@ -1284,7 +1286,9 @@ export default function LiteStudioSplitWorkspace({
     if (v2DragPerfMode === 'content-right-freeze' || v2DragPerfMode === 'content-freeze') {
       if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
     }
-    dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary' || v2DragPerfMode === 'pure-pane-live'
+    dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary'
+      || v2DragPerfMode === 'pure-pane-live'
+      || v2DragPerfMode === 'normal'
       ? readDragBoundarySignature(builderRect?.width || 1, resultRect?.width || 1, workspaceViewRef.current)
       : null;
     draggingRef.current = true;

@@ -1015,7 +1015,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
 
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   :is(
     [data-studio-menu="genre"],
@@ -1031,7 +1031,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   .soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"]
   .soridraw-menu-card-header-slot {
@@ -1043,7 +1043,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   .soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"]
   .soridraw-menu-card-body-slot {
@@ -1056,7 +1056,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   .soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"]
   > .soridraw-expand-summary {
@@ -1077,7 +1077,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
  * slot contract to the lower Lyrics menu without changing its responsive text. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   [data-studio-menu="lyrics"].soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"] {
     height: var(--soridraw-pure-pane-card-height) !important;
@@ -1086,7 +1086,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
   > .soridraw-menu-card-header-slot {
@@ -1097,7 +1097,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
   .soridraw-studio-builder-pane
   [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
   > .soridraw-menu-card-body-slot {

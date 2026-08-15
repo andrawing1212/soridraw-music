@@ -4338,25 +4338,20 @@ function App() {
   // the two split engines can be compared under the exact same viewport/pane.
   const studioSplitEngineOverride: StudioSplitEngine | null = requestedStudioSplitEngineOverride;
 
-  // 617 baseline kept Music Note / Library on Lite V2 while Recent stayed on
-  // Legacy. 713 preserves the 683 codebase but updates only that routing choice:
-  // Recent now shares the same result-workspace movement owner as Music Note /
-  // Library so pointer/divider/pane spacing follows one common rule.
+  // 764: interaction type still selects the Lite runtime profile, but no longer
+  // selects Legacy vs Lite. Galaxy Tab/touch keeps the verified `adaptive`
+  // reconciliation profile; fine-pointer result pages keep `library-590` after
+  // pointer-up. During the actual drag, every Studio workspace now shares the
+  // same Pure Pane live Lite V2 hot path.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
-  // 713: Recent Songs now uses the exact same fine-pointer split engine and
-  // runtime profile as Music Note / Library. The 683 Legacy Recent path drove
-  // the fixed divider ahead of the pane tree and adaptively throttled pane
-  // commits, which made pointer-to-divider spacing feel different even when
-  // throughput was high. Keep Create on Legacy; unify only the three result
-  // workspaces whose drag feel should match.
   const usesSharedResultSplitEngine = studioWorkspaceView === 'recent'
     || studioWorkspaceView === 'library'
     || studioWorkspaceView === 'music-note';
-  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
-    ? 'lite'
-    : usesSharedResultSplitEngine
-      ? 'lite'
-      : 'legacy';
+  // 764: Lite V2 is now the normal split engine for every Studio workspace.
+  // Pure Pane live proved stable and materially faster under real hand dragging,
+  // so Create no longer falls back to Legacy on fine-pointer desktop. The admin
+  // engine override remains available for A/B comparison and rollback diagnosis.
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = 'lite';
   const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
     ? 'adaptive'
     : usesSharedResultSplitEngine
@@ -4369,14 +4364,14 @@ function App() {
       : 'adaptive')
     : automaticLiteRuntimeProfile;
   const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
-    ? '자동 선택 · 갤탭/터치: Lite V2'
+    ? '자동 선택 · 갤탭/터치: Lite V2 · Pure Pane 실시간 기본'
     : studioWorkspaceView === 'library'
-      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · Pure Pane 실시간 기본'
       : studioWorkspaceView === 'music-note'
-        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+        ? '자동 선택 · PC 뮤직노트: Lite V2 · Pure Pane 실시간 기본'
         : studioWorkspaceView === 'recent'
-          ? '자동 선택 · PC 최근 생성곡: 뮤직노트/라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-          : '자동 선택 · PC 스튜디오: 기존 방식';
+          ? '자동 선택 · PC 최근 생성곡: Lite V2 · Pure Pane 실시간 기본'
+          : '자동 선택 · PC 스튜디오: Lite V2 · Pure Pane 실시간 기본';
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');

@@ -2230,3 +2230,28 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 적용 범위는 Studio Black + Lite V2 분할 Builder의 내부 mobile pane 전환만입니다. 실제 폰 화면, Classic 다크/라이트, 카드 내부 키워드 높이/개수/간격은 변경하지 않았습니다.
 - 2번 영상 관련 확인: Lite V2의 pane-local PC/tablet/mobile 판정은 pointermove rAF에서 실시간으로 수행합니다. 다만 성능 최적화를 위해 drag 중 `<html>` root dataset 전파는 `rootSync:false`로 미루고 pointer-up에서 최종 동기화합니다. 따라서 root/global 상태를 보는 일부 외부 UI는 놓는 순간 최종 판정되는 것처럼 보일 수 있습니다. 이는 757/764 계열의 의도된 style invalidation/reflow 절감 경로이며, divider/pane 자체 판정은 실시간입니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+## 785차 — 분할 키워드 카드 높이 릴리즈 스냅 제거
+- 기준: 784차
+- 수정: `src/components/studio/studioLayout.css`
+- 원인: 784차의 헤더 높이 고정 선택자가 실제 DOM 구조와 달라 적용되지 않았고, 5칸→7칸 구간도 별도 헤더 크기 전환이 남아 있어 드래그 중 vertical lock 해제 시 부모 카드 높이가 미세하게 재계산됨.
+- 변경: 분할모드의 장르/스타일/사운드/분위기/주제 카드에서 헤더 레이아웃 슬롯을 모든 Builder 폭 구간에 동일한 30px로 고정. 제목/아이콘의 시각적 반응형 크기와 키워드 4/5/7칸 전환은 그대로 유지.
+- 범위 제외: 확장 카드 내용, 실제 모바일 페이지, Classic 다크/라이트, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 786차 — 분할 Mood/Theme 카드 pointer-up 높이 스냅 제거
+- 기준: 785차
+- 증상: Lite V2 분할바 드래그 중에는 분위기/주제 카드 높이가 안정적이지만, 마우스를 놓는 순간 mobile↔4칸 및 5칸↔7칸 경계에서 카드 외곽 높이가 미세하게 변함.
+- 실제 원인: drag 중 Pure Pane 세로 잠금이 카드 전체 높이를 유지하고, pointer-up에서 resting responsive CSS로 소유권이 돌아오면서 자연 높이가 다시 계산됨. 785차는 헤더 슬롯만 고정해 이 릴리즈 소유권 차이를 끝까지 막지 못했음.
+- 수정: 분할모드의 접힌 분위기/주제 카드에 이미 사용 중인 구성값(헤더 30 + 키워드 96 + 요약 64 + 기존 여백/패딩)을 기준으로 외곽 높이 282px을 resting contract로 고정. 드래그 중/마우스 해제 후 높이가 동일함.
+- 미변경: 키워드 4/5/7열 전환, 텍스트/아이콘 크기, 확장 카드 높이, 다른 메뉴, Classic 다크/라이트, 비분할 모바일, Firebase/Auth/Firestore/Functions.
+
+## SORIDRAW 787차 — 분할 키워드카드 pointer-up 이중 높이 소유권 제거
+
+- 기준: 786차
+- 증상 재확인: 분할바를 누른 채 폭 구간을 넘을 때는 카드가 안정적인데, 같은 위치에서 마우스를 놓는 순간 Genre/Style/Sound/Mood/Theme 카드의 세로 프레임이 미세하게 다시 계산되어 Mood/Theme 위치까지 움직임.
+- 실제 원인: `LiteStudioSplitWorkspace`가 pointer-down에서 다섯 키워드 카드의 현재 높이를 스냅샷하고 `data-soridraw-pure-pane-vertical-lock` + CSS 변수로 고정했으며, `liteSplitWorkspace.css`의 drag 전용 `!important` 규칙이 그 값을 우선 사용함. pointer-up에서 해당 lock을 삭제하면서 785/786의 resting responsive CSS로 소유권이 바뀌어 release 시점에만 점프가 발생함.
+- 수정: Genre / Style / Sound / Mood / Theme는 drag 시작 높이 스냅샷과 drag 전용 높이 override 대상에서 완전히 제외. 785의 공통 30px header slot과 786의 Mood/Theme resting frame이 드래그 중/후 모두 같은 단일 소유자로 유지됨.
+- Lyrics는 별도 하단 카드이므로 기존 763 전용 drag lock만 유지.
+- 분할 성능 hot path, pane width 판정, 키워드 열 전환(모바일/4/5/7), 텍스트 크기, 펼침 동작은 변경하지 않음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

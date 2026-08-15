@@ -1267,9 +1267,9 @@ export default function LiteStudioSplitWorkspace({
     pointerIdRef.current = -1;
     activePointerTypeRef.current = '';
     layoutRef.current?.classList.remove('is-dragging');
-    // 762: Pure Pane menu vertical locks are drag-only. Clear them immediately
-    // after the drag class is removed so the resting responsive layout owns the
-    // natural card height and the next drag never inherits stale measurements.
+    // 787: only the dedicated Lyrics vertical lock remains drag-only. The five
+    // keyword cards no longer have a second drag-time height owner, so pointer-up
+    // cannot swap their geometry from a snapshot back to resting CSS.
     const purePaneLockedCards = builderRef.current?.querySelectorAll<HTMLElement>('[data-soridraw-pure-pane-vertical-lock="true"]');
     purePaneLockedCards?.forEach((card) => {
       delete card.dataset.soridrawPurePaneVerticalLock;
@@ -1341,37 +1341,28 @@ export default function LiteStudioSplitWorkspace({
     const rect = layout.getBoundingClientRect();
     if (rect.width <= 0) return;
 
-    // 763: freeze the five collapsed keyword cards plus the lower Lyrics card
-    // while Pure Pane live changes responsive typography/button density. 762
-    // already stabilized the five keyword cards; Lyrics now reuses the same
-    // drag-only header/body slot contract so its title can resize without
-    // pushing the rows below it. 761
-    // missed the real GenreHierarchySelector (`[data-studio-menu="genre"]`) and
-    // left its locks active after pointer-up, so Genre shrank in one direction
-    // while Style/Sound could retain a stale shorter height in the other.
-    const purePaneMenuCards: HTMLElement[] = builderRef.current
-      ? Array.from(builderRef.current.querySelectorAll<HTMLElement>(
-          '[data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"], [data-studio-menu="lyrics"]',
-        ))
+    // 787: the five keyword cards must NOT get a drag-start vertical snapshot.
+    // 762 locked Genre/Style/Sound/Mood/Theme with `!important` heights while
+    // dragging, then finishDrag removed those locks on pointer-up. That created
+    // two different height owners: drag snapshot -> resting responsive CSS,
+    // which is the exact release-only card jump visible at mobile<->4 and 5<->7.
+    // Their resting geometry is already stabilized by 785/786, so let that same
+    // pane-local CSS own the five cards before, during and after the drag.
+    // Lyrics remains the only card that keeps the dedicated 763 drag lock.
+    const purePaneVerticalLockCards: HTMLElement[] = builderRef.current
+      ? Array.from(builderRef.current.querySelectorAll<HTMLElement>('[data-studio-menu="lyrics"]'))
       : [];
-    for (const card of purePaneMenuCards) {
+    for (const card of purePaneVerticalLockCards) {
       delete card.dataset.soridrawPurePaneVerticalLock;
       card.style.removeProperty('--soridraw-pure-pane-card-height');
       card.style.removeProperty('--soridraw-pure-pane-header-height');
       card.style.removeProperty('--soridraw-pure-pane-body-height');
       card.style.removeProperty('--soridraw-pure-pane-summary-height');
     }
-    if ((v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal' || v2DragPerfMode === 'tablet-touch-pure') && purePaneMenuCards.length > 0) {
-      // Batch every measurement before any style write. The hot drag path still
-      // performs no DOM measurement. Expanded cards keep their natural height.
-      const verticalSnapshots = purePaneMenuCards.map((card) => {
-        const menuId = card.dataset.studioMenu || '';
-        const isLyricsCard = menuId === 'lyrics';
-        const summary = card.querySelector<HTMLElement>(':scope > .soridraw-expand-summary');
-        // Genre/Style/Sound/Mood/Theme keep the existing collapsed-only lock.
-        // Lyrics has no expand-summary; its header/body slots are always measured
-        // so only the responsive title/icon typography may change vertically.
-        if (!isLyricsCard && (!summary || summary.dataset.expanded !== 'false')) return null;
+    if ((v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal' || v2DragPerfMode === 'tablet-touch-pure') && purePaneVerticalLockCards.length > 0) {
+      // One cold-path snapshot for Lyrics only. Pointermove still performs no DOM
+      // measurement, and the five keyword cards stay on one responsive owner.
+      const verticalSnapshots = purePaneVerticalLockCards.map((card) => {
         const header = card.querySelector<HTMLElement>('.soridraw-menu-card-header-slot');
         const body = card.querySelector<HTMLElement>('.soridraw-menu-card-body-slot');
         if (!header || !body) return null;
@@ -1380,7 +1371,7 @@ export default function LiteStudioSplitWorkspace({
           cardHeight: Math.max(1, Math.round(card.getBoundingClientRect().height)),
           headerHeight: Math.max(1, Math.round(header.getBoundingClientRect().height)),
           bodyHeight: Math.max(1, Math.round(body.getBoundingClientRect().height)),
-          summaryHeight: summary ? Math.max(1, Math.round(summary.getBoundingClientRect().height)) : 0,
+          summaryHeight: 0,
         };
       });
 

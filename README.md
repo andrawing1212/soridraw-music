@@ -2092,3 +2092,78 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `Left Pane Only`, `Right Pane Only`: 한쪽 pane만 실제 resize하여 어느 pane의 layout/reflow가 고속 드래그 비용을 주도하는지 분리합니다.
 - 모든 진단 모드는 pointer-up에서 758차 정상 runtime geometry/responsive 상태로 1회 정합화합니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+
+## SORIDRAW 760차 — Pure Pane 실시간 경계 판정 + 분할창 높이 고정 후보
+- 기준: 759차
+- 759차에서 체감이 가장 좋았던 `Pure Pane` geometry hot path를 그대로 유지하면서, 실제 PC/Tablet/Compact/Mobile 경계를 넘는 순간에만 해당 pane의 responsive UI를 1회 실시간 반영하는 `Pure Pane 실시간` 관리자 비교 모드를 추가했습니다.
+- 경계 사이의 일반 pointer/rAF 프레임에는 Builder/Result/Splitter geometry 외 responsive broadcast, root dataset, 외부 geometry, ARIA, scroll lock을 실행하지 않습니다.
+- Builder 경계와 Result 경계를 분리 비교해 실제로 변경된 pane만 responsive publication을 수행합니다.
+- responsive typography/button density가 바뀌어도 드래그 중 visible split-window의 세로 높이가 변하지 않도록 pointer-down 시 기존 workspace 높이를 1회 캡처해 shell/pane scrollport 높이를 고정하고 pointer-up에서 즉시 해제합니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+## SORIDRAW 761차 — Pure Pane 실시간 판정 신뢰성 + 메뉴 높이/스크롤바 보정
+- 기준: 760차
+- Pure Pane 실시간 경계 판정에서 기존 16px pane hysteresis가 실제 660/680/820 경계 이벤트를 놓치던 충돌을 제거하고, 해당 모드에서는 정확한 경계값으로 즉시 전환합니다.
+- 760차의 전체 split-workspace 높이 잠금을 제거했습니다. 이 잠금은 사용자가 원한 메뉴 카드 높이 고정 대상이 아니었고, drag 중 scroll owner/scrollbar geometry를 바꾸는 부작용이 있었습니다.
+- 대신 장르/스타일/사운드/분위기/주제 collapsed 카드의 현재 높이를 pointer-down에서 1회 측정해 Pure Pane 실시간 모드 동안 카드 외곽 높이를 유지합니다. 텍스트/버튼 밀도는 실시간 변경되지만 카드 창 높이는 흔들리지 않습니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+## SORIDRAW 762차 — Pure Pane 실시간 판정·메뉴 세로 슬롯·우측 스크롤바 정밀 보정
+- 기준: 761차
+- Pure Pane 실시간은 더 이상 단발 boundary signature에 의존하지 않고, 매 rAF에서 이미 알고 있는 pane width로 로컬 mode를 비교하되 실제 mode 변경시에만 dataset/event를 갱신합니다. 따라서 PC→Tablet→Compact→Mobile을 빠르게 건너도 pointer-up까지 판정이 미뤄지지 않습니다.
+- 우측 결과 pane의 drag inline `right:0!important`가 wide-PC의 기존 `right:-18px!important` scrollbar reach-through를 덮어쓰던 원인을 제거했습니다. pointer-down 시 resting right 값을 1회 읽고 Pure/Direct geometry에 그대로 재사용합니다.
+- 761의 메뉴 높이 보정이 실제 GenreHierarchySelector를 누락하고 drag 종료 뒤 stale height lock을 남기던 문제를 수정했습니다. Genre/Style/Sound/Mood/Theme의 collapsed card만 drag 동안 card/header/body/summary 세로 슬롯을 pointer-down 높이로 고정하고 pointer-up 즉시 해제합니다.
+- 제목 글자/카운터/헤더 버튼 크기가 반응형으로 바뀌어도 아래 키워드·요약 줄의 세로 위치가 밀리지 않도록 header/body/summary 슬롯을 독립 고정합니다.
+- Studio Black + Lite V2 + Pure Pane live drag에만 적용되며 Classic/Dark/Light, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 763차 — Pure Pane 실시간 가사 메뉴 세로 슬롯 고정
+- 기준: 762차
+- Pure Pane 실시간 드래그에서 `가사` 카드도 장르/스타일/사운드와 동일한 드래그 전용 세로 슬롯 안정화 대상에 포함했습니다.
+- 가사 제목/헤더의 반응형 글자·아이콘 크기는 그대로 바뀌지만, 헤더 슬롯 높이와 본문 시작 위치, 카드 전체 높이는 드래그 시작 시점 값으로 유지됩니다.
+- 제목 크기 변화 때문에 `작사 스타일 → 가사 길이 → 섹션 구조`가 위아래로 밀리거나 가사 카드 외곽 높이가 출렁이는 현상을 차단합니다.
+- 드래그 종료 시 모든 임시 세로 잠금을 즉시 해제하여 정상 responsive 높이 소유권을 복원합니다.
+- Pure Pane geometry/실시간 경계 판정, 우측 스크롤바 보정, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 764차 — Lite V2 Pure Pane 실시간 기본 엔진 승격
+- 기준: 763차. 외부창 리사이즈 최적화는 이번 차수에서 건드리지 않고 내부 분할 엔진 기본화만 진행했습니다.
+- 관리자 진단에서 검증된 `Pure Pane 실시간` hot path를 Lite V2의 `normal` 드래그 경로로 승격했습니다. 일반 사용자는 별도 테스트 버튼이나 URL 파라미터 없이 동일한 Builder/Result/Splitter 직결 geometry와 실시간 경계 판정을 사용합니다.
+- PC `곡 만들기`도 자동 엔진을 Legacy에서 Lite V2로 전환했습니다. 최근 생성곡/뮤직노트/라이브러리와 함께 Studio 분할 화면 전체가 Lite V2를 기본으로 사용하며, 관리자 `기존 방식` 강제 선택은 비교/롤백 진단용으로 그대로 보존합니다.
+- 갤럭시탭/터치 환경은 기존부터 Lite V2 `adaptive` 프로필을 사용하고 있었지만 `normal`은 과거 경로였습니다. 이제 같은 `normal = Pure Pane 실시간` hot path를 공유하므로 분할 엔진이 마운트되는 태블릿 구간에서도 동일한 최적화 구조를 사용합니다. 기기 자체 성능/주사율/터치 샘플링 차이 때문에 절대 체감 속도가 PC와 완전히 같다고 보장하지는 않습니다.
+- 762~763의 우측 스크롤바 위치 보존, 장르/스타일/사운드/분위기/주제/가사 메뉴 세로 슬롯 안정화도 `normal` 기본 드래그에 함께 적용했습니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+
+## SORIDRAW 765차 — 관리자 성능 테스트 메뉴 계정 격리
+- 기준: 764차
+- 계정 전환 시 이전 계정의 `userRole` / `staffRole` / 관리자 권한을 즉시 안전한 비관리자 상태로 초기화합니다.
+- Firestore 역할 읽기 실패 시에도 관리자 상태를 유지하지 않고 비관리자로 fail-closed 처리합니다.
+- 성능 진단 및 `자동 / Lite V2 / 기존 방식`, 생성바/V2/Pure Pane 비교 버튼은 캐시된 역할 힌트를 사용하지 않고 현재 로그인 계정의 준비된 관리자 역할에서만 노출합니다.
+- 일반 내비게이션, Lite V2 Pure Pane 실시간 기본 엔진, 반응형/디자인/Firebase 데이터 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 766차 — 마스터 앱 테스트 ON/OFF · 관리자권한관리 탭 분리
+- 기준: 765차
+- `마스터 권한` 화면을 `앱 테스트` / `관리자권한관리` 두 내부 탭으로 분리했습니다.
+- 기존 관리자별 페이지 권한 설정 UI는 `관리자권한관리` 탭으로 이동했습니다.
+- 기존 `앱 설정`에 있던 성능 진단 ON/OFF를 `마스터 권한 > 앱 테스트`로 이동했습니다.
+- 앱 테스트 OFF 시 Studio 우측의 엔진 비교/생성바/V2/Pure Pane 테스트 메뉴와 성능 진단 패널을 숨기고, ON 시에만 표시합니다.
+- 테스트 UI는 현재 로그인한 MASTER 계정에서만 표시되며 일반 관리자/일반 회원에는 노출되지 않습니다.
+- 토글은 기존 로컬 진단 설정 키를 재사용하므로 Firebase/Auth/Firestore/Functions/데이터 구조 변경이 없습니다.
+
+## SORIDRAW 767차 — 앱 테스트 PERF 설명문 가로 배치 복구
+- 기준: 766차
+- `앱 테스트 > PERF`의 테스트 버튼 뒤 설명문이 남은 폭에 끼여 우측에서 한 글자씩 세로로 줄바꿈되던 레이아웃을 수정했습니다.
+- 테스트 버튼은 기존처럼 가로로 유지하고, 설명문은 버튼 묶음 바로 아래 전체 폭 한 줄 영역으로 배치합니다.
+- Studio 분할 엔진/Pure Pane/Firebase/Auth/Firestore/Functions 동작은 변경하지 않았습니다.
+
+
+## SORIDRAW 768차 — Galaxy Tab Pure Pane 태블릿 fast-path 연결
+- 기준: 767차
+- PC에서 검증된 Lite V2 + Pure Pane 실시간 기본 엔진은 그대로 유지합니다.
+- 764차 이후 Pure Pane은 drag hot path에서 조기 return하기 때문에, 기존 657 태블릿 fast-path marker가 Galaxy Tab touch/S Pen에는 실제로 연결되지 않던 경로를 수정했습니다.
+- touch/pen 입력으로 Pure Pane을 드래그할 때 이미 알고 있는 pane 폭이 661~1080px 태블릿 band에 들어오면 `data-soridraw-pane-tablet-fastpath`를 경계 변화 시에만 갱신합니다.
+- 기존 fast-path CSS의 layout/style/paint containment, off-screen content visibility, secondary container-query suspension을 그대로 재사용합니다. 새 DOM 측정/ResizeObserver/React state/pointermove capability query는 추가하지 않습니다.
+- PC fine-pointer Pure Pane 동작, 외부창 resize, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.

@@ -2134,3 +2134,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 갤럭시탭/터치 환경은 기존부터 Lite V2 `adaptive` 프로필을 사용하고 있었지만 `normal`은 과거 경로였습니다. 이제 같은 `normal = Pure Pane 실시간` hot path를 공유하므로 분할 엔진이 마운트되는 태블릿 구간에서도 동일한 최적화 구조를 사용합니다. 기기 자체 성능/주사율/터치 샘플링 차이 때문에 절대 체감 속도가 PC와 완전히 같다고 보장하지는 않습니다.
 - 762~763의 우측 스크롤바 위치 보존, 장르/스타일/사운드/분위기/주제/가사 메뉴 세로 슬롯 안정화도 `normal` 기본 드래그에 함께 적용했습니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+
+## SORIDRAW 765차 — 관리자 성능 테스트 메뉴 계정 격리
+- 기준: 764차
+- 계정 전환 시 이전 계정의 `userRole` / `staffRole` / 관리자 권한을 즉시 안전한 비관리자 상태로 초기화합니다.
+- Firestore 역할 읽기 실패 시에도 관리자 상태를 유지하지 않고 비관리자로 fail-closed 처리합니다.
+- 성능 진단 및 `자동 / Lite V2 / 기존 방식`, 생성바/V2/Pure Pane 비교 버튼은 캐시된 역할 힌트를 사용하지 않고 현재 로그인 계정의 준비된 관리자 역할에서만 노출합니다.
+- 일반 내비게이션, Lite V2 Pure Pane 실시간 기본 엔진, 반응형/디자인/Firebase 데이터 구조는 변경하지 않았습니다.

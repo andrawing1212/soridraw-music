@@ -7908,6 +7908,10 @@ const toggleCycleVariantSelection = (
     if (cachedUserRoleHint?.role !== 'admin') return false;
     return !user || cachedUserRoleHint.uid === user.uid;
   }, [cachedUserRoleHint, isAdminUser, user]);
+  // 765: performance/test controls are stricter than navigation hints.
+  // Never show them from cached admin hints; require the current signed-in
+  // identity's live role state to be ready and admin/staff-authorized.
+  const isAdminDiagnosticsUser = Boolean(user && isUserRoleReady && isAdminUser);
   const canAccessNavigationMenu = useCallback((key: NavigationMenuKey) => {
     if (isAdminUser) return true;
     if (!menuVisibility[key]) return false;
@@ -8082,13 +8086,20 @@ const toggleCycleVariantSelection = (
       }
       setIsAuthReady(true);
       setIsUserRoleReady(!currentUser);
+      // 765: never carry an admin/staff role across an auth identity change.
+      // A direct account switch can deliver the next Firebase user without an
+      // intermediate signed-out callback, so keeping the previous role here can
+      // briefly expose admin-only diagnostics to the wrong account. Start every
+      // identity from the safe non-admin baseline; the current user's Firestore
+      // snapshot will promote it again after that user's role is read.
+      setUserRole('free');
+      setStaffRole(null);
+      setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
       setEmailVerificationCycleKey(null);
       setIsEmailVerificationCycleReady(false);
       setEmailVerificationResendSeconds(0);
       emailVerificationAutoSendRef.current = '';
       if (!currentUser) {
-        setStaffRole(null);
-        setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
         setUserLyricClicheGuard(null);
         setIsUserLyricClicheGuardReady(true);
       } else {
@@ -8116,8 +8127,10 @@ const toggleCycleVariantSelection = (
         const cachedRole = readCachedUserRole();
         if (!cachedRole || cachedRole.uid !== currentUser.uid) {
           setCachedUserRoleHint(null);
-          setUserRole('free');
         } else {
+          // Cached role may hydrate menu hints, but it never restores the live
+          // admin/staff authority that was just reset above. Server/current-user
+          // document state remains the authority for admin diagnostics.
           setCachedUserRoleHint(cachedRole);
         }
         const userRef = doc(db, 'users', currentUser.uid);
@@ -8241,6 +8254,12 @@ const toggleCycleVariantSelection = (
           }
         }, (error) => {
           console.error('Failed to sync user role:', error);
+          // 765: a failed role read must fail closed. Do not leave a previous
+          // account's admin/staff state alive when the new identity cannot be
+          // verified.
+          setUserRole('free');
+          setStaffRole(null);
+          setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
           setEmailVerificationCycleKey(getEmailVerificationCycleKey(currentUser));
           setIsEmailVerificationCycleReady(true);
           setIsUserRoleReady(true);
@@ -14656,7 +14675,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         onStudioWorkspaceSelect={selectStudioWorkspaceView}
       />
 
-      <SplitPerformanceDiagnostics isAdmin={isAdminMenuUser} />
+      <SplitPerformanceDiagnostics isAdmin={isAdminDiagnosticsUser} />
 
       <Routes>
         <Route path="/" element={
@@ -14720,7 +14739,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && isAdminMenuUser && (
+              {isStudioBlackActionMode && isAdminDiagnosticsUser && (
                 <>
                   <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교 전환">
                     <button

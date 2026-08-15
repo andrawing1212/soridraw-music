@@ -2180,3 +2180,15 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 세 모드는 responsive/external/ARIA/scroll 보조 동기화를 드래그 종료까지 제외해 geometry/layout 비용만 비교한다.
 - pointer-up 시 모든 진단용 width/grid track을 즉시 제거한 뒤 기존 Lite V2/Pure Pane runtime geometry로 1회 복구한다.
 - PC 기본 Pure Pane 실시간 경로, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
+
+## SORIDRAW 770차 — 갤탭 Owner A/B 화면 구조 정상화
+
+- 기준: 769차 `갤탭 단일 Geometry Owner A/B 진단`.
+- 영상에서 `Right Owner` 선택 시 Builder가 정상 잔여폭을 채우지 못하고 큰 빈 공간이 생기던 진단 UI 오류를 수정했다.
+- 원인: 769차 Left/Right Owner 진단이 실제 Lite V2의 grid workspace를 drag 중 flex로 바꾸면서, 기존 grid/container-query 폭 계약과 충돌했다.
+- Left Owner / Right Owner 모두 production과 동일한 grid layout을 유지한다.
+  - Left Owner: Builder만 고정 폭 owner, Result는 `1fr` 잔여폭.
+  - Right Owner: Result만 고정 폭 owner, Builder는 `1fr` 잔여폭.
+- Single Owner도 drag 중 grid layout임을 명시해 이전 진단 모드의 layout model이 섞이지 않게 했다.
+- 성능 진단의 목적(한쪽 pane 또는 parent 한 곳만 geometry owner)은 유지하고, 화면 구조만 정상화했다.
+- Pure Pane 기본 엔진, PC 동작, Firebase/Auth/Firestore/Functions 구조는 변경하지 않았다.

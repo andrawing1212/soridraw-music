@@ -1137,43 +1137,58 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
 }
 
 @media (min-width: 1100px) {
+  /* 770 — keep the owner diagnostics on the real Lite V2 grid.
+   * 769 temporarily converted the workspace to flex for Left/Right Owner.
+   * The Studio panes still carry grid-owned width/container-query contracts, so
+   * Right Owner could collapse Builder and create the large blank area seen on
+   * Galaxy Tab.  The probes now preserve the production grid and change only
+   * which track is intrinsic: owner pane = auto track, opposite pane = 1fr. */
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"] {
-    display: flex !important;
-    align-items: flex-start !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    align-items: start !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"]
   > .soridraw-studio-builder-pane {
-    flex: 0 0 auto !important;
+    max-width: none !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"]
   > .soridraw-studio-result-pane {
-    flex: 1 1 0% !important;
-    width: auto !important;
-    max-width: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"] {
-    display: flex !important;
-    align-items: flex-start !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: start !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"]
   > .soridraw-studio-builder-pane {
-    flex: 1 1 0% !important;
-    width: auto !important;
-    max-width: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"]
   > .soridraw-studio-result-pane {
-    flex: 0 0 auto !important;
+    max-width: none !important;
+  }
+
+  /* Single Owner already writes one grid boundary from JS. Explicitly pin the
+   * workspace to grid so no diagnostic selected immediately before it can alter
+   * the layout model during the next drag. */
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="single-geometry-owner"] {
+    display: grid !important;
+    align-items: start !important;
   }
 }

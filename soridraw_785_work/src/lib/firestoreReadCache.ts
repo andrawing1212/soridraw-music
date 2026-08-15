@@ -1,0 +1,52 @@
+export const FIRESTORE_READ_CACHE_KEYS = {
+  navigationVisibility: 'soridraw_firestore_cache_navigation_visibility_v1',
+  lyricClicheGuard: 'soridraw_firestore_cache_lyric_cliche_guard_v1',
+  sectionTags: 'soridraw_firestore_cache_section_tags_v1',
+} as const;
+
+export const FIRESTORE_READ_CACHE_TTL_MS = {
+  navigationVisibility: 6 * 60 * 60 * 1000,
+  lyricClicheGuard: 6 * 60 * 60 * 1000,
+  sectionTags: 12 * 60 * 60 * 1000,
+} as const;
+
+type CacheEnvelope<T> = {
+  cachedAt: number;
+  data: T;
+};
+
+export const readFirestoreReadCache = <T,>(key: string, ttlMs: number) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheEnvelope<T>;
+    if (!parsed || typeof parsed.cachedAt !== 'number' || !('data' in parsed)) return null;
+    return {
+      data: parsed.data,
+      cachedAt: parsed.cachedAt,
+      isFresh: Date.now() - parsed.cachedAt < ttlMs,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const writeFirestoreReadCache = <T,>(key: string, data: T) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const envelope: CacheEnvelope<T> = { cachedAt: Date.now(), data };
+    window.localStorage.setItem(key, JSON.stringify(envelope));
+  } catch {
+    // Storage can be unavailable in private/restricted browser contexts.
+  }
+};
+
+export const clearFirestoreReadCache = (key: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Ignore unavailable storage.
+  }
+};

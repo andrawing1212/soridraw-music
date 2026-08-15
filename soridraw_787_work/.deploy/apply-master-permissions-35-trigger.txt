@@ -1,0 +1,5 @@
+Apply 35th master/admin page permission architecture.
+Bootstrap: andrawing1212@gmail.com as master.
+Deploy: Vercel test app, selected Firebase Functions, Firestore Rules.
+Official Firebase Hosting: do not deploy.
+Requested: 2026-07-25T11:05:07Z

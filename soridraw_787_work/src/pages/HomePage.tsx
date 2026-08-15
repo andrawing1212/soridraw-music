@@ -1,0 +1,184 @@
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Sparkles, Wand2, Library, Heart, User as UserIcon, ArrowRight, Music2, Mic2 } from 'lucide-react';
+import type { User } from 'firebase/auth';
+import type { NavigationMenuVisibility } from '../constants/navigationVisibility';
+
+type HomePageProps = {
+  user: User | null;
+  onLogin: () => void;
+  isLoggingIn?: boolean;
+  menuVisibility: NavigationMenuVisibility;
+};
+
+const quickCards = [
+  {
+    key: 'studio' as const,
+    title: '스튜디오',
+    desc: '가사와 5단 프롬프트를 설계하는 메인 작업실',
+    path: '/studio',
+    icon: Wand2,
+    accent: 'from-[#D8B88C]/90 via-[#A47048]/88 to-[#965B77]/78',
+  },
+  {
+    key: 'musicNote' as const,
+    title: '뮤직노트',
+    desc: '저장한 가사, 프롬프트, 설정값을 다시 꺼내 쓰기',
+    path: '/history',
+    icon: Heart,
+    accent: 'from-[#AC6B69]/88 to-[#965B77]/82',
+  },
+  {
+    key: 'library' as const,
+    title: '라이브러리',
+    desc: 'Music API로 만든 곡과 재생 가능한 URL 확인',
+    path: '/suno-library',
+    icon: Library,
+    accent: 'from-[#877198]/82 to-[#5E7FA8]/78',
+  },
+  {
+    key: 'myPage' as const,
+    title: '마이페이지',
+    desc: 'API 연결, 플랜, 사용량, 개인 설정 관리',
+    path: '/my-page',
+    icon: UserIcon,
+    accent: 'from-[#C08A5D]/82 to-[#AC6B69]/78',
+  },
+];
+
+export default function HomePage({ user, onLogin, isLoggingIn, menuVisibility }: HomePageProps) {
+  const navigate = useNavigate();
+
+  const go = (path: string) => {
+    if (!user) {
+      onLogin();
+      return;
+    }
+    navigate(path);
+  };
+
+  return (
+    <main className="min-h-screen overflow-hidden bg-[var(--bg-primary)] text-white">
+      <section className="relative mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-4 pb-16 pt-24 md:px-6 md:pt-28">
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#171414]/88 p-6 shadow-[0_24px_90px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:p-8 lg:p-10">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#D8B88C]/45 to-transparent" />
+            <div className="absolute right-8 top-8 hidden h-24 w-24 rounded-full border border-white/10 bg-gradient-to-br from-[#F7D66E]/16 via-[#A47048]/14 to-[#AC6B69]/12 blur-sm md:block" />
+            <div className="relative z-10 max-w-3xl">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/14 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-[#D8B88C]/85">
+                <Sparkles className="h-3.5 w-3.5 text-[#F7D66E]" />
+                Creative Music Workspace
+              </div>
+              <h1 className="text-4xl font-black leading-tight tracking-[-0.055em] text-white md:text-6xl">
+                감각적인 음악 아이디어를<br className="hidden md:block" />
+                <span className="bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#C995AC] bg-clip-text text-transparent">완성도 있는 곡 설계</span>로.
+              </h1>
+              <p className="mt-5 max-w-2xl text-sm font-medium leading-7 text-zinc-300 md:text-base">
+                SORIDRAW는 가사, 프롬프트, 보컬 감정, 곡 구조를 한곳에서 다듬는 AI 음악 제작 작업실입니다.
+                떠오른 장면을 정리하고, 다시 꺼내 쓰기 좋은 제작 데이터로 남겨둡니다.
+              </p>
+
+              {(menuVisibility.studio || menuVisibility.musicNote) && (
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  {menuVisibility.studio && (
+                    <button
+                      type="button"
+                      onClick={() => go('/studio')}
+                      disabled={isLoggingIn}
+                      className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7D66E] via-[#F19A77] to-[#D56C7F] px-5 py-3 text-sm font-black text-white shadow-[0_16px_42px_rgba(164,112,72,0.22)] transition-all hover:brightness-110 active:scale-[0.98] disabled:cursor-wait disabled:opacity-70"
+                    >
+                      스튜디오 시작하기
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    </button>
+                  )}
+                  {menuVisibility.musicNote && (
+                    <button
+                      type="button"
+                      onClick={() => go('/history')}
+                      disabled={isLoggingIn}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-5 py-3 text-sm font-black text-white/85 transition-all hover:bg-white/[0.11] disabled:cursor-wait disabled:opacity-70"
+                    >
+                      <Heart className="h-4 w-4 text-[#D8B88C]" />
+                      뮤직노트 보기
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <aside className="grid gap-4">
+            <div className="rounded-[1.75rem] border border-white/10 bg-[#171414]/82 p-5 backdrop-blur-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-white/40">My Setup</p>
+                  <h2 className="mt-1 text-xl font-black text-white">작업 준비 상태</h2>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#F7D66E]/16 via-[#A47048]/14 to-[#965B77]/12 text-[#D8B88C]">
+                  <Music2 className="h-5 w-5" />
+                </div>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between rounded-2xl bg-black/14 px-4 py-3">
+                  <span className="text-zinc-300">Google Gemini API</span>
+                  <span className="rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-black text-zinc-200">마이페이지 확인</span>
+                </div>
+                <div className="flex items-center justify-between rounded-2xl bg-black/14 px-4 py-3">
+                  <span className="text-zinc-300">Music API</span>
+                  <span className="rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-black text-zinc-200">마이페이지 확인</span>
+                </div>
+              </div>
+              {menuVisibility.myPage && (
+                <button
+                  type="button"
+                  onClick={() => go('/my-page')}
+                  disabled={isLoggingIn}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-[#A47048]/24 bg-[#A47048]/12 px-4 py-3 text-xs font-black text-[#D8B88C] transition-all hover:bg-[#A47048]/18 disabled:cursor-wait disabled:opacity-70"
+                >
+                  API / 플랜 관리
+                </button>
+              )}
+            </div>
+
+            <div className="rounded-[1.75rem] border border-white/10 bg-gradient-to-br from-[#F7D66E]/8 via-[#A47048]/10 to-[#5E7FA8]/8 p-5 backdrop-blur-xl">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-[#D8B88C]">
+                  <Mic2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-white">감각은 남기고, 복잡함은 줄이고</p>
+                  <p className="mt-1 text-xs font-medium leading-5 text-zinc-400">떠오른 한 줄을 가사와 프롬프트, 다음 작업으로 이어가세요.</p>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {quickCards.filter((card) => menuVisibility[card.key]).map((card) => {
+            const Icon = card.icon;
+            return (
+              <button
+                key={card.title}
+                type="button"
+                onClick={() => go(card.path)}
+                disabled={isLoggingIn}
+                className="group rounded-[1.5rem] border border-white/10 bg-[#171414]/76 p-5 text-left backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:border-white/18 hover:bg-white/[0.065] disabled:cursor-wait disabled:opacity-70"
+              >
+                <div className={`mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${card.accent} text-white shadow-[0_12px_34px_rgba(0,0,0,0.22)]`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-black text-white">{card.title}</h3>
+                <p className="mt-2 min-h-[44px] text-xs font-medium leading-5 text-zinc-400">{card.desc}</p>
+                <div className="mt-4 flex items-center gap-1 text-[11px] font-black text-[#D8B88C]/85">
+                  이동하기 <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+      </section>
+    </main>
+  );
+}

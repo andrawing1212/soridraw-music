@@ -1,0 +1,277 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function currentUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasUserDocument() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isMaster() {
+      return hasUserDocument() && ('staffRole' in currentUserData()) && currentUserData().staffRole == 'master';
+    }
+
+    function isLegacyAdmin() {
+      return hasUserDocument() && currentUserData().role == 'admin' && !('staffRole' in currentUserData());
+    }
+
+    function isStaffAdmin() {
+      return hasUserDocument() && ('staffRole' in currentUserData()) && currentUserData().staffRole == 'admin';
+    }
+
+    function isAdmin() {
+      return isMaster() || isStaffAdmin() || isLegacyAdmin();
+    }
+
+    function hasAdminPermission(permission) {
+      return isMaster() || isLegacyAdmin() ||
+        (isStaffAdmin() && ('adminPermissions' in currentUserData()) && currentUserData().adminPermissions[permission] == true);
+    }
+
+    // 2. Collection Rules
+
+    // [Section Tags] Managed by admin, read by all
+    match /section_tags/{tagId} {
+      allow read: if true;
+      allow write: if hasAdminPermission('sectionTagManagement');
+    }
+
+    // [Admin only] Live & Draft collections
+    match /section_tags_live/{tagId} {
+      allow read, write: if hasAdminPermission('sectionTagManagement');
+    }
+
+    match /section_tags_draft/{tagId} {
+      allow read, write: if hasAdminPermission('sectionTagManagement');
+    }
+
+    // Users collection
+    // Membership, payment and account-control fields are server/admin authority only.
+    // Client-maintained counters remain UI statistics and must never be trusted for entitlement checks.
+    match /users/{uid} {
+      function isValidSelfCreate() {
+        return request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+          'createdAt', 'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
+          'role', 'accountStatus', 'paymentStatus', 'favoriteCount', 'songGeneratedCount'
+        ]) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.role == 'free' &&
+        request.resource.data.accountStatus == 'active' &&
+        request.resource.data.paymentStatus == 'none' &&
+        request.resource.data.favoriteCount == 0 &&
+        request.resource.data.songGeneratedCount == 0;
+      }
+
+      function hasValidGenerationPreferences() {
+        return !('generationPreferences' in request.resource.data) ||
+          (request.resource.data.generationPreferences is map &&
+            request.resource.data.generationPreferences.keys().hasOnly(['autoModelFallback']) &&
+            (!('autoModelFallback' in request.resource.data.generationPreferences) ||
+              request.resource.data.generationPreferences.autoModelFallback is bool));
+      }
+
+      function isValidSelfUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'uid', 'email', 'displayName', 'photoURL', 'providerIds',
+          'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
+          'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences',
+          'favoriteCount', 'songGeneratedCount',
+          'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
+        ]) &&
+        (!('uid' in request.resource.data) || request.resource.data.uid == uid) &&
+        hasValidGenerationPreferences();
+      }
+
+      function changesPrivilegeFields() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'staffRole', 'staffBaseRole', 'adminPermissions', 'staffRoleUpdatedAt', 'staffRoleUpdatedBy'
+        ]);
+      }
+
+      function targetIsProtectedStaff() {
+        return (('staffRole' in resource.data) && resource.data.staffRole == 'master') ||
+          (('staffRole' in resource.data) && resource.data.staffRole == 'admin') ||
+          (resource.data.role == 'admin' && !('staffRole' in resource.data));
+      }
+
+      function validUserManagerUpdate() {
+        return hasAdminPermission('userManagement') && !targetIsProtectedStaff() && !changesPrivilegeFields() &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) ||
+            (request.resource.data.role in ['free', 'basic', 'pro'] && resource.data.role in ['free', 'basic', 'pro']));
+      }
+
+      allow get: if isOwner(uid) || hasAdminPermission('userManagement');
+      allow list: if hasAdminPermission('userManagement');
+      allow create: if isOwner(uid) && isValidSelfCreate();
+      allow update: if isMaster() || validUserManagerUpdate() || (isOwner(uid) && isValidSelfUpdate());
+    }
+
+    // Vocal tone configuration
+    match /vocalTones/{toneId} {
+      allow read: if true;
+      allow write: if hasAdminPermission('vocalManagement');
+    }
+
+    // Admin permission audit is written only by trusted Functions.
+    match /admin_permission_audit/{auditId} {
+      allow read: if isMaster();
+      allow write: if false;
+    }
+
+    // Favorites collection
+    match /favorites/{favoriteId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow list: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // User recent songs
+    match /user_recent_songs/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isOwner(uid) || isAdmin();
+    }
+
+    // User custom structures
+    match /user_structures/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // User Suno Playlists
+    match /user_playlists/{uid}/lists/{playlistId} {
+      allow read, write: if isOwner(uid) || isAdmin();
+
+      match /items/{itemId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    // App Settings
+    // navigation_visibility is read by the app so the public menu can react to admin toggles.
+    // Writes remain admin-only.
+    match /app_settings/{docId} {
+      allow read: if docId in ['navigation_visibility', 'lyric_cliche_guard'] || isAdmin();
+      allow write: if hasAdminPermission('appSettings');
+    }
+
+    // Suno API User Keys - Handled entirely by Firebase Functions
+    match /user_api_keys/{uid} {
+      allow read, write: if false;
+    }
+
+    // Server-side Gemini abuse guard. Never exposed to clients.
+    match /gemini_request_guards/{uid} {
+      allow read, write: if false;
+    }
+
+
+    // Suno API Tracks
+    match /suno_tracks/{uid}/tracks/{trackId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow read: if resource.data.isPublic == true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Suno public tracks for collectionGroup("tracks")
+    match /{path=**}/tracks/{trackId} {
+      allow read: if resource.data.isPublic == true;
+    }
+
+    // Suno API Shares
+    match /suno_shares/{shareId} {
+      function isValidShare(data) {
+        return data.ownerUid is string &&
+               data.ownerUid.size() <= 128 &&
+               data.trackId is string &&
+               data.title is string &&
+               data.isPublic == true &&
+               (!('audioUrl' in data) || data.audioUrl is string) &&
+               (!('imageUrl' in data) || data.imageUrl is string) &&
+               (!('taskId' in data) || data.taskId is string) &&
+               (!('appliedKeywords' in data) || data.appliedKeywords is map) &&
+               (!('requestPayload' in data) || data.requestPayload is map);
+      }
+
+      function isValidPrivateShareUpdate(data) {
+        return data.ownerUid is string &&
+               data.ownerUid.size() <= 128 &&
+               data.trackId is string &&
+               data.title is string &&
+               data.isPublic == false;
+      }
+
+      allow read: if resource.data.isPublic == true ||
+                   isOwner(resource.data.ownerUid) ||
+                   isAdmin();
+
+      allow create: if isAuthenticated() &&
+                     request.resource.data.ownerUid == request.auth.uid &&
+                     isValidShare(request.resource.data);
+
+      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+                    request.resource.data.ownerUid == resource.data.ownerUid &&
+                    (isValidShare(request.resource.data) || isValidPrivateShareUpdate(request.resource.data));
+
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
+    // Music Note Shares
+    match /music_note_shares/{shareId} {
+      function isValidMusicNoteShare(data) {
+        return data.ownerUid is string &&
+               data.ownerUid.size() <= 128 &&
+               data.title is string &&
+               data.isPublic is bool &&
+               data.songs is list &&
+               data.songs.size() > 0 &&
+               data.songs.size() <= 50;
+      }
+
+      allow read: if resource.data.isPublic == true ||
+                   isOwner(resource.data.ownerUid) ||
+                   isAdmin();
+
+      allow create: if isAuthenticated() &&
+                     request.resource.data.ownerUid == request.auth.uid &&
+                     isValidMusicNoteShare(request.resource.data);
+
+      allow update: if (isOwner(resource.data.ownerUid) || isAdmin()) &&
+                    request.resource.data.ownerUid == resource.data.ownerUid &&
+                    isValidMusicNoteShare(request.resource.data);
+
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
+    }
+
+    // Playlist Likes
+    match /playlist_like_counts/{trackGlobalId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    match /playlist_likes/{trackGlobalId}/users/{uid} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isOwner(uid);
+      allow update: if false;
+    }
+
+    // 3. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

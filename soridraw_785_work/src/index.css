@@ -1,0 +1,5003 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-brand-orange: #ff8200;
+  --color-studio-brown: #F6B85F;
+  --font-sans: "Pretendard", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Playfair Display", serif;
+  
+  --color-btn-bg: var(--button-bg);
+  --color-btn-border: var(--button-border);
+  --color-btn-hover: var(--button-hover-bg);
+  --shadow-btn: var(--button-shadow);
+}
+
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #faf9f8;
+  --card-bg: #ffffff;
+  --text-primary: #1a1a1a;
+  --text-secondary: #7d756d;
+  --border-color: #f1efed;
+  --input-bg: #ffffff;
+  --hover-bg: #faf9f8;
+  --hover-bg-solid: #f5f3f1;
+  --glass-bg: rgba(255, 255, 255, 0.95);
+  --glass-border: #f1efed;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 4px 12px rgba(27, 25, 24, 0.04);
+  --shadow-lg: 0 8px 24px rgba(27, 25, 24, 0.06);
+  --shadow-xl: 0 12px 32px rgba(27, 25, 24, 0.08);
+  --shadow-2xl: 0 20px 48px rgba(27, 25, 24, 0.1);
+  
+  /* Button Styles for Light Mode - Warmer & Lighter */
+  --button-bg: #f5f3f1;
+  --button-border: #e9e6e3;
+  --button-hover-bg: #edeae7;
+  --button-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  /* SORIDRAW common menu design tokens */
+  --soridraw-panel-bg: #faf9f8;
+  --soridraw-card-bg: #ffffff;
+  --soridraw-border: #f1efed;
+  --soridraw-text-main: #1a1a1a;
+  --soridraw-text-muted: #7d756d;
+  --soridraw-selected-bg: #FFB400;
+  --soridraw-selected-text: #171717;
+  --soridraw-menu-theme-color: #FFB400;
+  --soridraw-green-tone: #7FBD75;
+  --soridraw-menu-amber: #FFB400;
+  --soridraw-menu-amber-rgb: 255 187 34;
+  --soridraw-menu-amber-soft: #FFD36A;
+  --soridraw-menu-amber-soft-rgb: 255 211 106;
+  --soridraw-menu-red: #FF5C52;
+  --soridraw-menu-green: #7FBD75;
+}
+
+.dark {
+  --bg-primary: #0f0f0f;
+  --bg-secondary: #1a1a1a;
+  --card-bg: #1e1e1e;
+  --text-primary: #f8f9fa;
+  --text-secondary: #b0b3b8;
+  --border-color: rgba(255, 255, 255, 0.25);
+  --input-bg: rgba(255, 255, 255, 0.15);
+  --hover-bg: rgba(255, 255, 255, 0.12);
+  --hover-bg-solid: #2a2a2a;
+  --glass-bg: rgba(26, 26, 26, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+  
+  /* Button Styles for Dark Mode */
+  --button-bg: rgba(255, 255, 255, 0.05);
+  --button-border: rgba(255, 255, 255, 0.1);
+  --button-hover-bg: rgba(255, 255, 255, 0.12);
+  --button-shadow: none;
+
+  --soridraw-panel-bg: #1a1a1a;
+  --soridraw-card-bg: #1e1e1e;
+  --soridraw-border: rgba(255, 255, 255, 0.25);
+  --soridraw-text-main: #f8f9fa;
+  --soridraw-text-muted: #b0b3b8;
+  --soridraw-selected-bg: #FFB400;
+  --soridraw-selected-text: #171717;
+  --soridraw-menu-theme-color: #FFB400;
+  --soridraw-green-tone: #7FBD75;
+  --soridraw-menu-amber: #FFB400;
+  --soridraw-menu-amber-rgb: 255 187 34;
+  --soridraw-menu-amber-soft: #FFD36A;
+  --soridraw-menu-amber-soft-rgb: 255 211 106;
+  --soridraw-menu-red: #FF5C52;
+  --soridraw-menu-green: #7FBD75;
+}
+
+
+/* 모바일 앱 화면 확대/축소 고정: pinch zoom은 막되, 아래로 당겨 새로고침은 유지합니다. */
+html,
+body,
+#root {
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: auto;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #626266 transparent;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: #626266;
+  border-radius: 999px;
+  border: 0;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: #77777b;
+}
+
+@media (max-width: 640px) {
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+}
+
+@layer base {
+  body {
+    @apply font-sans transition-colors duration-300;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+}
+
+.music-pattern {
+  background-color: #ff8200;
+  background-image: radial-gradient(#ffffff22 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.music-waves {
+  background: linear-gradient(45deg, #ff8200 25%, #ff9500 25%, #ff9500 50%, #ff8200 50%, #ff8200 75%, #ff9500 75%, #ff9500 100%);
+  background-size: 40px 40px;
+  animation: wave 2s linear infinite;
+}
+
+@keyframes wave {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+/* Custom Scrollbar for Textarea */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #626266;
+  border-radius: 999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #77777b;
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #626266 transparent;
+}
+
+
+/* SORIDRAW_369_STUDIO_TONE_DOWN
+   Studio-only tone adjustment: keep the existing design structure, but lower
+   card/button brightness so it visually matches Music Note and Library lists. */
+.dark .studio-hero-tone {
+  --hover-bg: rgba(255, 255, 255, 0.055);
+  --home-card-border: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0)) !important;
+}
+
+.dark .studio-hero-tone [class*="bg-[var(--card-bg)]"] {
+  background-color: rgba(24, 24, 24, 0.78) !important;
+}
+
+.dark .studio-tone-down {
+  --card-bg: #181818;
+  --bg-secondary: #141414;
+  --input-bg: rgba(255, 255, 255, 0.075);
+  --hover-bg: rgba(255, 255, 255, 0.075);
+  --hover-bg-solid: #232323;
+  --border-color: rgba(255, 255, 255, 0.16);
+  --home-card-border: rgba(255, 255, 255, 0.095);
+  --keyword-button-border: rgba(255, 255, 255, 0.095);
+  --modal-soft-border: rgba(255, 255, 255, 0.10);
+  --modal-button-border: rgba(255, 255, 255, 0.095);
+  --button-bg: rgba(255, 255, 255, 0.04);
+  --button-border: rgba(255, 255, 255, 0.085);
+  --button-hover-bg: rgba(255, 255, 255, 0.085);
+  --button-shadow: none;
+  --shadow-md: 0 10px 18px rgba(0, 0, 0, 0.42), 0 3px 8px rgba(0, 0, 0, 0.32);
+}
+
+.dark .studio-tone-down [class*="bg-[var(--card-bg)]"] {
+  background-color: #181818 !important;
+}
+
+.dark .studio-tone-down [class*="bg-btn-bg"] {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dark .studio-tone-down [class*="hover:bg-btn-hover"]:hover {
+  background-color: rgba(255, 255, 255, 0.085) !important;
+}
+
+.dark .studio-tone-down [class*="border-btn-border"],
+.dark .studio-tone-down [class*="border-[var(--home-card-border)]"],
+.dark .studio-tone-down [class*="border-[var(--keyword-button-border)]"] {
+  border-color: rgba(255, 255, 255, 0.095) !important;
+}
+
+.dark .studio-tone-down [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.055) !important;
+}
+
+.dark .studio-tone-down [class*="bg-white/5"] {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+/* SORIDRAW_399_STUDIO_HERO_MERGED_FLAT
+   Merge the studio hero into the page background; keep only a thin divider line. */
+.dark .studio-hero-tone {
+  --hover-bg: rgba(255, 255, 255, 0.055);
+  --home-card-border: rgba(246, 200, 95, 0.10);
+  background: transparent !important;
+}
+
+.dark .studio-hero-tone::before {
+  content: none !important;
+}
+
+.dark .studio-hero-tone [class*="bg-[var(--card-bg)]"] {
+  background-color: rgba(22, 22, 22, 0.86) !important;
+  border-color: rgba(246, 200, 95, 0.12) !important;
+}
+
+.dark .studio-tone-down {
+  --card-bg: #171717;
+  --bg-secondary: #121212;
+  --input-bg: rgba(255, 255, 255, 0.045);
+  --hover-bg: rgba(246, 200, 95, 0.07);
+  --hover-bg-solid: #202020;
+  --border-color: rgba(241, 218, 164, 0.12);
+  --home-card-border: rgba(241, 218, 164, 0.10);
+  --keyword-button-border: rgba(241, 218, 164, 0.10);
+  --modal-soft-border: rgba(241, 218, 164, 0.10);
+  --modal-button-border: rgba(241, 218, 164, 0.10);
+  --button-bg: rgba(255, 255, 255, 0.04);
+  --button-border: rgba(241, 218, 164, 0.10);
+  --button-hover-bg: rgba(246, 200, 95, 0.08);
+  --button-shadow: none;
+  --shadow-md: 0 10px 18px rgba(0, 0, 0, 0.44), 0 3px 8px rgba(0, 0, 0, 0.32);
+  --soridraw-panel-bg: #121212;
+  --soridraw-card-bg: #171717;
+  --soridraw-border: rgba(241, 218, 164, 0.10);
+  --soridraw-text-main: #f8f9fa;
+  --soridraw-text-muted: #b0b3b8;
+  --soridraw-selected-bg: #FFB400;
+  --soridraw-selected-text: #171717;
+  --soridraw-menu-theme-color: #FFB400;
+  --soridraw-green-tone: #7FBD75;
+}
+
+.dark .studio-tone-down [class*="bg-[var(--card-bg)]"] {
+  background-color: #171717 !important;
+  border-color: rgba(241, 218, 164, 0.10) !important;
+}
+
+.dark .studio-tone-down [class*="bg-btn-bg"] {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dark .studio-tone-down [class*="hover:bg-btn-hover"]:hover {
+  background-color: rgba(246, 200, 95, 0.08) !important;
+}
+
+.dark .studio-tone-down [class*="border-btn-border"],
+.dark .studio-tone-down [class*="border-[var(--home-card-border)]"],
+.dark .studio-tone-down [class*="border-[var(--keyword-button-border)]"] {
+  border-color: rgba(241, 218, 164, 0.10) !important;
+}
+
+.dark .studio-tone-down [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.052) !important;
+}
+
+.dark .studio-tone-down [class*="bg-white/5"] {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+
+/* SORIDRAW_411_SOFT_DARK_BOUNDARY
+   스튜디오 영역의 밝은 외곽선을 줄이고, 어두운 투명 선과 번짐 없는 그림자로 경계를 만든다. */
+.dark .studio-tone-down :where(button, .rounded-xl, .rounded-2xl, .rounded-3xl, input, textarea, select)[class*="border"] {
+  border-color: rgba(0, 0, 0, 0.28) !important;
+}
+
+.dark .studio-tone-down :where(button, input, textarea, select)[class*="border"] {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+}
+
+.dark .studio-tone-down :where(.rounded-2xl, .rounded-3xl)[class*="border"] {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark .studio-tone-down :where(button, .rounded-xl, .rounded-2xl, .rounded-3xl, input, textarea, select)[class*="border"]:hover {
+  border-color: rgba(0, 0, 0, 0.34) !important;
+}
+
+.dark .studio-tone-down .soridraw-selected-strong {
+  border-color: rgba(0, 0, 0, 0.24) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+.dark .studio-tone-down .soridraw-selected-summary {
+  text-shadow: none !important;
+}
+
+/* SORIDRAW_407_SELECTED_TEXT_CLEAN_BOLD
+   선택된 버튼/카드 텍스트만 선명한 검정 + 굵은 글씨로 고정한다.
+   과한 stroke와 4방향 shadow는 글자를 뭉개므로 사용하지 않는다. */
+.soridraw-selected-strong,
+.soridraw-selected-strong :where(span, p, div, button, strong, em, small, h1, h2, h3, label) {
+  color: #050505 !important;
+  font-weight: 950 !important;
+  font-synthesis: weight !important;
+  -webkit-text-stroke: 0 !important;
+  text-rendering: geometricPrecision;
+}
+
+.soridraw-selected-strong :where(span, strong, h1, h2, h3, label) {
+  text-shadow: 0.22px 0 0 #050505;
+}
+
+.soridraw-selected-strong :where(p, small, em) {
+  color: rgba(5, 5, 5, 0.86) !important;
+  font-weight: 850 !important;
+  text-shadow: 0.16px 0 0 rgba(5, 5, 5, 0.72);
+}
+
+.soridraw-selected-strong svg {
+  color: #050505 !important;
+  stroke-width: 3 !important;
+}
+
+@media (max-width: 767px) {
+  .soridraw-selected-strong :where(span, strong, h1, h2, h3, label) {
+    text-shadow: 0.24px 0 0 #050505;
+  }
+}
+
+
+/* SORIDRAW_413_BADGE_VISIBILITY_FIX
+   오른쪽 일반 선택 숫자 배지만 검정 배경 + 메뉴 고유색 숫자로 고정한다.
+   왼쪽 포인트 숫자 배지는 기존 선택색 배경 방식을 유지한다. */
+.soridraw-selected-strong .soridraw-count-badge-main,
+.soridraw-count-badge-main {
+  background: rgba(3, 3, 3, 0.94) !important;
+  color: var(--soridraw-badge-accent, #FFB400) !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: 0 0 0 transparent !important;
+}
+
+.soridraw-selected-strong .soridraw-count-badge-main > span,
+.soridraw-count-badge-main > span {
+  color: var(--soridraw-badge-accent, #FFB400) !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+.soridraw-selected-strong .soridraw-count-badge-point {
+  color: #050505 !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+.soridraw-selected-strong .soridraw-count-badge-point > span,
+.soridraw-count-badge-point > span {
+  color: #050505 !important;
+  font-weight: 950 !important;
+  -webkit-text-stroke: 0 !important;
+  text-shadow: none !important;
+}
+
+
+/* SORIDRAW_420_SUMMARY_DASHED_ACCENT_FIX
+   펼쳐보기 하단 선택 표시 영역 전용.
+   전체 border hover 규칙이 검정으로 덮지 않도록 메뉴색 점선을 변수로 고정한다.
+   키워드 선택 여부는 배경색에 영향을 주지 않고, hover/펼침 상태에서만 은은한 배경을 준다. */
+.dark .studio-tone-down .soridraw-expand-summary {
+  border-color: var(--soridraw-summary-border) !important;
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.dark .studio-tone-down .soridraw-expand-summary:hover,
+.dark .studio-tone-down .soridraw-expand-summary[data-expanded="true"] {
+  border-color: var(--soridraw-summary-border-hover) !important;
+  background-color: var(--soridraw-summary-bg-active) !important;
+}
+
+
+/* SORIDRAW_425_HERO_FONT_SYNC
+   Keep the Sori Studio hero font consistent between PC and mobile. */
+.sori-studio-logo-text,
+.sori-studio-logo-text span {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif !important;
+  font-weight: 900 !important;
+  font-synthesis-weight: none;
+}
+
+
+/* SORIDRAW_435_MUSICNOTE_LIBRARY_THEME
+   Music Note and Library pages use page-specific accent tones and the same
+   soft, low-border surface treatment used in Studio. */
+.dark .soridraw-musicnote-theme {
+  --page-accent: #FF7A72;
+  --page-accent-soft: rgba(255, 122, 114, 0.14);
+  --page-accent-hover: rgba(255, 122, 114, 0.20);
+  --page-accent-text: #FFC1BC;
+  --page-soft-border: rgba(0, 0, 0, 0.30);
+  --page-soft-border-hover: rgba(0, 0, 0, 0.38);
+}
+
+.dark .soridraw-library-theme {
+  --page-accent: #A98BFF;
+  --page-accent-soft: rgba(169, 139, 255, 0.14);
+  --page-accent-hover: rgba(169, 139, 255, 0.20);
+  --page-accent-text: #D8CCFF;
+  --page-soft-border: rgba(0, 0, 0, 0.30);
+  --page-soft-border-hover: rgba(0, 0, 0, 0.38);
+}
+
+
+/* 437: Keep the custom Suno Library title mark visible despite the soft-border reset. */
+.dark .soridraw-library-theme .soridraw-library-title-icon > div {
+  border-color: currentColor !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select, section, article, div)[class*="border"] {
+  border-color: var(--page-soft-border) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select, section, article, div)[class*="border"]:hover {
+  border-color: var(--page-soft-border-hover) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(.rounded-xl, .rounded-2xl, .rounded-3xl)[class*="border"] {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(button, input, textarea, select)[class*="border"] {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.025) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="text-brand-orange"], .text-brand-orange) {
+  color: var(--page-accent-text) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="bg-brand-orange"], .bg-brand-orange) {
+  background-color: var(--page-accent) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="border-brand-orange"], .border-brand-orange) {
+  border-color: rgba(0, 0, 0, 0.30) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="focus:border-brand-orange"]):focus {
+  border-color: var(--page-accent) !important;
+}
+
+.dark .soridraw-musicnote-theme :where([class*="text-[#FFC1BC]"], [class*="text-[#FF8C85]"]) {
+  color: var(--page-accent-text) !important;
+}
+
+.dark .soridraw-library-theme :where([class*="text-sky"], [class*="text-purple"], [class*="text-emerald"]) {
+  color: var(--page-accent-text) !important;
+}
+
+.dark .soridraw-library-theme :where([class*="bg-sky"], [class*="bg-purple"], [class*="bg-emerald"]) {
+  background-color: var(--page-accent-soft) !important;
+}
+
+.dark .soridraw-library-theme :where([class*="border-sky"], [class*="border-purple"], [class*="border-emerald"]) {
+  border-color: rgba(0, 0, 0, 0.30) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="bg-white/5"], [class*="bg-white/[0.02]"], [class*="bg-white/[0.03]"]) {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="hover:bg-white/5"]):hover,
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="hover:bg-white/10"]):hover {
+  background-color: var(--page-accent-soft) !important;
+}
+
+.dark :where(.soridraw-musicnote-theme, .soridraw-library-theme) :where(input, textarea):focus {
+  outline: none !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--page-accent) 42%, transparent), 0 10px 24px rgba(0, 0, 0, 0.16) !important;
+}
+
+
+/* SORIDRAW_EXPAND_ANCHOR_STABILITY_FIX
+   Keep Studio section expansion anchored to the clicked card and prevent
+   browser scroll anchoring from pushing the viewport upward during height animation. */
+.studio-tone-down,
+.studio-tone-down [data-expand-section],
+.studio-tone-down .soridraw-expand-card,
+.studio-tone-down .soridraw-expand-content,
+.studio-tone-down .soridraw-expand-summary {
+  overflow-anchor: none;
+}
+
+.studio-tone-down .soridraw-expand-card {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.studio-tone-down .soridraw-expand-content {
+  will-change: height;
+  transform: translateZ(0);
+}
+
+/* SORIDRAW_51_STUDIO_MENU_CARD_COLOR_MATCH
+   Match Studio menu card surfaces to Music Note / Library list card surface.
+   Keep buttons, selected states, popups, spacing and animations unchanged. */
+.dark .studio-tone-down [data-expand-section],
+.dark .studio-tone-down .soridraw-expand-card {
+  background-color: #1a1a1a !important;
+}
+
+
+/* SORIDRAW_129_GENERATE_HEARTBEAT_GLOW
+   Subtle breathing glow for the floating/generate action button. */
+@keyframes soridraw-generate-heartbeat-glow {
+  0%, 100% {
+    box-shadow:
+      0 8px 18px rgba(0, 0, 0, 0.32),
+      0 0 0 0 rgba(255, 193, 90, 0.00),
+      0 0 0 0 rgba(240, 192, 121, 0.00);
+  }
+  44% {
+    box-shadow:
+      0 10px 22px rgba(0, 0, 0, 0.36),
+      0 0 18px 4px rgba(255, 193, 90, 0.22),
+      0 0 34px 10px rgba(240, 192, 121, 0.10);
+  }
+  62% {
+    box-shadow:
+      0 9px 20px rgba(0, 0, 0, 0.34),
+      0 0 10px 2px rgba(255, 193, 90, 0.14),
+      0 0 22px 6px rgba(240, 192, 121, 0.07);
+  }
+}
+
+.soridraw-generate-heartbeat {
+  animation: soridraw-generate-heartbeat-glow 2.9s ease-in-out infinite;
+}
+
+.soridraw-generate-heartbeat:hover,
+.soridraw-generate-heartbeat:active {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soridraw-generate-heartbeat {
+    animation: none;
+  }
+}
+
+/* SORIDRAW 142~143: folder long-press reorder helper */
+body.soridraw-folder-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+  overscroll-behavior: contain;
+}
+
+body.soridraw-folder-dragging .soridraw-folder-drag-scrollbar {
+  touch-action: none;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+}
+
+/* SORIDRAW 149: give long-press folder drag room so the lifted button is not clipped by the horizontal scroll container */
+.soridraw-folder-drag-scrollbar {
+  padding-top: 10px !important;
+  padding-bottom: 14px !important;
+  margin-top: -8px;
+  margin-bottom: -4px;
+  overflow-y: visible !important;
+}
+
+@keyframes soridraw-folder-drag-active-pulse {
+  0%, 100% {
+    box-shadow:
+      0 12px 28px rgba(0, 0, 0, 0.38),
+      0 0 0 1px rgba(255, 255, 255, 0.36),
+      0 0 18px rgba(216, 164, 162, 0.20);
+  }
+  50% {
+    box-shadow:
+      0 16px 34px rgba(0, 0, 0, 0.48),
+      0 0 0 2px rgba(255, 255, 255, 0.54),
+      0 0 28px rgba(216, 164, 162, 0.32);
+  }
+}
+
+.soridraw-folder-drag-active {
+  position: relative;
+  touch-action: none;
+  transform: translateY(-1px) scale(1.06) !important;
+  border-color: rgba(255, 255, 255, 0.68) !important;
+  animation: soridraw-folder-drag-active-pulse 0.9s ease-in-out infinite;
+}
+
+.soridraw-folder-drag-active::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soridraw-folder-drag-active {
+    animation: none;
+  }
+}
+
+/* SORIDRAW_397_STUDIO_COMMAND_SHADOW_LAYOUT_FIX
+   396에서 command wrapper까지 pseudo surface 방식을 적용하면서
+   wrapper의 직접 자식 absolute 요소(Search/placeholder/button)가 relative로 바뀌어 명령창 배치가 깨졌다.
+   카드형 메뉴는 pseudo surface를 유지하되, absolute 자식은 position을 건드리지 않는다.
+   명령창은 카드와 구조가 다르므로 pseudo surface에서 제외하고 실제 보이는 textarea에만 단일 그림자를 적용한다. */
+.studio-tone-down {
+  --soridraw-studio-card-bg: #202020;
+  --soridraw-studio-card-shadow: 0 18px 34px -18px rgba(0, 0, 0, 0.86), 0 10px 20px -15px rgba(0, 0, 0, 0.72);
+  --shadow-md: var(--soridraw-studio-card-shadow);
+  --shadow-lg: var(--soridraw-studio-card-shadow);
+  isolation: isolate;
+}
+
+.studio-tone-down .soridraw-studio-shadow-surface,
+.studio-tone-down .soridraw-studio-shadow-surface:hover,
+.studio-tone-down .soridraw-studio-shadow-surface:focus-within {
+  position: relative !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.studio-tone-down .soridraw-studio-shadow-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--soridraw-studio-card-bg);
+  box-shadow: var(--soridraw-studio-card-shadow);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* absolute로 배치된 아이콘/버튼/placeholder는 position을 절대 바꾸지 않는다. */
+.studio-tone-down .soridraw-studio-shadow-surface > :not(.absolute) {
+  position: relative;
+  z-index: 1;
+}
+
+.studio-tone-down .soridraw-studio-shadow-surface > .absolute {
+  z-index: 20;
+}
+
+/* 원형 펼침 버튼은 카드 밖에 걸쳐 있으므로 기존 위치/레이어를 유지한다. */
+.studio-tone-down .soridraw-studio-shadow-surface > .section-expand-button {
+  z-index: 20;
+}
+
+
+/* 명령창은 pseudo surface를 쓰지 않는다. 실제 보이는 textarea에만 단일 그림자를 적용해 이중 그림자/배치 틀어짐을 막는다. */
+.studio-tone-down .soridraw-studio-command-card {
+  position: relative !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.studio-tone-down .soridraw-studio-command-card::before {
+  content: none !important;
+  display: none !important;
+}
+
+.studio-tone-down .soridraw-studio-command-card textarea,
+.studio-tone-down .soridraw-studio-command-card textarea:hover,
+.studio-tone-down .soridraw-studio-command-card:focus-within textarea {
+  position: relative !important;
+  z-index: 1 !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+}
+
+/* SORIDRAW_398_STUDIO_HOVER_SHADOW_OFF_FIX
+   Fix the real cause: broad Studio border rules and textarea shadows were still overriding
+   the base state, so lower cards only matched on hover. Use one surface shadow with no hover
+   change, and keep the command box as a normal wrapper shadow to avoid double shadows. */
+.dark .studio-tone-down {
+  --soridraw-studio-card-shadow: 0 18px 34px -18px rgba(0, 0, 0, 0.86), 0 10px 20px -15px rgba(0, 0, 0, 0.72);
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:hover,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:focus-within {
+  position: relative !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface::before,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:hover::before,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface:focus-within::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  background: var(--soridraw-studio-card-bg, #202020) !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+  transform: none !important;
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface > :not(.absolute) {
+  position: relative;
+  z-index: 1;
+}
+
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface > .absolute,
+.dark .studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface > .section-expand-button {
+  z-index: 20;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card,
+.dark .studio-tone-down .soridraw-studio-command-card:hover,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within {
+  position: relative !important;
+  z-index: auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border-radius: 1rem !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card::before,
+.dark .studio-tone-down .soridraw-studio-command-card:hover::before,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within::before {
+  content: none !important;
+  display: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card textarea,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:hover,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within textarea,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:focus {
+  position: relative !important;
+  z-index: 1 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* SORIDRAW_399_COMMAND_SINGLE_SURFACE_FIX
+   명령창 이중 surface 제거: wrapper 그림자는 끄고, 실제 보이는 textarea 한 곳에만 기본 그림자를 고정한다.
+   hover/focus 때 그림자가 더 진해지지 않도록 동일 값으로 잠근다. */
+.dark .studio-tone-down .soridraw-studio-command-card,
+.dark .studio-tone-down .soridraw-studio-command-card:hover,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+  overflow: visible !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card textarea,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:hover,
+.dark .studio-tone-down .soridraw-studio-command-card textarea:focus,
+.dark .studio-tone-down .soridraw-studio-command-card:focus-within textarea {
+  background-color: rgba(255, 255, 255, 0.18) !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.dark .studio-tone-down .soridraw-studio-command-card button,
+.dark .studio-tone-down .soridraw-studio-command-card button:hover,
+.dark .studio-tone-down .soridraw-studio-command-card button:focus {
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* SORIDRAW_405_SECTION_CUSTOM_MOBILE_FLASH_FIX
+   Mobile section-custom popup should appear without fade/scale repaint.
+   This prevents the outside studio buttons from briefly flashing while the backdrop mounts. */
+@media (max-width: 767px) {
+  .studio-section-custom-modal-backdrop,
+  .studio-section-custom-modal-panel {
+    animation: none !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+
+  .studio-section-custom-modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.54) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* SORIDRAW_440_BADGE_CLICK_CLEAR_FIX
+   장르/스타일/사운드 선택 숫자 배지 전용.
+   PC hover 때 숫자를 X로 바꾸고, 모바일에서는 탭으로 해당 버튼 선택만 해제한다. */
+.soridraw-clearable-badge {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.soridraw-clearable-badge .soridraw-badge-x {
+  display: none;
+}
+
+.soridraw-clearable-badge:hover .soridraw-badge-number,
+.soridraw-clearable-badge:focus-visible .soridraw-badge-number {
+  display: none !important;
+}
+
+.soridraw-clearable-badge:hover .soridraw-badge-x,
+.soridraw-clearable-badge:focus-visible .soridraw-badge-x {
+  display: block !important;
+}
+
+/* SORIDRAW_441_BADGE_BLACK_X_VISIBILITY_FIX
+   검정 원 배지 hover/focus 상태에서 X 아이콘이 선택 버튼의 강제 svg 색상에 묻히지 않도록 고정한다. */
+.soridraw-count-badge-main .soridraw-badge-x,
+.soridraw-selected-strong .soridraw-count-badge-main .soridraw-badge-x,
+.soridraw-count-badge-main:hover .soridraw-badge-x,
+.soridraw-count-badge-main:focus-visible .soridraw-badge-x {
+  color: var(--soridraw-badge-accent, #FFB400) !important;
+  stroke: var(--soridraw-badge-accent, #FFB400) !important;
+}
+
+.soridraw-count-badge-point .soridraw-badge-x,
+.soridraw-selected-strong .soridraw-count-badge-point .soridraw-badge-x,
+.soridraw-count-badge-point:hover .soridraw-badge-x,
+.soridraw-count-badge-point:focus-visible .soridraw-badge-x {
+  color: #050505 !important;
+  stroke: #050505 !important;
+}
+
+/* ==========================================================================
+   SORIDRAW FHD COMPACT MODE (1024px - 2420px PC monitors with standard/zoomed viewports)
+   Provides an elegant, high-density, beautifully balanced compact PC layout.
+   Uses fluid clamp() to ensure proportional scaling without sudden breakpoint jumping
+   when zooming from 100% to 90% or 80% on 1920x1080 (FHD) screens.
+   ========================================================================== */
+[data-screen-type="fhd-desktop"] {
+  /* 1. Top Navigation Height & Padding Reduction */
+  div.absolute.left-0.z-\[60\].hidden.w-full.items-center {
+    padding-top: clamp(0.35rem, 0.6vh, 0.45rem) !important; /* Extremely neat navbar height */
+    padding-bottom: clamp(0.35rem, 0.6vh, 0.45rem) !important;
+  }
+  
+  /* Slightly decrease logo font size and navigation buttons padding/gap */
+  .font-display.text-\[22px\] {
+    font-size: clamp(17px, 1.1vw, 19px) !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 {
+    gap: 0.2rem !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 button {
+    height: 2.125rem !important; /* h-8.5 */
+    padding-left: clamp(0.5rem, 0.8vw, 0.625rem) !important;
+    padding-right: clamp(0.5rem, 0.8vw, 0.625rem) !important;
+    font-size: 12.5px !important;
+  }
+  div.flex.min-w-0.flex-1.items-center.justify-center.gap-1\.5 button svg {
+    width: 1.0625rem !important;
+    height: 1.0625rem !important;
+  }
+  
+  /* Decreasing navigation right side button sizes and padding */
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 {
+    gap: 0.35rem !important;
+  }
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 a,
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button {
+    height: 2rem !important; /* h-8 */
+    width: 2rem !important; /* w-8 */
+  }
+  /* Profile button needs to adjust max-width and internal padding */
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button.max-w-\[54px\] {
+    width: auto !important;
+    max-width: 130px !important;
+    padding-left: 0.45rem !important;
+    padding-right: 0.45rem !important;
+    font-size: 12px !important;
+  }
+  div.flex.min-w-\[176px\].shrink-0.items-center.justify-end.gap-2\.5 button.max-w-\[54px\] img {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  /* 2. Common PC Page Container Width & Spacing Reduction (Recreates the spacious QHD editorial feeling) */
+  /* For SunoLibraryPage and FavoritesPage */
+  .soridraw-library-theme,
+  .soridraw-musicnote-theme {
+    max-width: clamp(1180px, 70vw, 1340px) !important; /* Restricts max width so left/right margins match QHD aesthetic */
+    padding-top: clamp(62px, 5vh, 74px) !important;
+    padding-left: clamp(1rem, 2vw, 1.5rem) !important;
+    padding-right: clamp(1rem, 2vw, 1.5rem) !important;
+  }
+  .soridraw-library-theme {
+    /* Music Note와 맞추되, 14차에서 너무 위로 붙은 느낌을 1~2mm 정도 되돌림 */
+    padding-top: clamp(56px, 4.65vh, 66px) !important;
+    padding-bottom: clamp(3.5rem, 8vh, 4.5rem) !important;
+  }
+  .soridraw-musicnote-theme {
+    padding-bottom: clamp(1.5rem, 3vh, 2.5rem) !important;
+  }
+  .soridraw-library-theme .space-y-3.md\:space-y-5,
+  .soridraw-musicnote-theme .space-y-4.md\:space-y-5 {
+    --tw-space-y-reverse: 0 !important;
+    margin-top: clamp(0.25rem, 0.5vh, 0.35rem) !important;
+    margin-bottom: clamp(0.25rem, 0.5vh, 0.35rem) !important;
+  }
+
+  /* 3. Page Title & Description Font Sizes */
+  /* Headers: reduce 3xl/5xl titles to something more compact and elegant */
+  .soridraw-library-theme h1.text-3xl.md\:text-5xl,
+  .soridraw-musicnote-theme h1.text-3xl.md\:text-5xl {
+    font-size: clamp(1.5rem, 2vw, 1.875rem) !important; /* ~24px to 30px */
+    line-height: 2.25rem !important;
+  }
+  .soridraw-library-theme h1.text-3xl.md\:text-5xl svg,
+  .soridraw-musicnote-theme h1.text-3xl.md\:text-5xl svg {
+    width: clamp(1.5rem, 2vw, 1.875rem) !important;
+    height: clamp(1.5rem, 2vw, 1.875rem) !important;
+  }
+  .soridraw-library-theme p.text-sm.md\:text-base.mt-2,
+  .soridraw-musicnote-theme p.text-sm.md\:text-base.mt-2 {
+    font-size: clamp(12.5px, 0.8vw, 13.5px) !important;
+    margin-top: 0.15rem !important;
+  }
+
+  /* 4. Filter Buttons, Tabs and Action Bars Padding & Gaps */
+  /* Tabs selection (myNote/sharedNote tabs etc) and Library tabs */
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5,
+  .soridraw-library-theme .grid-cols-3.gap-0.p-1 {
+    max-width: clamp(480px, 28vw, 540px) !important;
+    width: 100% !important;
+  }
+  div.grid.grid-cols-3.gap-0.p-1.bg-white\/5 button,
+  .soridraw-library-theme .grid-cols-3.gap-0.p-1 button {
+    padding-top: clamp(0.35rem, 0.65vh, 0.45rem) !important;
+    padding-bottom: clamp(0.35rem, 0.65vh, 0.45rem) !important;
+    padding-left: clamp(0.25rem, 0.6vw, 0.75rem) !important;
+    padding-right: clamp(0.25rem, 0.6vw, 0.75rem) !important;
+    font-size: clamp(11.5px, 0.75vw, 12.5px) !important;
+    text-overflow: clip !important;
+    overflow: visible !important;
+    white-space: nowrap !important;
+  }
+
+  /* Folder and playlist buttons scrollbar */
+  .soridraw-folder-drag-scrollbar {
+    padding-top: 4px !important;
+    padding-bottom: 6px !important;
+    margin-top: -2px !important;
+    margin-bottom: -1px !important;
+  }
+  .soridraw-folder-drag-scrollbar button {
+    padding-left: clamp(0.55rem, 0.8vw, 0.75rem) !important;
+    padding-right: clamp(0.55rem, 0.8vw, 0.75rem) !important;
+    padding-top: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    padding-bottom: clamp(0.3rem, 0.6vh, 0.4rem) !important;
+    font-size: 11.5px !important;
+    border-radius: 0.375rem !important;
+  }
+
+  /* 5. Music Cards & Lists Layout Compression */
+  /* Song list gap */
+  .soridraw-musicnote-theme div.space-y-4 {
+    gap: clamp(0.3rem, 0.6vh, 0.45rem) !important; /* reduce vertical gap */
+  }
+  /* FavoritesPage: Song card container and item */
+  .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl {
+    border-radius: 0.5rem !important; /* rounded-lg */
+  }
+  .soridraw-musicnote-theme .group.relative.overflow-visible.rounded-2xl .flex.items-center.gap-3.py-4 {
+    padding-top: clamp(0.72rem, 1.18vh, 0.86rem) !important; /* keep Music Note cards breathable on FHD */
+    padding-bottom: clamp(0.72rem, 1.18vh, 0.86rem) !important;
+    padding-left: clamp(0.82rem, 1.08vw, 1.08rem) !important;
+    padding-right: clamp(0.82rem, 1.08vw, 1.08rem) !important;
+    gap: 0.58rem !important;
+  }
+  /* Keep Music Note cover/play/music icon boxes large and clear even in FHD compact mode */
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-12.w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-14.md\:w-14,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-12.md\:w-12,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-12.md\:w-12 {
+    width: clamp(2.65rem, 5.1vh, 3.15rem) !important;
+    height: clamp(2.65rem, 5.1vh, 3.15rem) !important;
+    border-radius: 0.95rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.h-12.w-12 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 div.md\:h-14.md\:w-14 svg {
+    width: 1.35rem !important;
+    height: 1.35rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12 .relative.z-10,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14 .relative.z-10 {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.h-12.w-12 .relative.z-10 svg,
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 button.md\:h-14.md\:w-14 .relative.z-10 svg {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+  .soridraw-musicnote-theme .flex.items-center.gap-3.py-4 h3.text-\[15px\] {
+    font-size: 13px !important;
+  }
+
+  /* SunoLibraryPage: Group header and list */
+  .soridraw-library-theme .space-y-4.md\:space-y-5 {
+    gap: clamp(0.35rem, 0.6vh, 0.45rem) !important;
+  }
+  .soridraw-library-theme .group.relative.flex.items-center.rounded-2xl {
+    border-radius: 0.5rem !important; /* rounded-lg */
+  }
+  /* Group Header */
+  .soridraw-library-theme .py-4.border-b.border-\[\#A98BFF\]\/10 {
+    padding-top: clamp(0.48rem, 0.88vh, 0.58rem) !important;
+    padding-bottom: clamp(0.48rem, 0.88vh, 0.58rem) !important;
+    padding-left: clamp(0.75rem, 1vw, 1rem) !important;
+    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
+  }
+  .soridraw-library-theme .py-4.border-b.border-\[\#A98BFF\]\/10 .w-10.h-10 {
+    width: clamp(1.75rem, 3.2vh, 2rem) !important;
+    height: clamp(1.75rem, 3.2vh, 2rem) !important;
+  }
+  .soridraw-library-theme .py-4.border-b.border-\[\#A98BFF\]\/10 h3 {
+    font-size: 13px !important;
+  }
+  /* Tracks */
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 {
+    padding-top: clamp(0.44rem, 0.78vh, 0.54rem) !important; /* visually match Music Note card density */
+    padding-bottom: clamp(0.44rem, 0.78vh, 0.54rem) !important;
+    padding-left: clamp(0.75rem, 1vw, 1rem) !important;
+    padding-right: clamp(0.75rem, 1vw, 1rem) !important;
+  }
+  /* Play button size */
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 .relative.w-12.h-12,
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 button.w-12.h-12 {
+    width: clamp(2rem, 3.65vh, 2.25rem) !important;
+    height: clamp(2rem, 3.65vh, 2.25rem) !important;
+  }
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 h4.text-sm.md\:text-base {
+    font-size: 12.5px !important;
+  }
+  .soridraw-library-theme .group.flex.items-center.gap-3.px-4.py-3 p.text-xs {
+    font-size: 10.5px !important;
+  }
+
+  /* 6. Utility Elements & Search Bar Shrink */
+  .soridraw-library-theme div.relative.flex-1.max-w-md,
+  .soridraw-musicnote-theme div.relative.flex-1.max-w-md {
+    max-width: clamp(240px, 16vw, 300px) !important;
+  }
+  .soridraw-library-theme input.w-full.rounded-xl,
+  .soridraw-musicnote-theme input.w-full.rounded-xl,
+  .soridraw-library-theme input.w-full.rounded-2xl,
+  .soridraw-musicnote-theme input.w-full.rounded-2xl {
+    height: 36px !important;
+    padding-top: 0.3rem !important;
+    padding-bottom: 0.3rem !important;
+    font-size: 11.5px !important;
+  }
+  /* Actions/sync buttons */
+  .soridraw-library-theme button.h-\[46px\].w-\[46px\],
+  .soridraw-musicnote-theme button.h-\[46px\].w-\[46px\] {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 0.375rem !important;
+  }
+  .soridraw-library-theme button.h-\[46px\].w-\[46px\] svg,
+  .soridraw-musicnote-theme button.h-\[46px\].w-\[46px\] svg {
+    width: 0.8125rem !important;
+    height: 0.8125rem !important;
+  }
+  
+  /* Bulk select action bars / Keyword bottom strips */
+  .favorite-keyword-strip.fixed,
+  div.fixed.bottom-5.left-1\/2.z-\[170\] {
+    bottom: 0.75rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    gap: 0.3rem !important;
+  }
+  .favorite-keyword-strip.fixed button,
+  div.fixed.bottom-5.left-1\/2.z-\[170\] button {
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    font-size: 11px !important;
+  }
+
+  /* ==========================================================================
+     7. Popups, Dropdowns & More Menus Sizing Adjustments
+     ========================================================================== */
+  [data-more-menu-panel="true"] {
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+  }
+  [data-more-menu-panel="true"] button {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    font-size: 12.5px !important;
+    gap: 0.5rem !important;
+  }
+  [data-more-menu-panel="true"] button svg {
+    width: 0.9rem !important;
+    height: 0.9rem !important;
+  }
+
+  /* Detailed Lyrics Modal (Music Note) */
+  .relative.flex.w-full.max-w-\[1120px\].flex-col.musicnote-edit-mobile-boost {
+    max-width: 960px !important;
+    border-radius: 24px !important;
+    max-h: 88vh !important;
+  }
+  .musicnote-edit-mobile-boost .px-6.py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+  .musicnote-edit-mobile-boost h3.text-\[28px\] {
+    font-size: 22px !important;
+  }
+  .musicnote-edit-mobile-boost .custom-scrollbar {
+    padding: 1.25rem 1.5rem !important;
+    gap: 1rem !important;
+  }
+  .musicnote-edit-mobile-boost section.rounded-\[28px\] {
+    border-radius: 18px !important;
+    padding: 1rem !important;
+  }
+
+  /* Suno Link Connection Guide Modal */
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] {
+    max-width: 670px !important;
+    padding: 1.25rem 1.75rem !important;
+    border-radius: 20px !important;
+  }
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] h3.text-xl {
+    font-size: 17px !important;
+  }
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] p.text-sm {
+    font-size: 12.5px !important;
+    line-height: 1.4 !important;
+    margin-top: 0.35rem !important;
+  }
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] .mt-5 {
+    margin-top: 1rem !important;
+  }
+  div.max-h-\[88vh\].w-full.max-w-\[95\%\].md\:max-w-\[780px\] .mt-5 button {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 11px !important;
+  }
+
+  /* Suno URL Editor Modal */
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] {
+    max-width: 580px !important;
+    padding: 1.125rem !important;
+    border-radius: 20px !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] h3.text-xl {
+    font-size: 18px !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] p.text-sm {
+    font-size: 12.5px !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] .grid.grid-cols-1.gap-3.md\:grid-cols-2 > div {
+    padding: 0.625rem !important;
+    border-radius: 0.75rem !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] input {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.75rem !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] p.text-xs {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] .mt-5.flex.flex-wrap.justify-end {
+    margin-top: 1rem !important;
+  }
+  div.w-full.max-w-\[520px\].md\:max-w-\[680px\] button.h-11 {
+    height: 2.25rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.75rem !important;
+    padding-left: 0.875rem !important;
+    padding-right: 0.875rem !important;
+  }
+
+
+
+  /* Library workspace more menu: fixed viewport layer, never clipped by page/card overflow. */
+  .soridraw-library-theme [data-more-menu-panel="true"].fixed {
+    max-width: calc(100vw - 24px) !important;
+    overflow: hidden !important;
+  }
+
+  /* Library workspace more menu is rendered through body portal, so it is not a child of .soridraw-library-theme. */
+  [data-more-menu-panel="true"].fixed {
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100vh - 24px) !important;
+    overscroll-behavior: contain !important;
+  }
+
+  /* Library Share and Bulk Share Modals */
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl {
+    max-width: 310px !important;
+    padding: 1.25rem !important;
+    border-radius: 14px !important;
+  }
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl .mb-6 {
+    margin-bottom: 1rem !important;
+  }
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl h2.text-xl {
+    font-size: 17px !important;
+  }
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl p.text-xs {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+  div.w-full.max-w-sm.bg-\[\#1a1a1a\].border.border-black\/20.rounded-2xl button.py-4 {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+    font-size: 13.5px !important;
+    border-radius: 0.75rem !important;
+  }
+
+  /* Playlist Rename & Move Modals */
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 {
+    max-width: 330px !important;
+    border-radius: 14px !important;
+  }
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 .p-4 {
+    padding: 0.875rem !important;
+  }
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 h3.font-bold {
+    font-size: 14.5px !important;
+  }
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 input {
+    padding: 0.6rem 0.875rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.625rem !important;
+  }
+  div.bg-\[\#2a2a2a\].w-full.max-w-sm.rounded-2xl.border.border-black\/20 button {
+    padding: 0.45rem 1rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.625rem !important;
+  }
+
+  /* Deletion / Confirmation & Warning Modals */
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl,
+  div.w-full.max-w-\[380px\].overflow-hidden.rounded-\[24px\] {
+    max-width: 320px !important;
+    border-radius: 18px !important;
+  }
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl .p-4,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl .p-6,
+  div.w-full.max-w-\[380px\].overflow-hidden.rounded-\[24px\] .px-5 {
+    padding: 1.125rem !important;
+  }
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl h3,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl h3 {
+    font-size: 16px !important;
+  }
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl p,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl p {
+    font-size: 12.5px !important;
+    line-height: 1.4 !important;
+  }
+  div.w-full.max-w-\[360px\].overflow-hidden.rounded-3xl button,
+  div.w-full.max-w-sm.bg-\[var\(--bg-secondary\)\].border.rounded-3xl button {
+    height: 2.25rem !important;
+    font-size: 12.5px !important;
+    border-radius: 0.75rem !important;
+  }
+
+  /* Folder Picker / Playlist Save Picker Modals */
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] {
+    max-width: 360px !important;
+    padding: 1.125rem !important;
+    border-radius: 20px !important;
+  }
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] h3.text-lg {
+    font-size: 15px !important;
+  }
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] p.text-xs {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+  div.w-full.max-w-\[420px\].overflow-hidden.rounded-\[28px\] button.flex.h-12 {
+    height: 2.5rem !important;
+    font-size: 12.5px !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    border-radius: 0.75rem !important;
+  }
+
+
+  @media (min-width: 1024px) {
+    /* ==========================================================================
+       8. Sori Studio FHD compact mode
+       Keep QHD layout untouched, but make the Studio page fit FHD without global scale.
+       Header, main shell, floating generate button, cards and studio modals share one density.
+       ========================================================================== */
+    .soridraw-studio-hero,
+    .soridraw-studio-main,
+    .soridraw-studio-shell {
+      --soridraw-studio-fhd-max: clamp(1180px, 70vw, 1340px);
+    }
+
+    .soridraw-studio-hero {
+      padding-top: clamp(68px, 7vh, 82px) !important;
+    }
+
+    .soridraw-studio-shell,
+    .soridraw-studio-main {
+      max-width: var(--soridraw-studio-fhd-max) !important;
+      padding-left: clamp(1rem, 1.8vw, 1.5rem) !important;
+      padding-right: clamp(1rem, 1.8vw, 1.5rem) !important;
+    }
+
+    .soridraw-studio-main {
+      /* Keep the hero/search line as the anchor and move the card grid down on FHD. */
+      padding-top: clamp(2.25rem, 4vh, 2.85rem) !important;
+      padding-bottom: clamp(1.25rem, 2.4vh, 1.75rem) !important;
+      row-gap: clamp(1rem, 1.8vh, 1.25rem) !important;
+    }
+
+    .soridraw-studio-title {
+      gap: 0.55rem !important;
+      font-size: clamp(38px, 2.55vw, 44px) !important;
+      line-height: 1.05 !important;
+    }
+
+    .soridraw-studio-title svg {
+      width: clamp(1.9rem, 2.3vw, 2.15rem) !important;
+      height: clamp(1.9rem, 2.3vw, 2.15rem) !important;
+    }
+
+    .soridraw-studio-selection-grid {
+      gap: clamp(0.9rem, 1.4vw, 1.05rem) !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card {
+      border-radius: 22px !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card.p-7,
+    .studio-tone-down .soridraw-studio-menu-card.p-5,
+    .studio-tone-down .soridraw-studio-menu-card.px-6.py-4 {
+      padding: clamp(1.05rem, 1.55vw, 1.25rem) !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card.pb-12,
+    .studio-tone-down .soridraw-studio-menu-card.pb-10 {
+      padding-bottom: clamp(2.2rem, 3.2vw, 2.6rem) !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card h3.text-\[22px\] {
+      font-size: clamp(18px, 1.25vw, 20px) !important;
+      line-height: 1.15 !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card h3 .w-1\.5.h-6,
+    .studio-tone-down .soridraw-studio-menu-card h3 span.w-1\.5.h-6 {
+      height: 1.25rem !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card .soridraw-expand-content {
+      min-height: 68px !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card .soridraw-expand-summary {
+      margin-top: clamp(0.75rem, 1.25vh, 0.95rem) !important;
+      min-height: 52px !important;
+      height: 52px !important;
+      border-radius: 16px !important;
+      padding: 0.65rem 1rem !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card button {
+      border-radius: 14px !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card .grid.gap-2\.5,
+    .studio-tone-down .soridraw-studio-menu-card .grid.md\:gap-3,
+    .studio-tone-down .soridraw-studio-menu-card .grid.gap-2,
+    .studio-tone-down .soridraw-studio-menu-card .space-y-2,
+    .studio-tone-down .soridraw-studio-menu-card .space-y-3,
+    .studio-tone-down .soridraw-studio-menu-card .space-y-3\.5,
+    .studio-tone-down .soridraw-studio-menu-card .space-y-4 {
+      gap: clamp(0.45rem, 0.8vh, 0.65rem) !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card button.min-h-\[58px\] {
+      min-height: 50px !important;
+      padding: 0.55rem 0.75rem !important;
+    }
+
+    .studio-tone-down .soridraw-studio-menu-card button.min-h-\[58px\] span.text-\[15px\],
+    .studio-tone-down .soridraw-studio-menu-card button.min-h-\[58px\] span.md\:text-\[16\.5px\] {
+      font-size: clamp(13px, 0.95vw, 14.5px) !important;
+    }
+
+    .studio-tone-down .soridraw-studio-command-card textarea {
+      min-height: 58px !important;
+      padding-top: 0.9rem !important;
+      padding-bottom: 0.9rem !important;
+      font-size: clamp(14px, 1vw, 16px) !important;
+      border-radius: 18px !important;
+    }
+
+    .studio-tone-down .soridraw-studio-command-card .absolute.top-6.left-4 {
+      top: 1.05rem !important;
+    }
+
+    .soridraw-studio-action-collapsed {
+      /* Move the collapsed generate button right by roughly one button-width on FHD. */
+      left: max(88px, calc((100vw - var(--soridraw-studio-fhd-max, 1340px)) / 2 - 40px)) !important;
+      bottom: clamp(1.25rem, 3vh, 1.75rem) !important;
+      height: clamp(4.8rem, 9vh, 5.4rem) !important;
+      width: 3.25rem !important;
+    }
+
+    .soridraw-studio-action-bar {
+      bottom: clamp(1rem, 2.4vh, 1.5rem) !important;
+    }
+
+    .soridraw-studio-action-panel {
+      max-width: clamp(760px, 48vw, 860px) !important;
+    }
+
+    .soridraw-studio-action-panel button {
+      transform-origin: center !important;
+    }
+
+    .soridraw-studio-action-panel button:active,
+    .soridraw-studio-action-collapsed:active {
+      translate: 0 0 !important;
+      transform: none !important;
+    }
+
+    /* Studio popups/modals: proportional FHD adjustment without hiding item descriptions. */
+    .soridraw-studio-global-search-panel,
+    .soridraw-studio-genre-modal-panel,
+    .soridraw-studio-cycle-modal-panel,
+    .soridraw-studio-storyboard-modal-panel,
+    .soridraw-studio-vocal-modal-panel,
+    .studio-section-custom-modal-panel {
+      max-width: clamp(680px, 56vw, 820px) !important;
+      border-radius: 24px !important;
+    }
+
+    .soridraw-studio-global-search-panel,
+    .soridraw-studio-genre-modal-panel,
+    .soridraw-studio-cycle-modal-panel,
+    .soridraw-studio-vocal-modal-panel,
+    .studio-section-custom-modal-panel {
+      max-height: min(84vh, 820px) !important;
+    }
+
+    .soridraw-studio-storyboard-modal-panel {
+      max-width: clamp(760px, 62vw, 900px) !important;
+      max-height: min(86vh, 820px) !important;
+    }
+
+    .soridraw-studio-global-search-panel .px-5.py-4,
+    .soridraw-studio-genre-modal-panel .px-6.py-5,
+    .soridraw-studio-cycle-modal-panel .px-5.py-4,
+    .soridraw-studio-vocal-modal-panel .px-5.py-4,
+    .studio-section-custom-modal-panel .px-5.py-4,
+    .soridraw-studio-storyboard-modal-panel .px-4.py-4,
+    .soridraw-studio-storyboard-modal-panel .md\:px-5.py-4 {
+      padding: 0.9rem 1rem !important;
+    }
+
+    .soridraw-studio-genre-modal-panel .p-5,
+    .soridraw-studio-genre-modal-panel .md\:p-6,
+    .soridraw-studio-cycle-modal-panel .p-4,
+    .soridraw-studio-cycle-modal-panel .p-5,
+    .soridraw-studio-storyboard-modal-panel .p-4,
+    .soridraw-studio-storyboard-modal-panel .md\:p-5,
+    .soridraw-studio-vocal-modal-panel .p-5,
+    .studio-section-custom-modal-panel .p-5 {
+      padding: clamp(0.85rem, 1.25vw, 1rem) !important;
+    }
+
+    .soridraw-studio-genre-modal-panel h3,
+    .soridraw-studio-cycle-modal-panel h3,
+    .soridraw-studio-storyboard-modal-panel h3,
+    .soridraw-studio-vocal-modal-panel h4,
+    .studio-section-custom-modal-panel h3 {
+      font-size: clamp(16px, 1.25vw, 19px) !important;
+      line-height: 1.2 !important;
+    }
+
+    .soridraw-studio-cycle-modal-panel .text-xs,
+    .soridraw-studio-genre-modal-panel .text-xs,
+    .soridraw-studio-storyboard-modal-panel .text-xs,
+    .soridraw-studio-vocal-modal-panel .text-xs,
+    .studio-section-custom-modal-panel .text-xs {
+      font-size: 11.5px !important;
+      line-height: 1.45 !important;
+    }
+
+    .soridraw-studio-genre-modal-panel button.min-h-\[82px\],
+    .soridraw-studio-genre-modal-panel button.min-h-\[64px\],
+    .soridraw-studio-genre-modal-panel button.md\:min-h-\[72px\],
+    .soridraw-studio-cycle-modal-panel button,
+    .soridraw-studio-global-search-panel button,
+    .soridraw-studio-storyboard-modal-panel button,
+    .soridraw-studio-vocal-modal-panel button,
+    .studio-section-custom-modal-panel button {
+      border-radius: 14px !important;
+    }
+
+    .soridraw-studio-genre-modal-panel button.min-h-\[82px\] {
+      min-height: 72px !important;
+      padding: 0.85rem !important;
+    }
+
+    .soridraw-studio-genre-modal-panel button.min-h-\[64px\],
+    .soridraw-studio-genre-modal-panel button.md\:min-h-\[72px\] {
+      min-height: 58px !important;
+      padding: 0.8rem 0.9rem !important;
+    }
+
+    .soridraw-studio-genre-modal-panel .font-bold.text-\[19px\],
+    .soridraw-studio-genre-modal-panel .md\:text-\[21px\] {
+      font-size: clamp(16px, 1.25vw, 18px) !important;
+    }
+
+    .soridraw-studio-genre-modal-panel .soridraw-genre-desc-track,
+    .soridraw-studio-genre-modal-panel .soridraw-genre-desc-copy {
+      font-size: clamp(11px, 0.85vw, 12.5px) !important;
+    }
+
+    .soridraw-studio-cycle-modal-panel .grid,
+    .soridraw-studio-storyboard-modal-panel .grid,
+    .soridraw-studio-vocal-modal-panel .grid,
+    .studio-section-custom-modal-panel .grid {
+      gap: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+    }
+
+    .soridraw-studio-cycle-modal-panel .space-y-2,
+    .soridraw-studio-cycle-modal-panel .space-y-3,
+    .soridraw-studio-cycle-modal-panel .space-y-4,
+    .soridraw-studio-storyboard-modal-panel .space-y-3\.5,
+    .soridraw-studio-storyboard-modal-panel .space-y-4,
+    .soridraw-studio-storyboard-modal-panel .space-y-5,
+    .soridraw-studio-vocal-modal-panel .space-y-3\.5,
+    .soridraw-studio-vocal-modal-panel .space-y-4,
+    .studio-section-custom-modal-panel .space-y-4 {
+      row-gap: clamp(0.55rem, 0.9vw, 0.75rem) !important;
+    }
+
+    .soridraw-studio-cycle-modal-panel p,
+    .soridraw-studio-cycle-modal-panel p.text-\[var\(--text-secondary\)\],
+    .soridraw-studio-genre-modal-panel p,
+    .soridraw-studio-genre-modal-panel p.text-\[var\(--text-secondary\)\],
+    .soridraw-studio-storyboard-modal-panel p,
+    .soridraw-studio-vocal-modal-panel p {
+      display: revert !important;
+      visibility: visible !important;
+    }
+
+    .soridraw-studio-cycle-modal-panel button.w-12.shrink-0 {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 !important;
+    }
+
+    .soridraw-studio-cycle-modal-panel button.w-12.shrink-0 svg {
+      margin: 0 auto !important;
+    }
+
+    /* Keep Studio compact spacing desktop-only. Do not affect mobile responsive layout. */
+    .soridraw-studio-main {
+      --soridraw-studio-section-gap: clamp(1rem, 1.55vh, 1.25rem);
+    }
+
+    .soridraw-studio-main > :not([hidden]) ~ :not([hidden]) {
+      --tw-space-y-reverse: 0 !important;
+      margin-top: calc(var(--soridraw-studio-section-gap) * calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(var(--soridraw-studio-section-gap) * var(--tw-space-y-reverse)) !important;
+    }
+
+    .soridraw-studio-main .grid.gap-y-5 {
+      row-gap: var(--soridraw-studio-section-gap) !important;
+    }
+
+    .soridraw-studio-main .space-y-5 > :not([hidden]) ~ :not([hidden]),
+    .soridraw-studio-main .space-y-4 > :not([hidden]) ~ :not([hidden]),
+    .soridraw-studio-main .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+      --tw-space-y-reverse: 0 !important;
+      margin-top: calc(var(--soridraw-studio-section-gap) * calc(1 - var(--tw-space-y-reverse))) !important;
+      margin-bottom: calc(var(--soridraw-studio-section-gap) * var(--tw-space-y-reverse)) !important;
+    }
+
+
+    /* PC only: visually center the Mood/Theme row between the top cards and Storyboard.
+       The first boundary looked slightly wider than the next one, so only these two
+       Studio boundaries are balanced without touching mobile. */
+    .soridraw-studio-selection-grid + .space-y-5 {
+      margin-top: clamp(0.78rem, 1.18vh, 0.95rem) !important;
+    }
+
+    .soridraw-studio-selection-grid + .space-y-5 > .grid.gap-y-5 {
+      row-gap: clamp(1.12rem, 1.7vh, 1.35rem) !important;
+    }
+
+  }
+
+  /* Library Detail Modal */
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col {
+    max-width: 960px !important;
+    border-radius: 24px !important;
+    max-h: 84vh !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col .px-6.py-5 {
+    padding-top: 1rem !important;
+    padding-bottom: 1rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col h3.text-\[28px\] {
+    font-size: 22px !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col .custom-scrollbar {
+    padding: 1.25rem 1.5rem !important;
+  }
+  div.relative.flex.max-h-\[88vh\].w-full.max-w-5xl.flex-col section.rounded-\[28px\] {
+    border-radius: 18px !important;
+    padding: 1rem !important;
+  }
+}
+
+/* SORIDRAW_25_MODAL_TONE_BALANCE_FIX
+   섹션 커스텀 / 보컬 캐릭터 만들기 팝업의 기본 바탕 톤을 같은 밝기로 맞춘다.
+   구조와 기능은 유지하고, 너무 어둡게 보이던 패널/헤더/기본 카드만 소폭 밝게 보정한다. */
+.dark .studio-section-custom-modal-panel,
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #202020 !important;
+  border-color: rgba(241, 218, 164, 0.12) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.54), inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+.dark .studio-section-custom-modal-panel > .px-5.py-4,
+.dark .soridraw-studio-vocal-modal-panel > .px-5.py-4 {
+  background-color: #242424 !important;
+  border-color: rgba(241, 218, 164, 0.12) !important;
+}
+
+.dark .studio-section-custom-modal-panel > .p-5,
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #202020 !important;
+}
+
+.dark .studio-section-custom-modal-panel [class*="bg-[var(--hover-bg)]"],
+.dark .studio-section-custom-modal-panel [class*="bg-[var(--card-bg)]"],
+.dark .studio-section-custom-modal-panel [class*="bg-btn-bg"] {
+  background-color: #292929 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-[var(--card-bg)]"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-btn-bg"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-[#151515]"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-[#1a1a1a]"] {
+  background-color: #262626 !important;
+}
+
+.dark .studio-section-custom-modal-panel [class*="bg-white/5"],
+.dark .studio-section-custom-modal-panel [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.088) !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-white/5"],
+.dark .soridraw-studio-vocal-modal-panel [class*="bg-white/10"] {
+  background-color: rgba(255, 255, 255, 0.075) !important;
+}
+
+.dark .studio-section-custom-modal-panel input,
+.dark .studio-section-custom-modal-panel textarea,
+.dark .soridraw-studio-vocal-modal-panel input,
+.dark .soridraw-studio-vocal-modal-panel textarea {
+  background-color: #252525 !important;
+  border-color: rgba(241, 218, 164, 0.13) !important;
+}
+
+/* SORIDRAW_26_MODAL_TONE_FINE_TUNE
+   섹션 커스텀의 현재 구조/Keep 섹션 카드는 살짝 더 밝게,
+   보컬 캐릭터 팝업은 제목 헤더와 내부 카드는 유지하고 본문 바탕만 조금 어둡게 맞춘다. */
+.dark .studio-section-custom-modal-panel [data-reorder-section-id],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: #2c2c2c !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #1e1e1e !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #1e1e1e !important;
+}
+
+/* SORIDRAW_27_MODAL_TONE_ROLLBACK_FINE_BALANCE
+   26차에서 과하게 밝아진 섹션 커스텀 내부 카드는 원래 톤에 가깝게 되돌리되
+   완전 검정이 아닌 아주 약한 명도 상승만 남긴다.
+   보컬 캐릭터는 섹션 커스텀과 분리해서 헤더/내부 카드 톤은 유지하고 본문 바탕만 더 어둡게 맞춘다. */
+.dark .studio-section-custom-modal-panel [data-reorder-section-id],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: #181818 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #181818 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #181818 !important;
+}
+
+/* SORIDRAW_28_VOCAL_MODAL_BACKGROUND_DECOUPLE_FIX
+   보컬 캐릭터 만들기 모달의 외부 본문 배경만 따로 어둡게 잡고,
+   내부 게이지 카드 밝기는 기존 카드 클래스 기준으로 되돌린다.
+   섹션 커스텀 색상과 묶이지 않도록 vocal modal 전용으로만 적용한다. */
+.dark .soridraw-studio-vocal-modal-panel {
+  background-color: #171717 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar {
+  background-color: #151515 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .px-5.py-4 {
+  background-color: #242424 !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\] {
+  background-color: #1a1a1a !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
+  background-color: rgba(255, 180, 0, 0.055) !important;
+}
+
+/* SORIDRAW_31_STORYBOARD_PARENT_BRIGHTER_FINE_FIX
+   스토리보드 팝업을 30차보다 조금 더 밝게 하되,
+   가장 큰 부모창/본문 바탕은 내부 카드보다 살짝 밝게 분리한다. */
+.dark .storyboard-tone-flat-panel {
+  background-color: #222222 !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.56) !important;
+}
+
+.dark .storyboard-tone-flat-panel > .sticky {
+  background-color: #242424 !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+.dark .storyboard-tone-flat-body {
+  background-color: #202020 !important;
+}
+
+.dark .storyboard-section-card {
+  background-color: #1c1c1c !important;
+  border: 1px solid rgba(255, 255, 255, 0.075) !important;
+  box-shadow: none !important;
+}
+
+.dark .storyboard-character-card {
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.dark .storyboard-control-card {
+  background-color: #1c1c1c !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: none !important;
+}
+
+.dark .storyboard-tone-flat-panel input,
+.dark .storyboard-tone-flat-panel textarea {
+  background-color: #343434 !important;
+  border-color: transparent !important;
+}
+
+.dark .storyboard-tone-flat-panel button {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.dark .storyboard-tone-flat-panel .storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background-color: #353535 !important;
+}
+
+.dark .storyboard-tone-flat-panel .storyboard-choice-button--selected {
+  border-color: transparent !important;
+}
+
+/* SORIDRAW_32_STORYBOARD_VOCAL_DARK_OUTLINE_FIX
+   스토리보드와 보컬 캐릭터 만들기 내부 카드의 외곽선을 섹션 커스텀처럼
+   밝은 회색선이 아닌 검정 계열 선으로 정리한다. 면 색/구조는 유지한다. */
+.dark .storyboard-tone-flat-panel .storyboard-section-card,
+.dark .storyboard-tone-flat-panel .storyboard-control-card {
+  border-color: rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark .storyboard-tone-flat-panel .storyboard-section-card input,
+.dark .storyboard-tone-flat-panel .storyboard-section-card textarea {
+  border: 1px solid rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\],
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#FFB400\]\/12 {
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.018) !important;
+}
+
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar input,
+.dark .soridraw-studio-vocal-modal-panel > .custom-scrollbar textarea {
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+/* SORIDRAW_34_STUDIO_MENU_POPUP_DARK_BUTTON_OUTLINE_FIX
+   스타일/사운드/장르 팝업 내부의 항목 버튼 외곽선을 다른 메뉴 팝업처럼
+   밝은 회색선이 아닌 검정 계열 선으로 맞춘다. 팝업 배경/구조는 건드리지 않는다. */
+.dark .soridraw-studio-cycle-modal-panel :where(button, div).border,
+.dark .soridraw-studio-genre-modal-panel :where(button, div).border {
+  border-color: rgba(0, 0, 0, 0.52) !important;
+}
+
+.dark .soridraw-studio-cycle-modal-panel :where(button, div)[class*="border-btn-border"],
+.dark .soridraw-studio-cycle-modal-panel :where(button, div)[class*="border-[var(--keyword-button-border)]"],
+.dark .soridraw-studio-cycle-modal-panel :where(button, div)[class*="border-[var(--modal-button-border)]"],
+.dark .soridraw-studio-genre-modal-panel :where(button, div)[class*="border-btn-border"],
+.dark .soridraw-studio-genre-modal-panel :where(button, div)[class*="border-[var(--keyword-button-border)]"],
+.dark .soridraw-studio-genre-modal-panel :where(button, div)[class*="border-[var(--modal-button-border)]"] {
+  border-color: rgba(0, 0, 0, 0.52) !important;
+}
+
+.dark .soridraw-studio-cycle-modal-panel :where(button, div).border:hover,
+.dark .soridraw-studio-genre-modal-panel :where(button, div).border:hover {
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+/* SORIDRAW_35_MODAL_HEADER_AND_ACTION_BUTTON_UNIFY_FIX
+   장르 팝업을 제외한 스튜디오 팝업 상단 구분선을 섹션 커스텀 기준으로 통일하고,
+   스튜디오 팝업의 V/X 아이콘 버튼 형태를 스타일 팝업 기준으로 맞춘다. */
+.dark .soridraw-studio-cycle-modal-panel > .px-5.py-4.border-b,
+.dark .storyboard-tone-flat-panel > .sticky,
+.dark .soridraw-studio-vocal-modal-panel > .flex.items-center.justify-between.gap-3.bg-\[\#151515\] {
+  border-bottom: 1px solid rgba(241, 218, 164, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.dark .studio-section-custom-modal-panel > .px-5.py-4.border-b {
+  border-bottom-color: rgba(241, 218, 164, 0.12) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="닫기"], [aria-label*="적용"]):not([aria-label*="전체"]):not([aria-label*="직접입력"]) {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 0 !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  transform: none !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="닫기"]):not([aria-label*="전체"]) {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  color: var(--text-secondary) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="닫기"]):not([aria-label*="전체"]):hover {
+  background-color: rgba(255, 255, 255, 0.085) !important;
+  color: var(--text-primary) !important;
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="적용"]):not([aria-label*="직접입력"]):not(:disabled) {
+  background-color: #FFB400 !important;
+  color: #171717 !important;
+  border-color: rgba(0, 0, 0, 0.52) !important;
+  font-weight: 900 !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="적용"]):not([aria-label*="직접입력"]):not(:disabled):hover {
+  background-color: #D49A18 !important;
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark :is(
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel,
+  .storyboard-tone-flat-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-genre-modal-panel
+) button:is([aria-label*="적용"]):disabled {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  border-color: rgba(0, 0, 0, 0.45) !important;
+  cursor: not-allowed !important;
+}
+
+
+/* SORIDRAW_36_MODAL_RESET_BUTTON_LABEL_AND_STYLE_FIX
+   팝업 공통 초기화 버튼 문구와 디자인을 스타일 메뉴 기준으로 통일한다. */
+.dark .soridraw-modal-reset-button {
+  height: 40px !important;
+  padding: 0 12px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(0, 0, 0, 0.52) !important;
+  background-color: rgba(255, 187, 34, 0.10) !important;
+  color: #FFD36A !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease !important;
+}
+
+.dark .soridraw-modal-reset-button:hover:not(:disabled) {
+  background-color: rgba(255, 187, 34, 0.18) !important;
+  color: #FFE3A3 !important;
+  border-color: rgba(0, 0, 0, 0.42) !important;
+}
+
+.dark .soridraw-modal-reset-button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+/* SORIDRAW_46_GENERATION_OPTIONS_FONT_SIZE_FIX
+   생성 옵션 선택 모달 내부 폰트만 살짝 키우고, 섞을 언어/혼합 비율 버튼은 더 또렷하게 조정한다. */
+.music-api-generate-modal .text-\[9px\] {
+  font-size: 10px !important;
+}
+
+.music-api-generate-modal .text-\[10px\] {
+  font-size: 11px !important;
+}
+
+.music-api-generate-modal .text-\[11px\] {
+  font-size: 12px !important;
+}
+
+.music-api-generate-modal .text-xs {
+  font-size: 13px !important;
+}
+
+.music-api-generate-modal .text-sm {
+  font-size: 15px !important;
+}
+
+.music-api-generate-modal .music-mix-language-button,
+.music-api-generate-modal .music-mix-ratio-button {
+  font-size: 12px !important;
+}
+
+@media (min-width: 640px) {
+  .music-api-generate-modal .sm\:text-sm {
+    font-size: 15px !important;
+  }
+}
+
+
+/* SORIDRAW_93_LANGUAGE_OPTION_BADGE_TOP_FIX
+   생성 옵션 선택의 언어 버튼은 PC/모바일 모두 텍스트 중앙 정렬, 선택 순서 배지는 우상단 고정으로 맞춘다. */
+.music-api-generate-modal .soridraw-language-option-button {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+.music-api-generate-modal .soridraw-language-option-label {
+  width: 100% !important;
+  min-width: 0 !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  justify-content: center !important;
+  gap: 0.35rem !important;
+  line-height: 1 !important;
+}
+
+.music-api-generate-modal .soridraw-language-option-text {
+  display: inline-block !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+  line-break: strict !important;
+}
+
+.music-api-generate-modal .soridraw-language-option-check {
+  width: 13px !important;
+  height: 13px !important;
+  flex: 0 0 auto !important;
+}
+
+.music-api-generate-modal .soridraw-language-order-badge {
+  top: 0.32rem !important;
+  right: 0.32rem !important;
+  transform: none !important;
+}
+
+@media (max-width: 640px) {
+  .music-api-generate-modal .soridraw-language-option-button {
+    min-height: 58px !important;
+    padding: 0.62rem 0.7rem !important;
+  }
+
+  .music-api-generate-modal .soridraw-language-option-label {
+    font-size: 14px !important;
+  }
+
+  .music-api-generate-modal .soridraw-language-order-badge {
+    width: 20px !important;
+    min-width: 20px !important;
+    height: 20px !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    font-size: 10px !important;
+  }
+}
+
+/* Vocal character summaries keep horizontal drag while making the native rail nearly invisible. */
+.vocal-character-horizontal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar {
+  height: 2px;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.vocal-character-horizontal-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+/* SORIDRAW design-version themes. Classic remains the compatibility default. */
+:root[data-soridraw-theme="classic"] {
+  color-scheme: dark;
+}
+
+:root[data-soridraw-theme="studio-black"] {
+  color-scheme: dark;
+  --bg-primary: #101010;
+  --bg-secondary: #101218;
+  --card-bg: #2e2e2e;
+  --text-primary: #f4f5f7;
+  --text-secondary: #9ba3af;
+  --border-color: #333333;
+  --input-bg: #222222;
+  --hover-bg: rgba(255, 255, 255, 0.075);
+  --hover-bg-solid: #333333;
+  --glass-bg: #101010;
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --button-bg: #2a2a2a;
+  --button-border: #333333;
+  --button-hover-bg: #333333;
+  --soridraw-panel-bg: #101218;
+  --soridraw-card-bg: #2e2e2e;
+  --soridraw-border: #333333;
+  --soridraw-text-main: #f4f5f7;
+  --soridraw-text-muted: #9ba3af;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root {
+  background: #101010;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface {
+  background: #2e2e2e !important;
+  border-color: #333333 !important;
+}
+
+/* Studio Black phase 2: neutral-black full surface system + desktop right workspace rail. */
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #101010;
+  --bg-secondary: #101010;
+  --card-bg: #2e2e2e;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --border-color: #333333;
+  --input-bg: #222222;
+  --hover-bg: rgba(255,255,255,.055);
+  --hover-bg-solid: #333333;
+  --glass-bg: #101010;
+  --glass-border: rgba(255,255,255,.085);
+  --button-bg: #2a2a2a;
+  --button-border: #333333;
+  --button-hover-bg: #333333;
+  --soridraw-panel-bg: #101010;
+  --soridraw-card-bg: #2e2e2e;
+  --soridraw-border: #333333;
+  --soridraw-text-main: #f4f4f5;
+  --soridraw-text-muted: #a1a1aa;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root {
+  background: #101010 !important;
+  background-image: radial-gradient(circle at 72% 10%, rgba(255,180,0,.028), transparent 32%) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
+  position: fixed !important;
+  background: #101010 !important;
+  border-color: #333333 !important;
+  box-shadow: 0 12px 36px rgba(0,0,0,.34) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation button,
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation a {
+  border-color: #333333 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation button:hover,
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation a:hover {
+  background: #2e2e2e !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation span[class*="bg-gradient"] {
+  background-image: none !important;
+  color: #f5f5f5 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+  transition: margin .22s ease, width .22s ease, max-width .22s ease;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero {
+  background: transparent !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-shell,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+  max-width: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-title {
+  font-size: clamp(2rem, 3vw, 3rem) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="rounded-"][class*="border"] {
+  border-color: #333333 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[#1"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[var(--card-bg)]"] {
+  background-color: #2e2e2e !important;
+}
+
+
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface {
+  background: #2e2e2e !important;
+  border-color: #333333 !important;
+}
+
+.soridraw-studio-side-panel { display: none; }
+
+@media (min-width: 1180px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-panel {
+    display: block;
+    position: fixed;
+    right: 18px;
+    top: 92px;
+    bottom: 18px;
+    width: 220px;
+    z-index: 45;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-panel-inner {
+    height: 100%;
+    padding: 16px 12px;
+    border: 1px solid #333333;
+    border-radius: 22px;
+    background: #101010;
+    box-shadow: 0 20px 58px rgba(0,0,0,.34);
+    backdrop-filter: blur(18px);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-eyebrow {
+    padding: 7px 10px 13px;
+    color: #71717a;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .16em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-item {
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 0 12px;
+    margin-bottom: 6px;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    color: #a1a1aa;
+    font-size: 14px;
+    font-weight: 850;
+    text-align: left;
+    background: transparent;
+    transition: .16s ease;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-item:hover {
+    color: #f4f4f5;
+    background: #2e2e2e;
+    border-color: #333333;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-item.is-active {
+    color: #ffb400;
+    background: #1d1b15;
+    border-color: rgba(255,180,0,.24);
+    box-shadow: inset -3px 0 0 #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-item.is-subtle {
+    color: #8b8b94;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-divider {
+    height: 1px;
+    margin: 14px 8px;
+    background: #333333;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    width: calc(100% - 258px) !important;
+    margin-left: 0 !important;
+    margin-right: 258px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    padding-left: 22px !important;
+    padding-right: 10px !important;
+  }
+}
+
+@media (max-width: 1179px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* Studio Black phase 3: reference-driven compact studio workspace + right dashboard. */
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #101010;
+  --bg-secondary: #101010;
+  --card-bg: #2e2e2e;
+  --border-color: #333333;
+  --input-bg: #101010;
+  --hover-bg-solid: #333333;
+  --button-bg: #2a2a2a;
+  --button-border: #333333;
+  --button-hover-bg: #333333;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root {
+  background: #101010 !important;
+  background-image: linear-gradient(180deg, rgba(255,255,255,.008), transparent 28%), radial-gradient(circle at 82% 2%, rgba(255,180,0,.024), transparent 24%) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
+  height: 62px !important;
+  background: #101010 !important;
+  border-bottom: 1px solid #333333 !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(22px) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation :where(button,a) {
+  border-radius: 10px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero {
+  padding-top: 88px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-title {
+  font-size: clamp(2rem, 2.45vw, 2.72rem) !important;
+  letter-spacing: -.035em !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="rounded-"][class*="border"] {
+  border-color: #333333 !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,.13) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[#1"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[var(--card-bg)]"] {
+  background-color: #2e2e2e !important;
+}
+
+
+@media (min-width: 1180px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-panel {
+    right: 22px;
+    top: 82px;
+    bottom: 22px;
+    width: 304px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-panel-inner {
+    height: auto;
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scrollbar-width: thin;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-card {
+    border: 1px solid #333333;
+    border-radius: 18px;
+    background: rgba(17,17,19,.96);
+    box-shadow: 0 18px 46px rgba(0,0,0,.24);
+    padding: 14px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-card-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 4px 12px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-card-heading.compact { padding-bottom: 10px; }
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-card-heading h2,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-tip-card h2 {
+    margin: 2px 0 0;
+    color: #f4f4f5;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: -.02em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #ffb400;
+    box-shadow: 0 0 0 5px rgba(255,180,0,.09);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-eyebrow {
+    padding: 0;
+    color: #72727b;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: .18em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-item {
+    min-height: 45px;
+    padding: 0 11px;
+    margin-bottom: 5px;
+    border-radius: 11px;
+    font-size: 13px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-item.is-active {
+    background: linear-gradient(90deg, rgba(255,180,0,.12), rgba(255,180,0,.035));
+    border-color: rgba(255,180,0,.38);
+    box-shadow: inset 3px 0 0 #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-action {
+    width: 100%;
+    min-height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    color: #c7c7ce;
+    background: transparent;
+    text-align: left;
+    transition: .16s ease;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-action:hover {
+    border-color: #333333;
+    background: #2e2e2e;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-action-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #333333;
+    border-radius: 10px;
+    color: #ffb400;
+    background: #2e2e2e;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-action span:nth-child(2) {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-action strong {
+    color: #ededf0;
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-action small {
+    color: #777780;
+    font-size: 10px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-tip-card {
+    padding: 16px;
+    background: linear-gradient(145deg, rgba(255,180,0,.11), rgba(20,20,22,.96) 46%);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-side-tip-card p:last-child {
+    margin: 8px 0 0;
+    color: #8d8d96;
+    font-size: 11px;
+    line-height: 1.58;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    width: calc(100% - 344px) !important;
+    max-width: 1220px !important;
+    margin-left: auto !important;
+    margin-right: 332px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-shell {
+    max-width: 1220px !important;
+    padding-left: 20px !important;
+    padding-right: 12px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    padding-left: 20px !important;
+    padding-right: 12px !important;
+  }
+}
+
+@media (min-width: 1500px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    max-width: 1260px !important;
+  }
+}
+
+/* SORIDRAW 164 — Studio Black three-column workspace.
+   All selectors are theme-scoped so Classic remains unchanged. */
+.soridraw-studio-left-panel,
+.soridraw-studio-dashboard-panel {
+  display: none;
+}
+
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #101010;
+  --bg-secondary: #101010;
+  --card-bg: #2e2e2e;
+  --text-primary: #f3f3f5;
+  --text-secondary: #8e8e98;
+  --border-color: #333333;
+  --input-bg: #222222;
+  --hover-bg: rgba(255, 255, 255, 0.055);
+  --hover-bg-solid: #333333;
+  --glass-bg: #101010;
+  --glass-border: #333333;
+  --button-bg: #2a2a2a;
+  --button-border: #333333;
+  --button-hover-bg: #333333;
+  --soridraw-panel-bg: #101010;
+  --soridraw-card-bg: #2e2e2e;
+  --soridraw-border: #333333;
+  --soridraw-text-main: #f3f3f5;
+  --soridraw-text-muted: #8e8e98;
+  --color-studio-brown: #ffb400;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root {
+  background-color: #101010 !important;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.012), transparent 32%),
+    radial-gradient(circle at 50% -10%, rgba(255, 180, 0, 0.035), transparent 28%) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
+  position: fixed !important;
+  height: 64px !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+  background: #101010 !important;
+  border-color: #333333 !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation :where(button, a) {
+  border-color: #333333 !important;
+  background-color: transparent !important;
+  color: #8f8f98;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation :where(button, a):hover {
+  background-color: #2a2a2a !important;
+  color: #f3f3f5 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation span[class*="bg-gradient"] {
+  background-image: none !important;
+  color: #f4f4f5 !important;
+  -webkit-text-fill-color: currentColor !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation span[class*="bg-[#783159]"] {
+  background: #ffb400 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero {
+  padding-top: 84px !important;
+  padding-bottom: 0 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-title {
+  font-family: var(--font-sans) !important;
+  font-size: clamp(1.8rem, 2.15vw, 2.42rem) !important;
+  letter-spacing: -0.045em !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+  padding-top: 22px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="rounded-"][class*="border"] {
+  border-color: #333333 !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.13) !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[#1"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main :where(section, article, div)[class*="bg-[var(--card-bg)]"] {
+  background-color: #2e2e2e !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :where(input, textarea, select) {
+  background-color: #222222 !important;
+  border-color: #333333 !important;
+  color: #eeeeF1 !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :where(input, textarea)::placeholder {
+  color: #64646d !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :where(.fixed, [role="dialog"]) :where([class*="bg-[#151313]"], [class*="bg-[#2e2e2e]"], [class*="bg-[#181818]"]) {
+  background-color: #222222 !important;
+  border-color: #333333 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface {
+  background-color: #2e2e2e !important;
+  border-color: #333333 !important;
+}
+
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    display: block;
+    position: fixed;
+    top: 80px;
+    bottom: 18px;
+    z-index: 44;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel {
+    left: 18px;
+    width: 214px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    right: 18px;
+    width: 294px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
+    height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #333333 transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 12px;
+    border: 1px solid #333333;
+    border-radius: 18px;
+    background: rgba(13, 13, 15, 0.96);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.28);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 52px;
+    padding: 5px 6px 15px;
+    border-bottom: 1px solid #242429;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand-mark {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 180, 0, 0.32);
+    border-radius: 11px;
+    background: rgba(255, 180, 0, 0.09);
+    color: #ffb400;
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: -0.03em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand > span:last-child,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme > span {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand strong,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme strong {
+    color: #efeff2;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand small,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme small {
+    color: #686871;
+    font-size: 9px;
+    font-weight: 750;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-nav {
+    flex: 1;
+    padding-top: 14px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-label {
+    margin: 0 0 7px;
+    padding: 0 8px;
+    color: #5e5e67;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: 0.17em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    background: transparent;
+    color: #8d8d96;
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+    /* 507: keep hover/color polish, but never animate rail geometry.
+       The previous all-property transition interpolated the collapsed 40px row
+       into the expanded full-width row while its text was already visible,
+       causing the one-frame vertical text pile-up seen during PC/tablet return. */
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item + .soridraw-studio-rail-item {
+    margin-top: 3px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item:hover,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme:hover {
+    border-color: transparent;
+    background: transparent;
+    color: #ececef;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item.is-active {
+    border-color: transparent;
+    background: transparent;
+    color: #ffbd23;
+    box-shadow: inset 3px 0 0 #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item svg:last-child,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme svg:last-child {
+    color: #505058;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-divider {
+    height: 1px;
+    margin: 14px 7px;
+    background: #242429;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme {
+    min-height: 58px;
+    margin-top: 14px;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding-right: 2px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-card {
+    padding: 14px;
+    border: 1px solid #333333;
+    border-radius: 16px;
+    background: rgba(16, 16, 18, 0.97);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.22);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-status {
+    background: linear-gradient(145deg, rgba(255, 180, 0, 0.075), rgba(16, 16, 18, 0.98) 42%);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-heading.compact {
+    padding-bottom: 9px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-heading p {
+    margin: 0 0 3px;
+    color: #606069;
+    font-size: 8px;
+    font-weight: 950;
+    letter-spacing: 0.16em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-heading h2 {
+    margin: 0;
+    color: #eeeeF1;
+    font-size: 14px;
+    font-weight: 950;
+    letter-spacing: -0.025em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #515158;
+    box-shadow: 0 0 0 5px rgba(81, 81, 88, 0.09);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-live-dot.is-running {
+    background: #ffb400;
+    box-shadow: 0 0 0 5px rgba(255, 180, 0, 0.1), 0 0 18px rgba(255, 180, 0, 0.28);
+    animation: studio-dashboard-pulse 1.7s ease-in-out infinite;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 11px 12px;
+    border: 1px solid #333333;
+    border-radius: 12px;
+    background: #222222;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state strong {
+    color: #f0f0f2;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state small {
+    color: #73737c;
+    font-size: 9px;
+    line-height: 1.45;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    min-height: 34px;
+    padding: 0 8px;
+    border: 1px solid #333333;
+    border-radius: 9px;
+    background: #101010;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics small {
+    color: #696972;
+    font-size: 8px;
+    font-weight: 800;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics strong {
+    color: #e8e8eb;
+    font-size: 12px;
+    font-weight: 950;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-primary {
+    width: 100%;
+    min-height: 39px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 9px;
+    border: 1px solid #ffb400;
+    border-radius: 10px;
+    background: #ffb400;
+    color: #161616;
+    font-size: 11px;
+    font-weight: 950;
+    transition: 0.16s ease;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-primary:hover {
+    background: #ffc126;
+    transform: translateY(-1px);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-text-button,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit-footer button {
+    border: 0;
+    background: transparent;
+    color: #ffb400;
+    font-size: 9px;
+    font-weight: 900;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-list,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song {
+    width: 100%;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 7px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: #5e5e67;
+    text-align: left;
+    transition: 0.15s ease;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song:hover {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song.is-selected {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-icon {
+    width: 31px;
+    height: 31px;
+    flex: 0 0 31px;
+    display: grid;
+    place-items: center;
+    border: 1px solid #333333;
+    border-radius: 9px;
+    background: #2e2e2e;
+    color: #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-copy strong {
+    overflow: hidden;
+    color: #dedee2;
+    font-size: 10px;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-copy small {
+    color: #66666f;
+    font-size: 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit {
+    background: linear-gradient(145deg, rgba(255, 180, 0, 0.055), rgba(16, 16, 18, 0.98) 58%);
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit .soridraw-studio-dashboard-heading > svg {
+    color: #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit-value {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 1px 1px 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit-value strong {
+    color: #f2f2f4;
+    font-size: 29px;
+    font-weight: 950;
+    letter-spacing: -0.05em;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit-value span {
+    color: #676770;
+    font-size: 9px;
+    font-weight: 800;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid #242429;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit-footer small {
+    color: #64646d;
+    font-size: 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity {
+    min-height: 43px;
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 3px;
+    border-bottom: 1px solid #333333;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity:last-child {
+    border-bottom: 0;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #56565e;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity-dot.is-active { background: #ffb400; }
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity-dot.is-done { background: #8b8b93; }
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity-dot.is-info { background: #b7b7bf; }
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity-dot.is-error { background: #f05c5c; }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity > span:nth-child(2) {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity strong {
+    overflow: hidden;
+    color: #d9d9dd;
+    font-size: 9px;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity small {
+    overflow: hidden;
+    color: #65656e;
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-activity time {
+    color: #56565f;
+    font-size: 7px;
+    white-space: nowrap;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-empty {
+    min-height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px dashed #333333;
+    border-radius: 11px;
+    color: #5f5f68;
+    font-size: 9px;
+    font-weight: 750;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-empty.compact {
+    min-height: 54px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    width: auto !important;
+    max-width: 1040px !important;
+    margin-left: 244px !important;
+    margin-right: 326px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-shell,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
+@media (min-width: 1540px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel {
+    left: 24px;
+    width: 224px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    right: 24px;
+    width: 306px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    max-width: 1120px !important;
+    margin-left: 264px !important;
+    margin-right: 348px !important;
+  }
+}
+
+@media (max-width: 1279px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-shell {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-app-root > div.fixed.inset-x-0.top-0 {
+    background: rgba(8, 8, 9, 0.97) !important;
+    border-bottom: 1px solid #333333;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-app-root > div.fixed.inset-x-0.top-0 button {
+    color: #92929b;
+  }
+}
+
+@keyframes studio-dashboard-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.58; transform: scale(0.88); }
+}
+
+/* SORIDRAW 165 — Studio Black splice-inspired refinement.
+   Goal: flatter layout regions, cleaner desktop rails, unified center cards,
+   lighter keyword typography, and a more controlled generation bar. */
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #101010;
+  --bg-secondary: #101010;
+  --card-bg: #101010;
+  --text-primary: #f0f0f2;
+  --text-secondary: #878792;
+  --border-color: #222228;
+  --input-bg: #101010;
+  --hover-bg: rgba(255, 255, 255, 0.04);
+  --hover-bg-solid: #16161a;
+  --glass-bg: rgba(12, 12, 14, 0.985);
+  --glass-border: #222228;
+  --button-bg: #101010;
+  --button-border: #333333;
+  --button-hover-bg: #2e2e2e;
+  --soridraw-panel-bg: #101010;
+  --soridraw-card-bg: #101010;
+  --soridraw-border: #222228;
+  --soridraw-text-main: #f0f0f2;
+  --soridraw-text-muted: #878792;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation {
+  height: 58px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  background: rgba(7, 7, 9, 0.985) !important;
+  border-bottom: 1px solid #1f1f25 !important;
+  box-shadow: none !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation :where(button, a) {
+  color: #9c9ca5;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-top-navigation :where(button, a):hover {
+  background: #101010 !important;
+  color: #f0f0f2 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero {
+  padding-top: 72px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-shell {
+  position: relative;
+  border-bottom: 1px solid #2e2e2e;
+  padding-bottom: 18px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-title {
+  font-size: clamp(1.7rem, 1.95vw, 2.2rem) !important;
+  letter-spacing: -0.04em !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+  padding-top: 18px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card {
+  background: #222222 !important;
+  border: 1px solid #232329 !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  padding: 22px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card h3 {
+  color: #f0f0f2 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card h3 > span:last-child:not([class*="text-"]) {
+  color: #f0f0f2 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card p,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card small,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card span[class*="text-[var(--text-secondary)]"] {
+  color: #8c8c96 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-content button,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-summary,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-direct-input-button,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card button[class*="bg-btn-bg"],
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card button[class*="rounded-"] {
+  border-radius: 10px !important;
+}
+
+/* Legacy card sizing only. Button color/state is owned by studioLayout.css. */
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-content button {
+  min-height: 44px !important;
+  padding: 10px 12px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-content button span {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary {
+  min-height: 58px !important;
+  margin-top: 18px !important;
+  padding: 12px 16px !important;
+  border-color: #333333 !important;
+  background: #101010 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-selected-summary {
+  font-size: 13px !important;
+  font-weight: 750 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary p,
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-summary .text-\[15px\] {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: #8b8b96 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-direct-input-button {
+  width: 40px !important;
+  height: 40px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-direct-input-button svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] :where(input, textarea, select) {
+  border-radius: 9px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-genre-modal-panel,
+:root[data-soridraw-theme="studio-black"] .soridraw-theme-surface,
+:root[data-soridraw-theme="studio-black"] [role="dialog"] [class*="rounded-3xl"] {
+  border-radius: 14px !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero button[aria-label="통합 검색"] {
+  width: 40px !important;
+  height: 40px !important;
+  bottom: 14px !important;
+  right: 0 !important;
+  translate: 0 0 !important;
+  border: 1px solid #2a2a2a !important;
+  border-radius: 10px !important;
+  background: #222222 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] .soridraw-studio-hero button[aria-label="통합 검색"] svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+@media (min-width: 1100px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    top: 66px;
+    bottom: 14px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel {
+    left: 14px;
+    width: 206px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    right: 14px;
+    width: 282px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
+    border: 1px solid #1f1f24;
+    border-radius: 8px;
+    background: #101010;
+    box-shadow: none;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel-inner {
+    padding: 0;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand {
+    min-height: 56px;
+    padding: 16px;
+    border-bottom: 1px solid #2e2e2e;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-brand-mark {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 8px;
+    border-color: #4b3810;
+    background: #1a1508;
+    color: #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-nav {
+    padding: 12px 10px 0;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-label {
+    padding: 0 6px;
+    margin-bottom: 8px;
+    color: #666670;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme {
+    min-height: 40px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item + .soridraw-studio-rail-item {
+    margin-top: 2px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item:hover,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme:hover {
+    background: transparent;
+    border-color: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-item.is-active {
+    background: transparent;
+    color: #ffb400;
+    border-color: transparent;
+    box-shadow: inset 2px 0 0 #ffb400;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-divider {
+    margin: 12px 6px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-rail-theme {
+    min-height: 52px;
+    margin: 12px 10px 10px;
+    background: transparent;
+    border-color: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-card {
+    padding: 14px 14px 15px;
+    border: 0;
+    border-bottom: 1px solid #2e2e2e;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-card:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-card:last-child {
+    border-bottom: 0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-status,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-credit {
+    background: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-heading {
+    padding-bottom: 10px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-state,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-metrics > span,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-empty {
+    border-radius: 8px;
+    background: #101010;
+    border-color: #222222;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song {
+    border-radius: 8px;
+    background: transparent;
+    border-color: transparent;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song {
+    padding: 7px 8px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-song-copy strong {
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-primary {
+    min-height: 38px;
+    margin-top: 10px;
+    border-radius: 8px;
+    background: #ffb400;
+    border-color: #ffb400;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-primary:hover {
+    background: #ffc126;
+    transform: none;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    max-width: 1048px !important;
+    margin-left: 236px !important;
+    margin-right: 308px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-shell,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+}
+
+@media (min-width: 1540px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-left-panel {
+    left: 18px;
+    width: 214px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-dashboard-panel {
+    right: 18px;
+    width: 292px;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-hero,
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main {
+    max-width: 1104px !important;
+    margin-left: 248px !important;
+    margin-right: 326px !important;
+  }
+
+}
+
+@media (max-width: 1279px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card {
+    padding: 20px !important;
+  }
+
+}
+
+@media (max-width: 767px) {
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-title {
+    font-size: 1.75rem !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-studio-menu-card {
+    border-radius: 12px !important;
+    padding: 18px !important;
+  }
+
+  :root[data-soridraw-theme="studio-black"] .soridraw-studio-main .soridraw-expand-card .soridraw-expand-content button span {
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+
+}
+
+/* SORIDRAW 193 — legacy Studio Black variables redirect to the canonical neutral palette.
+   Visual surface ownership remains in components/studio/studioLayout.css. */
+:root[data-soridraw-theme="studio-black"] {
+  --bg-primary: #101010;
+  --bg-secondary: #101010;
+  --card-bg: #2e2e2e;
+  --input-bg: #222222;
+  --hover-bg-solid: #333333;
+  --button-bg: #2a2a2a;
+  --button-hover-bg: #333333;
+  --soridraw-panel-bg: #101010;
+  --soridraw-card-bg: #2e2e2e;
+}
+
+:root[data-soridraw-theme="studio-black"] body,
+:root[data-soridraw-theme="studio-black"] #root,
+:root[data-soridraw-theme="studio-black"] .soridraw-app-root {
+  background-color: #101010 !important;
+  background-image: none !important;
+}
+
+/* 290: quick appearance switcher shared by desktop/tablet and phone menus. */
+:root[data-soridraw-color-mode="light"] {
+  color-scheme: light;
+}
+
+:root[data-soridraw-color-mode="light"] body,
+:root[data-soridraw-color-mode="light"] #root,
+:root[data-soridraw-color-mode="light"] .soridraw-app-root {
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-top-navigation,
+:root[data-soridraw-color-mode="light"] .soridraw-mobile-navigation {
+  background: rgba(255, 255, 255, 0.97) !important;
+  border-color: rgba(26, 26, 26, 0.10) !important;
+  box-shadow: 0 8px 24px rgba(26, 26, 26, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-top-navigation :where(button, a),
+:root[data-soridraw-color-mode="light"] .soridraw-mobile-navigation :where(button, a) {
+  color: rgba(26, 26, 26, 0.72) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-top-navigation :where(button, a):hover,
+:root[data-soridraw-color-mode="light"] .soridraw-mobile-navigation :where(button, a):hover {
+  color: #9a5a00 !important;
+  background: rgba(255, 180, 0, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu {
+  background: rgba(255, 255, 255, 0.99) !important;
+  border-color: rgba(26, 26, 26, 0.12) !important;
+  box-shadow: 0 16px 38px rgba(26, 26, 26, 0.16) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where(p, span, button) {
+  color: rgba(26, 26, 26, 0.78) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where(button):hover {
+  color: #9a5a00 !important;
+  background: rgba(255, 180, 0, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where([class*="border-white"]) {
+  border-color: rgba(26, 26, 26, 0.10) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu :where([class*="bg-white"]) {
+  background: rgba(26, 26, 26, 0.06) !important;
+}
+
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu .soridraw-theme-current-label,
+:root[data-soridraw-color-mode="light"] .soridraw-profile-menu .soridraw-theme-cycle-button svg {
+  color: #9a5a00 !important;
+}
+
+:root[data-soridraw-theme="studio-black"] {
+  color-scheme: dark;
+}
+
+/* 316: Section Custom shared design system.
+ * Classic and Split Mode intentionally use the exact same component geometry,
+ * spacing, radii, border hierarchy and control states. Classic owns the neutral
+ * grayscale below; Split Mode only changes the color temperature in
+ * studioLayout.css while preserving the same perceived brightness. */
+.dark .studio-section-custom-modal-panel {
+  --soridraw-section-shell: #1b1b1b;
+  --soridraw-section-body: #232323;
+  --soridraw-section-soft: #262626;
+  --soridraw-section-card: #2b2b2b;
+  --soridraw-section-control: #2e2e2e;
+  --soridraw-section-control-hover: #343434;
+  --soridraw-section-search: #303030;
+  --soridraw-section-preview: #1b1b1b;
+  --soridraw-section-current-list: #1b1b1b;
+  --soridraw-section-current-card: #1b1b1b;
+  --soridraw-section-keep-panel: #1b1b1b;
+  --soridraw-section-keep-card: #252525;
+  background: var(--soridraw-section-shell) !important;
+  background-color: var(--soridraw-section-shell) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel > .px-5.py-4 {
+  background: var(--soridraw-section-shell) !important;
+  background-color: var(--soridraw-section-shell) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel > .p-5 {
+  background: var(--soridraw-section-body) !important;
+  background-color: var(--soridraw-section-body) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel :is(input, textarea, select),
+.dark .studio-section-custom-modal-panel [class*="bg-[var(--bg-secondary)]"] {
+  background-color: var(--soridraw-section-soft) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel :is(
+  button[class*="bg-[var(--hover-bg)]"],
+  button[class*="bg-btn-bg"],
+  button[class*="bg-white/5"],
+  button[class*="bg-white/10"]
+) {
+  background-color: var(--soridraw-section-control) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel :is(
+  button[class*="bg-[var(--hover-bg)]"],
+  button[class*="bg-btn-bg"],
+  button[class*="bg-white/5"],
+  button[class*="bg-white/10"]
+):hover {
+  background-color: var(--soridraw-section-control-hover) !important;
+}
+
+.dark .studio-section-custom-modal-panel [data-reorder-section-id],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-2xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .xl\:block .rounded-xl.bg-\[var\(--bg-secondary\)\],
+.dark .studio-section-custom-modal-panel .rounded-2xl.bg-\[var\(--hover-bg\)\]\/60 {
+  background-color: var(--soridraw-section-card) !important;
+  background-image: none !important;
+}
+
+
+/* 317: Section Custom small luminance lift.
+ * Keep the shared Classic/Split geometry and temperature split from 316,
+ * but make controls, current-structure cards and Keep cards easier to read.
+ * The Keep search is intentionally one step brighter; Preview stays dark gray. */
+.dark .studio-section-custom-modal-panel .soridraw-section-current-card,
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-card {
+  background-color: var(--soridraw-section-card) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-search {
+  background-color: var(--soridraw-section-search) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-reaction-group {
+  background-color: var(--soridraw-section-control) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+
+/* 322: Section Custom darker work surfaces and border cleanup.
+ * Preview, current-structure work area/cards and the Keep workspace are
+ * deliberately darker while preserving the shared Classic/Split geometry.
+ * The modal outer outline and Keep-card outlines are removed. */
+.dark .studio-section-custom-modal-panel {
+  border: 0 !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-preview-card {
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-current-list {
+  background-color: var(--soridraw-section-current-list) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-current-card {
+  background-color: var(--soridraw-section-current-card) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-panel {
+  background-color: var(--soridraw-section-keep-panel) !important;
+  background-image: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-card {
+  background-color: var(--soridraw-section-keep-card) !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark .studio-section-custom-modal-panel .soridraw-section-keep-card:hover {
+  border: 0 !important;
+}
+
+
+/* 323: Unify the three requested Section Custom work surfaces.
+ * Preview, current-structure rows/workspace and the Keep background use the
+ * same darker neutral gray. Keep preset cards remain separately readable. */
+.dark .studio-section-custom-modal-panel :is(
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel
+) {
+  background: var(--soridraw-section-preview) !important;
+  background-color: var(--soridraw-section-preview) !important;
+  background-image: none !important;
+}
+
+/* 347: Use the hand cursor for every genuinely clickable app control.
+ * Disabled controls keep the normal cursor so unfinished/unavailable actions
+ * are not presented as interactive. */
+:where(
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  [role="link"]:not([aria-disabled="true"]),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  summary
+) {
+  cursor: pointer !important;
+}
+
+:where(
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  [role="link"][aria-disabled="true"],
+  input[type="button"]:disabled,
+  input[type="submit"]:disabled,
+  input[type="reset"]:disabled
+) {
+  cursor: default !important;
+}
+
+/* 366: Music Note keyword chips stay in one non-overlapping horizontal strip */
+body #root .favorite-keyword-strip > * {
+  flex: 0 0 auto !important;
+  position: static !important;
+}
+
+/* 436 — Classic mobile masthead guide: match every page to Music Note.
+ *
+ * Dark and Light share the Classic layout, so this rule intentionally covers
+ * both Classic color modes while excluding Studio Black (split mode). The
+ * reference capture places the Music Note wordmark at the approved mobile
+ * guide. Sori Studio was about 2px higher and Suno Library still used its old
+ * 72px page top. Move each page through real layout spacing so the title and all
+ * following content travel together; do not use transforms and do not touch
+ * split-mode geometry. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root .soridraw-studio-hero,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root .soridraw-studio-hero {
+    padding-top: 82px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root .soridraw-musicnote-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root .soridraw-musicnote-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root .soridraw-library-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root .soridraw-library-theme {
+    padding-top: 96px !important;
+  }
+}
+
+/* 437 — Classic mobile vertical rhythm now uses Suno Library as the reference.
+ *
+ * Scope is intentionally limited to Classic dark/light mobile. Studio Black
+ * split/fullscreen rules remain frozen. Library already has the approved top
+ * guide and compact title-to-controls/list rhythm. Match Music Note's real flow
+ * gaps to Library, remove Studio's extra main top spacer, and standardize the
+ * menu/list gutters to Studio's established 12px mobile guide instead of
+ * copying Library's former 16px width. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme),
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    padding-top: 96px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Library's header-to-primary-controls flow is 12px. Music Note previously
+   * kept 16px here, pushing every control and song card lower. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header {
+    margin-bottom: 12px !important;
+  }
+
+  /* Library begins its first list card 8px below the search/filter row. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-list-start-divider,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-musicnote-list-start-divider {
+    margin-top: 8px !important;
+  }
+
+  /* Align Sori Studio's wordmark and first menu card to the same compact upper
+   * rhythm. The hero supplies the title slot; the old main pt-6 was a second
+   * spacer that Library does not have. */
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-hero,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-hero {
+    padding-top: 77px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-top: 0 !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* 438 — Classic mobile: lower Suno Library slightly and compact the two
+ * header utility controls. Scope stays on Classic dark/light mobile only;
+ * Studio Black split/fullscreen geometry remains frozen. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme {
+    padding-top: 100px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-musicnote-hero-sync,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-musicnote-page-header .soridraw-musicnote-hero-sync {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    border-radius: 10px !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-library-credit-button,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-page-header .soridraw-library-credit-button {
+    height: 30px !important;
+    min-height: 30px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    border-radius: 10px !important;
+    gap: 3px !important;
+    font-size: 9px !important;
+    line-height: 1 !important;
+  }
+}
+
+
+/* 439 — Classic mobile: use one 102px page-top guide for Music Note and
+ * Suno Library in both dark and light color modes. This changes only the real
+ * mobile page top spacing; split mode / Studio Black remains frozen. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme),
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  :is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+    padding-top: 102px !important;
+  }
+}
+
+/* 440 — Classic mobile Library accent hover states stay lavender.
+ * The old shared dark-page hover rule still changed any purple-accent Library
+ * button to the former green (#8ac982). That made the selected space tab,
+ * filter reset button and remaining-credit button flash green on hover/click.
+ * Scope this correction to Classic dark/light mobile only; Studio Black split
+ * and fullscreen layouts remain frozen. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ),
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ) {
+    background-color: #A98BFF !important;
+    background-image: none !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme .soridraw-library-mode-tab:is(
+    .soridraw-library-mode-tab--active,
+    [aria-pressed="true"],
+    [data-active="true"]
+  ):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-library-theme :is(.soridraw-color-reset-button, .soridraw-library-credit-button):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-library-theme :is(.soridraw-color-reset-button, .soridraw-library-credit-button):hover {
+    background-color: #B79FFF !important;
+    background-image: none !important;
+  }
+}
+
+
+/* 441 — Classic mobile: raise only the Sori Studio global-search button.
+ * Keep every masthead/card/menu measurement from 440 frozen. The button still
+ * uses its existing size, color and horizontal position; only its absolute
+ * bottom anchor moves 12px upward so the magnifier sits just above the first
+ * card, matching the approved split-mode relationship without touching split
+ * mode itself. */
+@media (max-width: 767px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    bottom: 16px !important;
+  }
+}
+
+/* 443 — Classic desktop dark mode: reduce only the vertical gap between the
+ * Sori Studio masthead and the first card row. Keep the hero, global-search
+ * button, Music Note, Suno Library, mobile and Studio Black/split geometry
+ * unchanged. The existing FHD padding formula remains the source value; this
+ * override subtracts only 8px from the main content top padding. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-main {
+    padding-top: calc(clamp(2.25rem, 4vh, 2.85rem) - 8px) !important;
+  }
+}
+
+
+/* 444 — Classic PC dark/light: reduce only the real Sori Studio title-to-card
+ * flow gap. 443 subtracted 8px from the FHD clamp, but the user's short desktop
+ * viewport is held by the clamp's 36px minimum, leaving a still-large 28px
+ * content inset. Scope the correction to the Create workspace and set the
+ * actual main-flow inset directly. The hero and its absolutely positioned
+ * global-search button are intentionally untouched. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main {
+    padding-top: 16px !important;
+  }
+}
+
+/* 445 — Classic PC dark/light Create screen only.
+ * Tighten the remaining Sori Studio title-to-card gap and restore the global
+ * search button above the card edge. The previous 16px main inset still left
+ * visible empty space, while the button kept its original bottom:0 + 50%
+ * translation and therefore appeared too low as the card row moved upward.
+ * Use zero real flow inset and raise only that button by 12px. Music Note,
+ * Library, mobile and Studio Black/split geometry remain untouched. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"] .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"]
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame[data-workspace-view="create"]
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    bottom: 12px !important;
+  }
+}
+
+
+/* 446 — Classic PC profile dropdown: neutral gray panel background.
+ * Scope is limited to the desktop Classic dark/light account popup. Mobile,
+ * Music Note, Library and Studio Black/split layouts remain unchanged. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"]
+  body #root .soridraw-app-root .soridraw-top-navigation .soridraw-profile-menu {
+    background: rgba(42, 42, 44, 0.98) !important;
+    background-color: rgba(42, 42, 44, 0.98) !important;
+    background-image: none !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+  body #root .soridraw-app-root .soridraw-top-navigation .soridraw-profile-menu {
+    background: rgba(232, 232, 234, 0.99) !important;
+    background-color: rgba(232, 232, 234, 0.99) !important;
+    background-image: none !important;
+  }
+}
+
+/* 449 — Classic Light redesign: warm Suno-like ivory surfaces.
+ *
+ * Scope is strictly Classic + Light. Dark mode and Studio Black/split mode are
+ * intentionally untouched. The reference palette is sampled from the provided
+ * Suno light-theme screenshots: canvas #F7F4EF and panel #EEEBE7. Replace the
+ * remaining dark card/modal surfaces, soften the pure-white canvas, and keep
+ * existing accent colors and layout behavior intact. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  color-scheme: light;
+  --bg-primary: #F7F4EF;
+  --bg-secondary: #EEEBE7;
+  --card-bg: #EEEBE7;
+  --text-primary: #24211E;
+  --text-secondary: #746E66;
+  --border-color: rgba(58, 52, 45, 0.10);
+  --input-bg: #F8F5F0;
+  --hover-bg: #E8E3DC;
+  --hover-bg-solid: #E2DDD6;
+  --glass-bg: rgba(247, 244, 239, 0.96);
+  --glass-border: rgba(58, 52, 45, 0.10);
+  --shadow-sm: 0 1px 2px rgba(58, 52, 45, 0.05);
+  --shadow-md: 0 8px 22px rgba(58, 52, 45, 0.08);
+  --shadow-lg: 0 14px 34px rgba(58, 52, 45, 0.10);
+  --shadow-xl: 0 20px 48px rgba(58, 52, 45, 0.12);
+  --button-bg: #F8F5F0;
+  --button-border: transparent;
+  --button-hover-bg: #E2DDD6;
+  --button-shadow: none;
+  --soridraw-panel-bg: #F3F0EA;
+  --soridraw-card-bg: #EEEBE7;
+  --soridraw-border: transparent;
+  --soridraw-text-main: #24211E;
+  --soridraw-text-muted: #746E66;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] #root,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .soridraw-app-root {
+  background: #F7F4EF !important;
+  background-color: #F7F4EF !important;
+  background-image: none !important;
+  color: #24211E !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-top-navigation, .soridraw-mobile-navigation) {
+  background: rgba(248, 245, 240, 0.97) !important;
+  background-color: rgba(248, 245, 240, 0.97) !important;
+  border-color: transparent !important;
+  box-shadow: 0 8px 24px rgba(58, 52, 45, 0.08) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-profile-menu {
+  background: rgba(238, 235, 231, 0.99) !important;
+  background-color: rgba(238, 235, 231, 0.99) !important;
+  border-color: transparent !important;
+  box-shadow: 0 18px 44px rgba(58, 52, 45, 0.14) !important;
+}
+
+/* Studio create cards and neutral controls. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] .studio-tone-down {
+  --soridraw-studio-card-bg: #EEEBE7;
+  --soridraw-studio-card-shadow: 0 12px 28px rgba(58, 52, 45, 0.10);
+  --shadow-md: var(--soridraw-studio-card-shadow);
+  --shadow-lg: var(--soridraw-studio-card-shadow);
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface::before {
+  background: #EEEBE7 !important;
+  background-color: #EEEBE7 !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-menu-card {
+  color: #24211E !important;
+  border-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-content button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button {
+  background: #F8F5F0 !important;
+  background-color: #F8F5F0 !important;
+  color: #342F2A !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-content button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]):hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]):hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button:hover {
+  background: #E2DDD6 !important;
+  background-color: #E2DDD6 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-summary {
+  background: #E7E2DB !important;
+  background-color: #E7E2DB !important;
+  border-color: transparent !important;
+  color: #746E66 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-command-card textarea {
+  background: #EEEBE7 !important;
+  background-color: #EEEBE7 !important;
+  color: #24211E !important;
+  border-color: transparent !important;
+  box-shadow: var(--soridraw-studio-card-shadow) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down :where(input, textarea, select) {
+  color: #24211E !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down :where(input, textarea)::placeholder {
+  color: #9A938A !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-selected-strong {
+  color: #171513 !important;
+  -webkit-text-fill-color: #171513 !important;
+}
+
+/* Shared light modal palette for Storyboard, Section Custom, Vocal Character,
+ * Genre/Style/Sound and Music Note/Library detail windows. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) {
+  background: #F7F4EF !important;
+  background-color: #F7F4EF !important;
+  color: #24211E !important;
+  border-color: transparent !important;
+  box-shadow: 0 24px 70px rgba(58, 52, 45, 0.18) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151515]"], [class*="bg-[#171717]"], [class*="bg-[#171719]"], [class*="bg-[#181818]"], [class*="bg-[#1a1a1a]"], [class*="bg-[#1f1f1f]"], [class*="bg-[#202020]"]) {
+  background: #EEEBE7 !important;
+  background-color: #EEEBE7 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="bg-white/"], [class*="bg-[var(--bg-secondary)]"], [class*="bg-[var(--hover-bg)]"], [class*="bg-btn-bg"]) {
+  background: #F3F0EA !important;
+  background-color: #F3F0EA !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="text-white"]) {
+  color: #3D3833 !important;
+  -webkit-text-fill-color: #3D3833 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="border-white"], [class*="border-black"]) {
+  border-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where(input, textarea, select) {
+  background: #FBF9F5 !important;
+  background-color: #FBF9F5 !important;
+  color: #24211E !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where(input, textarea)::placeholder {
+  color: #9A938A !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="text-[#FFD36A]"]) {
+  color: #8B6500 !important;
+  -webkit-text-fill-color: #8B6500 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.storyboard-tone-flat-panel, .soridraw-musicnote-detail-panel)
+:where([class*="text-[#FF9B92]"], [class*="text-[#FFC1BC]"], [class*="text-[#FF8C85]"]) {
+  color: #B64F49 !important;
+  -webkit-text-fill-color: #B64F49 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-detail-panel :where([class*="text-[#D8CCFF]"], [class*="text-[#A98BFF]"]) {
+  color: #7054B8 !important;
+  -webkit-text-fill-color: #7054B8 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.storyboard-tone-flat-panel > .sticky,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-vocal-modal-panel > .px-5.py-4,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel > .px-5.py-4 {
+  background: #F3F0EA !important;
+  background-color: #F3F0EA !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.storyboard-tone-flat-body,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel > .p-5 {
+  background: #F7F4EF !important;
+  background-color: #F7F4EF !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.storyboard-section-card,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.storyboard-control-card,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\] {
+  background: #EEEBE7 !important;
+  background-color: #EEEBE7 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.storyboard-character-card {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.storyboard-choice-button:not(.storyboard-choice-button--selected) {
+  background: #F8F5F0 !important;
+  background-color: #F8F5F0 !important;
+  color: #342F2A !important;
+  border-color: transparent !important;
+}
+
+/* Music Note and Library light pages: restore readable titles/content and use
+ * the same ivory panel hierarchy instead of dark list cards. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme {
+  --page-accent: #FF7A72;
+  --page-accent-soft: rgba(255, 122, 114, 0.16);
+  --page-accent-hover: rgba(255, 122, 114, 0.22);
+  --page-accent-text: #A9433E;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-theme {
+  --page-accent: #A98BFF;
+  --page-accent-soft: rgba(169, 139, 255, 0.18);
+  --page-accent-hover: rgba(169, 139, 255, 0.24);
+  --page-accent-text: #6748B0;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) {
+  background: transparent !important;
+  color: #24211E !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) :where([class*="text-white"]) {
+  color: #4C4640 !important;
+  -webkit-text-fill-color: #4C4640 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-responsive-color-filter, .soridraw-responsive-filter-button) {
+  background: #EEEBE7 !important;
+  background-color: #EEEBE7 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-mode-tab, .soridraw-library-mode-tab):not([aria-pressed="true"]):not([data-active="true"]) {
+  background: transparent !important;
+  color: #5C554E !important;
+  -webkit-text-fill-color: #5C554E !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-mode-tab:is([aria-pressed="true"], [data-active="true"]) {
+  background: #FF7A72 !important;
+  background-color: #FF7A72 !important;
+  color: #171513 !important;
+  -webkit-text-fill-color: #171513 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-mode-tab:is([aria-pressed="true"], [data-active="true"]) {
+  background: #A98BFF !important;
+  background-color: #A98BFF !important;
+  color: #171513 !important;
+  -webkit-text-fill-color: #171513 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-responsive-search-input, .soridraw-responsive-search) {
+  background: #E9E5DF !important;
+  background-color: #E9E5DF !important;
+  color: #342F2A !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-responsive-search-placeholder,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-responsive-search-placeholder :where(div, span) {
+  color: #80786F !important;
+  -webkit-text-fill-color: #80786F !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-song-card, .soridraw-library-workspace-group) {
+  background: #EEEBE7 !important;
+  background-color: #EEEBE7 !important;
+  color: #24211E !important;
+  border-color: transparent !important;
+  box-shadow: 0 7px 18px rgba(58, 52, 45, 0.07) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-workspace-header,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-workspace-group :where([class*="bg-white/"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-song-card :where([class*="bg-white/"]) {
+  background: #F3F0EA !important;
+  background-color: #F3F0EA !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(button, input, textarea, select, section, article, div)[class*="border"] {
+  border-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:where(button, input, textarea, select)[class*="bg-white/"] {
+  background: #F3F0EA !important;
+  background-color: #F3F0EA !important;
+}
+
+/* 450 — Classic Light contrast refinement.
+ * Keep the approved warm ivory direction from 449, but strengthen the visual
+ * hierarchy slightly. Scope remains Classic + Light only; dark mode and Studio
+ * Black/split mode are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --bg-secondary: #E9E5DF;
+  --card-bg: #E9E5DF;
+  --hover-bg: #E1DBD4;
+  --hover-bg-solid: #DCD5CD;
+  --button-bg: #F2EEE8;
+  --button-hover-bg: #E1DBD4;
+  --soridraw-panel-bg: #EEEAE4;
+  --soridraw-card-bg: #E9E5DF;
+}
+
+/* Main Studio menu surfaces: slightly darker than the page, while keyword
+ * controls stay a touch lighter than their section titles. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down {
+  --soridraw-studio-card-bg: #E2DDD6;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-menu-card.soridraw-studio-shadow-surface::before,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-studio-command-card textarea {
+  background: #E2DDD6 !important;
+  background-color: #E2DDD6 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-content button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]) {
+  background: #F2EEE8 !important;
+  background-color: #F2EEE8 !important;
+  color: #5F5850 !important;
+  -webkit-text-fill-color: #5F5850 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-expand-content button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]):hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([data-active="true"]):hover {
+  background: #E1DBD4 !important;
+  background-color: #E1DBD4 !important;
+}
+
+/* Pencil/edit controls should read as icons, not square buttons. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button:is(:hover, :active, :focus, :focus-visible) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button {
+  color: #746E66 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-direct-input-button:hover {
+  color: #342F2A !important;
+}
+
+/* The vocal-character launcher looked more natural only during hover. Make
+ * that light neutral surface its steady state and keep hover from jumping. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher:is(:hover, :active, :focus, :focus-visible) {
+  background: #F8F5F0 !important;
+  background-color: #F8F5F0 !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Light modal cards use the same slightly deeper gray hierarchy. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .storyboard-tone-flat-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where([class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151515]"], [class*="bg-[#171717]"], [class*="bg-[#171719]"], [class*="bg-[#181818]"], [class*="bg-[#1a1a1a]"], [class*="bg-[#1f1f1f]"], [class*="bg-[#202020]"]) {
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.storyboard-section-card, .storyboard-control-card),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-studio-vocal-modal-panel > .custom-scrollbar .rounded-2xl.bg-\[\#1a1a1a\] {
+  background: #E8E3DC !important;
+  background-color: #E8E3DC !important;
+}
+
+/* Music Note / Library menus and result cards: slightly stronger contrast. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-responsive-color-filter, .soridraw-responsive-filter-button),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-song-card, .soridraw-library-workspace-group) {
+  background: #E2DDD6 !important;
+  background-color: #E2DDD6 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-workspace-header,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-library-workspace-group :where([class*="bg-white/"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-song-card :where([class*="bg-white/"]) {
+  background: #E9E5DF !important;
+  background-color: #E9E5DF !important;
+}
+
+/* Remove the remaining rectangular outline around the Music Note search area. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme :is(
+  .soridraw-responsive-search-slot,
+  .soridraw-responsive-search,
+  .soridraw-responsive-search-input
+) {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme .soridraw-responsive-search-slot,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme .soridraw-responsive-search {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.soridraw-musicnote-theme .soridraw-responsive-search-input {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: #E2DDD6 !important;
+  background-color: #E2DDD6 !important;
+}
+
+
+/* 452 — Keep stored Classic Light/Dark appearance stable after reload and make
+ * the Suno Library search field match the approved Music Note pill geometry.
+ * Scope is Classic + Light for the visual rule; Studio Black/split and Classic
+ * Dark remain untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) :is(
+  .soridraw-responsive-search-slot,
+  .soridraw-responsive-search,
+  .soridraw-responsive-search-input
+) {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-slot {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search {
+  background: transparent !important;
+  background-color: transparent !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+.soridraw-responsive-search-input {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  border-radius: 16px !important;
+  background: #E2DDD6 !important;
+  background-color: #E2DDD6 !important;
+}
+
+
+/* 453 — Classic dark/light must render the same Studio geometry on first load
+ * and after an in-app theme switch. The classic world uses the normal Studio
+ * composition (builder above, recent results below), while Studio Black remains
+ * a separate split workspace. Keep the approved zero title-to-card inset and
+ * raised search button for both classic workspace labels so changing between
+ * create/recent cannot change the masthead geometry. */
+@media (min-width: 1024px) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-main,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-main {
+    padding-top: 0 !important;
+  }
+
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="dark"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"],
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-page-frame:is([data-workspace-view="create"], [data-workspace-view="recent"])
+  .soridraw-studio-hero button.soridraw-studio-hero-search-button[aria-label="통합 검색"] {
+    bottom: 12px !important;
+  }
+}
+
+
+/* 454 — Classic Light selected-keyword readability and control hierarchy.
+ * Keep the approved warm ivory palette, but give the direct-input summary box
+ * a clearly separate tonal surface, replace the black selection-count badge,
+ * and restore readable command guidance / Direct Lyrics controls. Classic Dark
+ * and Studio Black/split mode are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box {
+  background: #DCD4CA !important;
+  background-color: #DCD4CA !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  color: #655E56 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box:is(:hover, [data-expanded="true"], [aria-pressed="true"]) {
+  background: #D5CCC1 !important;
+  background-color: #D5CCC1 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box
+:is(.soridraw-menu-summary-text--selected, .soridraw-selected-summary, .soridraw-menu-summary-token) {
+  color: #74591E !important;
+  -webkit-text-fill-color: #74591E !important;
+  text-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box .soridraw-menu-summary-text--empty {
+  color: #756D64 !important;
+  -webkit-text-fill-color: #756D64 !important;
+  opacity: 1 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box input {
+  color: #3B3631 !important;
+  -webkit-text-fill-color: #3B3631 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-menu-summary-box input::placeholder {
+  color: #81786F !important;
+  -webkit-text-fill-color: #81786F !important;
+  opacity: 1 !important;
+}
+
+/* Replace the dark count dot on selected keyword buttons with a warm light
+ * badge that remains legible over the amber selected state. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-count-badge-main,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-selected-strong .soridraw-count-badge-main {
+  background: #F2E2B2 !important;
+  background-color: #F2E2B2 !important;
+  color: #59420E !important;
+  border: 0 !important;
+  box-shadow: 0 3px 8px rgba(83, 67, 39, 0.18) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-count-badge-main > .soridraw-badge-number,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-count-badge-main .soridraw-badge-x {
+  color: #59420E !important;
+  stroke: #59420E !important;
+  -webkit-text-fill-color: #59420E !important;
+  text-shadow: none !important;
+}
+
+/* Command guidance and inactive Direct Lyrics button need their own visible
+ * neutral tone on the light command surface. The active amber state remains. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down .soridraw-command-placeholder {
+  color: #756D64 !important;
+  -webkit-text-fill-color: #756D64 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button.soridraw-direct-lyrics-toggle[aria-pressed="false"] {
+  background: #D8D0C6 !important;
+  background-color: #D8D0C6 !important;
+  color: #443E38 !important;
+  -webkit-text-fill-color: #443E38 !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button.soridraw-direct-lyrics-toggle[aria-pressed="false"]:hover {
+  background: #CEC4B8 !important;
+  background-color: #CEC4B8 !important;
+  color: #2F2A26 !important;
+  -webkit-text-fill-color: #2F2A26 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+.studio-tone-down button.soridraw-direct-lyrics-toggle[aria-pressed="false"] svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* 456 — Classic Light accent controls need readable foreground contrast.
+ * Keep layout and the approved coral/lavender identity unchanged; strengthen
+ * only the credit label and the Music Note / Library "전체" reset labels.
+ * Classic Dark and Studio Black/split mode are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-credit-button {
+  background: #E1D8F7 !important;
+  background-color: #E1D8F7 !important;
+  color: #56359F !important;
+  -webkit-text-fill-color: #56359F !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-credit-button:hover {
+  background: #D8CCF4 !important;
+  background-color: #D8CCF4 !important;
+  color: #482887 !important;
+  -webkit-text-fill-color: #482887 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-color-reset-button {
+  color: #56359F !important;
+  -webkit-text-fill-color: #56359F !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-color-reset-button[class*="bg-[#A98BFF]/24"] {
+  background: #D8CCF4 !important;
+  background-color: #D8CCF4 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-color-reset-button {
+  color: #A13C37 !important;
+  -webkit-text-fill-color: #A13C37 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-color-reset-button[class*="bg-[#FF7A72]/24"] {
+  background: #F6D1CE !important;
+  background-color: #F6D1CE !important;
+}

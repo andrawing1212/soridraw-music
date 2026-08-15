@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>SORIDRAW's Studio</title>
+    <!-- VERIFICATION COMMENT: IF YOU SEE THIS IN SOURCE, THIS FILE IS BEING SERVED -->
+    <meta name="theme-color" content="#0f0f0f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SORIDRAW" />
+
+    <!-- 아이콘 -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+
+    <style>
+      html,
+      body,
+      #root {
+        background: var(--soridraw-initial-bg, #0f0f0f);
+        color: var(--soridraw-initial-text, #f8f9fa);
+      }
+    </style>
+
+    <script>
+      (function() {
+        try {
+          var nav = navigator || {};
+          var ua = nav.userAgent || '';
+          var uaPhone = /iPhone|iPod|Windows Phone|IEMobile|Opera Mini|BlackBerry|webOS/i.test(ua)
+            || (/Android/i.test(ua) && /Mobile/i.test(ua));
+          var shortSide = Math.min((screen && screen.width) || 9999, (screen && screen.height) || 9999);
+          var touchPhoneFallback = typeof matchMedia === 'function'
+            && (matchMedia('(pointer: coarse)').matches || matchMedia('(hover: none)').matches)
+            && shortSide <= 600;
+          // 631: only UA-CH `mobile:true` is decisive. Some Android
+          // browser/PWA combinations can report false even on a real phone.
+          var isPhone = nav.userAgentData?.mobile === true || uaPhone || touchPhoneFallback;
+          var requestedTheme = localStorage.getItem('soridraw_app_theme') === 'studio-black' ? 'studio-black' : 'classic';
+          var displayKey = isPhone ? 'soridraw_phone_display_mode' : 'soridraw_large_display_mode';
+          var storedDisplay = localStorage.getItem(displayKey);
+          var legacyColorKey = isPhone ? 'soridraw_phone_color_mode' : 'soridraw_large_screen_color_mode';
+          var legacyColor = localStorage.getItem(legacyColorKey)
+            || localStorage.getItem('soridraw_color_mode')
+            || localStorage.getItem('themeMode')
+            || 'dark';
+          var requestedDisplay = storedDisplay === 'studio-black' || storedDisplay === 'light' || storedDisplay === 'dark'
+            ? storedDisplay
+            : requestedTheme === 'studio-black'
+              ? 'studio-black'
+              : legacyColor === 'light' ? 'light' : 'dark';
+          // 631: actual phones never first-paint the split workspace. Use the
+          // same robust physical-device rule as the React runtime so a stale Split
+          // preference cannot expose the desktop dashboard under the Classic page.
+          if (isPhone && requestedDisplay === 'studio-black') requestedDisplay = 'dark';
+          var effectiveTheme = requestedDisplay === 'studio-black' ? 'studio-black' : 'classic';
+          var effectiveColor = requestedDisplay === 'light' ? 'light' : 'dark';
+          document.documentElement.dataset.soridrawTheme = effectiveTheme;
+          document.documentElement.dataset.soridrawColorMode = effectiveColor;
+          document.documentElement.dataset.soridrawDevice = isPhone ? 'phone' : 'large-screen';
+          document.documentElement.classList.toggle('dark', effectiveColor === 'dark');
+          document.documentElement.style.setProperty('--soridraw-initial-bg', effectiveColor === 'light' ? '#ffffff' : effectiveTheme === 'studio-black' ? '#101010' : '#0f0f0f');
+          document.documentElement.style.setProperty('--soridraw-initial-text', effectiveColor === 'light' ? '#1a1a1a' : '#f8f9fa');
+        } catch (error) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+
+
+
+    <script>
+      // 모바일 앱 화면에서 두 손가락 확대/축소 흔들림을 막고, 한 손가락 스크롤은 유지합니다.
+      (function() {
+        var preventPinchZoom = function(event) {
+          if (event.touches && event.touches.length > 1) {
+            event.preventDefault();
+          }
+        };
+
+        var preventGestureZoom = function(event) {
+          event.preventDefault();
+        };
+
+        document.addEventListener('touchmove', preventPinchZoom, { passive: false });
+        document.addEventListener('gesturestart', preventGestureZoom, { passive: false });
+        document.addEventListener('gesturechange', preventGestureZoom, { passive: false });
+        document.addEventListener('gestureend', preventGestureZoom, { passive: false });
+      })();
+    </script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

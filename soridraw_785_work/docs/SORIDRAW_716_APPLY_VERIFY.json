@@ -1,0 +1,16 @@
+{
+  "version": 716,
+  "base": "SORIDRAW_715차_714기준_뮤직노트썸네일고정_장르연회색_직접입력아이콘배경제거.zip",
+  "stable_split_baseline": 713,
+  "changes": [
+    "Music Note genre label uses #9ca0a6",
+    "Library genre label uses #9ca0a6",
+    "Remove 715 transparent direct-input pencil override and restore prior background styling",
+    "Keep Music Note thumbnail at 48x60"
+  ],
+  "untouched": [
+    "split divider performance logic",
+    "Lite V2 geometry",
+    "Firebase/Auth/Firestore/Functions/storage schema"
+  ]
+}

@@ -1,21 +1,21 @@
 /*
  * Galaxy Tab / coarse-pointer A/B helper for `v2DragPerf=tablet-touch-pure`.
  *
- * Why this exists:
- * - Splitter Only is fast on the real tablet.
- * - Both Content Freeze is much faster than live Pure Pane, which proves that
- *   repeated descendant reflow is the expensive part of the gesture.
- * - Fully freezing content is visually wrong, so this helper keeps the REAL
- *   pane shells/divider on the existing Pure Pane path while pacing only the
- *   expensive inner formatting width.
+ * Real-device findings:
+ * - Splitter Only is fast.
+ * - Both Content Freeze is much faster than live Pure Pane.
+ * - The first paced-content attempt still committed both inner trees every 40ms.
+ *   On the real tablet that periodic full reflow was frequent enough to erase the
+ *   expected latency win.
  *
- * The inner subtree is laid out at a committed width roughly every 40ms.
- * Between those commits a compositor scale bridges the tiny width difference,
- * so the visual pane edge still follows the finger every frame without asking
- * the whole Builder + Result subtree to reflow for every pointer pixel.
+ * This revision removes the timer-driven layout commits entirely. The REAL pane
+ * shells/divider still follow the existing Pure Pane path every frame. Inner
+ * formatting widths are committed only when a real responsive breakpoint is
+ * crossed, when visual scale drift reaches a small safety limit, or on release.
+ * Between those sparse commits a compositor scale bridges the width difference.
  *
- * This is deliberately isolated to the existing admin A/B mode. Production
- * `normal` / PC Pure Pane are untouched until the real Galaxy Tab test passes.
+ * This remains isolated to the existing admin A/B mode. Production `normal` and
+ * PC Pure Pane are untouched until the Galaxy Tab hand test proves a benefit.
  */
 
 const MODE = 'tablet-touch-pure';
@@ -23,7 +23,6 @@ const MODE_ALIAS = 'tablet-pure';
 const MIN_SPLIT_PERCENT = 24;
 const MAX_SPLIT_PERCENT = 76;
 const TABLET_MIN_PANE_PX = 430;
-const CONTENT_COMMIT_INTERVAL_MS = 40;
 const MAX_VISUAL_SCALE_DRIFT = 0.055;
 
 const BUILDER_BREAKPOINTS = [660, 700, 760, 820, 1074, 1080] as const;
@@ -56,7 +55,6 @@ type Session = {
   resultExtraWidth: number;
   committedBuilderWidth: number;
   committedResultWidth: number;
-  lastCommitTime: number;
   lastResponsiveSignature: string;
   pointerId: number;
   pendingClientX: number | null;
@@ -179,13 +177,11 @@ const commitFormattingWidths = (
   activeSession: Session,
   builderWidth: number,
   resultWidth: number,
-  now: number,
 ) => {
   setFormattingWidth(activeSession.builderNodes, builderWidth);
   setFormattingWidth(activeSession.resultNodes, resultWidth);
   activeSession.committedBuilderWidth = builderWidth;
   activeSession.committedResultWidth = resultWidth;
-  activeSession.lastCommitTime = now;
   activeSession.lastResponsiveSignature = readResponsiveSignature(builderWidth, resultWidth);
 };
 
@@ -196,7 +192,6 @@ const flushFrame = (forceCommit = false) => {
   activeSession.frameId = null;
   const clientX = activeSession.pendingClientX;
   activeSession.pendingClientX = null;
-  const now = performance.now();
   const { builderWidth, resultWidth } = resolveWidths(activeSession, clientX);
 
   const builderScale = builderWidth / Math.max(1, activeSession.committedBuilderWidth);
@@ -204,10 +199,12 @@ const flushFrame = (forceCommit = false) => {
   const scaleDrift = Math.max(Math.abs(builderScale - 1), Math.abs(resultScale - 1));
   const nextSignature = readResponsiveSignature(builderWidth, resultWidth);
   const crossedResponsiveBoundary = nextSignature !== activeSession.lastResponsiveSignature;
-  const intervalElapsed = now - activeSession.lastCommitTime >= CONTENT_COMMIT_INTERVAL_MS;
 
-  if (forceCommit || crossedResponsiveBoundary || intervalElapsed || scaleDrift >= MAX_VISUAL_SCALE_DRIFT) {
-    commitFormattingWidths(activeSession, builderWidth, resultWidth, now);
+  // Important: no timer-based commit here. The previous 40ms cadence forced a
+  // full Builder + Result formatting reflow about 25 times per second, which is
+  // exactly the expensive work the tablet test is trying to avoid.
+  if (forceCommit || crossedResponsiveBoundary || scaleDrift >= MAX_VISUAL_SCALE_DRIFT) {
+    commitFormattingWidths(activeSession, builderWidth, resultWidth);
     return;
   }
 
@@ -264,7 +261,6 @@ const beginSession = () => {
   if (builderNodes.length === 0 || resultNodes.length === 0) return;
 
   const resultExtraWidth = resultRect.width - Math.max(0, layoutRect.width - builderRect.width);
-  const now = performance.now();
   const initialBuilderWidth = Math.max(1, Math.round(builderRect.width));
   const initialResultWidth = Math.max(1, Math.round(resultRect.width));
 
@@ -279,7 +275,6 @@ const beginSession = () => {
     resultExtraWidth,
     committedBuilderWidth: initialBuilderWidth,
     committedResultWidth: initialResultWidth,
-    lastCommitTime: now,
     lastResponsiveSignature: readResponsiveSignature(initialBuilderWidth, initialResultWidth),
     pointerId: pointer.pointerId,
     pendingClientX: null,

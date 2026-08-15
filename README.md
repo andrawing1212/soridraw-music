@@ -2274,3 +2274,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 결과 목표: 분할선 이동 중 생성바가 같은 프레임으로 실시간 추적하고, 마우스를 놓는 순간 별도 위치 점프가 없어야 함. PC/태블릿/Builder 모바일 판정 시에도 현재 pane mode의 기존 gutter 규칙을 그대로 사용함.
 - 관리자 A/B `genBarPerf=freeze/off` 동작은 유지. 일반 사용자는 기본 `normal` 경로로 실시간 추적 적용.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## SORIDRAW 791차 — 분할 생성바 디자인 실시간 반응형 전환
+- 기준: 790차.
+- 증상: 790차에서 생성바의 좌우 위치/폭은 분할바를 실시간 추적하지만, Builder가 desktop↔mobile pane 경계를 넘을 때 생성바 내부 디자인(접기 화살표, 무작위/초기화 폭·라벨, 버튼 높이/폰트/간격)은 pointer-up 이후에만 바뀌어 이질감이 남음.
+- 실제 원인: Lite V2 Pure Pane 실시간 경로가 `syncPaneModes(..., { rootSync:false })`를 사용해 pane-local `data-pane-mode`는 즉시 갱신하면서도 생성바 CSS가 보는 `<html data-soridraw-builder-mode>`는 drag-end까지 미뤘음. App의 React mirror도 태블릿 드래그 중 의도적으로 억제되어 있어 시각 전환이 릴리즈 시점까지 지연됨.
+- 수정 1: Pure Pane의 이미 계산된 Builder pane mode를 `<html data-soridraw-builder-mode>`에 **660px 경계를 실제로 넘을 때만** 즉시 미러링. 매 pixel 쓰기가 아니라 mode 변경 1회만 발생하며, App.tsx의 기존 tablet-drag React rerender 억제는 그대로 유지.
+- 수정 2: >=1100px 분할 작업에서는 생성바 접기 화살표 DOM을 항상 유지하고 CSS가 live builder-mode에 따라 보이기/숨기기를 소유하도록 변경. 따라서 mobile에서 시작해 desktop으로 돌아가는 반대 방향도 pointer-up 없이 즉시 정상 디자인으로 복귀함. <1100px Compact/실제 모바일의 기존 DOM 동작은 유지.
+- 결과 목표: 생성바의 위치/폭뿐 아니라 desktop↔mobile 디자인도 분할바 이동 중 즉시 바뀌고, 마우스를 놓는 순간 추가 디자인 스냅이 없어야 함.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

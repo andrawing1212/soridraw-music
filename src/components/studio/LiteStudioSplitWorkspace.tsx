@@ -226,6 +226,8 @@ const readInitialRuntimeLayoutMode = (
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
+export type StudioV2DragPerfMode = 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only' | 'tablet-touch-pure';
+
 export type LiteStudioSplitWorkspaceProps = {
   children: ReactNode;
   builderMasthead?: ReactNode;
@@ -234,7 +236,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only';
+  v2DragPerfMode?: StudioV2DragPerfMode;
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -818,8 +820,9 @@ export default function LiteStudioSplitWorkspace({
     // already-known pane widths, with no DOM read, observer or React state added
     // to pointermove. The explicit `pure-pane-live` mode remains as an admin A/B
     // alias so the proven candidate can still be compared directly.
+    const tabletTouchPureLive = live && draggingRef.current && v2DragPerfMode === 'tablet-touch-pure';
     const purePaneResponsiveLive = live && draggingRef.current
-      && (v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal');
+      && (v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal' || v2DragPerfMode === 'tablet-touch-pure');
     const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
     const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
     const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
@@ -885,7 +888,8 @@ export default function LiteStudioSplitWorkspace({
         // when a pane enters/leaves the tablet band; there is no DOM read here.
         const touchLikePointer = activePointerTypeRef.current === 'touch'
           || activePointerTypeRef.current === 'pen'
-          || (!activePointerTypeRef.current && !finePointerFastPathRef.current);
+          || (!activePointerTypeRef.current && !finePointerFastPathRef.current)
+          || tabletTouchPureLive;
         if (touchLikePointer) {
           const syncPurePaneTabletFastPath = (pane: HTMLElement, paneWidth: number) => {
             const shouldBeActive = paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
@@ -1185,6 +1189,7 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'splitter-only'
       || v2DragPerfMode === 'left-pane-only'
       || v2DragPerfMode === 'right-pane-only'
+      || v2DragPerfMode === 'tablet-touch-pure'
       || v2DragPerfMode === 'normal'
     ) {
       // Reconcile any intentionally deferred responsive/external state exactly
@@ -1195,6 +1200,7 @@ export default function LiteStudioSplitWorkspace({
     // 761: do not lock the whole split workspace height. That temporary
     // shell lock changed the scroll owner/scrollbar geometry while dragging.
     // Menu-card height stabilization is local to the Builder cards instead.
+    if (layoutRef.current) delete layoutRef.current.dataset.v2DragPerfMode;
     dragBoundarySignatureRef.current = null;
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
@@ -1244,7 +1250,7 @@ export default function LiteStudioSplitWorkspace({
       card.style.removeProperty('--soridraw-pure-pane-body-height');
       card.style.removeProperty('--soridraw-pure-pane-summary-height');
     }
-    if ((v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal') && purePaneMenuCards.length > 0) {
+    if ((v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal' || v2DragPerfMode === 'tablet-touch-pure') && purePaneMenuCards.length > 0) {
       // Batch every measurement before any style write. The hot drag path still
       // performs no DOM measurement. Expanded cards keep their natural height.
       const verticalSnapshots = purePaneMenuCards.map((card) => {
@@ -1345,6 +1351,7 @@ export default function LiteStudioSplitWorkspace({
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
+    layout.dataset.v2DragPerfMode = v2DragPerfMode;
     document.documentElement.classList.add('soridraw-lite-split-dragging');
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';

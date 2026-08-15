@@ -1077,7 +1077,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
  * slot contract to the lower Lyrics menu without changing its responsive text. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"], [data-v2-drag-perf-mode="tablet-touch-pure"])
   .soridraw-studio-builder-pane
   [data-studio-menu="lyrics"].soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"] {
     height: var(--soridraw-pure-pane-card-height) !important;
@@ -1086,7 +1086,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"], [data-v2-drag-perf-mode="tablet-touch-pure"])
   .soridraw-studio-builder-pane
   [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
   > .soridraw-menu-card-header-slot {
@@ -1097,7 +1097,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 
   html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"], [data-v2-drag-perf-mode="tablet-touch-pure"])
   .soridraw-studio-builder-pane
   [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
   > .soridraw-menu-card-body-slot {
@@ -1106,6 +1106,42 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     max-height: var(--soridraw-pure-pane-body-height) !important;
     flex: 0 0 var(--soridraw-pure-pane-body-height) !important;
     transition: none !important;
+  }
+}
+
+/* Tablet Touch Pure mode layout & style containment for Galaxy Tab touch latency optimization */
+@media (min-width: 1100px) {
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="tablet-touch-pure"] {
+    contain: layout style;
+  }
+
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="tablet-touch-pure"]
+  :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    contain: layout style;
+    will-change: width;
+  }
+
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="tablet-touch-pure"]
+  :is(
+    .soridraw-perf-layout-region-create,
+    .soridraw-perf-layout-region-recent,
+    .soridraw-perf-layout-region-musicnote,
+    .soridraw-perf-layout-region-library,
+    .soridraw-studio-menu-container
+  ) {
+    contain: layout style;
+    will-change: width;
+  }
+
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="tablet-touch-pure"]
+  :is(
+    .soridraw-musicnote-song-card,
+    .soridraw-library-song-item,
+    .soridraw-recent-song-card
+  ) {
+    contain: layout paint style;
+    content-visibility: auto;
+    contain-intrinsic-size: 320px 120px;
   }
 }
 

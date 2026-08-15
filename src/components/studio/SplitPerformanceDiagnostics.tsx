@@ -1070,7 +1070,7 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             <span>자동: 1400×900 동일조건 · 실손: 실제 마우스 입력률/폭 반영률/긴 프레임을 뮤직노트↔라이브러리로 직접 비교</span>
           </div>
           <div className="soridraw-split-perf-benchmark-row" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '6px' }}>
-            <span style={{ fontWeight: 800, color: '#FFB400', fontSize: '12px', alignSelf: 'center', marginRight: '6px' }}>[PERF A/B 테스트] Content Freeze 모드:</span>
+            <span style={{ fontWeight: 800, color: '#FFB400', fontSize: '12px', alignSelf: 'center', marginRight: '6px' }}>[PERF A/B 테스트]:</span>
             {(() => {
               const currentParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('v2DragPerf') || 'normal' : 'normal';
               const setPerfParam = (param: string) => {
@@ -1090,6 +1090,14 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     onClick={() => setPerfParam('normal')}
                   >
                     PC 기본 (Pure Pane 실시간)
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? 900 : 500, backgroundColor: currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? '#00E5FF' : undefined, color: currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('tablet-touch-pure')}
+                  >
+                    ★ Tablet Touch Pure
                   </button>
                   <button
                     type="button"
@@ -1114,6 +1122,14 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     onClick={() => setPerfParam('content')}
                   >
                     Both Content Freeze
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'splitter-only' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'splitter-only' ? 900 : 500, backgroundColor: currentParam === 'splitter-only' ? '#FFB400' : undefined, color: currentParam === 'splitter-only' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('splitter-only')}
+                  >
+                    Splitter Only
                   </button>
                 </>
               );

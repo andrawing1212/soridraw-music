@@ -1414,22 +1414,8 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     right: calc(var(--soridraw-studio-result-right, 0px) + 6px) !important;
   }
 
-  /* Tablet `.soridraw-studio-main` owns an 18px right inset. The result
-   * scrollbar must sit on the frame divider, not at the workspace inset edge.
-   * Keep the shell visible through that gutter. In direct layout TypeScript now
-   * expands the explicit result width by the same cached 18px; without that,
-   * `left + width` wins the over-constrained geometry and `right:-18px` is ignored. */
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace[data-scroll-isolated="true"] {
-    overflow: visible !important;
-    contain: size layout style !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace[data-scroll-isolated="true"]
-  > .soridraw-studio-result-pane {
-    right: -18px !important;
-    padding-right: 18px !important;
-    box-sizing: border-box !important;
-  }
+  /* 777: result scrollbar edge ownership moved to the existing high-specificity
+   * PC rule in studioLayout.css and is now shared by tablet. Keeping a second
+   * lower-specificity copy here was ineffective against the older `contain:strict`
+   * / `overflow:hidden` owner and made the cascade harder to reason about. */
 }

@@ -2860,9 +2860,10 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   overflow-anchor: none !important;
 }
 
-/* 254/506: keep the left auxiliary rail on one PC/tablet geometry contract.
- * Only the split-result scrollbar reach-through remains wide-PC-only, preserving
- * the 488 center workspace geometry below 1600px. */
+/* 254/777: keep the left auxiliary rail on one PC/tablet geometry contract.
+ * The result pane scrollbar now uses the same outer-edge reach-through on both
+ * wide PC and tablet split. Tablet had been excluded by the old >=1600px media
+ * gate, which left its native result scrollbar 18px inside the right divider. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel,
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel-inner,
@@ -2896,8 +2897,10 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   }
 }
 
-@media (min-width: 1600px) {
-  /* Keep the original 488 split/result scrollbar geometry wide-PC-only. */
+@media (min-width: 1100px) {
+  /* 777: reuse the already-correct PC scroll-shell contract on tablet too.
+   * Keep this high-specificity owner in studioLayout.css so the older 248
+   * `overflow:hidden/contain:strict/right:0` rules cannot win by specificity. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
     overflow: visible !important;
     contain: size layout style !important;

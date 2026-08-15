@@ -13529,3 +13529,194 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     overflow: visible !important;
   }
 }
+
+/* 793 — Generate bar responsive ownership cleanup.
+ * Phone -> portrait tablet -> landscape tablet all use the same simplified
+ * three-button composition. The larger collapse-arrow + side-text layout is
+ * reserved for real PC only.
+ *
+ * Non-split Classic/Dark/Light is viewport-owned: <=1599px is compact.
+ * Split Studio Black is stricter: <=1599px is compact regardless of pane width,
+ * and on >=1600px the Builder must also be in its real `pc` content mode.
+ * This keeps a narrow/tablet Builder simple even inside a large PC viewport.
+ * Colors remain theme-owned; this block changes composition/geometry only. */
+@media (max-width: 1599px) {
+  :root body .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 24px !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
+  :root body .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
+    display: none !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: none !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 0 56px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    box-sizing: border-box !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding: 0 !important;
+    border-radius: 16px !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding-block: 0 !important;
+    padding-inline: 10px !important;
+    border-radius: 16px !important;
+    gap: 8px !important;
+    font-size: 25px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  :root body .soridraw-studio-action-bar--tracking
+    :is(.soridraw-action-generate-button, .soridraw-action-random > button, .soridraw-action-reset > button) > svg {
+    width: 20px !important;
+    height: 20px !important;
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"] {
+    --soridraw-action-control-height: 69px;
+    --soridraw-action-row-gap: 8px;
+    --soridraw-action-row-padding: 8px;
+  }
+
+  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 8px !important;
+  }
+}
+
+/* A large physical viewport can still hold a mobile/tablet-width Builder while
+ * the split divider moves. Keep that Builder on the same simplified bar and
+ * switch to the full PC bar only after the Builder itself crosses 1080px. */
+@media (min-width: 1600px) {
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) {
+    --soridraw-action-control-height: 69px;
+    --soridraw-action-row-gap: 8px;
+    --soridraw-action-row-padding: 8px;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+    padding-inline: 8px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
+    gap: 8px !important;
+    padding: 8px !important;
+    border-radius: 24px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+    display: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
+    display: block !important;
+    flex: 0 0 56px !important;
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding: 0 !important;
+    border-radius: 16px !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking .soridraw-action-generate {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
+    min-width: 0 !important;
+    height: 69px !important;
+    min-height: 69px !important;
+    max-height: 69px !important;
+    padding-block: 0 !important;
+    padding-inline: 10px !important;
+    border-radius: 16px !important;
+    gap: 8px !important;
+    font-size: 25px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]:is(
+    [data-soridraw-builder-content-mode="mobile"],
+    [data-soridraw-builder-content-mode="tablet"]
+  ) .soridraw-studio-action-bar--tracking
+    :is(.soridraw-action-generate-button, .soridraw-action-random > button, .soridraw-action-reset > button) > svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+}

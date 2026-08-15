@@ -1026,18 +1026,20 @@ export default function LiteStudioSplitWorkspace({
         syncPaneModes(builderWidth, resultWidth, responsiveOptions);
         broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
 
-        // 791 — Keep the Generate bar's responsive composition live without
+        // 791/793 — Keep the Generate bar's responsive composition live without
         // re-enabling the expensive App-root React mirror. Pure Pane updates the
-        // pane-local mode every rAF, but rootSync:false intentionally deferred the
-        // <html> builder-mode flag until pointer-up. The floating action bar CSS
-        // is keyed to that root flag, so its desktop/mobile design lagged behind
-        // the divider even after 790 made its geometry live. Mirror ONLY the
-        // already-resolved Builder pane mode here. This writes at the 660px mode
-        // boundary only (not every pixel), and App.tsx already suppresses its
-        // React state mirror while a tablet split drag is active.
+        // pane-local modes every rAF, while rootSync:false intentionally defers
+        // root attributes until pointer-up. The bar now has three visual bands
+        // (mobile/tablet = simple, pc = full), so mirror both already-resolved
+        // mode values here. These attributes change only when the 660/1080
+        // boundaries are crossed; there is still no per-pixel React rerender.
         const root = document.documentElement;
         if (root.dataset.soridrawBuilderMode !== modeRef.current.builder) {
           root.dataset.soridrawBuilderMode = modeRef.current.builder;
+        }
+        const builderContentMode = contentResponsiveModeRef.current.builder;
+        if (builderContentMode && root.dataset.soridrawBuilderContentMode !== builderContentMode) {
+          root.dataset.soridrawBuilderContentMode = builderContentMode;
         }
 
         dragBoundarySignatureRef.current = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);

@@ -4006,8 +4006,11 @@ function App() {
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1100px)', true);
   const isStudioTwoColumnSelectionLayout = useMediaQuery('(min-width: 768px)', true);
   const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
-  const isActionDragMobile = useMediaQuery('(max-width: 767px)');
+  // 793 — The simplified Generate bar is now the shared phone/tablet contract.
+  // The heavier arrow + text-label composition is PC-only from 1600px upward.
+  const isActionCompactViewport = useMediaQuery('(max-width: 1599px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
+  const [isSplitBuilderActionCompact, setIsSplitBuilderActionCompact] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
   const isStudioCompactMobileLayout = isStudioCompactViewport
     && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
@@ -4046,7 +4049,20 @@ function App() {
 
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
       const builderMode = root.dataset.soridrawBuilderMode;
+      const builderContentMode = root.dataset.soridrawBuilderContentMode;
       setIsStudioBlackActionMode(isStudioBlack);
+
+      // 793 — Split Studio uses the same compact/full ownership as its content
+      // mode: mobile + tablet are simplified; only a real PC Builder is full.
+      // Missing means the split engine has not committed yet, so keep the last
+      // state rather than flashing the PC bar during page/view hand-offs.
+      if (!isStudioBlack) {
+        setIsSplitBuilderActionCompact(false);
+      } else if (builderContentMode === 'mobile' || builderContentMode === 'tablet') {
+        setIsSplitBuilderActionCompact(true);
+      } else if (builderContentMode === 'pc') {
+        setIsSplitBuilderActionCompact(false);
+      }
 
       // 749 — Split workspace callbacks used to clear data-soridraw-builder-mode
       // for a moment while Recent/Music Note/Library changed. Treating that
@@ -4068,7 +4084,7 @@ function App() {
     const observer = new MutationObserver(() => syncBuilderActionMode(false));
     observer.observe(root, {
       attributes: true,
-      attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
+      attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode', 'data-soridraw-builder-content-mode'],
     });
 
     const handleSplitDragEnd = () => syncBuilderActionMode(true);
@@ -4079,7 +4095,10 @@ function App() {
     };
   }, []);
 
-  const isActionSwipeCollapseMode = isActionDragMobile || isSplitBuilderActionMobile;
+  // 793 — Compact visual composition keeps the same gesture-first collapse
+  // behavior as mobile, so hiding the desktop arrow never removes the ability
+  // to collapse the bar on portrait/landscape tablets or a tablet-width split.
+  const isActionSwipeCollapseMode = isActionCompactViewport || isSplitBuilderActionCompact || isSplitBuilderActionMobile;
   // Screen type only changes when the desktop breakpoint changes; physical
   // screen resolution itself is stable. Avoid running this on every resize tick.
   useEffect(() => {

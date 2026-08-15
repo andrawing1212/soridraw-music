@@ -2292,3 +2292,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정 2: split 엔진이 `곡 만들기`의 Result 접힘 / `최근 생성곡`의 split 복귀를 완료한 뒤 이미 발행하는 `soridraw-studio-pane-collapse-change` 이벤트에 생성바 geometry 재동기화를 연결함. 따라서 workspace 전환 후 한 프레임 뒤 현재 pane geometry를 기준으로 독립적으로 자리잡음.
 - 결과 목표: 곡만들기와 최근 생성곡이 서로의 이전 생성바 폭/위치를 물려받지 않으며, 페이지 이동 직후부터 현재 페이지 위치/크기로 표시됨. 접기/펼치기 보정이 필요 없어야 함.
 - 미변경: 생성바 접힘 상태 자체, 선택값/가사/프롬프트 상태, 분할 퍼센트, 실시간 drag 성능 경로, Firebase/Auth/Firestore/Functions/저장 구조. 배포 없음.
+
+### 793차 — 모바일~태블릿가로 생성바 심플형 통일 / PC형 분리
+- 기준: 792차.
+- 모바일, 태블릿 세로, 태블릿 가로(<=1599px)는 생성바를 동일한 심플 3버튼형으로 통일했다.
+- 심플형: 왼쪽 접기 화살표 숨김, 무작위/전체초기화 텍스트 숨김, 좌우 아이콘 버튼 56px, 생성하기 69px/25px 기준.
+- PC형은 1600px 이상에서만 유지하며, 분할 Studio Black에서는 Builder 내용 폭이 실제 PC 모드(>1080px)일 때만 PC형을 사용한다.
+- 큰 PC 화면에서도 분할바로 Builder가 태블릿/모바일 폭이 되면 생성바 디자인도 같은 프레임에 심플형으로 전환된다.
+- 태블릿 심플형에서도 생성바 접기 기능이 사라지지 않도록 모바일과 같은 스와이프/드래그 접기 동작을 사용한다.
+- 적용 범위: 분할 Studio Black + Classic 다크/라이트 공통. 색상/기능/생성 로직/Firebase 저장 구조는 변경하지 않았다.

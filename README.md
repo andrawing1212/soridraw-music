@@ -2192,3 +2192,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Single Owner도 drag 중 grid layout임을 명시해 이전 진단 모드의 layout model이 섞이지 않게 했다.
 - 성능 진단의 목적(한쪽 pane 또는 parent 한 곳만 geometry owner)은 유지하고, 화면 구조만 정상화했다.
 - Pure Pane 기본 엔진, PC 동작, Firebase/Auth/Firestore/Functions 구조는 변경하지 않았다.
+
+## SORIDRAW 771차 — 갤탭 Owner A/B 실제 geometry 정상화
+
+- 기준: 770차 `갤탭 Owner A/B 화면 구조 정상화`.
+- 770차 영상에서 `Right Owner`는 드래그 중 오른쪽 pane이 사라지고, `Single Owner`는 좌우 사이에 큰 빈 공간이 생겨 속도 비교 자체가 무효였던 문제를 수정했다.
+- 원인은 child inline width와 `auto/1fr` grid track을 동시에 owner로 사용해 실제 geometry 소유권이 이중화된 것이었다.
+- 세 진단 모두 production Lite V2와 동일한 2-column grid를 유지하고, pane child에는 드래그 중 `width/left/right`를 쓰지 않는다.
+  - `Left Owner`: workspace의 `--soridraw-v2-owner-left-px` 한 값으로 왼쪽 track만 정의하고 오른쪽은 `1fr` 잔여폭.
+  - `Right Owner`: workspace의 `--soridraw-v2-owner-right-px` 한 값으로 오른쪽 track만 정의하고 왼쪽은 `1fr` 잔여폭.
+  - `Single Owner`: workspace의 `--soridraw-v2-owner-boundary-px` 한 값으로 경계를 정의하고 오른쪽은 `1fr` 잔여폭.
+- pointer-down에서 현재 폭을 1회 seed해 모드 진입 첫 프레임의 점프를 막고, pointermove hot path에는 DOM 측정을 추가하지 않았다.
+- pointer-up 시 세 임시 track 변수를 모두 제거하고 기존 Pure Pane runtime으로 정합화한다.
+- PC Pure Pane 기본 엔진, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

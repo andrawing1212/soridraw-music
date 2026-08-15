@@ -1127,68 +1127,59 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   overflow-wrap: break-word;
 }
 
-/* 769 — Galaxy Tab dual-layout owner diagnostics.
- * Pane Only already proved pointer/rAF is fast and each side alone is affordable.
- * These three probes keep both panes participating while reducing the JS geometry
- * owner to one place so we can separate duplicate writes from dual-subtree layout.
- * Diagnostic-only: pointer-up restores the normal Pure Pane live owner. */
+/* 771 — Galaxy Tab single-track owner diagnostics, geometry-safe rewrite.
+ * 769/770 mixed child inline widths with auto grid tracks. On Galaxy Tab that
+ * could momentarily collapse the opposite track or leave a blank gap while the
+ * drag was live. These probes now keep the exact production two-column grid and
+ * change only one workspace-level track value. No child pane gets live width,
+ * left or right geometry in these modes. */
 .soridraw-split-engine-test-switch--v2-owner {
   top: 312px;
 }
 
 @media (min-width: 1100px) {
-  /* 770 — keep the owner diagnostics on the real Lite V2 grid.
-   * 769 temporarily converted the workspace to flex for Left/Right Owner.
-   * The Studio panes still carry grid-owned width/container-query contracts, so
-   * Right Owner could collapse Builder and create the large blank area seen on
-   * Galaxy Tab.  The probes now preserve the production grid and change only
-   * which track is intrinsic: owner pane = auto track, opposite pane = 1fr. */
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"] {
     display: grid !important;
-    grid-template-columns: auto minmax(0, 1fr) !important;
+    grid-template-columns:
+      minmax(0, var(--soridraw-v2-owner-left-px, 50%))
+      minmax(0, 1fr) !important;
     align-items: start !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"]
-  > .soridraw-studio-builder-pane {
-    max-width: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"]
-  > .soridraw-studio-result-pane {
-    width: 100% !important;
-    max-width: 100% !important;
   }
 
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"] {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(0, var(--soridraw-v2-owner-right-px, 50%)) !important;
     align-items: start !important;
   }
 
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"]
-  > .soridraw-studio-builder-pane {
-    width: 100% !important;
-    max-width: 100% !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]
-  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"]
-  > .soridraw-studio-result-pane {
-    max-width: none !important;
-  }
-
-  /* Single Owner already writes one grid boundary from JS. Explicitly pin the
-   * workspace to grid so no diagnostic selected immediately before it can alter
-   * the layout model during the next drag. */
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="single-geometry-owner"] {
     display: grid !important;
+    grid-template-columns:
+      minmax(0, var(--soridraw-v2-owner-boundary-px, 50%))
+      minmax(0, 1fr) !important;
     align-items: start !important;
   }
+
+  /* Keep both pane contracts identical to normal Lite V2. The owner is only the
+   * workspace track above; no diagnostic width/max-width/position override is
+   * allowed to leak onto either child. */
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is(
+    [data-v2-drag-perf-mode="left-owner"],
+    [data-v2-drag-perf-mode="right-owner"],
+    [data-v2-drag-perf-mode="single-geometry-owner"]
+  ) > :is(.soridraw-studio-builder-pane, .soridraw-studio-result-pane) {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+  }
 }
+

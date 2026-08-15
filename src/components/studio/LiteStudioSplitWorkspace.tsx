@@ -737,11 +737,16 @@ export default function LiteStudioSplitWorkspace({
     layoutRef.current?.removeAttribute('data-benchmark-layout-mode');
   }, []);
 
-  // 769: owner diagnostics may place the only live geometry write on either
-  // pane or on the parent grid. Clear every temporary owner before the normal
-  // pointer-up reconciliation so no diagnostic width/track leaks into runtime.
+  // 771: owner diagnostics keep production grid geometry intact and publish
+  // exactly one track variable on the workspace. Clear every temporary owner
+  // variable before the normal pointer-up reconciliation so no diagnostic track
+  // leaks into runtime. Older inline child geometry is also cleared defensively.
   const clearOwnerDiagnosticGeometry = useCallback(() => {
-    layoutRef.current?.style.removeProperty('grid-template-columns');
+    const layout = layoutRef.current;
+    layout?.style.removeProperty('grid-template-columns');
+    layout?.style.removeProperty('--soridraw-v2-owner-left-px');
+    layout?.style.removeProperty('--soridraw-v2-owner-right-px');
+    layout?.style.removeProperty('--soridraw-v2-owner-boundary-px');
     clearDirectBenchmarkGeometry();
   }, [clearDirectBenchmarkGeometry]);
 
@@ -878,24 +883,20 @@ export default function LiteStudioSplitWorkspace({
       if (splitterOnlyLive) {
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       } else if (leftOwnerLive) {
-        // One live geometry write: Builder owns width; Result is flex:1 and the
-        // browser derives the remainder. Both panes therefore resize, but JS does
-        // not write Result geometry.
-        builder.style.setProperty('width', `${builderWidth}px`, 'important');
+        // 771: the workspace owns one left-track value; neither child receives
+        // live width/left/right geometry. Production grid derives Result as 1fr.
+        layout.style.setProperty('--soridraw-v2-owner-left-px', `${builderWidth}px`);
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       } else if (rightOwnerLive) {
-        // Mirror of Left Owner: Result owns one width; Builder flexes into the
-        // remaining space. This isolates which side is cheaper as the sole owner.
-        result.style.setProperty('width', `${resultWidth}px`, 'important');
+        // Mirror probe: publish only the right-track width on the workspace.
+        // Builder is the 1fr remainder, so both panes stay visually valid while
+        // only one layout owner changes per frame.
+        layout.style.setProperty('--soridraw-v2-owner-right-px', `${resultWidth}px`);
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       } else if (singleGeometryOwnerLive) {
-        // One parent-level track write. Children have no per-frame inline geometry;
-        // Grid derives both pane widths from a single boundary owner.
-        layout.style.setProperty(
-          'grid-template-columns',
-          `minmax(0, ${builderWidth}px) minmax(0, 1fr)`,
-          'important',
-        );
+        // Single boundary probe: one parent custom property defines the left track;
+        // children keep their normal grid contracts with no inline pane geometry.
+        layout.style.setProperty('--soridraw-v2-owner-boundary-px', `${builderWidth}px`);
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       } else {
         // Mark temporary direct geometry so the normal pointer-up reconciliation can
@@ -1352,14 +1353,18 @@ export default function LiteStudioSplitWorkspace({
       actionInsetsRef.current = { left: 0, right: 0 };
     }
 
-    // 769: start owner diagnostics from a clean runtime geometry snapshot.
-    // Measurements above happen once before drag; pointermove itself stays read-free.
+    // 771: seed the selected workspace track variable before `.is-dragging`
+    // activates its CSS. This prevents a one-frame jump without adding any read
+    // to pointermove; all measurements here happen once at pointer-down.
     if (v2DragPerfMode === 'left-owner' || v2DragPerfMode === 'right-owner' || v2DragPerfMode === 'single-geometry-owner') {
       clearOwnerDiagnosticGeometry();
+      const layout = layoutRef.current;
       if (v2DragPerfMode === 'left-owner' && builderRect?.width) {
-        builderRef.current?.style.setProperty('width', `${Math.max(1, Math.round(builderRect.width))}px`, 'important');
+        layout?.style.setProperty('--soridraw-v2-owner-left-px', `${Math.max(1, Math.round(builderRect.width))}px`);
       } else if (v2DragPerfMode === 'right-owner' && resultRect?.width) {
-        resultRef.current?.style.setProperty('width', `${Math.max(1, Math.round(resultRect.width))}px`, 'important');
+        layout?.style.setProperty('--soridraw-v2-owner-right-px', `${Math.max(1, Math.round(resultRect.width))}px`);
+      } else if (v2DragPerfMode === 'single-geometry-owner' && builderRect?.width) {
+        layout?.style.setProperty('--soridraw-v2-owner-boundary-px', `${Math.max(1, Math.round(builderRect.width))}px`);
       }
     }
 

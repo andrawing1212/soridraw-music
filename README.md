@@ -2142,3 +2142,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Firestore 역할 읽기 실패 시에도 관리자 상태를 유지하지 않고 비관리자로 fail-closed 처리합니다.
 - 성능 진단 및 `자동 / Lite V2 / 기존 방식`, 생성바/V2/Pure Pane 비교 버튼은 캐시된 역할 힌트를 사용하지 않고 현재 로그인 계정의 준비된 관리자 역할에서만 노출합니다.
 - 일반 내비게이션, Lite V2 Pure Pane 실시간 기본 엔진, 반응형/디자인/Firebase 데이터 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 766차 — 마스터 앱 테스트 ON/OFF · 관리자권한관리 탭 분리
+- 기준: 765차
+- `마스터 권한` 화면을 `앱 테스트` / `관리자권한관리` 두 내부 탭으로 분리했습니다.
+- 기존 관리자별 페이지 권한 설정 UI는 `관리자권한관리` 탭으로 이동했습니다.
+- 기존 `앱 설정`에 있던 성능 진단 ON/OFF를 `마스터 권한 > 앱 테스트`로 이동했습니다.
+- 앱 테스트 OFF 시 Studio 우측의 엔진 비교/생성바/V2/Pure Pane 테스트 메뉴와 성능 진단 패널을 숨기고, ON 시에만 표시합니다.
+- 테스트 UI는 현재 로그인한 MASTER 계정에서만 표시되며 일반 관리자/일반 회원에는 노출되지 않습니다.
+- 토글은 기존 로컬 진단 설정 키를 재사용하므로 Firebase/Auth/Firestore/Functions/데이터 구조 변경이 없습니다.

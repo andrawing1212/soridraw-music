@@ -7911,7 +7911,10 @@ const toggleCycleVariantSelection = (
   // 765: performance/test controls are stricter than navigation hints.
   // Never show them from cached admin hints; require the current signed-in
   // identity's live role state to be ready and admin/staff-authorized.
-  const isAdminDiagnosticsUser = Boolean(user && isUserRoleReady && isAdminUser);
+  // 766: Studio performance/A-B test controls are a master-only app-test tool.
+  // Admin accounts still keep their normal admin pages, but cannot expose the
+  // floating split diagnostics or comparison switches.
+  const isMasterDiagnosticsUser = Boolean(user && isUserRoleReady && isMasterUser);
   const canAccessNavigationMenu = useCallback((key: NavigationMenuKey) => {
     if (isAdminUser) return true;
     if (!menuVisibility[key]) return false;
@@ -14675,7 +14678,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
         onStudioWorkspaceSelect={selectStudioWorkspaceView}
       />
 
-      <SplitPerformanceDiagnostics isAdmin={isAdminDiagnosticsUser} />
+      <SplitPerformanceDiagnostics isAdmin={isMasterDiagnosticsUser} />
 
       <Routes>
         <Route path="/" element={
@@ -14739,7 +14742,7 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               />
             }
           >
-              {isStudioBlackActionMode && isAdminDiagnosticsUser && (
+              {isStudioBlackActionMode && isMasterDiagnosticsUser && splitPerfToolsVisible && (
                 <>
                   <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--studio" aria-label="Studio 분할 엔진 비교 전환">
                     <button

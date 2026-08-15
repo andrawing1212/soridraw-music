@@ -1108,3 +1108,21 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     transition: none !important;
   }
 }
+
+/* 767 — PERF test helper copy belongs below the test buttons.
+ * The button row can consume the full panel width, so keeping the helper text
+ * as the final flex item squeezed it into a few pixels and wrapped Korean text
+ * one character per line on the right edge. Keep the controls horizontal, then
+ * give the helper copy its own full-width row underneath. */
+.soridraw-split-perf-benchmark-row {
+  flex-wrap: wrap;
+}
+
+.soridraw-split-perf-benchmark-row > span {
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}

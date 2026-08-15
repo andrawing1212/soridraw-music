@@ -2152,3 +2152,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 앱 테스트 OFF 시 Studio 우측의 엔진 비교/생성바/V2/Pure Pane 테스트 메뉴와 성능 진단 패널을 숨기고, ON 시에만 표시합니다.
 - 테스트 UI는 현재 로그인한 MASTER 계정에서만 표시되며 일반 관리자/일반 회원에는 노출되지 않습니다.
 - 토글은 기존 로컬 진단 설정 키를 재사용하므로 Firebase/Auth/Firestore/Functions/데이터 구조 변경이 없습니다.
+
+## SORIDRAW 767차 — 앱 테스트 PERF 설명문 가로 배치 복구
+- 기준: 766차
+- `앱 테스트 > PERF`의 테스트 버튼 뒤 설명문이 남은 폭에 끼여 우측에서 한 글자씩 세로로 줄바꿈되던 레이아웃을 수정했습니다.
+- 테스트 버튼은 기존처럼 가로로 유지하고, 설명문은 버튼 묶음 바로 아래 전체 폭 한 줄 영역으로 배치합니다.
+- Studio 분할 엔진/Pure Pane/Firebase/Auth/Firestore/Functions 동작은 변경하지 않았습니다.

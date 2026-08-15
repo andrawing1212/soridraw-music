@@ -234,7 +234,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only' | 'left-owner' | 'right-owner' | 'single-geometry-owner';
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -737,19 +737,6 @@ export default function LiteStudioSplitWorkspace({
     layoutRef.current?.removeAttribute('data-benchmark-layout-mode');
   }, []);
 
-  // 771: owner diagnostics keep production grid geometry intact and publish
-  // exactly one track variable on the workspace. Clear every temporary owner
-  // variable before the normal pointer-up reconciliation so no diagnostic track
-  // leaks into runtime. Older inline child geometry is also cleared defensively.
-  const clearOwnerDiagnosticGeometry = useCallback(() => {
-    const layout = layoutRef.current;
-    layout?.style.removeProperty('grid-template-columns');
-    layout?.style.removeProperty('--soridraw-v2-owner-left-px');
-    layout?.style.removeProperty('--soridraw-v2-owner-right-px');
-    layout?.style.removeProperty('--soridraw-v2-owner-boundary-px');
-    clearDirectBenchmarkGeometry();
-  }, [clearDirectBenchmarkGeometry]);
-
   const writeLiveSplitGeometry = useCallback((builderWidth: number, resultWidth: number, forceSingleDirect = false) => {
     const layout = layoutRef.current;
     const builder = builderRef.current;
@@ -836,22 +823,7 @@ export default function LiteStudioSplitWorkspace({
     const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
     const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
     const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
-    // 769 Galaxy Tab geometry-owner diagnostics. Unlike Left/Right Pane Only,
-    // these keep both panes visually participating while reducing JS geometry
-    // ownership to exactly one source: left width, right width, or parent grid.
-    // If they still lag while Pane Only stays fast, the cost is the browser
-    // laying out both pane subtrees in the same frame rather than duplicate JS writes.
-    const leftOwnerLive = live && draggingRef.current && v2DragPerfMode === 'left-owner';
-    const rightOwnerLive = live && draggingRef.current && v2DragPerfMode === 'right-owner';
-    const singleGeometryOwnerLive = live && draggingRef.current && v2DragPerfMode === 'single-geometry-owner';
-    const pureGeometryDiagnosticLive = purePaneLive
-      || purePaneResponsiveLive
-      || splitterOnlyLive
-      || leftPaneOnlyLive
-      || rightPaneOnlyLive
-      || leftOwnerLive
-      || rightOwnerLive
-      || singleGeometryOwnerLive;
+    const pureGeometryDiagnosticLive = purePaneLive || purePaneResponsiveLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive;
     const deferScrollLockLive = live && draggingRef.current
       && (v2DragPerfMode === 'scroll-defer'
         || v2DragPerfMode === 'direct-scroll-defer'
@@ -881,22 +853,6 @@ export default function LiteStudioSplitWorkspace({
 
       // Splitter-only proves whether pointer/rAF itself is fast when pane layout is absent.
       if (splitterOnlyLive) {
-        splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
-      } else if (leftOwnerLive) {
-        // 771: the workspace owns one left-track value; neither child receives
-        // live width/left/right geometry. Production grid derives Result as 1fr.
-        layout.style.setProperty('--soridraw-v2-owner-left-px', `${builderWidth}px`);
-        splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
-      } else if (rightOwnerLive) {
-        // Mirror probe: publish only the right-track width on the workspace.
-        // Builder is the 1fr remainder, so both panes stay visually valid while
-        // only one layout owner changes per frame.
-        layout.style.setProperty('--soridraw-v2-owner-right-px', `${resultWidth}px`);
-        splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
-      } else if (singleGeometryOwnerLive) {
-        // Single boundary probe: one parent custom property defines the left track;
-        // children keep their normal grid contracts with no inline pane geometry.
-        layout.style.setProperty('--soridraw-v2-owner-boundary-px', `${builderWidth}px`);
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       } else {
         // Mark temporary direct geometry so the normal pointer-up reconciliation can
@@ -1226,14 +1182,8 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'splitter-only'
       || v2DragPerfMode === 'left-pane-only'
       || v2DragPerfMode === 'right-pane-only'
-      || v2DragPerfMode === 'left-owner'
-      || v2DragPerfMode === 'right-owner'
-      || v2DragPerfMode === 'single-geometry-owner'
       || v2DragPerfMode === 'normal'
     ) {
-      if (v2DragPerfMode === 'left-owner' || v2DragPerfMode === 'right-owner' || v2DragPerfMode === 'single-geometry-owner') {
-        clearOwnerDiagnosticGeometry();
-      }
       // Reconcile any intentionally deferred responsive/external state exactly
       // once after pointer-up. Content-freeze modes now defer their selected
       // pane's responsive contract as well as its formatting width.
@@ -1262,7 +1212,7 @@ export default function LiteStudioSplitWorkspace({
     }
     window.requestAnimationFrame(connectTopCardObserver);
     try { window.localStorage.setItem(getStorageKey(splitProfileRef.current), String(percentRef.current)); } catch { /* optional */ }
-  }, [applyPercent, clearLiveExternalGeometry, clearOwnerDiagnosticGeometry, clearV2DragContentFreeze, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, v2DragPerfMode]);
+  }, [applyPercent, clearLiveExternalGeometry, clearV2DragContentFreeze, commitRootMeasurements, connectTopCardObserver, finishDragScrollLocks, flushPointer, readExternalControls, v2DragPerfMode]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (builderCollapsedRef.current || resultCollapsedRef.current || window.innerWidth < 1100) return;
@@ -1351,21 +1301,6 @@ export default function LiteStudioSplitWorkspace({
       };
     } else {
       actionInsetsRef.current = { left: 0, right: 0 };
-    }
-
-    // 771: seed the selected workspace track variable before `.is-dragging`
-    // activates its CSS. This prevents a one-frame jump without adding any read
-    // to pointermove; all measurements here happen once at pointer-down.
-    if (v2DragPerfMode === 'left-owner' || v2DragPerfMode === 'right-owner' || v2DragPerfMode === 'single-geometry-owner') {
-      clearOwnerDiagnosticGeometry();
-      const layout = layoutRef.current;
-      if (v2DragPerfMode === 'left-owner' && builderRect?.width) {
-        layout?.style.setProperty('--soridraw-v2-owner-left-px', `${Math.max(1, Math.round(builderRect.width))}px`);
-      } else if (v2DragPerfMode === 'right-owner' && resultRect?.width) {
-        layout?.style.setProperty('--soridraw-v2-owner-right-px', `${Math.max(1, Math.round(resultRect.width))}px`);
-      } else if (v2DragPerfMode === 'single-geometry-owner' && builderRect?.width) {
-        layout?.style.setProperty('--soridraw-v2-owner-boundary-px', `${Math.max(1, Math.round(builderRect.width))}px`);
-      }
     }
 
     topCardObserverRef.current?.disconnect();

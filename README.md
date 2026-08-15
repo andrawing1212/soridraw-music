@@ -2168,40 +2168,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 fast-path CSS의 layout/style/paint containment, off-screen content visibility, secondary container-query suspension을 그대로 재사용합니다. 새 DOM 측정/ResizeObserver/React state/pointermove capability query는 추가하지 않습니다.
 - PC fine-pointer Pure Pane 동작, 외부창 resize, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
 
-## SORIDRAW 769차 — 갤탭 단일 Geometry Owner A/B 진단
-
-- 기준: 768차 갤탭 Pure Pane 태블릿 FastPath 연결.
-- 사용자 실기기 결과: `Splitter Only`는 빠름, `Pure Pane`부터 손가락 추종 딜레이 발생. `Left Pane Only`는 약간 느리고 `Right Pane Only`는 빠름. 최근 생성곡에서도 좌/우 각각은 빠르지만 두 pane을 함께 움직이면 지연이 생김.
-- 목적: 특정 페이지보다 **좌우 두 pane이 같은 프레임에서 동시에 layout되는 비용**인지 먼저 확인한다.
-- 관리자 앱 테스트에 3개 진단 추가:
-  - `Left Owner`: JS는 Builder width 한 번만 갱신하고 Result는 flex로 남은 폭을 계산. 좌우 모두 실제 resize.
-  - `Right Owner`: JS는 Result width 한 번만 갱신하고 Builder는 flex로 남은 폭을 계산. 좌우 모두 실제 resize.
-  - `Single Owner`: pane 개별 geometry write 없이 부모 grid track 한 번만 갱신해 좌우 폭을 계산.
-- 세 모드는 responsive/external/ARIA/scroll 보조 동기화를 드래그 종료까지 제외해 geometry/layout 비용만 비교한다.
-- pointer-up 시 모든 진단용 width/grid track을 즉시 제거한 뒤 기존 Lite V2/Pure Pane runtime geometry로 1회 복구한다.
-- PC 기본 Pure Pane 실시간 경로, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.
-
-## SORIDRAW 770차 — 갤탭 Owner A/B 화면 구조 정상화
-
-- 기준: 769차 `갤탭 단일 Geometry Owner A/B 진단`.
-- 영상에서 `Right Owner` 선택 시 Builder가 정상 잔여폭을 채우지 못하고 큰 빈 공간이 생기던 진단 UI 오류를 수정했다.
-- 원인: 769차 Left/Right Owner 진단이 실제 Lite V2의 grid workspace를 drag 중 flex로 바꾸면서, 기존 grid/container-query 폭 계약과 충돌했다.
-- Left Owner / Right Owner 모두 production과 동일한 grid layout을 유지한다.
-  - Left Owner: Builder만 고정 폭 owner, Result는 `1fr` 잔여폭.
-  - Right Owner: Result만 고정 폭 owner, Builder는 `1fr` 잔여폭.
-- Single Owner도 drag 중 grid layout임을 명시해 이전 진단 모드의 layout model이 섞이지 않게 했다.
-- 성능 진단의 목적(한쪽 pane 또는 parent 한 곳만 geometry owner)은 유지하고, 화면 구조만 정상화했다.
-- Pure Pane 기본 엔진, PC 동작, Firebase/Auth/Firestore/Functions 구조는 변경하지 않았다.
-
-## SORIDRAW 771차 — 갤탭 Owner A/B 실제 geometry 정상화
-
-- 기준: 770차 `갤탭 Owner A/B 화면 구조 정상화`.
-- 770차 영상에서 `Right Owner`는 드래그 중 오른쪽 pane이 사라지고, `Single Owner`는 좌우 사이에 큰 빈 공간이 생겨 속도 비교 자체가 무효였던 문제를 수정했다.
-- 원인은 child inline width와 `auto/1fr` grid track을 동시에 owner로 사용해 실제 geometry 소유권이 이중화된 것이었다.
-- 세 진단 모두 production Lite V2와 동일한 2-column grid를 유지하고, pane child에는 드래그 중 `width/left/right`를 쓰지 않는다.
-  - `Left Owner`: workspace의 `--soridraw-v2-owner-left-px` 한 값으로 왼쪽 track만 정의하고 오른쪽은 `1fr` 잔여폭.
-  - `Right Owner`: workspace의 `--soridraw-v2-owner-right-px` 한 값으로 오른쪽 track만 정의하고 왼쪽은 `1fr` 잔여폭.
-  - `Single Owner`: workspace의 `--soridraw-v2-owner-boundary-px` 한 값으로 경계를 정의하고 오른쪽은 `1fr` 잔여폭.
-- pointer-down에서 현재 폭을 1회 seed해 모드 진입 첫 프레임의 점프를 막고, pointermove hot path에는 DOM 측정을 추가하지 않았다.
-- pointer-up 시 세 임시 track 변수를 모두 제거하고 기존 Pure Pane runtime으로 정합화한다.
-- PC Pure Pane 기본 엔진, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+## SORIDRAW 772차 — Galaxy Tab Owner 진단 롤백 · 768 정상 구조 복구
+- 기준: 771차 결과를 검토한 뒤, 769~771에서 추가한 `Left Owner / Right Owner / Single Owner` 진단 실험을 전부 폐기했습니다.
+- 실제 앱 코드는 768차의 정상 Lite V2 + Pure Pane 실시간 구조로 복구했습니다. 764차에서 기본 엔진으로 승격한 PC Lite V2/Pure Pane 경로와 765~767의 관리자 테스트 메뉴/앱 테스트 ON/OFF/PERF 설명문 배치는 그대로 유지됩니다.
+- Galaxy Tab에는 768차에서 연결한 기존 태블릿 fast-path까지만 남기고, 화면 구조를 깨뜨리던 owner별 grid/geometry 실험 코드는 모두 제거했습니다.
+- 기존 신뢰 가능한 진단 결과(`Splitter Only` 빠름, `Right Pane Only` 빠름, `Left Pane Only` 약간 느림, `Pure Pane`에서 양쪽 동시 이동 시 입력 추종 지연)는 기록으로만 유지하고 새로운 레이아웃 실험은 포함하지 않습니다.
+- 다음 성능 진단은 정상 Pure Pane 화면 구조를 변경하지 않는 방식으로 진행해야 하며, 우선 AI Studio에 동일 기준 ZIP과 위 결과를 전달해 원인 분석/진단 설계를 맡기는 방향으로 전환합니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음. 배포 작업 없음.

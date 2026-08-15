@@ -4299,13 +4299,7 @@ function App() {
                               ? 'left-pane-only'
                               : v2DragPerfParam === 'right-pane-only'
                                 ? 'right-pane-only'
-                                : v2DragPerfParam === 'left-owner'
-                                  ? 'left-owner'
-                                  : v2DragPerfParam === 'right-owner'
-                                    ? 'right-owner'
-                                    : v2DragPerfParam === 'single-owner'
-                                      ? 'single-geometry-owner'
-                                      : 'normal';
+                                : 'normal';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4426,13 +4420,7 @@ function App() {
                                 ? 'splitter-only'
                                 : mode === 'left-pane-only'
                                   ? 'left-pane-only'
-                                  : mode === 'right-pane-only'
-                                    ? 'right-pane-only'
-                                    : mode === 'left-owner'
-                                      ? 'left-owner'
-                                      : mode === 'right-owner'
-                                        ? 'right-owner'
-                                        : 'single-owner';
+                                  : 'right-pane-only';
       nextParams.set('v2DragPerf', param);
     }
     const query = nextParams.toString();
@@ -14985,35 +14973,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                       title="진단용: Result pane + Splitter만 실제 resize. 왼쪽 pane layout 비용 제외"
                     >
                       Right Pane Only
-                    </button>
-                  </div>
-                  <div className="soridraw-split-engine-test-switch soridraw-split-engine-test-switch--v2-owner" aria-label="Lite V2 단일 geometry owner 진단">
-                    <button
-                      type="button"
-                      disabled={studioSplitEngine !== 'lite'}
-                      className={studioV2DragPerfMode === 'left-owner' ? 'is-active' : ''}
-                      onClick={() => setStudioV2DragPerfMode('left-owner')}
-                      title="갤탭 진단: Builder width 하나만 JS가 갱신하고 Result는 flex로 남은 폭을 자동 계산. 좌우 모두 실제 resize되지만 geometry owner는 왼쪽 하나"
-                    >
-                      Left Owner
-                    </button>
-                    <button
-                      type="button"
-                      disabled={studioSplitEngine !== 'lite'}
-                      className={studioV2DragPerfMode === 'right-owner' ? 'is-active' : ''}
-                      onClick={() => setStudioV2DragPerfMode('right-owner')}
-                      title="갤탭 진단: Result width 하나만 JS가 갱신하고 Builder는 flex로 남은 폭을 자동 계산. 좌우 모두 실제 resize되지만 geometry owner는 오른쪽 하나"
-                    >
-                      Right Owner
-                    </button>
-                    <button
-                      type="button"
-                      disabled={studioSplitEngine !== 'lite'}
-                      className={studioV2DragPerfMode === 'single-geometry-owner' ? 'is-active' : ''}
-                      onClick={() => setStudioV2DragPerfMode('single-geometry-owner')}
-                      title="갤탭 진단: pane에는 geometry를 쓰지 않고 부모 grid track 한 번만 갱신해 좌우 폭을 브라우저가 계산. 한 프레임의 geometry owner를 부모 하나로 축소"
-                    >
-                      Single Owner
                     </button>
                   </div>
                 </>

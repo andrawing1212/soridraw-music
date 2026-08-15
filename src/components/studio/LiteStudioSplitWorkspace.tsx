@@ -789,7 +789,18 @@ export default function LiteStudioSplitWorkspace({
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
       result.style.setProperty('left', `${builderWidth}px`, 'important');
       result.style.setProperty('right', dragResultRightRef.current, 'important');
-      result.style.setProperty('width', `${resultWidth}px`, 'important');
+      // 776: direct layout used left + explicit width + right together. In LTR,
+      // left + width win, so the tablet `right:-18px` reach-through was ignored
+      // and the native result scrollbar stayed 18px inside the right frame.
+      // Extend only the scroll shell by the negative right inset; CSS returns
+      // the same amount as padding-right, so the visible result content width
+      // and card positions do not change. This is pure math from the cached
+      // drag right owner and adds no DOM read to the live path.
+      const directResultRight = Number.parseFloat(dragResultRightRef.current);
+      const directResultReachThrough = Number.isFinite(directResultRight) && directResultRight < 0
+        ? Math.abs(directResultRight)
+        : 0;
+      result.style.setProperty('width', `${Math.max(0, resultWidth + directResultReachThrough)}px`, 'important');
       // 622: splitter is now the same body-level fixed control as Recent Songs,
       // so its live x-coordinate must be viewport-relative rather than local.
       splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');

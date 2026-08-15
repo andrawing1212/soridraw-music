@@ -1346,10 +1346,13 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   overflow-wrap: break-word;
 }
 
-/* 775 — Tablet split frame / result scrollbar owner correction.
+/* 776 — Tablet split frame / result scrollbar owner correction.
  * Keep the successful Lite V2 / Tablet Touch Pure performance path untouched.
- * 774 mistakenly started the portal splitter at the LOWER 110px masthead divider;
- * the approved vertical divider must start at the UPPER top-navigation line (58px).
+ * 774 started the portal splitter at the LOWER 110px masthead divider.
+ * 775 reused the legacy desktop 58px top-nav height, but tablet shows the compact
+ * mobile navigation (`h-11` + `py-2.5`) whose actual height is 64px. That made
+ * the vertical splitter protrude 6px above the visible upper divider. Tablet
+ * split therefore starts at the real 64px compact-navigation bottom edge.
  * The collapse buttons stay at their already-approved 774 position.
  *
  * Tablet result scrolling also had two owners fighting the intended -18px
@@ -1369,7 +1372,7 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus,
   html[data-soridraw-theme="studio-black"]
   body > button.soridraw-studio-splitter.soridraw-lite-studio-splitter:focus-visible {
-    top: 58px !important;
+    top: 64px !important;
   }
 
   /* 774's collapse-button position was user-verified as correct.
@@ -1411,11 +1414,11 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
     right: calc(var(--soridraw-studio-result-right, 0px) + 6px) !important;
   }
 
-  /* The workspace's older `overflow:hidden` clipped the 18px reach-through,
-   * so 774 could not move the native result scrollbar even though the result
-   * pane itself had `right:-18px`. Match the already-proven wide-PC shell:
-   * preserve size/layout/style containment, drop only paint clipping, and let
-   * the result pane occupy the main's existing 18px right gutter. */
+  /* Tablet `.soridraw-studio-main` owns an 18px right inset. The result
+   * scrollbar must sit on the frame divider, not at the workspace inset edge.
+   * Keep the shell visible through that gutter. In direct layout TypeScript now
+   * expands the explicit result width by the same cached 18px; without that,
+   * `left + width` wins the over-constrained geometry and `right:-18px` is ignored. */
   html[data-soridraw-theme="studio-black"]
   .soridraw-lite-studio-split-workspace[data-scroll-isolated="true"] {
     overflow: visible !important;

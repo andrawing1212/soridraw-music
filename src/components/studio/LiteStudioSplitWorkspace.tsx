@@ -823,7 +823,10 @@ export default function LiteStudioSplitWorkspace({
     const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
     const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
     const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
-    const pureGeometryDiagnosticLive = purePaneLive || purePaneResponsiveLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive;
+    const contentLeftFreezeLive = live && draggingRef.current && v2DragPerfMode === 'content-left-freeze';
+    const contentRightFreezeLive = live && draggingRef.current && v2DragPerfMode === 'content-right-freeze';
+    const contentFreezeLive = live && draggingRef.current && v2DragPerfMode === 'content-freeze';
+    const pureGeometryDiagnosticLive = purePaneLive || purePaneResponsiveLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive;
     const deferScrollLockLive = live && draggingRef.current
       && (v2DragPerfMode === 'scroll-defer'
         || v2DragPerfMode === 'direct-scroll-defer'
@@ -859,12 +862,12 @@ export default function LiteStudioSplitWorkspace({
         // remove all diagnostic inline geometry before restoring the runtime owner.
         layout.dataset.v2TraceDirectGeometry = 'true';
 
-        if (purePaneLive || purePaneResponsiveLive || leftPaneOnlyLive) {
+        if (purePaneLive || purePaneResponsiveLive || leftPaneOnlyLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {
           builder.style.setProperty('left', '0px', 'important');
           builder.style.setProperty('right', 'auto', 'important');
           builder.style.setProperty('width', `${builderWidth}px`, 'important');
         }
-        if (purePaneLive || purePaneResponsiveLive || rightPaneOnlyLive) {
+        if (purePaneLive || purePaneResponsiveLive || rightPaneOnlyLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {
           result.style.setProperty('left', `${builderWidth}px`, 'important');
           result.style.setProperty('right', dragResultRightRef.current, 'important');
           result.style.removeProperty('width');
@@ -872,7 +875,7 @@ export default function LiteStudioSplitWorkspace({
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       }
 
-      if (purePaneResponsiveLive) {
+      if (purePaneResponsiveLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {
         // 768 — Galaxy Tab Pure Pane tablet isolation.
         // The old 657 fast-path marker was only published from the non-Pure branch
         // and only for fine pointers. Since 764 made Pure Pane the production path,

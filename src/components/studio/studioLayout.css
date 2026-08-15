@@ -589,6 +589,26 @@
   min-height: 48px !important;
 }
 
+/* 782 — Mood / Theme keep two visible keyword rows on every mobile path.
+ * The shared mobile collapsed height is intentionally still one row (48px) for
+ * the other keyword menus. Mood/Theme alone use the same two-row 96px contract
+ * as PC/tablet. The viewport rule covers Classic dark/light mobile; the pane-
+ * owned rule covers split Studio when the Builder itself enters mobile mode
+ * inside a wider desktop/tablet viewport. */
+@media (max-width: 767px) {
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-expand-content {
+    --soridraw-expand-collapsed-height: 96px;
+    min-height: 96px !important;
+  }
+}
+
+:root[data-soridraw-theme="studio-black"]
+.soridraw-studio-builder-pane[data-pane-mode="mobile"]
+:is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-expand-content {
+  --soridraw-expand-collapsed-height: 96px;
+  min-height: 96px !important;
+}
+
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-studio-menu-card {
   overflow: hidden !important;
   isolation: isolate;

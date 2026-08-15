@@ -2205,3 +2205,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 최소폭 상태(dataset)는 실제 경계를 넘을 때만 바뀌며, 일반 드래그 중에는 카드/반응형/외부 UI 동기화를 다시 켜지 않는다. 즉 Pure Pane 성능 경로는 유지하고 접기버튼에 필요한 최소 상태/좌표만 보강했다.
 - 드래그 종료 시 임시 inline 좌표와 Lite toggle 변수를 제거하고 기존 committed root 좌표에 소유권을 돌려준다. 그래서 접은 뒤 다시 펼칠 때의 기존 restore 위치 규칙은 그대로 유지된다.
 - 영향 범위: Studio Black 분할모드의 Lite V2 좌/우 pane 최소폭 접기버튼. Classic, 모바일(<1100px), Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## SORIDRAW 782차 — 모바일 분위기·주제 키워드 2줄 공통화
+
+- 기준: 781차.
+- 모바일에서 `분위기` / `주제` 카드의 접힌 키워드 영역만 48px(1줄)로 축소되던 공통 규칙을 확인했습니다. PC/태블릿은 동일 영역이 96px이라 2줄이 보이고 있었습니다.
+- 공통 모바일 48px 규칙은 장르/스타일/사운드 등 다른 메뉴를 위해 그대로 유지하고, `data-studio-menu="mood"` / `theme`에만 96px 2줄 규칙을 우선 적용했습니다.
+- 일반 모바일 viewport 규칙으로 Classic 다크/라이트를 함께 적용하고, `data-pane-mode="mobile"` pane 규칙으로 넓은 화면 안에서 분할 Builder가 모바일 폭이 되는 Studio Black 경로까지 동일하게 적용했습니다.
+- 키워드 개수/선택 로직/카드 폭/버튼 디자인/펼치기 동작은 변경하지 않았습니다. Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 작업 없음.
+

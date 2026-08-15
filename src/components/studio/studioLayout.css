@@ -13337,24 +13337,34 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
 }
 
 
-/* 778 — Tablet-landscape Sori Studio one-pane scrollbar edge parity.
- * 777 extended the Result pane reach-through to tablet, but Sori Studio's
- * Builder-only view still inherited the main column's 18px right inset at
- * 1100~1599px. Extend only the Builder scroll shell into that reserved gutter
- * and give the same 18px back as inner padding, so the cards/search/layout do
- * not move while the native scrollbar lands immediately before the right rail.
- * Wide desktop >=1600px keeps its existing 337 contract. */
-@media (min-width: 1100px) and (max-width: 1599px) {
+/* 779 — Tablet-landscape builder-only scrollbar uses the proven 337 shell rule.
+ * 778 tried to move only the Builder pane with `right:-18px`, but Lite V2 owns
+ * the collapsed Builder width as an inline `width: ... !important`. In an
+ * absolutely positioned LTR box, left + width win over right, so that rule was
+ * geometrically unable to move the native scrollbar.
+ *
+ * Reuse the same ownership principle already verified by wide-PC rule 337:
+ * release the Studio main's reserved RIGHT gutter so the workspace/scroll shell
+ * itself reaches the right-rail divider, then return that 18px inside the
+ * Builder as extra padding. The visible cards, masthead and search keep their
+ * previous width/position while only the scrollbar shell gains the missing 18px.
+ * This shared one-pane rule works for both Legacy and Lite V2 split engines. */
+@media (min-width: 1100px) and (max-width: 1599.98px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root .soridraw-studio-main {
+    padding-right: 0 !important;
+  }
+
   html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
   body #root .soridraw-app-root
-  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  .soridraw-studio-split-workspace
   > .soridraw-studio-builder-pane {
     left: 0 !important;
-    right: -18px !important;
-    width: auto !important;
+    right: 0 !important;
+    width: 100% !important;
     max-width: none !important;
     margin: 0 !important;
-    padding-right: 18px !important;
+    padding-right: 36px !important;
     box-sizing: border-box !important;
   }
 }

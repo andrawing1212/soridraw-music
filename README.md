@@ -2181,3 +2181,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 777차에서 결과 pane에 적용한 우측 스크롤바 외곽 정렬과 별개로, 1100~1599px 태블릿 가로의 Sori Studio Builder 단독 화면은 main의 18px 우측 여백 안쪽에 스크롤바가 남아 있던 원인을 수정했습니다.
 - Builder scroll shell만 우측 18px 예약 영역까지 확장하고 동일한 18px를 내부 padding으로 되돌려 카드/검색/레이아웃 위치는 그대로 유지하면서 스크롤바만 우측 레일 바로 앞 외곽선에 맞췄습니다.
 - 1600px 이상 PC의 기존 one-pane 규칙, 분할바, 반응형 전환, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
+### 779차 — 태블릿 가로 곡만들기 스크롤바 공통 셸 정렬
+- 778의 `right:-18px` 방식은 Lite V2가 Builder에 쓰는 inline `width: ... !important`와 충돌해 실제 스크롤바 위치가 바뀌지 않는 원인을 확인.
+- PC 337차에서 이미 검증된 공통 원리(바깥 scroll shell이 우측 레일까지 도달하고 내부 콘텐츠 폭은 별도 보존)를 1100~1599.98px Builder-only 상태에도 재사용.
+- `soridraw-studio-main`의 오른쪽 18px 예약 여백만 해제하고 Builder 내부에 18px을 추가 반환해 카드/검색/마스트헤드 위치는 유지하면서 스크롤바만 우측 레일 바로 앞까지 이동.
+- Legacy/Lite V2 공통 CSS 소유권으로 처리. Classic, 모바일(<1100), PC(>=1600), Firebase/Auth/Firestore/Functions 저장 구조는 변경 없음.

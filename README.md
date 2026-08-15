@@ -2175,3 +2175,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 신뢰 가능한 진단 결과(`Splitter Only` 빠름, `Right Pane Only` 빠름, `Left Pane Only` 약간 느림, `Pure Pane`에서 양쪽 동시 이동 시 입력 추종 지연)는 기록으로만 유지하고 새로운 레이아웃 실험은 포함하지 않습니다.
 - 다음 성능 진단은 정상 Pure Pane 화면 구조를 변경하지 않는 방식으로 진행해야 하며, 우선 AI Studio에 동일 기준 ZIP과 위 결과를 전달해 원인 분석/진단 설계를 맡기는 방향으로 전환합니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음. 배포 작업 없음.
+
+## SORIDRAW 778차 — 태블릿 가로 Sori Studio 우측 스크롤바 외곽 정렬
+- 기준: 777차.
+- 777차에서 결과 pane에 적용한 우측 스크롤바 외곽 정렬과 별개로, 1100~1599px 태블릿 가로의 Sori Studio Builder 단독 화면은 main의 18px 우측 여백 안쪽에 스크롤바가 남아 있던 원인을 수정했습니다.
+- Builder scroll shell만 우측 18px 예약 영역까지 확장하고 동일한 18px를 내부 padding으로 되돌려 카드/검색/레이아웃 위치는 그대로 유지하면서 스크롤바만 우측 레일 바로 앞 외곽선에 맞췄습니다.
+- 1600px 이상 PC의 기존 one-pane 규칙, 분할바, 반응형 전환, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.

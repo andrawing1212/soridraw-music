@@ -13336,3 +13336,25 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
   }
 }
 
+
+/* 778 — Tablet-landscape Sori Studio one-pane scrollbar edge parity.
+ * 777 extended the Result pane reach-through to tablet, but Sori Studio's
+ * Builder-only view still inherited the main column's 18px right inset at
+ * 1100~1599px. Extend only the Builder scroll shell into that reserved gutter
+ * and give the same 18px back as inner padding, so the cards/search/layout do
+ * not move while the native scrollbar lands immediately before the right rail.
+ * Wide desktop >=1600px keeps its existing 337 contract. */
+@media (min-width: 1100px) and (max-width: 1599px) {
+  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
+  body #root .soridraw-app-root
+  .soridraw-studio-split-workspace[data-scroll-isolated="true"]
+  > .soridraw-studio-builder-pane {
+    left: 0 !important;
+    right: -18px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding-right: 18px !important;
+    box-sizing: border-box !important;
+  }
+}

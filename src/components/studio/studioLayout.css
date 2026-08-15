@@ -13499,3 +13499,33 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     max-height: 282px !important;
   }
 }
+
+
+/* 789 — Vocal/Lyrics title-size changes must never move the card row.
+ * The shared 1074px compact rule intentionally shrinks card titles (22 -> 18px)
+ * and header action buttons (36 -> 30px). For Vocal/Lyrics, that visual change
+ * was still allowed to change the header's natural height, which changed the
+ * paired grid row by a few pixels. During drag, the old 763 Lyrics snapshot hid
+ * the change; pointer-up removed the snapshot and the whole lower row jumped.
+ *
+ * Keep the WIDE header footprint (36px) as the layout slot at every split width.
+ * The title and icons may still resize visually, but their parent card and the
+ * following content start position stay fixed. Both cards in the pair share the
+ * exact same owner, so neither one can push the other or move the rows below.
+ * This is split Studio Black only; Classic, non-split mobile, keyword cards and
+ * all content/control responsive rules remain unchanged. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace
+  .soridraw-studio-builder-pane
+  :is([data-studio-menu="vocal"], [data-studio-menu="lyrics"])
+  > .soridraw-card-header {
+    box-sizing: border-box !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    flex: 0 0 36px !important;
+    align-items: center !important;
+    overflow: visible !important;
+  }
+}

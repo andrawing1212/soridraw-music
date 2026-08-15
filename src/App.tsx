@@ -14122,7 +14122,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       style={{ transformOrigin: 'center bottom' }}
       className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
     >
-      {!isActionSwipeCollapseMode && (
+      {/* 791 — Keep the split-desktop collapse control mounted even while the
+       * Builder is in its narrow mobile pane state. CSS owns its live visibility
+       * from data-soridraw-builder-mode, so dragging mobile -> desktop can reveal
+       * it immediately without an App-root rerender. <1100px keeps the old DOM
+       * behavior. */}
+      {(!isActionSwipeCollapseMode || isStudioWideSelectionLayout) && (
         <motion.button
           type="button"
           onClick={collapseActionButtons}

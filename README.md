@@ -2283,3 +2283,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정 2: >=1100px 분할 작업에서는 생성바 접기 화살표 DOM을 항상 유지하고 CSS가 live builder-mode에 따라 보이기/숨기기를 소유하도록 변경. 따라서 mobile에서 시작해 desktop으로 돌아가는 반대 방향도 pointer-up 없이 즉시 정상 디자인으로 복귀함. <1100px Compact/실제 모바일의 기존 DOM 동작은 유지.
 - 결과 목표: 생성바의 위치/폭뿐 아니라 desktop↔mobile 디자인도 분할바 이동 중 즉시 바뀌고, 마우스를 놓는 순간 추가 디자인 스냅이 없어야 함.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+## SORIDRAW 792차 — 곡만들기/최근생성곡 생성바 페이지간 geometry 분리
+- 기준: 791차.
+- 증상: 분할모드에서 `곡 만들기`와 `최근 생성곡`을 오갈 때, 먼저 열려 있던 페이지의 생성바 폭/좌표가 다음 페이지의 첫 표시에도 남음. 생성바를 접었다 다시 펼치면 그제야 현재 페이지 폭으로 정상화됨.
+- 실제 원인: Lite V2 실시간 생성바 추적이 drag 중 portal 생성바 요소 자체에 `--soridraw-action-fixed-left/width`를 임시 inline 변수로 기록함. 이 값은 root의 resting geometry보다 우선순위가 높고, workspace 전환 시 같은 portal DOM이 계속 살아 있으면 이전 페이지 값이 다음 페이지까지 남을 수 있었음. 접기/펼치기 시 DOM이 교체되면서 inline 값이 사라져 정상으로 보였던 이유도 동일함.
+- 수정 1: resting geometry를 다시 계산할 때 expanded/collapsed 생성바에 남아 있을 수 있는 drag 전용 inline geometry만 먼저 제거하고, 현재 페이지의 실제 command anchor를 기준으로 root geometry를 새로 계산함.
+- 수정 2: split 엔진이 `곡 만들기`의 Result 접힘 / `최근 생성곡`의 split 복귀를 완료한 뒤 이미 발행하는 `soridraw-studio-pane-collapse-change` 이벤트에 생성바 geometry 재동기화를 연결함. 따라서 workspace 전환 후 한 프레임 뒤 현재 pane geometry를 기준으로 독립적으로 자리잡음.
+- 결과 목표: 곡만들기와 최근 생성곡이 서로의 이전 생성바 폭/위치를 물려받지 않으며, 페이지 이동 직후부터 현재 페이지 위치/크기로 표시됨. 접기/펼치기 보정이 필요 없어야 함.
+- 미변경: 생성바 접힘 상태 자체, 선택값/가사/프롬프트 상태, 분할 퍼센트, 실시간 drag 성능 경로, Firebase/Auth/Firestore/Functions/저장 구조. 배포 없음.

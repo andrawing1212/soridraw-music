@@ -7306,6 +7306,27 @@ const toggleCycleVariantSelection = (
 
   const syncActionBarLayoutMetrics = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
+
+    // 792 — Workspace switches (Create <-> Recent) must never inherit the
+    // outgoing page's live Generate-bar geometry. Lite V2 writes temporary
+    // per-element CSS vars while dragging; those vars outrank the committed
+    // root geometry and can survive on the same mounted portal node when the
+    // workspace changes. Collapse/expand remounts that node, which is why the
+    // old bug appeared to fix itself only after toggling the bar.
+    //
+    // At rest, root geometry is the single owner. Clear only the transient
+    // live element vars before measuring the current command anchor, then
+    // publish fresh geometry for the active workspace. No user state is reset.
+    const floatingActionBar = document.querySelector<HTMLElement>(
+      'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
+    );
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-left');
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-width');
+
+    const collapsedActionButton = document.querySelector<HTMLElement>('body > .soridraw-studio-action-collapsed');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-builder-width');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-left-rail-edge');
+
     const anchor = actionButtonsAnchorRef.current;
     if (!anchor) return;
 
@@ -7476,6 +7497,12 @@ const toggleCycleVariantSelection = (
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
     window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
     window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
+    // 792 — Create collapses the Result pane, while Recent restores the split.
+    // Lite/Legacy already publish this event after their pane geometry has been
+    // committed. Re-measure on the next rAF so each workspace gets its own
+    // Generate-bar left/width instead of reusing the previous workspace's
+    // portal geometry until collapse/expand.
+    window.addEventListener('soridraw-studio-pane-collapse-change', scheduleLayoutChange as EventListener);
     scheduleLayoutChange();
 
     return () => {
@@ -7494,6 +7521,7 @@ const toggleCycleVariantSelection = (
       window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
       window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
       window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', scheduleLayoutChange as EventListener);
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       };

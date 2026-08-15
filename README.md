@@ -2158,3 +2158,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `앱 테스트 > PERF`의 테스트 버튼 뒤 설명문이 남은 폭에 끼여 우측에서 한 글자씩 세로로 줄바꿈되던 레이아웃을 수정했습니다.
 - 테스트 버튼은 기존처럼 가로로 유지하고, 설명문은 버튼 묶음 바로 아래 전체 폭 한 줄 영역으로 배치합니다.
 - Studio 분할 엔진/Pure Pane/Firebase/Auth/Firestore/Functions 동작은 변경하지 않았습니다.
+
+
+## SORIDRAW 768차 — Galaxy Tab Pure Pane 태블릿 fast-path 연결
+- 기준: 767차
+- PC에서 검증된 Lite V2 + Pure Pane 실시간 기본 엔진은 그대로 유지합니다.
+- 764차 이후 Pure Pane은 drag hot path에서 조기 return하기 때문에, 기존 657 태블릿 fast-path marker가 Galaxy Tab touch/S Pen에는 실제로 연결되지 않던 경로를 수정했습니다.
+- touch/pen 입력으로 Pure Pane을 드래그할 때 이미 알고 있는 pane 폭이 661~1080px 태블릿 band에 들어오면 `data-soridraw-pane-tablet-fastpath`를 경계 변화 시에만 갱신합니다.
+- 기존 fast-path CSS의 layout/style/paint containment, off-screen content visibility, secondary container-query suspension을 그대로 재사용합니다. 새 DOM 측정/ResizeObserver/React state/pointermove capability query는 추가하지 않습니다.
+- PC fine-pointer Pure Pane 동작, 외부창 resize, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.

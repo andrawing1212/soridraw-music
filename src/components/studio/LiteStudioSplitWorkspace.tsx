@@ -277,6 +277,10 @@ export default function LiteStudioSplitWorkspace({
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
   );
   const pointerIdRef = useRef(-1);
+  // 768: remember the active input source so Galaxy Tab touch/S Pen can use
+  // the same tablet-pane isolation during the Pure Pane production hot path.
+  // This is set once on pointer-down; pointermove performs no capability query.
+  const activePointerTypeRef = useRef<string>('');
   const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
   const manualPerfCaptureActiveRef = useRef(false);
   const pendingClientXRef = useRef<number | null>(null);
@@ -869,6 +873,28 @@ export default function LiteStudioSplitWorkspace({
       }
 
       if (purePaneResponsiveLive) {
+        // 768 — Galaxy Tab Pure Pane tablet isolation.
+        // The old 657 fast-path marker was only published from the non-Pure branch
+        // and only for fine pointers. Since 764 made Pure Pane the production path,
+        // coarse touch/S Pen never received the already-proven 661~1080px layout
+        // containment and therefore kept paying the full tablet card/list reflow.
+        // Reuse the same marker from already-known pane widths. It changes only
+        // when a pane enters/leaves the tablet band; there is no DOM read here.
+        const touchLikePointer = activePointerTypeRef.current === 'touch'
+          || activePointerTypeRef.current === 'pen'
+          || (!activePointerTypeRef.current && !finePointerFastPathRef.current);
+        if (touchLikePointer) {
+          const syncPurePaneTabletFastPath = (pane: HTMLElement, paneWidth: number) => {
+            const shouldBeActive = paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
+            const isActive = pane.dataset.soridrawPaneTabletFastpath === 'true';
+            if (shouldBeActive === isActive) return;
+            if (shouldBeActive) pane.dataset.soridrawPaneTabletFastpath = 'true';
+            else delete pane.dataset.soridrawPaneTabletFastpath;
+          };
+          syncPurePaneTabletFastPath(builder, builderWidth);
+          syncPurePaneTabletFastPath(result, resultWidth);
+        }
+
         // 762: do not rely on a one-shot boundary signature to trigger the live
         // responsive handoff. Fast pointer frames can jump across multiple bands,
         // and a missed signature left Compact/Mobile visually stale until pointer-up.
@@ -1125,6 +1151,7 @@ export default function LiteStudioSplitWorkspace({
     flushPointer();
     draggingRef.current = false;
     pointerIdRef.current = -1;
+    activePointerTypeRef.current = '';
     layoutRef.current?.classList.remove('is-dragging');
     // 762: Pure Pane menu vertical locks are drag-only. Clear them immediately
     // after the drag class is removed so the resting responsive layout owns the
@@ -1293,6 +1320,7 @@ export default function LiteStudioSplitWorkspace({
       : null;
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
+    activePointerTypeRef.current = event.pointerType || '';
     pendingClientXRef.current = null;
     // 611: real hand dragging is intentionally uninstrumented unless the admin
     // explicitly arms the one-shot "실손 드래그 비교" diagnostic. The arm is

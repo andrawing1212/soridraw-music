@@ -288,6 +288,10 @@ export default function LiteStudioSplitWorkspace({
   const lastViewportHeightRef = useRef<number | null>(null);
   const lastIsolatedHeightRef = useRef<number | null>(null);
   const actionInsetsRef = useRef<{ left: number; right: number } | null>(null);
+  // 762: preserve the result scroll-shell's resting right edge during direct/Pure Pane drag.
+  // Wide split mode intentionally reaches 18px past the workspace so its scrollbar
+  // sits on the outer rail boundary; forcing right:0 during drag made it jump left.
+  const dragResultRightRef = useRef('0px');
   // 749 — Keep geometry callbacks stable while only the workspace result page
   // changes. The latest page is read through this ref; dedicated view effects
   // still request one exact resting refresh outside any drag gesture.
@@ -750,7 +754,7 @@ export default function LiteStudioSplitWorkspace({
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
       result.style.setProperty('left', `${builderWidth}px`, 'important');
-      result.style.setProperty('right', '0px', 'important');
+      result.style.setProperty('right', dragResultRightRef.current, 'important');
       result.style.removeProperty('width');
       splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       return;
@@ -769,7 +773,7 @@ export default function LiteStudioSplitWorkspace({
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
       result.style.setProperty('left', `${builderWidth}px`, 'important');
-      result.style.setProperty('right', '0px', 'important');
+      result.style.setProperty('right', dragResultRightRef.current, 'important');
       result.style.setProperty('width', `${resultWidth}px`, 'important');
       // 622: splitter is now the same body-level fixed control as Recent Songs,
       // so its live x-coordinate must be viewport-relative rather than local.
@@ -856,44 +860,26 @@ export default function LiteStudioSplitWorkspace({
         }
         if (purePaneLive || purePaneResponsiveLive || rightPaneOnlyLive) {
           result.style.setProperty('left', `${builderWidth}px`, 'important');
-          result.style.setProperty('right', '0px', 'important');
+          result.style.setProperty('right', dragResultRightRef.current, 'important');
           result.style.removeProperty('width');
         }
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       }
 
       if (purePaneResponsiveLive) {
-        const nextBoundarySignature = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
-        if (dragBoundarySignatureRef.current !== nextBoundarySignature) {
-          const previousParts = dragBoundarySignatureRef.current?.split(':') ?? [];
-          const nextParts = nextBoundarySignature.split(':');
-          const builderBoundaryChanged = previousParts.length < 4
-            || previousParts[0] !== nextParts[0]
-            || previousParts[1] !== nextParts[1];
-          const resultBoundaryChanged = previousParts.length < 4
-            || previousParts[2] !== nextParts[2]
-            || previousParts[3] !== nextParts[3];
-
-          dragBoundarySignatureRef.current = nextBoundarySignature;
-
-          // Publish only the pane that actually crossed a visible responsive
-          // boundary. Root/html mirrors, external geometry, scroll locks, ARIA
-          // and persistence remain deferred to pointer-up so the Pure Pane frame
-          // stays essentially geometry-only between boundaries.
-          const responsiveOptions = {
-            skipBuilder: !builderBoundaryChanged,
-            skipResult: !resultBoundaryChanged,
-            rootSync: false,
-            // 761: Pure Pane live owns exact visible boundaries. The normal
-            // 16px pane hysteresis used by the legacy responsive path cannot
-            // be reused here, because the boundary signature only fires at
-            // the real threshold. With hysteresis left on, Compact/Mobile can
-            // miss the live switch and wait until pointer-up reconciliation.
-            hysteresisPx: 0,
-          };
-          syncPaneModes(builderWidth, resultWidth, responsiveOptions);
-          broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
-        }
+        // 762: do not rely on a one-shot boundary signature to trigger the live
+        // responsive handoff. Fast pointer frames can jump across multiple bands,
+        // and a missed signature left Compact/Mobile visually stale until pointer-up.
+        // Run only the cheap mode comparisons every rAF; both helpers already skip
+        // every DOM write/event when the resolved mode did not change. Root/html,
+        // external geometry, scroll locks, ARIA and persistence stay deferred.
+        const responsiveOptions = {
+          rootSync: false,
+          hysteresisPx: 0,
+        };
+        syncPaneModes(builderWidth, resultWidth, responsiveOptions);
+        broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
+        dragBoundarySignatureRef.current = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
       }
 
       if (perfEnabled && live) {
@@ -1138,6 +1124,17 @@ export default function LiteStudioSplitWorkspace({
     draggingRef.current = false;
     pointerIdRef.current = -1;
     layoutRef.current?.classList.remove('is-dragging');
+    // 762: Pure Pane menu vertical locks are drag-only. Clear them immediately
+    // after the drag class is removed so the resting responsive layout owns the
+    // natural card height and the next drag never inherits stale measurements.
+    const purePaneLockedCards = builderRef.current?.querySelectorAll<HTMLElement>('[data-soridraw-pure-pane-vertical-lock="true"]');
+    purePaneLockedCards?.forEach((card) => {
+      delete card.dataset.soridrawPurePaneVerticalLock;
+      card.style.removeProperty('--soridraw-pure-pane-card-height');
+      card.style.removeProperty('--soridraw-pure-pane-header-height');
+      card.style.removeProperty('--soridraw-pure-pane-body-height');
+      card.style.removeProperty('--soridraw-pure-pane-summary-height');
+    });
     clearV2DragContentFreeze();
     if (
       v2DragPerfMode === 'aux-freeze'
@@ -1195,25 +1192,49 @@ export default function LiteStudioSplitWorkspace({
     const rect = layout.getBoundingClientRect();
     if (rect.width <= 0) return;
 
-    // 761: the user meant the individual Sori Studio menu cards, not the
-    // entire split workspace. Capture the five collapsed keyword-card heights
-    // once at pointer-down and keep those card shells stable while typography,
-    // counters and button density switch across responsive boundaries. No read
-    // is added to the drag hot path; expanded cards remain naturally sized.
-    const purePaneMenuCards = Array.from(builderRef.current?.querySelectorAll<HTMLElement>(
-      '.soridraw-genre-card, [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"]',
-    ) ?? []);
+    // 762: freeze only the five collapsed Sori Studio menu-card vertical slots
+    // while Pure Pane live changes responsive typography/button density. 761
+    // missed the real GenreHierarchySelector (`[data-studio-menu="genre"]`) and
+    // left its locks active after pointer-up, so Genre shrank in one direction
+    // while Style/Sound could retain a stale shorter height in the other.
+    const purePaneMenuCards: HTMLElement[] = builderRef.current
+      ? Array.from(builderRef.current.querySelectorAll<HTMLElement>(
+          '[data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"]',
+        ))
+      : [];
     for (const card of purePaneMenuCards) {
-      delete card.dataset.soridrawPurePaneMenuHeight;
-      card.style.removeProperty('--soridraw-pure-pane-menu-height');
+      delete card.dataset.soridrawPurePaneVerticalLock;
+      card.style.removeProperty('--soridraw-pure-pane-card-height');
+      card.style.removeProperty('--soridraw-pure-pane-header-height');
+      card.style.removeProperty('--soridraw-pure-pane-body-height');
+      card.style.removeProperty('--soridraw-pure-pane-summary-height');
     }
     if (v2DragPerfMode === 'pure-pane-live' && purePaneMenuCards.length > 0) {
-      // Batch all reads before writes so pointer-down pays at most one layout.
-      const menuHeights = purePaneMenuCards.map((card) => Math.max(1, Math.round(card.getBoundingClientRect().height)));
-      purePaneMenuCards.forEach((card, index) => {
-        card.dataset.soridrawPurePaneMenuHeight = 'true';
-        card.style.setProperty('--soridraw-pure-pane-menu-height', `${menuHeights[index]}px`);
+      // Batch every measurement before any style write. The hot drag path still
+      // performs no DOM measurement. Expanded cards keep their natural height.
+      const verticalSnapshots = purePaneMenuCards.map((card) => {
+        const summary = card.querySelector<HTMLElement>(':scope > .soridraw-expand-summary');
+        if (!summary || summary.dataset.expanded !== 'false') return null;
+        const header = card.querySelector<HTMLElement>('.soridraw-menu-card-header-slot');
+        const body = card.querySelector<HTMLElement>('.soridraw-menu-card-body-slot');
+        if (!header || !body) return null;
+        return {
+          card,
+          cardHeight: Math.max(1, Math.round(card.getBoundingClientRect().height)),
+          headerHeight: Math.max(1, Math.round(header.getBoundingClientRect().height)),
+          bodyHeight: Math.max(1, Math.round(body.getBoundingClientRect().height)),
+          summaryHeight: Math.max(1, Math.round(summary.getBoundingClientRect().height)),
+        };
       });
+
+      for (const snapshot of verticalSnapshots) {
+        if (!snapshot) continue;
+        snapshot.card.dataset.soridrawPurePaneVerticalLock = 'true';
+        snapshot.card.style.setProperty('--soridraw-pure-pane-card-height', `${snapshot.cardHeight}px`);
+        snapshot.card.style.setProperty('--soridraw-pure-pane-header-height', `${snapshot.headerHeight}px`);
+        snapshot.card.style.setProperty('--soridraw-pure-pane-body-height', `${snapshot.bodyHeight}px`);
+        snapshot.card.style.setProperty('--soridraw-pure-pane-summary-height', `${snapshot.summaryHeight}px`);
+      }
     }
 
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
@@ -1226,6 +1247,15 @@ export default function LiteStudioSplitWorkspace({
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
     const resultRect = resultRef.current?.getBoundingClientRect();
+    // 762: read the resting result-shell right edge once before direct drag geometry
+    // starts. No geometry read is added to pointermove. This preserves the wide-PC
+    // -18px scrollbar reach-through instead of overriding it with right:0.
+    if (resultRef.current) {
+      const restingRight = window.getComputedStyle(resultRef.current).right;
+      dragResultRightRef.current = restingRight && restingRight !== 'auto' ? restingRight : '0px';
+    } else {
+      dragResultRightRef.current = '0px';
+    }
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {

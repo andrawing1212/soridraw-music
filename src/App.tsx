@@ -19215,7 +19215,7 @@ function CycleSectionComponent({
   return (
     <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="soridraw-card-header flex items-center justify-between mb-4 gap-3">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
@@ -19288,7 +19288,7 @@ function CycleSectionComponent({
         </div>
 
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
             maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
@@ -20045,7 +20045,7 @@ function CategorySectionComponent({
   return (
     <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="soridraw-card-header flex items-center justify-between mb-4">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3 
@@ -20152,7 +20152,7 @@ function CategorySectionComponent({
         </div>
         
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
           style={{
             maxHeight: isExpanded
               ? resolveExpandedHeight(forcedHeight, contentHeight, 96)

@@ -2108,3 +2108,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 760차의 전체 split-workspace 높이 잠금을 제거했습니다. 이 잠금은 사용자가 원한 메뉴 카드 높이 고정 대상이 아니었고, drag 중 scroll owner/scrollbar geometry를 바꾸는 부작용이 있었습니다.
 - 대신 장르/스타일/사운드/분위기/주제 collapsed 카드의 현재 높이를 pointer-down에서 1회 측정해 Pure Pane 실시간 모드 동안 카드 외곽 높이를 유지합니다. 텍스트/버튼 밀도는 실시간 변경되지만 카드 창 높이는 흔들리지 않습니다.
 - Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+## SORIDRAW 762차 — Pure Pane 실시간 판정·메뉴 세로 슬롯·우측 스크롤바 정밀 보정
+- 기준: 761차
+- Pure Pane 실시간은 더 이상 단발 boundary signature에 의존하지 않고, 매 rAF에서 이미 알고 있는 pane width로 로컬 mode를 비교하되 실제 mode 변경시에만 dataset/event를 갱신합니다. 따라서 PC→Tablet→Compact→Mobile을 빠르게 건너도 pointer-up까지 판정이 미뤄지지 않습니다.
+- 우측 결과 pane의 drag inline `right:0!important`가 wide-PC의 기존 `right:-18px!important` scrollbar reach-through를 덮어쓰던 원인을 제거했습니다. pointer-down 시 resting right 값을 1회 읽고 Pure/Direct geometry에 그대로 재사용합니다.
+- 761의 메뉴 높이 보정이 실제 GenreHierarchySelector를 누락하고 drag 종료 뒤 stale height lock을 남기던 문제를 수정했습니다. Genre/Style/Sound/Mood/Theme의 collapsed card만 drag 동안 card/header/body/summary 세로 슬롯을 pointer-down 높이로 고정하고 pointer-up 즉시 해제합니다.
+- 제목 글자/카운터/헤더 버튼 크기가 반응형으로 바뀌어도 아래 키워드·요약 줄의 세로 위치가 밀리지 않도록 header/body/summary 슬롯을 독립 고정합니다.
+- Studio Black + Lite V2 + Pure Pane live drag에만 적용되며 Classic/Dark/Light, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.

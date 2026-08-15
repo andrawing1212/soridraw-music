@@ -2116,3 +2116,12 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 761의 메뉴 높이 보정이 실제 GenreHierarchySelector를 누락하고 drag 종료 뒤 stale height lock을 남기던 문제를 수정했습니다. Genre/Style/Sound/Mood/Theme의 collapsed card만 drag 동안 card/header/body/summary 세로 슬롯을 pointer-down 높이로 고정하고 pointer-up 즉시 해제합니다.
 - 제목 글자/카운터/헤더 버튼 크기가 반응형으로 바뀌어도 아래 키워드·요약 줄의 세로 위치가 밀리지 않도록 header/body/summary 슬롯을 독립 고정합니다.
 - Studio Black + Lite V2 + Pure Pane live drag에만 적용되며 Classic/Dark/Light, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 763차 — Pure Pane 실시간 가사 메뉴 세로 슬롯 고정
+- 기준: 762차
+- Pure Pane 실시간 드래그에서 `가사` 카드도 장르/스타일/사운드와 동일한 드래그 전용 세로 슬롯 안정화 대상에 포함했습니다.
+- 가사 제목/헤더의 반응형 글자·아이콘 크기는 그대로 바뀌지만, 헤더 슬롯 높이와 본문 시작 위치, 카드 전체 높이는 드래그 시작 시점 값으로 유지됩니다.
+- 제목 크기 변화 때문에 `작사 스타일 → 가사 길이 → 섹션 구조`가 위아래로 밀리거나 가사 카드 외곽 높이가 출렁이는 현상을 차단합니다.
+- 드래그 종료 시 모든 임시 세로 잠금을 즉시 해제하여 정상 responsive 높이 소유권을 복원합니다.
+- Pure Pane geometry/실시간 경계 판정, 우측 스크롤바 보정, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.

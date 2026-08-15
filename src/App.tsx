@@ -21702,7 +21702,7 @@ function SongStructureIntegratedControlComponent({
   return (
     <>
       <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
-        <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot relative mb-4 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
@@ -21764,7 +21764,7 @@ function SongStructureIntegratedControlComponent({
             animate={naturalResponsiveHeight ? undefined : { height: contentHeight }}
             transition={naturalResponsiveHeight ? undefined : { duration: 0.25, ease: "easeOut" }}
             className={cn(
-              "soridraw-lyrics-content-shell",
+              "soridraw-lyrics-content-shell soridraw-menu-card-body-slot",
               naturalResponsiveHeight ? "overflow-visible" : "overflow-hidden"
             )}
           >

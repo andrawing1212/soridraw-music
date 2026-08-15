@@ -1068,3 +1068,43 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   }
 }
 
+
+
+/* 763 — Pure Pane live: Lyrics card keeps one stable vertical frame.
+ * The responsive header may change its title/icon size at the compact desktop
+ * threshold, but the header slot, content start position and outer card height
+ * stay fixed for the duration of the drag. This extends the proven 762 vertical
+ * slot contract to the lower Lyrics menu without changing its responsive text. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-studio-builder-pane
+  [data-studio-menu="lyrics"].soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"] {
+    height: var(--soridraw-pure-pane-card-height) !important;
+    min-height: var(--soridraw-pure-pane-card-height) !important;
+    max-height: var(--soridraw-pure-pane-card-height) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-studio-builder-pane
+  [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
+  > .soridraw-menu-card-header-slot {
+    height: var(--soridraw-pure-pane-header-height) !important;
+    min-height: var(--soridraw-pure-pane-header-height) !important;
+    max-height: var(--soridraw-pure-pane-header-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-header-height) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="pure-pane-live"]
+  .soridraw-studio-builder-pane
+  [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
+  > .soridraw-menu-card-body-slot {
+    height: var(--soridraw-pure-pane-body-height) !important;
+    min-height: var(--soridraw-pure-pane-body-height) !important;
+    max-height: var(--soridraw-pure-pane-body-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-body-height) !important;
+    transition: none !important;
+  }
+}

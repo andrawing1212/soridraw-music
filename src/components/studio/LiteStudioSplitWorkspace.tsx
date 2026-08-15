@@ -1192,14 +1192,17 @@ export default function LiteStudioSplitWorkspace({
     const rect = layout.getBoundingClientRect();
     if (rect.width <= 0) return;
 
-    // 762: freeze only the five collapsed Sori Studio menu-card vertical slots
-    // while Pure Pane live changes responsive typography/button density. 761
+    // 763: freeze the five collapsed keyword cards plus the lower Lyrics card
+    // while Pure Pane live changes responsive typography/button density. 762
+    // already stabilized the five keyword cards; Lyrics now reuses the same
+    // drag-only header/body slot contract so its title can resize without
+    // pushing the rows below it. 761
     // missed the real GenreHierarchySelector (`[data-studio-menu="genre"]`) and
     // left its locks active after pointer-up, so Genre shrank in one direction
     // while Style/Sound could retain a stale shorter height in the other.
     const purePaneMenuCards: HTMLElement[] = builderRef.current
       ? Array.from(builderRef.current.querySelectorAll<HTMLElement>(
-          '[data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"]',
+          '[data-studio-menu="genre"], [data-studio-menu="style"], [data-studio-menu="sound"], [data-studio-menu="mood"], [data-studio-menu="theme"], [data-studio-menu="lyrics"]',
         ))
       : [];
     for (const card of purePaneMenuCards) {
@@ -1213,8 +1216,13 @@ export default function LiteStudioSplitWorkspace({
       // Batch every measurement before any style write. The hot drag path still
       // performs no DOM measurement. Expanded cards keep their natural height.
       const verticalSnapshots = purePaneMenuCards.map((card) => {
+        const menuId = card.dataset.studioMenu || '';
+        const isLyricsCard = menuId === 'lyrics';
         const summary = card.querySelector<HTMLElement>(':scope > .soridraw-expand-summary');
-        if (!summary || summary.dataset.expanded !== 'false') return null;
+        // Genre/Style/Sound/Mood/Theme keep the existing collapsed-only lock.
+        // Lyrics has no expand-summary; its header/body slots are always measured
+        // so only the responsive title/icon typography may change vertically.
+        if (!isLyricsCard && (!summary || summary.dataset.expanded !== 'false')) return null;
         const header = card.querySelector<HTMLElement>('.soridraw-menu-card-header-slot');
         const body = card.querySelector<HTMLElement>('.soridraw-menu-card-body-slot');
         if (!header || !body) return null;
@@ -1223,7 +1231,7 @@ export default function LiteStudioSplitWorkspace({
           cardHeight: Math.max(1, Math.round(card.getBoundingClientRect().height)),
           headerHeight: Math.max(1, Math.round(header.getBoundingClientRect().height)),
           bodyHeight: Math.max(1, Math.round(body.getBoundingClientRect().height)),
-          summaryHeight: Math.max(1, Math.round(summary.getBoundingClientRect().height)),
+          summaryHeight: summary ? Math.max(1, Math.round(summary.getBoundingClientRect().height)) : 0,
         };
       });
 

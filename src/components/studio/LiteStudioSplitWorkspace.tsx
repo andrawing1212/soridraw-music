@@ -274,6 +274,8 @@ export default function LiteStudioSplitWorkspace({
   // dragging. The signature is pure math from already-known pane widths; it adds
   // no DOM read, observer, or React state to pointermove.
   const dragBoundarySignatureRef = useRef<string | null>(null);
+  const dragBuilderCqBandRef = useRef<string | null>(null);
+  const dragResultCqBandRef = useRef<string | null>(null);
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
@@ -902,6 +904,22 @@ export default function LiteStudioSplitWorkspace({
           syncPurePaneTabletFastPath(result, resultWidth);
         }
 
+        if (tabletTouchPureLive) {
+          // Discrete Pane-level Container Query band synchronization.
+          // Replaces continuous 1px browser-internal CQ evaluations with discrete
+          // dataset updates ONLY when actual breakpoint boundaries (1074, 760, 700 / 660) are crossed.
+          const nextBuilderBand = builderWidth <= 700 ? 'compact-700' : builderWidth <= 760 ? 'compact-760' : builderWidth <= 1074 ? 'compact-1074' : 'wide';
+          if (dragBuilderCqBandRef.current !== nextBuilderBand) {
+            dragBuilderCqBandRef.current = nextBuilderBand;
+            builder.dataset.dragCqBand = nextBuilderBand;
+          }
+          const nextResultBand = resultWidth <= 660 ? 'compact-660' : 'wide';
+          if (dragResultCqBandRef.current !== nextResultBand) {
+            dragResultCqBandRef.current = nextResultBand;
+            result.dataset.dragCqBand = nextResultBand;
+          }
+        }
+
         // 762: do not rely on a one-shot boundary signature to trigger the live
         // responsive handoff. Fast pointer frames can jump across multiple bands,
         // and a missed signature left Compact/Mobile visually stale until pointer-up.
@@ -1201,6 +1219,10 @@ export default function LiteStudioSplitWorkspace({
     // shell lock changed the scroll owner/scrollbar geometry while dragging.
     // Menu-card height stabilization is local to the Builder cards instead.
     if (layoutRef.current) delete layoutRef.current.dataset.v2DragPerfMode;
+    if (builderRef.current) delete builderRef.current.dataset.dragCqBand;
+    if (resultRef.current) delete resultRef.current.dataset.dragCqBand;
+    dragBuilderCqBandRef.current = null;
+    dragResultCqBandRef.current = null;
     dragBoundarySignatureRef.current = null;
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
@@ -1321,6 +1343,16 @@ export default function LiteStudioSplitWorkspace({
     }
     if (v2DragPerfMode === 'content-right-freeze' || v2DragPerfMode === 'content-freeze') {
       if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
+    }
+    if (v2DragPerfMode === 'tablet-touch-pure') {
+      const initialBWidth = builderRect?.width || Math.round(rect.width * (percentRef.current / 100));
+      const initialRWidth = resultRect?.width || Math.max(0, rect.width - initialBWidth);
+      const initialBuilderBand = initialBWidth <= 700 ? 'compact-700' : initialBWidth <= 760 ? 'compact-760' : initialBWidth <= 1074 ? 'compact-1074' : 'wide';
+      const initialResultBand = initialRWidth <= 660 ? 'compact-660' : 'wide';
+      dragBuilderCqBandRef.current = initialBuilderBand;
+      dragResultCqBandRef.current = initialResultBand;
+      if (builderRef.current) builderRef.current.dataset.dragCqBand = initialBuilderBand;
+      if (resultRef.current) resultRef.current.dataset.dragCqBand = initialResultBand;
     }
     dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary'
       || v2DragPerfMode === 'pure-pane-live'

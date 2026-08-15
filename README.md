@@ -2187,3 +2187,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - PC 337차에서 이미 검증된 공통 원리(바깥 scroll shell이 우측 레일까지 도달하고 내부 콘텐츠 폭은 별도 보존)를 1100~1599.98px Builder-only 상태에도 재사용.
 - `soridraw-studio-main`의 오른쪽 18px 예약 여백만 해제하고 Builder 내부에 18px을 추가 반환해 카드/검색/마스트헤드 위치는 유지하면서 스크롤바만 우측 레일 바로 앞까지 이동.
 - Legacy/Lite V2 공통 CSS 소유권으로 처리. Classic, 모바일(<1100), PC(>=1600), Firebase/Auth/Firestore/Functions 저장 구조는 변경 없음.
+## 780차 — 분할 최소폭 접기버튼 즉시 경계 추적
+
+- 기준: 779차.
+- 수정: `src/components/studio/StudioSplitWorkspace.tsx`.
+- 원인: 659 태블릿 성능 경로는 분할선을 최신 포인터 좌표로 즉시 이동시키지만, 좌/우 pane 접기버튼(body portal)은 throttled layout commit을 기다렸다. 그 결과 오른쪽 최근 생성곡 pane이 최소폭에 도달해 Result 접기버튼이 나타나는 순간, 버튼이 이전 splitter 좌표(왼쪽)에 남아 보일 수 있었다.
+- 처리: `previewSplitterAtClientX`가 splitter와 동일한 최신 좌표로 Builder/Result 접기버튼도 직접 추적한다. Builder는 splitter 왼쪽 9px, Result는 splitter 오른쪽 9px 간격을 그대로 사용한다. pane reflow/반응형 판정/접힘 상태 로직은 변경하지 않았다.
+- 영향 범위: Studio Black 분할모드의 좌/우 pane 접기버튼 위치 추적만 변경. Classic, 모바일, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+

@@ -4006,8 +4006,11 @@ function App() {
   const isStudioWideSelectionLayout = useMediaQuery('(min-width: 1100px)', true);
   const isStudioTwoColumnSelectionLayout = useMediaQuery('(min-width: 768px)', true);
   const isStudioCompactViewport = useMediaQuery('(max-width: 1099px)');
-  const isActionDragMobile = useMediaQuery('(max-width: 767px)');
+  // 793 — The simplified Generate bar is now the shared phone/tablet contract.
+  // The heavier arrow + text-label composition is PC-only from 1600px upward.
+  const isActionCompactViewport = useMediaQuery('(max-width: 1599px)');
   const [isSplitBuilderActionMobile, setIsSplitBuilderActionMobile] = useState(false);
+  const [isSplitBuilderActionCompact, setIsSplitBuilderActionCompact] = useState(false);
   const [isStudioBlackActionMode, setIsStudioBlackActionMode] = useState(false);
   const isStudioCompactMobileLayout = isStudioCompactViewport
     && (isStudioBlackActionMode || readSoridrawDisplayMode() === 'studio-black');
@@ -4046,7 +4049,20 @@ function App() {
 
       const isStudioBlack = root.dataset.soridrawTheme === 'studio-black';
       const builderMode = root.dataset.soridrawBuilderMode;
+      const builderContentMode = root.dataset.soridrawBuilderContentMode;
       setIsStudioBlackActionMode(isStudioBlack);
+
+      // 793 — Split Studio uses the same compact/full ownership as its content
+      // mode: mobile + tablet are simplified; only a real PC Builder is full.
+      // Missing means the split engine has not committed yet, so keep the last
+      // state rather than flashing the PC bar during page/view hand-offs.
+      if (!isStudioBlack) {
+        setIsSplitBuilderActionCompact(false);
+      } else if (builderContentMode === 'mobile' || builderContentMode === 'tablet') {
+        setIsSplitBuilderActionCompact(true);
+      } else if (builderContentMode === 'pc') {
+        setIsSplitBuilderActionCompact(false);
+      }
 
       // 749 — Split workspace callbacks used to clear data-soridraw-builder-mode
       // for a moment while Recent/Music Note/Library changed. Treating that
@@ -4068,7 +4084,7 @@ function App() {
     const observer = new MutationObserver(() => syncBuilderActionMode(false));
     observer.observe(root, {
       attributes: true,
-      attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode'],
+      attributeFilter: ['data-soridraw-theme', 'data-soridraw-builder-mode', 'data-soridraw-builder-content-mode'],
     });
 
     const handleSplitDragEnd = () => syncBuilderActionMode(true);
@@ -4079,7 +4095,10 @@ function App() {
     };
   }, []);
 
-  const isActionSwipeCollapseMode = isActionDragMobile || isSplitBuilderActionMobile;
+  // 793 — Compact visual composition keeps the same gesture-first collapse
+  // behavior as mobile, so hiding the desktop arrow never removes the ability
+  // to collapse the bar on portrait/landscape tablets or a tablet-width split.
+  const isActionSwipeCollapseMode = isActionCompactViewport || isSplitBuilderActionCompact || isSplitBuilderActionMobile;
   // Screen type only changes when the desktop breakpoint changes; physical
   // screen resolution itself is stable. Avoid running this on every resize tick.
   useEffect(() => {
@@ -7306,6 +7325,27 @@ const toggleCycleVariantSelection = (
 
   const syncActionBarLayoutMetrics = useCallback(() => {
     if (isSplitDraggingRef.current || document.documentElement.classList.contains('soridraw-window-resizing')) return;
+
+    // 792 — Workspace switches (Create <-> Recent) must never inherit the
+    // outgoing page's live Generate-bar geometry. Lite V2 writes temporary
+    // per-element CSS vars while dragging; those vars outrank the committed
+    // root geometry and can survive on the same mounted portal node when the
+    // workspace changes. Collapse/expand remounts that node, which is why the
+    // old bug appeared to fix itself only after toggling the bar.
+    //
+    // At rest, root geometry is the single owner. Clear only the transient
+    // live element vars before measuring the current command anchor, then
+    // publish fresh geometry for the active workspace. No user state is reset.
+    const floatingActionBar = document.querySelector<HTMLElement>(
+      'body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]',
+    );
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-left');
+    floatingActionBar?.style.removeProperty('--soridraw-action-fixed-width');
+
+    const collapsedActionButton = document.querySelector<HTMLElement>('body > .soridraw-studio-action-collapsed');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-builder-width');
+    collapsedActionButton?.style.removeProperty('--soridraw-studio-left-rail-edge');
+
     const anchor = actionButtonsAnchorRef.current;
     if (!anchor) return;
 
@@ -7476,6 +7516,12 @@ const toggleCycleVariantSelection = (
     window.addEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
     window.addEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
     window.addEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
+    // 792 — Create collapses the Result pane, while Recent restores the split.
+    // Lite/Legacy already publish this event after their pane geometry has been
+    // committed. Re-measure on the next rAF so each workspace gets its own
+    // Generate-bar left/width instead of reusing the previous workspace's
+    // portal geometry until collapse/expand.
+    window.addEventListener('soridraw-studio-pane-collapse-change', scheduleLayoutChange as EventListener);
     scheduleLayoutChange();
 
     return () => {
@@ -7494,6 +7540,7 @@ const toggleCycleVariantSelection = (
       window.removeEventListener('soridraw-theme-change', scheduleLayoutChange as EventListener);
       window.removeEventListener('soridraw-studio-frame-resize', scheduleLayoutChange as EventListener);
       window.removeEventListener('soridraw-window-resize-end', handleWindowResizeEnd as EventListener);
+      window.removeEventListener('soridraw-studio-pane-collapse-change', scheduleLayoutChange as EventListener);
       document.documentElement.style.removeProperty('--soridraw-action-fixed-left');
       document.documentElement.style.removeProperty('--soridraw-action-fixed-width');
       };
@@ -14122,7 +14169,12 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
       style={{ transformOrigin: 'center bottom' }}
       className="soridraw-studio-action-row flex flex-row items-stretch gap-2 md:gap-3 rounded-[24px] border border-white/12 bg-[#202020]/98 backdrop-blur-xl p-2 md:p-2.5 shadow-[0_18px_52px_rgba(0,0,0,0.52),0_7px_18px_rgba(0,0,0,0.34),0_0_0_1px_rgba(255,255,255,0.045)] opacity-100 overflow-hidden"
     >
-      {!isActionSwipeCollapseMode && (
+      {/* 791 — Keep the split-desktop collapse control mounted even while the
+       * Builder is in its narrow mobile pane state. CSS owns its live visibility
+       * from data-soridraw-builder-mode, so dragging mobile -> desktop can reveal
+       * it immediately without an App-root rerender. <1100px keeps the old DOM
+       * behavior. */}
+      {(!isActionSwipeCollapseMode || isStudioWideSelectionLayout) && (
         <motion.button
           type="button"
           onClick={collapseActionButtons}

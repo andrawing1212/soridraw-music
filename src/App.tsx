@@ -4267,7 +4267,9 @@ function App() {
   // untouched while identifying which pane causes reflow cost and whether
   // responsive state can update only when a real PC/tablet/mobile boundary is crossed.
   const v2DragPerfParam = studioTestParams.get('v2DragPerf');
-  const studioV2DragPerfMode: StudioV2DragPerfMode = v2DragPerfParam === 'content-left'
+  const studioV2DragPerfMode: StudioV2DragPerfMode = v2DragPerfParam === 'tablet-touch-pure' || v2DragPerfParam === 'tablet-pure'
+    ? 'tablet-touch-pure'
+    : v2DragPerfParam === 'content-left'
     ? 'content-left-freeze'
     : v2DragPerfParam === 'content-right'
       ? 'content-right-freeze'

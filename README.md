@@ -2167,3 +2167,91 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - touch/pen 입력으로 Pure Pane을 드래그할 때 이미 알고 있는 pane 폭이 661~1080px 태블릿 band에 들어오면 `data-soridraw-pane-tablet-fastpath`를 경계 변화 시에만 갱신합니다.
 - 기존 fast-path CSS의 layout/style/paint containment, off-screen content visibility, secondary container-query suspension을 그대로 재사용합니다. 새 DOM 측정/ResizeObserver/React state/pointermove capability query는 추가하지 않습니다.
 - PC fine-pointer Pure Pane 동작, 외부창 resize, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
+
+## SORIDRAW 772차 — Galaxy Tab Owner 진단 롤백 · 768 정상 구조 복구
+- 기준: 771차 결과를 검토한 뒤, 769~771에서 추가한 `Left Owner / Right Owner / Single Owner` 진단 실험을 전부 폐기했습니다.
+- 실제 앱 코드는 768차의 정상 Lite V2 + Pure Pane 실시간 구조로 복구했습니다. 764차에서 기본 엔진으로 승격한 PC Lite V2/Pure Pane 경로와 765~767의 관리자 테스트 메뉴/앱 테스트 ON/OFF/PERF 설명문 배치는 그대로 유지됩니다.
+- Galaxy Tab에는 768차에서 연결한 기존 태블릿 fast-path까지만 남기고, 화면 구조를 깨뜨리던 owner별 grid/geometry 실험 코드는 모두 제거했습니다.
+- 기존 신뢰 가능한 진단 결과(`Splitter Only` 빠름, `Right Pane Only` 빠름, `Left Pane Only` 약간 느림, `Pure Pane`에서 양쪽 동시 이동 시 입력 추종 지연)는 기록으로만 유지하고 새로운 레이아웃 실험은 포함하지 않습니다.
+- 다음 성능 진단은 정상 Pure Pane 화면 구조를 변경하지 않는 방식으로 진행해야 하며, 우선 AI Studio에 동일 기준 ZIP과 위 결과를 전달해 원인 분석/진단 설계를 맡기는 방향으로 전환합니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음. 배포 작업 없음.
+
+## SORIDRAW 778차 — 태블릿 가로 Sori Studio 우측 스크롤바 외곽 정렬
+- 기준: 777차.
+- 777차에서 결과 pane에 적용한 우측 스크롤바 외곽 정렬과 별개로, 1100~1599px 태블릿 가로의 Sori Studio Builder 단독 화면은 main의 18px 우측 여백 안쪽에 스크롤바가 남아 있던 원인을 수정했습니다.
+- Builder scroll shell만 우측 18px 예약 영역까지 확장하고 동일한 18px를 내부 padding으로 되돌려 카드/검색/레이아웃 위치는 그대로 유지하면서 스크롤바만 우측 레일 바로 앞 외곽선에 맞췄습니다.
+- 1600px 이상 PC의 기존 one-pane 규칙, 분할바, 반응형 전환, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다.
+
+### 779차 — 태블릿 가로 곡만들기 스크롤바 공통 셸 정렬
+- 778의 `right:-18px` 방식은 Lite V2가 Builder에 쓰는 inline `width: ... !important`와 충돌해 실제 스크롤바 위치가 바뀌지 않는 원인을 확인.
+- PC 337차에서 이미 검증된 공통 원리(바깥 scroll shell이 우측 레일까지 도달하고 내부 콘텐츠 폭은 별도 보존)를 1100~1599.98px Builder-only 상태에도 재사용.
+- `soridraw-studio-main`의 오른쪽 18px 예약 여백만 해제하고 Builder 내부에 18px을 추가 반환해 카드/검색/마스트헤드 위치는 유지하면서 스크롤바만 우측 레일 바로 앞까지 이동.
+- Legacy/Lite V2 공통 CSS 소유권으로 처리. Classic, 모바일(<1100), PC(>=1600), Firebase/Auth/Firestore/Functions 저장 구조는 변경 없음.
+## 780차 — 분할 최소폭 접기버튼 즉시 경계 추적
+
+- 기준: 779차.
+- 수정: `src/components/studio/StudioSplitWorkspace.tsx`.
+- 원인: 659 태블릿 성능 경로는 분할선을 최신 포인터 좌표로 즉시 이동시키지만, 좌/우 pane 접기버튼(body portal)은 throttled layout commit을 기다렸다. 그 결과 오른쪽 최근 생성곡 pane이 최소폭에 도달해 Result 접기버튼이 나타나는 순간, 버튼이 이전 splitter 좌표(왼쪽)에 남아 보일 수 있었다.
+- 처리: `previewSplitterAtClientX`가 splitter와 동일한 최신 좌표로 Builder/Result 접기버튼도 직접 추적한다. Builder는 splitter 왼쪽 9px, Result는 splitter 오른쪽 9px 간격을 그대로 사용한다. pane reflow/반응형 판정/접힘 상태 로직은 변경하지 않았다.
+- 영향 범위: Studio Black 분할모드의 좌/우 pane 접기버튼 위치 추적만 변경. Classic, 모바일, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## SORIDRAW 781차 — Lite V2 분할 최소폭 접기버튼 좌우 소유권 수정
+
+- 기준: 780차.
+- 실제 원인: 764차부터 `곡 만들기` 분할모드도 기본 엔진이 `LiteStudioSplitWorkspace`(Lite V2 + Pure Pane)인데, 780차는 Legacy `StudioSplitWorkspace`의 즉시 추적만 수정해 현재 기본 실행 경로를 놓쳤다.
+- Lite V2 `normal = Pure Pane` hot path는 성능을 위해 `syncExternalGeometry`보다 먼저 return한다. 이 때문에 분할바는 현재 포인터 좌표로 움직여도 `builder/result-at-minimum` 상태와 접기버튼 좌표는 이전 최소폭 위치에 남아, 반대쪽 최소폭으로 이동할 때 접기버튼이 분할바 반대편에 표시될 수 있었다.
+- 수정: Lite V2 엔진 내부에 좌/우 최소폭 접기버튼 공통 규칙을 추가했다. Builder 최소폭이면 Builder 버튼만 분할바 왼쪽 9px, Result(최근 생성곡) 최소폭이면 Result 버튼만 분할바 오른쪽 9px에 현재 live splitter 좌표로 즉시 배치한다.
+- 최소폭 상태(dataset)는 실제 경계를 넘을 때만 바뀌며, 일반 드래그 중에는 카드/반응형/외부 UI 동기화를 다시 켜지 않는다. 즉 Pure Pane 성능 경로는 유지하고 접기버튼에 필요한 최소 상태/좌표만 보강했다.
+- 드래그 종료 시 임시 inline 좌표와 Lite toggle 변수를 제거하고 기존 committed root 좌표에 소유권을 돌려준다. 그래서 접은 뒤 다시 펼칠 때의 기존 restore 위치 규칙은 그대로 유지된다.
+- 영향 범위: Studio Black 분할모드의 Lite V2 좌/우 pane 최소폭 접기버튼. Classic, 모바일(<1100px), Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+## SORIDRAW 782차 — 모바일 분위기·주제 키워드 2줄 공통화
+
+- 기준: 781차.
+- 모바일에서 `분위기` / `주제` 카드의 접힌 키워드 영역만 48px(1줄)로 축소되던 공통 규칙을 확인했습니다. PC/태블릿은 동일 영역이 96px이라 2줄이 보이고 있었습니다.
+- 공통 모바일 48px 규칙은 장르/스타일/사운드 등 다른 메뉴를 위해 그대로 유지하고, `data-studio-menu="mood"` / `theme`에만 96px 2줄 규칙을 우선 적용했습니다.
+- 일반 모바일 viewport 규칙으로 Classic 다크/라이트를 함께 적용하고, `data-pane-mode="mobile"` pane 규칙으로 넓은 화면 안에서 분할 Builder가 모바일 폭이 되는 Studio Black 경로까지 동일하게 적용했습니다.
+- 키워드 개수/선택 로직/카드 폭/버튼 디자인/펼치기 동작은 변경하지 않았습니다. Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 작업 없음.
+
+
+## SORIDRAW 783차 — 태블릿 세로 메뉴 간격 PC·모바일 공통화
+
+- 기준: 782차.
+- 원인: 태블릿 세로 Compact 구간만 메뉴 카드 grid 간격이 16px으로 별도 지정되어 있었습니다. 반면 PC/모바일 공통 간격과 `스타일·사운드 → 분위기·주제` 그룹 경계는 20px이라, 해당 한 구간만 정상으로 보이고 `장르 → 스타일·사운드`, `분위기·주제 → 스토리보드`, `스토리보드 → 보컬·가사` 및 2열 좌우 간격은 더 좁게 보였습니다.
+- 수정: 768~1099px 외부 태블릿 세로 Compact와 분할 Builder의 661~820px pane Compact 모두 메뉴 카드 `column-gap` / `row-gap`을 20px으로 통일했습니다.
+- 적용 범위: Studio Black 분할모드 + Compact 화면, Classic 다크/라이트 태블릿 세로. PC와 모바일의 기존 20px 기준은 그대로 유지합니다.
+- 메뉴 내부 키워드/버튼 간격, 카드 크기, 반응형 열 구성, 분할바/접기버튼, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다. 배포 작업 없음.
+
+## SORIDRAW 784차 — 분할 태블릿→모바일 메뉴카드 세로 크기 고정
+- 기준: 783차
+- 1번 영상의 분할 `곡 만들기`에서 Builder pane이 태블릿 세로 Compact(661~820px)에서 모바일(<=660px)로 넘어갈 때, 모바일 제목/카운터/헤더 버튼의 시각 크기 변화가 부모 메뉴 카드 높이에 몇 px 더해지는 현상을 수정했습니다.
+- 762차의 원칙과 동일하게 **제목/버튼의 반응형 크기 변화 자체는 유지**하되, 장르/스타일/사운드/분위기/주제 카드의 header slot은 Compact 기준 30px가 계속 레이아웃 높이를 소유하도록 했습니다. 따라서 모바일 판정 직후 부모 카드 외곽이 살짝 커지지 않습니다.
+- 적용 범위는 Studio Black + Lite V2 분할 Builder의 내부 mobile pane 전환만입니다. 실제 폰 화면, Classic 다크/라이트, 카드 내부 키워드 높이/개수/간격은 변경하지 않았습니다.
+- 2번 영상 관련 확인: Lite V2의 pane-local PC/tablet/mobile 판정은 pointermove rAF에서 실시간으로 수행합니다. 다만 성능 최적화를 위해 drag 중 `<html>` root dataset 전파는 `rootSync:false`로 미루고 pointer-up에서 최종 동기화합니다. 따라서 root/global 상태를 보는 일부 외부 UI는 놓는 순간 최종 판정되는 것처럼 보일 수 있습니다. 이는 757/764 계열의 의도된 style invalidation/reflow 절감 경로이며, divider/pane 자체 판정은 실시간입니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.
+
+## 785차 — 분할 키워드 카드 높이 릴리즈 스냅 제거
+- 기준: 784차
+- 수정: `src/components/studio/studioLayout.css`
+- 원인: 784차의 헤더 높이 고정 선택자가 실제 DOM 구조와 달라 적용되지 않았고, 5칸→7칸 구간도 별도 헤더 크기 전환이 남아 있어 드래그 중 vertical lock 해제 시 부모 카드 높이가 미세하게 재계산됨.
+- 변경: 분할모드의 장르/스타일/사운드/분위기/주제 카드에서 헤더 레이아웃 슬롯을 모든 Builder 폭 구간에 동일한 30px로 고정. 제목/아이콘의 시각적 반응형 크기와 키워드 4/5/7칸 전환은 그대로 유지.
+- 범위 제외: 확장 카드 내용, 실제 모바일 페이지, Classic 다크/라이트, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## 786차 — 분할 Mood/Theme 카드 pointer-up 높이 스냅 제거
+- 기준: 785차
+- 증상: Lite V2 분할바 드래그 중에는 분위기/주제 카드 높이가 안정적이지만, 마우스를 놓는 순간 mobile↔4칸 및 5칸↔7칸 경계에서 카드 외곽 높이가 미세하게 변함.
+- 실제 원인: drag 중 Pure Pane 세로 잠금이 카드 전체 높이를 유지하고, pointer-up에서 resting responsive CSS로 소유권이 돌아오면서 자연 높이가 다시 계산됨. 785차는 헤더 슬롯만 고정해 이 릴리즈 소유권 차이를 끝까지 막지 못했음.
+- 수정: 분할모드의 접힌 분위기/주제 카드에 이미 사용 중인 구성값(헤더 30 + 키워드 96 + 요약 64 + 기존 여백/패딩)을 기준으로 외곽 높이 282px을 resting contract로 고정. 드래그 중/마우스 해제 후 높이가 동일함.
+- 미변경: 키워드 4/5/7열 전환, 텍스트/아이콘 크기, 확장 카드 높이, 다른 메뉴, Classic 다크/라이트, 비분할 모바일, Firebase/Auth/Firestore/Functions.
+
+## SORIDRAW 787차 — 분할 키워드카드 pointer-up 이중 높이 소유권 제거
+
+- 기준: 786차
+- 증상 재확인: 분할바를 누른 채 폭 구간을 넘을 때는 카드가 안정적인데, 같은 위치에서 마우스를 놓는 순간 Genre/Style/Sound/Mood/Theme 카드의 세로 프레임이 미세하게 다시 계산되어 Mood/Theme 위치까지 움직임.
+- 실제 원인: `LiteStudioSplitWorkspace`가 pointer-down에서 다섯 키워드 카드의 현재 높이를 스냅샷하고 `data-soridraw-pure-pane-vertical-lock` + CSS 변수로 고정했으며, `liteSplitWorkspace.css`의 drag 전용 `!important` 규칙이 그 값을 우선 사용함. pointer-up에서 해당 lock을 삭제하면서 785/786의 resting responsive CSS로 소유권이 바뀌어 release 시점에만 점프가 발생함.
+- 수정: Genre / Style / Sound / Mood / Theme는 drag 시작 높이 스냅샷과 drag 전용 높이 override 대상에서 완전히 제외. 785의 공통 30px header slot과 786의 Mood/Theme resting frame이 드래그 중/후 모두 같은 단일 소유자로 유지됨.
+- Lyrics는 별도 하단 카드이므로 기존 763 전용 drag lock만 유지.
+- 분할 성능 hot path, pane width 판정, 키워드 열 전환(모바일/4/5/7), 텍스트 크기, 펼침 동작은 변경하지 않음.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

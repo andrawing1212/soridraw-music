@@ -13398,3 +13398,31 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     box-sizing: border-box !important;
   }
 }
+
+/* 784 — Keep the split Builder's keyword-card shell height stable at the
+ * tablet -> mobile pane handoff. Compact desktop uses a 30px title/action row;
+ * when the pane crosses <=660px the mobile title/count/action visuals become
+ * larger, which used to add a few pixels to the parent card after the final
+ * responsive commit. Preserve the approved Compact header slot as the layout
+ * owner while allowing the mobile title/buttons themselves to render at their
+ * existing visual size. This is split Studio Black only; real phone layouts and
+ * Classic Dark/Light keep their existing mobile geometry. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+  .soridraw-lite-studio-split-workspace
+  .soridraw-studio-builder-pane[data-pane-mode="mobile"]
+  :is(
+    [data-studio-menu="genre"],
+    [data-studio-menu="style"],
+    [data-studio-menu="sound"],
+    [data-studio-menu="mood"],
+    [data-studio-menu="theme"]
+  ) > .soridraw-menu-card-header-slot {
+    height: 30px !important;
+    min-height: 30px !important;
+    max-height: 30px !important;
+    flex: 0 0 30px !important;
+    overflow: visible !important;
+    align-items: center !important;
+  }
+}

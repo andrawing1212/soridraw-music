@@ -2222,3 +2222,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 수정: 768~1099px 외부 태블릿 세로 Compact와 분할 Builder의 661~820px pane Compact 모두 메뉴 카드 `column-gap` / `row-gap`을 20px으로 통일했습니다.
 - 적용 범위: Studio Black 분할모드 + Compact 화면, Classic 다크/라이트 태블릿 세로. PC와 모바일의 기존 20px 기준은 그대로 유지합니다.
 - 메뉴 내부 키워드/버튼 간격, 카드 크기, 반응형 열 구성, 분할바/접기버튼, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았습니다. 배포 작업 없음.
+
+## SORIDRAW 784차 — 분할 태블릿→모바일 메뉴카드 세로 크기 고정
+- 기준: 783차
+- 1번 영상의 분할 `곡 만들기`에서 Builder pane이 태블릿 세로 Compact(661~820px)에서 모바일(<=660px)로 넘어갈 때, 모바일 제목/카운터/헤더 버튼의 시각 크기 변화가 부모 메뉴 카드 높이에 몇 px 더해지는 현상을 수정했습니다.
+- 762차의 원칙과 동일하게 **제목/버튼의 반응형 크기 변화 자체는 유지**하되, 장르/스타일/사운드/분위기/주제 카드의 header slot은 Compact 기준 30px가 계속 레이아웃 높이를 소유하도록 했습니다. 따라서 모바일 판정 직후 부모 카드 외곽이 살짝 커지지 않습니다.
+- 적용 범위는 Studio Black + Lite V2 분할 Builder의 내부 mobile pane 전환만입니다. 실제 폰 화면, Classic 다크/라이트, 카드 내부 키워드 높이/개수/간격은 변경하지 않았습니다.
+- 2번 영상 관련 확인: Lite V2의 pane-local PC/tablet/mobile 판정은 pointermove rAF에서 실시간으로 수행합니다. 다만 성능 최적화를 위해 drag 중 `<html>` root dataset 전파는 `rootSync:false`로 미루고 pointer-up에서 최종 동기화합니다. 따라서 root/global 상태를 보는 일부 외부 UI는 놓는 순간 최종 판정되는 것처럼 보일 수 있습니다. 이는 757/764 계열의 의도된 style invalidation/reflow 절감 경로이며, divider/pane 자체 판정은 실시간입니다.
+- Firebase/Auth/Firestore/Functions/데이터 구조 변경 없음.

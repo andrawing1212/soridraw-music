@@ -716,6 +716,16 @@ export default function LiteStudioSplitWorkspace({
 
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
+    // 781: live split-edge controls use direct inline coordinates only while
+    // dragging. Clear them before returning ownership to the committed root
+    // splitter variables, so collapsed restore positions still use the existing
+    // left/right boundary rules.
+    builderToggleRef.current?.style.removeProperty('left');
+    builderToggleRef.current?.style.removeProperty('right');
+    builderToggleRef.current?.style.removeProperty('--soridraw-lite-studio-builder-toggle-left');
+    resultToggleRef.current?.style.removeProperty('left');
+    resultToggleRef.current?.style.removeProperty('right');
+    resultToggleRef.current?.style.removeProperty('--soridraw-lite-studio-result-toggle-left');
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
     if (controls.floatingActionBar && !document.documentElement.classList.contains('soridraw-window-resizing')) {
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
@@ -813,6 +823,62 @@ export default function LiteStudioSplitWorkspace({
     // shared body splitter follows the same boundary with one tiny fixed write.
     splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
   }, [clearDirectBenchmarkGeometry]);
+
+  // 781 — The two minimum-width collapse controls must have the same live
+  // boundary owner as the divider. The production Pure Pane path deliberately
+  // skips `syncExternalGeometry`, so leaving minimum-state + button geometry in
+  // that auxiliary lane made the previously visible edge button stay on the
+  // opposite side while the divider crossed to the other minimum. Keep this
+  // tiny shared rule inside the split engine itself: switch the two minimum
+  // flags only when the threshold actually changes, and position only the
+  // currently visible edge control from the exact live splitter coordinate.
+  const syncMinimumCollapseControls = useCallback((
+    nextPercent: number,
+    bounds: SplitBounds,
+    safeWidth: number,
+    splitterLeft: number,
+    livePosition: boolean,
+  ) => {
+    const root = document.documentElement;
+    const edgeTolerancePercent = (1.5 / Math.max(1, safeWidth)) * 100;
+    const builderAtMinimum = !builderCollapsedRef.current
+      && !resultCollapsedRef.current
+      && nextPercent <= bounds.min + edgeTolerancePercent;
+    const resultAtMinimum = !builderCollapsedRef.current
+      && !resultCollapsedRef.current
+      && nextPercent >= bounds.max - edgeTolerancePercent;
+
+    if (builderAtMinimum) {
+      if (root.dataset.soridrawBuilderAtMinimum !== 'true') root.dataset.soridrawBuilderAtMinimum = 'true';
+    } else if (root.dataset.soridrawBuilderAtMinimum) {
+      delete root.dataset.soridrawBuilderAtMinimum;
+    }
+
+    if (resultAtMinimum) {
+      if (root.dataset.soridrawResultAtMinimum !== 'true') root.dataset.soridrawResultAtMinimum = 'true';
+    } else if (root.dataset.soridrawResultAtMinimum) {
+      delete root.dataset.soridrawResultAtMinimum;
+    }
+
+    if (!livePosition) return;
+    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
+    if (builderAtMinimum && builderToggleRef.current) {
+      builderToggleRef.current.style.removeProperty('right');
+      builderToggleRef.current.style.setProperty(
+        'left',
+        `${Math.max(0, roundedSplitterLeft - 43)}px`,
+        'important',
+      );
+    }
+    if (resultAtMinimum && resultToggleRef.current) {
+      resultToggleRef.current.style.removeProperty('right');
+      resultToggleRef.current.style.setProperty(
+        'left',
+        `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`,
+        'important',
+      );
+    }
+  }, []);
 
   const applyPercent = useCallback((rawPercent: number, live = false) => {
     const layout = layoutRef.current;
@@ -953,6 +1019,12 @@ export default function LiteStudioSplitWorkspace({
         dragBoundarySignatureRef.current = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
       }
 
+      // Keep the split-edge collapse UI correct even on the Pure Pane
+      // production hot path, which intentionally returns before auxiliary
+      // external-geometry synchronization. This is threshold-only state plus
+      // one tiny button position write at an actual minimum edge.
+      syncMinimumCollapseControls(nextPercent, bounds, safeWidth, splitterLeft, true);
+
       if (perfEnabled && live) {
         recordSplitPerfGeometryWrite(builderWidth, resultWidth);
         const perfEnd = performance.now();
@@ -1031,20 +1103,13 @@ export default function LiteStudioSplitWorkspace({
     const perfAfterExternal = perfEnabled ? performance.now() : 0;
 
     if (!deferAuxLive) {
-      const root = document.documentElement;
-      const edgeTolerancePercent = (1.5 / safeWidth) * 100;
-      const builderAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent <= bounds.min + edgeTolerancePercent;
-      const resultAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent >= bounds.max - edgeTolerancePercent;
-      if (builderAtMinimum) {
-        if (root.dataset.soridrawBuilderAtMinimum !== 'true') root.dataset.soridrawBuilderAtMinimum = 'true';
-      } else if (root.dataset.soridrawBuilderAtMinimum) {
-        delete root.dataset.soridrawBuilderAtMinimum;
-      }
-      if (resultAtMinimum) {
-        if (root.dataset.soridrawResultAtMinimum !== 'true') root.dataset.soridrawResultAtMinimum = 'true';
-      } else if (root.dataset.soridrawResultAtMinimum) {
-        delete root.dataset.soridrawResultAtMinimum;
-      }
+      syncMinimumCollapseControls(
+        nextPercent,
+        bounds,
+        safeWidth,
+        splitterLeft,
+        live && draggingRef.current,
+      );
 
       const boundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
       if (lastAriaBoundsRef.current !== boundsKey) {
@@ -1070,7 +1135,7 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, v2DragPerfMode, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncMinimumCollapseControls, syncPaneModes, v2DragPerfMode, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;

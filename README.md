@@ -2195,3 +2195,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 처리: `previewSplitterAtClientX`가 splitter와 동일한 최신 좌표로 Builder/Result 접기버튼도 직접 추적한다. Builder는 splitter 왼쪽 9px, Result는 splitter 오른쪽 9px 간격을 그대로 사용한다. pane reflow/반응형 판정/접힘 상태 로직은 변경하지 않았다.
 - 영향 범위: Studio Black 분할모드의 좌/우 pane 접기버튼 위치 추적만 변경. Classic, 모바일, Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
 
+
+## SORIDRAW 781차 — Lite V2 분할 최소폭 접기버튼 좌우 소유권 수정
+
+- 기준: 780차.
+- 실제 원인: 764차부터 `곡 만들기` 분할모드도 기본 엔진이 `LiteStudioSplitWorkspace`(Lite V2 + Pure Pane)인데, 780차는 Legacy `StudioSplitWorkspace`의 즉시 추적만 수정해 현재 기본 실행 경로를 놓쳤다.
+- Lite V2 `normal = Pure Pane` hot path는 성능을 위해 `syncExternalGeometry`보다 먼저 return한다. 이 때문에 분할바는 현재 포인터 좌표로 움직여도 `builder/result-at-minimum` 상태와 접기버튼 좌표는 이전 최소폭 위치에 남아, 반대쪽 최소폭으로 이동할 때 접기버튼이 분할바 반대편에 표시될 수 있었다.
+- 수정: Lite V2 엔진 내부에 좌/우 최소폭 접기버튼 공통 규칙을 추가했다. Builder 최소폭이면 Builder 버튼만 분할바 왼쪽 9px, Result(최근 생성곡) 최소폭이면 Result 버튼만 분할바 오른쪽 9px에 현재 live splitter 좌표로 즉시 배치한다.
+- 최소폭 상태(dataset)는 실제 경계를 넘을 때만 바뀌며, 일반 드래그 중에는 카드/반응형/외부 UI 동기화를 다시 켜지 않는다. 즉 Pure Pane 성능 경로는 유지하고 접기버튼에 필요한 최소 상태/좌표만 보강했다.
+- 드래그 종료 시 임시 inline 좌표와 Lite toggle 변수를 제거하고 기존 committed root 좌표에 소유권을 돌려준다. 그래서 접은 뒤 다시 펼칠 때의 기존 restore 위치 규칙은 그대로 유지된다.
+- 영향 범위: Studio Black 분할모드의 Lite V2 좌/우 pane 최소폭 접기버튼. Classic, 모바일(<1100px), Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

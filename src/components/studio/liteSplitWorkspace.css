@@ -1126,3 +1126,54 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+
+/* 769 — Galaxy Tab dual-layout owner diagnostics.
+ * Pane Only already proved pointer/rAF is fast and each side alone is affordable.
+ * These three probes keep both panes participating while reducing the JS geometry
+ * owner to one place so we can separate duplicate writes from dual-subtree layout.
+ * Diagnostic-only: pointer-up restores the normal Pure Pane live owner. */
+.soridraw-split-engine-test-switch--v2-owner {
+  top: 312px;
+}
+
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"] {
+    display: flex !important;
+    align-items: flex-start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"]
+  > .soridraw-studio-builder-pane {
+    flex: 0 0 auto !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="left-owner"]
+  > .soridraw-studio-result-pane {
+    flex: 1 1 0% !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"] {
+    display: flex !important;
+    align-items: flex-start !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"]
+  > .soridraw-studio-builder-pane {
+    flex: 1 1 0% !important;
+    width: auto !important;
+    max-width: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging[data-v2-drag-perf-mode="right-owner"]
+  > .soridraw-studio-result-pane {
+    flex: 0 0 auto !important;
+  }
+}

@@ -2167,3 +2167,16 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - touch/pen 입력으로 Pure Pane을 드래그할 때 이미 알고 있는 pane 폭이 661~1080px 태블릿 band에 들어오면 `data-soridraw-pane-tablet-fastpath`를 경계 변화 시에만 갱신합니다.
 - 기존 fast-path CSS의 layout/style/paint containment, off-screen content visibility, secondary container-query suspension을 그대로 재사용합니다. 새 DOM 측정/ResizeObserver/React state/pointermove capability query는 추가하지 않습니다.
 - PC fine-pointer Pure Pane 동작, 외부창 resize, Firebase/Auth/Firestore/Functions/데이터 구조는 변경하지 않았습니다.
+
+## SORIDRAW 769차 — 갤탭 단일 Geometry Owner A/B 진단
+
+- 기준: 768차 갤탭 Pure Pane 태블릿 FastPath 연결.
+- 사용자 실기기 결과: `Splitter Only`는 빠름, `Pure Pane`부터 손가락 추종 딜레이 발생. `Left Pane Only`는 약간 느리고 `Right Pane Only`는 빠름. 최근 생성곡에서도 좌/우 각각은 빠르지만 두 pane을 함께 움직이면 지연이 생김.
+- 목적: 특정 페이지보다 **좌우 두 pane이 같은 프레임에서 동시에 layout되는 비용**인지 먼저 확인한다.
+- 관리자 앱 테스트에 3개 진단 추가:
+  - `Left Owner`: JS는 Builder width 한 번만 갱신하고 Result는 flex로 남은 폭을 계산. 좌우 모두 실제 resize.
+  - `Right Owner`: JS는 Result width 한 번만 갱신하고 Builder는 flex로 남은 폭을 계산. 좌우 모두 실제 resize.
+  - `Single Owner`: pane 개별 geometry write 없이 부모 grid track 한 번만 갱신해 좌우 폭을 계산.
+- 세 모드는 responsive/external/ARIA/scroll 보조 동기화를 드래그 종료까지 제외해 geometry/layout 비용만 비교한다.
+- pointer-up 시 모든 진단용 width/grid track을 즉시 제거한 뒤 기존 Lite V2/Pure Pane runtime geometry로 1회 복구한다.
+- PC 기본 Pure Pane 실시간 경로, Firebase/Auth/Firestore/Functions 저장 구조는 변경하지 않음.

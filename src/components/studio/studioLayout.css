@@ -13399,133 +13399,30 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
   }
 }
 
-/* 785 — One vertical header-slot owner for split keyword cards across every
- * Builder width band (mobile -> 4 -> 5 -> 7 keyword columns).
- *
- * 784 only targeted `> .soridraw-menu-card-header-slot`, but all five real menu
- * cards wrap that header inside an intermediate `.flex-1`, so the selector never
- * matched. It also covered only the <=660 mobile pane, leaving the 1074px 5<->7
- * title/action-size handoff free to change the parent card height after pointer-up.
- *
- * Keep the already-approved Compact 30px slot as the layout owner at ALL split
- * widths. The visible title/count/action controls may still change their own font
- * and icon sizes responsively, but that visual change is no longer allowed to
- * add/remove vertical space from the parent card. This makes the resting layout
- * match the drag-time vertical lock, so releasing the splitter cannot cause the
- * small card-height snap at mobile<->4 or 5<->7. Expanded content, keyword column
- * counts, real phone layouts, Classic Dark/Light, and every non-split page remain
- * untouched. */
+/* 784 — Keep the split Builder's keyword-card shell height stable at the
+ * tablet -> mobile pane handoff. Compact desktop uses a 30px title/action row;
+ * when the pane crosses <=660px the mobile title/count/action visuals become
+ * larger, which used to add a few pixels to the parent card after the final
+ * responsive commit. Preserve the approved Compact header slot as the layout
+ * owner while allowing the mobile title/buttons themselves to render at their
+ * existing visual size. This is split Studio Black only; real phone layouts and
+ * Classic Dark/Light keep their existing mobile geometry. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
+  .soridraw-studio-builder-pane[data-pane-mode="mobile"]
   :is(
     [data-studio-menu="genre"],
     [data-studio-menu="style"],
     [data-studio-menu="sound"],
     [data-studio-menu="mood"],
     [data-studio-menu="theme"]
-  ) .soridraw-menu-card-header-slot {
+  ) > .soridraw-menu-card-header-slot {
     height: 30px !important;
     min-height: 30px !important;
     max-height: 30px !important;
     flex: 0 0 30px !important;
     overflow: visible !important;
     align-items: center !important;
-  }
-}
-
-/* 786 — Fix the actual pointer-up snap for Mood / Theme cards in Lite V2 split.
- *
- * 785 stabilized only the title/header slot. The remaining visible jump happened
- * specifically when the splitter was released: Pure Pane keeps the whole card
- * vertically locked while dragging, then finishDrag returns ownership to the
- * resting responsive CSS. Mood/Theme therefore exposed a slightly different
- * natural outer height at the mobile<->4 and 5<->7 handoffs even though the live
- * drag itself looked stable.
- *
- * Mood/Theme already have one intentional collapsed geometry in every split band:
- *   header 30px + gap 16px + two keyword rows 96px + summary gap 20px +
- *   summary 64px + card vertical padding 56px = 282px.
- * Make that existing geometry the resting owner too. This does not freeze expanded
- * cards, does not alter keyword columns/font sizing, and does not touch Classic,
- * non-split pages, Vocal/Lyrics, Storyboard, or the split engine timing. Because
- * drag-time and pointer-up resting height are now identical, releasing the mouse
- * cannot change the card height. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  .soridraw-menu-card-header-slot {
-    box-sizing: border-box !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    max-height: 30px !important;
-    flex: 0 0 30px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  .soridraw-menu-card-body-slot {
-    box-sizing: border-box !important;
-    height: 96px !important;
-    min-height: 96px !important;
-    max-height: 96px !important;
-    flex: 0 0 96px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  > .soridraw-expand-summary[data-expanded="false"] {
-    box-sizing: border-box !important;
-    height: 64px !important;
-    min-height: 64px !important;
-    max-height: 64px !important;
-    flex: 0 0 64px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"]).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"]) {
-    box-sizing: border-box !important;
-    height: 282px !important;
-    min-height: 282px !important;
-    max-height: 282px !important;
-  }
-}
-
-
-/* 789 — Vocal/Lyrics title-size changes must never move the card row.
- * The shared 1074px compact rule intentionally shrinks card titles (22 -> 18px)
- * and header action buttons (36 -> 30px). For Vocal/Lyrics, that visual change
- * was still allowed to change the header's natural height, which changed the
- * paired grid row by a few pixels. During drag, the old 763 Lyrics snapshot hid
- * the change; pointer-up removed the snapshot and the whole lower row jumped.
- *
- * Keep the WIDE header footprint (36px) as the layout slot at every split width.
- * The title and icons may still resize visually, but their parent card and the
- * following content start position stay fixed. Both cards in the pair share the
- * exact same owner, so neither one can push the other or move the rows below.
- * This is split Studio Black only; Classic, non-split mobile, keyword cards and
- * all content/control responsive rules remain unchanged. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="vocal"], [data-studio-menu="lyrics"])
-  > .soridraw-card-header {
-    box-sizing: border-box !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-    flex: 0 0 36px !important;
-    align-items: center !important;
-    overflow: visible !important;
   }
 }

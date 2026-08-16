@@ -4340,9 +4340,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) {
   background: #F7F4EF !important;
   background-color: #F7F4EF !important;
@@ -4357,9 +4355,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where([class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151515]"], [class*="bg-[#171717]"], [class*="bg-[#171719]"], [class*="bg-[#181818]"], [class*="bg-[#1a1a1a]"], [class*="bg-[#1f1f1f]"], [class*="bg-[#202020]"]) {
   background: #EEEBE7 !important;
   background-color: #EEEBE7 !important;
@@ -4371,9 +4367,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where([class*="bg-white/"], [class*="bg-[var(--bg-secondary)]"], [class*="bg-[var(--hover-bg)]"], [class*="bg-btn-bg"]) {
   background: #F3F0EA !important;
   background-color: #F3F0EA !important;
@@ -4385,9 +4379,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where([class*="text-white"]) {
   color: #3D3833 !important;
   -webkit-text-fill-color: #3D3833 !important;
@@ -4399,9 +4391,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where([class*="border-white"], [class*="border-black"]) {
   border-color: transparent !important;
 }
@@ -4412,9 +4402,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where(input, textarea, select) {
   background: #FBF9F5 !important;
   background-color: #FBF9F5 !important;
@@ -4429,9 +4417,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where(input, textarea)::placeholder {
   color: #9A938A !important;
   opacity: 1 !important;
@@ -4443,9 +4429,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where([class*="text-[#FFD36A]"]) {
   color: #8B6500 !important;
   -webkit-text-fill-color: #8B6500 !important;
@@ -4715,9 +4699,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .studio-section-custom-modal-panel,
   .soridraw-studio-vocal-modal-panel,
   .soridraw-studio-cycle-modal-panel,
-  .soridraw-studio-genre-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-genre-modal-panel
 ) :where([class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151515]"], [class*="bg-[#171717]"], [class*="bg-[#171719]"], [class*="bg-[#181818]"], [class*="bg-[#1a1a1a]"], [class*="bg-[#1f1f1f]"], [class*="bg-[#202020]"]) {
   background: #E8E3DC !important;
   background-color: #E8E3DC !important;
@@ -5069,9 +5051,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .soridraw-studio-cycle-modal-panel,
   .soridraw-studio-genre-modal-panel,
   .studio-section-custom-modal-panel,
-  .soridraw-studio-vocal-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-vocal-modal-panel
 ) :where(
   button,
   [role="button"],
@@ -5089,9 +5069,7 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   .soridraw-studio-cycle-modal-panel,
   .soridraw-studio-genre-modal-panel,
   .studio-section-custom-modal-panel,
-  .soridraw-studio-vocal-modal-panel,
-  .soridraw-musicnote-detail-panel,
-  .soridraw-library-detail-panel
+  .soridraw-studio-vocal-modal-panel
 ) :where(
   button,
   [role="button"],

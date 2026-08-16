@@ -1072,11 +1072,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
           <div className="soridraw-split-perf-benchmark-row" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '6px' }}>
             <span style={{ fontWeight: 800, color: '#FFB400', fontSize: '12px', alignSelf: 'center', marginRight: '6px' }}>[PERF A/B 테스트]:</span>
             {(() => {
-              const currentParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('v2DragPerf') || 'pure-pane-hybrid' : 'pure-pane-hybrid';
+              const currentParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('v2DragPerf') || 'normal' : 'normal';
               const setPerfParam = (param: string) => {
                 if (typeof window === 'undefined') return;
                 const url = new URL(window.location.href);
-                if (param === 'pure-pane-hybrid' || param === 'normal') url.searchParams.delete('v2DragPerf');
+                if (param === 'normal') url.searchParams.delete('v2DragPerf');
                 else url.searchParams.set('v2DragPerf', param);
                 window.history.pushState({}, '', url.toString());
                 window.dispatchEvent(new Event('popstate'));
@@ -1085,11 +1085,11 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                 <>
                   <button
                     type="button"
-                    className={currentParam === 'pure-pane-hybrid' ? 'is-active' : 'is-secondary'}
-                    style={{ fontWeight: currentParam === 'pure-pane-hybrid' ? 900 : 500, backgroundColor: currentParam === 'pure-pane-hybrid' ? '#FFB400' : undefined, color: currentParam === 'pure-pane-hybrid' ? '#000' : undefined }}
-                    onClick={() => setPerfParam('pure-pane-hybrid')}
+                    className={currentParam === 'normal' || !currentParam ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'normal' || !currentParam ? 900 : 500, backgroundColor: currentParam === 'normal' || !currentParam ? '#FFB400' : undefined, color: currentParam === 'normal' || !currentParam ? '#000' : undefined }}
+                    onClick={() => setPerfParam('normal')}
                   >
-                    ★ 기본 · Pure Pane 하이브리드
+                    PC 기본 (Pure Pane 실시간)
                   </button>
                   <button
                     type="button"

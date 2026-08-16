@@ -1004,22 +1004,110 @@ html[data-soridraw-perf-probe="musicnote-text-off"]
 }
 
 
-/* 787 — Keyword-card vertical geometry has one owner during drag and rest.
- * 762 used drag-scoped `!important` height snapshots for
- * Genre/Style/Sound/Mood/Theme. Removing `.is-dragging` on pointer-up then
- * exposed the resting responsive sizes and produced the visible release snap.
- * Keep the admin switch position, but intentionally provide NO drag-only height
- * override for those five cards. 785/786 resting rules now remain active through
- * the whole gesture. Lyrics keeps its separate 763 lock below. */
+/* 762 — Pure Pane live: stable vertical menu slots without freezing the workspace.
+ * The actual GenreHierarchySelector is `[data-studio-menu="genre"]`; 761 targeted
+ * an obsolete `.soridraw-genre-card`, so Genre was never locked. Also keep the
+ * lock drag-scoped and preserve header/body/summary slots independently so a
+ * responsive title/button-size change cannot push the rows below it. */
 .soridraw-split-engine-test-switch--v2-pure {
   top: 272px;
 }
 
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-studio-builder-pane
+  :is(
+    [data-studio-menu="genre"],
+    [data-studio-menu="style"],
+    [data-studio-menu="sound"],
+    [data-studio-menu="mood"],
+    [data-studio-menu="theme"]
+  ).soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"] {
+    height: var(--soridraw-pure-pane-card-height) !important;
+    min-height: var(--soridraw-pure-pane-card-height) !important;
+    max-height: var(--soridraw-pure-pane-card-height) !important;
+    overflow: visible !important;
+  }
 
-/* 789 — Remove the 763 Lyrics-only drag snapshot override.
- * Vocal/Lyrics now use one resting header-slot geometry in studioLayout.css, so
- * keeping a second `.is-dragging` height owner here would recreate the pointer-up
- * snap. No drag-only vertical height rule is intentionally defined for Lyrics. */
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-studio-builder-pane
+  .soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"]
+  .soridraw-menu-card-header-slot {
+    height: var(--soridraw-pure-pane-header-height) !important;
+    min-height: var(--soridraw-pure-pane-header-height) !important;
+    max-height: var(--soridraw-pure-pane-header-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-header-height) !important;
+    overflow: visible !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-studio-builder-pane
+  .soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"]
+  .soridraw-menu-card-body-slot {
+    height: var(--soridraw-pure-pane-body-height) !important;
+    min-height: var(--soridraw-pure-pane-body-height) !important;
+    max-height: var(--soridraw-pure-pane-body-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-body-height) !important;
+    overflow: hidden !important;
+    transition: none !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"])
+  .soridraw-studio-builder-pane
+  .soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"]
+  > .soridraw-expand-summary {
+    height: var(--soridraw-pure-pane-summary-height) !important;
+    min-height: var(--soridraw-pure-pane-summary-height) !important;
+    max-height: var(--soridraw-pure-pane-summary-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-summary-height) !important;
+    transition: none !important;
+  }
+}
+
+
+
+/* 763 — Pure Pane live: Lyrics card keeps one stable vertical frame.
+ * The responsive header may change its title/icon size at the compact desktop
+ * threshold, but the header slot, content start position and outer card height
+ * stay fixed for the duration of the drag. This extends the proven 762 vertical
+ * slot contract to the lower Lyrics menu without changing its responsive text. */
+@media (min-width: 1100px) {
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"], [data-v2-drag-perf-mode="tablet-touch-pure"])
+  .soridraw-studio-builder-pane
+  [data-studio-menu="lyrics"].soridraw-studio-menu-card[data-soridraw-pure-pane-vertical-lock="true"] {
+    height: var(--soridraw-pure-pane-card-height) !important;
+    min-height: var(--soridraw-pure-pane-card-height) !important;
+    max-height: var(--soridraw-pure-pane-card-height) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"], [data-v2-drag-perf-mode="tablet-touch-pure"])
+  .soridraw-studio-builder-pane
+  [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
+  > .soridraw-menu-card-header-slot {
+    height: var(--soridraw-pure-pane-header-height) !important;
+    min-height: var(--soridraw-pure-pane-header-height) !important;
+    max-height: var(--soridraw-pure-pane-header-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-header-height) !important;
+  }
+
+  html[data-soridraw-theme="studio-black"]
+  .soridraw-lite-studio-split-workspace.is-dragging:is([data-v2-drag-perf-mode="pure-pane-live"], [data-v2-drag-perf-mode="normal"], [data-v2-drag-perf-mode="tablet-touch-pure"])
+  .soridraw-studio-builder-pane
+  [data-studio-menu="lyrics"][data-soridraw-pure-pane-vertical-lock="true"]
+  > .soridraw-menu-card-body-slot {
+    height: var(--soridraw-pure-pane-body-height) !important;
+    min-height: var(--soridraw-pure-pane-body-height) !important;
+    max-height: var(--soridraw-pure-pane-body-height) !important;
+    flex: 0 0 var(--soridraw-pure-pane-body-height) !important;
+    transition: none !important;
+  }
+}
 
 /* Tablet Touch Pure mode — Pane-level Container Query drag dependency decoupling */
 @media (min-width: 1100px) {

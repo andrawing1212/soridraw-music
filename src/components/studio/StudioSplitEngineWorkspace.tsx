@@ -6,7 +6,7 @@ import StudioCompactMobileWorkspace from './StudioCompactMobileWorkspace';
 export type StudioSplitEngine = 'lite' | 'legacy';
 export type StudioLiteRuntimeProfile = 'adaptive' | 'library-590';
 export type StudioGenerationBarPerfMode = 'normal' | 'freeze' | 'off';
-export type StudioV2DragPerfMode = 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-hybrid' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only' | 'tablet-touch-pure';
+export type StudioV2DragPerfMode = 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only' | 'tablet-touch-pure';
 
 type Props = {
   engine: StudioSplitEngine;
@@ -26,7 +26,7 @@ export default function StudioSplitEngineWorkspace({
   liteRuntimeProfile = 'adaptive',
   compactMobileMode = false,
   generationBarPerfMode = 'normal',
-  v2DragPerfMode = 'pure-pane-hybrid',
+  v2DragPerfMode = 'normal',
   ...props
 }: Props) {
   // 646: below the mobile threshold Studio Black is no longer a squeezed split

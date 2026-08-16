@@ -2376,3 +2376,19 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 원인: 786차의 Mood/Theme 높이 안정화 CSS가 접힌 상태 전용 96px body 높이를 펼친 상태에도 `!important`로 강제해, React가 계산한 expanded max-height가 적용되지 못했다.
 - 수정: 96px body/282px outer 고정 계약은 `data-expanded=false`인 접힌 상태에만 적용한다. 펼친 상태는 기존 측정 높이 + max-height transition 경로를 다시 사용한다.
 - Pure Pane 하이브리드 엔진, 820/660 경계 처리, 생성바, Firebase/Auth/Firestore/Functions는 변경하지 않았다.
+
+## SORIDRAW 801차 — 장르~주제 접기/펼치기 모션 완전 통일
+- 기준: 800차.
+- 문제: 800차에서 분위기/주제 펼치기는 복구됐지만, 접는 순간 collapsed 전용 `height/max-height/flex-basis`가 즉시 96px/282px 소유권을 가져가서 장르/스타일/사운드의 220ms max-height easing과 달리 순간적으로 닫혀 보였다.
+- 수정: 분위기/주제에만 있던 collapsed 전용 body `height/max-height/flex-basis`, summary 강제 geometry, outer `height/max-height`를 제거했다.
+- 공통 모션: 장르/스타일/사운드/분위기/주제 모두 `soridraw-keyword-expand-motion`의 동일한 `max-height + opacity / 220ms ease-out` 경로를 사용한다.
+- 분위기/주제의 모바일 2줄(96px) collapsed contract는 그대로 유지하며, 최종 카드 안정성을 위해 collapsed outer `min-height: 282px`만 남긴다. 이는 애니메이션 진행을 막지 않는다.
+- Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+
+## SORIDRAW 802차 — 장르 접기/펼치기 체감 속도 보정
+- 기준: 801차.
+- 801차에서 장르/스타일/사운드/분위기/주제는 모두 동일한 max-height + opacity 경로를 사용하지만, 장르는 전체 폭의 더 큰 펼침 이동량 때문에 같은 220ms가 다른 카드보다 느리게 느껴졌다.
+- 장르는 모션 구조/소유권/ease-out은 그대로 유지하고 transition-duration만 180ms로 짧게 보정했다. 스타일/사운드/분위기/주제는 승인된 220ms를 유지한다.
+- 목적은 숫자상 동일 duration이 아니라 실제 화면에서 장르부터 주제까지 접기/펼치기 체감 리듬을 동일하게 맞추는 것이다.
+- Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

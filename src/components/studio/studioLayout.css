@@ -564,6 +564,15 @@
   transition-timing-function: ease-out;
 }
 
+/* 802 — Genre has a much taller full-width reveal than the other keyword cards.
+ * With the literal same 220ms max-height duration it still reads visually slower,
+ * even though it is on the shared motion path. Keep the same max-height/opacity
+ * owner and the same ease-out curve, but shorten only Genre's travel time so the
+ * perceived close/open cadence matches Style / Sound / Mood / Theme. */
+[data-studio-menu="genre"] .soridraw-keyword-expand-motion {
+  transition-duration: 180ms;
+}
+
 /* 519 — collapsed keyword-card height follows the builder pane itself.
  * The old App.tsx fallback used window.innerWidth, so a narrow split pane inside
  * a desktop browser could retain desktop height until a later React render. */
@@ -13488,43 +13497,23 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     flex: 0 0 30px !important;
   }
 
-  /* 800 — The 96px body contract belongs ONLY to the collapsed Mood/Theme
-   * state. 786 accidentally applied it unconditionally, so the inline expanded
-   * max-height from CategorySection could never grow past 96px. Scope the fixed
-   * body geometry to cards whose summary is actually collapsed; expanded cards
-   * return to their normal measured max-height/transition path. */
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"]).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"])
-  .soridraw-menu-card-body-slot {
-    box-sizing: border-box !important;
-    height: 96px !important;
-    min-height: 96px !important;
-    max-height: 96px !important;
-    flex: 0 0 96px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  > .soridraw-expand-summary[data-expanded="false"] {
-    box-sizing: border-box !important;
-    height: 64px !important;
-    min-height: 64px !important;
-    max-height: 64px !important;
-    flex: 0 0 64px !important;
-  }
-
+  /* 801 — Mood / Theme now use the exact same expand/collapse motion owner as
+   * Genre / Style / Sound. 800 restored expanding, but its collapsed-only fixed
+   * `height/max-height/flex-basis` took ownership immediately when data-expanded
+   * flipped to false. That bypassed the shared 220ms max-height transition and
+   * made Mood/Theme snap shut while the first three keyword cards eased closed.
+   *
+   * Keep only the final collapsed OUTER minimum as a resting-height guard. The
+   * body max-height remains owned by CategorySection's inline value +
+   * `.soridraw-keyword-expand-motion`, so it animates from measured expanded
+   * height down to the existing 96px two-row contract exactly like the other
+   * keyword menus. No separate Mood/Theme animation path remains. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-lite-studio-split-workspace
   .soridraw-studio-builder-pane
   :is([data-studio-menu="mood"], [data-studio-menu="theme"]).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"]) {
     box-sizing: border-box !important;
-    height: 282px !important;
     min-height: 282px !important;
-    max-height: 282px !important;
   }
 }
 

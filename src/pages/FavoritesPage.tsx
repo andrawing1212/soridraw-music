@@ -6844,17 +6844,22 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       onMouseLeave={() => { onHover(null); onLongPressEnd(); }}
                       onTouchStart={() => onLongPressStart({ id: 'detail-lock', label: selectedSong.isLocked ? '잠금 해제' : '잠금', description: selectedSong.isLocked ? '이 곡의 잠금을 해제합니다.' : '이 곡을 삭제되지 않도록 잠급니다.' })}
                       onTouchEnd={onLongPressEnd}
+                      data-soridraw-detail-lock-button="true"
+                      data-locked={selectedSong.isLocked ? 'true' : 'false'}
                       className={cn(
-                        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35 hover:text-[#FFC1BC]',
+                        'soridraw-detail-state-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35',
                         selectedSong.isLocked
-                          ? 'border-[#FF7A72]/25 bg-white/[0.035] text-[#FFC1BC]'
-                          : 'border-white/10 bg-white/[0.035] text-white/78'
+                          ? 'border-transparent bg-[#FF7A72]/18 text-[#FF7A72] hover:bg-[#FF7A72]/26 hover:text-[#FF9B92]'
+                          : 'border-transparent bg-white/[0.035] text-white/78 hover:bg-[#FF7A72]/10 hover:text-[#FF9B92]'
                       )}
                     >
                       {selectedSong.isLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
                     </button>
                     <button
                       data-detail-delete-button="true"
+                      data-soridraw-detail-delete-button="true"
+                      data-confirm={confirmDeleteSong ? 'true' : 'false'}
+                      data-locked={selectedSong.isLocked ? 'true' : 'false'}
                       onClick={() => handlePopupDelete(selectedSong)}
                       disabled={isEditing}
                       onMouseEnter={() => onHover({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
@@ -6862,12 +6867,12 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       onTouchStart={() => onLongPressStart({ id: 'detail-delete', label: confirmDeleteSong ? '삭제 확인' : '삭제', description: selectedSong.isLocked ? '잠긴 곡은 삭제할 수 없습니다.' : (confirmDeleteSong ? '한번 더 누르면 삭제됩니다.' : '이 곡을 삭제합니다.') })}
                       onTouchEnd={onLongPressEnd}
                       className={cn(
-                        'inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                        'soridraw-detail-state-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition-all disabled:cursor-not-allowed disabled:opacity-35',
                         selectedSong.isLocked
-                          ? 'border-black/20 bg-white/[0.03] text-white/18'
+                          ? 'border-transparent bg-white/[0.03] text-white/18'
                           : confirmDeleteSong
-                            ? 'border-red-500/55 bg-white/[0.035] text-red-500'
-                            : 'border-white/10 bg-white/[0.035] text-white/78 hover:text-red-500'
+                            ? 'border-transparent bg-red-500/18 text-red-500 hover:bg-red-500/26'
+                            : 'border-transparent bg-white/[0.035] text-white/78 hover:bg-red-500/12 hover:text-red-500'
                       )}
                     >
                       <Trash2 className="h-5 w-5" />

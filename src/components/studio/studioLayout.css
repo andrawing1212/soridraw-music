@@ -9003,26 +9003,34 @@ button[class*="bg-white/"] {
   box-shadow: none !important;
 }
 
-/* Music Note and Library detail windows. All header/body/footer divisions use
- * neighboring warm tones instead of border lines. */
+/* 822 — Music Note / Library Classic Light detail ownership.
+ * The previous shared light conversion matched every rounded/bg descendant and
+ * used background shorthand with !important. That accidentally covered accent
+ * buttons, media overlays and thumbnail surfaces. Keep the light shell, but
+ * scope tonal conversion to structural containers only; native coral/violet
+ * action buttons and media artwork keep their own component colors/effects. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel) {
   background: var(--soridraw-light-canvas) !important;
   background-color: var(--soridraw-light-canvas) !important;
-  background-image: none !important;
   color: var(--soridraw-light-text) !important;
   border: 0 !important;
   outline: 0 !important;
   box-shadow: 0 26px 74px rgba(69, 59, 48, 0.20) !important;
 }
 
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-library-detail-panel > div:first-child,
+/* Light headers keep a small page identity tint instead of a flat ivory wash. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 .soridraw-musicnote-detail-panel > div:nth-of-type(3) {
-  background: var(--soridraw-light-panel-strong) !important;
-  background-color: var(--soridraw-light-panel-strong) !important;
-  background-image: none !important;
+  background: linear-gradient(135deg, #E5DCD3 0%, #F0E9E2 100%) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-detail-panel > div:first-child {
+  background: radial-gradient(circle at 12% 0%, rgba(169, 139, 255, 0.17), transparent 42%),
+              linear-gradient(135deg, #E4DEE7 0%, #F0EBF2 100%) !important;
   border: 0 !important;
   box-shadow: none !important;
 }
@@ -9034,36 +9042,54 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   border: 0 !important;
 }
 
+/* Only semantic content sections receive the light panel fill. Do not match
+ * generic rounded elements: those include buttons and cover/media controls. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where(section, [class*="rounded-[28px]"], [class*="rounded-[30px]"], [class*="rounded-2xl"])[class*="bg-"] {
+.custom-scrollbar section {
   background: var(--soridraw-light-panel-soft) !important;
   background-color: var(--soridraw-light-panel-soft) !important;
-  background-image: none !important;
-  border: 0 !important;
+  border-color: transparent !important;
   box-shadow: none !important;
 }
 
+/* Neutral information cells may step down one tone, but media wrappers are
+ * explicitly excluded so cover artwork/thumbnail backgrounds are never erased. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where([class*="bg-black/"], [class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151516]"], [class*="bg-[#171719]"]) {
+.custom-scrollbar div[class*="bg-black/"]:not(.soridraw-musicnote-suno-cover-media):not(.soridraw-musicnote-suno-cover-card),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+.custom-scrollbar div[class*="bg-white/"]:not(.soridraw-musicnote-suno-cover-media):not(.soridraw-musicnote-suno-cover-card) {
   background: var(--soridraw-light-panel-strong) !important;
   background-color: var(--soridraw-light-panel-strong) !important;
-  background-image: none !important;
+}
+
+/* Neutral white-translucent buttons become light controls. Accent buttons with
+ * explicit coral/violet backgrounds are deliberately not matched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+button[class*="bg-white/"] {
+  background: var(--soridraw-light-control) !important;
+  background-color: var(--soridraw-light-control) !important;
+  color: var(--soridraw-light-text-soft) !important;
+  border-color: transparent !important;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where([class*="text-white"], [class*="text-white/"]) {
+:where([class*="text-white"]):not(button) {
   color: var(--soridraw-light-text) !important;
   -webkit-text-fill-color: var(--soridraw-light-text) !important;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where([class*="border-white"], [class*="border-black"], [class*="border-[#877198]"]) {
+:where(input, textarea) {
+  background: #FBF9F5 !important;
+  background-color: #FBF9F5 !important;
+  color: var(--soridraw-light-text) !important;
   border-color: transparent !important;
-  border-width: 0 !important;
 }
 
 /* Generated result area: remove the line-only separators and convert all
@@ -14470,175 +14496,214 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   stroke: #8E6534 !important;
 }
 
-/* 820 — Classic Light Music Note / Library detail palette ownership.
- * These detail portals were still being flattened by the older shared light-modal
- * conversion plus the 808 detail override. They now own one dedicated tonal stack
- * at the final stylesheet layer. Geometry is unchanged; only light-mode surfaces,
- * neutral controls and existing coral/purple accents are resolved here. */
+/* 823 — Classic Light detail glow integration.
+ * Dark/Split detail cards use translucent surfaces, so the panel-wide coral/
+ * violet light naturally bleeds through the sections. The light variant had
+ * fully opaque ivory section fills, which pushed that light behind every card
+ * and made the cards look detached. Keep the 822 color ownership, but restore
+ * the same depth principle: panel glow underneath + translucent structural
+ * surfaces above it. Media, thumbnails and accent buttons keep their native
+ * colors because no generic descendant/button override is added here. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel) {
-  --soridraw-detail-shell: #F3EEE7;
-  --soridraw-detail-header: #E5DDD3;
-  --soridraw-detail-body: #F0EAE2;
-  --soridraw-detail-card: #E9E1D7;
-  --soridraw-detail-inner: #E1D7CB;
-  --soridraw-detail-control: #DDD2C5;
-  --soridraw-detail-control-hover: #D5C8B9;
-  --soridraw-detail-text: #2B2723;
-  --soridraw-detail-muted: #746B62;
-  background: var(--soridraw-detail-shell) !important;
-  background-color: var(--soridraw-detail-shell) !important;
-  background-image: none !important;
-  color: var(--soridraw-detail-text) !important;
+.soridraw-musicnote-detail-panel {
+  background-color: var(--soridraw-light-canvas) !important;
+  background-image:
+    radial-gradient(circle at 50% 2%, rgba(255, 92, 82, 0.16), rgba(255, 92, 82, 0.07) 23%, transparent 48%),
+    radial-gradient(circle at 96% 84%, rgba(255, 112, 102, 0.10), transparent 31%) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-library-detail-panel {
+  background-color: var(--soridraw-light-canvas) !important;
+  background-image:
+    radial-gradient(circle at 14% 2%, rgba(169, 139, 255, 0.15), rgba(169, 139, 255, 0.06) 24%, transparent 46%),
+    radial-gradient(circle at 92% 84%, rgba(169, 139, 255, 0.09), transparent 31%) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+.custom-scrollbar section {
+  background: rgba(241, 237, 231, 0.84) !important;
+  background-color: rgba(241, 237, 231, 0.84) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+.custom-scrollbar div[class*="bg-black/"]:not(.soridraw-musicnote-suno-cover-media):not(.soridraw-musicnote-suno-cover-card),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+.custom-scrollbar div[class*="bg-white/"]:not(.soridraw-musicnote-suno-cover-media):not(.soridraw-musicnote-suno-cover-card) {
+  background: rgba(222, 216, 208, 0.78) !important;
+  background-color: rgba(222, 216, 208, 0.78) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+:where(input, textarea) {
+  background: rgba(251, 249, 245, 0.88) !important;
+  background-color: rgba(251, 249, 245, 0.88) !important;
+}
+
+/* 824 — Classic Light top-nav surface reuse + Music Note/Library depth.
+ * Reuse the exact warm top-navigation surface for the Studio command field and
+ * Music Note/Library search fields. Add soft elevation to the page controls and
+ * song-list containers without adding outlines or changing selected accents. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --soridraw-light-top-nav-surface: rgba(248, 245, 240, 0.97);
+  --soridraw-light-control-shadow:
+    0 9px 20px -12px rgba(69, 59, 48, 0.28),
+    0 3px 8px -5px rgba(69, 59, 48, 0.14);
+  --soridraw-light-list-shadow:
+    0 13px 28px -16px rgba(69, 59, 48, 0.34),
+    0 4px 11px -6px rgba(69, 59, 48, 0.18);
+}
+
+/* Studio command box: same surface as the desktop top navigation. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.studio-tone-down .soridraw-studio-command-card textarea,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.studio-tone-down .soridraw-studio-command-card textarea:hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.studio-tone-down .soridraw-studio-command-card:focus-within textarea {
+  background: var(--soridraw-light-top-nav-surface) !important;
+  background-color: var(--soridraw-light-top-nav-surface) !important;
+}
+
+/* Music Note + Library search bars: exact same light surface as the top menu. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) .soridraw-responsive-search-input,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) .soridraw-responsive-search-input:hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme) .soridraw-responsive-search-input:focus {
+  background: var(--soridraw-light-top-nav-surface) !important;
+  background-color: var(--soridraw-light-top-nav-surface) !important;
+  border-color: transparent !important;
+  box-shadow: var(--soridraw-light-control-shadow) !important;
+}
+
+/* Top page menus/filters get a restrained lift instead of a border. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+:is(.soridraw-musicnote-mode-tabs, .soridraw-library-mode-tabs,
+    .soridraw-responsive-color-filter, .soridraw-responsive-filter-button) {
   border: 0 !important;
   outline: 0 !important;
-  box-shadow: 0 26px 74px rgba(69, 59, 48, 0.20) !important;
+  box-shadow: var(--soridraw-light-control-shadow) !important;
 }
 
-/* The Music Note panel carries two dark-mode color-wash overlays. They are useful
- * in dark mode but flatten every light surface into one tint, so light mode turns
- * only those decorative washes off. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-musicnote-detail-panel.musicnote-edit-mobile-boost > .mn-mobile-edit-color-wash,
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-musicnote-detail-panel > .pointer-events-none.absolute.inset-0:not(.mn-mobile-edit-color-wash) {
-  opacity: 0 !important;
-}
-
-/* Header / body / footer separation. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-musicnote-detail-panel > div:nth-of-type(3),
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-library-detail-panel > div:first-child {
-  background: var(--soridraw-detail-header) !important;
-  background-color: var(--soridraw-detail-header) !important;
-  background-image: none !important;
+/* Song-list windows: stronger than controls, still soft enough for the light UI. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-musicnote-theme .soridraw-musicnote-song-card,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-library-theme .soridraw-library-workspace-group {
   border: 0 !important;
-  box-shadow: none !important;
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel) > .custom-scrollbar {
-  background: var(--soridraw-detail-body) !important;
-  background-color: var(--soridraw-detail-body) !important;
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-library-detail-panel > div:last-child {
-  background: var(--soridraw-detail-header) !important;
-  background-color: var(--soridraw-detail-header) !important;
-  border: 0 !important;
-}
-
-/* Main information cards and their inner rows. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where(section, [class*="rounded-[28px]"], [class*="rounded-[30px]"], [class*="rounded-2xl"])[class*="bg-"] {
-  background: var(--soridraw-detail-card) !important;
-  background-color: var(--soridraw-detail-card) !important;
-  background-image: none !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-}
-
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where([class*="bg-black/"], [class*="bg-[#111"], [class*="bg-[#131313]"], [class*="bg-[#151516]"], [class*="bg-[#171719]"]) {
-  background: var(--soridraw-detail-inner) !important;
-  background-color: var(--soridraw-detail-inner) !important;
-  background-image: none !important;
-  border-color: transparent !important;
-}
-
-/* Neutral controls are intentionally one step darker than their card. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]) {
-  background: var(--soridraw-detail-control) !important;
-  background-color: var(--soridraw-detail-control) !important;
-  background-image: none !important;
-  color: var(--soridraw-detail-text) !important;
-  border-color: transparent !important;
   outline: 0 !important;
-  box-shadow: none !important;
+  box-shadow: var(--soridraw-light-list-shadow) !important;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-  :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-  button:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover {
-    background: var(--soridraw-detail-control-hover) !important;
-    background-color: var(--soridraw-detail-control-hover) !important;
-  }
-}
-
+/* 825 — Detail/control hover feedback + persistent lock/delete state fills.
+ * Light mode had a broad [class*="bg-white/"] !important conversion that also
+ * matched Tailwind hover:bg-white/* classes. That made neutral buttons appear
+ * static on hover. Restore one visible hover step for Music Note/Library only,
+ * then give lock/delete their own state-owned fills so icon + button surface
+ * change together in Classic Light, Classic Dark and Studio Black/Split. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+:is(.soridraw-musicnote-theme, .soridraw-library-theme)
+button[class*="bg-white/"]:not(:disabled):hover,
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
 :is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where(input, textarea, select) {
-  background: var(--soridraw-detail-inner) !important;
-  background-color: var(--soridraw-detail-inner) !important;
-  color: var(--soridraw-detail-text) !important;
+button[class*="bg-white/"]:not(:disabled):hover,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
+button.soridraw-detail-neutral-button:not(:disabled):hover {
+  background: #E2DAD1 !important;
+  background-color: #E2DAD1 !important;
+}
+
+/* Lock: the locked state owns a coral-tinted surface in every theme. */
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-lock-button="true"][data-locked="true"] {
+  background: rgba(255, 122, 114, 0.18) !important;
+  background-color: rgba(255, 122, 114, 0.18) !important;
+  color: #FF7A72 !important;
   border-color: transparent !important;
-  outline: 0 !important;
-  box-shadow: none !important;
+  box-shadow: 0 8px 20px rgba(255, 122, 114, 0.10) !important;
 }
 
-/* Restore readable primary/muted hierarchy after the old text-white conversion. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where([class*="text-white"]):not([class*="text-white/"]) {
-  color: var(--soridraw-detail-text) !important;
-  -webkit-text-fill-color: var(--soridraw-detail-text) !important;
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-lock-button="true"][data-locked="true"]:hover {
+  background: rgba(255, 122, 114, 0.27) !important;
+  background-color: rgba(255, 122, 114, 0.27) !important;
+  color: #FF9B92 !important;
 }
 
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-:is(.soridraw-musicnote-detail-panel, .soridraw-library-detail-panel)
-:where([class*="text-white/"]) {
-  color: var(--soridraw-detail-muted) !important;
-  -webkit-text-fill-color: var(--soridraw-detail-muted) !important;
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-lock-button="true"][data-locked="false"]:not(:disabled):hover {
+  background: rgba(255, 122, 114, 0.11) !important;
+  background-color: rgba(255, 122, 114, 0.11) !important;
+  color: #FF7A72 !important;
+  border-color: transparent !important;
 }
 
-/* Detail identity accents: Music Note stays coral, Library stays violet. */
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-musicnote-detail-panel :where(
-  [class*="text-[#FF8C85]"],
-  [class*="text-[#FF9B92]"],
-  [class*="text-[#FFC1BC]"],
-  [class*="text-[#FFAAA3]"],
-  [class*="text-[#F2B8AE]"]
-) {
-  color: #B65A54 !important;
-  -webkit-text-fill-color: #B65A54 !important;
+/* Delete: first click gets a red confirmation surface instead of only changing
+ * the glyph. Hover also gets a small red tint while the normal state stays neutral. */
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-delete-button="true"][data-confirm="true"][data-locked="false"] {
+  background: rgba(239, 68, 68, 0.18) !important;
+  background-color: rgba(239, 68, 68, 0.18) !important;
+  color: #EF4444 !important;
+  border-color: transparent !important;
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.08) !important;
 }
 
-html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-musicnote-detail-panel :where(
-  button[class*="D85C56"], button[class*="C76559"],
-  [role="button"][class*="D85C56"], [role="button"][class*="C76559"]
-) {
-  background: #E9D5D1 !important;
-  background-color: #E9D5D1 !important;
-  color: #A84E49 !important;
-  filter: none !important;
-  box-shadow: none !important;
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-delete-button="true"][data-confirm="true"][data-locked="false"]:hover {
+  background: rgba(239, 68, 68, 0.26) !important;
+  background-color: rgba(239, 68, 68, 0.26) !important;
 }
 
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-delete-button="true"][data-confirm="false"][data-locked="false"]:not(:disabled):hover {
+  background: rgba(239, 68, 68, 0.11) !important;
+  background-color: rgba(239, 68, 68, 0.11) !important;
+  color: #EF4444 !important;
+  border-color: transparent !important;
+}
+
+/* Light mode needs a slightly denser tint because the ivory surface otherwise
+ * washes out translucent state colors. */
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-library-detail-panel :where(
-  [class*="text-[#BBA8CA]"],
-  [class*="text-[#DCCDEA]"],
-  [class*="text-[#D8CCFF]"],
-  [class*="text-[#A98BFF]"],
-  [class*="text-[#A567CF]"],
-  [class*="text-[#C084F5]"]
-) {
-  color: #7B6190 !important;
-  -webkit-text-fill-color: #7B6190 !important;
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-lock-button="true"][data-locked="true"] {
+  background: rgba(214, 103, 95, 0.18) !important;
+  background-color: rgba(214, 103, 95, 0.18) !important;
+  color: #B64F49 !important;
 }
 
 html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
-.soridraw-library-detail-panel button[class*="bg-[#8A4EAD]"] {
-  background: #E2D8E8 !important;
-  background-color: #E2D8E8 !important;
-  color: #76578B !important;
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-lock-button="true"][data-locked="true"]:hover {
+  background: rgba(214, 103, 95, 0.25) !important;
+  background-color: rgba(214, 103, 95, 0.25) !important;
+  color: #A94640 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-lock-button="true"][data-locked="false"]:not(:disabled):hover {
+  background: rgba(214, 103, 95, 0.11) !important;
+  background-color: rgba(214, 103, 95, 0.11) !important;
+  color: #B64F49 !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-delete-button="true"][data-confirm="true"][data-locked="false"] {
+  background: rgba(214, 79, 73, 0.17) !important;
+  background-color: rgba(214, 79, 73, 0.17) !important;
+  color: #B8423D !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-delete-button="true"][data-confirm="false"][data-locked="false"]:not(:disabled):hover {
+  background: rgba(214, 79, 73, 0.10) !important;
+  background-color: rgba(214, 79, 73, 0.10) !important;
+  color: #B8423D !important;
 }

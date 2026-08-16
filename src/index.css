@@ -5001,3 +5001,105 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
   background: #F6D1CE !important;
   background-color: #F6D1CE !important;
 }
+
+/* 816 — Classic Light helper-accent brown + stronger modal layering.
+   Keep the primary CTA amber fills, but separate helper labels and modal
+   surfaces so the action hierarchy is clearer in light mode. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --soridraw-light-helper-brown: #A2743A;
+  --soridraw-light-helper-brown-strong: #8E6534;
+  --soridraw-light-modal-surface: #F4EFE8;
+  --soridraw-light-modal-panel: #ECE5DC;
+  --soridraw-light-modal-control: #E4DBCF;
+  --soridraw-light-modal-control-hover: #DDD2C4;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main {
+  background: var(--soridraw-light-modal-surface) !important;
+  background-color: var(--soridraw-light-modal-surface) !important;
+  box-shadow: 0 24px 70px rgba(58, 52, 45, 0.18) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main :where([class*="bg-white/[0.035]"], [class*="bg-white/[0.055]"], [class*="bg-white/[0.08]"]) {
+  background: var(--soridraw-light-modal-panel) !important;
+  background-color: var(--soridraw-light-modal-panel) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main :where(button, [role="button"]):not([class*="bg-[#E7AD68]"]):not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]) {
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main :where(
+  .soridraw-language-option-button,
+  .music-mix-language-button,
+  .music-mix-ratio-button
+):not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]) {
+  background: var(--soridraw-light-modal-control) !important;
+  background-color: var(--soridraw-light-modal-control) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main :where(
+  .soridraw-language-option-button,
+  .music-mix-language-button,
+  .music-mix-ratio-button
+):not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover {
+  background: var(--soridraw-light-modal-control-hover) !important;
+  background-color: var(--soridraw-light-modal-control-hover) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main :where(.text-[#E7AD68], [class*="text-[#E7AD68]"], [class*="text-[#FFD36A]"], [class*="text-[#f4bc63]"], [class*="text-[#e3a13a]"], [class*="text-[#cd8c31]"]) {
+  color: var(--soridraw-light-helper-brown) !important;
+  -webkit-text-fill-color: var(--soridraw-light-helper-brown) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.music-api-generate-modal--main :where(.text-[#E7AD68], [class*="text-[#E7AD68]"], [class*="text-[#FFD36A]"], [class*="text-[#f4bc63]"], [class*="text-[#e3a13a]"], [class*="text-[#cd8c31]"]) svg {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where(
+  button,
+  [role="button"],
+  [class*="bg-[#1a1a1a]"],
+  [class*="bg-[var(--bg-secondary)]"],
+  [class*="bg-[var(--hover-bg)]"],
+  [class*="bg-btn-bg"]
+):not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([class*="bg-[#FFB400]"]):not([class*="bg-[#E7AD68]"]) {
+  background: #ECE5DC !important;
+  background-color: #ECE5DC !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .soridraw-studio-cycle-modal-panel,
+  .soridraw-studio-genre-modal-panel,
+  .studio-section-custom-modal-panel,
+  .soridraw-studio-vocal-modal-panel,
+  .soridraw-musicnote-detail-panel,
+  .soridraw-library-detail-panel
+) :where(
+  button,
+  [role="button"],
+  [class*="bg-[#1a1a1a]"],
+  [class*="bg-[var(--bg-secondary)]"],
+  [class*="bg-[var(--hover-bg)]"],
+  [class*="bg-btn-bg"]
+):not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):not([class*="bg-[#FFB400]"]):not([class*="bg-[#E7AD68]"]):hover {
+  background: #E5DCCE !important;
+  background-color: #E5DCCE !important;
+}

@@ -13971,3 +13971,455 @@ html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel > .p
 ) {
   box-shadow: none !important;
 }
+
+/* 807 — Section Custom flat controls + selectable current-structure cards.
+ * Keep the Current Structure workspace background unchanged. Remove the remaining
+ * Split Mode internal outlines, then make only the added section cards one tone
+ * brighter. Hover is a small lift; click toggles a slightly stronger fill without
+ * restoring borders/rings. Classic Dark/Light and Split share the same behavior. */
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel > .px-5.py-4.border-b,
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel > .p-5 :where(
+  .border,
+  .border-b,
+  .border-t,
+  .border-l,
+  .border-r,
+  [data-reorder-section-id],
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel,
+  .soridraw-section-keep-card,
+  .soridraw-section-keep-search,
+  .soridraw-section-reaction-group
+),
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel button,
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel [role="button"] {
+  border-color: transparent !important;
+  outline: 0 !important;
+}
+
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel > .p-5 :where(
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel,
+  .soridraw-section-keep-card,
+  .soridraw-section-reaction-group
+),
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel .soridraw-section-current-card {
+  box-shadow: none !important;
+}
+
+/* Current Structure workspace stays at its existing color. Only row cards lift. */
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel .soridraw-section-current-card {
+  background: #29292c !important;
+  background-color: #29292c !important;
+}
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel .soridraw-section-current-card:hover {
+  background: #303034 !important;
+  background-color: #303034 !important;
+}
+html[data-soridraw-theme="studio-black"] body .studio-section-custom-modal-panel .soridraw-section-current-card[data-selected="true"] {
+  background: #3a342b !important;
+  background-color: #3a342b !important;
+}
+
+html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel .soridraw-section-current-card {
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"]:not([data-soridraw-color-mode="light"]) body .studio-section-custom-modal-panel .soridraw-section-current-card {
+  background: #292929 !important;
+  background-color: #292929 !important;
+}
+html[data-soridraw-theme="classic"]:not([data-soridraw-color-mode="light"]) body .studio-section-custom-modal-panel .soridraw-section-current-card:hover {
+  background: #303030 !important;
+  background-color: #303030 !important;
+}
+html[data-soridraw-theme="classic"]:not([data-soridraw-color-mode="light"]) body .studio-section-custom-modal-panel .soridraw-section-current-card[data-selected="true"] {
+  background: #39332a !important;
+  background-color: #39332a !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body .studio-section-custom-modal-panel .soridraw-section-current-card {
+  background: #F8F5F0 !important;
+  background-color: #F8F5F0 !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body .studio-section-custom-modal-panel .soridraw-section-current-card:hover {
+  background: #FFFDF9 !important;
+  background-color: #FFFDF9 !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body .studio-section-custom-modal-panel .soridraw-section-current-card[data-selected="true"] {
+  background: #FFECC0 !important;
+  background-color: #FFECC0 !important;
+}
+
+/* 808 — Classic Light global tone-down.
+ * The light theme was reading too bright/white across the canvas, nested panels
+ * and neutral controls. Keep the approved warm hierarchy and brand amber, but
+ * lower every neutral surface one step. Scope is strictly Classic + Light;
+ * Classic Dark and Studio Black/split are untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --soridraw-light-canvas: #ECE7E0;
+  --soridraw-light-panel: #DDD6CD;
+  --soridraw-light-panel-strong: #CFC5BA;
+  --soridraw-light-panel-soft: #E4DDD5;
+  --soridraw-light-control: #D8D0C7;
+
+  /* Feed the same toned palette into the legacy/common light tokens so outer
+     page, menu cards, inputs and neutral buttons no longer fall back to white. */
+  --bg-primary: var(--soridraw-light-canvas);
+  --bg-secondary: var(--soridraw-light-panel);
+  --card-bg: var(--soridraw-light-panel-soft);
+  --input-bg: #DED6CD;
+  --hover-bg: #D6CDC3;
+  --hover-bg-solid: #CEC4B9;
+  --glass-bg: rgba(224, 216, 207, 0.96);
+  --glass-border: transparent;
+  --border-color: transparent;
+  --button-bg: var(--soridraw-light-control);
+  --button-border: transparent;
+  --button-hover-bg: #CCC2B7;
+  --button-shadow: 0 4px 12px rgba(69, 59, 48, 0.08);
+  --soridraw-panel-bg: var(--soridraw-light-panel);
+  --soridraw-card-bg: var(--soridraw-light-panel-soft);
+  --soridraw-border: transparent;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root {
+  background: var(--soridraw-light-canvas) !important;
+  background-color: var(--soridraw-light-canvas) !important;
+}
+
+/* Common Studio neutral controls that still carry explicit white utility fills
+ * are pulled into the same muted control tone. Accent/selected amber controls
+ * keep their existing color and therefore remain easy to identify. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.studio-tone-down :is(
+  button[class~="bg-white"],
+  button[class~="bg-white/5"],
+  button[class~="bg-white/10"],
+  button[class~="bg-white/15"],
+  button[class~="bg-white/20"]
+):not(.soridraw-selected-strong) {
+  background: var(--soridraw-light-control) !important;
+  background-color: var(--soridraw-light-control) !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .studio-tone-down :is(
+    button[class~="bg-white"],
+    button[class~="bg-white/5"],
+    button[class~="bg-white/10"],
+    button[class~="bg-white/15"],
+    button[class~="bg-white/20"]
+  ):not(.soridraw-selected-strong):hover {
+    background: #CCC2B7 !important;
+    background-color: #CCC2B7 !important;
+  }
+}
+
+/* 807's light Current Structure rows were intentionally bright to demonstrate
+ * selection. Rebase them onto the new lower-luminance light palette while
+ * keeping the same hover → selected → click-again-off interaction. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel .soridraw-section-current-card {
+  background: #E1D9D0 !important;
+  background-color: #E1D9D0 !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel .soridraw-section-current-card:hover {
+  background: #E8E1D9 !important;
+  background-color: #E8E1D9 !important;
+}
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel .soridraw-section-current-card[data-selected="true"] {
+  background: #DDC99C !important;
+  background-color: #DDC99C !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel .soridraw-musicnote-suno-cover-play {
+  background: rgb(236 231 224 / 0.94) !important;
+  background-color: rgb(236 231 224 / 0.94) !important;
+}
+
+/* 810 — Classic Light: revert to the approved 808 palette and add depth only.
+ * No surface/background/control color changes from 808. The existing Studio
+ * shadow surface already owns Genre -> Tempo/Vocal/Lyrics/Storyboard cards and
+ * the command textarea, so only its light-mode shadow token is strengthened.
+ * Dark and split modes remain untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.studio-tone-down {
+  --soridraw-studio-card-shadow:
+    0 10px 20px -10px rgba(69, 59, 48, 0.24),
+    0 3px 8px -4px rgba(69, 59, 48, 0.14);
+}
+
+/* 811 — Classic Light contrast tune: neutral menu summaries + darker popup controls.
+ * Keep the approved 808 palette and 810 card shadow. Only three light-mode details
+ * change here: Genre selected summary text is neutral like the other menu summaries,
+ * Genre->Theme expand/summary controls use one moderately darker warm-neutral fill,
+ * and neutral buttons/cards inside keyword/section popups step down one tone.
+ * Accent/selected amber states, Classic Dark and Studio Black/split are untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-genre-card .soridraw-genre-summary-box
+.soridraw-genre-selected-summary,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-genre-card .soridraw-genre-summary-box
+.soridraw-genre-selected-summary :where(span, strong, em) {
+  color: #655D55 !important;
+  -webkit-text-fill-color: #655D55 !important;
+  text-shadow: none !important;
+}
+
+/* The five menu summary/expand controls should read as a button-like dark-neutral
+ * surface instead of another near-white card. Geometry stays exactly as-is. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-expand-summary {
+  background: #CFC5BA !important;
+  background-color: #CFC5BA !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-expand-summary .soridraw-menu-summary-text--empty,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-expand-summary .soridraw-menu-summary-text--selected,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-expand-summary .soridraw-menu-summary-text--selected :where(span, strong, em),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-expand-summary .soridraw-selected-summary {
+  color: #655D55 !important;
+  -webkit-text-fill-color: #655D55 !important;
+  text-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-expand-summary:hover {
+    background: #C6BBB0 !important;
+    background-color: #C6BBB0 !important;
+  }
+}
+
+/* Popup neutral controls: darker than the popup shell, but intentionally not dark.
+ * Match only neutral utility fills so selected amber cards/buttons keep their state. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel
+)
+:where(button, div)[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel
+:where(button, div)[class*="bg-[var(--bg-secondary)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel
+:where(button, div)[class*="bg-[var(--hover-bg)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel
+button[class*="bg-white/"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]) {
+  background: #D2C9BF !important;
+  background-color: #D2C9BF !important;
+  background-image: none !important;
+  border-color: transparent !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  :is(
+    .soridraw-studio-genre-modal-panel,
+    .soridraw-studio-cycle-modal-panel,
+    .studio-section-custom-modal-panel
+  )
+  :where(button, div)[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  .studio-section-custom-modal-panel
+  :where(button, div)[class*="bg-[var(--bg-secondary)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  .studio-section-custom-modal-panel
+  :where(button, div)[class*="bg-[var(--hover-bg)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  .studio-section-custom-modal-panel
+  button[class*="bg-white/"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover {
+    background: #C8BDB2 !important;
+    background-color: #C8BDB2 !important;
+  }
+}
+
+/* 812 — Classic Light neutral controls: soften 811 contrast.
+ * 811 proved too dark in real use. Keep the 808/810 light palette, card shadow,
+ * and Genre summary text fix, but move only the menu expand surfaces and popup
+ * neutral controls much closer to their original light tone. Selected amber
+ * states, Classic Dark and Studio Black/split remain untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main .soridraw-expand-summary {
+  background: #DAD2C9 !important;
+  background-color: #DAD2C9 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-main .soridraw-expand-summary:hover {
+    background: #D5CDC4 !important;
+    background-color: #D5CDC4 !important;
+  }
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+:is(
+  .soridraw-studio-genre-modal-panel,
+  .soridraw-studio-cycle-modal-panel,
+  .studio-section-custom-modal-panel
+)
+:where(button, div)[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel
+:where(button, div)[class*="bg-[var(--bg-secondary)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel
+:where(button, div)[class*="bg-[var(--hover-bg)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]),
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.studio-section-custom-modal-panel
+button[class*="bg-white/"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]) {
+  background: #E6E0D9 !important;
+  background-color: #E6E0D9 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  :is(
+    .soridraw-studio-genre-modal-panel,
+    .soridraw-studio-cycle-modal-panel,
+    .studio-section-custom-modal-panel
+  )
+  :where(button, div)[class*="bg-btn-bg"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  .studio-section-custom-modal-panel
+  :where(button, div)[class*="bg-[var(--bg-secondary)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  .studio-section-custom-modal-panel
+  :where(button, div)[class*="bg-[var(--hover-bg)]"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+  .studio-section-custom-modal-panel
+  button[class*="bg-white/"]:not(.soridraw-selected-strong):not([aria-pressed="true"]):not([data-soridraw-selected="true"]):hover {
+    background: #DFD8D0 !important;
+    background-color: #DFD8D0 !important;
+  }
+}
+
+/* 813 — Classic Light Vocal mode neutral state parity.
+ * The unselected Group tab was picking up a brighter generic light-button fill.
+ * Match the Lyrics writing-style selector: selected stays amber, while the
+ * unselected Vocal mode tab is transparent over the same muted control shell.
+ * Classic Dark and Studio Black/split are intentionally untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-main button.soridraw-vocal-mode-button:not([data-soridraw-selected="true"]):not([aria-pressed="true"]) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-main button.soridraw-vocal-mode-button:not([data-soridraw-selected="true"]):not([aria-pressed="true"]):hover {
+    background: var(--button-hover-bg) !important;
+    background-color: var(--button-hover-bg) !important;
+  }
+}
+
+
+/* 814 — Classic Light Vocal Character launcher tone-down.
+ * Keep the current launcher geometry/text/icons, but move only its steady light
+ * surface from near-white to a softer warm gray. It stays clearly lighter than
+ * dark-gray controls and receives only a tiny hover step. Classic Dark and
+ * Studio Black/split are untouched. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+body #root .soridraw-app-root button.soridraw-vocal-character-launcher:is(:active, :focus, :focus-visible) {
+  background: #E3DDD6 !important;
+  background-color: #E3DDD6 !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"]
+  body #root .soridraw-app-root button.soridraw-vocal-character-launcher:hover {
+    background: #DDD6CE !important;
+    background-color: #DDD6CE !important;
+  }
+}
+
+/* 816 — Classic Light result accent de-yellowing.
+ * In the result pane and lower tracking bar, the light-mode amber helper text
+ * was too close to the main button fill. Keep the selected fills unchanged,
+ * but move helper labels/icons/copy actions to a warmer brown accent so the
+ * information layer reads separately from the primary CTA buttons. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] {
+  --soridraw-light-accent-brown: #A2743A;
+  --soridraw-light-accent-brown-strong: #8E6534;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :where(
+  [class*="text-[#f4bc63]"],
+  [class*="text-[#e3a13a]"],
+  [class*="text-[#cd8c31]"],
+  [class*="text-[#FFD36A]"],
+  [class*="text-[#FFB400]"]
+) {
+  color: var(--soridraw-light-accent-brown) !important;
+  -webkit-text-fill-color: var(--soridraw-light-accent-brown) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :where(
+  [class*="fill-[#f4bc63]"],
+  [class*="fill-[#e3a13a]"],
+  [class*="fill-[#cd8c31]"],
+  [class*="fill-[#FFD36A]"],
+  [class*="fill-[#FFB400]"]
+) {
+  fill: var(--soridraw-light-accent-brown) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content :where(
+  [class*="stroke-[#f4bc63]"],
+  [class*="stroke-[#e3a13a]"],
+  [class*="stroke-[#cd8c31]"],
+  [class*="stroke-[#FFD36A]"],
+  [class*="stroke-[#FFB400]"]
+) {
+  stroke: var(--soridraw-light-accent-brown) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-bar--tracking .soridraw-action-side-label {
+  color: var(--soridraw-light-accent-brown) !important;
+  -webkit-text-fill-color: var(--soridraw-light-accent-brown) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-bar--tracking .soridraw-action-side-button svg,
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-bar--tracking .soridraw-action-side-button span[class*="text-[#FFB400]"],
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-action-bar--tracking .soridraw-action-side-button span[class*="text-[#FFD36A]"] {
+  color: var(--soridraw-light-accent-brown) !important;
+  stroke: currentColor !important;
+}

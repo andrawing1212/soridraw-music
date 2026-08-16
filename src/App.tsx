@@ -2103,17 +2103,14 @@ const ReorderableSectionItem = ({
   return (
     <div
       data-reorder-section-id={item.id}
+      data-selected={isInsertionTarget ? 'true' : 'false'}
       onClick={() => {
         if (isReorderDragging) return;
         onSelect(index);
       }}
       className={cn(
-        "soridraw-section-current-card flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border px-3 py-2.5 select-none shadow-sm cursor-pointer transition-[border-color,background-color,opacity,transform] duration-150",
-        isDraggingItem
-          ? "border-brand-orange/70 bg-white/[0.08] opacity-80 scale-[0.995]"
-          : isInsertionTarget
-            ? "border-white/70 bg-white/[0.07] ring-1 ring-white/35"
-            : "border-btn-border hover:border-white/30 hover:bg-white/[0.04]"
+        "soridraw-section-current-card flex items-center gap-2 rounded-2xl bg-[var(--bg-secondary)] border-0 px-3 py-2.5 select-none cursor-pointer transition-[background-color,opacity,transform] duration-150",
+        isDraggingItem && "opacity-80 scale-[0.995]"
       )}
     >
       <button
@@ -22432,7 +22429,7 @@ function SongStructureIntegratedControlComponent({
                               onEdit={setEditingSectionIndex}
                               onRemove={removeSectionAt}
                               onHover={onHover}
-                              onSelect={setSelectedInsertIndex}
+                              onSelect={(index) => setSelectedInsertIndex((current) => current === index ? null : index)}
                               onDragStart={handleSectionReorderPointerDown}
                               isReorderDragging={isReorderDragging}
                               isDraggingItem={draggingSectionId === item.id}
@@ -24802,7 +24799,7 @@ function VocalControlComponent({
                 onTouchEnd={onLongPressEnd}
                 onTouchCancel={onLongPressEnd}
                 className={cn(
-                  "flex-1 py-2.5 rounded-xl text-[14px] font-bold transition-all",
+                  "soridraw-vocal-mode-button flex-1 py-2.5 rounded-xl text-[14px] font-bold transition-all",
                   vocalMode === mode 
                     ? "bg-[#FFB400] text-[#171717] font-black shadow-md" 
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-btn-hover"

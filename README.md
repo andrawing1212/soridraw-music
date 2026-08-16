@@ -2323,3 +2323,14 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 생성바 floating portal의 live 위치는 Lite V2 rAF에서 이미 계산된 `actionGeometry.left`를 `left`에 직접 기록한다. `width`는 값이 실제로 달라질 때만 기록한다.
 - 790~793처럼 `--soridraw-action-fixed-left/width` 상속 변수를 매 pixel 다시 발행하지 않으며, collapsed action button도 per-pixel Builder 폭 동기화에서 제외한 794 경량화는 유지한다.
 - 목표: 794에서 좋아진 분할바 체감은 최대한 유지하면서 생성바 위치도 분할선과 같은 frame에 실시간 추종한다.
+
+
+## 796차 - 생성바 실시간 추적 compositor 경량화
+
+- 기준: 795차.
+- 문제: 795차는 생성바가 다시 실시간으로 따라오지만 `left`를 매 rAF 직접 갱신하면서 고정 portal이 매 프레임 layout에 참여해 분할바/생성바 이동이 미세하게 끊겼다.
+- 수정: 생성바 X 이동을 registered non-inherited `--soridraw-action-live-x` + `translate3d()`로 변경했다. 이 값은 자식에게 상속되지 않아 790~793의 상속 CSS 변수처럼 생성바 전체 subtree를 style invalidation하지 않는다.
+- 폭은 실제 값이 바뀔 때만 기존처럼 직접 갱신한다. 넓은 PC 구간처럼 생성바 최대폭이 고정된 구간에서는 X 이동만 compositor에서 처리된다.
+- 기존 794의 개별 `translate` 속성은 사용하지 않는다. CSS의 명시적 transform 소유권으로 live 이동을 유지한다.
+- Pure Pane / Lite V2 / 태블릿 fast-path / 생성바 실시간 디자인 경계 / 접기버튼 / 페이지별 geometry 분리는 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.

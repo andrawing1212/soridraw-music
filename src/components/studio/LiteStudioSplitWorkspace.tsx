@@ -640,17 +640,16 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  // 795 — Preserve the 794 reduction in inherited custom-property churn, but
-  // restore deterministic live tracking. The 794 `translate` writer can lose
-  // ownership against the floating bar's existing !important/motion style
-  // contract, so the bar may visually stay at its resting position until the
-  // final pointer-up reconciliation.
+  // 796 — Keep 795's deterministic live tracking, but move the common
+  // capped-width horizontal motion back onto the compositor. Writing `left`
+  // every rAF makes the fixed portal participate in layout and was the source
+  // of the visible micro-stutter reported after 795.
   //
-  // Use direct, non-inherited portal geometry instead: `left` follows the live
-  // Builder boundary every Lite V2 rAF frame and `width` is written only when
-  // it actually changes. This is still lighter than 790~793 because we do not
-  // publish inherited --soridraw-action-* variables through the full action-bar
-  // subtree and we keep the collapsed button out of the per-pixel hot path.
+  // The live X value is now a registered, NON-INHERITED custom property used
+  // only by the floating portal's translate3d(). Because it does not inherit,
+  // updating it does not dirty the full Generate-bar subtree like the old
+  // --soridraw-action-fixed-left variable did. Width is still written only
+  // when it genuinely changes (the narrow/mobile side of the range).
   const syncGenerationBarGeometry = useCallback((builderWidth: number) => {
     if (generationBarPerfMode !== 'normal') return;
     const { left } = metricsRef.current;
@@ -664,20 +663,24 @@ export default function LiteStudioSplitWorkspace({
     const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
 
     if (controls.floatingActionBar) {
+      // Keep the layout origin stable while dragging. The stylesheet consumes
+      // --soridraw-action-live-x with translate3d(), so the common PC movement
+      // is compositor-only instead of a per-frame `left` layout write.
+      if (cache.floatingOriginLeft !== '0px') {
+        cache.floatingOriginLeft = '0px';
+        controls.floatingActionBar.style.setProperty('left', '0px', 'important');
+      }
       const floatingLeft = `${actionGeometry.left}px`;
       if (cache.floatingLeft !== floatingLeft) {
         cache.floatingLeft = floatingLeft;
-        controls.floatingActionBar.style.setProperty('left', floatingLeft, 'important');
+        controls.floatingActionBar.style.setProperty('--soridraw-action-live-x', floatingLeft);
       }
       const floatingWidth = `${actionGeometry.width}px`;
       if (cache.floatingWidth !== floatingWidth) {
         cache.floatingWidth = floatingWidth;
         controls.floatingActionBar.style.setProperty('width', floatingWidth, 'important');
       }
-      // A stale 794 translate must never stack with the direct live left value.
-      if (cache.floatingOriginLeft !== '') {
-        cache.floatingOriginLeft = '';
-      }
+      // The individual translate property from 794 is no longer used.
       controls.floatingActionBar.style.removeProperty('translate');
     }
   }, [generationBarPerfMode]);
@@ -742,6 +745,7 @@ export default function LiteStudioSplitWorkspace({
       controls.floatingActionBar.style.removeProperty('left');
       controls.floatingActionBar.style.removeProperty('width');
       controls.floatingActionBar.style.removeProperty('translate');
+      controls.floatingActionBar.style.removeProperty('--soridraw-action-live-x');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }

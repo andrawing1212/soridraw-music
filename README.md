@@ -2547,3 +2547,20 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 잠금 상태 배경은 Classic Light뿐 아니라 Classic Dark / Studio Black(분할)에서도 동일한 상태 의미로 보이도록 적용했습니다.
 - Library 디테일의 중립 복사/닫기 버튼에도 배경 hover를 추가했습니다.
 - 외곽선 추가, 레이아웃/크기, Firebase/Auth/Firestore/Functions 변경은 없습니다.
+
+## 826차 — 잠금/잠금해제 버튼 상태 표현 정리
+- 기준: 825차.
+- 뮤직노트 디테일 잠금 버튼은 `잠금됨`일 때만 코랄 계열 배경색이 버튼 전체에 유지되도록 함.
+- `잠금해제됨` 상태에서는 버튼의 강조 배경을 완전히 제거하고 Unlock 아이콘만 코랄 계열로 표시.
+- 잠금해제 상태 hover는 코랄 배경이 아니라 중립 hover 면만 사용해 잠금 상태로 오인되지 않도록 함.
+- Classic Light / Classic Dark / Studio Black(분할) 모두 같은 상태 의미를 사용하며 삭제 버튼 동작은 변경하지 않음.
+
+## 827차 — 디테일 잠금 버튼 3상태 시각 규칙 확정
+- 기준: 826차.
+- 뮤직노트 디테일 잠금 버튼을 사용자 참고 이미지의 3상태로 재정의했습니다.
+- 평소 잠금해제 상태: 중립 버튼 배경 + 코랄 Unlock 아이콘.
+- 잠금해제 상태 hover: 살짝 밝은 다크 코랄 배경 + Lock 아이콘으로 동작 미리보기.
+- 잠금 상태: 코랄 버튼 전체 배경 + 더 밝은 Lock 아이콘.
+- 잠금 상태 hover는 기존 상태보다 아주 조금만 밝아지도록 제한했습니다.
+- 라이트모드는 같은 상태 의미를 유지하되 중립 배경만 라이트 팔레트에 맞게 조정했습니다.
+- 삭제 버튼/Firebase/Auth/Firestore/Functions/분할 엔진은 변경하지 않았습니다.

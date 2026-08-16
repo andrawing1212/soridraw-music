@@ -6847,13 +6847,20 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
                       data-soridraw-detail-lock-button="true"
                       data-locked={selectedSong.isLocked ? 'true' : 'false'}
                       className={cn(
-                        'soridraw-detail-state-button inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                        'soridraw-detail-state-button soridraw-detail-lock-state-button group inline-flex h-12 w-12 items-center justify-center rounded-2xl border text-sm transition-all disabled:cursor-not-allowed disabled:opacity-35',
                         selectedSong.isLocked
-                          ? 'border-transparent bg-[#FF7A72]/18 text-[#FF7A72] hover:bg-[#FF7A72]/26 hover:text-[#FF9B92]'
-                          : 'border-transparent bg-white/[0.035] text-white/78 hover:bg-[#FF7A72]/10 hover:text-[#FF9B92]'
+                          ? 'border-transparent'
+                          : 'border-transparent'
                       )}
                     >
-                      {selectedSong.isLocked ? <Lock className="h-5 w-5" /> : <Unlock className="h-5 w-5" />}
+                      {selectedSong.isLocked ? (
+                        <Lock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--locked h-5 w-5" />
+                      ) : (
+                        <>
+                          <Unlock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--rest h-5 w-5 group-hover:hidden" />
+                          <Lock className="soridraw-detail-lock-icon soridraw-detail-lock-icon--hover hidden h-5 w-5 group-hover:block" />
+                        </>
+                      )}
                     </button>
                     <button
                       data-detail-delete-button="true"

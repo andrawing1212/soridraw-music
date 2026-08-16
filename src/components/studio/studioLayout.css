@@ -14707,3 +14707,113 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
   background-color: rgba(214, 79, 73, 0.10) !important;
   color: #B8423D !important;
 }
+
+/* 826 — Lock state hierarchy.
+ * Locked = the whole control carries the coral state fill.
+ * Unlocked = no accent fill; only the unlock glyph keeps the accent color.
+ * Hover stays neutral so an unlocked button never looks locked. */
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-lock-button="true"][data-locked="false"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #FF7A72 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+body .soridraw-musicnote-detail-panel
+button[data-soridraw-detail-lock-button="true"][data-locked="false"]:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  background-color: rgba(255, 255, 255, 0.07) !important;
+  color: #FF9B92 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-lock-button="true"][data-locked="false"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #B64F49 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button[data-soridraw-detail-lock-button="true"][data-locked="false"]:not(:disabled):hover {
+  background: #E2DAD1 !important;
+  background-color: #E2DAD1 !important;
+  color: #A94640 !important;
+}
+
+/* 827 — Detail lock control: exact three-state visual hierarchy.
+ * 1) unlocked/rest: neutral button surface + coral Unlock glyph;
+ * 2) unlocked/hover: slightly brighter muted-coral surface + Lock glyph preview;
+ * 3) locked: solid coral surface + brighter Lock glyph.
+ * The same state language is used in Classic Dark, Classic Light and Split. */
+body .soridraw-musicnote-detail-panel
+button.soridraw-detail-lock-state-button[data-locked="false"] {
+  background: #232325 !important;
+  background-color: #232325 !important;
+  color: #FF8F87 !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+body .soridraw-musicnote-detail-panel
+button.soridraw-detail-lock-state-button[data-locked="false"]:not(:disabled):hover {
+  background: #552B2C !important;
+  background-color: #552B2C !important;
+  color: #FF8F87 !important;
+  border-color: transparent !important;
+  box-shadow: 0 8px 18px rgba(255, 122, 114, 0.08) !important;
+}
+
+body .soridraw-musicnote-detail-panel
+button.soridraw-detail-lock-state-button[data-locked="true"] {
+  background: #FF7A72 !important;
+  background-color: #FF7A72 !important;
+  color: #FFD0CC !important;
+  border-color: transparent !important;
+  box-shadow: 0 10px 22px rgba(255, 122, 114, 0.18) !important;
+}
+
+body .soridraw-musicnote-detail-panel
+button.soridraw-detail-lock-state-button[data-locked="true"]:not(:disabled):hover {
+  background: #FF8580 !important;
+  background-color: #FF8580 !important;
+  color: #FFE0DD !important;
+}
+
+/* Classic Light keeps the same state meaning, but uses the light neutral
+ * surface at rest so the control does not turn into a dark island. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button.soridraw-detail-lock-state-button[data-locked="false"] {
+  background: #E3DBD2 !important;
+  background-color: #E3DBD2 !important;
+  color: #B64F49 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button.soridraw-detail-lock-state-button[data-locked="false"]:not(:disabled):hover {
+  background: #E7CEC9 !important;
+  background-color: #E7CEC9 !important;
+  color: #B64F49 !important;
+  box-shadow: 0 7px 16px rgba(182, 79, 73, 0.08) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button.soridraw-detail-lock-state-button[data-locked="true"] {
+  background: #D96861 !important;
+  background-color: #D96861 !important;
+  color: #FFE1DE !important;
+  box-shadow: 0 9px 20px rgba(182, 79, 73, 0.16) !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body
+.soridraw-musicnote-detail-panel button.soridraw-detail-lock-state-button[data-locked="true"]:not(:disabled):hover {
+  background: #E1716A !important;
+  background-color: #E1716A !important;
+  color: #FFF0EE !important;
+}

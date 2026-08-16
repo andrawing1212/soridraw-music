@@ -13488,10 +13488,15 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     flex: 0 0 30px !important;
   }
 
+  /* 800 — The 96px body contract belongs ONLY to the collapsed Mood/Theme
+   * state. 786 accidentally applied it unconditionally, so the inline expanded
+   * max-height from CategorySection could never grow past 96px. Scope the fixed
+   * body geometry to cards whose summary is actually collapsed; expanded cards
+   * return to their normal measured max-height/transition path. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-lite-studio-split-workspace
   .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
+  :is([data-studio-menu="mood"], [data-studio-menu="theme"]).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"])
   .soridraw-menu-card-body-slot {
     box-sizing: border-box !important;
     height: 96px !important;

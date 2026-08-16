@@ -2368,3 +2368,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 이 변경으로 과거 `normal`에 묶여 있던 responsive-hysteresis/local-responsive/direct 계열 진단 플래그가 생산 기본 경로에 함께 켜질 여지를 제거했다. 생산 hot path는 Pure Pane geometry + 820px/660px 경계 순간 동기화만 소유한다.
 - 관리자 테스트 UI의 `V2 기본`, `Trace 기본`, `Pure Pane 하이브리드`는 모두 같은 생산 기본 모드를 가리킨다. PERF A/B 행의 중복 `PC 기본`/`Pure Pane 하이브리드` 버튼은 하나의 `★ 기본 · Pure Pane 하이브리드`로 정리했다.
 - 기존 `Pure Pane`, `Pure Pane 실시간`, Splitter Only, Left/Right Pane Only 및 기타 진단 모드는 그대로 보존한다. Legacy/Classic/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+
+
+## SORIDRAW 800차 — 분위기/주제 펼치기 복구
+
+- 기준: 799차 Pure Pane 하이브리드 생산 기본 엔진.
+- 원인: 786차의 Mood/Theme 높이 안정화 CSS가 접힌 상태 전용 96px body 높이를 펼친 상태에도 `!important`로 강제해, React가 계산한 expanded max-height가 적용되지 못했다.
+- 수정: 96px body/282px outer 고정 계약은 `data-expanded=false`인 접힌 상태에만 적용한다. 펼친 상태는 기존 측정 높이 + max-height transition 경로를 다시 사용한다.
+- Pure Pane 하이브리드 엔진, 820/660 경계 처리, 생성바, Firebase/Auth/Firestore/Functions는 변경하지 않았다.

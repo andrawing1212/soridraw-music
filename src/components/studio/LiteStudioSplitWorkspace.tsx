@@ -272,7 +272,7 @@ export default function LiteStudioSplitWorkspace({
   workspaceRequestId = 0,
   runtimeProfile = 'adaptive',
   generationBarPerfMode = 'normal',
-  v2DragPerfMode = 'normal',
+  v2DragPerfMode = 'pure-pane-hybrid',
 }: LiteStudioSplitWorkspaceProps) {
   // 617: PC Music Note no longer owns a special geometry path. App routes it
   // through the same `library-590` profile as Library. Adaptive mode is kept for

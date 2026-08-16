@@ -2358,3 +2358,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 `Pure Pane`(순수 geometry)과 `Pure Pane 실시간`(전체 responsive publication)은 관리자 비교용으로 그대로 보존한다. 테스트 스위치와 PERF A/B 행에 **Pure Pane 하이브리드** 항목을 추가했다.
 - 적용 범위: Studio Black Lite V2 분할의 일반 사용자 `normal` 기본 경로. Legacy/Classic/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
 - 확인 항목: 빠른 좌↔우 드래그가 Pure Pane에 가깝게 부드러운지, 7↔5칸은 기존처럼 자연스럽게 보이는지, 820px 진입/이탈에서 4칸 Compact/태블릿 세로형이 즉시 바뀌는지, 660px 진입/이탈에서 모바일 구성이 즉시 바뀌는지, pointer-up 추가 스냅이 없는지 확인한다.
+
+
+## SORIDRAW 799차 - Pure Pane 하이브리드 생산 기본 엔진 정착
+
+- 기준: 798차.
+- 실사용 검증에서 `Pure Pane 하이브리드`의 드래그 체감과 820px/660px 경계 순간 반응형 전환이 최종 채택되어, 더 이상 후보/진단 alias가 아니라 Lite V2의 **명시적 생산 기본 드래그 모드**로 승격했다.
+- URL에 `v2DragPerf`가 없는 일반 사용자 경로는 이제 `normal` alias를 거치지 않고 곧바로 `pure-pane-hybrid`를 선택한다. `StudioSplitEngineWorkspace`와 `LiteStudioSplitWorkspace`의 prop 기본값도 동일하게 `pure-pane-hybrid`로 통일했다.
+- 이 변경으로 과거 `normal`에 묶여 있던 responsive-hysteresis/local-responsive/direct 계열 진단 플래그가 생산 기본 경로에 함께 켜질 여지를 제거했다. 생산 hot path는 Pure Pane geometry + 820px/660px 경계 순간 동기화만 소유한다.
+- 관리자 테스트 UI의 `V2 기본`, `Trace 기본`, `Pure Pane 하이브리드`는 모두 같은 생산 기본 모드를 가리킨다. PERF A/B 행의 중복 `PC 기본`/`Pure Pane 하이브리드` 버튼은 하나의 `★ 기본 · Pure Pane 하이브리드`로 정리했다.
+- 기존 `Pure Pane`, `Pure Pane 실시간`, Splitter Only, Left/Right Pane Only 및 기타 진단 모드는 그대로 보존한다. Legacy/Classic/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.

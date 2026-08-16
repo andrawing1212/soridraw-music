@@ -26,7 +26,7 @@ export default function StudioSplitEngineWorkspace({
   liteRuntimeProfile = 'adaptive',
   compactMobileMode = false,
   generationBarPerfMode = 'normal',
-  v2DragPerfMode = 'normal',
+  v2DragPerfMode = 'pure-pane-hybrid',
   ...props
 }: Props) {
   // 646: below the mobile threshold Studio Black is no longer a squeezed split

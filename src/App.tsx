@@ -4322,7 +4322,7 @@ function App() {
                               ? 'left-pane-only'
                               : v2DragPerfParam === 'right-pane-only'
                                 ? 'right-pane-only'
-                                : 'normal';
+                                : 'pure-pane-hybrid';
   const [automaticStudioSplitEngine, setAutomaticStudioSplitEngine] = useState<StudioSplitEngine>(() => detectAutomaticStudioSplitEngine());
 
   useEffect(() => {
@@ -4411,7 +4411,7 @@ function App() {
   }, [location.pathname, location.search, navigate]);
   const setStudioV2DragPerfMode = useCallback((mode: StudioV2DragPerfMode) => {
     const nextParams = new URLSearchParams(location.search);
-    if (mode === 'normal') nextParams.delete('v2DragPerf');
+    if (mode === 'pure-pane-hybrid' || mode === 'normal') nextParams.delete('v2DragPerf');
     else {
       const param = mode === 'content-left-freeze'
         ? 'content-left'
@@ -14858,11 +14858,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       disabled={studioSplitEngine !== 'lite'}
-                      className={studioV2DragPerfMode === 'normal' ? 'is-active' : ''}
-                      onClick={() => setStudioV2DragPerfMode('normal')}
-                      title="Lite V2 현재 드래그 경로 전체 사용"
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
+                      title="현재 생산 기본 엔진 · Lite V2 + Pure Pane 하이브리드"
                     >
-                      V2 정상
+                      V2 기본
                     </button>
                     <button
                       type="button"
@@ -14914,11 +14914,11 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       disabled={studioSplitEngine !== 'lite'}
-                      className={studioV2DragPerfMode === 'normal' ? 'is-active' : ''}
-                      onClick={() => setStudioV2DragPerfMode('normal')}
-                      title="Trace 기준 비교점 · 현재 Lite V2 전체 경로"
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
+                      title="Trace 기준 비교점 · 현재 생산 기본 Pure Pane 하이브리드"
                     >
-                      Trace 정상
+                      Trace 기본
                     </button>
                     <button
                       type="button"
@@ -14999,9 +14999,9 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       disabled={studioSplitEngine !== 'lite'}
-                      className={studioV2DragPerfMode === 'pure-pane-hybrid' || studioV2DragPerfMode === 'normal' ? 'is-active' : ''}
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' ? 'is-active' : ''}
                       onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
-                      title="798 기본 후보 · Pure Pane geometry는 매 프레임 유지하고 Builder가 820px Compact/태블릿 세로 또는 660px Mobile 경계를 넘는 순간에만 pane responsive 상태를 1회 갱신. 7/5칸은 CSS 폭 반응 그대로 유지"
+                      title="799 생산 기본 엔진 · Pure Pane geometry는 매 프레임 유지하고 Builder가 820px Compact/태블릿 세로 또는 660px Mobile 경계를 넘는 순간에만 pane responsive 상태를 1회 갱신. 7/5칸은 CSS 폭 반응 그대로 유지"
                     >
                       Pure Pane 하이브리드
                     </button>

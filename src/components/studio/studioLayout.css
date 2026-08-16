@@ -564,6 +564,15 @@
   transition-timing-function: ease-out;
 }
 
+/* 802 — Genre has a much taller full-width reveal than the other keyword cards.
+ * With the literal same 220ms max-height duration it still reads visually slower,
+ * even though it is on the shared motion path. Keep the same max-height/opacity
+ * owner and the same ease-out curve, but shorten only Genre's travel time so the
+ * perceived close/open cadence matches Style / Sound / Mood / Theme. */
+[data-studio-menu="genre"] .soridraw-keyword-expand-motion {
+  transition-duration: 180ms;
+}
+
 /* 519 — collapsed keyword-card height follows the builder pane itself.
  * The old App.tsx fallback used window.innerWidth, so a narrow split pane inside
  * a desktop browser could retain desktop height until a later React render. */

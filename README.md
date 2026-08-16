@@ -2384,3 +2384,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 공통 모션: 장르/스타일/사운드/분위기/주제 모두 `soridraw-keyword-expand-motion`의 동일한 `max-height + opacity / 220ms ease-out` 경로를 사용한다.
 - 분위기/주제의 모바일 2줄(96px) collapsed contract는 그대로 유지하며, 최종 카드 안정성을 위해 collapsed outer `min-height: 282px`만 남긴다. 이는 애니메이션 진행을 막지 않는다.
 - Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+
+## SORIDRAW 802차 — 장르 접기/펼치기 체감 속도 보정
+- 기준: 801차.
+- 801차에서 장르/스타일/사운드/분위기/주제는 모두 동일한 max-height + opacity 경로를 사용하지만, 장르는 전체 폭의 더 큰 펼침 이동량 때문에 같은 220ms가 다른 카드보다 느리게 느껴졌다.
+- 장르는 모션 구조/소유권/ease-out은 그대로 유지하고 transition-duration만 180ms로 짧게 보정했다. 스타일/사운드/분위기/주제는 승인된 220ms를 유지한다.
+- 목적은 숫자상 동일 duration이 아니라 실제 화면에서 장르부터 주제까지 접기/펼치기 체감 리듬을 동일하게 맞추는 것이다.
+- Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

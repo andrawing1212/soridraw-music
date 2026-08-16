@@ -4291,7 +4291,9 @@ function App() {
                         ? 'local-responsive'
                         : v2DragPerfParam === 'pure-pane'
                           ? 'pure-pane'
-                          : v2DragPerfParam === 'splitter-only'
+                          : v2DragPerfParam === 'pure-pane-live'
+                            ? 'pure-pane-live'
+                            : v2DragPerfParam === 'splitter-only'
                             ? 'splitter-only'
                             : v2DragPerfParam === 'left-pane-only'
                               ? 'left-pane-only'
@@ -4336,25 +4338,20 @@ function App() {
   // the two split engines can be compared under the exact same viewport/pane.
   const studioSplitEngineOverride: StudioSplitEngine | null = requestedStudioSplitEngineOverride;
 
-  // 617 baseline kept Music Note / Library on Lite V2 while Recent stayed on
-  // Legacy. 713 preserves the 683 codebase but updates only that routing choice:
-  // Recent now shares the same result-workspace movement owner as Music Note /
-  // Library so pointer/divider/pane spacing follows one common rule.
+  // 764: interaction type still selects the Lite runtime profile, but no longer
+  // selects Legacy vs Lite. Galaxy Tab/touch keeps the verified `adaptive`
+  // reconciliation profile; fine-pointer result pages keep `library-590` after
+  // pointer-up. During the actual drag, every Studio workspace now shares the
+  // same Pure Pane live Lite V2 hot path.
   const isTouchPrimaryStudioEnvironment = automaticStudioSplitEngine === 'lite';
-  // 713: Recent Songs now uses the exact same fine-pointer split engine and
-  // runtime profile as Music Note / Library. The 683 Legacy Recent path drove
-  // the fixed divider ahead of the pane tree and adaptively throttled pane
-  // commits, which made pointer-to-divider spacing feel different even when
-  // throughput was high. Keep Create on Legacy; unify only the three result
-  // workspaces whose drag feel should match.
   const usesSharedResultSplitEngine = studioWorkspaceView === 'recent'
     || studioWorkspaceView === 'library'
     || studioWorkspaceView === 'music-note';
-  const automaticWorkspaceSplitEngine: StudioSplitEngine = isTouchPrimaryStudioEnvironment
-    ? 'lite'
-    : usesSharedResultSplitEngine
-      ? 'lite'
-      : 'legacy';
+  // 764: Lite V2 is now the normal split engine for every Studio workspace.
+  // Pure Pane live proved stable and materially faster under real hand dragging,
+  // so Create no longer falls back to Legacy on fine-pointer desktop. The admin
+  // engine override remains available for A/B comparison and rollback diagnosis.
+  const automaticWorkspaceSplitEngine: StudioSplitEngine = 'lite';
   const automaticLiteRuntimeProfile: StudioLiteRuntimeProfile = isTouchPrimaryStudioEnvironment
     ? 'adaptive'
     : usesSharedResultSplitEngine
@@ -4367,14 +4364,14 @@ function App() {
       : 'adaptive')
     : automaticLiteRuntimeProfile;
   const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
-    ? '자동 선택 · 갤탭/터치: Lite V2'
+    ? '자동 선택 · 갤탭/터치: Lite V2 · Pure Pane 실시간 기본'
     : studioWorkspaceView === 'library'
-      ? '자동 선택 · PC 라이브러리: Lite V2 · 590 CSS 변수 경로'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · Pure Pane 실시간 기본'
       : studioWorkspaceView === 'music-note'
-        ? '자동 선택 · PC 뮤직노트: 라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
+        ? '자동 선택 · PC 뮤직노트: Lite V2 · Pure Pane 실시간 기본'
         : studioWorkspaceView === 'recent'
-          ? '자동 선택 · PC 최근 생성곡: 뮤직노트/라이브러리와 동일한 Lite V2 · 590 CSS 변수 경로'
-          : '자동 선택 · PC 스튜디오: 기존 방식';
+          ? '자동 선택 · PC 최근 생성곡: Lite V2 · Pure Pane 실시간 기본'
+          : '자동 선택 · PC 스튜디오: Lite V2 · Pure Pane 실시간 기본';
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');
@@ -4417,7 +4414,9 @@ function App() {
                             ? 'local-responsive'
                             : mode === 'pure-pane'
                               ? 'pure-pane'
-                              : mode === 'splitter-only'
+                              : mode === 'pure-pane-live'
+                                ? 'pure-pane-live'
+                                : mode === 'splitter-only'
                                 ? 'splitter-only'
                                 : mode === 'left-pane-only'
                                   ? 'left-pane-only'
@@ -14920,6 +14919,15 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-live' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-live')}
+                      title="Pure Pane 속도를 유지하면서 PC/Tablet/Compact/Mobile 실제 경계를 넘는 순간에만 해당 pane의 responsive UI를 1회 실시간 반영. 드래그 중 split-window 높이는 고정"
+                    >
+                      Pure Pane 실시간
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
                       className={studioV2DragPerfMode === 'splitter-only' ? 'is-active' : ''}
                       onClick={() => setStudioV2DragPerfMode('splitter-only')}
                       title="진단용: 실제 pane은 고정하고 분할선만 pointer/rAF를 따라 이동. 입력 엔진 자체 속도 확인"
@@ -19202,7 +19210,7 @@ function CycleSectionComponent({
   return (
     <div data-expand-section data-studio-menu={title === 'Style' ? 'style' : title === 'Sound/Texture' ? 'sound' : title.toLowerCase()} className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="soridraw-card-header flex items-center justify-between mb-4 gap-3">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3
@@ -19275,7 +19283,7 @@ function CycleSectionComponent({
         </div>
 
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[76px]"
           style={{
             maxHeight: isExpanded ? resolveExpandedHeight(forcedHeight, contentHeight, 76) : 76,
             opacity: 1
@@ -20032,7 +20040,7 @@ function CategorySectionComponent({
   return (
     <div data-expand-section data-studio-menu={title.toLowerCase()} className="soridraw-category-card soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-[28px] p-7 flex flex-col justify-between h-auto relative group">
       <div className="flex-1">
-        <div className="soridraw-card-header flex items-center justify-between mb-4">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot flex items-center justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative min-w-0">
               <h3 
@@ -20139,7 +20147,7 @@ function CategorySectionComponent({
         </div>
         
         <div
-          className="soridraw-expand-content soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
+          className="soridraw-expand-content soridraw-menu-card-body-slot soridraw-keyword-expand-motion overflow-hidden min-h-[48px] md:min-h-[96px]"
           style={{
             maxHeight: isExpanded
               ? resolveExpandedHeight(forcedHeight, contentHeight, 96)
@@ -21689,7 +21697,7 @@ function SongStructureIntegratedControlComponent({
   return (
     <>
       <div data-studio-menu="lyrics" className="soridraw-expand-card soridraw-studio-menu-card soridraw-studio-shadow-surface bg-[var(--card-bg)] rounded-3xl p-5 border border-[var(--home-card-border)] flex flex-col h-full relative pb-12 overflow-visible">
-        <div className="soridraw-card-header relative mb-4 flex items-center justify-between">
+        <div className="soridraw-card-header soridraw-menu-card-header-slot relative mb-4 flex items-center justify-between">
           <h3 
             onMouseEnter={() => setShowTitleTooltip(true)}
             onMouseLeave={() => setShowTitleTooltip(false)}
@@ -21751,7 +21759,7 @@ function SongStructureIntegratedControlComponent({
             animate={naturalResponsiveHeight ? undefined : { height: contentHeight }}
             transition={naturalResponsiveHeight ? undefined : { duration: 0.25, ease: "easeOut" }}
             className={cn(
-              "soridraw-lyrics-content-shell",
+              "soridraw-lyrics-content-shell soridraw-menu-card-body-slot",
               naturalResponsiveHeight ? "overflow-visible" : "overflow-hidden"
             )}
           >

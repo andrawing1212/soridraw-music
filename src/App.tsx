@@ -17276,18 +17276,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               </div>
 
               {/* Prompt Section */}
-              <div className="soridraw-result-prompt-card bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[400px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
+              <div className="soridraw-result-prompt-card bg-[var(--card-bg)] rounded-3xl border border-[#e3a13a]/[0.16] overflow-hidden flex flex-col h-[360px] shadow-[0_14px_36px_rgba(0,0,0,0.26)] hover:border-[#e3a13a]/[0.15] transition-colors duration-150">
                 <div className="p-5 border-b border-[#e3a13a]/[0.22] flex items-center justify-between bg-[#e3a13a]/[0.07]">
                   <h3 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
                     <Sparkles className="w-4 h-4 text-[#e3a13a]" />
-                    음악 프롬프트
+                    스타일 프롬프트
                   </h3>
                   <div className="flex items-center gap-2">
-                    {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 음악 프롬프트를 수정합니다.', 'section')}
+                    {renderRecentSongInlineEditActions('prompt', 'edit-generated-prompt', '프롬프트 수정', '보관함 저장 전 스타일 프롬프트를 수정합니다.', 'section')}
                     <button
                       type="button"
                       onClick={() => copyToClipboard(isRecentSongSectionEditing('prompt') && recentSongEditDraft ? recentSongEditDraft.prompt : normalizePromptForDisplay(result.prompt), 'prompt')}
-                      onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '음악 생성 프롬프트를 복사합니다.' })}
+                      onMouseEnter={() => setHoveredItem({ id: 'copy-prompt', label: '프롬프트 복사', description: '스타일 프롬프트를 복사합니다.' })}
                       onMouseLeave={() => setHoveredItem(null)}
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#e3a13a]/[0.12] hover:bg-[#e3a13a]/[0.18] text-[#e3a13a]/85 hover:text-[#f4bc63] transition-all border border-[#e3a13a]/[0.16] active:scale-95 shadow-btn"
                     >
@@ -17300,8 +17300,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <textarea
                       value={recentSongEditDraft.prompt}
                       onChange={(event) => setRecentSongEditDraft((prev) => prev ? { ...prev, prompt: event.target.value } : prev)}
-                      className="h-full min-h-[260px] w-full resize-none rounded-2xl border border-[#e3a13a]/35 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
-                      placeholder="음악 프롬프트를 수정하세요"
+                      className="h-full min-h-[220px] w-full resize-none rounded-2xl border border-[#e3a13a]/35 bg-black/20 p-4 font-mono text-sm leading-relaxed text-[var(--text-primary)] outline-none focus:border-[#e3a13a]/60 focus:ring-2 focus:ring-[#e3a13a]/10"
+                      placeholder="스타일 프롬프트를 수정하세요"
                     />
                   ) : (
                     <pre className="whitespace-pre-wrap font-mono text-[var(--text-secondary)] leading-relaxed text-sm w-full">

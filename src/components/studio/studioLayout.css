@@ -13848,3 +13848,89 @@ html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root
     color: #e3a13a !important;
   }
 }
+
+/* 804 — Applied Keywords toggle: smaller hit shape, larger orange chevron,
+ * no visible button surface in Split / Classic Dark / Classic Light.
+ * The compact Recent Songs card is also reduced slightly in height. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-card {
+  padding: 14px 20px 30px !important;
+}
+
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"],
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"] {
+  bottom: 2px !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #e3a13a !important;
+  box-shadow: none !important;
+}
+
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"] svg,
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"] svg {
+  width: 22px !important;
+  height: 22px !important;
+  color: #e3a13a !important;
+  stroke: #e3a13a !important;
+  stroke-width: 2.4 !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #root .soridraw-app-root .soridraw-studio-result-content
+  button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"]:hover,
+  html body #root .soridraw-app-root .soridraw-studio-result-content
+  button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"]:hover {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: #e3a13a !important;
+  }
+}
+
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button:not(:disabled):active {
+  transform: translateX(-50%) scale(0.94) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #e3a13a !important;
+  filter: none !important;
+}
+
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"],
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #e3a13a !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"]:hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"]:hover {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: #e3a13a !important;
+  }
+}
+
+
+/* 805 — Recent Songs result cards: compact prompt/lyrics title strips.
+ * Keep the same header rhythm for the Style Prompt and every lyrics card,
+ * while reducing only the prompt card's overall height. */
+html body #root .soridraw-app-root .soridraw-studio-result-content
+:is(.soridraw-result-prompt-card, .soridraw-result-lyrics-card) > div:first-child {
+  padding: 12px 18px !important;
+}

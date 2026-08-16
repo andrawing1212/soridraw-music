@@ -2400,3 +2400,18 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - `적용된 키워드` 펼치기/접기 버튼은 Split / Classic Dark / Classic Light 모두 52x32 pill 모양으로 통일했다. 두 상태 모두 밝아진 중성 회색 바탕 + 주황색 Chevron을 사용하며, 상태에 따라 주황 배경으로 바뀌지 않는다.
 - 라이트 모드만 같은 형태를 유지하면서 배경을 밝은 회색 계열로 맞췄다. 버튼 외곽선/그림자는 추가하지 않았다.
 - Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 장르~주제 모션, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+## SORIDRAW 804차 — 적용 키워드 화살표 전용 토글 + 카드 높이 추가 축소
+- 기준: 803차.
+- `적용된 키워드` 접기/펼치기 버튼의 외형 크기를 52x32에서 40x24로 줄이고, Chevron은 18px에서 22px로 키웠다.
+- Split / Classic Dark / Classic Light 모두 버튼 배경/hover 배경/active 배경을 완전히 투명하게 통일해 주황색 위/아래 화살표만 보이도록 변경했다. 외곽선/그림자는 사용하지 않는다.
+- 분할모드 최근 생성곡의 `적용된 키워드` 카드 padding을 16px 20px 36px에서 14px 20px 30px로 조금 더 줄여 접힌 창 높이를 한 단계 더 컴팩트하게 조정했다.
+- `다음 곡에 적용` 버튼 크기, Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 장르~주제 모션, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+
+## 805차 — 최근 생성곡 스타일 프롬프트 명칭·카드 높이·제목 영역 축소
+- 기준: 804차.
+- 최근 생성곡 결과 카드의 표시 이름을 `음악 프롬프트`에서 `스타일 프롬프트`로 변경했다. 데이터 키와 생성 엔진의 `prompt` 구조는 변경하지 않았다.
+- 스타일 프롬프트 카드 높이를 400px에서 360px로 줄였다.
+- 스타일 프롬프트 카드와 그 아래 모든 가사 카드의 제목/수정/복사 영역은 동일하게 상하 12px, 좌우 18px 패딩을 사용해 한 단계 더 낮췄다.
+- Pure Pane 하이브리드, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

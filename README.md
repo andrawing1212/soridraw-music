@@ -2313,3 +2313,48 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 분할선/Builder/Result Pure Pane geometry, 태블릿 fast-path, 접기버튼 최소폭 위치, 카드 높이 contract, 페이지간 생성바 geometry 분리, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
 - 검증: 수정 TSX는 TypeScript `transpileModule` 기준 문법/JSX transpile 정상. 전체 `tsc --noEmit`은 기준 ZIP의 `@types/*` 의존성 누락 때문에 기존과 동일하게 실행 불가.
 - 실사용 확인 포인트: PC와 태블릿 가로에서 빠른 좌↔우 드래그 시 793보다 미세 끊김이 줄어드는지, 생성바는 계속 같은 프레임으로 이동하는지, 660/1080 경계 디자인 전환 및 pointer-up 스냅이 그대로 없는지 확인한다.
+
+
+## 795차 — 분할 생성바 실시간 추적 복구 + 794 경량화 유지
+
+- 기준: `SORIDRAW_794차_분할바_764체감복구_생성바LiveWriter경량화.zip`
+- 수정: `src/components/studio/LiteStudioSplitWorkspace.tsx`
+- 794차의 `translate` 기반 portal 이동이 기존 action bar의 `!important`/motion 스타일 소유권과 충돌해, 분할바 드래그 중 생성바가 resting 위치에 남고 pointer-up에서만 최종 정합화되는 회귀를 수정했다.
+- 생성바 floating portal의 live 위치는 Lite V2 rAF에서 이미 계산된 `actionGeometry.left`를 `left`에 직접 기록한다. `width`는 값이 실제로 달라질 때만 기록한다.
+- 790~793처럼 `--soridraw-action-fixed-left/width` 상속 변수를 매 pixel 다시 발행하지 않으며, collapsed action button도 per-pixel Builder 폭 동기화에서 제외한 794 경량화는 유지한다.
+- 목표: 794에서 좋아진 분할바 체감은 최대한 유지하면서 생성바 위치도 분할선과 같은 frame에 실시간 추종한다.
+
+
+## 796차 - 생성바 실시간 추적 compositor 경량화
+
+- 기준: 795차.
+- 문제: 795차는 생성바가 다시 실시간으로 따라오지만 `left`를 매 rAF 직접 갱신하면서 고정 portal이 매 프레임 layout에 참여해 분할바/생성바 이동이 미세하게 끊겼다.
+- 수정: 생성바 X 이동을 registered non-inherited `--soridraw-action-live-x` + `translate3d()`로 변경했다. 이 값은 자식에게 상속되지 않아 790~793의 상속 CSS 변수처럼 생성바 전체 subtree를 style invalidation하지 않는다.
+- 폭은 실제 값이 바뀔 때만 기존처럼 직접 갱신한다. 넓은 PC 구간처럼 생성바 최대폭이 고정된 구간에서는 X 이동만 compositor에서 처리된다.
+- 기존 794의 개별 `translate` 속성은 사용하지 않는다. CSS의 명시적 transform 소유권으로 live 이동을 유지한다.
+- Pure Pane / Lite V2 / 태블릿 fast-path / 생성바 실시간 디자인 경계 / 접기버튼 / 페이지별 geometry 분리는 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## SORIDRAW 797차 - 생성바 live width compositor 분리 / 764 체감 2차 복구
+
+- 기준: 796차.
+- 796차에서 X축은 `translate3d()`로 옮겼지만, Builder 폭이 생성바 최대폭(896px + gutter)보다 좁은 대부분의 분할 구간에서는 floating 생성바 `width`를 여전히 거의 매 splitter pixel마다 직접 갱신하고 있었습니다. 이 폭 변경은 생성바 flex subtree와 큰 버튼 surface를 계속 다시 layout/rasterize하므로 X만 compositor로 바꿔도 체감이 거의 변하지 않았습니다.
+- 797차는 드래그 중 생성바의 실제 layout width를 안정된 base width로 유지하고, 목표 폭과의 차이는 non-inherited `--soridraw-action-live-scale-x` + `scaleX()`로 실시간 표현합니다. 위치는 기존 `--soridraw-action-live-x` + `translate3d()`를 그대로 사용합니다.
+- 실제 `width` write는 mobile/tablet/pc 구성 전환 또는 현재 base에서 목표 폭이 ±8%를 넘었을 때만 rebase합니다. 따라서 전체 드래그 동안 per-pixel layout/raster 작업 수를 크게 줄이면서 위치와 시각적 폭은 매 rAF 계속 따라갑니다.
+- pointer-up에서는 live X/scale/width를 제거하고 기존 resting root geometry가 정확한 최종 폭을 다시 소유하므로 release jump가 생기지 않도록 했습니다.
+- Pure Pane / Lite V2 / 태블릿 fast-path / 생성바 660·1080 실시간 디자인 전환 / 최소폭 접기버튼 / 페이지간 생성바 geometry 분리 / Firebase 저장 구조는 변경하지 않았습니다.
+
+
+## SORIDRAW 798차 - Pure Pane 하이브리드 기본화 / 경계 순간 반응형
+
+- 기준: 797차.
+- 실사용 A/B 결과: 생성바를 완전히 OFF해도 현재 normal의 미세 끊김은 동일했고, 관리자 `Pure Pane`은 같은 조건에서 확실히 부드러웠다. 따라서 생성바가 주원인이 아니라 Pure Pane 위에 붙은 연속 responsive publication 비용을 우선 분리한다.
+- 생산 기본 `normal`을 **Pure Pane 하이브리드** 동작으로 변경했다. Builder/Result/Splitter direct geometry는 기존 Pure Pane처럼 매 rAF 동일하게 움직인다.
+- 7칸↔5칸처럼 실제 pane 폭만으로 CSS/container가 자연스럽게 처리하는 구간에는 JS responsive broadcast를 추가하지 않는다.
+- Builder가 **820px 경계(Compact / 태블릿 세로형)** 또는 **660px 경계(Mobile)** 를 실제로 넘을 때만 `syncPaneModes`를 1회 실행한다. 반대 방향으로 넓힐 때도 같은 경계에서 1회만 실행한다. Result는 기존 result mobile 경계만 동일하게 순간 반영한다.
+- 하이브리드 경계 판정은 이미 rAF에서 계산된 `builderWidth/resultWidth` 숫자만 사용한다. pointermove에 DOM read, ResizeObserver, React setState, content-width broadcast를 추가하지 않는다.
+- 생성바 live geometry와 최소폭 접기버튼은 797 Pure Pane에서도 이미 동작하면서 속도 차이를 만들지 않았으므로 유지한다. 생성바 mobile/desktop root mode 미러는 실제 pane mode가 바뀐 경계 프레임에서만 갱신한다.
+- 기존 `Pure Pane`(순수 geometry)과 `Pure Pane 실시간`(전체 responsive publication)은 관리자 비교용으로 그대로 보존한다. 테스트 스위치와 PERF A/B 행에 **Pure Pane 하이브리드** 항목을 추가했다.
+- 적용 범위: Studio Black Lite V2 분할의 일반 사용자 `normal` 기본 경로. Legacy/Classic/Firebase/Auth/Firestore/Functions/저장 구조 변경 없음. 배포 없음.
+- 확인 항목: 빠른 좌↔우 드래그가 Pure Pane에 가깝게 부드러운지, 7↔5칸은 기존처럼 자연스럽게 보이는지, 820px 진입/이탈에서 4칸 Compact/태블릿 세로형이 즉시 바뀌는지, 660px 진입/이탈에서 모바일 구성이 즉시 바뀌는지, pointer-up 추가 스냅이 없는지 확인한다.

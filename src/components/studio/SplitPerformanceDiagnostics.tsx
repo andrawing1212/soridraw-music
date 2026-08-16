@@ -1089,7 +1089,15 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
                     style={{ fontWeight: currentParam === 'normal' || !currentParam ? 900 : 500, backgroundColor: currentParam === 'normal' || !currentParam ? '#FFB400' : undefined, color: currentParam === 'normal' || !currentParam ? '#000' : undefined }}
                     onClick={() => setPerfParam('normal')}
                   >
-                    PC 기본 (Pure Pane 실시간)
+                    PC 기본 (Pure Pane 하이브리드)
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'pure-pane-hybrid' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'pure-pane-hybrid' ? 900 : 500, backgroundColor: currentParam === 'pure-pane-hybrid' ? '#FFB400' : undefined, color: currentParam === 'pure-pane-hybrid' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('pure-pane-hybrid')}
+                  >
+                    Pure Pane 하이브리드
                   </button>
                   <button
                     type="button"

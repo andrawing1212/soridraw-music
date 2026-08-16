@@ -2133,13 +2133,36 @@ html[data-soridraw-theme="studio-black"] {
   --soridraw-action-slot-height: calc(var(--soridraw-action-row-height) + 12px);
 }
 
+/* 796: compositor-only live X for the floating Generate bar. Registering this
+   property as non-inherited is important: each rAF update invalidates only the
+   portal element instead of the whole action-bar subtree. */
+@property --soridraw-action-live-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* 797: width follows the splitter visually on the compositor. The real layout
+   width is rebased only occasionally by Lite V2, so this number remains local
+   to the portal and does not invalidate the action-bar subtree. */
+@property --soridraw-action-live-scale-x {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
 html[data-soridraw-theme="studio-black"] .soridraw-studio-action-bar--tracking {
   margin: 0 !important;
   justify-content: center !important;
   z-index: 140 !important;
   translate: none !important;
-  transform: none !important;
+  transform-origin: left center !important;
+  transform: translate3d(var(--soridraw-action-live-x), 0, 0) scaleX(var(--soridraw-action-live-scale-x)) !important;
   transition: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
+  will-change: transform;
 }
 
 html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {

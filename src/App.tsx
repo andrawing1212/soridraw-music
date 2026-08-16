@@ -4312,7 +4312,9 @@ function App() {
                         ? 'local-responsive'
                         : v2DragPerfParam === 'pure-pane'
                           ? 'pure-pane'
-                          : v2DragPerfParam === 'pure-pane-live'
+                          : v2DragPerfParam === 'pure-pane-hybrid'
+                            ? 'pure-pane-hybrid'
+                            : v2DragPerfParam === 'pure-pane-live'
                             ? 'pure-pane-live'
                             : v2DragPerfParam === 'splitter-only'
                             ? 'splitter-only'
@@ -4385,14 +4387,14 @@ function App() {
       : 'adaptive')
     : automaticLiteRuntimeProfile;
   const studioSplitAutoTitle = isTouchPrimaryStudioEnvironment
-    ? '자동 선택 · 갤탭/터치: Lite V2 · Pure Pane 실시간 기본'
+    ? '자동 선택 · 갤탭/터치: Lite V2 · Pure Pane 하이브리드 기본'
     : studioWorkspaceView === 'library'
-      ? '자동 선택 · PC 라이브러리: Lite V2 · Pure Pane 실시간 기본'
+      ? '자동 선택 · PC 라이브러리: Lite V2 · Pure Pane 하이브리드 기본'
       : studioWorkspaceView === 'music-note'
-        ? '자동 선택 · PC 뮤직노트: Lite V2 · Pure Pane 실시간 기본'
+        ? '자동 선택 · PC 뮤직노트: Lite V2 · Pure Pane 하이브리드 기본'
         : studioWorkspaceView === 'recent'
-          ? '자동 선택 · PC 최근 생성곡: Lite V2 · Pure Pane 실시간 기본'
-          : '자동 선택 · PC 스튜디오: Lite V2 · Pure Pane 실시간 기본';
+          ? '자동 선택 · PC 최근 생성곡: Lite V2 · Pure Pane 하이브리드 기본'
+          : '자동 선택 · PC 스튜디오: Lite V2 · Pure Pane 하이브리드 기본';
   const setStudioSplitEngine = useCallback((engine: StudioSplitEngine | 'auto') => {
     const nextParams = new URLSearchParams(location.search);
     if (engine === 'auto') nextParams.delete('splitEngine');
@@ -4435,7 +4437,9 @@ function App() {
                             ? 'local-responsive'
                             : mode === 'pure-pane'
                               ? 'pure-pane'
-                              : mode === 'pure-pane-live'
+                              : mode === 'pure-pane-hybrid'
+                                ? 'pure-pane-hybrid'
+                                : mode === 'pure-pane-live'
                                 ? 'pure-pane-live'
                                 : mode === 'splitter-only'
                                 ? 'splitter-only'
@@ -14995,9 +14999,18 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                     <button
                       type="button"
                       disabled={studioSplitEngine !== 'lite'}
+                      className={studioV2DragPerfMode === 'pure-pane-hybrid' || studioV2DragPerfMode === 'normal' ? 'is-active' : ''}
+                      onClick={() => setStudioV2DragPerfMode('pure-pane-hybrid')}
+                      title="798 기본 후보 · Pure Pane geometry는 매 프레임 유지하고 Builder가 820px Compact/태블릿 세로 또는 660px Mobile 경계를 넘는 순간에만 pane responsive 상태를 1회 갱신. 7/5칸은 CSS 폭 반응 그대로 유지"
+                    >
+                      Pure Pane 하이브리드
+                    </button>
+                    <button
+                      type="button"
+                      disabled={studioSplitEngine !== 'lite'}
                       className={studioV2DragPerfMode === 'pure-pane-live' ? 'is-active' : ''}
                       onClick={() => setStudioV2DragPerfMode('pure-pane-live')}
-                      title="Pure Pane 속도를 유지하면서 PC/Tablet/Compact/Mobile 실제 경계를 넘는 순간에만 해당 pane의 responsive UI를 1회 실시간 반영. 드래그 중 split-window 높이는 고정"
+                      title="비교용 · Pure Pane geometry에 기존 PC/Tablet/Compact/Mobile content responsive publication을 모두 실시간 연결"
                     >
                       Pure Pane 실시간
                     </button>

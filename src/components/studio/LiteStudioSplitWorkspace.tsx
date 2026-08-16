@@ -76,7 +76,6 @@ type ExternalGeometryCache = {
   builderToggleLeft: string;
   resultToggleLeft: string;
   heroBuilderWidth: string;
-  floatingOriginLeft: string;
   floatingLeft: string;
   floatingWidth: string;
   collapsedBuilderWidth: string;
@@ -87,7 +86,6 @@ const createEmptyExternalGeometryCache = (): ExternalGeometryCache => ({
   builderToggleLeft: '',
   resultToggleLeft: '',
   heroBuilderWidth: '',
-  floatingOriginLeft: '',
   floatingLeft: '',
   floatingWidth: '',
   collapsedBuilderWidth: '',
@@ -640,24 +638,15 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  // 794 — Keep the 790 live Generate-bar tracking, but remove the inherited
-  // custom-property churn that was added after the 764 Pure Pane baseline.
-  //
-  // The floating bar is a body portal. Updating --soridraw-action-fixed-left /
-  // --soridraw-action-fixed-width on that portal every split pixel makes those
-  // inherited custom properties dirty for the whole Generate-bar subtree. The
-  // bar then competes with the two panes for style/layout work even though the
-  // splitter itself is already on the minimal Pure Pane path.
-  //
-  // Write geometry directly to the portal instead: horizontal movement uses the
-  // independent CSS `translate` property (compositor-friendly when width is
-  // unchanged), while only the actual track width remains a layout write. The
-  // collapsed tab is anchored to the left rail, so it does not need a per-pixel
-  // Builder-width/rail custom-property update during a horizontal split drag;
-  // its resting size is reconciled once at pointer-up as before.
+  // 790 — The Generate bar must follow the same already-known Builder geometry
+  // as the divider on every Lite V2 rAF frame. Keep this helper intentionally
+  // read-free: pointer-down captures the command-anchor insets once, and live
+  // frames only publish the two portal geometry variables (plus the collapsed
+  // tab's Builder width). This preserves the Pure Pane production hot path
+  // without re-enabling hero/toggle/root synchronization.
   const syncGenerationBarGeometry = useCallback((builderWidth: number) => {
     if (generationBarPerfMode !== 'normal') return;
-    const { left } = metricsRef.current;
+    const { left, leftRailEdge } = metricsRef.current;
     const controls = externalRef.current;
     const cache = externalGeometryCacheRef.current;
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
@@ -668,22 +657,28 @@ export default function LiteStudioSplitWorkspace({
     const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
 
     if (controls.floatingActionBar) {
-      // Keep the layout origin fixed and move the portal with `translate`.
-      // This avoids a left-position layout update on the very common PC range
-      // where the Generate track is already capped at its max width.
-      if (cache.floatingOriginLeft !== '0px') {
-        cache.floatingOriginLeft = '0px';
-        controls.floatingActionBar.style.setProperty('left', '0px', 'important');
-      }
-      const floatingLeft = `${actionGeometry.left}px 0px`;
+      const floatingLeft = `${actionGeometry.left}px`;
       if (cache.floatingLeft !== floatingLeft) {
         cache.floatingLeft = floatingLeft;
-        controls.floatingActionBar.style.setProperty('translate', floatingLeft, 'important');
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
       }
       const floatingWidth = `${actionGeometry.width}px`;
       if (cache.floatingWidth !== floatingWidth) {
         cache.floatingWidth = floatingWidth;
-        controls.floatingActionBar.style.setProperty('width', floatingWidth, 'important');
+        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
+      }
+    }
+
+    if (controls.collapsedActionButton) {
+      const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
+      if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
+        cache.collapsedBuilderWidth = collapsedBuilderWidth;
+        controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
+      }
+      const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
+      if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
+        cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
+        controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
       }
     }
   }, [generationBarPerfMode]);
@@ -742,12 +737,6 @@ export default function LiteStudioSplitWorkspace({
     resultToggleRef.current?.style.removeProperty('--soridraw-lite-studio-result-toggle-left');
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
     if (controls.floatingActionBar && !document.documentElement.classList.contains('soridraw-window-resizing')) {
-      // 794: live drag geometry is direct/non-inherited. Remove both the new
-      // properties and any stale 790~793 custom-property values before resting
-      // root geometry takes ownership again.
-      controls.floatingActionBar.style.removeProperty('left');
-      controls.floatingActionBar.style.removeProperty('width');
-      controls.floatingActionBar.style.removeProperty('translate');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }

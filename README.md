@@ -2415,3 +2415,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 스타일 프롬프트 카드 높이를 400px에서 360px로 줄였다.
 - 스타일 프롬프트 카드와 그 아래 모든 가사 카드의 제목/수정/복사 영역은 동일하게 상하 12px, 좌우 18px 패딩을 사용해 한 단계 더 낮췄다.
 - Pure Pane 하이브리드, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+### 806 — 다크/라이트 섹션 커스텀 내부 외곽선 제거
+- `data-soridraw-theme="classic"` 범위에서만 섹션 커스텀 내부 레이아웃/버튼의 외곽선을 제거했습니다.
+- 상단 내부 구분선, 섹션 버튼, 미리보기/현재 구조/KEEP 섹션 영역 및 관련 컨트롤의 선을 투명 처리했습니다.
+- 분할모드(`studio-black`)는 선택자 범위에서 제외해 기존 디자인을 그대로 유지합니다.
+- 기능/레이아웃/Firebase 데이터 구조 변경은 없습니다.

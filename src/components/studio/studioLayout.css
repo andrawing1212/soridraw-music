@@ -13934,3 +13934,40 @@ html body #root .soridraw-app-root .soridraw-studio-result-content
 :is(.soridraw-result-prompt-card, .soridraw-result-lyrics-card) > div:first-child {
   padding: 12px 18px !important;
 }
+
+/* 806 — Classic Dark/Light Section Custom border cleanup.
+ * The user-facing classic color modes intentionally use flat, borderless
+ * internal surfaces and controls. Split Mode keeps its existing Section Custom
+ * border hierarchy unchanged, so this rule is scoped only to theme=classic. */
+html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel > .px-5.py-4.border-b,
+html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel > .p-5 :where(
+  .border,
+  .border-b,
+  .border-t,
+  .border-l,
+  .border-r,
+  [data-reorder-section-id],
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel,
+  .soridraw-section-keep-card,
+  .soridraw-section-keep-search,
+  .soridraw-section-reaction-group
+),
+html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel button,
+html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel [role="button"] {
+  border-color: transparent !important;
+  outline: 0 !important;
+}
+
+html[data-soridraw-theme="classic"] body .studio-section-custom-modal-panel > .p-5 :where(
+  .soridraw-section-preview-card,
+  .soridraw-section-current-list,
+  .soridraw-section-current-card,
+  .soridraw-section-keep-panel,
+  .soridraw-section-keep-card,
+  .soridraw-section-reaction-group
+) {
+  box-shadow: none !important;
+}

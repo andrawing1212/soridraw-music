@@ -226,8 +226,6 @@ const readInitialRuntimeLayoutMode = (
   return workspaceView === 'music-note' ? 'direct' : 'css-var';
 };
 
-export type StudioV2DragPerfMode = 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'pure-pane-live' | 'splitter-only' | 'left-pane-only' | 'right-pane-only' | 'tablet-touch-pure';
-
 export type LiteStudioSplitWorkspaceProps = {
   children: ReactNode;
   builderMasthead?: ReactNode;
@@ -236,7 +234,7 @@ export type LiteStudioSplitWorkspaceProps = {
   workspaceRequestId?: number;
   runtimeProfile?: RuntimeProfile;
   generationBarPerfMode?: 'normal' | 'freeze' | 'off';
-  v2DragPerfMode?: StudioV2DragPerfMode;
+  v2DragPerfMode?: 'normal' | 'content-left-freeze' | 'content-right-freeze' | 'content-freeze' | 'aux-boundary' | 'aux-freeze' | 'scroll-defer' | 'direct-geometry' | 'direct-scroll-defer' | 'responsive-freeze' | 'responsive-hysteresis' | 'local-responsive' | 'pure-pane' | 'splitter-only' | 'left-pane-only' | 'right-pane-only';
 };
 
 export default function LiteStudioSplitWorkspace({
@@ -274,17 +272,11 @@ export default function LiteStudioSplitWorkspace({
   // dragging. The signature is pure math from already-known pane widths; it adds
   // no DOM read, observer, or React state to pointermove.
   const dragBoundarySignatureRef = useRef<string | null>(null);
-  const dragBuilderCqBandRef = useRef<string | null>(null);
-  const dragResultCqBandRef = useRef<string | null>(null);
   const draggingRef = useRef(false);
   const finePointerFastPathRef = useRef(
     typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches,
   );
   const pointerIdRef = useRef(-1);
-  // 768: remember the active input source so Galaxy Tab touch/S Pen can use
-  // the same tablet-pane isolation during the Pure Pane production hot path.
-  // This is set once on pointer-down; pointermove performs no capability query.
-  const activePointerTypeRef = useRef<string>('');
   const manualPerfArmedWorkspaceRef = useRef<StudioWorkspaceView | null>(null);
   const manualPerfCaptureActiveRef = useRef(false);
   const pendingClientXRef = useRef<number | null>(null);
@@ -296,17 +288,6 @@ export default function LiteStudioSplitWorkspace({
   const lastViewportHeightRef = useRef<number | null>(null);
   const lastIsolatedHeightRef = useRef<number | null>(null);
   const actionInsetsRef = useRef<{ left: number; right: number } | null>(null);
-  // 762: preserve the result scroll-shell's resting right edge during direct/Pure Pane drag.
-  // Wide split mode intentionally reaches 18px past the workspace so its scrollbar
-  // sits on the outer rail boundary; forcing right:0 during drag made it jump left.
-  // 775: tablet split uses the same 18px result-scrollbar reach-through as
-  // wide PC. Seeding the direct-geometry owner here prevents an inline `right:0`
-  // from overriding the CSS edge alignment before the first pointer gesture.
-  const dragResultRightRef = useRef(
-    typeof window !== 'undefined' && window.innerWidth >= 1100 && window.innerWidth < 1600
-      ? '-18px'
-      : '0px',
-  );
   // 749 — Keep geometry callbacks stable while only the workspace result page
   // changes. The latest page is read through this ref; dedicated view effects
   // still request one exact resting refresh outside any drag gesture.
@@ -638,52 +619,8 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  // 790 — The Generate bar must follow the same already-known Builder geometry
-  // as the divider on every Lite V2 rAF frame. Keep this helper intentionally
-  // read-free: pointer-down captures the command-anchor insets once, and live
-  // frames only publish the two portal geometry variables (plus the collapsed
-  // tab's Builder width). This preserves the Pure Pane production hot path
-  // without re-enabling hero/toggle/root synchronization.
-  const syncGenerationBarGeometry = useCallback((builderWidth: number) => {
-    if (generationBarPerfMode !== 'normal') return;
-    const { left, leftRailEdge } = metricsRef.current;
-    const controls = externalRef.current;
-    const cache = externalGeometryCacheRef.current;
-    const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
-    const actionInsets = actionInsetsRef.current ?? { left: 0, right: 0 };
-    const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
-    const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
-    const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
-    const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
-
-    if (controls.floatingActionBar) {
-      const floatingLeft = `${actionGeometry.left}px`;
-      if (cache.floatingLeft !== floatingLeft) {
-        cache.floatingLeft = floatingLeft;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
-      }
-      const floatingWidth = `${actionGeometry.width}px`;
-      if (cache.floatingWidth !== floatingWidth) {
-        cache.floatingWidth = floatingWidth;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
-      }
-    }
-
-    if (controls.collapsedActionButton) {
-      const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
-      if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
-        cache.collapsedBuilderWidth = collapsedBuilderWidth;
-        controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
-      }
-      const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
-      if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
-        cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
-        controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
-      }
-    }
-  }, [generationBarPerfMode]);
-
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
+    const { left, leftRailEdge } = metricsRef.current;
     const controls = externalRef.current;
     const cache = externalGeometryCacheRef.current;
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
@@ -717,24 +654,49 @@ export default function LiteStudioSplitWorkspace({
     // the old left/right writes were pure drag-time work and are intentionally
     // omitted in Lite V2.
 
-    // 752/790: the Generate bar has its own minimal geometry writer so the
-    // production Pure Pane path can reuse it without re-enabling the rest of
-    // external synchronization. Admin `freeze`/`off` still bypass it.
-    syncGenerationBarGeometry(roundedBuilderWidth);
-  }, [syncGenerationBarGeometry]);
+    // 752 A/B probe: in `freeze`, keep the Generate bar rendered exactly as-is
+    // but remove only its divider-frame geometry writes. App's existing drag-end
+    // sync still moves it to the final resting position. `off` also enters this
+    // branch because App removes the rendered bar entirely. This isolates the
+    // bar from the rest of the external UI without weakening pane/search/toggle
+    // synchronization.
+    if (generationBarPerfMode === 'normal') {
+      const actionInsets = actionInsetsRef.current ?? { left: 0, right: 0 };
+      const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
+      const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
+      const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
+      const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
+      if (controls.floatingActionBar) {
+        const floatingLeft = `${actionGeometry.left}px`;
+        if (cache.floatingLeft !== floatingLeft) {
+          cache.floatingLeft = floatingLeft;
+          controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
+        }
+        const floatingWidth = `${actionGeometry.width}px`;
+        if (cache.floatingWidth !== floatingWidth) {
+          cache.floatingWidth = floatingWidth;
+          controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
+        }
+        // No Studio CSS consumes --soridraw-studio-builder-width from the
+        // expanded floating bar, so the former third write was redundant.
+      }
+      if (controls.collapsedActionButton) {
+        const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
+        if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
+          cache.collapsedBuilderWidth = collapsedBuilderWidth;
+          controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
+        }
+        const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
+        if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
+          cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
+          controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
+        }
+      }
+    }
+  }, [generationBarPerfMode]);
 
   const clearLiveExternalGeometry = useCallback(() => {
     const controls = externalRef.current;
-    // 781: live split-edge controls use direct inline coordinates only while
-    // dragging. Clear them before returning ownership to the committed root
-    // splitter variables, so collapsed restore positions still use the existing
-    // left/right boundary rules.
-    builderToggleRef.current?.style.removeProperty('left');
-    builderToggleRef.current?.style.removeProperty('right');
-    builderToggleRef.current?.style.removeProperty('--soridraw-lite-studio-builder-toggle-left');
-    resultToggleRef.current?.style.removeProperty('left');
-    resultToggleRef.current?.style.removeProperty('right');
-    resultToggleRef.current?.style.removeProperty('--soridraw-lite-studio-result-toggle-left');
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
     if (controls.floatingActionBar && !document.documentElement.classList.contains('soridraw-window-resizing')) {
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
@@ -788,7 +750,7 @@ export default function LiteStudioSplitWorkspace({
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
       result.style.setProperty('left', `${builderWidth}px`, 'important');
-      result.style.setProperty('right', dragResultRightRef.current, 'important');
+      result.style.setProperty('right', '0px', 'important');
       result.style.removeProperty('width');
       splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       return;
@@ -807,19 +769,8 @@ export default function LiteStudioSplitWorkspace({
       builder.style.setProperty('right', 'auto', 'important');
       builder.style.setProperty('width', `${builderWidth}px`, 'important');
       result.style.setProperty('left', `${builderWidth}px`, 'important');
-      result.style.setProperty('right', dragResultRightRef.current, 'important');
-      // 776: direct layout used left + explicit width + right together. In LTR,
-      // left + width win, so the tablet `right:-18px` reach-through was ignored
-      // and the native result scrollbar stayed 18px inside the right frame.
-      // Extend only the scroll shell by the negative right inset; CSS returns
-      // the same amount as padding-right, so the visible result content width
-      // and card positions do not change. This is pure math from the cached
-      // drag right owner and adds no DOM read to the live path.
-      const directResultRight = Number.parseFloat(dragResultRightRef.current);
-      const directResultReachThrough = Number.isFinite(directResultRight) && directResultRight < 0
-        ? Math.abs(directResultRight)
-        : 0;
-      result.style.setProperty('width', `${Math.max(0, resultWidth + directResultReachThrough)}px`, 'important');
+      result.style.setProperty('right', '0px', 'important');
+      result.style.setProperty('width', `${resultWidth}px`, 'important');
       // 622: splitter is now the same body-level fixed control as Recent Songs,
       // so its live x-coordinate must be viewport-relative rather than local.
       splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
@@ -832,62 +783,6 @@ export default function LiteStudioSplitWorkspace({
     // shared body splitter follows the same boundary with one tiny fixed write.
     splitter?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
   }, [clearDirectBenchmarkGeometry]);
-
-  // 781 — The two minimum-width collapse controls must have the same live
-  // boundary owner as the divider. The production Pure Pane path deliberately
-  // skips `syncExternalGeometry`, so leaving minimum-state + button geometry in
-  // that auxiliary lane made the previously visible edge button stay on the
-  // opposite side while the divider crossed to the other minimum. Keep this
-  // tiny shared rule inside the split engine itself: switch the two minimum
-  // flags only when the threshold actually changes, and position only the
-  // currently visible edge control from the exact live splitter coordinate.
-  const syncMinimumCollapseControls = useCallback((
-    nextPercent: number,
-    bounds: SplitBounds,
-    safeWidth: number,
-    splitterLeft: number,
-    livePosition: boolean,
-  ) => {
-    const root = document.documentElement;
-    const edgeTolerancePercent = (1.5 / Math.max(1, safeWidth)) * 100;
-    const builderAtMinimum = !builderCollapsedRef.current
-      && !resultCollapsedRef.current
-      && nextPercent <= bounds.min + edgeTolerancePercent;
-    const resultAtMinimum = !builderCollapsedRef.current
-      && !resultCollapsedRef.current
-      && nextPercent >= bounds.max - edgeTolerancePercent;
-
-    if (builderAtMinimum) {
-      if (root.dataset.soridrawBuilderAtMinimum !== 'true') root.dataset.soridrawBuilderAtMinimum = 'true';
-    } else if (root.dataset.soridrawBuilderAtMinimum) {
-      delete root.dataset.soridrawBuilderAtMinimum;
-    }
-
-    if (resultAtMinimum) {
-      if (root.dataset.soridrawResultAtMinimum !== 'true') root.dataset.soridrawResultAtMinimum = 'true';
-    } else if (root.dataset.soridrawResultAtMinimum) {
-      delete root.dataset.soridrawResultAtMinimum;
-    }
-
-    if (!livePosition) return;
-    const roundedSplitterLeft = Math.max(0, Math.round(splitterLeft));
-    if (builderAtMinimum && builderToggleRef.current) {
-      builderToggleRef.current.style.removeProperty('right');
-      builderToggleRef.current.style.setProperty(
-        'left',
-        `${Math.max(0, roundedSplitterLeft - 43)}px`,
-        'important',
-      );
-    }
-    if (resultAtMinimum && resultToggleRef.current) {
-      resultToggleRef.current.style.removeProperty('right');
-      resultToggleRef.current.style.setProperty(
-        'left',
-        `${Math.min(window.innerWidth - 43, roundedSplitterLeft + 9)}px`,
-        'important',
-      );
-    }
-  }, []);
 
   const applyPercent = useCallback((rawPercent: number, live = false) => {
     const layout = layoutRef.current;
@@ -910,21 +805,10 @@ export default function LiteStudioSplitWorkspace({
     // 759 diagnostic isolation: these modes intentionally bypass every non-essential
     // drag-time sync so we can measure the raw cost of splitter/pane geometry.
     const purePaneLive = live && draggingRef.current && v2DragPerfMode === 'pure-pane';
-    // 764 production path: the verified Pure Pane geometry hot path is now the
-    // normal Lite V2 drag behavior. Responsive UI is published only from the
-    // already-known pane widths, with no DOM read, observer or React state added
-    // to pointermove. The explicit `pure-pane-live` mode remains as an admin A/B
-    // alias so the proven candidate can still be compared directly.
-    const tabletTouchPureLive = live && draggingRef.current && v2DragPerfMode === 'tablet-touch-pure';
-    const purePaneResponsiveLive = live && draggingRef.current
-      && (v2DragPerfMode === 'pure-pane-live' || v2DragPerfMode === 'normal' || v2DragPerfMode === 'tablet-touch-pure');
     const splitterOnlyLive = live && draggingRef.current && v2DragPerfMode === 'splitter-only';
     const leftPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'left-pane-only';
     const rightPaneOnlyLive = live && draggingRef.current && v2DragPerfMode === 'right-pane-only';
-    const contentLeftFreezeLive = live && draggingRef.current && v2DragPerfMode === 'content-left-freeze';
-    const contentRightFreezeLive = live && draggingRef.current && v2DragPerfMode === 'content-right-freeze';
-    const contentFreezeLive = live && draggingRef.current && v2DragPerfMode === 'content-freeze';
-    const pureGeometryDiagnosticLive = purePaneLive || purePaneResponsiveLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive;
+    const pureGeometryDiagnosticLive = purePaneLive || splitterOnlyLive || leftPaneOnlyLive || rightPaneOnlyLive;
     const deferScrollLockLive = live && draggingRef.current
       && (v2DragPerfMode === 'scroll-defer'
         || v2DragPerfMode === 'direct-scroll-defer'
@@ -960,102 +844,18 @@ export default function LiteStudioSplitWorkspace({
         // remove all diagnostic inline geometry before restoring the runtime owner.
         layout.dataset.v2TraceDirectGeometry = 'true';
 
-        if (purePaneLive || purePaneResponsiveLive || leftPaneOnlyLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {
+        if (purePaneLive || leftPaneOnlyLive) {
           builder.style.setProperty('left', '0px', 'important');
           builder.style.setProperty('right', 'auto', 'important');
           builder.style.setProperty('width', `${builderWidth}px`, 'important');
         }
-        if (purePaneLive || purePaneResponsiveLive || rightPaneOnlyLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {
+        if (purePaneLive || rightPaneOnlyLive) {
           result.style.setProperty('left', `${builderWidth}px`, 'important');
-          result.style.setProperty('right', dragResultRightRef.current, 'important');
+          result.style.setProperty('right', '0px', 'important');
           result.style.removeProperty('width');
         }
         splitterRef.current?.style.setProperty('left', `${viewportSplitterLeft}px`, 'important');
       }
-
-      if (purePaneResponsiveLive || contentLeftFreezeLive || contentRightFreezeLive || contentFreezeLive) {
-        // 768 — Galaxy Tab Pure Pane tablet isolation.
-        // The old 657 fast-path marker was only published from the non-Pure branch
-        // and only for fine pointers. Since 764 made Pure Pane the production path,
-        // coarse touch/S Pen never received the already-proven 661~1080px layout
-        // containment and therefore kept paying the full tablet card/list reflow.
-        // Reuse the same marker from already-known pane widths. It changes only
-        // when a pane enters/leaves the tablet band; there is no DOM read here.
-        const touchLikePointer = activePointerTypeRef.current === 'touch'
-          || activePointerTypeRef.current === 'pen'
-          || (!activePointerTypeRef.current && !finePointerFastPathRef.current)
-          || tabletTouchPureLive;
-        if (touchLikePointer) {
-          const syncPurePaneTabletFastPath = (pane: HTMLElement, paneWidth: number) => {
-            const shouldBeActive = paneWidth > CONTENT_MOBILE_MAX && paneWidth <= CONTENT_TABLET_MAX;
-            const isActive = pane.dataset.soridrawPaneTabletFastpath === 'true';
-            if (shouldBeActive === isActive) return;
-            if (shouldBeActive) pane.dataset.soridrawPaneTabletFastpath = 'true';
-            else delete pane.dataset.soridrawPaneTabletFastpath;
-          };
-          syncPurePaneTabletFastPath(builder, builderWidth);
-          syncPurePaneTabletFastPath(result, resultWidth);
-        }
-
-        if (tabletTouchPureLive) {
-          // Discrete Pane-level Container Query band synchronization.
-          // Replaces continuous 1px browser-internal CQ evaluations with discrete
-          // dataset updates ONLY when actual breakpoint boundaries (1074, 760, 700 / 660) are crossed.
-          const nextBuilderBand = builderWidth <= 700 ? 'compact-700' : builderWidth <= 760 ? 'compact-760' : builderWidth <= 1074 ? 'compact-1074' : 'wide';
-          if (dragBuilderCqBandRef.current !== nextBuilderBand) {
-            dragBuilderCqBandRef.current = nextBuilderBand;
-            builder.dataset.dragCqBand = nextBuilderBand;
-          }
-          const nextResultBand = resultWidth <= 660 ? 'compact-660' : 'wide';
-          if (dragResultCqBandRef.current !== nextResultBand) {
-            dragResultCqBandRef.current = nextResultBand;
-            result.dataset.dragCqBand = nextResultBand;
-          }
-        }
-
-        // 762: do not rely on a one-shot boundary signature to trigger the live
-        // responsive handoff. Fast pointer frames can jump across multiple bands,
-        // and a missed signature left Compact/Mobile visually stale until pointer-up.
-        // Run only the cheap mode comparisons every rAF; both helpers already skip
-        // every DOM write/event when the resolved mode did not change. Root/html,
-        // external geometry, scroll locks, ARIA and persistence stay deferred.
-        const responsiveOptions = {
-          rootSync: false,
-          hysteresisPx: 0,
-        };
-        syncPaneModes(builderWidth, resultWidth, responsiveOptions);
-        broadcastLitePaneResponsiveWidths(builderWidth, resultWidth, false, responsiveOptions);
-
-        // 791/793 — Keep the Generate bar's responsive composition live without
-        // re-enabling the expensive App-root React mirror. Pure Pane updates the
-        // pane-local modes every rAF, while rootSync:false intentionally defers
-        // root attributes until pointer-up. The bar now has three visual bands
-        // (mobile/tablet = simple, pc = full), so mirror both already-resolved
-        // mode values here. These attributes change only when the 660/1080
-        // boundaries are crossed; there is still no per-pixel React rerender.
-        const root = document.documentElement;
-        if (root.dataset.soridrawBuilderMode !== modeRef.current.builder) {
-          root.dataset.soridrawBuilderMode = modeRef.current.builder;
-        }
-        const builderContentMode = contentResponsiveModeRef.current.builder;
-        if (builderContentMode && root.dataset.soridrawBuilderContentMode !== builderContentMode) {
-          root.dataset.soridrawBuilderContentMode = builderContentMode;
-        }
-
-        dragBoundarySignatureRef.current = readDragBoundarySignature(builderWidth, resultWidth, workspaceViewRef.current);
-      }
-
-      // 790: Pure Pane is the production drag path and used to return here before
-      // `syncExternalGeometry`, so the divider moved live while the Generate bar
-      // waited for pointer-up. Publish only the Generate bar's read-free geometry
-      // from this same rAF frame; all other external/root work stays deferred.
-      syncGenerationBarGeometry(builderWidth);
-
-      // Keep the split-edge collapse UI correct even on the Pure Pane
-      // production hot path, which intentionally returns before auxiliary
-      // external-geometry synchronization. This is threshold-only state plus
-      // one tiny button position write at an actual minimum edge.
-      syncMinimumCollapseControls(nextPercent, bounds, safeWidth, splitterLeft, true);
 
       if (perfEnabled && live) {
         recordSplitPerfGeometryWrite(builderWidth, resultWidth);
@@ -1135,13 +935,20 @@ export default function LiteStudioSplitWorkspace({
     const perfAfterExternal = perfEnabled ? performance.now() : 0;
 
     if (!deferAuxLive) {
-      syncMinimumCollapseControls(
-        nextPercent,
-        bounds,
-        safeWidth,
-        splitterLeft,
-        live && draggingRef.current,
-      );
+      const root = document.documentElement;
+      const edgeTolerancePercent = (1.5 / safeWidth) * 100;
+      const builderAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent <= bounds.min + edgeTolerancePercent;
+      const resultAtMinimum = !builderCollapsedRef.current && !resultCollapsedRef.current && nextPercent >= bounds.max - edgeTolerancePercent;
+      if (builderAtMinimum) {
+        if (root.dataset.soridrawBuilderAtMinimum !== 'true') root.dataset.soridrawBuilderAtMinimum = 'true';
+      } else if (root.dataset.soridrawBuilderAtMinimum) {
+        delete root.dataset.soridrawBuilderAtMinimum;
+      }
+      if (resultAtMinimum) {
+        if (root.dataset.soridrawResultAtMinimum !== 'true') root.dataset.soridrawResultAtMinimum = 'true';
+      } else if (root.dataset.soridrawResultAtMinimum) {
+        delete root.dataset.soridrawResultAtMinimum;
+      }
 
       const boundsKey = `${bounds.min.toFixed(2)}:${bounds.max.toFixed(2)}`;
       if (lastAriaBoundsRef.current !== boundsKey) {
@@ -1167,19 +974,13 @@ export default function LiteStudioSplitWorkspace({
       });
     }
     return nextPercent;
-  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncGenerationBarGeometry, syncMinimumCollapseControls, syncPaneModes, v2DragPerfMode, writeLiveSplitGeometry]);
+  }, [applyDragScrollLocks, broadcastLitePaneResponsiveWidths, runtimeProfile, syncExternalGeometry, syncPaneModes, v2DragPerfMode, writeLiveSplitGeometry]);
 
   const refreshMetrics = useCallback(() => {
     const layout = layoutRef.current;
     if (!layout) return;
     refreshIsolationHeight();
     syncModalHost();
-    // 775: refresh is outside the drag hot path. Keep the tablet result scroll
-    // shell extended through Studio main's 18px right gutter before any direct
-    // geometry write runs, so the native scrollbar sits on the outer divider.
-    if (window.innerWidth >= 1100 && window.innerWidth < 1600) {
-      dragResultRightRef.current = '-18px';
-    }
     const rect = layout.getBoundingClientRect();
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
@@ -1297,19 +1098,7 @@ export default function LiteStudioSplitWorkspace({
     flushPointer();
     draggingRef.current = false;
     pointerIdRef.current = -1;
-    activePointerTypeRef.current = '';
     layoutRef.current?.classList.remove('is-dragging');
-    // 787: only the dedicated Lyrics vertical lock remains drag-only. The five
-    // keyword cards no longer have a second drag-time height owner, so pointer-up
-    // cannot swap their geometry from a snapshot back to resting CSS.
-    const purePaneLockedCards = builderRef.current?.querySelectorAll<HTMLElement>('[data-soridraw-pure-pane-vertical-lock="true"]');
-    purePaneLockedCards?.forEach((card) => {
-      delete card.dataset.soridrawPurePaneVerticalLock;
-      card.style.removeProperty('--soridraw-pure-pane-card-height');
-      card.style.removeProperty('--soridraw-pure-pane-header-height');
-      card.style.removeProperty('--soridraw-pure-pane-body-height');
-      card.style.removeProperty('--soridraw-pure-pane-summary-height');
-    });
     clearV2DragContentFreeze();
     if (
       v2DragPerfMode === 'aux-freeze'
@@ -1324,11 +1113,9 @@ export default function LiteStudioSplitWorkspace({
       || v2DragPerfMode === 'responsive-hysteresis'
       || v2DragPerfMode === 'local-responsive'
       || v2DragPerfMode === 'pure-pane'
-      || v2DragPerfMode === 'pure-pane-live'
       || v2DragPerfMode === 'splitter-only'
       || v2DragPerfMode === 'left-pane-only'
       || v2DragPerfMode === 'right-pane-only'
-      || v2DragPerfMode === 'tablet-touch-pure'
       || v2DragPerfMode === 'normal'
     ) {
       // Reconcile any intentionally deferred responsive/external state exactly
@@ -1336,14 +1123,6 @@ export default function LiteStudioSplitWorkspace({
       // pane's responsive contract as well as its formatting width.
       applyPercent(percentRef.current, false);
     }
-    // 761: do not lock the whole split workspace height. That temporary
-    // shell lock changed the scroll owner/scrollbar geometry while dragging.
-    // Menu-card height stabilization is local to the Builder cards instead.
-    if (layoutRef.current) delete layoutRef.current.dataset.v2DragPerfMode;
-    if (builderRef.current) delete builderRef.current.dataset.dragCqBand;
-    if (resultRef.current) delete resultRef.current.dataset.dragCqBand;
-    dragBuilderCqBandRef.current = null;
-    dragResultCqBandRef.current = null;
     dragBoundarySignatureRef.current = null;
     document.documentElement.classList.remove('soridraw-lite-split-dragging');
     document.body.style.removeProperty('cursor');
@@ -1372,28 +1151,6 @@ export default function LiteStudioSplitWorkspace({
     if (!layout) return;
     const rect = layout.getBoundingClientRect();
     if (rect.width <= 0) return;
-
-    // 789: Vocal/Lyrics must use the same vertical geometry during drag and rest.
-    // 763 still snapshotted Lyrics on pointer-down and released that snapshot on
-    // pointer-up. At the 1074px compact-title handoff, the live drag therefore
-    // kept the old header/card height while the resting CSS used the new one,
-    // producing the exact release-only jump visible in the lower card row.
-    // Clear any stale legacy lock but do NOT create a new drag-time snapshot.
-    // The shared 789 header-slot rule in studioLayout.css now owns both Vocal and
-    // Lyrics before, during and after the gesture.
-    if (builderRef.current) {
-      const staleVerticalLocks = builderRef.current.querySelectorAll<HTMLElement>(
-        '[data-soridraw-pure-pane-vertical-lock="true"]'
-      );
-      for (const card of staleVerticalLocks) {
-        delete card.dataset.soridrawPurePaneVerticalLock;
-        card.style.removeProperty('--soridraw-pure-pane-card-height');
-        card.style.removeProperty('--soridraw-pure-pane-header-height');
-        card.style.removeProperty('--soridraw-pure-pane-body-height');
-        card.style.removeProperty('--soridraw-pure-pane-summary-height');
-      }
-    }
-
     const leftRail = document.querySelector<HTMLElement>('.soridraw-studio-left-panel');
     const leftRailRect = leftRail?.getBoundingClientRect();
     metricsRef.current = {
@@ -1404,22 +1161,6 @@ export default function LiteStudioSplitWorkspace({
     readExternalControls();
     const builderRect = builderRef.current?.getBoundingClientRect();
     const resultRect = resultRef.current?.getBoundingClientRect();
-    // 762: read the resting result-shell right edge once before direct drag geometry
-    // starts. No geometry read is added to pointermove. This preserves the wide-PC
-    // -18px scrollbar reach-through instead of overriding it with right:0.
-    if (resultRef.current) {
-      // 775: tablet direct geometry must not re-capture a stale inline `right:0`
-      // and pull the result scrollbar back inside. Wide PC keeps its existing
-      // computed-style behavior; tablet split has one canonical -18px edge.
-      if (window.innerWidth >= 1100 && window.innerWidth < 1600) {
-        dragResultRightRef.current = '-18px';
-      } else {
-        const restingRight = window.getComputedStyle(resultRef.current).right;
-        dragResultRightRef.current = restingRight && restingRight !== 'auto' ? restingRight : '0px';
-      }
-    } else {
-      dragResultRightRef.current = window.innerWidth >= 1100 && window.innerWidth < 1600 ? '-18px' : '0px';
-    }
     const actionRect = externalRef.current.actionAnchor?.getBoundingClientRect();
     if (builderRect && actionRect && builderRect.width > 0 && actionRect.width > 0) {
       actionInsetsRef.current = {
@@ -1440,24 +1181,11 @@ export default function LiteStudioSplitWorkspace({
     if (v2DragPerfMode === 'content-right-freeze' || v2DragPerfMode === 'content-freeze') {
       if (resultRect?.width) resultRef.current?.style.setProperty('--soridraw-v2-drag-content-width', `${Math.max(1, Math.round(resultRect.width))}px`);
     }
-    if (v2DragPerfMode === 'tablet-touch-pure') {
-      const initialBWidth = builderRect?.width || Math.round(rect.width * (percentRef.current / 100));
-      const initialRWidth = resultRect?.width || Math.max(0, rect.width - initialBWidth);
-      const initialBuilderBand = initialBWidth <= 700 ? 'compact-700' : initialBWidth <= 760 ? 'compact-760' : initialBWidth <= 1074 ? 'compact-1074' : 'wide';
-      const initialResultBand = initialRWidth <= 660 ? 'compact-660' : 'wide';
-      dragBuilderCqBandRef.current = initialBuilderBand;
-      dragResultCqBandRef.current = initialResultBand;
-      if (builderRef.current) builderRef.current.dataset.dragCqBand = initialBuilderBand;
-      if (resultRef.current) resultRef.current.dataset.dragCqBand = initialResultBand;
-    }
     dragBoundarySignatureRef.current = v2DragPerfMode === 'aux-boundary'
-      || v2DragPerfMode === 'pure-pane-live'
-      || v2DragPerfMode === 'normal'
       ? readDragBoundarySignature(builderRect?.width || 1, resultRect?.width || 1, workspaceViewRef.current)
       : null;
     draggingRef.current = true;
     pointerIdRef.current = event.pointerId;
-    activePointerTypeRef.current = event.pointerType || '';
     pendingClientXRef.current = null;
     // 611: real hand dragging is intentionally uninstrumented unless the admin
     // explicitly arms the one-shot "실손 드래그 비교" diagnostic. The arm is
@@ -1479,7 +1207,6 @@ export default function LiteStudioSplitWorkspace({
     lastPixelRef.current = null;
     event.currentTarget.setPointerCapture(event.pointerId);
     layout.classList.add('is-dragging');
-    layout.dataset.v2DragPerfMode = v2DragPerfMode;
     document.documentElement.classList.add('soridraw-lite-split-dragging');
     document.body.style.cursor = 'ew-resize';
     document.body.style.userSelect = 'none';

@@ -589,26 +589,6 @@
   min-height: 48px !important;
 }
 
-/* 782 — Mood / Theme keep two visible keyword rows on every mobile path.
- * The shared mobile collapsed height is intentionally still one row (48px) for
- * the other keyword menus. Mood/Theme alone use the same two-row 96px contract
- * as PC/tablet. The viewport rule covers Classic dark/light mobile; the pane-
- * owned rule covers split Studio when the Builder itself enters mobile mode
- * inside a wider desktop/tablet viewport. */
-@media (max-width: 767px) {
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-expand-content {
-    --soridraw-expand-collapsed-height: 96px;
-    min-height: 96px !important;
-  }
-}
-
-:root[data-soridraw-theme="studio-black"]
-.soridraw-studio-builder-pane[data-pane-mode="mobile"]
-:is([data-studio-menu="mood"], [data-studio-menu="theme"]) .soridraw-expand-content {
-  --soridraw-expand-collapsed-height: 96px;
-  min-height: 96px !important;
-}
-
 :root[data-soridraw-theme="studio-black"] .soridraw-studio-builder-pane[data-pane-mode="mobile"] .soridraw-studio-menu-card {
   overflow: hidden !important;
   isolation: isolate;
@@ -2880,10 +2860,9 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   overflow-anchor: none !important;
 }
 
-/* 254/777: keep the left auxiliary rail on one PC/tablet geometry contract.
- * The result pane scrollbar now uses the same outer-edge reach-through on both
- * wide PC and tablet split. Tablet had been excluded by the old >=1600px media
- * gate, which left its native result scrollbar 18px inside the right divider. */
+/* 254/506: keep the left auxiliary rail on one PC/tablet geometry contract.
+ * Only the split-result scrollbar reach-through remains wide-PC-only, preserving
+ * the 488 center workspace geometry below 1600px. */
 @media (min-width: 1100px) {
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel,
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-left-panel-inner,
@@ -2917,10 +2896,8 @@ html.soridraw-split-dragging[data-soridraw-theme="studio-black"] .soridraw-gener
   }
 }
 
-@media (min-width: 1100px) {
-  /* 777: reuse the already-correct PC scroll-shell contract on tablet too.
-   * Keep this high-specificity owner in studioLayout.css so the older 248
-   * `overflow:hidden/contain:strict/right:0` rules cannot win by specificity. */
+@media (min-width: 1600px) {
+  /* Keep the original 488 split/result scrollbar geometry wide-PC-only. */
   html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root .soridraw-studio-split-workspace[data-scroll-isolated="true"] {
     overflow: visible !important;
     contain: size layout style !important;
@@ -12987,8 +12964,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-main .soridraw-studio-selection-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    column-gap: 20px !important;
-    row-gap: 20px !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
     align-items: start !important;
   }
 
@@ -13020,8 +12997,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   .soridraw-studio-main :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    column-gap: 20px !important;
-    row-gap: 20px !important;
+    column-gap: 16px !important;
+    row-gap: 16px !important;
     align-items: start !important;
   }
 
@@ -13228,8 +13205,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 .soridraw-studio-selection-grid {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  column-gap: 20px !important;
-  row-gap: 20px !important;
+  column-gap: 16px !important;
+  row-gap: 16px !important;
   align-items: start !important;
 }
 
@@ -13253,8 +13230,8 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
 :is(.soridraw-studio-mood-theme-grid, .soridraw-studio-vocal-lyrics-grid) {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  column-gap: 20px !important;
-  row-gap: 20px !important;
+  column-gap: 16px !important;
+  row-gap: 16px !important;
   align-items: start !important;
 }
 
@@ -13282,16 +13259,6 @@ html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
   grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
 
-
-
-/* 783 — Tablet-portrait menu spacing uses the same 20px card rhythm as PC/mobile.
- * The Compact rules had 16px grid gaps while the boundary between the primary
- * and secondary groups already stayed at 20px. That produced exactly one normal
- * row boundary (Style/Sound -> Mood/Theme) and tighter Genre -> Style/Sound,
- * Mood/Theme -> Storyboard, Storyboard -> Vocal/Lyrics, plus tighter horizontal
- * two-card gaps. Both external 768~1099 Compact (Classic dark/light + Studio
- * Black compact workspace) and pane-owned 661~820 split Compact now use 20px.
- * Internal keyword/button gaps are intentionally unchanged. */
 
 /* 750 — Generate bar resize geometry has one exact contract.
  * 749 was still using a hard-coded 0/18px anchor assumption while the resting
@@ -13366,357 +13333,3 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
   }
 }
 
-
-/* 779 — Tablet-landscape builder-only scrollbar uses the proven 337 shell rule.
- * 778 tried to move only the Builder pane with `right:-18px`, but Lite V2 owns
- * the collapsed Builder width as an inline `width: ... !important`. In an
- * absolutely positioned LTR box, left + width win over right, so that rule was
- * geometrically unable to move the native scrollbar.
- *
- * Reuse the same ownership principle already verified by wide-PC rule 337:
- * release the Studio main's reserved RIGHT gutter so the workspace/scroll shell
- * itself reaches the right-rail divider, then return that 18px inside the
- * Builder as extra padding. The visible cards, masthead and search keep their
- * previous width/position while only the scrollbar shell gains the missing 18px.
- * This shared one-pane rule works for both Legacy and Lite V2 split engines. */
-@media (min-width: 1100px) and (max-width: 1599.98px) {
-  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
-  body #root .soridraw-app-root .soridraw-studio-main {
-    padding-right: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"][data-soridraw-result-collapsed="true"]
-  body #root .soridraw-app-root
-  .soridraw-studio-split-workspace
-  > .soridraw-studio-builder-pane {
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding-right: 36px !important;
-    box-sizing: border-box !important;
-  }
-}
-
-/* 785 — One vertical header-slot owner for split keyword cards across every
- * Builder width band (mobile -> 4 -> 5 -> 7 keyword columns).
- *
- * 784 only targeted `> .soridraw-menu-card-header-slot`, but all five real menu
- * cards wrap that header inside an intermediate `.flex-1`, so the selector never
- * matched. It also covered only the <=660 mobile pane, leaving the 1074px 5<->7
- * title/action-size handoff free to change the parent card height after pointer-up.
- *
- * Keep the already-approved Compact 30px slot as the layout owner at ALL split
- * widths. The visible title/count/action controls may still change their own font
- * and icon sizes responsively, but that visual change is no longer allowed to
- * add/remove vertical space from the parent card. This makes the resting layout
- * match the drag-time vertical lock, so releasing the splitter cannot cause the
- * small card-height snap at mobile<->4 or 5<->7. Expanded content, keyword column
- * counts, real phone layouts, Classic Dark/Light, and every non-split page remain
- * untouched. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is(
-    [data-studio-menu="genre"],
-    [data-studio-menu="style"],
-    [data-studio-menu="sound"],
-    [data-studio-menu="mood"],
-    [data-studio-menu="theme"]
-  ) .soridraw-menu-card-header-slot {
-    height: 30px !important;
-    min-height: 30px !important;
-    max-height: 30px !important;
-    flex: 0 0 30px !important;
-    overflow: visible !important;
-    align-items: center !important;
-  }
-}
-
-/* 786 — Fix the actual pointer-up snap for Mood / Theme cards in Lite V2 split.
- *
- * 785 stabilized only the title/header slot. The remaining visible jump happened
- * specifically when the splitter was released: Pure Pane keeps the whole card
- * vertically locked while dragging, then finishDrag returns ownership to the
- * resting responsive CSS. Mood/Theme therefore exposed a slightly different
- * natural outer height at the mobile<->4 and 5<->7 handoffs even though the live
- * drag itself looked stable.
- *
- * Mood/Theme already have one intentional collapsed geometry in every split band:
- *   header 30px + gap 16px + two keyword rows 96px + summary gap 20px +
- *   summary 64px + card vertical padding 56px = 282px.
- * Make that existing geometry the resting owner too. This does not freeze expanded
- * cards, does not alter keyword columns/font sizing, and does not touch Classic,
- * non-split pages, Vocal/Lyrics, Storyboard, or the split engine timing. Because
- * drag-time and pointer-up resting height are now identical, releasing the mouse
- * cannot change the card height. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  .soridraw-menu-card-header-slot {
-    box-sizing: border-box !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    max-height: 30px !important;
-    flex: 0 0 30px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  .soridraw-menu-card-body-slot {
-    box-sizing: border-box !important;
-    height: 96px !important;
-    min-height: 96px !important;
-    max-height: 96px !important;
-    flex: 0 0 96px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"])
-  > .soridraw-expand-summary[data-expanded="false"] {
-    box-sizing: border-box !important;
-    height: 64px !important;
-    min-height: 64px !important;
-    max-height: 64px !important;
-    flex: 0 0 64px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="mood"], [data-studio-menu="theme"]).soridraw-studio-menu-card:has(> .soridraw-expand-summary[data-expanded="false"]) {
-    box-sizing: border-box !important;
-    height: 282px !important;
-    min-height: 282px !important;
-    max-height: 282px !important;
-  }
-}
-
-
-/* 789 — Vocal/Lyrics title-size changes must never move the card row.
- * The shared 1074px compact rule intentionally shrinks card titles (22 -> 18px)
- * and header action buttons (36 -> 30px). For Vocal/Lyrics, that visual change
- * was still allowed to change the header's natural height, which changed the
- * paired grid row by a few pixels. During drag, the old 763 Lyrics snapshot hid
- * the change; pointer-up removed the snapshot and the whole lower row jumped.
- *
- * Keep the WIDE header footprint (36px) as the layout slot at every split width.
- * The title and icons may still resize visually, but their parent card and the
- * following content start position stay fixed. Both cards in the pair share the
- * exact same owner, so neither one can push the other or move the rows below.
- * This is split Studio Black only; Classic, non-split mobile, keyword cards and
- * all content/control responsive rules remain unchanged. */
-@media (min-width: 1100px) {
-  html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
-  .soridraw-lite-studio-split-workspace
-  .soridraw-studio-builder-pane
-  :is([data-studio-menu="vocal"], [data-studio-menu="lyrics"])
-  > .soridraw-card-header {
-    box-sizing: border-box !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
-    flex: 0 0 36px !important;
-    align-items: center !important;
-    overflow: visible !important;
-  }
-}
-
-/* 793 — Generate bar responsive ownership cleanup.
- * Phone -> portrait tablet -> landscape tablet all use the same simplified
- * three-button composition. The larger collapse-arrow + side-text layout is
- * reserved for real PC only.
- *
- * Non-split Classic/Dark/Light is viewport-owned: <=1599px is compact.
- * Split Studio Black is stricter: <=1599px is compact regardless of pane width,
- * and on >=1600px the Builder must also be in its real `pc` content mode.
- * This keeps a narrow/tablet Builder simple even inside a large PC viewport.
- * Colors remain theme-owned; this block changes composition/geometry only. */
-@media (max-width: 1599px) {
-  :root body .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
-    gap: 8px !important;
-    padding: 8px !important;
-    border-radius: 24px !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
-  :root body .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
-    display: none !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
-    display: none !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
-    display: block !important;
-    flex: 0 0 56px !important;
-    width: 56px !important;
-    min-width: 56px !important;
-    max-width: 56px !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
-    box-sizing: border-box !important;
-    width: 56px !important;
-    min-width: 56px !important;
-    max-width: 56px !important;
-    height: 69px !important;
-    min-height: 69px !important;
-    max-height: 69px !important;
-    padding: 0 !important;
-    border-radius: 16px !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking .soridraw-action-generate {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
-    box-sizing: border-box !important;
-    min-width: 0 !important;
-    height: 69px !important;
-    min-height: 69px !important;
-    max-height: 69px !important;
-    padding-block: 0 !important;
-    padding-inline: 10px !important;
-    border-radius: 16px !important;
-    gap: 8px !important;
-    font-size: 25px !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-  }
-
-  :root body .soridraw-studio-action-bar--tracking
-    :is(.soridraw-action-generate-button, .soridraw-action-random > button, .soridraw-action-reset > button) > svg {
-    width: 20px !important;
-    height: 20px !important;
-    flex: 0 0 auto !important;
-  }
-
-  html[data-soridraw-theme="studio-black"] {
-    --soridraw-action-control-height: 69px;
-    --soridraw-action-row-gap: 8px;
-    --soridraw-action-row-padding: 8px;
-  }
-
-  html[data-soridraw-theme="studio-black"] body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
-    padding-inline: 8px !important;
-  }
-}
-
-/* A large physical viewport can still hold a mobile/tablet-width Builder while
- * the split divider moves. Keep that Builder on the same simplified bar and
- * switch to the full PC bar only after the Builder itself crosses 1080px. */
-@media (min-width: 1600px) {
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) {
-    --soridraw-action-control-height: 69px;
-    --soridraw-action-row-gap: 8px;
-    --soridraw-action-row-padding: 8px;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"] {
-    padding-inline: 8px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking .soridraw-studio-action-row {
-    gap: 8px !important;
-    padding: 8px !important;
-    border-radius: 24px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking .soridraw-action-collapse,
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking .soridraw-studio-action-panel > .soridraw-studio-action-row > button.soridraw-action-collapse:first-child {
-    display: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking .soridraw-action-side-label {
-    display: none !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) {
-    display: block !important;
-    flex: 0 0 56px !important;
-    width: 56px !important;
-    min-width: 56px !important;
-    max-width: 56px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking :is(.soridraw-action-random, .soridraw-action-reset) > button {
-    width: 56px !important;
-    min-width: 56px !important;
-    max-width: 56px !important;
-    height: 69px !important;
-    min-height: 69px !important;
-    max-height: 69px !important;
-    padding: 0 !important;
-    border-radius: 16px !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking .soridraw-action-generate {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking .soridraw-action-generate-button {
-    min-width: 0 !important;
-    height: 69px !important;
-    min-height: 69px !important;
-    max-height: 69px !important;
-    padding-block: 0 !important;
-    padding-inline: 10px !important;
-    border-radius: 16px !important;
-    gap: 8px !important;
-    font-size: 25px !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-  }
-
-  html[data-soridraw-theme="studio-black"]:is(
-    [data-soridraw-builder-content-mode="mobile"],
-    [data-soridraw-builder-content-mode="tablet"]
-  ) .soridraw-studio-action-bar--tracking
-    :is(.soridraw-action-generate-button, .soridraw-action-random > button, .soridraw-action-reset > button) > svg {
-    width: 20px !important;
-    height: 20px !important;
-  }
-}

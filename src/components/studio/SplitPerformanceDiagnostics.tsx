@@ -1069,6 +1069,72 @@ export default function SplitPerformanceDiagnostics({ isAdmin = false }: { isAdm
             </button>
             <span>자동: 1400×900 동일조건 · 실손: 실제 마우스 입력률/폭 반영률/긴 프레임을 뮤직노트↔라이브러리로 직접 비교</span>
           </div>
+          <div className="soridraw-split-perf-benchmark-row" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: '6px' }}>
+            <span style={{ fontWeight: 800, color: '#FFB400', fontSize: '12px', alignSelf: 'center', marginRight: '6px' }}>[PERF A/B 테스트]:</span>
+            {(() => {
+              const currentParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('v2DragPerf') || 'normal' : 'normal';
+              const setPerfParam = (param: string) => {
+                if (typeof window === 'undefined') return;
+                const url = new URL(window.location.href);
+                if (param === 'normal') url.searchParams.delete('v2DragPerf');
+                else url.searchParams.set('v2DragPerf', param);
+                window.history.pushState({}, '', url.toString());
+                window.dispatchEvent(new Event('popstate'));
+              };
+              return (
+                <>
+                  <button
+                    type="button"
+                    className={currentParam === 'normal' || !currentParam ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'normal' || !currentParam ? 900 : 500, backgroundColor: currentParam === 'normal' || !currentParam ? '#FFB400' : undefined, color: currentParam === 'normal' || !currentParam ? '#000' : undefined }}
+                    onClick={() => setPerfParam('normal')}
+                  >
+                    PC 기본 (Pure Pane 실시간)
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? 900 : 500, backgroundColor: currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? '#00E5FF' : undefined, color: currentParam === 'tablet-touch-pure' || currentParam === 'tablet-pure' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('tablet-touch-pure')}
+                  >
+                    ★ Tablet Touch Pure
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'content-left' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'content-left' ? 900 : 500, backgroundColor: currentParam === 'content-left' ? '#FFB400' : undefined, color: currentParam === 'content-left' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('content-left')}
+                  >
+                    Left Content Freeze
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'content-right' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'content-right' ? 900 : 500, backgroundColor: currentParam === 'content-right' ? '#FFB400' : undefined, color: currentParam === 'content-right' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('content-right')}
+                  >
+                    Right Content Freeze
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'content' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'content' ? 900 : 500, backgroundColor: currentParam === 'content' ? '#FFB400' : undefined, color: currentParam === 'content' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('content')}
+                  >
+                    Both Content Freeze
+                  </button>
+                  <button
+                    type="button"
+                    className={currentParam === 'splitter-only' ? 'is-active' : 'is-secondary'}
+                    style={{ fontWeight: currentParam === 'splitter-only' ? 900 : 500, backgroundColor: currentParam === 'splitter-only' ? '#FFB400' : undefined, color: currentParam === 'splitter-only' ? '#000' : undefined }}
+                    onClick={() => setPerfParam('splitter-only')}
+                  >
+                    Splitter Only
+                  </button>
+                </>
+              );
+            })()}
+          </div>
           {benchmarkMessage && <p className="soridraw-split-perf-benchmark-message">{benchmarkMessage}</p>}
           {pairRows.length > 0 && (
             <div className="soridraw-split-perf-pair" aria-label="뮤직노트 라이브러리 성능 비교">

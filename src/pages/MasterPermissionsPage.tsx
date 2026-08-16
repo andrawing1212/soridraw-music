@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { CheckCircle2, Crown, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Crown, FlaskConical, Loader2, RefreshCw, Save, Search, ShieldCheck } from 'lucide-react';
 import AdminPageLayout from '../components/AdminPageLayout';
+import { readSplitPerfToolVisibility, writeSplitPerfToolVisibility } from '../components/studio/splitPerfDiagnostics';
 import { ADMIN_PERMISSION_DEFINITIONS, FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import { cn } from '../lib/utils';
 import { auth, db, functions } from '../firebase';
@@ -30,7 +31,11 @@ const parseUser = (uid: string, data: Record<string, any>): AppUserInfo => ({
 const samePermissions = (a: AdminPermissions, b: AdminPermissions) =>
   ADMIN_PERMISSION_DEFINITIONS.every(({ key }) => a[key] === b[key]);
 
+type MasterSettingsTab = 'app-test' | 'admin-permissions';
+
 export default function MasterPermissionsPage() {
+  const [activeTab, setActiveTab] = useState<MasterSettingsTab>('app-test');
+  const [perfToolsVisible, setPerfToolsVisible] = useState(() => readSplitPerfToolVisibility());
   const [admins, setAdmins] = useState<AppUserInfo[]>([]);
   const [drafts, setDrafts] = useState<Record<string, AdminPermissions>>({});
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,7 +113,7 @@ export default function MasterPermissionsPage() {
     <AdminPageLayout
       title="마스터 권한"
       description="현재 관리자만 표시하며 페이지별 접근 권한을 설정합니다."
-      actions={(
+      actions={activeTab === 'admin-permissions' ? (
         <button
           type="button"
           onClick={() => void loadAdmins()}
@@ -118,10 +123,68 @@ export default function MasterPermissionsPage() {
           <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
           새로고침
         </button>
-      )}
+      ) : undefined}
     >
       <div className="space-y-4">
-        <div className="rounded-3xl bg-white/[0.035] p-5">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('app-test')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black transition',
+              activeTab === 'app-test' ? 'bg-zinc-100 text-zinc-950' : 'bg-white/[0.045] text-zinc-400 hover:bg-white/[0.075] hover:text-zinc-100',
+            )}
+          >
+            <FlaskConical className="h-4 w-4" />
+            앱 테스트
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('admin-permissions')}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-black transition',
+              activeTab === 'admin-permissions' ? 'bg-zinc-100 text-zinc-950' : 'bg-white/[0.045] text-zinc-400 hover:bg-white/[0.075] hover:text-zinc-100',
+            )}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            관리자권한관리
+          </button>
+        </div>
+
+        {activeTab === 'app-test' ? (
+          <div className="rounded-3xl bg-white/[0.035] p-5 md:p-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.07] text-zinc-200">
+                  <FlaskConical className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-zinc-100">Studio 앱 테스트 메뉴</h2>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                    Studio 우측의 엔진 비교, 생성바 A/B, V2 드래그·Pure Pane 진단 메뉴와 성능 진단 패널을 마스터 계정에서만 표시합니다. 기본값은 OFF이며 이 기기에서만 저장됩니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-pressed={perfToolsVisible}
+                onClick={() => {
+                  const next = !perfToolsVisible;
+                  setPerfToolsVisible(next);
+                  writeSplitPerfToolVisibility(next);
+                }}
+                className={cn(
+                  'inline-flex min-w-[116px] items-center justify-center rounded-2xl px-5 py-3 text-sm font-black transition',
+                  perfToolsVisible ? 'bg-zinc-100 text-zinc-950' : 'bg-black/25 text-zinc-500 hover:bg-white/[0.06] hover:text-zinc-200',
+                )}
+              >
+                앱 테스트 {perfToolsVisible ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-3xl bg-white/[0.035] p-5">
           <div className="flex items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/[0.07] text-zinc-200">
               <ShieldCheck className="h-5 w-5" />
@@ -238,6 +301,8 @@ export default function MasterPermissionsPage() {
                 <p className="text-sm font-black text-zinc-400">표시할 관리자가 없습니다.</p>
               </div>
             )}
+          </div>
+        )}
           </div>
         )}
       </div>

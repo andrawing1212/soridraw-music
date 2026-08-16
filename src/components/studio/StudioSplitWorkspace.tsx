@@ -1426,9 +1426,34 @@ export default function StudioSplitWorkspace({
     const rawPercent = clampToBounds(startPercent + deltaPercent, bounds);
     const builderPixel = Math.round(safeWidth * (rawPercent / 100));
     const viewportLeft = metricsRef.current.left + builderPixel;
+    const roundedViewportLeft = Math.max(0, Math.round(viewportLeft));
 
     splitter.style.removeProperty('transform');
-    splitter.style.setProperty('left', `${Math.max(0, Math.round(viewportLeft) - 8)}px`, 'important');
+    splitter.style.setProperty('left', `${Math.max(0, roundedViewportLeft - 8)}px`, 'important');
+
+    // 780 — The split-edge collapse buttons are body portals just like the
+    // divider. 659 intentionally lets the divider follow the pointer ahead of
+    // the throttled pane-layout lane in the tablet hot band, but the two portal
+    // buttons were still waiting for that slower lane. When the Result pane hit
+    // its minimum width, its newly revealed collapse control could therefore
+    // appear at the *previous* split position on the left until the next layout
+    // commit. Give these tiny controls the same immediate pixel owner as the
+    // divider. This is only two style writes and does not touch pane reflow.
+    if (builderCollapseToggleRef.current && !builderCollapsedRef.current) {
+      builderCollapseToggleRef.current.style.setProperty(
+        'left',
+        `${Math.max(0, roundedViewportLeft - 43)}px`,
+        'important',
+      );
+    }
+    if (resultCollapseToggleRef.current && !resultCollapsedRef.current) {
+      resultCollapseToggleRef.current.style.removeProperty('right');
+      resultCollapseToggleRef.current.style.setProperty(
+        'left',
+        `${Math.min(window.innerWidth - 43, roundedViewportLeft + 9)}px`,
+        'important',
+      );
+    }
   }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {

@@ -76,6 +76,7 @@ type ExternalGeometryCache = {
   builderToggleLeft: string;
   resultToggleLeft: string;
   heroBuilderWidth: string;
+  floatingOriginLeft: string;
   floatingLeft: string;
   floatingWidth: string;
   collapsedBuilderWidth: string;
@@ -86,6 +87,7 @@ const createEmptyExternalGeometryCache = (): ExternalGeometryCache => ({
   builderToggleLeft: '',
   resultToggleLeft: '',
   heroBuilderWidth: '',
+  floatingOriginLeft: '',
   floatingLeft: '',
   floatingWidth: '',
   collapsedBuilderWidth: '',
@@ -638,15 +640,20 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  // 790 — The Generate bar must follow the same already-known Builder geometry
-  // as the divider on every Lite V2 rAF frame. Keep this helper intentionally
-  // read-free: pointer-down captures the command-anchor insets once, and live
-  // frames only publish the two portal geometry variables (plus the collapsed
-  // tab's Builder width). This preserves the Pure Pane production hot path
-  // without re-enabling hero/toggle/root synchronization.
+  // 795 — Preserve the 794 reduction in inherited custom-property churn, but
+  // restore deterministic live tracking. The 794 `translate` writer can lose
+  // ownership against the floating bar's existing !important/motion style
+  // contract, so the bar may visually stay at its resting position until the
+  // final pointer-up reconciliation.
+  //
+  // Use direct, non-inherited portal geometry instead: `left` follows the live
+  // Builder boundary every Lite V2 rAF frame and `width` is written only when
+  // it actually changes. This is still lighter than 790~793 because we do not
+  // publish inherited --soridraw-action-* variables through the full action-bar
+  // subtree and we keep the collapsed button out of the per-pixel hot path.
   const syncGenerationBarGeometry = useCallback((builderWidth: number) => {
     if (generationBarPerfMode !== 'normal') return;
-    const { left, leftRailEdge } = metricsRef.current;
+    const { left } = metricsRef.current;
     const controls = externalRef.current;
     const cache = externalGeometryCacheRef.current;
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
@@ -660,26 +667,18 @@ export default function LiteStudioSplitWorkspace({
       const floatingLeft = `${actionGeometry.left}px`;
       if (cache.floatingLeft !== floatingLeft) {
         cache.floatingLeft = floatingLeft;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-left', floatingLeft);
+        controls.floatingActionBar.style.setProperty('left', floatingLeft, 'important');
       }
       const floatingWidth = `${actionGeometry.width}px`;
       if (cache.floatingWidth !== floatingWidth) {
         cache.floatingWidth = floatingWidth;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-fixed-width', floatingWidth);
+        controls.floatingActionBar.style.setProperty('width', floatingWidth, 'important');
       }
-    }
-
-    if (controls.collapsedActionButton) {
-      const collapsedBuilderWidth = `${roundedBuilderWidth}px`;
-      if (cache.collapsedBuilderWidth !== collapsedBuilderWidth) {
-        cache.collapsedBuilderWidth = collapsedBuilderWidth;
-        controls.collapsedActionButton.style.setProperty('--soridraw-studio-builder-width', collapsedBuilderWidth);
+      // A stale 794 translate must never stack with the direct live left value.
+      if (cache.floatingOriginLeft !== '') {
+        cache.floatingOriginLeft = '';
       }
-      const collapsedLeftRailEdge = `${Math.max(0, Math.round(leftRailEdge))}px`;
-      if (cache.collapsedLeftRailEdge !== collapsedLeftRailEdge) {
-        cache.collapsedLeftRailEdge = collapsedLeftRailEdge;
-        controls.collapsedActionButton.style.setProperty('--soridraw-studio-left-rail-edge', collapsedLeftRailEdge);
-      }
+      controls.floatingActionBar.style.removeProperty('translate');
     }
   }, [generationBarPerfMode]);
 
@@ -737,6 +736,12 @@ export default function LiteStudioSplitWorkspace({
     resultToggleRef.current?.style.removeProperty('--soridraw-lite-studio-result-toggle-left');
     controls.heroShell?.style.removeProperty('--soridraw-studio-builder-width');
     if (controls.floatingActionBar && !document.documentElement.classList.contains('soridraw-window-resizing')) {
+      // 794: live drag geometry is direct/non-inherited. Remove both the new
+      // properties and any stale 790~793 custom-property values before resting
+      // root geometry takes ownership again.
+      controls.floatingActionBar.style.removeProperty('left');
+      controls.floatingActionBar.style.removeProperty('width');
+      controls.floatingActionBar.style.removeProperty('translate');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }

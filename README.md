@@ -2392,3 +2392,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 장르는 모션 구조/소유권/ease-out은 그대로 유지하고 transition-duration만 180ms로 짧게 보정했다. 스타일/사운드/분위기/주제는 승인된 220ms를 유지한다.
 - 목적은 숫자상 동일 duration이 아니라 실제 화면에서 장르부터 주제까지 접기/펼치기 체감 리듬을 동일하게 맞추는 것이다.
 - Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 생성바, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.
+
+## SORIDRAW 803차 — 최근 생성곡 적용 키워드 컴팩트화 + 접기/펼치기 버튼 통일
+- 기준: 802차.
+- 분할모드 최근 생성곡의 `다음 곡에 적용` 버튼을 36px 높이, 축소된 좌우 패딩/아이콘으로 조정해 기존보다 한 단계 작게 만들었다.
+- 분할모드 `적용된 키워드` 카드의 상단/하단 여백과 헤더 아래 간격을 줄여 접힌 상태 전체 높이를 낮췄다. 펼친 내용/측정 height 로직은 변경하지 않았다.
+- `적용된 키워드` 펼치기/접기 버튼은 Split / Classic Dark / Classic Light 모두 52x32 pill 모양으로 통일했다. 두 상태 모두 밝아진 중성 회색 바탕 + 주황색 Chevron을 사용하며, 상태에 따라 주황 배경으로 바뀌지 않는다.
+- 라이트 모드만 같은 형태를 유지하면서 배경을 밝은 회색 계열로 맞췄다. 버튼 외곽선/그림자는 추가하지 않았다.
+- Pure Pane 하이브리드 기본 엔진, 820/660 경계 전환, 장르~주제 모션, Firebase/Auth/Firestore/Functions/저장 구조는 변경하지 않았다.

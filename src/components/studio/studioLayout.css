@@ -13737,3 +13737,114 @@ body > .soridraw-studio-action-bar--tracking[data-soridraw-placement="floating"]
     height: 20px !important;
   }
 }
+
+/* 803: Recent-song applied-keywords compact layout + one shared neutral toggle.
+ * Split mode keeps the card/button more compact, while the expand/collapse pill
+ * uses the same geometry in Split / Classic Dark / Classic Light. */
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-card {
+  padding: 16px 20px 36px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content .soridraw-result-keywords-card > div:first-child {
+  margin-bottom: 2px !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-apply-next-button {
+  min-width: 0 !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 14px !important;
+  gap: 6px !important;
+  border: 0 !important;
+  border-radius: 11px !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+}
+
+html[data-soridraw-theme="studio-black"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-apply-next-button svg {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* Shared Applied Keywords expand/collapse button shape.
+ * Expanded/collapsed states intentionally keep the same neutral surface;
+ * only the chevron direction changes. */
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"],
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"] {
+  position: absolute !important;
+  left: 50% !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: 5px !important;
+  width: 52px !important;
+  min-width: 52px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: translateX(-50%) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 999px !important;
+  background: #3a3a3d !important;
+  background-color: #3a3a3d !important;
+  color: #e3a13a !important;
+  box-shadow: none !important;
+}
+
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"] svg,
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"] svg {
+  width: 18px !important;
+  height: 18px !important;
+  color: #e3a13a !important;
+  stroke: #e3a13a !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html body #root .soridraw-app-root .soridraw-studio-result-content
+  button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"]:hover,
+  html body #root .soridraw-app-root .soridraw-studio-result-content
+  button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"]:hover {
+    background: #444448 !important;
+    background-color: #444448 !important;
+    color: #e3a13a !important;
+  }
+}
+
+html body #root .soridraw-app-root .soridraw-studio-result-content
+button.soridraw-result-keywords-expand.section-expand-button:not(:disabled):active {
+  transform: translateX(-50%) scale(0.96) !important;
+  background: #404044 !important;
+  color: #e3a13a !important;
+  filter: none !important;
+}
+
+/* Light mode keeps the exact same 52x32 pill geometry, with a light neutral surface. */
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"],
+html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+.soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"] {
+  background: #d8d5d0 !important;
+  background-color: #d8d5d0 !important;
+  color: #e3a13a !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="true"]:hover,
+  html[data-soridraw-theme="classic"][data-soridraw-color-mode="light"] body #root .soridraw-app-root
+  .soridraw-studio-result-content button.soridraw-result-keywords-expand.section-expand-button[data-expanded="false"]:hover {
+    background: #cbc7c1 !important;
+    background-color: #cbc7c1 !important;
+    color: #e3a13a !important;
+  }
+}

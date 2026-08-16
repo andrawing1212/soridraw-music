@@ -324,6 +324,15 @@ export default function LiteStudioSplitWorkspace({
     workspaceHeroHost: null,
   });
   const externalGeometryCacheRef = useRef<ExternalGeometryCache>(createEmptyExternalGeometryCache());
+  // 797 — The Generate bar keeps a stable layout width while the splitter is
+  // moving and uses compositor scale for the in-between visual width. Rebase
+  // only after a meaningful width drift or a responsive composition change.
+  // This removes the last per-pixel width/layout write that 796 still kept.
+  const generationBarLiveBaseRef = useRef<{ node: HTMLElement | null; width: number; mode: ContentResponsiveMode | null }>({
+    node: null,
+    width: 0,
+    mode: null,
+  });
   const dragScrollLocksRef = useRef<Array<{ pane: HTMLElement; edge: 'top' | 'bottom' | 'position'; scrollTop: number }>>([]);
   const dragScrollRestoreFrameRef = useRef<number | null>(null);
   const benchmarkFrameRef = useRef<number | null>(null);
@@ -347,6 +356,7 @@ export default function LiteStudioSplitWorkspace({
     current.heroShell = document.querySelector<HTMLElement>('.soridraw-studio-hero > .soridraw-studio-shell');
     current.workspaceHeroHost = document.getElementById('soridraw-studio-workspace-hero-host');
     externalGeometryCacheRef.current = createEmptyExternalGeometryCache();
+    generationBarLiveBaseRef.current = { node: null, width: 0, mode: null };
     return current;
   }, []);
 
@@ -640,49 +650,73 @@ export default function LiteStudioSplitWorkspace({
     }
   }, []);
 
-  // 796 — Keep 795's deterministic live tracking, but move the common
-  // capped-width horizontal motion back onto the compositor. Writing `left`
-  // every rAF makes the fixed portal participate in layout and was the source
-  // of the visible micro-stutter reported after 795.
+  // 797 — 796 moved X to the compositor, but the floating Generate bar still
+  // wrote `width` for practically every splitter pixel whenever Builder was
+  // narrower than the 896px panel cap. That continuously re-rasterized the
+  // action surface and kept the same micro-stutter. Keep one stable layout
+  // width and express the in-between visual width with scaleX instead.
   //
-  // The live X value is now a registered, NON-INHERITED custom property used
-  // only by the floating portal's translate3d(). Because it does not inherit,
-  // updating it does not dirty the full Generate-bar subtree like the old
-  // --soridraw-action-fixed-left variable did. Width is still written only
-  // when it genuinely changes (the narrow/mobile side of the range).
+  // To avoid visible long-range stretching, rebase the real layout width only
+  // when the target drifts more than 8% from the current base, or when the
+  // mobile/tablet/pc composition changes. Between rebases the hot path is only
+  // two non-inherited custom-property writes (X + scale), so the splitter/panes
+  // retain the 764-style Pure Pane budget while the Generate bar still follows
+  // position AND visual size continuously.
   const syncGenerationBarGeometry = useCallback((builderWidth: number) => {
     if (generationBarPerfMode !== 'normal') return;
     const { left } = metricsRef.current;
     const controls = externalRef.current;
     const cache = externalGeometryCacheRef.current;
+    const bar = controls.floatingActionBar;
+    if (!bar) return;
+
     const roundedBuilderWidth = Math.max(0, Math.round(builderWidth));
     const actionInsets = actionInsetsRef.current ?? { left: 0, right: 0 };
     const anchorLeft = Math.max(0, Math.round(left + actionInsets.left));
     const anchorWidth = Math.max(0, Math.round(roundedBuilderWidth - actionInsets.left - actionInsets.right));
     const actionGutter = getStudioActionFloatingGutter(window.innerWidth, modeRef.current.builder);
     const actionGeometry = resolveStudioActionFloatingGeometry(anchorLeft, anchorWidth, actionGutter);
+    const liveMode = contentResponsiveModeRef.current.builder ?? readContentResponsiveMode(roundedBuilderWidth);
 
-    if (controls.floatingActionBar) {
-      // Keep the layout origin stable while dragging. The stylesheet consumes
-      // --soridraw-action-live-x with translate3d(), so the common PC movement
-      // is compositor-only instead of a per-frame `left` layout write.
-      if (cache.floatingOriginLeft !== '0px') {
-        cache.floatingOriginLeft = '0px';
-        controls.floatingActionBar.style.setProperty('left', '0px', 'important');
-      }
-      const floatingLeft = `${actionGeometry.left}px`;
-      if (cache.floatingLeft !== floatingLeft) {
-        cache.floatingLeft = floatingLeft;
-        controls.floatingActionBar.style.setProperty('--soridraw-action-live-x', floatingLeft);
-      }
-      const floatingWidth = `${actionGeometry.width}px`;
-      if (cache.floatingWidth !== floatingWidth) {
-        cache.floatingWidth = floatingWidth;
-        controls.floatingActionBar.style.setProperty('width', floatingWidth, 'important');
-      }
-      // The individual translate property from 794 is no longer used.
-      controls.floatingActionBar.style.removeProperty('translate');
+    if (cache.floatingOriginLeft !== '0px') {
+      cache.floatingOriginLeft = '0px';
+      bar.style.setProperty('left', '0px', 'important');
     }
+
+    const base = generationBarLiveBaseRef.current;
+    const nodeChanged = base.node !== bar;
+    const modeChanged = base.mode !== liveMode;
+    const widthRatio = base.width > 0 ? actionGeometry.width / base.width : 1;
+    const needsRebase = nodeChanged
+      || base.width <= 0
+      || modeChanged
+      || widthRatio < 0.92
+      || widthRatio > 1.08;
+
+    if (needsRebase) {
+      base.node = bar;
+      base.width = Math.max(1, actionGeometry.width);
+      base.mode = liveMode;
+      const baseWidth = `${base.width}px`;
+      if (cache.floatingWidth !== baseWidth) {
+        cache.floatingWidth = baseWidth;
+        bar.style.setProperty('width', baseWidth, 'important');
+      }
+    }
+
+    const visualScale = base.width > 0 ? actionGeometry.width / base.width : 1;
+    const floatingLeft = `${actionGeometry.left}px`;
+    if (cache.floatingLeft !== floatingLeft) {
+      cache.floatingLeft = floatingLeft;
+      bar.style.setProperty('--soridraw-action-live-x', floatingLeft);
+    }
+    const scaleValue = visualScale.toFixed(5);
+    if (bar.style.getPropertyValue('--soridraw-action-live-scale-x') !== scaleValue) {
+      bar.style.setProperty('--soridraw-action-live-scale-x', scaleValue);
+    }
+
+    // The individual translate property from 794 is no longer used.
+    bar.style.removeProperty('translate');
   }, [generationBarPerfMode]);
 
   const syncExternalGeometry = useCallback((builderWidth: number, splitterLeft: number) => {
@@ -746,6 +780,7 @@ export default function LiteStudioSplitWorkspace({
       controls.floatingActionBar.style.removeProperty('width');
       controls.floatingActionBar.style.removeProperty('translate');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-live-x');
+      controls.floatingActionBar.style.removeProperty('--soridraw-action-live-scale-x');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-left');
       controls.floatingActionBar.style.removeProperty('--soridraw-action-fixed-width');
     }
@@ -754,6 +789,7 @@ export default function LiteStudioSplitWorkspace({
       controls.collapsedActionButton.style.removeProperty('--soridraw-studio-left-rail-edge');
     }
     externalGeometryCacheRef.current = createEmptyExternalGeometryCache();
+    generationBarLiveBaseRef.current = { node: null, width: 0, mode: null };
     actionInsetsRef.current = null;
   }, []);
 

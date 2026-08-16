@@ -2334,3 +2334,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 기존 794의 개별 `translate` 속성은 사용하지 않는다. CSS의 명시적 transform 소유권으로 live 이동을 유지한다.
 - Pure Pane / Lite V2 / 태블릿 fast-path / 생성바 실시간 디자인 경계 / 접기버튼 / 페이지별 geometry 분리는 변경하지 않았다.
 - Firebase/Auth/Firestore/Functions/저장 구조 변경 없음.
+
+
+## SORIDRAW 797차 - 생성바 live width compositor 분리 / 764 체감 2차 복구
+
+- 기준: 796차.
+- 796차에서 X축은 `translate3d()`로 옮겼지만, Builder 폭이 생성바 최대폭(896px + gutter)보다 좁은 대부분의 분할 구간에서는 floating 생성바 `width`를 여전히 거의 매 splitter pixel마다 직접 갱신하고 있었습니다. 이 폭 변경은 생성바 flex subtree와 큰 버튼 surface를 계속 다시 layout/rasterize하므로 X만 compositor로 바꿔도 체감이 거의 변하지 않았습니다.
+- 797차는 드래그 중 생성바의 실제 layout width를 안정된 base width로 유지하고, 목표 폭과의 차이는 non-inherited `--soridraw-action-live-scale-x` + `scaleX()`로 실시간 표현합니다. 위치는 기존 `--soridraw-action-live-x` + `translate3d()`를 그대로 사용합니다.
+- 실제 `width` write는 mobile/tablet/pc 구성 전환 또는 현재 base에서 목표 폭이 ±8%를 넘었을 때만 rebase합니다. 따라서 전체 드래그 동안 per-pixel layout/raster 작업 수를 크게 줄이면서 위치와 시각적 폭은 매 rAF 계속 따라갑니다.
+- pointer-up에서는 live X/scale/width를 제거하고 기존 resting root geometry가 정확한 최종 폭을 다시 소유하므로 release jump가 생기지 않도록 했습니다.
+- Pure Pane / Lite V2 / 태블릿 fast-path / 생성바 660·1080 실시간 디자인 전환 / 최소폭 접기버튼 / 페이지간 생성바 geometry 분리 / Firebase 저장 구조는 변경하지 않았습니다.

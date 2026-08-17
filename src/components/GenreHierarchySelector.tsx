@@ -126,9 +126,10 @@ interface Props {
   onHover: (item: CategoryItem | null) => void;
   onCommitSelection?: (mainId: string | null, subId: string | null, meta?: { removeMainId?: string | null; removeSubId?: string | null }) => void;
   onCommitSelectionList?: (subIds: string[]) => void;
-  isExpanded: boolean;
-  onToggleExpand: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
   isRandomized?: boolean;
+  expandResetToken?: number;
   onHeightChange?: (height: number) => void;
   forcedHeight?: number;
   onModalStateChange?: (isOpen: boolean) => void;
@@ -254,14 +255,31 @@ function GenreHierarchySelectorComponent({
   onHover,
   onCommitSelection,
   onCommitSelectionList,
-  isExpanded,
-  onToggleExpand,
+  isExpanded: controlledExpanded,
+  onToggleExpand: controlledToggleExpand,
   isRandomized = false,
+  expandResetToken = 0,
   onHeightChange,
   forcedHeight,
   onModalStateChange,
   directInput,
 }: Props) {
+  // 829 — Genre expand/collapse owns its visual state locally by default.
+  // This keeps the fast Recent Songs interaction path identical when the right
+  // pane is Music Note or Library: toggling Genre no longer re-renders App or
+  // the heavyweight result page. Controlled props are still supported for any
+  // future caller that explicitly needs external ownership.
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isControlledExpansion = typeof controlledExpanded === 'boolean' && typeof controlledToggleExpand === 'function';
+  const isExpanded = isControlledExpansion ? controlledExpanded : internalExpanded;
+  const onToggleExpand = isControlledExpansion
+    ? controlledToggleExpand
+    : () => setInternalExpanded((prev) => !prev);
+
+  useEffect(() => {
+    if (!isControlledExpansion) setInternalExpanded(false);
+  }, [expandResetToken, isControlledExpansion]);
+
   const [activeGroup, setActiveGroup] = useState<GroupItem | null>(null);
   const [activeMain, setActiveMain] = useState<MainGenreItem | null>(null);
   const [modalStep, setModalStep] = useState<ModalStep>("main");
@@ -1535,6 +1553,7 @@ const GenreHierarchySelector = React.memo(GenreHierarchySelectorComponent, (prev
   return prev.isLocked === next.isLocked &&
          prev.isExpanded === next.isExpanded &&
          prev.isRandomized === next.isRandomized &&
+         prev.expandResetToken === next.expandResetToken &&
          prev.forcedHeight === next.forcedHeight &&
          prev.directInput?.selectedText === next.directInput?.selectedText &&
          isArrayEqual(prev.selectedGenre, next.selectedGenre) &&

@@ -6662,7 +6662,7 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem('soridraw_pinned_instrument_sounds', JSON.stringify(pinnedInstrumentSounds));
   }, [pinnedInstrumentSounds]);
-  const [isGenreExpanded, setIsGenreExpanded] = useState(false);
+  const [genreExpandResetToken, setGenreExpandResetToken] = useState(0);
   const [isStyleExpanded, setIsStyleExpanded] = useState(false);
   const [isSoundExpanded, setIsSoundExpanded] = useState(false);
   const [isMoodExpanded, setIsMoodExpanded] = useState(false);
@@ -6718,9 +6718,8 @@ function App() {
     };
   }, [location.pathname]);
 
-  const toggleMainSections = (section: 'genre' | 'style' | 'sound') => {
-    if (section === 'genre') setIsGenreExpanded(prev => !prev);
-    else if (section === 'style') setIsStyleExpanded(prev => !prev);
+  const toggleMainSections = (section: 'style' | 'sound') => {
+    if (section === 'style') setIsStyleExpanded(prev => !prev);
     else if (section === 'sound') setIsSoundExpanded(prev => !prev);
   };
 
@@ -10319,7 +10318,7 @@ const toggleCycleVariantSelection = (
     setIsStyleRandomized(false);
     setIsSoundTextureRandomized(false);
         // 펼쳐보기 상태 초기화
-    setIsGenreExpanded(false);
+    setGenreExpandResetToken((prev) => prev + 1);
     setIsStyleExpanded(false);
     setIsSoundExpanded(false);
     setIsMoodExpanded(false);
@@ -15176,9 +15175,8 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
                 isLocked={menuLocks.genre}
                 onToggleLock={() => toggleMenuLock('genre')}
                 onHover={setHoveredItem}
-                isExpanded={isGenreExpanded}
-                onToggleExpand={() => toggleMainSections('genre')}
                 isRandomized={isGenreRandomized}
+                expandResetToken={genreExpandResetToken}
                 onHeightChange={setGenreHeight}
                 forcedHeight={!isStudioBlackActionMode && isStudioWideSelectionLayout && row1MaxHeight > 0 ? row1MaxHeight : undefined}
                 onModalStateChange={(isOpen) => { syncActionBarModalBlock(isOpen); setIsGenreHierarchyModalOpen(isOpen); }}
@@ -15349,7 +15347,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onToggleExpand={() => toggleSubSections('mood')}
               onHeightChange={setMoodHeight}
               forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
-              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isMoodRandomized}
               hidePin={true}
               uniformKeywordGrid={true}
@@ -15379,7 +15376,6 @@ const isGlobalSearchSelectionClearable = subGenre.length > 0 || selectedStyles.l
               onToggleExpand={() => toggleSubSections('theme')}
               onHeightChange={setThemeHeight}
               forcedHeight={isStudioTwoColumnSelectionLayout && row2MaxHeight > 0 ? row2MaxHeight : undefined}
-              allExpanded={isGenreExpanded && isMoodExpanded && isThemeExpanded}
               isRandomized={isThemeRandomized}
               hidePin={true}
               uniformKeywordGrid={true}
@@ -20030,7 +20026,6 @@ interface CategorySectionProps {
   hoveredItem: CategoryItem | null;
   isExpanded: boolean;
   onToggleExpand: () => void;
-  allExpanded: boolean;
   kpopMode?: 0 | 1 | 2;
   citypopMode?: 0 | 1 | 2;
   isRandomized?: boolean;
@@ -20066,7 +20061,6 @@ function CategorySectionComponent({
   hoveredItem,
   isExpanded,
   onToggleExpand,
-  allExpanded,
   kpopMode = 0,
   citypopMode = 0,
   isRandomized = false,
@@ -20499,7 +20493,6 @@ const CategorySection = React.memo(CategorySectionComponent, (prev, next) => {
          prev.isLocked === next.isLocked &&
          prev.isRandomized === next.isRandomized &&
          prev.isExpanded === next.isExpanded &&
-         prev.allExpanded === next.allExpanded &&
          prev.kpopMode === next.kpopMode &&
          prev.citypopMode === next.citypopMode &&
          prev.forcedHeight === next.forcedHeight &&

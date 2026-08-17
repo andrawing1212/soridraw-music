@@ -2564,3 +2564,22 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 잠금 상태 hover는 기존 상태보다 아주 조금만 밝아지도록 제한했습니다.
 - 라이트모드는 같은 상태 의미를 유지하되 중립 배경만 라이트 팔레트에 맞게 조정했습니다.
 - 삭제 버튼/Firebase/Auth/Firestore/Functions/분할 엔진은 변경하지 않았습니다.
+
+## 828차 — 장르 접기/펼치기 공통 반응속도: 뮤직노트/라이브러리 무거운 우측 트리 격리
+- 기준: 827차.
+- 최근 생성곡에서는 빠른데 뮤직노트/라이브러리에서만 장르 접기/펼치기 클릭 반응이 늦던 원인을 페이지별 애니메이션 CSS가 아니라 App 재렌더 경로에서 확인했다.
+- 장르 `isGenreExpanded`가 바뀔 때 App 전체가 다시 렌더되면서 우측의 대형 Music Note / Suno Library 리스트도 같이 React 재렌더되던 구조를 분리했다.
+- Music Note의 `HistoryRouteWrapper`를 `React.memo`로 격리하고, App에서 전달하는 액션 함수는 `useStableEvent` 프록시로 고정해 Builder 전용 상태 변화가 콜백 identity 때문에 Music Note를 다시 그리지 않도록 했다. 실제 클릭 시에는 항상 최신 핸들러를 호출한다.
+- Suno Library lazy 페이지도 `React.memo` 래퍼를 사용해 `appUser`가 바뀌지 않는 Builder 접기/펼치기에서는 리스트 전체 재렌더를 건너뛴다. 페이지 내부 state/context 업데이트는 정상적으로 계속 렌더된다.
+- Genre/Style/Sound/Mood/Theme의 기존 공통 801/802 모션 및 Pure Pane 하이브리드 엔진은 변경하지 않았다.
+- Firebase/Auth/Firestore/Functions 저장 구조 및 읽기 방식은 변경하지 않았다.
+
+## 829차 — 장르 펼치기 공통 경로 정리: 페이지별 memo 제거 + Builder 로컬 소유권
+- 기준: 828차.
+- 828차에서 Music Note/Library에만 추가했던 `React.memo + useStableEvent` 페이지별 보정은 제거했습니다.
+- 장르 펼치기/접기 상태를 App 전역 state가 아니라 `GenreHierarchySelector` 내부 로컬 state가 직접 소유하도록 변경했습니다.
+- 따라서 최근 생성곡 / 뮤직노트 / 라이브러리 어느 우측 화면을 보고 있어도 장르 버튼 클릭은 같은 Builder 컴포넌트 내부 경로만 갱신하며 App 전체와 우측 대형 결과 트리를 다시 렌더하지 않습니다.
+- 전체초기화 시 장르 펼침 상태도 기존처럼 접히도록 별도 reset token만 전달하며, 평소 장르 펼치기/접기에는 App state 변경이 발생하지 않습니다.
+- 사용되지 않던 `allExpanded` 전달값도 제거해 장르 로컬 소유권과 충돌할 수 있는 부모 의존성을 정리했습니다.
+- 장르의 802차 체감속도(180ms)와 기존 CSS 모션/디자인은 그대로 유지하며 Style/Sound/Mood/Theme 및 Pure Pane 하이브리드 엔진은 변경하지 않았습니다.
+- Firebase/Auth/Firestore/Functions 저장 구조 및 읽기 방식은 변경하지 않았습니다.

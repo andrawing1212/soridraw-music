@@ -1115,6 +1115,7 @@ function GenreHierarchySelectorComponent({
                 selectedCount > 0 || isRandomized
                   ? genreAccent.selectedSoft
                   : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (selectedCount > 0 || isRandomized) && "soridraw-active-reset-button",
               )}
               title="초기화"
             >

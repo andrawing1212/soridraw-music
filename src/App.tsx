@@ -21811,8 +21811,9 @@ function SongStructureIntegratedControlComponent({
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0)
-                  ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover"
+                  ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                  : "bg-btn-bg border-btn-border text-[var(--text-secondary)] hover:bg-btn-hover",
+                (lyricsLength !== 'normal' || songStructure !== '1' || (customStructure ?? []).length > 0) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />
@@ -24742,8 +24743,9 @@ function VocalControlComponent({
             className={cn(
               "p-2.5 rounded-xl transition-all border shadow-btn",
               (maleCount > 0 || femaleCount > 0)
-                ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+              (maleCount > 0 || femaleCount > 0) && "soridraw-active-reset-button"
             )}
           >
             <Trash2 className="w-4 h-4" />
@@ -25697,8 +25699,9 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
                 className={cn(
                   "p-2.5 rounded-xl transition-all border shadow-btn",
                   (!enabled || min !== 90 || max !== 110)
-                    ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                    ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                    : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                  (!enabled || min !== 90 || max !== 110) && "soridraw-active-reset-button"
                 )}
               >
                 <Trash2 className="w-4 h-4" />
@@ -25735,8 +25738,9 @@ function TempoControlComponent({ enabled, onEnabledChange, min, max, onMinChange
               className={cn(
                 "p-2.5 rounded-xl transition-all border shadow-btn",
                 (!enabled || min !== 90 || max !== 110)
-                  ? "bg-[#FFB400]/20 text-[#FFD36A] border-black/20 hover:bg-[#FFB400]/30" 
-                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover"
+                  ? "bg-[#FFB400]/14 border-black/20 text-[#FFD36A] hover:bg-[#FFB400]/20"
+                  : "bg-btn-bg text-[var(--text-secondary)] border-btn-border hover:bg-btn-hover",
+                (!enabled || min !== 90 || max !== 110) && "soridraw-active-reset-button"
               )}
             >
               <Trash2 className="w-4 h-4" />

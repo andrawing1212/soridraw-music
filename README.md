@@ -2583,3 +2583,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 사용되지 않던 `allExpanded` 전달값도 제거해 장르 로컬 소유권과 충돌할 수 있는 부모 의존성을 정리했습니다.
 - 장르의 802차 체감속도(180ms)와 기존 CSS 모션/디자인은 그대로 유지하며 Style/Sound/Mood/Theme 및 Pure Pane 하이브리드 엔진은 변경하지 않았습니다.
 - Firebase/Auth/Firestore/Functions 저장 구조 및 읽기 방식은 변경하지 않았습니다.
+
+## 830차 — 장르·보컬·가사·템포 리셋 활성 디자인 공통화
+- 기준: 829차.
+- 스타일/사운드/분위기/주제에서 이미 사용 중인 `soridraw-active-reset-button` 공통 활성 상태를 장르, 보컬, 가사, 템포 리셋 버튼에도 동일하게 적용.
+- 활성 조건일 때는 아이콘만 노랗게 보이는 상태가 아니라, 기존 스타일~주제 리셋 버튼과 같은 은은한 앰버/브라운 배경 + 노란 휴지통 아이콘이 보이도록 통일.
+- 비활성 상태, hover, 버튼 크기/위치, 리셋 기능 자체는 변경하지 않음.
+- 템포는 모바일/PC 리셋 버튼 모두 같은 공통 활성 상태를 사용.

@@ -16,6 +16,7 @@ import {
   GEMINI_AUDIT_EVENT,
   getGeminiAuditSessions,
   summarizeGeminiAuditSession,
+  type GeminiAuditModelSkip,
   type GeminiAuditSession,
 } from '../services/geminiAuditLog';
 
@@ -63,6 +64,16 @@ function dateText(value?: string): string {
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+function modelSkipReasonText(skip: GeminiAuditModelSkip): string {
+  if (skip.reason === 'in_flight') return '다른 생성이 같은 모델 시험 중';
+  if (skip.reason === 'slow_success') return '같은 곡에서 느린 성공 모델 제외';
+  if (skip.reason === 'cooldown') {
+    const remaining = skip.remainingMs ? ` · ${durationText(skip.remainingMs)} 남음` : '';
+    return `쿨다운${remaining}`;
+  }
+  return skip.detail || '모델 상태 정책으로 제외';
 }
 
 function statusBadge(session: GeminiAuditSession) {
@@ -244,6 +255,23 @@ export default function AdminGeminiAuditPage() {
                     {session.errorMessage && (
                       <div className="mt-3 rounded-xl border border-red-500/15 bg-red-500/[0.07] px-3 py-2 text-xs leading-5 text-red-300">
                         {session.errorMessage}
+                      </div>
+                    )}
+
+                    {Boolean(session.modelSkips?.length) && (
+                      <div className="mt-4 space-y-1.5">
+                        {session.modelSkips!.map((skip) => (
+                          <div key={skip.id} className="rounded-xl bg-amber-400/[0.065] px-3 py-2 text-[10px] leading-4 text-amber-100/80">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="font-black text-amber-300">{skip.model} 건너뜀</span>
+                              <span>{modelSkipReasonText(skip)}</span>
+                              <span className="text-[var(--text-secondary)]">· {CONTEXT_LABELS[skip.context] || skip.context}</span>
+                            </div>
+                            {skip.detail && skip.reason !== 'in_flight' && (
+                              <div className="mt-0.5 break-words text-[var(--text-secondary)]">사유: {skip.detail}</div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
 

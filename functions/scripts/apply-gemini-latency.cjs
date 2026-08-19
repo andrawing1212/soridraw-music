@@ -130,6 +130,54 @@ replaceOnce(
 );
 
 replaceOnce(
+  '850 thinking policy request flag',
+  '    const latencyPolicy: GeminiLatencyPolicy = req.body?.latencyPolicy === "bounded-v1" ? "bounded-v1" : null;',
+  '    const latencyPolicy: GeminiLatencyPolicy = req.body?.latencyPolicy === "bounded-v1" ? "bounded-v1" : null;\n    const thinkingPolicy = req.body?.thinkingPolicy === "initial-36-low-v1" ? "initial-36-low-v1" : null;',
+);
+
+replaceOnce(
+  '850 initial 3.6 low thinking',
+  `        const attemptPayload = normalizeGeminiServerAttemptRequest(
+          requestPayload,
+          attemptModel,
+          fallbackInstruction,
+          index > 0 || attemptModel !== model,
+        );`,
+  `        const attemptPayload = normalizeGeminiServerAttemptRequest(
+          requestPayload,
+          attemptModel,
+          fallbackInstruction,
+          index > 0 || attemptModel !== model,
+        );
+        const isInitialSongContext = context === "generateSong"
+          || context === "generateSongCompactFallback"
+          || context.startsWith("languageMixLockedWholeRewrite")
+          || context.startsWith("generateSong v2");
+        if (thinkingPolicy === "initial-36-low-v1"
+          && attemptModel === "gemini-3.6-flash"
+          && isInitialSongContext) {
+          const existingConfig = attemptPayload?.config && typeof attemptPayload.config === "object"
+            ? attemptPayload.config
+            : {};
+          const existingThinkingConfig = existingConfig?.thinkingConfig && typeof existingConfig.thinkingConfig === "object"
+            ? existingConfig.thinkingConfig
+            : {};
+          attemptPayload.config = {
+            ...existingConfig,
+            thinkingConfig: {
+              ...existingThinkingConfig,
+              thinkingLevel: "low",
+            },
+          };
+          console.info("[Gemini 850 Thinking] initial 3.6 request uses low thinking", {
+            context,
+            sessionId,
+            model: attemptModel,
+          });
+        }`,
+);
+
+replaceOnce(
   'server model-aware busy cooldown',
   `          const status = attemptRecord.statusCode || 500;
           const isPolicyTimeout = String(attemptRecord.code || "").trim() === "GEMINI_ATTEMPT_TIMEOUT";
@@ -208,4 +256,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(securedPath, source, 'utf8');
-console.log('Applied SORIDRAW 849 Gemini latency policy: adaptive busy cooldown + per-model in-flight coordination.');
+console.log('Applied SORIDRAW 850 Gemini policy: 849 latency/in-flight + opt-in initial 3.6 low-thinking experiment.');

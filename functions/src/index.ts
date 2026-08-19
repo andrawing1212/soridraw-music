@@ -841,6 +841,47 @@ const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promis
   });
 };
 
+const reserveGeminiFallbackAttempt = async (uid: string, sessionId: string): Promise<void> => {
+  const db = admin.firestore();
+  const guardRef = db.collection("gemini_request_guards").doc(uid);
+  const now = Date.now();
+
+  // 838: fallback stays inside the same Function invocation, but every physical
+  // Gemini upstream call still consumes the existing per-minute/session ceiling.
+  // Only this single guard document is touched for fallback attempts; Auth, App Check,
+  // account state and API-key reads are not repeated.
+  await db.runTransaction(async (tx) => {
+    const guardSnap = await tx.get(guardRef);
+    const data = guardSnap.data() || {};
+
+    const minuteWindowStart = Number(data.minuteWindowStart || 0);
+    const sameMinuteWindow = minuteWindowStart > 0 && now - minuteWindowStart < 60_000;
+    const minuteCount = sameMinuteWindow ? Math.max(0, Number(data.minuteCount || 0)) : 0;
+    if (minuteCount >= GEMINI_MAX_REQUESTS_PER_MINUTE) {
+      throw new HttpsError("resource-exhausted", "짧은 시간에 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    const sessionWindowStart = Number(data.sessionWindowStart || 0);
+    const sameSessionWindow = sessionWindowStart > 0 && now - sessionWindowStart < GEMINI_SESSION_WINDOW_MS;
+    const sessionCounts = sameSessionWindow && data.sessionCounts && typeof data.sessionCounts === "object"
+      ? { ...data.sessionCounts }
+      : {};
+    const sessionCount = Math.max(0, Number(sessionCounts[sessionId] || 0));
+    if (sessionCount >= GEMINI_MAX_REQUESTS_PER_SESSION) {
+      throw new HttpsError("resource-exhausted", "곡 하나의 Gemini 호출 상한에 도달했습니다.");
+    }
+    sessionCounts[sessionId] = sessionCount + 1;
+
+    tx.set(guardRef, {
+      minuteWindowStart: sameMinuteWindow ? minuteWindowStart : now,
+      minuteCount: minuteCount + 1,
+      sessionWindowStart: sameSessionWindow ? sessionWindowStart : now,
+      sessionCounts,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+};
+
 const releaseGeminiRequestGuard = async (uid: string): Promise<void> => {
   const guardRef = admin.firestore().collection("gemini_request_guards").doc(uid);
   try {
@@ -1067,6 +1108,9 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
       promptTokenCount: Number(usage.total_input_tokens || 0) || undefined,
       candidatesTokenCount: Number(usage.total_output_tokens || 0) || undefined,
       thoughtsTokenCount: Number(usage.total_thought_tokens || 0) || undefined,
+      // Interactions API implicit caching is automatic on Gemini 2.5+ models.
+      // Surface cache hits through the same generateContent-shaped metadata used by the admin audit UI.
+      cachedContentTokenCount: Number(usage.total_cached_tokens || 0) || undefined,
       totalTokenCount: Number(usage.total_tokens || 0) || undefined,
     },
     modelVersion: String(payload?.model || model),
@@ -1134,6 +1178,83 @@ const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): P
     throw error;
   }
   return payload || {};
+};
+
+type GeminiServerAttemptRecord = {
+  model: string;
+  status: "success" | "failed";
+  durationMs: number;
+  usageMetadata?: any;
+  errorMessage?: string;
+  statusCode?: number;
+  code?: string | number;
+};
+
+const normalizeGeminiServerAttemptRequest = (
+  requestPayload: any,
+  model: string,
+  fallbackInstruction: string,
+  isFallbackAttempt: boolean,
+): any => {
+  const next = {
+    ...(requestPayload || {}),
+    model,
+    config: requestPayload?.config && typeof requestPayload.config === "object"
+      ? { ...requestPayload.config }
+      : requestPayload?.config,
+  };
+
+  if ((model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
+    delete next.config.temperature;
+    delete next.config.topP;
+    delete next.config.topK;
+  }
+
+  if (isFallbackAttempt && fallbackInstruction && next.config) {
+    const currentInstruction = next.config.systemInstruction;
+    if (typeof currentInstruction === "string") {
+      next.config.systemInstruction = [currentInstruction, fallbackInstruction].filter(Boolean).join("\n\n");
+    } else if (currentInstruction && typeof currentInstruction === "object" && Array.isArray(currentInstruction.parts)) {
+      next.config.systemInstruction = {
+        ...currentInstruction,
+        parts: [
+          ...currentInstruction.parts,
+          { text: `\n\n${fallbackInstruction}` },
+        ],
+      };
+    } else {
+      next.config.systemInstruction = fallbackInstruction;
+    }
+  }
+
+  return next;
+};
+
+const normalizeGeminiServerModelChain = (primaryModel: string, rawChain: any): string[] => {
+  const requested = Array.isArray(rawChain)
+    ? rawChain.map((item: any) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const chain = [primaryModel, ...requested.filter((model: string) => model !== primaryModel)]
+    .filter((model, index, all) => Boolean(model) && all.indexOf(model) === index)
+    .filter((model) => GEMINI_ALLOWED_MODELS.has(model))
+    .slice(0, GEMINI_MAX_REQUESTS_PER_SESSION);
+  return chain.length ? chain : [primaryModel];
+};
+
+const isGeminiServerFallbackStatus = (status: number): boolean =>
+  status === 404 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+
+const buildGeminiServerAttemptError = (error: unknown, apiKey: string, model: string, durationMs: number): GeminiServerAttemptRecord => {
+  const anyError = error as any;
+  const statusCode = extractGeminiErrorStatus(error);
+  return {
+    model,
+    status: "failed",
+    durationMs,
+    errorMessage: sanitizeGeminiErrorMessage(error, apiKey),
+    statusCode,
+    code: anyError?.code || statusCode,
+  };
 };
 
 const pickFirstString = (...values: any[]): string => {
@@ -1866,6 +1987,8 @@ export const generateGeminiContent = onRequest(
     const sessionId = String(req.body?.sessionId || "").trim();
     const context = String(req.body?.context || "Gemini 호출").trim().slice(0, 120);
     const fallbackAttempt = Math.max(1, Math.min(5, Math.round(Number(req.body?.fallbackAttempt) || 1)));
+    const modelChain = normalizeGeminiServerModelChain(model, req.body?.modelChain);
+    const fallbackInstruction = String(req.body?.fallbackInstruction || "").trim().slice(0, 5000);
 
     if (!requestPayload || typeof requestPayload !== "object" || !model || !GEMINI_ALLOWED_MODELS.has(model)) {
       res.status(400).json({ error: "Unsupported Gemini request", code: "INVALID_GEMINI_REQUEST", ok: false });
@@ -1885,6 +2008,7 @@ export const generateGeminiContent = onRequest(
 
     let guardAcquired = false;
     let apiKey = "";
+    const attempts: GeminiServerAttemptRecord[] = [];
     try {
       apiKey = await acquireGeminiRequestGuard(uid, sessionId);
       guardAcquired = true;
@@ -1893,25 +2017,70 @@ export const generateGeminiContent = onRequest(
         return;
       }
 
-      const response = await callGeminiGenerateContent(apiKey, requestPayload);
-      const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
-        ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
-        : "";
-      res.json({
-        ok: true,
-        text,
-        usageMetadata: response.usageMetadata || null,
-        modelVersion: response.modelVersion || model,
-        responseId: response.responseId || null,
-        promptFeedback: response.promptFeedback || null,
-        context,
-        fallbackAttempt,
-      });
+      let lastUpstreamError: unknown = null;
+      for (let index = 0; index < modelChain.length; index += 1) {
+        const attemptModel = modelChain[index];
+        if (index > 0) {
+          await reserveGeminiFallbackAttempt(uid, sessionId);
+        }
+
+        const attemptPayload = normalizeGeminiServerAttemptRequest(
+          requestPayload,
+          attemptModel,
+          fallbackInstruction,
+          index > 0,
+        );
+        const attemptStartedAt = Date.now();
+        try {
+          const response = await callGeminiGenerateContent(apiKey, attemptPayload);
+          const durationMs = Math.max(0, Date.now() - attemptStartedAt);
+          attempts.push({
+            model: attemptModel,
+            status: "success",
+            durationMs,
+            usageMetadata: response.usageMetadata || null,
+          });
+          const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
+            ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
+            : "";
+          res.json({
+            ok: true,
+            text,
+            usageMetadata: response.usageMetadata || null,
+            modelVersion: response.modelVersion || attemptModel,
+            responseId: response.responseId || null,
+            promptFeedback: response.promptFeedback || null,
+            usedModel: attemptModel,
+            attempts,
+            context,
+            fallbackAttempt: Math.min(5, fallbackAttempt + index),
+          });
+          return;
+        } catch (upstreamError) {
+          lastUpstreamError = upstreamError;
+          const durationMs = Math.max(0, Date.now() - attemptStartedAt);
+          const attemptRecord = buildGeminiServerAttemptError(upstreamError, apiKey, attemptModel, durationMs);
+          attempts.push(attemptRecord);
+          const status = attemptRecord.statusCode || 500;
+          const canFallback = index < modelChain.length - 1 && isGeminiServerFallbackStatus(status);
+          if (!canFallback) throw upstreamError;
+          console.warn("[Gemini Server Fallback] advancing model inside one Function request", {
+            context,
+            sessionId,
+            from: attemptModel,
+            to: modelChain[index + 1],
+            status,
+            physicalAttempt: fallbackAttempt + index,
+          });
+        }
+      }
+      if (lastUpstreamError) throw lastUpstreamError;
+      throw new Error("Gemini server fallback chain ended without a response.");
     } catch (error) {
       const requestError = error as any;
       if (requestError instanceof HttpsError) {
         const status = requestError.code === "permission-denied" ? 403 : requestError.code === "resource-exhausted" ? 429 : 400;
-        res.status(status).json({ error: requestError.message, code: requestError.code, ok: false });
+        res.status(status).json({ error: requestError.message, code: requestError.code, attempts, ok: false });
         return;
       }
       const status = extractGeminiErrorStatus(error);
@@ -1931,6 +2100,7 @@ export const generateGeminiContent = onRequest(
                 ? "GEMINI_UPSTREAM_UNAVAILABLE"
                 : "GEMINI_UPSTREAM_ERROR",
         ...(upstreamReason ? { upstreamReason } : {}),
+        attempts,
         ok: false,
       });
     } finally {

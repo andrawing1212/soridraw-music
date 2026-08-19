@@ -111,10 +111,11 @@ export default function AdminGeminiAuditPage() {
       acc.prompt += summary.promptTokens;
       acc.output += summary.outputTokens;
       acc.thoughts += summary.thoughtsTokens;
+      acc.cached += summary.cachedTokens;
       acc.total += summary.totalTokens;
       acc.failed += summary.failedCallCount;
       return acc;
-    }, { sessions: 0, calls: 0, prompt: 0, output: 0, thoughts: 0, total: 0, failed: 0 });
+    }, { sessions: 0, calls: 0, prompt: 0, output: 0, thoughts: 0, cached: 0, total: 0, failed: 0 });
   }, [sessions]);
 
   const handleClear = () => {
@@ -148,7 +149,7 @@ export default function AdminGeminiAuditPage() {
     >
       <div className="rounded-2xl border border-amber-400/15 bg-amber-400/[0.055] px-4 py-3 text-xs leading-5 text-amber-100/75">
         현재 기록은 <strong className="text-amber-200">이 브라우저·이 기기에서 발생한 호출만</strong> 저장합니다. 프롬프트와 가사 원문은 저장하지 않고, 호출 사유·모델·토큰·시간·오류만 보관합니다.<br />
-        곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 3회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 보통 2회입니다.
+        곡 생성은 <strong className="text-amber-200">실제 API 요청 최대 5회</strong>, 그중 자동 품질 보정은 <strong className="text-amber-200">최대 1회</strong>로 강제 제한됩니다. 정상 생성은 1회이고, 필수 섹션 누락·개발 섹션의 극단적 밀도 부족·금지어 교정이 실제로 필요할 때만 추가 호출됩니다.
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -172,7 +173,7 @@ export default function AdminGeminiAuditPage() {
           ['입력 토큰', totals.prompt],
           ['출력 토큰', totals.output],
           ['추론 토큰', totals.thoughts],
-          ['전체 토큰', totals.total],
+          ['캐시 적중', totals.cached],
         ].map(([label, value]) => (
           <div key={String(label)} className="rounded-xl border border-btn-border bg-btn-bg px-3 py-2.5">
             <div className="text-[11px] font-bold text-[var(--text-secondary)]">{label}</div>
@@ -273,6 +274,7 @@ export default function AdminGeminiAuditPage() {
                             <span>입력 {numberText(call.usage.promptTokens)}</span>
                             <span>출력 {numberText(call.usage.outputTokens)}</span>
                             <span>추론 {numberText(call.usage.thoughtsTokens)}</span>
+                            {call.usage.cachedTokens > 0 && <span>캐시 {numberText(call.usage.cachedTokens)}</span>}
                             <span>전체 {numberText(call.usage.totalTokens)}</span>
                           </div>
                           {call.errorMessage && (

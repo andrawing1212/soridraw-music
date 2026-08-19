@@ -2596,7 +2596,7 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - AI Studio `Get code`에서 확인된 실제 모델 ID `models/gemini-3.7-flash`를 SORIDRAW 최우선 생성 모델로 추가했습니다.
 - 3.7 Flash는 AI Studio가 생성한 최신 호출 방식에 맞춰 Firebase Function 내부에서 Gemini Interactions API(`/v1beta/interactions`)를 사용합니다. 브라우저/가사 엔진은 기존 `models.generateContent` 인터페이스를 그대로 사용하고 서버가 응답을 기존 형식으로 정규화하므로 프롬프트 엔진 구조는 변경하지 않았습니다.
 - 자동 모델 전환 순서는 `3.7 Flash → 3.6 Flash → 3.5 Flash → 3.5 Flash-Lite → 3.1 Flash-Lite`로 확장했습니다.
-- 자동 전환은 기존 원칙대로 upstream `429` 또는 `503`에서만 진행하며, 3.7 단계적 공개로 특정 API 프로젝트에서 모델이 아직 보이지 않는 경우를 위해 Google 공식 오류 가이드의 `404 model_not_found`도 모델 전환 사유로 제한적으로 허용합니다.
+- 자동 전환은 upstream `429` 또는 서버가 `GEMINI_UPSTREAM_UNAVAILABLE`로 명확히 분류한 일시적 `500/502/503/504`에서 진행하며, 3.7 단계적 공개로 특정 API 프로젝트에서 모델이 아직 보이지 않는 경우를 위해 `404 model_not_found`도 모델 전환 사유로 제한적으로 허용합니다.
 - 곡당 물리 Gemini 호출 절대 상한과 Functions 세션 상한을 3회에서 5회로 함께 올렸습니다. 자동 품질 보정은 기존 최대 1회 제한을 그대로 유지합니다.
 - 3.7 요청은 `thinking_level=medium`, `store=false`로 서버에서 고정하고 기존 structured JSON schema를 Interactions API의 `response_format` 형태로 변환합니다.
 - Gemini 개인 API 키는 계속 브라우저로 내려오지 않으며 `user_api_keys/{uid}`의 서버 전용 키를 매 실제 요청마다 읽는 기존 보안 구조를 유지합니다.
@@ -2618,3 +2618,47 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 요청 종료 시 `activeCount` 해제를 위해 Firestore 문서를 다시 읽는 트랜잭션을 사용하던 경로를 원자적 `FieldValue.increment(-1)` 단일 쓰기로 변경해, Gemini 물리 호출 1회당 Firestore 읽기 1회와 트랜잭션 왕복을 추가로 줄였습니다.
 - Firestore 문서 구조, API Key 저장 위치, 호출 제한 값, Gemini 3.7 및 5단 fallback 순서는 변경하지 않았습니다.
 
+## 834차 — Gemini 입력 토큰 중복 제거 + 암시적 캐시 가시화
+
+- 기준: `SORIDRAW_833차_GeminiFunctions_Firestore왕복최적화.zip`
+- 메인 V1 생성 system instruction 안에서 동일한 `lyricDensityInstruction`과 `arrangementSectionPlanInstruction`이 각각 두 번 삽입되던 중복을 제거했다. 규칙 자체는 삭제하지 않고 각 1회만 유지해 품질/우선순위 의미는 그대로 둔다.
+- Gemini 3.7 Interactions API가 반환하는 `usage.total_cached_tokens`를 기존 감사 메타데이터의 `cachedContentTokenCount`로 전달한다. Google의 implicit caching은 2.5+ 모델에서 자동이며, 별도 캐시 저장 객체를 만들지 않는다.
+- 관리자 `Gemini 호출 기록`에서 캐시 적중 토큰을 확인할 수 있게 했고, 오래된 `최대 3회` 안내 문구를 현재 실제 제한인 `최대 5회`로 수정했다.
+- Firebase/Auth/App Check/Firestore 저장 구조와 API Key 보안 경로는 변경하지 않았다.
+
+
+
+## 835차 - Gemini 3.7 고수요 500 자동전환 보완
+- 실제 테스트에서 Gemini 3.7 Flash가 `HTTP 500 GEMINI_UPSTREAM_UNAVAILABLE`(high demand)로 실패했을 때 기존 판별기가 503만 허용해 3.6으로 넘어가지 못하는 경로를 확인했습니다.
+- 모델 자동전환은 이제 서버가 명시적으로 `GEMINI_UPSTREAM_UNAVAILABLE`로 분류한 500/502/503/504에 한해서 다음 모델로 진행합니다. 400/401/403, 스키마 오류, App Check/Auth/로컬 guard 오류는 계속 즉시 중단합니다.
+- 서버 프록시와 Firestore/Auth/App Check 구조는 변경하지 않았습니다.
+
+## 836차 — 시간 우선 Gemini 모델 쿨다운 캐시 / 서버 호출 절감
+- 기준: 835차.
+- 429, 명시적 일시 5xx, 모델 404가 발생한 모델은 사용자 브라우저의 로컬 cooldown 캐시에 잠시 기록한다.
+- 429는 provider retry 문구를 존중하되 최소 2분, transient 5xx는 최소 45초, rollout 404는 30분 동안 자동 fallback 체인에서 건너뛴다.
+- 쿨다운 중인 모델은 Firebase Function 자체를 호출하지 않으므로 실패 응답을 기다리는 시간, Function invocation, Firestore guard 읽기/쓰기, Auth/App Check 전달을 함께 줄인다.
+- 쿨다운으로 건너뛴 모델은 곡당 5회 물리 호출 예산에도 포함하지 않는다. 실제 서버에 나간 요청만 예산을 소비한다.
+- 모든 모델이 쿨다운이면 생성 자체가 막히지 않도록 가장 먼저 풀릴 모델 1개를 선택해 시도한다.
+- API 키/프롬프트/생성 결과는 캐시에 저장하지 않는다. 캐시에는 모델명, 만료 시각, 실패 종류만 저장한다.
+- Functions/Firebase 저장 구조 변경 없음. 이번 차수는 프론트 반영만으로 동작한다.
+
+## 837차 — Gemini 쿨다운 전 생성 경로 공통화 / 재호출 대기 제거
+- 836차 실사용에서 최초 곡 생성의 `gemini-3.7-flash` 429 이후에도 같은 곡의 금지어/repair 단계가 다시 3.7을 호출하는 경로가 확인되었다.
+- 원인은 모델 쿨다운이 Firebase Auth UID가 아직 준비되지 않은 순간에는 브라우저 저장소에 기록되지 않아, 뒤이은 교정 호출이 같은 실패 모델을 다시 선택할 수 있었던 것이다.
+- 쿨다운을 탭 메모리의 즉시 공통 상태로 먼저 기록하고 localStorage는 새로고침 유지용 보조 캐시로 사용한다.
+- Auth가 생성 도중 준비되는 경우 guest 쿨다운을 로그인 사용자 스코프로 자동 승계한다.
+- 따라서 최초 생성/금지어 통합 교정/repair/언어혼합 재시도 등 `generateContentWithModelFallback`을 쓰는 모든 경로가 같은 쿨다운을 즉시 공유한다.
+- 3.7에서 429가 한 번 확인되면 쿨다운 동안 이후 호출은 Firebase Function 자체를 3.7 용도로 다시 호출하지 않고 즉시 다음 사용 가능 모델부터 시작한다.
+- API Key, 프롬프트, 가사 결과는 캐시에 저장하지 않는다. Firebase/Auth/Firestore 저장 구조와 Functions 코드는 변경하지 않았다.
+
+## 838차 — Gemini fallback 서버 1회 호출 통합 / Function 왕복 절감
+- 기준: 837차.
+- `generateContentWithModelFallback`의 모델 전환을 브라우저에서 Function을 모델마다 다시 호출하는 방식에서, 한 번의 `generateGeminiContent` 요청 안에 이미 필터링된 모델 체인을 전달하고 Functions 내부에서 다음 모델로 전환하는 방식으로 변경했습니다.
+- 정상 모델 1회 성공 경로는 기존과 동일하게 Gemini 물리 호출 1회이며, fallback이 필요할 때만 같은 Function 실행 안에서 다음 모델을 호출합니다.
+- Auth/App Check 확인, 사용자 상태/API Key Firestore 읽기, 기본 요청 guard 획득은 logical operation당 1회만 수행합니다. fallback 추가 물리 호출은 기존 5회/분당 제한을 보존하기 위해 `gemini_request_guards` 단일 문서만 가볍게 추가 예약합니다.
+- 곡당 물리 Gemini 호출 최대 5회와 자동 품질 보정 최대 1회 제한은 유지됩니다. 서버가 429/404/명시적 500/502/503/504에서만 다음 모델로 진행하며, 400/401/403/스키마/Auth/App Check/앱 guard 오류는 그대로 중단합니다.
+- 서버가 각 실제 모델 시도의 성공/실패, 처리시간, 토큰 메타데이터를 브라우저에 반환해 기존 관리자 Gemini 호출 기록은 물리 호출 단위로 계속 표시됩니다.
+- 836~837의 브라우저 모델 cooldown도 유지합니다. 이미 쿨다운된 모델은 서버 체인에 포함되지 않아 Function 내부에서도 불필요하게 다시 시도하지 않습니다.
+- API Key/프롬프트/가사 결과를 새 캐시에 저장하지 않으며 Firestore 문서 구조도 변경하지 않습니다.
+- `functions/src/index.ts`가 변경되므로 실제 적용 시 `generateGeminiContent` Function 재배포가 필요합니다.

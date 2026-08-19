@@ -135,6 +135,24 @@ Gemini 토큰비 보호만을 목적으로 Free/Basic/Pro에 강한 일일 생�
 ## 831차 Gemini fallback 상한 변경 메모
 - Gemini 3.7 Flash 도입과 함께 자동 fallback 후보가 5개로 늘어 곡당 물리 호출 절대 상한도 3회 → 5회로 변경되었다.
 - 정상 상태에서는 첫 모델 1회 성공이 기본이므로 평상시 평균 호출 수가 자동으로 5회가 되는 구조는 아니다.
-- 추가 호출은 자동 전환 ON + 명시적 429/503/모델 rollout 404 상황에서만 발생한다.
+- 추가 호출은 자동 전환 ON + 명시적 upstream 429 또는 일시적 500/502/503/504, 모델 rollout 404 상황에서만 발생한다.
 - 자동 품질 보정은 기존 최대 1회 제한을 유지한다.
 - 따라서 비용 추정 시 평상시 평균 호출률과 별도로 장애/쿼터 소진 시 최악 5회 물리 호출 가능성을 비상 상한으로 계산한다.
+
+### 836 — 모델 실패 쿨다운을 브라우저에 두는 이유
+- Gemini 3.7이 429/일시 5xx 상태일 때 매 보정/다음 곡마다 먼저 같은 실패를 기다리면 지연과 Firebase Function 호출이 동시에 늘어난다.
+- 따라서 실패 상태 자체만 로컬에 짧게 캐시하고, 살아 있는 다음 모델부터 바로 시작한다.
+- 저장 항목은 모델명/만료시각/실패종류뿐이며 사용자 API 키, 프롬프트, 생성 결과는 저장하지 않는다.
+- 서버 warm-memory에 API 키를 캐시하는 방식은 키 삭제/교체 즉시성 및 보안 경계를 흐릴 수 있으므로 사용하지 않는다.
+- 장기 방향: 반복 fallback을 서버 한 invocation 안으로 합치는 것은 별도 성능 검증 후 진행한다. 현재 단계에서는 기존 보안/감사 구조를 유지하면서 불필요한 invocation부터 제거한다.
+
+### 837 — latency-first model cooldown continuity
+- A confirmed upstream 429/temporary unavailable model is suppressed across every browser generation pass for the active cooldown window.
+- Session memory is authoritative for immediate continuity; localStorage only preserves the short-lived model name/reason/expiry across refreshes.
+- No API key, prompt, lyric, generated result, token, or user content is cached by this optimization.
+
+### 838 — fallback Function invocation consolidation
+- Known cooldown models are still removed in the browser before any Function call.
+- When an unknown upstream failure requires fallback, the browser no longer repeats Auth/App Check + full guard/API-key Firestore reads for every model. One Function invocation owns the bounded fallback chain.
+- Every additional upstream Gemini attempt still increments the existing per-minute/session physical request guard using only the single guard document, preserving the 5-request ceiling without repeating user/API-key reads.
+- No API key or user prompt/result is cached in Function memory. Security and key-rotation immediacy are unchanged.

@@ -1579,7 +1579,7 @@ Gemini 3.7 Flash
 ### fallback 및 비용 가드
 
 - 자동 전환 ON일 때만 다음 모델로 이동한다.
-- 허용 사유는 upstream `429 rate/quota`, `503 unavailable`, 그리고 3.7 단계적 rollout 호환을 위한 명시적 `404 model_not_found`다.
+- 허용 사유는 upstream `429 rate/quota`, 명시적 `GEMINI_UPSTREAM_UNAVAILABLE`로 분류된 일시적 `500/502/503/504`, 그리고 3.7 단계적 rollout 호환을 위한 명시적 `404 model_not_found`다.
 - auth/billing/schema/content/network/품질 문제는 다음 모델 호출을 만들지 않는다.
 - 곡당 물리 Gemini 호출 절대 상한: 최대 5회.
 - Functions 세션 상한: 최대 5회.
@@ -1591,3 +1591,17 @@ Gemini 3.7 Flash
 - 사용자 Gemini API Key는 브라우저로 반환하지 않는다.
 - Firebase Auth + App Check + Functions 서버 프록시 + `user_api_keys/{uid}` 서버 읽기 구조를 유지한다.
 - Firestore 문서 구조나 기존 사용자 데이터 형식은 변경하지 않는다.
+
+### 836 Gemini cooldown path
+`generateContentWithModelFallback` 앞단에 사용자별 localStorage 모델 cooldown을 둔다. 429/명시적 transient 5xx/rollout 404에서만 기록하며, 활성 cooldown 모델은 물리 요청 전에 제거한다. 따라서 알려진 실패 모델은 `geminiProxyClient -> generateGeminiContent Function -> Firestore guard` 경로 자체를 타지 않는다. 정상 성공 시 해당 모델 cooldown은 즉시 해제된다.
+
+### 837 — Gemini cooldown shared across every generation pass
+- Temporary model cooldown is now written to in-memory session state before persistence, so the initial generation and all correction/repair passes share the same failure knowledge immediately.
+- Guest cooldown state is migrated into the authenticated user scope if Firebase Auth hydrates after the first call.
+- Cooldown-skipped models do not create a Firebase Function request and do not consume the physical Gemini request budget.
+
+### 838 — server-contained Gemini fallback
+- Browser sends one logical `generateGeminiContent` request with the cooldown-filtered model chain.
+- Functions performs model fallback inside that same invocation only for explicit 429, 404 rollout mismatch, or transient 500/502/503/504.
+- Primary Auth/App Check/account/API-key reads happen once. Each extra physical Gemini attempt only reserves the existing guard counter on `gemini_request_guards` so the 5-call physical ceiling remains enforced.
+- Server returns per-attempt model/status/duration/usage metadata so the existing local admin audit stays physical-call accurate.

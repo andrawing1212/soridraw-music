@@ -1594,20 +1594,3 @@ Gemini 3.7 Flash
 
 ### 836 Gemini cooldown path
 `generateContentWithModelFallback` 앞단에 사용자별 localStorage 모델 cooldown을 둔다. 429/명시적 transient 5xx/rollout 404에서만 기록하며, 활성 cooldown 모델은 물리 요청 전에 제거한다. 따라서 알려진 실패 모델은 `geminiProxyClient -> generateGeminiContent Function -> Firestore guard` 경로 자체를 타지 않는다. 정상 성공 시 해당 모델 cooldown은 즉시 해제된다.
-
-### 837 — Gemini cooldown shared across every generation pass
-- Temporary model cooldown is now written to in-memory session state before persistence, so the initial generation and all correction/repair passes share the same failure knowledge immediately.
-- Guest cooldown state is migrated into the authenticated user scope if Firebase Auth hydrates after the first call.
-- Cooldown-skipped models do not create a Firebase Function request and do not consume the physical Gemini request budget.
-
-### 838 — server-contained Gemini fallback
-- Browser sends one logical `generateGeminiContent` request with the cooldown-filtered model chain.
-- Functions performs model fallback inside that same invocation only for explicit 429, 404 rollout mismatch, or transient 500/502/503/504.
-- Primary Auth/App Check/account/API-key reads happen once. Each extra physical Gemini attempt only reserves the existing guard counter on `gemini_request_guards` so the 5-call physical ceiling remains enforced.
-- Server returns per-attempt model/status/duration/usage metadata so the existing local admin audit stays physical-call accurate.
-
-### 839 — server cooldown hint synchronization
-- A server-contained fallback now returns explicit failed-model cooldown hints with retry timing in the same successful Function response.
-- The browser immediately persists those hints into the existing per-user cooldown store, so the next song/correction omits known-busy models before the Function request is built.
-- A best-effort warm-instance cache keyed by user+model protects against repeated 429/404/transient-5xx probes when browser state is missing. It stores only model/status/expiry metadata, never keys, prompts, lyrics or generated content.
-- Server-skipped cooldown models are not counted as physical Gemini attempts and do not appear as fake audit calls.

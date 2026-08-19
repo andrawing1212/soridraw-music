@@ -1,6 +1,7 @@
 import type { GoogleGenAI } from '@google/genai';
 import { auth, getFirebaseAppCheckToken } from '../firebase';
 import { getGeminiModelCooldown } from './geminiModelPreferences';
+import { recordGeminiAuditModelSkips } from './geminiAuditLog';
 
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
@@ -298,6 +299,9 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     ...preFilteredCooldownSkips,
     ...concurrentResult.skips,
   ]);
+  if (localModelSkips.length) {
+    recordGeminiAuditModelSkips({ sessionId, context, skips: localModelSkips });
+  }
   if (modelChain.length && String(requestParams?.model || '').trim() !== modelChain[0]) {
     requestParams.model = modelChain[0];
   }
@@ -331,6 +335,9 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     ...localModelSkips,
     ...getServerCooldownSkips(payload, context, modelChain, serverAttempts),
   ]);
+  if (modelSkips.length) {
+    recordGeminiAuditModelSkips({ sessionId, context, skips: modelSkips });
+  }
   recordSlowSuccessModels(sessionId, serverAttempts);
   if (!response.ok || !payload?.ok) {
     const error = normalizeProxyError(response.status, payload);

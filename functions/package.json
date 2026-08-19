@@ -1,7 +1,7 @@
 {
   "name": "functions",
   "scripts": {
-    "prebuild": "node scripts/build-secured-index.cjs && node scripts/apply-847-gemini-latency.cjs",
+    "prebuild": "node scripts/build-secured-index.cjs && node scripts/apply-gemini-latency.cjs",
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",

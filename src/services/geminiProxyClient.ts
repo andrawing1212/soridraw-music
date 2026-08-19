@@ -4,6 +4,12 @@ import { auth, getFirebaseAppCheckToken } from '../firebase';
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
 const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
+const INITIAL_SONG_MODEL_CHAIN = [
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.1-flash-lite',
+] as const;
 const FAST_REPAIR_MODEL_CHAIN = [
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
@@ -87,26 +93,45 @@ function normalizeRequestedModelChain(meta: any, requestParams: any): string[] {
   return normalized.length ? normalized : requested;
 }
 
+function isInitialSongGenerationContext(context: string): boolean {
+  const clean = String(context || '').trim();
+  return clean === 'generateSong'
+    || clean === 'generateSongCompactFallback'
+    || clean.startsWith('languageMixLockedWholeRewrite')
+    || clean.startsWith('generateSong v2');
+}
+
 function resolveLatencyModelChain(meta: any, requestParams: any): string[] {
   const context = String(meta?.context || '').trim();
   const sessionId = String(meta?.sessionId || '').trim();
   const requested = normalizeRequestedModelChain(meta, requestParams);
-  if (context !== FAST_REPAIR_CONTEXT) return requested;
 
-  // Respect the user's auto-fallback choice. A one-model incoming chain means
-  // the repair also stays single-model, but it starts on the latency-oriented 3.5 model.
-  const fastBase = requested.length > 1
-    ? [...FAST_REPAIR_MODEL_CHAIN]
-    : [FAST_REPAIR_MODEL_CHAIN[0]];
-  const slowModels = getSlowSuccessModels(sessionId);
-  const filtered = fastBase.filter((model) => !slowModels.has(model));
-  const resolved = filtered.length ? filtered : fastBase;
-  if (slowModels.size && filtered.length) {
-    console.warn(
-      `[SORIDRAW Gemini Latency] ${context}: skipping same-song slow-success model(s) ${Array.from(slowModels).join(', ')}`,
-    );
+  if (context === FAST_REPAIR_CONTEXT) {
+    // Respect the user's auto-fallback choice. A one-model incoming chain means
+    // the repair also stays single-model, but it starts on the latency-oriented 3.5 model.
+    const fastBase = requested.length > 1
+      ? [...FAST_REPAIR_MODEL_CHAIN]
+      : [FAST_REPAIR_MODEL_CHAIN[0]];
+    const slowModels = getSlowSuccessModels(sessionId);
+    const filtered = fastBase.filter((model) => !slowModels.has(model));
+    const resolved = filtered.length ? filtered : fastBase;
+    if (slowModels.size && filtered.length) {
+      console.warn(
+        `[SORIDRAW Gemini Latency] ${context}: skipping same-song slow-success model(s) ${Array.from(slowModels).join(', ')}`,
+      );
+    }
+    return resolved;
   }
-  return resolved;
+
+  if (isInitialSongGenerationContext(context) && requested.length > 1) {
+    // 848: 3.5 Flash is useful for small repair work but repeatedly spent the full
+    // 30-second ceiling after a 3.6 busy/timeout on large ~34K song requests.
+    // Keep 3.7 -> 3.6 quality priority, then move directly to Flash-Lite.
+    const initialFastChain = INITIAL_SONG_MODEL_CHAIN.filter((model) => requested.includes(model));
+    if (initialFastChain.length) return initialFastChain;
+  }
+
+  return requested;
 }
 
 async function generateContentViaFirebase(params: any): Promise<any> {
@@ -126,7 +151,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   const sessionId = String(meta.sessionId || '').trim();
   const context = String(meta.context || 'Gemini 호출').trim();
   const modelChain = resolveLatencyModelChain(meta, requestParams);
-  if (context === FAST_REPAIR_CONTEXT && modelChain.length) {
+  if (modelChain.length && String(requestParams?.model || '').trim() !== modelChain[0]) {
     requestParams.model = modelChain[0];
   }
 
@@ -144,8 +169,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
       fallbackAttempt: Math.max(1, Math.round(Number(meta.fallbackAttempt) || 1)),
       modelChain: modelChain.length ? modelChain : undefined,
       fallbackInstruction: String(meta.fallbackInstruction || '').trim().slice(0, 5000) || undefined,
-      // 846 preview opts in explicitly. The shared Function keeps 845/main behavior
-      // unchanged for clients that do not send this policy flag.
+      // The bounded latency policy is explicit so older cached clients remain backward-compatible.
       latencyPolicy: GEMINI_LATENCY_POLICY,
     }),
   });

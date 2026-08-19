@@ -3,6 +3,7 @@ import { auth, getFirebaseAppCheckToken } from '../firebase';
 
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
+const GEMINI_THINKING_POLICY = 'initial-36-low-v1' as const;
 const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
 const INITIAL_SONG_MODEL_CHAIN = [
   'gemini-3.7-flash',
@@ -211,6 +212,9 @@ async function generateContentViaFirebase(params: any): Promise<any> {
       fallbackInstruction: String(meta.fallbackInstruction || '').trim().slice(0, 5000) || undefined,
       // The bounded latency policy is explicit so older cached clients remain backward-compatible.
       latencyPolicy: GEMINI_LATENCY_POLICY,
+      // 850 preview experiment: only initial large-song requests that actually land on 3.6
+      // opt into low thinking. Older/main clients do not send this flag.
+      thinkingPolicy: GEMINI_THINKING_POLICY,
     }),
   }).finally(releaseClientInFlight);
 

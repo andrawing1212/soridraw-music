@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   deploy:
@@ -43,4 +43,40 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
       - name: Deploy generateGeminiContent only
-        run: npx --yes firebase-tools@latest deploy --only functions:generateGeminiContent --project soridraw-app-866a5 --non-interactive
+        id: deploy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only functions:generateGeminiContent --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/gemini-853-deploy.log
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          if [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            STATUS=success
+          else
+            STATUS=failure
+          fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "function=generateGeminiContent"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "--- deploy log tail ---"
+            tail -n 100 /tmp/gemini-853-deploy.log 2>/dev/null || true
+          } > .deploy/gemini-853-deploy-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/gemini-853-deploy-result.txt
+          git commit -m "chore(853): record Gemini function deploy result" || true
+          git push origin HEAD:preview
+
+      - name: Fail workflow when deploy failed
+        if: steps.deploy.outcome != 'success'
+        run: exit 1

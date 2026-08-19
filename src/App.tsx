@@ -10603,8 +10603,8 @@ const toggleCycleVariantSelection = (
       setMaxBPM(max);
     }
   };
-const saveRecentSong = async (newSong: any) => {
-  if (!user) return;
+const saveRecentSongsBatch = async (newSongs: any[]) => {
+  if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
 
   const saveOperation = async () => {
     try {
@@ -10612,7 +10612,7 @@ const saveRecentSong = async (newSong: any) => {
       const snap = await getDoc(ref);
       const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
       const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-      const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
+      const updatedSongs = mergeRecentSongLists(newSongs, firestoreSongs, recoverySongs);
 
       await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
       recentSongsReadyToCacheRef.current = true;
@@ -10626,11 +10626,14 @@ const saveRecentSong = async (newSong: any) => {
   };
 
   // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
-  // read-merge-write sequence in completion order so one finished song cannot overwrite another.
+  // read-merge-write sequence in completion order so one finished batch cannot overwrite another.
+  // A multi-song generation is persisted with one read + one write instead of one pair per song.
   const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
   recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
   await chainedSave;
 };
+
+const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
 
   /* 
   useEffect(() => {
@@ -11453,18 +11456,24 @@ const saveRecentSong = async (newSong: any) => {
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
-      for (const item of generatedResults) {
-        await saveRecentSong(item);
-      }
-
-      // Increment songGeneratedCount in users document
-      if (user) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          songGeneratedCount: increment(generatedResults.length)
-        }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
-      }
-
       setHistoryIndex(0);
+
+      // 841 — Result-ready and persistence-ready are different states.
+      // Once Gemini has returned the complete song, release the generation queue immediately.
+      // Firestore recent-song persistence and the user counter continue in the existing serialized
+      // background save chain, so a slow Firestore/network response can no longer leave the UI
+      // spinner stuck for minutes after the finished song is already visible.
+      void (async () => {
+        await saveRecentSongsBatch(generatedResults);
+        if (user) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            songGeneratedCount: increment(generatedResults.length)
+          }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
+        }
+      })().catch((error) => {
+        console.error('Failed to persist completed generation in background:', error);
+      });
+
       return {
         success: true,
         generationBatchId,

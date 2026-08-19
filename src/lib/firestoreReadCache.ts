@@ -38,7 +38,14 @@ export const writeFirestoreReadCache = <T,>(key: string, data: T) => {
     const envelope: CacheEnvelope<T> = { cachedAt: Date.now(), data };
     window.localStorage.setItem(key, JSON.stringify(envelope));
   } catch {
-    // Storage can be unavailable in private/restricted browser contexts.
+    // A failed write must never leave an older cache value looking current.
+    // Remove only this expendable SORIDRAW read-cache key; never touch Auth,
+    // Firestore SDK internals, or unrelated site storage.
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Storage can be unavailable in private/restricted browser contexts.
+    }
   }
 };
 

@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, getToken as getAppCheckToken } from "firebase/app-check";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, browserSessionPersistence } from "firebase/auth";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -100,22 +100,23 @@ googleProvider.setCustomParameters({
 });
 let firestoreDb;
 try {
-  // Persistent multi-tab cache is enabled on local/AI-Studio development hosts,
-  // and on user devices only when "remember login" marks the browser as trusted.
-  // This lets short development reloads/reconnects reuse IndexedDB instead of
-  // behaving like brand-new listener queries, while session-only user logins keep
-  // the default memory cache.
-  const shouldUsePersistentFirestoreCache = readRememberLoginPreference()
-    || isAiStudioPreview
+  // Auth persistence and Firestore cache persistence are intentionally independent.
+  // "Remember login" controls only Firebase Auth. Deployed SORIDRAW apps always use
+  // the in-memory Firestore cache so a full browser storage quota cannot break the
+  // Firestore client's multi-tab persistence metadata and crash the whole app.
+  // Persistent multi-tab cache remains development-only for short local/AI Studio
+  // reload cycles where clearing browser storage is part of the development workflow.
+  const shouldUsePersistentFirestoreCache = isAiStudioPreview
     || currentHostname === "localhost"
     || currentHostname === "127.0.0.1";
-  firestoreDb = shouldUsePersistentFirestoreCache
-    ? initializeFirestore(app, {
-        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-      })
-    : getFirestore(app);
+
+  firestoreDb = initializeFirestore(app, {
+    localCache: shouldUsePersistentFirestoreCache
+      ? persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+      : memoryLocalCache(),
+  });
 } catch (error) {
-  console.warn("[Firestore] persistent cache unavailable; using memory cache:", error);
+  console.warn("[Firestore] cache initialization unavailable; using default memory cache:", error);
   firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;

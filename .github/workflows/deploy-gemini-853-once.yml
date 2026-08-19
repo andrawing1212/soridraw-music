@@ -1,0 +1,46 @@
+name: Deploy Gemini 853 once
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .deploy/gemini-853-trigger.txt
+
+concurrency:
+  group: deploy-gemini-853-once
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy generateGeminiContent 853
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy generateGeminiContent only
+        run: npx --yes firebase-tools@latest deploy --only functions:generateGeminiContent --project soridraw-app-866a5 --non-interactive

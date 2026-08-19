@@ -2684,3 +2684,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 이제 완성 결과를 메모리/최근곡 UI에 반영한 즉시 생성 큐를 `completed`로 전환하고, 최근곡 Firestore 저장과 `songGeneratedCount` 갱신은 기존 직렬 저장 체인에서 백그라운드로 이어집니다.
 - 2곡 이상 한 번에 생성할 때 최근곡 저장도 곡마다 `getDoc + setDoc`을 반복하지 않고 배치 전체를 한 번의 `getDoc + setDoc`으로 병합 저장합니다.
 - Firebase/Auth/App Check/Gemini API Key 저장 구조는 변경하지 않았고 Functions 변경도 없습니다.
+
+## 842차 — 배포앱 관리자/Firestore 일시 오류 격리
+- 배포앱에서 Firestore `resource-exhausted`/일시 네트워크 오류가 발생해도 이미 현재 로그인 세션에서 서버 확인된 관리자 권한을 즉시 `free`로 강등하지 않습니다. 로그인 계정이 바뀌면 검증 플래그를 반드시 초기화해 다른 계정으로 권한이 넘어가지 않습니다.
+- 관리자 공통 레이아웃의 사용자 권한 `onSnapshot`에 오류 콜백을 추가해 일시적인 Firestore 오류가 앱 전체 ErrorBoundary를 터뜨리지 않도록 했습니다.
+- 관리자 메뉴의 화면 표시만 동일 UID의 기존 admin 캐시를 임시 fallback으로 사용할 수 있게 했습니다. 실제 관리자 라우트 접근 권한은 기존 App의 라이브 권한 게이트가 계속 담당합니다.
+- ErrorBoundary가 단순히 `limit`라는 단어가 있다는 이유만으로 모든 오류를 `무료 생성 한도`로 오인하던 조건을 제거하고, Gemini 429/쿼터와 Firebase 데이터 제한을 구분합니다.
+- 라우트가 바뀌면 ErrorBoundary 상태도 새로 시작하도록 해 한 페이지 오류가 다른 페이지까지 영구 고정되지 않게 했습니다.
+- Firebase/Auth/Firestore 저장 구조, Functions, Gemini 모델/fallback 구조는 변경하지 않았습니다.

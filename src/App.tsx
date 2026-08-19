@@ -699,8 +699,10 @@ class ErrorBoundary extends Component<any, any> {
       if (error?.message) {
         if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(error.message)) {
           errorMessage = "마이페이지에서 개인 Gemini API 키를 등록해주세요.";
-        } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
-          errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
+        } else if (/GEMINI_RATE_LIMITED|generate_content_.*(?:quota|limit)|gemini[^\n]*(?:quota|rate.?limit)|(?:quota|rate.?limit)[^\n]*gemini|HTTP\s*429/i.test(error.message)) {
+          errorMessage = "Gemini 생성 사용량 또는 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.";
+        } else if (/firestore|firebase/i.test(error.message) && /resource[-_ ]exhausted|quota/i.test(error.message)) {
+          errorMessage = "Firebase 데이터 요청이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요.";
         } else {
           try {
             const parsed = JSON.parse(error.message);
@@ -3186,7 +3188,7 @@ export default function AppWrapper() {
   }
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary key={location.pathname}>
       <GlobalPlayerProvider>
         <App />
       </GlobalPlayerProvider>
@@ -4550,6 +4552,11 @@ function App() {
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
   const hasCompletedForceLogoutReentryCheckRef = useRef(false);
+  // 842 — A transient Firestore outage/quota response must not revoke a role that
+  // was already verified from the server for this exact signed-in identity.
+  // This flag is reset on every auth identity change, so a different account can
+  // never inherit the previous account's admin authority.
+  const hasVerifiedCurrentUserRoleFromServerRef = useRef(false);
   const lastFavoriteSyncSignalIdRef = useRef<string>('');
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
@@ -8162,6 +8169,7 @@ const toggleCycleVariantSelection = (
       setForcedLogoutCountdown(10);
       lastForcedLogoutTimeRef.current = 0;
       hasCompletedForceLogoutReentryCheckRef.current = false;
+      hasVerifiedCurrentUserRoleFromServerRef.current = false;
       
       if (unsubFavs) {
         unsubFavs();
@@ -8242,6 +8250,9 @@ const toggleCycleVariantSelection = (
         // immediately, but force-logout and session writes wait for the server copy.
         unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
           const isServerSnapshot = !docSnap.metadata.fromCache;
+          if (isServerSnapshot) {
+            hasVerifiedCurrentUserRoleFromServerRef.current = true;
+          }
 
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -8305,11 +8316,28 @@ const toggleCycleVariantSelection = (
               void createMissingUserDocOnce();
             }
           }
-        }, (error) => {
+        }, (error: any) => {
           console.error('Failed to sync user role:', error);
-          // 765: a failed role read must fail closed. Do not leave a previous
-          // account's admin/staff state alive when the new identity cannot be
-          // verified.
+          const firestoreCode = String(error?.code || '').toLowerCase();
+          const transientReadFailure = [
+            'resource-exhausted',
+            'unavailable',
+            'deadline-exceeded',
+            'aborted',
+            'internal',
+          ].some((code) => firestoreCode.includes(code));
+
+          // 842 — If this exact identity already received a server snapshot during
+          // the current auth session, a temporary Firestore quota/network failure
+          // must keep the last verified role instead of knocking the whole deployed
+          // admin UI back to a non-admin state. Permission/auth failures still fail
+          // closed, and every identity change resets the verification flag above.
+          if (transientReadFailure && hasVerifiedCurrentUserRoleFromServerRef.current) {
+            console.warn('[Firestore role] transient read failure; keeping last server-verified role for current identity.');
+            return;
+          }
+
+          // 765 safety remains for first-read failures and real permission/auth errors.
           setUserRole('free');
           setStaffRole(null);
           setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });

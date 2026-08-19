@@ -1,0 +1,58 @@
+status=success
+run_id=32312854936
+commit=fc9e317354a36bbc18e8fb8ccff2863ce35b1fbf
+target_project=soridraw-app-866a5
+function=generateGeminiContent
+finished_at=2026-08-19T23:22:49Z
+
+--- deploy log tail ---
+
+[1m[37m===[39m Deploying to 'soridraw-app-866a5'...[22m
+
+[36m[1mi [22m[39m deploying [1mfunctions[22m
+Running command: npm --prefix "$RESOURCE_DIR" run build
+
+> prebuild
+> node scripts/build-secured-index.cjs && node scripts/apply-gemini-latency.cjs
+
+Generated src/securedIndex.ts with Music API App Check monitoring.
+Applied SORIDRAW 853 Gemini policy: Retry-After based 429 cooldown + 850 low-thinking + 849 in-flight.
+
+> build
+> tsc
+
+[32m[1m✔ [22m[39m [32m[1mfunctions:[22m[39m Finished running [1mpredeploy[22m script.
+[36m[1mi  functions:[22m[39m preparing codebase [1mdefault[22m for deployment
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudfunctions.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mcloudbuild.googleapis.com[22m is enabled...
+[36m[1mi  artifactregistry:[22m[39m ensuring required API [1martifactregistry.googleapis.com[22m is enabled...
+[32m[1m✔  functions:[22m[39m required API [1mcloudbuild.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mcloudfunctions.googleapis.com[22m is enabled
+[32m[1m✔  artifactregistry:[22m[39m required API [1martifactregistry.googleapis.com[22m is enabled
+[33m[1m⚠ [22m[39m [1m[33mfunctions: [39m[22mpackage.json indicates an outdated version of firebase-functions. Please upgrade using [1mnpm install --save firebase-functions@latest[22m in your functions directory.
+[33m[1m⚠ [22m[39m [1m[33mfunctions: [39m[22mPlease note that there will be breaking changes when you upgrade.
+[36m[1mi  functions:[22m[39m Loading and analyzing source code for codebase default to determine what to deploy
+[36m[1mi  functions:[22m[39m You are using a version of firebase-functions SDK (4.9.0) that does not have support for the newest Firebase Extensions features. Please update firebase-functions SDK to >=5.1.0 to use them correctly
+Serving at port 8596
+
+[36m[1mi  functions:[22m[39m preparing [1mfunctions[22m directory for uploading...
+[36m[1mi [22m[39m [36m[1mfunctions:[22m[39m packaged [1m/home/runner/work/soridraw-music/soridraw-music/functions[22m (209.27 KB) for uploading
+[36m[1mi [22m[39m [36m[1mfunctions:[22m[39m packaged [1m/home/runner/work/soridraw-music/soridraw-music/functions[22m (209.52 KB) for uploading
+[36m[1mi  functions:[22m[39m ensuring required API [1mrun.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1meventarc.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mpubsub.googleapis.com[22m is enabled...
+[36m[1mi  functions:[22m[39m ensuring required API [1mstorage.googleapis.com[22m is enabled...
+[32m[1m✔  functions:[22m[39m required API [1mpubsub.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1meventarc.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mrun.googleapis.com[22m is enabled
+[32m[1m✔  functions:[22m[39m required API [1mstorage.googleapis.com[22m is enabled
+[36m[1mi  functions:[22m[39m generating the service identity for [1mpubsub.googleapis.com[22m...
+[36m[1mi  functions:[22m[39m generating the service identity for [1meventarc.googleapis.com[22m...
+[32m[1m✔  functions:[22m[39m [1mfunctions[22m source uploaded successfully
+[36m[1mi  functions:[22m[39m updating Node.js 22 (2nd Gen) function [1mgenerateGeminiContent(us-central1)[22m...
+[32m[1m✔ [22m[39m [1m[32mfunctions[generateGeminiContent(us-central1)][39m[22m Successful update operation.
+[1mFunction URL[22m (generateGeminiContent(us-central1)): https://generategeminicontent-kg5gftakjq-uc.a.run.app
+
+[32m[1m✔ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/soridraw-app-866a5/overview

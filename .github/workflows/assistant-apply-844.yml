@@ -1,0 +1,62 @@
+name: Apply SORIDRAW 844 to main
+
+on:
+  push:
+    branches:
+      - assistant-deploy-844
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout staging branch
+        uses: actions/checkout@v4
+        with:
+          ref: assistant-deploy-844
+          fetch-depth: 0
+
+      - name: Reconstruct and verify 843-844 patch
+        shell: bash
+        run: |
+          cat .deploy/assistant_844_patch_00.b64 .deploy/assistant_844_patch_01.b64 | base64 -d > /tmp/soridraw-844.patch
+          echo "6ef9ebfb786c782172d20ca208f7989a3db6ae091fd47118f8fbcb7a308871fe  /tmp/soridraw-844.patch" | sha256sum -c -
+
+      - name: Restore exact 842 baseline and apply 843-844
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout -B assistant-main origin/main
+          git read-tree --reset -u 6d5c56a6b71e098e582c007e8eb022df9a08edd4
+          git apply --check /tmp/soridraw-844.patch
+          git apply /tmp/soridraw-844.patch
+          test "$(git hash-object src/App.tsx)" = "a21955d5c4d416952fbc859f470f1959de4f6d12"
+          test "$(git hash-object src/components/AdminPageLayout.tsx)" = "7f4c7f28a63d339deb6f6e18d39f569dd73a17df"
+          test "$(git hash-object src/pages/MyPage.tsx)" = "8620556f6fee51e4c1f673c8dbc594e8af3ab22e"
+          test "$(git hash-object README.md)" = "aa3a4a8c52b7f6420be9dde916df571de4cfed52"
+          test "$(git hash-object src/services/geminiService.ts)" = "66275ca7fb53a90162394e694e93e79ffc982f9b"
+          test "$(git hash-object functions/src/index.ts)" = "091bcc4df009e47314eb50f9a1debe06aaf7b80f"
+          git add -A
+          git diff --cached --check
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Production build
+        run: npm run build
+
+      - name: Commit and push main
+        shell: bash
+        run: |
+          git config user.name "SORIDRAW Deploy Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "fix: deploy SORIDRAW 844 Firestore recovery"
+          git push origin HEAD:main

@@ -777,22 +777,23 @@ const GEMINI_MAX_ACTIVE_REQUESTS = 2;
 const GEMINI_MAX_REQUESTS_PER_SESSION = 5;
 const GEMINI_GUARD_STALE_MS = 3 * 60 * 1000;
 const GEMINI_SESSION_WINDOW_MS = 10 * 60 * 1000;
-const getStoredGeminiApiKey = async (uid: string): Promise<string> => {
-  // Read the current server-only key for every real Gemini request. One Firestore read is
-  // intentionally preferred over caching private keys in warm instance memory, so key
-  // deletion or replacement takes effect immediately across all Function instances.
-  const snap = await admin.firestore().collection("user_api_keys").doc(uid).get();
-  return String(snap.data()?.googleGeminiApiKey || "").trim();
-};
 
-const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promise<void> => {
+const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promise<string> => {
   const db = admin.firestore();
   const guardRef = db.collection("gemini_request_guards").doc(uid);
   const userRef = db.collection("users").doc(uid);
+  const apiKeyRef = db.collection("user_api_keys").doc(uid);
   const now = Date.now();
 
-  await db.runTransaction(async (tx) => {
-    const [userSnap, guardSnap] = await Promise.all([tx.get(userRef), tx.get(guardRef)]);
+  // Keep the private Gemini key uncached, but read it inside the same transaction round-trip
+  // as the account/rate guard. Key deletion or replacement still takes effect immediately
+  // across warm instances without an extra Firestore request after the guard is acquired.
+  return db.runTransaction(async (tx) => {
+    const [userSnap, guardSnap, apiKeySnap] = await Promise.all([
+      tx.get(userRef),
+      tx.get(guardRef),
+      tx.get(apiKeyRef),
+    ]);
     const userData = userSnap.data() || {};
     const role = String(userData.role || "free");
     const accountStatus = String(userData.accountStatus || "active");
@@ -835,22 +836,20 @@ const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promis
       sessionCounts,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+
+    return String(apiKeySnap.data()?.googleGeminiApiKey || "").trim();
   });
 };
 
 const releaseGeminiRequestGuard = async (uid: string): Promise<void> => {
-  const db = admin.firestore();
-  const guardRef = db.collection("gemini_request_guards").doc(uid);
+  const guardRef = admin.firestore().collection("gemini_request_guards").doc(uid);
   try {
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(guardRef);
-      if (!snap.exists) return;
-      const activeCount = Math.max(0, Number(snap.data()?.activeCount || 0) - 1);
-      tx.set(guardRef, {
-        activeCount,
-        activeUpdatedAt: Date.now(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
+    // The active counter is already serialized on acquire. Releasing only needs an atomic
+    // decrement, so avoid a second read/transaction after every Gemini response.
+    await guardRef.update({
+      activeCount: admin.firestore.FieldValue.increment(-1),
+      activeUpdatedAt: Date.now(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
   } catch (error) {
     console.warn("[Gemini Guard] failed to release active request:", error instanceof Error ? error.message : String(error));
@@ -1887,9 +1886,8 @@ export const generateGeminiContent = onRequest(
     let guardAcquired = false;
     let apiKey = "";
     try {
-      await acquireGeminiRequestGuard(uid, sessionId);
+      apiKey = await acquireGeminiRequestGuard(uid, sessionId);
       guardAcquired = true;
-      apiKey = await getStoredGeminiApiKey(uid);
       if (!apiKey) {
         res.status(404).json({ error: "Google Gemini API Key is not registered", code: "GEMINI_KEY_NOT_FOUND", ok: false });
         return;

@@ -2610,3 +2610,11 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 현재 실제 잠금 버전인 `firebase-functions 4.9.0`은 패키지 engine이 `node >=14.10.0`이라 Node 22 범위에 포함되고, 현재 SORIDRAW Functions는 Firebase Extensions API를 사용하지 않으므로 이번 차수에서는 SDK 메이저 업그레이드를 하지 않았습니다.
 - Firebase CLI의 `firebase-functions SDK >=5.1.0` 경고는 최신 Extensions 기능 지원 경고이므로, Gemini 3.7 배포 검증과 SDK 메이저 업그레이드를 한 번에 섞지 않도록 분리했습니다. SDK 업그레이드는 실제 배포 확인 후 별도 차수에서 진행할 수 있습니다.
 - 831차의 Gemini 3.7 Flash / 5단 자동 전환 / Auth / App Check / Firestore 저장 구조는 변경하지 않았습니다.
+
+## 833차 — Gemini Functions Firestore 왕복 최적화
+- `generateGeminiContent`의 보안 구조(Auth/App Check/서버 전용 API Key/요청 가드)는 그대로 유지했습니다.
+- Gemini API Key는 서버 메모리에 캐시하지 않습니다. 키 변경/삭제가 모든 Function 인스턴스에 즉시 반영되는 기존 보안 성질을 유지합니다.
+- 기존에는 요청 가드 트랜잭션 완료 후 `user_api_keys`를 별도 Firestore 요청으로 다시 읽었지만, 이제 계정/가드/API Key를 같은 트랜잭션 읽기 단계에서 가져와 별도 왕복 1회를 제거했습니다.
+- 요청 종료 시 `activeCount` 해제를 위해 Firestore 문서를 다시 읽는 트랜잭션을 사용하던 경로를 원자적 `FieldValue.increment(-1)` 단일 쓰기로 변경해, Gemini 물리 호출 1회당 Firestore 읽기 1회와 트랜잭션 왕복을 추가로 줄였습니다.
+- Firestore 문서 구조, API Key 저장 위치, 호출 제한 값, Gemini 3.7 및 5단 fallback 순서는 변경하지 않았습니다.
+

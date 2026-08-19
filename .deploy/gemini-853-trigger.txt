@@ -1,6 +1,0 @@
-Deploy SORIDRAW 853 generateGeminiContent only.
-Target project: soridraw-app-866a5
-Source branch: preview
-Official Firebase Hosting: do not deploy.
-Attempt: 2
-Requested: 2026-08-20T08:16:00+09:00

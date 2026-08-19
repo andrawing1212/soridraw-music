@@ -1,5 +1,6 @@
 import type { GoogleGenAI } from '@google/genai';
 import { auth, getFirebaseAppCheckToken } from '../firebase';
+import { getGeminiModelCooldown } from './geminiModelPreferences';
 
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
@@ -25,6 +26,47 @@ const CLIENT_INFLIGHT_COORDINATED_MODELS = new Set([
 ]);
 const clientModelInFlightCounts = new Map<string, number>();
 
+type GeminiProxyModelSkip = {
+  id: string;
+  context: string;
+  model: string;
+  reason: 'cooldown' | 'in_flight' | 'slow_success' | 'other';
+  detail?: string;
+  remainingMs?: number;
+  createdAtMs: number;
+};
+
+function createModelSkip(
+  context: string,
+  model: string,
+  reason: GeminiProxyModelSkip['reason'],
+  options?: { detail?: string; remainingMs?: number },
+): GeminiProxyModelSkip {
+  const createdAtMs = Date.now();
+  return {
+    id: `gemini-skip-${createdAtMs}-${Math.random().toString(36).slice(2, 9)}`,
+    context: String(context || 'Gemini 호출').trim() || 'Gemini 호출',
+    model: String(model || '').trim(),
+    reason,
+    detail: String(options?.detail || '').trim() || undefined,
+    remainingMs: Number.isFinite(Number(options?.remainingMs))
+      ? Math.max(0, Math.round(Number(options?.remainingMs)))
+      : undefined,
+    createdAtMs,
+  };
+}
+
+function dedupeModelSkips(skips: GeminiProxyModelSkip[]): GeminiProxyModelSkip[] {
+  const seen = new Set<string>();
+  return skips.filter((skip) => {
+    if (!skip.model) return false;
+    const key = `${skip.context}|${skip.model}|${skip.reason}|${skip.detail || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function isClientModelInFlight(model: string): boolean {
   const normalized = String(model || '').trim();
   if (!CLIENT_INFLIGHT_COORDINATED_MODELS.has(normalized)) return false;
@@ -45,16 +87,27 @@ function acquireClientModelInFlight(model: string): () => void {
   };
 }
 
-function avoidConcurrentModelProbe(modelChain: string[], context: string): string[] {
-  if (modelChain.length <= 1) return modelChain;
+function avoidConcurrentModelProbe(
+  modelChain: string[],
+  context: string,
+): { modelChain: string[]; skips: GeminiProxyModelSkip[] } {
+  if (modelChain.length <= 1) return { modelChain, skips: [] };
   const busyModels = modelChain.filter((model) => isClientModelInFlight(model));
-  if (!busyModels.length) return modelChain;
+  if (!busyModels.length) return { modelChain, skips: [] };
   const available = modelChain.filter((model) => !isClientModelInFlight(model));
-  if (!available.length) return modelChain;
+  if (!available.length) return { modelChain, skips: [] };
   console.warn(
     `[SORIDRAW Gemini InFlight] ${context}: skipping model(s) already being probed ${busyModels.join(', ')}`,
   );
-  return available;
+  return {
+    modelChain: available,
+    skips: busyModels.map((model) => createModelSkip(
+      context,
+      model,
+      'in_flight',
+      { detail: '다른 생성이 같은 모델을 현재 시험 중' },
+    )),
+  };
 }
 
 type SlowSuccessSession = {
@@ -140,14 +193,37 @@ function isInitialSongGenerationContext(context: string): boolean {
     || clean.startsWith('generateSong v2');
 }
 
+function getPreFilteredCooldownSkips(
+  context: string,
+  requested: string[],
+): GeminiProxyModelSkip[] {
+  const canonical = isInitialSongGenerationContext(context)
+    ? [...INITIAL_SONG_MODEL_CHAIN]
+    : context === FAST_REPAIR_CONTEXT
+      ? [...FAST_REPAIR_MODEL_CHAIN]
+      : [];
+  if (!canonical.length) return [];
+  return canonical
+    .filter((model) => !requested.includes(model))
+    .map((model) => ({ model, cooldown: getGeminiModelCooldown(model) }))
+    .filter((item) => Boolean(item.cooldown))
+    .map(({ model, cooldown }) => createModelSkip(
+      context,
+      model,
+      'cooldown',
+      {
+        remainingMs: cooldown?.remainingMs,
+        detail: String(cooldown?.reason || 'temporary_model_cooldown'),
+      },
+    ));
+}
+
 function resolveLatencyModelChain(meta: any, requestParams: any): string[] {
   const context = String(meta?.context || '').trim();
   const sessionId = String(meta?.sessionId || '').trim();
   const requested = normalizeRequestedModelChain(meta, requestParams);
 
   if (context === FAST_REPAIR_CONTEXT) {
-    // Respect the user's auto-fallback choice. A one-model incoming chain means
-    // the repair also stays single-model, but it starts on the latency-oriented 3.5 model.
     const fastBase = requested.length > 1
       ? [...FAST_REPAIR_MODEL_CHAIN]
       : [FAST_REPAIR_MODEL_CHAIN[0]];
@@ -163,14 +239,38 @@ function resolveLatencyModelChain(meta: any, requestParams: any): string[] {
   }
 
   if (isInitialSongGenerationContext(context) && requested.length > 1) {
-    // 849 keeps the 848 large-request chain: 3.5 Flash is useful for small repair work but repeatedly spent the full
-    // 30-second ceiling after a 3.6 busy/timeout on large ~34K song requests.
-    // Keep 3.7 -> 3.6 quality priority, then move directly to Flash-Lite.
     const initialFastChain = INITIAL_SONG_MODEL_CHAIN.filter((model) => requested.includes(model));
     if (initialFastChain.length) return initialFastChain;
   }
 
   return requested;
+}
+
+function getServerCooldownSkips(
+  payload: any,
+  context: string,
+  modelChain: string[],
+  serverAttempts: any[],
+): GeminiProxyModelSkip[] {
+  const hints = Array.isArray(payload?.cooldowns) ? payload.cooldowns : [];
+  if (!hints.length) return [];
+  const attemptedModels = new Set(serverAttempts.map((attempt) => String(attempt?.model || '').trim()).filter(Boolean));
+  return hints
+    .map((hint: any) => ({
+      model: String(hint?.model || '').trim(),
+      remainingMs: Math.max(0, Math.round(Number(hint?.remainingMs) || 0)),
+      reason: String(hint?.reason || 'temporary_model_cooldown').trim() || 'temporary_model_cooldown',
+    }))
+    .filter((hint) => Boolean(hint.model)
+      && hint.remainingMs > 0
+      && modelChain.includes(hint.model)
+      && !attemptedModels.has(hint.model))
+    .map((hint) => createModelSkip(
+      context,
+      hint.model,
+      'cooldown',
+      { remainingMs: hint.remainingMs, detail: hint.reason },
+    ));
 }
 
 async function generateContentViaFirebase(params: any): Promise<any> {
@@ -189,8 +289,15 @@ async function generateContentViaFirebase(params: any): Promise<any> {
 
   const sessionId = String(meta.sessionId || '').trim();
   const context = String(meta.context || 'Gemini 호출').trim();
+  const requestedModelChain = normalizeRequestedModelChain(meta, requestParams);
+  const preFilteredCooldownSkips = getPreFilteredCooldownSkips(context, requestedModelChain);
   const resolvedModelChain = resolveLatencyModelChain(meta, requestParams);
-  const modelChain = avoidConcurrentModelProbe(resolvedModelChain, context);
+  const concurrentResult = avoidConcurrentModelProbe(resolvedModelChain, context);
+  const modelChain = concurrentResult.modelChain;
+  const localModelSkips = dedupeModelSkips([
+    ...preFilteredCooldownSkips,
+    ...concurrentResult.skips,
+  ]);
   if (modelChain.length && String(requestParams?.model || '').trim() !== modelChain[0]) {
     requestParams.model = modelChain[0];
   }
@@ -210,10 +317,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
       fallbackAttempt: Math.max(1, Math.round(Number(meta.fallbackAttempt) || 1)),
       modelChain: modelChain.length ? modelChain : undefined,
       fallbackInstruction: String(meta.fallbackInstruction || '').trim().slice(0, 5000) || undefined,
-      // The bounded latency policy is explicit so older cached clients remain backward-compatible.
       latencyPolicy: GEMINI_LATENCY_POLICY,
-      // 850 preview experiment: only initial large-song requests that actually land on 3.6
-      // opt into low thinking. Older/main clients do not send this flag.
       thinkingPolicy: GEMINI_THINKING_POLICY,
     }),
   }).finally(releaseClientInFlight);
@@ -223,11 +327,16 @@ async function generateContentViaFirebase(params: any): Promise<any> {
 
   const payload = await response.json().catch(() => null);
   const serverAttempts = Array.isArray(payload?.attempts) ? payload.attempts : [];
+  const modelSkips = dedupeModelSkips([
+    ...localModelSkips,
+    ...getServerCooldownSkips(payload, context, modelChain, serverAttempts),
+  ]);
   recordSlowSuccessModels(sessionId, serverAttempts);
   if (!response.ok || !payload?.ok) {
     const error = normalizeProxyError(response.status, payload);
     (error as any).serverAttempts = serverAttempts;
     (error as any).serverCooldowns = Array.isArray(payload?.cooldowns) ? payload.cooldowns : [];
+    (error as any).__soridrawModelSkips = modelSkips;
     throw error;
   }
 
@@ -240,6 +349,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     __soridrawServerAttempts: serverAttempts,
     __soridrawServerCooldowns: Array.isArray(payload.cooldowns) ? payload.cooldowns : [],
     __soridrawServerUsedModel: String(payload.usedModel || payload.modelVersion || '').trim() || undefined,
+    __soridrawModelSkips: modelSkips,
   };
 }
 

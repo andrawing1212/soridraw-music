@@ -17,6 +17,44 @@ const FAST_REPAIR_MODEL_CHAIN = [
 ] as const;
 const SLOW_SUCCESS_THRESHOLD_MS = 30_000;
 const SLOW_SUCCESS_SESSION_TTL_MS = 20 * 60_000;
+const CLIENT_INFLIGHT_COORDINATED_MODELS = new Set([
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+]);
+const clientModelInFlightCounts = new Map<string, number>();
+
+function isClientModelInFlight(model: string): boolean {
+  const normalized = String(model || '').trim();
+  if (!CLIENT_INFLIGHT_COORDINATED_MODELS.has(normalized)) return false;
+  return Math.max(0, Number(clientModelInFlightCounts.get(normalized) || 0)) > 0;
+}
+
+function acquireClientModelInFlight(model: string): () => void {
+  const normalized = String(model || '').trim();
+  if (!CLIENT_INFLIGHT_COORDINATED_MODELS.has(normalized)) return () => {};
+  clientModelInFlightCounts.set(normalized, Math.max(0, Number(clientModelInFlightCounts.get(normalized) || 0)) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const next = Math.max(0, Number(clientModelInFlightCounts.get(normalized) || 0) - 1);
+    if (next > 0) clientModelInFlightCounts.set(normalized, next);
+    else clientModelInFlightCounts.delete(normalized);
+  };
+}
+
+function avoidConcurrentModelProbe(modelChain: string[], context: string): string[] {
+  if (modelChain.length <= 1) return modelChain;
+  const busyModels = modelChain.filter((model) => isClientModelInFlight(model));
+  if (!busyModels.length) return modelChain;
+  const available = modelChain.filter((model) => !isClientModelInFlight(model));
+  if (!available.length) return modelChain;
+  console.warn(
+    `[SORIDRAW Gemini InFlight] ${context}: skipping model(s) already being probed ${busyModels.join(', ')}`,
+  );
+  return available;
+}
 
 type SlowSuccessSession = {
   models: Set<string>;
@@ -124,7 +162,7 @@ function resolveLatencyModelChain(meta: any, requestParams: any): string[] {
   }
 
   if (isInitialSongGenerationContext(context) && requested.length > 1) {
-    // 848: 3.5 Flash is useful for small repair work but repeatedly spent the full
+    // 849 keeps the 848 large-request chain: 3.5 Flash is useful for small repair work but repeatedly spent the full
     // 30-second ceiling after a 3.6 busy/timeout on large ~34K song requests.
     // Keep 3.7 -> 3.6 quality priority, then move directly to Flash-Lite.
     const initialFastChain = INITIAL_SONG_MODEL_CHAIN.filter((model) => requested.includes(model));
@@ -150,10 +188,12 @@ async function generateContentViaFirebase(params: any): Promise<any> {
 
   const sessionId = String(meta.sessionId || '').trim();
   const context = String(meta.context || 'Gemini 호출').trim();
-  const modelChain = resolveLatencyModelChain(meta, requestParams);
+  const resolvedModelChain = resolveLatencyModelChain(meta, requestParams);
+  const modelChain = avoidConcurrentModelProbe(resolvedModelChain, context);
   if (modelChain.length && String(requestParams?.model || '').trim() !== modelChain[0]) {
     requestParams.model = modelChain[0];
   }
+  const releaseClientInFlight = acquireClientModelInFlight(modelChain[0] || '');
 
   const response = await fetch(`${CLOUD_FUNCTIONS_BASE_URL}/generateGeminiContent`, {
     method: 'POST',
@@ -172,7 +212,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
       // The bounded latency policy is explicit so older cached clients remain backward-compatible.
       latencyPolicy: GEMINI_LATENCY_POLICY,
     }),
-  });
+  }).finally(releaseClientInFlight);
 
   const appCheckStatus = response.headers.get('X-SORIDRAW-App-Check-Status') || 'not-reported';
   console.info(`[SORIDRAW App Check] server status: ${appCheckStatus}`);

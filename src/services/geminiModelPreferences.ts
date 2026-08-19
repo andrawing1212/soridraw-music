@@ -37,9 +37,16 @@ function sanitizeCooldownMap(value: unknown): GeminiModelCooldownMap {
   for (const [model, entry] of Object.entries(value as Record<string, any>)) {
     const until = Number(entry?.until || 0);
     if (!Number.isFinite(until) || until <= now) continue;
+    const reason = String(entry?.reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown";
+    // 853 migration: old 847-852 quota cooldowns could persist for 5-10 minutes.
+    // New quota policy is Retry-After based and capped at 60s, so clamp only
+    // legacy quota entries. Other timeout/overload cooldowns are preserved.
+    const safeUntil = reason === "quota_or_rate_limit"
+      ? Math.min(until, now + 60_000)
+      : until;
     next[model] = {
-      until,
-      reason: String(entry?.reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown",
+      until: safeUntil,
+      reason,
     };
   }
   return next;
@@ -162,12 +169,19 @@ export function setGeminiModelCooldown(
 ): void {
   const normalizedModel = String(model || "").trim();
   if (!normalizedModel) return;
-  const safeDurationMs = Math.max(1_000, Math.min(30 * 60_000, Math.round(Number(durationMs) || 0)));
+  const normalizedReason = String(reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown";
+  const requestedDurationMs = Math.max(1_000, Math.min(30 * 60_000, Math.round(Number(durationMs) || 0)));
+  // 853 safety net: the Function now returns Retry-After based quota cooldowns.
+  // Never let an older/fallback client path inflate quota_or_rate_limit back into
+  // the legacy multi-minute lock; provider-guided cooldowns are capped at 60s.
+  const safeDurationMs = normalizedReason === "quota_or_rate_limit"
+    ? Math.min(60_000, requestedDurationMs)
+    : requestedDurationMs;
   const nextUntil = Date.now() + safeDurationMs;
   const existing = readGeminiModelCooldownMap(uid)[normalizedModel];
   const nextEntry: GeminiModelCooldownEntry = {
     until: Math.max(Number(existing?.until || 0), nextUntil),
-    reason: String(reason || existing?.reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown",
+    reason: normalizedReason || existing?.reason || "temporary_model_cooldown",
   };
 
   // Always update memory first so a correction launched milliseconds later sees

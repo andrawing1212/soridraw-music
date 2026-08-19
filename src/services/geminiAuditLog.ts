@@ -1,5 +1,6 @@
 export type GeminiAuditSessionStatus = 'running' | 'success' | 'failed';
 export type GeminiAuditCallStatus = 'success' | 'failed';
+export type GeminiAuditModelSkipReason = 'cooldown' | 'in_flight' | 'slow_success' | 'other';
 
 export interface GeminiAuditUsage {
   promptTokens: number;
@@ -23,6 +24,16 @@ export interface GeminiAuditCall {
   errorMessage?: string;
 }
 
+export interface GeminiAuditModelSkip {
+  id: string;
+  context: string;
+  model: string;
+  reason: GeminiAuditModelSkipReason;
+  detail?: string;
+  remainingMs?: number;
+  createdAt: string;
+}
+
 export interface GeminiAuditSession {
   id: string;
   operation: string;
@@ -32,12 +43,14 @@ export interface GeminiAuditSession {
   resultLabel?: string;
   errorMessage?: string;
   calls: GeminiAuditCall[];
+  modelSkips?: GeminiAuditModelSkip[];
 }
 
 export const GEMINI_AUDIT_EVENT = 'soridraw:gemini-audit-updated';
 const STORAGE_KEY = 'soridraw_gemini_audit_v1';
 const MAX_SESSIONS = 80;
 const MAX_ERROR_LENGTH = 500;
+const MAX_SKIP_DETAIL_LENGTH = 180;
 
 const emptyUsage = (): GeminiAuditUsage => ({
   promptTokens: 0,
@@ -91,6 +104,53 @@ function normalizeError(error: unknown): string {
   return String(message || '').replace(/\s+/g, ' ').trim().slice(0, MAX_ERROR_LENGTH);
 }
 
+function normalizeSkipReason(value: unknown): GeminiAuditModelSkipReason {
+  const clean = String(value || '').trim();
+  if (clean === 'cooldown' || clean === 'in_flight' || clean === 'slow_success') return clean;
+  return 'other';
+}
+
+function extractModelSkips(value: any, fallbackContext: string): GeminiAuditModelSkip[] {
+  if (!value || typeof value !== 'object') return [];
+  const raw = Array.isArray(value?.__soridrawModelSkips)
+    ? value.__soridrawModelSkips
+    : Array.isArray(value?.modelSkips)
+      ? value.modelSkips
+      : [];
+  return raw
+    .map((skip: any) => {
+      const createdAtMs = Number(skip?.createdAtMs || 0);
+      return {
+        id: String(skip?.id || '').trim() || createId('gemini-skip'),
+        context: String(skip?.context || fallbackContext || 'Gemini 호출').trim() || 'Gemini 호출',
+        model: String(skip?.model || '').trim(),
+        reason: normalizeSkipReason(skip?.reason),
+        detail: String(skip?.detail || '').replace(/\s+/g, ' ').trim().slice(0, MAX_SKIP_DETAIL_LENGTH) || undefined,
+        remainingMs: safeNumber(skip?.remainingMs) || undefined,
+        createdAt: Number.isFinite(createdAtMs) && createdAtMs > 0
+          ? new Date(createdAtMs).toISOString()
+          : new Date().toISOString(),
+      } satisfies GeminiAuditModelSkip;
+    })
+    .filter((skip: GeminiAuditModelSkip) => Boolean(skip.model));
+}
+
+function mergeModelSkips(
+  current: GeminiAuditModelSkip[] | undefined,
+  incoming: GeminiAuditModelSkip[],
+): GeminiAuditModelSkip[] | undefined {
+  if (!incoming.length) return current;
+  const merged = [...(current || [])];
+  const keys = new Set(merged.map((skip) => `${skip.context}|${skip.model}|${skip.reason}|${skip.createdAt}`));
+  incoming.forEach((skip) => {
+    const key = `${skip.context}|${skip.model}|${skip.reason}|${skip.createdAt}`;
+    if (keys.has(key)) return;
+    keys.add(key);
+    merged.push(skip);
+  });
+  return merged.slice(-40);
+}
+
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
@@ -139,6 +199,7 @@ export function startGeminiAuditSession(operation: string): string {
     status: 'running',
     startedAt: new Date().toISOString(),
     calls: [],
+    modelSkips: [],
   };
   writeSessions([session, ...readSessions()]);
   return id;
@@ -194,9 +255,12 @@ export function recordGeminiAuditCall(input: {
     fallbackAttempt: Math.max(1, Math.round(Number(input.fallbackAttempt) || 1)),
     errorMessage: normalizeError(input.error) || undefined,
   };
+  const responseSkips = extractModelSkips(input.response, call.context);
+  const errorSkips = extractModelSkips(input.error as any, call.context);
   sessions[index] = {
     ...session,
     calls: [...session.calls, call],
+    modelSkips: mergeModelSkips(session.modelSkips, [...responseSkips, ...errorSkips]),
   };
   writeSessions(sessions);
 }

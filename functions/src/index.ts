@@ -1040,6 +1040,81 @@ const extractGeminiInteractionText = (payload: any): string => {
     .join("");
 };
 
+const parseGeminiRetryAfterMs = (headerValue: string | null, message: unknown): number => {
+  const header = String(headerValue || "").trim();
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1000);
+    const retryAt = Date.parse(header);
+    if (Number.isFinite(retryAt)) return Math.max(0, retryAt - Date.now());
+  }
+  const text = String(message || "");
+  const match = text.match(/(?:Please\s+retry\s+in|retry\s+in)\s*([0-9]+(?:\.[0-9]+)?)\s*s/i);
+  if (!match) return 0;
+  const parsedSeconds = Number(match[1]);
+  return Number.isFinite(parsedSeconds) && parsedSeconds > 0 ? Math.ceil(parsedSeconds * 1000) : 0;
+};
+
+const getGeminiServerCooldownMs = (statusCode: number, retryAfterMs = 0): number => {
+  const retryFloor = Math.max(0, Math.round(Number(retryAfterMs) || 0));
+  if (statusCode === 429) return Math.max(120_000, Math.min(10 * 60_000, retryFloor + 1_000));
+  if ([500, 502, 503, 504].includes(statusCode)) return Math.max(45_000, Math.min(5 * 60_000, retryFloor + 1_000));
+  if (statusCode === 404) return 30 * 60_000;
+  return 0;
+};
+
+type GeminiServerCooldownEntry = {
+  until: number;
+  reason: string;
+  statusCode: number;
+};
+
+// Best-effort per-instance memory only. It never stores API keys, prompts or generated text.
+// Browser localStorage remains the durable short-term source across Function instances.
+const geminiServerModelCooldowns = new Map<string, GeminiServerCooldownEntry>();
+
+const geminiServerCooldownKey = (uid: string, model: string): string => `${uid}:${model}`;
+
+const pruneGeminiServerCooldowns = (): void => {
+  const now = Date.now();
+  for (const [key, entry] of geminiServerModelCooldowns.entries()) {
+    if (!entry || entry.until <= now) geminiServerModelCooldowns.delete(key);
+  }
+  if (geminiServerModelCooldowns.size <= 500) return;
+  const oldest = Array.from(geminiServerModelCooldowns.entries())
+    .sort((a, b) => a[1].until - b[1].until)
+    .slice(0, geminiServerModelCooldowns.size - 500);
+  oldest.forEach(([key]) => geminiServerModelCooldowns.delete(key));
+};
+
+const getGeminiServerModelCooldown = (uid: string, model: string): GeminiServerCooldownEntry | null => {
+  pruneGeminiServerCooldowns();
+  const entry = geminiServerModelCooldowns.get(geminiServerCooldownKey(uid, model));
+  if (!entry || entry.until <= Date.now()) return null;
+  return entry;
+};
+
+const setGeminiServerModelCooldown = (
+  uid: string,
+  model: string,
+  statusCode: number,
+  retryAfterMs: number,
+  reason: string,
+): GeminiServerCooldownEntry | null => {
+  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);
+  if (cooldownMs <= 0) return null;
+  const key = geminiServerCooldownKey(uid, model);
+  const existing = geminiServerModelCooldowns.get(key);
+  const next: GeminiServerCooldownEntry = {
+    until: Math.max(Number(existing?.until || 0), Date.now() + cooldownMs),
+    reason: String(reason || existing?.reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown",
+    statusCode,
+  };
+  geminiServerModelCooldowns.set(key, next);
+  pruneGeminiServerCooldowns();
+  return next;
+};
+
 const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
   const config = requestPayload?.config && typeof requestPayload.config === "object"
@@ -1097,6 +1172,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
     (error as any).status = upstream.status;
     (error as any).code = payload?.error?.status || upstream.status;
     (error as any).reason = upstreamReason;
+    (error as any).retryAfterMs = parseGeminiRetryAfterMs(upstream.headers.get("retry-after"), (error as Error).message);
     throw error;
   }
 
@@ -1175,6 +1251,7 @@ const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): P
     (error as any).status = upstream.status;
     (error as any).code = payload?.error?.status || upstream.status;
     (error as any).reason = upstreamReason;
+    (error as any).retryAfterMs = parseGeminiRetryAfterMs(upstream.headers.get("retry-after"), (error as Error).message);
     throw error;
   }
   return payload || {};
@@ -1188,6 +1265,9 @@ type GeminiServerAttemptRecord = {
   errorMessage?: string;
   statusCode?: number;
   code?: string | number;
+  retryAfterMs?: number;
+  cooldownMs?: number;
+  cooldownReason?: string;
 };
 
 const normalizeGeminiServerAttemptRequest = (
@@ -1247,6 +1327,8 @@ const isGeminiServerFallbackStatus = (status: number): boolean =>
 const buildGeminiServerAttemptError = (error: unknown, apiKey: string, model: string, durationMs: number): GeminiServerAttemptRecord => {
   const anyError = error as any;
   const statusCode = extractGeminiErrorStatus(error);
+  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));
+  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);
   return {
     model,
     status: "failed",
@@ -1254,7 +1336,41 @@ const buildGeminiServerAttemptError = (error: unknown, apiKey: string, model: st
     errorMessage: sanitizeGeminiErrorMessage(error, apiKey),
     statusCode,
     code: anyError?.code || statusCode,
+    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),
+    ...(cooldownMs > 0 ? { cooldownMs } : {}),
+    ...(cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),
   };
+};
+
+type GeminiServerCooldownHint = {
+  model: string;
+  remainingMs: number;
+  reason: string;
+  statusCode: number;
+};
+
+const mergeGeminiServerCooldownHints = (...groups: GeminiServerCooldownHint[][]): GeminiServerCooldownHint[] => {
+  const merged = new Map<string, GeminiServerCooldownHint>();
+  groups.flat().forEach((hint) => {
+    if (!hint?.model || hint.remainingMs <= 0) return;
+    const previous = merged.get(hint.model);
+    if (!previous || hint.remainingMs > previous.remainingMs) merged.set(hint.model, hint);
+  });
+  return Array.from(merged.values());
+};
+
+const activeGeminiServerCooldownHints = (uid: string, models: string[]): GeminiServerCooldownHint[] => {
+  const now = Date.now();
+  return models.flatMap((model) => {
+    const entry = getGeminiServerModelCooldown(uid, model);
+    if (!entry) return [];
+    return [{
+      model,
+      remainingMs: Math.max(1_000, entry.until - now),
+      reason: entry.reason,
+      statusCode: entry.statusCode,
+    }];
+  });
 };
 
 const pickFirstString = (...values: any[]): string => {
@@ -2009,6 +2125,17 @@ export const generateGeminiContent = onRequest(
     let guardAcquired = false;
     let apiKey = "";
     const attempts: GeminiServerAttemptRecord[] = [];
+    const initialServerCooldownHints = activeGeminiServerCooldownHints(uid, modelChain);
+    const availableServerModelChain = modelChain.filter((attemptModel) => !getGeminiServerModelCooldown(uid, attemptModel));
+    const runtimeServerModelChain = availableServerModelChain.length
+      ? availableServerModelChain
+      : modelChain
+          .map((attemptModel) => ({ attemptModel, cooldown: getGeminiServerModelCooldown(uid, attemptModel) }))
+          .filter((item) => Boolean(item.cooldown))
+          .sort((a, b) => Number(a.cooldown?.until || 0) - Number(b.cooldown?.until || 0))
+          .slice(0, 1)
+          .map((item) => item.attemptModel);
+    let responseCooldownHints = initialServerCooldownHints;
     try {
       apiKey = await acquireGeminiRequestGuard(uid, sessionId);
       guardAcquired = true;
@@ -2018,8 +2145,8 @@ export const generateGeminiContent = onRequest(
       }
 
       let lastUpstreamError: unknown = null;
-      for (let index = 0; index < modelChain.length; index += 1) {
-        const attemptModel = modelChain[index];
+      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
+        const attemptModel = runtimeServerModelChain[index];
         if (index > 0) {
           await reserveGeminiFallbackAttempt(uid, sessionId);
         }
@@ -2028,7 +2155,7 @@ export const generateGeminiContent = onRequest(
           requestPayload,
           attemptModel,
           fallbackInstruction,
-          index > 0,
+          index > 0 || attemptModel !== model,
         );
         const attemptStartedAt = Date.now();
         try {
@@ -2040,6 +2167,11 @@ export const generateGeminiContent = onRequest(
             durationMs,
             usageMetadata: response.usageMetadata || null,
           });
+          geminiServerModelCooldowns.delete(geminiServerCooldownKey(uid, attemptModel));
+          responseCooldownHints = mergeGeminiServerCooldownHints(
+            responseCooldownHints,
+            activeGeminiServerCooldownHints(uid, modelChain),
+          );
           const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
             ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
             : "";
@@ -2052,6 +2184,7 @@ export const generateGeminiContent = onRequest(
             promptFeedback: response.promptFeedback || null,
             usedModel: attemptModel,
             attempts,
+            cooldowns: responseCooldownHints,
             context,
             fallbackAttempt: Math.min(5, fallbackAttempt + index),
           });
@@ -2062,13 +2195,33 @@ export const generateGeminiContent = onRequest(
           const attemptRecord = buildGeminiServerAttemptError(upstreamError, apiKey, attemptModel, durationMs);
           attempts.push(attemptRecord);
           const status = attemptRecord.statusCode || 500;
-          const canFallback = index < modelChain.length - 1 && isGeminiServerFallbackStatus(status);
+          const serverCooldown = isGeminiServerFallbackStatus(status)
+            ? setGeminiServerModelCooldown(
+                uid,
+                attemptModel,
+                status,
+                Number(attemptRecord.retryAfterMs || 0),
+                String(attemptRecord.cooldownReason || (status === 429 ? "quota_or_rate_limit" : status === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded")),
+              )
+            : null;
+          if (serverCooldown) {
+            responseCooldownHints = mergeGeminiServerCooldownHints(
+              responseCooldownHints,
+              [{
+                model: attemptModel,
+                remainingMs: Math.max(1_000, serverCooldown.until - Date.now()),
+                reason: serverCooldown.reason,
+                statusCode: serverCooldown.statusCode,
+              }],
+            );
+          }
+          const canFallback = index < runtimeServerModelChain.length - 1 && isGeminiServerFallbackStatus(status);
           if (!canFallback) throw upstreamError;
           console.warn("[Gemini Server Fallback] advancing model inside one Function request", {
             context,
             sessionId,
             from: attemptModel,
-            to: modelChain[index + 1],
+            to: runtimeServerModelChain[index + 1],
             status,
             physicalAttempt: fallbackAttempt + index,
           });
@@ -2080,7 +2233,7 @@ export const generateGeminiContent = onRequest(
       const requestError = error as any;
       if (requestError instanceof HttpsError) {
         const status = requestError.code === "permission-denied" ? 403 : requestError.code === "resource-exhausted" ? 429 : 400;
-        res.status(status).json({ error: requestError.message, code: requestError.code, attempts, ok: false });
+        res.status(status).json({ error: requestError.message, code: requestError.code, attempts, cooldowns: responseCooldownHints, ok: false });
         return;
       }
       const status = extractGeminiErrorStatus(error);
@@ -2101,6 +2254,7 @@ export const generateGeminiContent = onRequest(
                 : "GEMINI_UPSTREAM_ERROR",
         ...(upstreamReason ? { upstreamReason } : {}),
         attempts,
+        cooldowns: mergeGeminiServerCooldownHints(responseCooldownHints, activeGeminiServerCooldownHints(uid, modelChain)),
         ok: false,
       });
     } finally {

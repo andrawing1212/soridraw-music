@@ -156,3 +156,10 @@ Gemini 토큰비 보호만을 목적으로 Free/Basic/Pro에 강한 일일 생�
 - When an unknown upstream failure requires fallback, the browser no longer repeats Auth/App Check + full guard/API-key Firestore reads for every model. One Function invocation owns the bounded fallback chain.
 - Every additional upstream Gemini attempt still increments the existing per-minute/session physical request guard using only the single guard document, preserving the 5-request ceiling without repeating user/API-key reads.
 - No API key or user prompt/result is cached in Function memory. Security and key-rotation immediacy are unchanged.
+
+### 839 — 실패 모델 재호출 제거 / warm-instance 보조 캐시
+- 838의 서버 내부 fallback에서 확인된 실패 모델의 Retry-After 정보를 성공 응답에 포함해 브라우저 cooldown과 동기화한다.
+- 다음 작업은 cooldown 중인 모델을 요청 체인에서 제외하므로 불필요한 Gemini upstream 호출과 대기시간을 함께 줄인다.
+- Functions warm memory에는 사용자별 모델 cooldown 메타데이터만 짧게 유지한다. API 키/프롬프트/가사/생성 결과는 캐시하지 않는다.
+- warm-instance 캐시는 보조 수단이며 영속성/정합성의 기준이 아니다. 인스턴스가 내려가면 소멸하고, 브라우저 localStorage cooldown이 새로고침 간 단기 연속성을 담당한다.
+- Firestore 읽기/쓰기 구조와 기존 사용자 데이터 형식은 변경하지 않는다.

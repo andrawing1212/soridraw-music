@@ -2662,3 +2662,13 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 836~837의 브라우저 모델 cooldown도 유지합니다. 이미 쿨다운된 모델은 서버 체인에 포함되지 않아 Function 내부에서도 불필요하게 다시 시도하지 않습니다.
 - API Key/프롬프트/가사 결과를 새 캐시에 저장하지 않으며 Firestore 문서 구조도 변경하지 않습니다.
 - `functions/src/index.ts`가 변경되므로 실제 적용 시 `generateGeminiContent` Function 재배포가 필요합니다.
+
+## 839차 — 서버 실패모델 쿨다운 힌트 동기화 / 다음 곡 재시도 제거
+- 기준: 838차.
+- 838차에서 fallback을 한 Function 안으로 합친 뒤, 서버 내부에서 발생한 3.7/3.6 실패 정보가 브라우저 cooldown에 확실히 남지 않아 다음 곡이 다시 3.7부터 확인하는 경로를 보완했습니다.
+- Functions가 실패 모델별 `statusCode`, provider `Retry-After`/`Please retry in ...s`, 계산된 cooldown 시간과 이유를 성공 응답에도 함께 반환합니다.
+- 브라우저는 서버 cooldown 힌트를 즉시 탭 메모리 + localStorage의 기존 사용자별 모델 cooldown에 반영합니다. 다음 곡/교정/repair는 해당 모델을 Function 요청 체인에서 처음부터 제외합니다.
+- Function 인스턴스가 살아 있는 동안에는 사용자 UID+모델 단위의 짧은 메모리 cooldown도 보조로 사용합니다. 브라우저 저장이 비어 있거나 다른 탭에서 요청해도 같은 warm instance에서는 최근 429/404/일시 5xx 모델을 다시 두드리지 않습니다.
+- 서버 메모리에는 API Key, 프롬프트, 가사, 생성 결과, 토큰 원문을 저장하지 않습니다. 모델명/만료시각/실패종류만 저장하며 인스턴스 종료 시 자동 소멸합니다.
+- 모든 모델이 일시 cooldown인 극단 상황에는 생성 자체가 막히지 않도록 가장 먼저 풀릴 모델 1개만 다시 시도합니다.
+- Firestore 문서 구조/Auth/App Check/API Key 저장 구조는 변경하지 않았습니다. `functions/src/index.ts` 변경으로 `generateGeminiContent` Function 재배포가 필요합니다.

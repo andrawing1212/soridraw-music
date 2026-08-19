@@ -200,6 +200,16 @@ type GeminiServerAttempt = {
   errorMessage?: string;
   statusCode?: number;
   code?: string | number;
+  retryAfterMs?: number;
+  cooldownMs?: number;
+  cooldownReason?: string;
+};
+
+type GeminiServerCooldownHint = {
+  model: string;
+  remainingMs: number;
+  reason: string;
+  statusCode?: number;
 };
 
 type GeminiGenerationRequestBudget = {
@@ -316,8 +326,27 @@ function getGeminiServerAttempts(value: any): GeminiServerAttempt[] {
       errorMessage: String(attempt?.errorMessage || '').trim() || undefined,
       statusCode: Number.isFinite(Number(attempt?.statusCode)) ? Number(attempt.statusCode) : undefined,
       code: attempt?.code,
+      retryAfterMs: Number.isFinite(Number(attempt?.retryAfterMs)) ? Math.max(0, Math.round(Number(attempt.retryAfterMs))) : undefined,
+      cooldownMs: Number.isFinite(Number(attempt?.cooldownMs)) ? Math.max(0, Math.round(Number(attempt.cooldownMs))) : undefined,
+      cooldownReason: String(attempt?.cooldownReason || '').trim() || undefined,
     }))
     .filter((attempt: GeminiServerAttempt) => Boolean(attempt.model));
+}
+
+function getGeminiServerCooldownHints(value: any): GeminiServerCooldownHint[] {
+  const raw = Array.isArray(value?.__soridrawServerCooldowns)
+    ? value.__soridrawServerCooldowns
+    : Array.isArray(value?.serverCooldowns)
+      ? value.serverCooldowns
+      : [];
+  return raw
+    .map((hint: any) => ({
+      model: String(hint?.model || '').trim(),
+      remainingMs: Math.max(0, Math.round(Number(hint?.remainingMs) || 0)),
+      reason: String(hint?.reason || 'temporary_model_cooldown').trim() || 'temporary_model_cooldown',
+      statusCode: Number.isFinite(Number(hint?.statusCode)) ? Number(hint.statusCode) : undefined,
+    }))
+    .filter((hint: GeminiServerCooldownHint) => Boolean(hint.model) && hint.remainingMs > 0);
 }
 
 function recordGeminiServerAttempts(
@@ -713,17 +742,31 @@ async function generateContentWithModelFallback(
       const syntheticError = {
         status: attempt.statusCode,
         code: attempt.statusCode || attempt.code,
-        message: [marker, attempt.errorMessage || ''].filter(Boolean).join(' '),
+        message: [marker, attempt.errorMessage || '', attempt.retryAfterMs ? `Please retry in ${attempt.retryAfterMs / 1000}s` : ''].filter(Boolean).join(' '),
       };
       if (!firstFailedModel) {
         firstFailedModel = attempt.model;
-        firstFallbackReason = getGeminiFallbackReason(syntheticError);
+        firstFallbackReason = attempt.cooldownReason || getGeminiFallbackReason(syntheticError);
       }
       if (isGeminiRetryableError(syntheticError)) {
-        const cooldownMs = getGeminiModelCooldownDurationMs(syntheticError);
+        const cooldownMs = Math.max(0, Number(attempt.cooldownMs || 0)) || getGeminiModelCooldownDurationMs(syntheticError);
         if (cooldownMs > 0) {
-          setGeminiModelCooldown(attempt.model, cooldownMs, getGeminiFallbackReason(syntheticError));
+          setGeminiModelCooldown(
+            attempt.model,
+            cooldownMs,
+            attempt.cooldownReason || getGeminiFallbackReason(syntheticError),
+          );
         }
+      }
+    });
+  };
+
+  const applyServerCooldownHints = (value: any) => {
+    getGeminiServerCooldownHints(value).forEach((hint) => {
+      setGeminiModelCooldown(hint.model, hint.remainingMs, hint.reason);
+      if (!firstFailedModel) {
+        firstFailedModel = hint.model;
+        firstFallbackReason = hint.reason;
       }
     });
   };
@@ -740,6 +783,7 @@ async function generateContentWithModelFallback(
     );
     const serverAttempts = getGeminiServerAttempts(response);
     applyAttemptCooldowns(serverAttempts);
+    applyServerCooldownHints(response);
 
     const usedModel = String(
       (response as any)?.__soridrawServerUsedModel
@@ -762,6 +806,7 @@ async function generateContentWithModelFallback(
   } catch (error) {
     const serverAttempts = getGeminiServerAttempts(error);
     applyAttemptCooldowns(serverAttempts);
+    applyServerCooldownHints(error);
     console.warn(`[SORIDRAW Gemini Fallback] ${context}: server-side chain failed`, error);
     throw error;
   }

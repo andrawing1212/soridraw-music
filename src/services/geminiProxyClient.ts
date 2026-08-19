@@ -66,6 +66,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
   if (!response.ok || !payload?.ok) {
     const error = normalizeProxyError(response.status, payload);
     (error as any).serverAttempts = Array.isArray(payload?.attempts) ? payload.attempts : [];
+    (error as any).serverCooldowns = Array.isArray(payload?.cooldowns) ? payload.cooldowns : [];
     throw error;
   }
 
@@ -76,6 +77,7 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     responseId: payload.responseId || undefined,
     promptFeedback: payload.promptFeedback || undefined,
     __soridrawServerAttempts: Array.isArray(payload.attempts) ? payload.attempts : [],
+    __soridrawServerCooldowns: Array.isArray(payload.cooldowns) ? payload.cooldowns : [],
     __soridrawServerUsedModel: String(payload.usedModel || payload.modelVersion || '').trim() || undefined,
   };
 }

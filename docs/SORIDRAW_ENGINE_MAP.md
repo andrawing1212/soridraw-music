@@ -1605,3 +1605,9 @@ Gemini 3.7 Flash
 - Functions performs model fallback inside that same invocation only for explicit 429, 404 rollout mismatch, or transient 500/502/503/504.
 - Primary Auth/App Check/account/API-key reads happen once. Each extra physical Gemini attempt only reserves the existing guard counter on `gemini_request_guards` so the 5-call physical ceiling remains enforced.
 - Server returns per-attempt model/status/duration/usage metadata so the existing local admin audit stays physical-call accurate.
+
+### 839 — server cooldown hint synchronization
+- A server-contained fallback now returns explicit failed-model cooldown hints with retry timing in the same successful Function response.
+- The browser immediately persists those hints into the existing per-user cooldown store, so the next song/correction omits known-busy models before the Function request is built.
+- A best-effort warm-instance cache keyed by user+model protects against repeated 429/404/transient-5xx probes when browser state is missing. It stores only model/status/expiry metadata, never keys, prompts, lyrics or generated content.
+- Server-skipped cooldown models are not counted as physical Gemini attempts and do not appear as fake audit calls.

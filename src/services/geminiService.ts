@@ -32874,7 +32874,6 @@ Rewrite only the listed lyric-body lines in each card.
       },
     },
     'rewriteLyricHardBanCards',
-    [GEMINI_TEXT_MODEL_CHAIN[0]],
   );
 
   const parsed = parseGeminiJsonObject(response?.text || '{}');

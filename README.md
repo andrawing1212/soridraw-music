@@ -2672,3 +2672,9 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 서버 메모리에는 API Key, 프롬프트, 가사, 생성 결과, 토큰 원문을 저장하지 않습니다. 모델명/만료시각/실패종류만 저장하며 인스턴스 종료 시 자동 소멸합니다.
 - 모든 모델이 일시 cooldown인 극단 상황에는 생성 자체가 막히지 않도록 가장 먼저 풀릴 모델 1개만 다시 시도합니다.
 - Firestore 문서 구조/Auth/App Check/API Key 저장 구조는 변경하지 않았습니다. `functions/src/index.ts` 변경으로 `generateGeminiContent` Function 재배포가 필요합니다.
+
+## 840차 — 금지어 통합 교정 fallback 공통화
+- `rewriteLyricHardBanCards`가 `gemini-3.7-flash` 단일 모델 체인으로 고정되어 있던 예외 경로를 제거했습니다.
+- 금지어 통합 교정도 최초 곡 생성과 동일한 5단 모델 체인/쿨다운을 사용합니다.
+- 따라서 3.7이 429 쿨다운 상태이면 교정에서 3.7을 다시 호출하지 않고 3.6 이하의 사용 가능한 모델부터 시작합니다.
+- 기존 최종 금지어 안전 검사와 곡당 물리 호출 상한은 그대로 유지합니다.

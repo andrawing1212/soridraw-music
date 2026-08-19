@@ -189,7 +189,7 @@ type GeminiGenerationRequestBudget = {
   usedCorrectionRequests: number;
 };
 
-const GEMINI_GENERATION_MAX_REQUESTS = 3;
+const GEMINI_GENERATION_MAX_REQUESTS = 5;
 const GEMINI_GENERATION_MAX_CORRECTION_REQUESTS = 1;
 const AUTO_LANGUAGE_MIX_RETRY_ENABLED = false;
 const geminiGenerationRequestBudgets = new Map<string, GeminiGenerationRequestBudget>();
@@ -242,7 +242,7 @@ function consumeGeminiGenerationRequestBudget(
   if (!budget) return;
 
   // Final hard-ban editing is an output-safety obligation, not a discretionary quality retry.
-  // It still consumes the absolute 3-request ceiling, but it must not be blocked merely because
+  // It still consumes the absolute 5-request ceiling, but it must not be blocked merely because
   // the one allowed structure/density quality correction already ran.
   const isCorrection = !isInitialSongGenerationContext(context) && !isFinalHardBanSafetyContext(context);
   const isNewCorrectionOperation = isCorrection && fallbackAttempt <= 1;
@@ -251,8 +251,8 @@ function consumeGeminiGenerationRequestBudget(
       `곡 생성 Gemini 호출 상한(${budget.maxRequests}회)에 도달해 ${context} 호출을 생략했습니다.`,
     );
   }
-  // A temporary 429/5xx failure inside the single permitted correction may retry once on the
-  // fallback model. That physical fallback request still consumes the absolute request ceiling,
+  // A temporary model-level retry inside the single permitted correction may advance on the
+  // fallback chain. That physical fallback request still consumes the absolute request ceiling,
   // but it is not a second correction operation.
   if (isNewCorrectionOperation && budget.usedCorrectionRequests >= budget.maxCorrectionRequests) {
     throw new GeminiRequestBudgetExceededError(
@@ -347,17 +347,19 @@ function getAuditedAI(
 }
 
 // Stable production model priority for song generation.
-// Default order is always 3.6 Flash -> 3.5 Flash -> 3.5 Flash-Lite.
+// Default order is 3.7 Flash -> 3.6 Flash -> 3.5 Flash -> 3.5 Flash-Lite -> 3.1 Flash-Lite.
 // Automatic fallback is optional per user and keeps this fixed priority on every new song.
-// Only explicit upstream 429 or 503 responses may advance to the next model.
-// Keep the chain to three calls because the Functions session guard allows at most three attempts.
+// Only explicit upstream 429 / 503, plus a model-specific 404 rollout mismatch, may advance.
+// The absolute request budget and Functions session guard are both capped at five physical calls.
 const GEMINI_TEXT_MODEL_CHAIN = [
+  "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
 ];
 function getFixedGeminiModelChain(modelChain: string[]): string[] {
-  return Array.from(new Set(modelChain.filter(Boolean))).slice(0, 3);
+  return Array.from(new Set(modelChain.filter(Boolean))).slice(0, 5);
 }
 
 const GEMINI_FALLBACK_STABILITY_INSTRUCTION = `
@@ -475,12 +477,13 @@ function isGeminiRetryableError(error: any): boolean {
   const code = getGeminiErrorCode(error);
 
   // Model fallback is intentionally narrow. Only the proxy's explicit upstream
-  // rate-limit or model-unavailable responses may move to the next Gemini model.
+  // rate-limit, model-unavailable, or model-rollout-not-found responses may move to the next Gemini model.
   // App-level resource guards, network failures, slow responses, schema/content
   // errors, auth/billing issues, and quality problems must stop on the current model.
   const isExplicitUpstreamRateLimit = code === 429 && text.includes("GEMINI_RATE_LIMITED");
   const isExplicitUpstreamUnavailable = code === 503 && text.includes("GEMINI_UPSTREAM_UNAVAILABLE");
-  return isExplicitUpstreamRateLimit || isExplicitUpstreamUnavailable;
+  const isExplicitModelNotFound = code === 404 && text.includes("GEMINI_MODEL_NOT_FOUND");
+  return isExplicitUpstreamRateLimit || isExplicitUpstreamUnavailable || isExplicitModelNotFound;
 }
 
 function withFallbackSafetyInstruction(config: any, attemptIndex: number): any {
@@ -498,6 +501,7 @@ function getGeminiFallbackReason(error: any): string {
   const text = describeGeminiError(error).toLowerCase();
   const status = getGeminiErrorStatus(error).toLowerCase();
   const code = getGeminiErrorCode(error);
+  if (code === 404 || text.includes("gemini_model_not_found")) return "model_not_found_or_rollout";
   if (code === 429 || status.includes("resource_exhausted") || text.includes("quota")) return "quota_or_rate_limit";
   if (text.includes("rate limit") || text.includes("429")) return "quota_or_rate_limit";
   if (status.includes("unavailable") || text.includes("unavailable") || text.includes("overloaded")) return "model_unavailable_or_overloaded";

@@ -2590,3 +2590,23 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 활성 조건일 때는 아이콘만 노랗게 보이는 상태가 아니라, 기존 스타일~주제 리셋 버튼과 같은 은은한 앰버/브라운 배경 + 노란 휴지통 아이콘이 보이도록 통일.
 - 비활성 상태, hover, 버튼 크기/위치, 리셋 기능 자체는 변경하지 않음.
 - 템포는 모바일/PC 리셋 버튼 모두 같은 공통 활성 상태를 사용.
+
+## 831차 — Gemini 3.7 Flash + 5단 자동 모델 전환
+- 기준: 830차.
+- AI Studio `Get code`에서 확인된 실제 모델 ID `models/gemini-3.7-flash`를 SORIDRAW 최우선 생성 모델로 추가했습니다.
+- 3.7 Flash는 AI Studio가 생성한 최신 호출 방식에 맞춰 Firebase Function 내부에서 Gemini Interactions API(`/v1beta/interactions`)를 사용합니다. 브라우저/가사 엔진은 기존 `models.generateContent` 인터페이스를 그대로 사용하고 서버가 응답을 기존 형식으로 정규화하므로 프롬프트 엔진 구조는 변경하지 않았습니다.
+- 자동 모델 전환 순서는 `3.7 Flash → 3.6 Flash → 3.5 Flash → 3.5 Flash-Lite → 3.1 Flash-Lite`로 확장했습니다.
+- 자동 전환은 기존 원칙대로 upstream `429` 또는 `503`에서만 진행하며, 3.7 단계적 공개로 특정 API 프로젝트에서 모델이 아직 보이지 않는 경우를 위해 Google 공식 오류 가이드의 `404 model_not_found`도 모델 전환 사유로 제한적으로 허용합니다.
+- 곡당 물리 Gemini 호출 절대 상한과 Functions 세션 상한을 3회에서 5회로 함께 올렸습니다. 자동 품질 보정은 기존 최대 1회 제한을 그대로 유지합니다.
+- 3.7 요청은 `thinking_level=medium`, `store=false`로 서버에서 고정하고 기존 structured JSON schema를 Interactions API의 `response_format` 형태로 변환합니다.
+- Gemini 개인 API 키는 계속 브라우저로 내려오지 않으며 `user_api_keys/{uid}`의 서버 전용 키를 매 실제 요청마다 읽는 기존 보안 구조를 유지합니다.
+- Firestore/Auth 저장 구조 변경은 없습니다. 다만 `functions/src/index.ts`가 변경됐기 때문에 실제 앱 적용 시 Functions 재배포가 필요합니다.
+
+## 832차 — Firebase Functions Node 22 런타임 전환 + SDK 호환 안정화
+- 기준: 831차.
+- `functions/package.json`의 Cloud Functions 런타임을 Node.js 20에서 공식 지원 중인 Node.js 22로 전환했습니다.
+- 루트 `.nvmrc`도 22로 맞춰 로컬 개발/배포 환경 기준을 통일했습니다.
+- `functions/package-lock.json`의 루트 engine도 Node 22로 맞춰 `npm ci` 시 엔진 기준이 package.json과 일치하도록 정리했습니다.
+- 현재 실제 잠금 버전인 `firebase-functions 4.9.0`은 패키지 engine이 `node >=14.10.0`이라 Node 22 범위에 포함되고, 현재 SORIDRAW Functions는 Firebase Extensions API를 사용하지 않으므로 이번 차수에서는 SDK 메이저 업그레이드를 하지 않았습니다.
+- Firebase CLI의 `firebase-functions SDK >=5.1.0` 경고는 최신 Extensions 기능 지원 경고이므로, Gemini 3.7 배포 검증과 SDK 메이저 업그레이드를 한 번에 섞지 않도록 분리했습니다. SDK 업그레이드는 실제 배포 확인 후 별도 차수에서 진행할 수 있습니다.
+- 831차의 Gemini 3.7 Flash / 5단 자동 전환 / Auth / App Check / Firestore 저장 구조는 변경하지 않았습니다.

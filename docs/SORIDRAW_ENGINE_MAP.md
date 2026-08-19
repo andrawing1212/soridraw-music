@@ -1556,3 +1556,38 @@ HardBan·구조 확정
 - 기존 누락/복구/cue/미해결/추가 호출 필드 유지
 
 섹션 무결성 버전: `v1-post-language-mix-section-cue-integrity-step19-active-33`
+
+## 831차 — Gemini 3.7 Flash / Interactions API / 5단 fallback
+
+### 생산 모델 체인
+
+```text
+Gemini 3.7 Flash
+→ Gemini 3.6 Flash
+→ Gemini 3.5 Flash
+→ Gemini 3.5 Flash-Lite
+→ Gemini 3.1 Flash-Lite
+```
+
+- 기본 모델은 `gemini-3.7-flash`다.
+- 3.7은 AI Studio `Get code`에서 확인된 모델 ID를 사용한다.
+- 3.7은 Functions 서버 내부에서 `/v1beta/interactions`로 호출하고, 응답을 기존 `generateContent` 응답 모양으로 정규화해 앱/가사 엔진 인터페이스는 바꾸지 않는다.
+- 3.6 이하 기존 모델은 기존 `/v1beta/models/{model}:generateContent` 경로를 유지한다.
+- structured output은 기존 `responseMimeType/responseSchema`를 Interactions API의 `response_format`으로 변환한다.
+- 3.7 요청은 `thinking_level=medium`, `store=false`를 사용한다.
+
+### fallback 및 비용 가드
+
+- 자동 전환 ON일 때만 다음 모델로 이동한다.
+- 허용 사유는 upstream `429 rate/quota`, `503 unavailable`, 그리고 3.7 단계적 rollout 호환을 위한 명시적 `404 model_not_found`다.
+- auth/billing/schema/content/network/품질 문제는 다음 모델 호출을 만들지 않는다.
+- 곡당 물리 Gemini 호출 절대 상한: 최대 5회.
+- Functions 세션 상한: 최대 5회.
+- 자동 품질 보정 operation 상한: 기존 최대 1회 유지.
+- fallback 호출도 동일한 물리 호출 상한에 포함된다.
+
+### 보안/호환성
+
+- 사용자 Gemini API Key는 브라우저로 반환하지 않는다.
+- Firebase Auth + App Check + Functions 서버 프록시 + `user_api_keys/{uid}` 서버 읽기 구조를 유지한다.
+- Firestore 문서 구조나 기존 사용자 데이터 형식은 변경하지 않는다.

@@ -16,7 +16,7 @@ function normalizeModelRequest(params: any): any {
   if (!params || typeof params !== 'object') return params;
   const next = { ...params };
   const model = String(next.model || '').trim();
-  if ((model === 'gemini-3.6-flash' || model === 'gemini-3.5-flash-lite') && next.config) {
+  if ((model === 'gemini-3.7-flash' || model === 'gemini-3.6-flash' || model === 'gemini-3.5-flash-lite') && next.config) {
     const config = { ...next.config };
     delete config.temperature;
     delete config.topP;

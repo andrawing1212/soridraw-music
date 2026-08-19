@@ -764,6 +764,7 @@ const verifyAppCheckForRequest = async (
 };
 
 const GEMINI_ALLOWED_MODELS = new Set([
+  "gemini-3.7-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
   "gemini-3.5-flash-lite",
@@ -773,7 +774,7 @@ const GEMINI_ALLOWED_MODELS = new Set([
 const GEMINI_MAX_REQUEST_BYTES = 900_000;
 const GEMINI_MAX_REQUESTS_PER_MINUTE = 12;
 const GEMINI_MAX_ACTIVE_REQUESTS = 2;
-const GEMINI_MAX_REQUESTS_PER_SESSION = 3;
+const GEMINI_MAX_REQUESTS_PER_SESSION = 5;
 const GEMINI_GUARD_STALE_MS = 3 * 60 * 1000;
 const GEMINI_SESSION_WINDOW_MS = 10 * 60 * 1000;
 const getStoredGeminiApiKey = async (uid: string): Promise<string> => {
@@ -951,8 +952,134 @@ const sanitizeLegacyGeminiResponseSchema = (value: any): any => {
   return sanitized;
 };
 
+const normalizeInteractionJsonSchema = (value: any): any => {
+  if (Array.isArray(value)) return value.map(normalizeInteractionJsonSchema);
+  if (!value || typeof value !== "object") return value;
+
+  const normalized: Record<string, any> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "type" && typeof child === "string") {
+      normalized[key] = child.toLowerCase();
+      continue;
+    }
+    normalized[key] = normalizeInteractionJsonSchema(child);
+  }
+  return normalized;
+};
+
+const geminiTextContentToInteractionInput = (rawContents: any): string => {
+  if (typeof rawContents === "string") return rawContents;
+  const contents = Array.isArray(rawContents) ? rawContents : [rawContents];
+  const turns = contents.map((content: any) => {
+    if (typeof content === "string") return content;
+    const role = String(content?.role || "user").trim();
+    const text = Array.isArray(content?.parts)
+      ? content.parts.map((part: any) => String(part?.text || "")).join("")
+      : "";
+    return role && role !== "user" ? `${role}: ${text}` : text;
+  }).filter(Boolean);
+  return turns.join("\n\n");
+};
+
+const geminiSystemInstructionToText = (value: any): string => {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && Array.isArray(value.parts)) {
+    return value.parts.map((part: any) => String(part?.text || "")).join("");
+  }
+  return "";
+};
+
+const extractGeminiInteractionText = (payload: any): string => {
+  if (typeof payload?.output_text === "string") return payload.output_text;
+  if (!Array.isArray(payload?.steps)) return "";
+  return payload.steps
+    .filter((step: any) => step?.type === "model_output")
+    .flatMap((step: any) => Array.isArray(step?.content) ? step.content : [])
+    .filter((item: any) => item?.type === "text")
+    .map((item: any) => String(item?.text || ""))
+    .join("");
+};
+
+const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promise<any> => {
+  const model = String(requestPayload?.model || "").trim();
+  const config = requestPayload?.config && typeof requestPayload.config === "object"
+    ? { ...requestPayload.config }
+    : {};
+  const systemInstruction = geminiSystemInstructionToText(config.systemInstruction);
+  const responseMimeType = String(config.responseMimeType || "").trim();
+  const responseSchema = config.responseSchema;
+
+  const generationConfig: Record<string, any> = {
+    // AI Studio currently emits Gemini 3.7 Flash with medium thinking by default.
+    // Keep it explicit so the production proxy matches the model's current default profile.
+    thinking_level: "medium",
+  };
+  if (Number.isFinite(Number(config.maxOutputTokens)) && Number(config.maxOutputTokens) > 0) {
+    generationConfig.max_output_tokens = Math.round(Number(config.maxOutputTokens));
+  }
+  if (Number.isFinite(Number(config.seed))) generationConfig.seed = Math.round(Number(config.seed));
+  if (Array.isArray(config.stopSequences) && config.stopSequences.length) {
+    generationConfig.stop_sequences = config.stopSequences.map((item: any) => String(item));
+  }
+
+  const body: Record<string, any> = {
+    model,
+    input: geminiTextContentToInteractionInput(requestPayload?.contents),
+    generation_config: generationConfig,
+    store: false,
+  };
+  if (systemInstruction) body.system_instruction = systemInstruction;
+  if (responseMimeType || responseSchema) {
+    body.response_format = {
+      type: "text",
+      mime_type: responseMimeType || "application/json",
+      ...(responseSchema ? { schema: normalizeInteractionJsonSchema(responseSchema) } : {}),
+    };
+  }
+
+  const upstream = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/interactions",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const payload = await upstream.json().catch(() => null);
+  if (!upstream.ok) {
+    const error = new Error(String(payload?.error?.message || `Gemini interaction failed (${upstream.status})`));
+    const upstreamReason = Array.isArray(payload?.error?.details)
+      ? String(payload.error.details.find((detail: any) => typeof detail?.reason === "string")?.reason || "")
+      : "";
+    (error as any).status = upstream.status;
+    (error as any).code = payload?.error?.status || upstream.status;
+    (error as any).reason = upstreamReason;
+    throw error;
+  }
+
+  const text = extractGeminiInteractionText(payload);
+  const usage = payload?.usage || {};
+  return {
+    candidates: [{ content: { role: "model", parts: [{ text }] } }],
+    usageMetadata: {
+      promptTokenCount: Number(usage.total_input_tokens || 0) || undefined,
+      candidatesTokenCount: Number(usage.total_output_tokens || 0) || undefined,
+      thoughtsTokenCount: Number(usage.total_thought_tokens || 0) || undefined,
+      totalTokenCount: Number(usage.total_tokens || 0) || undefined,
+    },
+    modelVersion: String(payload?.model || model),
+    responseId: String(payload?.id || "") || undefined,
+  };
+};
+
 const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
+  if (model === "gemini-3.7-flash") {
+    return callGeminiInteraction(apiKey, requestPayload);
+  }
   const config = requestPayload?.config && typeof requestPayload.config === "object"
     ? { ...requestPayload.config }
     : {};
@@ -1739,7 +1866,7 @@ export const generateGeminiContent = onRequest(
     const model = String(requestPayload?.model || "").trim();
     const sessionId = String(req.body?.sessionId || "").trim();
     const context = String(req.body?.context || "Gemini 호출").trim().slice(0, 120);
-    const fallbackAttempt = Math.max(1, Math.min(3, Math.round(Number(req.body?.fallbackAttempt) || 1)));
+    const fallbackAttempt = Math.max(1, Math.min(5, Math.round(Number(req.body?.fallbackAttempt) || 1)));
 
     if (!requestPayload || typeof requestPayload !== "object" || !model || !GEMINI_ALLOWED_MODELS.has(model)) {
       res.status(400).json({ error: "Unsupported Gemini request", code: "INVALID_GEMINI_REQUEST", ok: false });
@@ -1798,11 +1925,13 @@ export const generateGeminiContent = onRequest(
           : sanitizeGeminiErrorMessage(error, apiKey),
         code: isAuthKeyActivationError
           ? "GEMINI_AUTH_KEY_NOT_READY"
-          : status === 429
-            ? "GEMINI_RATE_LIMITED"
-            : status >= 500
-              ? "GEMINI_UPSTREAM_UNAVAILABLE"
-              : "GEMINI_UPSTREAM_ERROR",
+          : status === 404
+            ? "GEMINI_MODEL_NOT_FOUND"
+            : status === 429
+              ? "GEMINI_RATE_LIMITED"
+              : status >= 500
+                ? "GEMINI_UPSTREAM_UNAVAILABLE"
+                : "GEMINI_UPSTREAM_ERROR",
         ...(upstreamReason ? { upstreamReason } : {}),
         ok: false,
       });

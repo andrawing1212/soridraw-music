@@ -141,9 +141,13 @@ function mergeModelSkips(
 ): GeminiAuditModelSkip[] | undefined {
   if (!incoming.length) return current;
   const merged = [...(current || [])];
-  const keys = new Set(merged.map((skip) => `${skip.context}|${skip.model}|${skip.reason}|${skip.createdAt}`));
+  // 852: the same skip may be observed at the pre-request decision point and again
+  // on the proxy response. Keep one logical audit row instead of duplicating it.
+  const skipKey = (skip: GeminiAuditModelSkip) =>
+    `${skip.context}|${skip.model}|${skip.reason}|${skip.detail || ''}`;
+  const keys = new Set(merged.map(skipKey));
   incoming.forEach((skip) => {
-    const key = `${skip.context}|${skip.model}|${skip.reason}|${skip.createdAt}`;
+    const key = skipKey(skip);
     if (keys.has(key)) return;
     keys.add(key);
     merged.push(skip);
@@ -220,6 +224,48 @@ export function finishGeminiAuditSession(
     endedAt: new Date().toISOString(),
     resultLabel: String(options?.resultLabel || '').trim().slice(0, 120) || undefined,
     errorMessage: normalizeError(options?.error) || undefined,
+  };
+  writeSessions(sessions);
+}
+
+export function recordGeminiAuditModelSkips(input: {
+  sessionId?: string;
+  context: string;
+  skips?: Array<{
+    id?: string;
+    model?: string;
+    reason?: GeminiAuditModelSkipReason | string;
+    detail?: string;
+    remainingMs?: number;
+    createdAtMs?: number;
+  }>;
+}): void {
+  if (!input.sessionId || !Array.isArray(input.skips) || !input.skips.length) return;
+  const sessions = readSessions();
+  const index = sessions.findIndex((session) => session.id === input.sessionId);
+  if (index < 0) return;
+  const context = String(input.context || 'Gemini 호출').trim() || 'Gemini 호출';
+  const incoming = input.skips
+    .map((skip) => {
+      const createdAtMs = Number(skip?.createdAtMs || 0);
+      return {
+        id: String(skip?.id || '').trim() || createId('gemini-skip'),
+        context,
+        model: String(skip?.model || '').trim(),
+        reason: normalizeSkipReason(skip?.reason),
+        detail: String(skip?.detail || '').replace(/\s+/g, ' ').trim().slice(0, MAX_SKIP_DETAIL_LENGTH) || undefined,
+        remainingMs: safeNumber(skip?.remainingMs) || undefined,
+        createdAt: Number.isFinite(createdAtMs) && createdAtMs > 0
+          ? new Date(createdAtMs).toISOString()
+          : new Date().toISOString(),
+      } satisfies GeminiAuditModelSkip;
+    })
+    .filter((skip) => Boolean(skip.model));
+  if (!incoming.length) return;
+  const session = sessions[index];
+  sessions[index] = {
+    ...session,
+    modelSkips: mergeModelSkips(session.modelSkips, incoming),
   };
   writeSessions(sessions);
 }

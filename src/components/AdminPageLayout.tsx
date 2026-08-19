@@ -3,7 +3,7 @@ import { Activity, Crown, Home, Key, Mic2, SlidersHorizontal, Tags, Users } from
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
+import { normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import type { AdminPermissionKey, AdminPermissions, StaffRole } from '../types';
 import { cn } from '../lib/utils';
 
@@ -20,29 +20,11 @@ const ADMIN_TABS: AdminTab[] = [
   { path: '/admin/gemini-audit', label: 'Gemini 호출', icon: Activity, permission: 'geminiAudit' },
 ];
 
-const readCachedAdminLayoutHint = (): { staffRole: StaffRole; permissions: AdminPermissions } => {
-  try {
-    const uid = auth.currentUser?.uid;
-    if (!uid) return { staffRole: null, permissions: normalizeAdminPermissions(null) };
-    const raw = window.localStorage.getItem('soridraw_cached_user_role_v1');
-    const parsed = raw ? JSON.parse(raw) : null;
-    if (parsed?.uid === uid && parsed?.role === 'admin') {
-      // Navigation-only fallback. Route authorization is still enforced by App's
-      // live/current-user admin gate; this cannot grant access to an admin route.
-      return { staffRole: 'admin', permissions: { ...FULL_ADMIN_PERMISSIONS } };
-    }
-  } catch {
-    // Storage is optional; the live Firestore snapshot remains the normal source.
-  }
-  return { staffRole: null, permissions: normalizeAdminPermissions(null) };
-};
-
 export default function AdminPageLayout({ title, description, actions, children }: AdminPageLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const cachedAdminHint = readCachedAdminLayoutHint();
-  const [staffRole, setStaffRole] = useState<StaffRole>(cachedAdminHint.staffRole);
-  const [permissions, setPermissions] = useState<AdminPermissions>(cachedAdminHint.permissions);
+  const [staffRole, setStaffRole] = useState<StaffRole>(null);
+  const [permissions, setPermissions] = useState<AdminPermissions>(() => normalizeAdminPermissions(null));
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -51,10 +33,6 @@ export default function AdminPageLayout({ title, description, actions, children 
       const data = snapshot.exists() ? snapshot.data() : null;
       setStaffRole(normalizeStaffRole(data));
       setPermissions(normalizeAdminPermissions(data));
-    }, (error) => {
-      // 842 — Do not let a temporary Firestore quota/network failure become an
-      // uncaught route-level error. Keep the last live/cached navigation state.
-      console.warn('[Admin layout] user permission listener unavailable; keeping last verified/cached layout state.', error);
     });
   }, []);
 

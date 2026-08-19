@@ -699,10 +699,8 @@ class ErrorBoundary extends Component<any, any> {
       if (error?.message) {
         if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(error.message)) {
           errorMessage = "마이페이지에서 개인 Gemini API 키를 등록해주세요.";
-        } else if (/GEMINI_RATE_LIMITED|generate_content_.*(?:quota|limit)|gemini[^\n]*(?:quota|rate.?limit)|(?:quota|rate.?limit)[^\n]*gemini|HTTP\s*429/i.test(error.message)) {
-          errorMessage = "Gemini 생성 사용량 또는 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.";
-        } else if (/firestore|firebase/i.test(error.message) && /resource[-_ ]exhausted|quota/i.test(error.message)) {
-          errorMessage = "Firebase 데이터 요청이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요.";
+        } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
+          errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
         } else {
           try {
             const parsed = JSON.parse(error.message);
@@ -3188,7 +3186,7 @@ export default function AppWrapper() {
   }
 
   return (
-    <ErrorBoundary key={location.pathname}>
+    <ErrorBoundary>
       <GlobalPlayerProvider>
         <App />
       </GlobalPlayerProvider>
@@ -4552,11 +4550,6 @@ function App() {
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
   const hasCompletedForceLogoutReentryCheckRef = useRef(false);
-  // 842 — A transient Firestore outage/quota response must not revoke a role that
-  // was already verified from the server for this exact signed-in identity.
-  // This flag is reset on every auth identity change, so a different account can
-  // never inherit the previous account's admin authority.
-  const hasVerifiedCurrentUserRoleFromServerRef = useRef(false);
   const lastFavoriteSyncSignalIdRef = useRef<string>('');
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
@@ -8169,7 +8162,6 @@ const toggleCycleVariantSelection = (
       setForcedLogoutCountdown(10);
       lastForcedLogoutTimeRef.current = 0;
       hasCompletedForceLogoutReentryCheckRef.current = false;
-      hasVerifiedCurrentUserRoleFromServerRef.current = false;
       
       if (unsubFavs) {
         unsubFavs();
@@ -8250,9 +8242,6 @@ const toggleCycleVariantSelection = (
         // immediately, but force-logout and session writes wait for the server copy.
         unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
           const isServerSnapshot = !docSnap.metadata.fromCache;
-          if (isServerSnapshot) {
-            hasVerifiedCurrentUserRoleFromServerRef.current = true;
-          }
 
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -8316,28 +8305,11 @@ const toggleCycleVariantSelection = (
               void createMissingUserDocOnce();
             }
           }
-        }, (error: any) => {
+        }, (error) => {
           console.error('Failed to sync user role:', error);
-          const firestoreCode = String(error?.code || '').toLowerCase();
-          const transientReadFailure = [
-            'resource-exhausted',
-            'unavailable',
-            'deadline-exceeded',
-            'aborted',
-            'internal',
-          ].some((code) => firestoreCode.includes(code));
-
-          // 842 — If this exact identity already received a server snapshot during
-          // the current auth session, a temporary Firestore quota/network failure
-          // must keep the last verified role instead of knocking the whole deployed
-          // admin UI back to a non-admin state. Permission/auth failures still fail
-          // closed, and every identity change resets the verification flag above.
-          if (transientReadFailure && hasVerifiedCurrentUserRoleFromServerRef.current) {
-            console.warn('[Firestore role] transient read failure; keeping last server-verified role for current identity.');
-            return;
-          }
-
-          // 765 safety remains for first-read failures and real permission/auth errors.
+          // 765: a failed role read must fail closed. Do not leave a previous
+          // account's admin/staff state alive when the new identity cannot be
+          // verified.
           setUserRole('free');
           setStaffRole(null);
           setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
@@ -10631,8 +10603,8 @@ const toggleCycleVariantSelection = (
       setMaxBPM(max);
     }
   };
-const saveRecentSongsBatch = async (newSongs: any[]) => {
-  if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
+const saveRecentSong = async (newSong: any) => {
+  if (!user) return;
 
   const saveOperation = async () => {
     try {
@@ -10640,7 +10612,7 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
       const snap = await getDoc(ref);
       const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
       const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-      const updatedSongs = mergeRecentSongLists(newSongs, firestoreSongs, recoverySongs);
+      const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
 
       await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
       recentSongsReadyToCacheRef.current = true;
@@ -10654,14 +10626,11 @@ const saveRecentSongsBatch = async (newSongs: any[]) => {
   };
 
   // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
-  // read-merge-write sequence in completion order so one finished batch cannot overwrite another.
-  // A multi-song generation is persisted with one read + one write instead of one pair per song.
+  // read-merge-write sequence in completion order so one finished song cannot overwrite another.
   const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
   recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
   await chainedSave;
 };
-
-const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
 
   /* 
   useEffect(() => {
@@ -11484,24 +11453,18 @@ const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
+      for (const item of generatedResults) {
+        await saveRecentSong(item);
+      }
+
+      // Increment songGeneratedCount in users document
+      if (user) {
+        await updateDoc(doc(db, 'users', user.uid), {
+          songGeneratedCount: increment(generatedResults.length)
+        }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
+      }
+
       setHistoryIndex(0);
-
-      // 841 — Result-ready and persistence-ready are different states.
-      // Once Gemini has returned the complete song, release the generation queue immediately.
-      // Firestore recent-song persistence and the user counter continue in the existing serialized
-      // background save chain, so a slow Firestore/network response can no longer leave the UI
-      // spinner stuck for minutes after the finished song is already visible.
-      void (async () => {
-        await saveRecentSongsBatch(generatedResults);
-        if (user) {
-          await updateDoc(doc(db, 'users', user.uid), {
-            songGeneratedCount: increment(generatedResults.length)
-          }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
-        }
-      })().catch((error) => {
-        console.error('Failed to persist completed generation in background:', error);
-      });
-
       return {
         success: true,
         generationBatchId,

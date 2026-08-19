@@ -8,7 +8,7 @@ let source = fs.readFileSync(securedPath, 'utf8');
 function replaceOnce(label, before, after) {
   const count = source.split(before).length - 1;
   if (count !== 1) {
-    throw new Error(`[849 latency patch] ${label} anchor mismatch: ${count}`);
+    throw new Error(`[853 latency patch] ${label} anchor mismatch: ${count}`);
   }
   source = source.replace(before, after);
 }
@@ -36,6 +36,9 @@ const getGeminiAttemptTimeoutMs = (`,
 
 const GEMINI_37_BUSY_SKIP_MS = 10 * 60_000;
 const GEMINI_36_BUSY_SKIP_MS = 5 * 60_000;
+const GEMINI_RETRY_AFTER_SAFETY_MS = 1_500;
+const GEMINI_RATE_LIMIT_NO_HINT_COOLDOWN_MS = 15_000;
+const GEMINI_RATE_LIMIT_MAX_COOLDOWN_MS = 60_000;
 const GEMINI_SERVER_INFLIGHT_LEASE_MS = 70_000;
 const GEMINI_SERVER_INFLIGHT_COORDINATED_MODELS = new Set([
   "gemini-3.7-flash",
@@ -92,8 +95,19 @@ const getGeminiPolicyBusyCooldownMs = (
   model: string,
   statusCode: number,
   isAttemptTimeout: boolean,
+  retryAfterMs = 0,
 ): number => {
-  const isBusyFailure = isAttemptTimeout || statusCode === 429 || [500, 502, 503, 504].includes(statusCode);
+  if (statusCode === 429) {
+    const retryMs = Math.max(0, Math.round(Number(retryAfterMs) || 0));
+    if (retryMs > 0) {
+      return Math.min(
+        GEMINI_RATE_LIMIT_MAX_COOLDOWN_MS,
+        Math.max(3_000, retryMs + GEMINI_RETRY_AFTER_SAFETY_MS),
+      );
+    }
+    return GEMINI_RATE_LIMIT_NO_HINT_COOLDOWN_MS;
+  }
+  const isBusyFailure = isAttemptTimeout || [500, 502, 503, 504].includes(statusCode);
   if (!isBusyFailure) return 0;
   if (model === "gemini-3.7-flash") return GEMINI_37_BUSY_SKIP_MS;
   if (model === "gemini-3.6-flash") return GEMINI_36_BUSY_SKIP_MS;
@@ -126,7 +140,7 @@ const getGeminiAttemptTimeoutMs = (`,
 replaceOnce(
   'model-aware busy cooldown duration',
   '  const cooldownMs = isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs);',
-  '  const policyCooldownMs = getGeminiPolicyBusyCooldownMs(model, statusCode, isAttemptTimeout);\n  const cooldownMs = policyCooldownMs || (isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs));',
+  '  const policyCooldownMs = getGeminiPolicyBusyCooldownMs(model, statusCode, isAttemptTimeout, retryAfterMs);\n  const cooldownMs = policyCooldownMs || (isAttemptTimeout ? 0 : getGeminiServerCooldownMs(statusCode, retryAfterMs));',
 );
 
 replaceOnce(
@@ -192,7 +206,12 @@ replaceOnce(
             : null;`,
   `          const status = attemptRecord.statusCode || 500;
           const isPolicyTimeout = String(attemptRecord.code || "").trim() === "GEMINI_ATTEMPT_TIMEOUT";
-          const policyCooldownMs = getGeminiPolicyBusyCooldownMs(attemptModel, status, isPolicyTimeout);
+          const policyCooldownMs = getGeminiPolicyBusyCooldownMs(
+            attemptModel,
+            status,
+            isPolicyTimeout,
+            Number(attemptRecord.retryAfterMs || 0),
+          );
           const cooldownReason = String(attemptRecord.cooldownReason || (status === 429 ? "quota_or_rate_limit" : status === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded"));
           const serverCooldown = policyCooldownMs > 0
             ? setGeminiPolicyBusyCooldown(uid, attemptModel, status, cooldownReason, policyCooldownMs)
@@ -256,4 +275,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(securedPath, source, 'utf8');
-console.log('Applied SORIDRAW 850 Gemini policy: 849 latency/in-flight + opt-in initial 3.6 low-thinking experiment.');
+console.log('Applied SORIDRAW 853 Gemini policy: Retry-After based 429 cooldown + 850 low-thinking + 849 in-flight.');

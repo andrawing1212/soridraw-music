@@ -2700,3 +2700,10 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - Firestore `onSnapshot`은 오류 콜백 이후 더 이상 새 스냅샷을 전달하지 않으므로, 사용자 역할 리스너와 관리자 레이아웃 권한 리스너에 30초→60초→120초→최대 5분의 저빈도 재연결을 추가했습니다. 같은 로그인 세션에서 이미 서버 검증된 권한은 일시 오류 동안 유지하고, 첫 검증 실패는 기존대로 fail-closed 상태를 유지한 채 백그라운드에서 재검증합니다.
 - 프로덕션 시작 때마다 실행되던 `test/connection` 강제 서버 읽기는 개발 환경에서만 실행하도록 제한해 불필요한 Firestore 읽기 1회를 제거했습니다.
 - 839~841의 Gemini fallback/cooldown, 금지어 통합 교정, 841의 생성완료 즉시 UI 해제 및 배치 저장 구조는 변경하지 않았습니다. Firestore 문서 구조/Rules/Functions/API Key 구조 변경도 없습니다.
+
+
+## 844차 — Firestore 일시 오류 전역 차단 제거
+- `favorites` paged query가 실패한 뒤 사용하는 legacy `onSnapshot` fallback에서 Firestore 오류를 `handleFirestoreError()`로 다시 throw하던 경로를 제거했습니다. 즐겨찾기는 로컬 캐시를 유지하고, `resource-exhausted`/`unavailable` 등 일시 오류는 30초→60초→120초→최대 5분 간격으로 백그라운드 재연결합니다.
+- Firestore 데이터 읽기 실패는 해당 데이터만 일시적으로 오래된 상태가 될 수 있을 뿐, 글로벌 `ErrorBoundary`로 승격되어 앱 전체 페이지 진입을 막지 않도록 했습니다.
+- `MyPage` 사용자 프로필 listener에도 오류 콜백을 추가해 일시적인 Firestore 제한 시 마지막 정상 프로필 상태를 유지합니다.
+- Firestore/Auth/Functions 저장 구조, Rules, 기존 사용자 데이터 형식은 변경하지 않았습니다.

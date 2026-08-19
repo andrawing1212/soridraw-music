@@ -8106,6 +8106,8 @@ const toggleCycleVariantSelection = (
 
     let unsubFavs: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
+    let favoritesRetryTimer: number | null = null;
+    let favoritesRetryAttempt = 0;
     let userRoleRetryTimer: number | null = null;
     let userRoleRetryAttempt = 0;
     let favoriteFullCacheRecoveryTimer: any = null;
@@ -8189,6 +8191,11 @@ const toggleCycleVariantSelection = (
         unsubUserDoc();
         unsubUserDoc = null;
       }
+      if (favoritesRetryTimer !== null) {
+        window.clearTimeout(favoritesRetryTimer);
+        favoritesRetryTimer = null;
+      }
+      favoritesRetryAttempt = 0;
       if (userRoleRetryTimer !== null) {
         window.clearTimeout(userRoleRetryTimer);
         userRoleRetryTimer = null;
@@ -8419,13 +8426,37 @@ const toggleCycleVariantSelection = (
 
           const legacyQuery = query(collection(db, 'favorites'), where('uid', '==', currentUser.uid));
           unsubFavs = onSnapshot(legacyQuery, (legacySnapshot) => {
+            favoritesRetryAttempt = 0;
             const legacyFavs = sortFavoriteList(legacySnapshot.docs.map(mapFavoriteFirestoreDoc).filter((favorite) => !isFavoriteSoftRemoved(favorite)));
             setFavorites(legacyFavs);
             writeFavoritesCache(currentUser.uid, legacyFavs);
             setIsFavoritesLoading(false);
-          }, (legacyError) => {
-            handleFirestoreError(legacyError, OperationType.GET, 'favorites');
+          }, (legacyError: any) => {
+            // 844 — Favorites are non-critical cached data. A Firestore listener error must
+            // never be escalated into the global ErrorBoundary and block the whole app.
+            // Keep the last local/cache result visible and retry the terminated listener slowly.
+            console.error('Favorites legacy listener failed. Keeping cached favorites and retrying in background.', legacyError);
             setIsFavoritesLoading(false);
+
+            const firestoreCode = String(legacyError?.code || '').toLowerCase();
+            const transientReadFailure = [
+              'resource-exhausted',
+              'unavailable',
+              'deadline-exceeded',
+              'aborted',
+              'internal',
+            ].some((code) => firestoreCode.includes(code));
+
+            if (transientReadFailure) {
+              const retryDelaysMs = [30_000, 60_000, 120_000, 300_000];
+              const retryDelay = retryDelaysMs[Math.min(favoritesRetryAttempt, retryDelaysMs.length - 1)];
+              favoritesRetryAttempt += 1;
+              if (favoritesRetryTimer !== null) window.clearTimeout(favoritesRetryTimer);
+              favoritesRetryTimer = window.setTimeout(() => {
+                favoritesRetryTimer = null;
+                attachLegacyFavoritesFallback();
+              }, retryDelay);
+            }
           });
         };
 
@@ -8553,6 +8584,7 @@ const toggleCycleVariantSelection = (
       unsubscribe();
       if (unsubFavs) unsubFavs();
       if (unsubUserDoc) unsubUserDoc();
+      if (favoritesRetryTimer !== null) window.clearTimeout(favoritesRetryTimer);
       if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
       if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);
     };

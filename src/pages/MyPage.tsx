@@ -283,6 +283,10 @@ export default function MyPage({ onLogout }: MyPageProps) {
  const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (snapshot) => {
  const nextProfile = snapshot.exists() ? ({ uid: user.uid, ...snapshot.data() } as AppUserInfo) : null;
  setProfile(nextProfile);
+ }, (error) => {
+ // 844 — Keep the last profile UI on transient Firestore failures instead of allowing
+ // an operational data error to become a page-level failure.
+ console.error('MyPage profile listener failed. Keeping the last available profile state.', error);
  });
  return () => unsubscribe();
  }, [user]);

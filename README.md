@@ -2642,3 +2642,61 @@ The V1 song generator now fails open after temporary Gemini correction failures:
 - 모든 모델이 쿨다운이면 생성 자체가 막히지 않도록 가장 먼저 풀릴 모델 1개를 선택해 시도한다.
 - API 키/프롬프트/생성 결과는 캐시에 저장하지 않는다. 캐시에는 모델명, 만료 시각, 실패 종류만 저장한다.
 - Functions/Firebase 저장 구조 변경 없음. 이번 차수는 프론트 반영만으로 동작한다.
+
+## 837차 — Gemini 쿨다운 전 생성 경로 공통화 / 재호출 대기 제거
+- 836차 실사용에서 최초 곡 생성의 `gemini-3.7-flash` 429 이후에도 같은 곡의 금지어/repair 단계가 다시 3.7을 호출하는 경로가 확인되었다.
+- 원인은 모델 쿨다운이 Firebase Auth UID가 아직 준비되지 않은 순간에는 브라우저 저장소에 기록되지 않아, 뒤이은 교정 호출이 같은 실패 모델을 다시 선택할 수 있었던 것이다.
+- 쿨다운을 탭 메모리의 즉시 공통 상태로 먼저 기록하고 localStorage는 새로고침 유지용 보조 캐시로 사용한다.
+- Auth가 생성 도중 준비되는 경우 guest 쿨다운을 로그인 사용자 스코프로 자동 승계한다.
+- 따라서 최초 생성/금지어 통합 교정/repair/언어혼합 재시도 등 `generateContentWithModelFallback`을 쓰는 모든 경로가 같은 쿨다운을 즉시 공유한다.
+- 3.7에서 429가 한 번 확인되면 쿨다운 동안 이후 호출은 Firebase Function 자체를 3.7 용도로 다시 호출하지 않고 즉시 다음 사용 가능 모델부터 시작한다.
+- API Key, 프롬프트, 가사 결과는 캐시에 저장하지 않는다. Firebase/Auth/Firestore 저장 구조와 Functions 코드는 변경하지 않았다.
+
+## 838차 — Gemini fallback 서버 1회 호출 통합 / Function 왕복 절감
+- 기준: 837차.
+- `generateContentWithModelFallback`의 모델 전환을 브라우저에서 Function을 모델마다 다시 호출하는 방식에서, 한 번의 `generateGeminiContent` 요청 안에 이미 필터링된 모델 체인을 전달하고 Functions 내부에서 다음 모델로 전환하는 방식으로 변경했습니다.
+- 정상 모델 1회 성공 경로는 기존과 동일하게 Gemini 물리 호출 1회이며, fallback이 필요할 때만 같은 Function 실행 안에서 다음 모델을 호출합니다.
+- Auth/App Check 확인, 사용자 상태/API Key Firestore 읽기, 기본 요청 guard 획득은 logical operation당 1회만 수행합니다. fallback 추가 물리 호출은 기존 5회/분당 제한을 보존하기 위해 `gemini_request_guards` 단일 문서만 가볍게 추가 예약합니다.
+- 곡당 물리 Gemini 호출 최대 5회와 자동 품질 보정 최대 1회 제한은 유지됩니다. 서버가 429/404/명시적 500/502/503/504에서만 다음 모델로 진행하며, 400/401/403/스키마/Auth/App Check/앱 guard 오류는 그대로 중단합니다.
+- 서버가 각 실제 모델 시도의 성공/실패, 처리시간, 토큰 메타데이터를 브라우저에 반환해 기존 관리자 Gemini 호출 기록은 물리 호출 단위로 계속 표시됩니다.
+- 836~837의 브라우저 모델 cooldown도 유지합니다. 이미 쿨다운된 모델은 서버 체인에 포함되지 않아 Function 내부에서도 불필요하게 다시 시도하지 않습니다.
+- API Key/프롬프트/가사 결과를 새 캐시에 저장하지 않으며 Firestore 문서 구조도 변경하지 않습니다.
+- `functions/src/index.ts`가 변경되므로 실제 적용 시 `generateGeminiContent` Function 재배포가 필요합니다.
+
+## 839차 — 서버 실패모델 쿨다운 힌트 동기화 / 다음 곡 재시도 제거
+- 기준: 838차.
+- 838차에서 fallback을 한 Function 안으로 합친 뒤, 서버 내부에서 발생한 3.7/3.6 실패 정보가 브라우저 cooldown에 확실히 남지 않아 다음 곡이 다시 3.7부터 확인하는 경로를 보완했습니다.
+- Functions가 실패 모델별 `statusCode`, provider `Retry-After`/`Please retry in ...s`, 계산된 cooldown 시간과 이유를 성공 응답에도 함께 반환합니다.
+- 브라우저는 서버 cooldown 힌트를 즉시 탭 메모리 + localStorage의 기존 사용자별 모델 cooldown에 반영합니다. 다음 곡/교정/repair는 해당 모델을 Function 요청 체인에서 처음부터 제외합니다.
+- Function 인스턴스가 살아 있는 동안에는 사용자 UID+모델 단위의 짧은 메모리 cooldown도 보조로 사용합니다. 브라우저 저장이 비어 있거나 다른 탭에서 요청해도 같은 warm instance에서는 최근 429/404/일시 5xx 모델을 다시 두드리지 않습니다.
+- 서버 메모리에는 API Key, 프롬프트, 가사, 생성 결과, 토큰 원문을 저장하지 않습니다. 모델명/만료시각/실패종류만 저장하며 인스턴스 종료 시 자동 소멸합니다.
+- 모든 모델이 일시 cooldown인 극단 상황에는 생성 자체가 막히지 않도록 가장 먼저 풀릴 모델 1개만 다시 시도합니다.
+- Firestore 문서 구조/Auth/App Check/API Key 저장 구조는 변경하지 않았습니다. `functions/src/index.ts` 변경으로 `generateGeminiContent` Function 재배포가 필요합니다.
+
+## 840차 — 금지어 통합 교정 fallback 공통화
+- `rewriteLyricHardBanCards`가 `gemini-3.7-flash` 단일 모델 체인으로 고정되어 있던 예외 경로를 제거했습니다.
+- 금지어 통합 교정도 최초 곡 생성과 동일한 5단 모델 체인/쿨다운을 사용합니다.
+- 따라서 3.7이 429 쿨다운 상태이면 교정에서 3.7을 다시 호출하지 않고 3.6 이하의 사용 가능한 모델부터 시작합니다.
+- 기존 최종 금지어 안전 검사와 곡당 물리 호출 상한은 그대로 유지합니다.
+
+### 841차 — 생성 완료 상태와 Firestore 저장 분리 / 멈춘 회전 표시 제거
+- Gemini 결과가 이미 완성되어 화면에 표시된 뒤에도 `saveRecentSong()`의 Firestore read/merge/write와 사용자 생성 카운트 갱신을 `await`하느라 생성 큐가 계속 `running`으로 남던 경로를 분리했습니다.
+- 이제 완성 결과를 메모리/최근곡 UI에 반영한 즉시 생성 큐를 `completed`로 전환하고, 최근곡 Firestore 저장과 `songGeneratedCount` 갱신은 기존 직렬 저장 체인에서 백그라운드로 이어집니다.
+- 2곡 이상 한 번에 생성할 때 최근곡 저장도 곡마다 `getDoc + setDoc`을 반복하지 않고 배치 전체를 한 번의 `getDoc + setDoc`으로 병합 저장합니다.
+- Firebase/Auth/App Check/Gemini API Key 저장 구조는 변경하지 않았고 Functions 변경도 없습니다.
+
+## 842차 — 배포앱 관리자/Firestore 일시 오류 격리
+- 배포앱에서 Firestore `resource-exhausted`/일시 네트워크 오류가 발생해도 이미 현재 로그인 세션에서 서버 확인된 관리자 권한을 즉시 `free`로 강등하지 않습니다. 로그인 계정이 바뀌면 검증 플래그를 반드시 초기화해 다른 계정으로 권한이 넘어가지 않습니다.
+- 관리자 공통 레이아웃의 사용자 권한 `onSnapshot`에 오류 콜백을 추가해 일시적인 Firestore 오류가 앱 전체 ErrorBoundary를 터뜨리지 않도록 했습니다.
+- 관리자 메뉴의 화면 표시만 동일 UID의 기존 admin 캐시를 임시 fallback으로 사용할 수 있게 했습니다. 실제 관리자 라우트 접근 권한은 기존 App의 라이브 권한 게이트가 계속 담당합니다.
+- ErrorBoundary가 단순히 `limit`라는 단어가 있다는 이유만으로 모든 오류를 `무료 생성 한도`로 오인하던 조건을 제거하고, Gemini 429/쿼터와 Firebase 데이터 제한을 구분합니다.
+- 라우트가 바뀌면 ErrorBoundary 상태도 새로 시작하도록 해 한 페이지 오류가 다른 페이지까지 영구 고정되지 않게 했습니다.
+- Firebase/Auth/Firestore 저장 구조, Functions, Gemini 모델/fallback 구조는 변경하지 않았습니다.
+
+
+## 843차 — Firestore 일시오류 실제 복구 + 라우트 전역 리마운트 제거
+- 842차의 `ErrorBoundary key={location.pathname}`이 정상 라우트 이동마다 `App`과 `GlobalPlayerProvider` 전체를 새로 마운트하던 회귀를 제거했습니다. ErrorBoundary 자체의 오류 상태만 `resetKey` 변화에서 초기화하므로 정상 페이지 이동에서는 Auth/Firestore/생성 저장 체인이 유지됩니다.
+- 이 전역 리마운트 때문에 페이지 이동 때마다 사용자 역할 검증 플래그가 초기화되고 Auth/Firestore 리스너가 재생성되어, 842차의 관리자 일시오류 보호가 스스로 무효화될 수 있던 문제를 수정했습니다.
+- Firestore `onSnapshot`은 오류 콜백 이후 더 이상 새 스냅샷을 전달하지 않으므로, 사용자 역할 리스너와 관리자 레이아웃 권한 리스너에 30초→60초→120초→최대 5분의 저빈도 재연결을 추가했습니다. 같은 로그인 세션에서 이미 서버 검증된 권한은 일시 오류 동안 유지하고, 첫 검증 실패는 기존대로 fail-closed 상태를 유지한 채 백그라운드에서 재검증합니다.
+- 프로덕션 시작 때마다 실행되던 `test/connection` 강제 서버 읽기는 개발 환경에서만 실행하도록 제한해 불필요한 Firestore 읽기 1회를 제거했습니다.
+- 839~841의 Gemini fallback/cooldown, 금지어 통합 교정, 841의 생성완료 즉시 UI 해제 및 배치 저장 구조는 변경하지 않았습니다. Firestore 문서 구조/Rules/Functions/API Key 구조 변경도 없습니다.

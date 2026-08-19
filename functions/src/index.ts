@@ -841,6 +841,47 @@ const acquireGeminiRequestGuard = async (uid: string, sessionId: string): Promis
   });
 };
 
+const reserveGeminiFallbackAttempt = async (uid: string, sessionId: string): Promise<void> => {
+  const db = admin.firestore();
+  const guardRef = db.collection("gemini_request_guards").doc(uid);
+  const now = Date.now();
+
+  // 838: fallback stays inside the same Function invocation, but every physical
+  // Gemini upstream call still consumes the existing per-minute/session ceiling.
+  // Only this single guard document is touched for fallback attempts; Auth, App Check,
+  // account state and API-key reads are not repeated.
+  await db.runTransaction(async (tx) => {
+    const guardSnap = await tx.get(guardRef);
+    const data = guardSnap.data() || {};
+
+    const minuteWindowStart = Number(data.minuteWindowStart || 0);
+    const sameMinuteWindow = minuteWindowStart > 0 && now - minuteWindowStart < 60_000;
+    const minuteCount = sameMinuteWindow ? Math.max(0, Number(data.minuteCount || 0)) : 0;
+    if (minuteCount >= GEMINI_MAX_REQUESTS_PER_MINUTE) {
+      throw new HttpsError("resource-exhausted", "짧은 시간에 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    const sessionWindowStart = Number(data.sessionWindowStart || 0);
+    const sameSessionWindow = sessionWindowStart > 0 && now - sessionWindowStart < GEMINI_SESSION_WINDOW_MS;
+    const sessionCounts = sameSessionWindow && data.sessionCounts && typeof data.sessionCounts === "object"
+      ? { ...data.sessionCounts }
+      : {};
+    const sessionCount = Math.max(0, Number(sessionCounts[sessionId] || 0));
+    if (sessionCount >= GEMINI_MAX_REQUESTS_PER_SESSION) {
+      throw new HttpsError("resource-exhausted", "곡 하나의 Gemini 호출 상한에 도달했습니다.");
+    }
+    sessionCounts[sessionId] = sessionCount + 1;
+
+    tx.set(guardRef, {
+      minuteWindowStart: sameMinuteWindow ? minuteWindowStart : now,
+      minuteCount: minuteCount + 1,
+      sessionWindowStart: sameSessionWindow ? sessionWindowStart : now,
+      sessionCounts,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+};
+
 const releaseGeminiRequestGuard = async (uid: string): Promise<void> => {
   const guardRef = admin.firestore().collection("gemini_request_guards").doc(uid);
   try {
@@ -999,6 +1040,81 @@ const extractGeminiInteractionText = (payload: any): string => {
     .join("");
 };
 
+const parseGeminiRetryAfterMs = (headerValue: string | null, message: unknown): number => {
+  const header = String(headerValue || "").trim();
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds) && seconds > 0) return Math.ceil(seconds * 1000);
+    const retryAt = Date.parse(header);
+    if (Number.isFinite(retryAt)) return Math.max(0, retryAt - Date.now());
+  }
+  const text = String(message || "");
+  const match = text.match(/(?:Please\s+retry\s+in|retry\s+in)\s*([0-9]+(?:\.[0-9]+)?)\s*s/i);
+  if (!match) return 0;
+  const parsedSeconds = Number(match[1]);
+  return Number.isFinite(parsedSeconds) && parsedSeconds > 0 ? Math.ceil(parsedSeconds * 1000) : 0;
+};
+
+const getGeminiServerCooldownMs = (statusCode: number, retryAfterMs = 0): number => {
+  const retryFloor = Math.max(0, Math.round(Number(retryAfterMs) || 0));
+  if (statusCode === 429) return Math.max(120_000, Math.min(10 * 60_000, retryFloor + 1_000));
+  if ([500, 502, 503, 504].includes(statusCode)) return Math.max(45_000, Math.min(5 * 60_000, retryFloor + 1_000));
+  if (statusCode === 404) return 30 * 60_000;
+  return 0;
+};
+
+type GeminiServerCooldownEntry = {
+  until: number;
+  reason: string;
+  statusCode: number;
+};
+
+// Best-effort per-instance memory only. It never stores API keys, prompts or generated text.
+// Browser localStorage remains the durable short-term source across Function instances.
+const geminiServerModelCooldowns = new Map<string, GeminiServerCooldownEntry>();
+
+const geminiServerCooldownKey = (uid: string, model: string): string => `${uid}:${model}`;
+
+const pruneGeminiServerCooldowns = (): void => {
+  const now = Date.now();
+  for (const [key, entry] of geminiServerModelCooldowns.entries()) {
+    if (!entry || entry.until <= now) geminiServerModelCooldowns.delete(key);
+  }
+  if (geminiServerModelCooldowns.size <= 500) return;
+  const oldest = Array.from(geminiServerModelCooldowns.entries())
+    .sort((a, b) => a[1].until - b[1].until)
+    .slice(0, geminiServerModelCooldowns.size - 500);
+  oldest.forEach(([key]) => geminiServerModelCooldowns.delete(key));
+};
+
+const getGeminiServerModelCooldown = (uid: string, model: string): GeminiServerCooldownEntry | null => {
+  pruneGeminiServerCooldowns();
+  const entry = geminiServerModelCooldowns.get(geminiServerCooldownKey(uid, model));
+  if (!entry || entry.until <= Date.now()) return null;
+  return entry;
+};
+
+const setGeminiServerModelCooldown = (
+  uid: string,
+  model: string,
+  statusCode: number,
+  retryAfterMs: number,
+  reason: string,
+): GeminiServerCooldownEntry | null => {
+  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);
+  if (cooldownMs <= 0) return null;
+  const key = geminiServerCooldownKey(uid, model);
+  const existing = geminiServerModelCooldowns.get(key);
+  const next: GeminiServerCooldownEntry = {
+    until: Math.max(Number(existing?.until || 0), Date.now() + cooldownMs),
+    reason: String(reason || existing?.reason || "temporary_model_cooldown").trim() || "temporary_model_cooldown",
+    statusCode,
+  };
+  geminiServerModelCooldowns.set(key, next);
+  pruneGeminiServerCooldowns();
+  return next;
+};
+
 const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promise<any> => {
   const model = String(requestPayload?.model || "").trim();
   const config = requestPayload?.config && typeof requestPayload.config === "object"
@@ -1056,6 +1172,7 @@ const callGeminiInteraction = async (apiKey: string, requestPayload: any): Promi
     (error as any).status = upstream.status;
     (error as any).code = payload?.error?.status || upstream.status;
     (error as any).reason = upstreamReason;
+    (error as any).retryAfterMs = parseGeminiRetryAfterMs(upstream.headers.get("retry-after"), (error as Error).message);
     throw error;
   }
 
@@ -1134,9 +1251,126 @@ const callGeminiGenerateContent = async (apiKey: string, requestPayload: any): P
     (error as any).status = upstream.status;
     (error as any).code = payload?.error?.status || upstream.status;
     (error as any).reason = upstreamReason;
+    (error as any).retryAfterMs = parseGeminiRetryAfterMs(upstream.headers.get("retry-after"), (error as Error).message);
     throw error;
   }
   return payload || {};
+};
+
+type GeminiServerAttemptRecord = {
+  model: string;
+  status: "success" | "failed";
+  durationMs: number;
+  usageMetadata?: any;
+  errorMessage?: string;
+  statusCode?: number;
+  code?: string | number;
+  retryAfterMs?: number;
+  cooldownMs?: number;
+  cooldownReason?: string;
+};
+
+const normalizeGeminiServerAttemptRequest = (
+  requestPayload: any,
+  model: string,
+  fallbackInstruction: string,
+  isFallbackAttempt: boolean,
+): any => {
+  const next = {
+    ...(requestPayload || {}),
+    model,
+    config: requestPayload?.config && typeof requestPayload.config === "object"
+      ? { ...requestPayload.config }
+      : requestPayload?.config,
+  };
+
+  if ((model === "gemini-3.7-flash" || model === "gemini-3.6-flash" || model === "gemini-3.5-flash-lite") && next.config) {
+    delete next.config.temperature;
+    delete next.config.topP;
+    delete next.config.topK;
+  }
+
+  if (isFallbackAttempt && fallbackInstruction && next.config) {
+    const currentInstruction = next.config.systemInstruction;
+    if (typeof currentInstruction === "string") {
+      next.config.systemInstruction = [currentInstruction, fallbackInstruction].filter(Boolean).join("\n\n");
+    } else if (currentInstruction && typeof currentInstruction === "object" && Array.isArray(currentInstruction.parts)) {
+      next.config.systemInstruction = {
+        ...currentInstruction,
+        parts: [
+          ...currentInstruction.parts,
+          { text: `\n\n${fallbackInstruction}` },
+        ],
+      };
+    } else {
+      next.config.systemInstruction = fallbackInstruction;
+    }
+  }
+
+  return next;
+};
+
+const normalizeGeminiServerModelChain = (primaryModel: string, rawChain: any): string[] => {
+  const requested = Array.isArray(rawChain)
+    ? rawChain.map((item: any) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const chain = [primaryModel, ...requested.filter((model: string) => model !== primaryModel)]
+    .filter((model, index, all) => Boolean(model) && all.indexOf(model) === index)
+    .filter((model) => GEMINI_ALLOWED_MODELS.has(model))
+    .slice(0, GEMINI_MAX_REQUESTS_PER_SESSION);
+  return chain.length ? chain : [primaryModel];
+};
+
+const isGeminiServerFallbackStatus = (status: number): boolean =>
+  status === 404 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+
+const buildGeminiServerAttemptError = (error: unknown, apiKey: string, model: string, durationMs: number): GeminiServerAttemptRecord => {
+  const anyError = error as any;
+  const statusCode = extractGeminiErrorStatus(error);
+  const retryAfterMs = Math.max(0, Math.round(Number(anyError?.retryAfterMs) || 0));
+  const cooldownMs = getGeminiServerCooldownMs(statusCode, retryAfterMs);
+  return {
+    model,
+    status: "failed",
+    durationMs,
+    errorMessage: sanitizeGeminiErrorMessage(error, apiKey),
+    statusCode,
+    code: anyError?.code || statusCode,
+    ...(retryAfterMs > 0 ? { retryAfterMs } : {}),
+    ...(cooldownMs > 0 ? { cooldownMs } : {}),
+    ...(cooldownMs > 0 ? { cooldownReason: statusCode === 429 ? "quota_or_rate_limit" : statusCode === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded" } : {}),
+  };
+};
+
+type GeminiServerCooldownHint = {
+  model: string;
+  remainingMs: number;
+  reason: string;
+  statusCode: number;
+};
+
+const mergeGeminiServerCooldownHints = (...groups: GeminiServerCooldownHint[][]): GeminiServerCooldownHint[] => {
+  const merged = new Map<string, GeminiServerCooldownHint>();
+  groups.flat().forEach((hint) => {
+    if (!hint?.model || hint.remainingMs <= 0) return;
+    const previous = merged.get(hint.model);
+    if (!previous || hint.remainingMs > previous.remainingMs) merged.set(hint.model, hint);
+  });
+  return Array.from(merged.values());
+};
+
+const activeGeminiServerCooldownHints = (uid: string, models: string[]): GeminiServerCooldownHint[] => {
+  const now = Date.now();
+  return models.flatMap((model) => {
+    const entry = getGeminiServerModelCooldown(uid, model);
+    if (!entry) return [];
+    return [{
+      model,
+      remainingMs: Math.max(1_000, entry.until - now),
+      reason: entry.reason,
+      statusCode: entry.statusCode,
+    }];
+  });
 };
 
 const pickFirstString = (...values: any[]): string => {
@@ -1869,6 +2103,8 @@ export const generateGeminiContent = onRequest(
     const sessionId = String(req.body?.sessionId || "").trim();
     const context = String(req.body?.context || "Gemini 호출").trim().slice(0, 120);
     const fallbackAttempt = Math.max(1, Math.min(5, Math.round(Number(req.body?.fallbackAttempt) || 1)));
+    const modelChain = normalizeGeminiServerModelChain(model, req.body?.modelChain);
+    const fallbackInstruction = String(req.body?.fallbackInstruction || "").trim().slice(0, 5000);
 
     if (!requestPayload || typeof requestPayload !== "object" || !model || !GEMINI_ALLOWED_MODELS.has(model)) {
       res.status(400).json({ error: "Unsupported Gemini request", code: "INVALID_GEMINI_REQUEST", ok: false });
@@ -1888,6 +2124,18 @@ export const generateGeminiContent = onRequest(
 
     let guardAcquired = false;
     let apiKey = "";
+    const attempts: GeminiServerAttemptRecord[] = [];
+    const initialServerCooldownHints = activeGeminiServerCooldownHints(uid, modelChain);
+    const availableServerModelChain = modelChain.filter((attemptModel) => !getGeminiServerModelCooldown(uid, attemptModel));
+    const runtimeServerModelChain = availableServerModelChain.length
+      ? availableServerModelChain
+      : modelChain
+          .map((attemptModel) => ({ attemptModel, cooldown: getGeminiServerModelCooldown(uid, attemptModel) }))
+          .filter((item) => Boolean(item.cooldown))
+          .sort((a, b) => Number(a.cooldown?.until || 0) - Number(b.cooldown?.until || 0))
+          .slice(0, 1)
+          .map((item) => item.attemptModel);
+    let responseCooldownHints = initialServerCooldownHints;
     try {
       apiKey = await acquireGeminiRequestGuard(uid, sessionId);
       guardAcquired = true;
@@ -1896,25 +2144,96 @@ export const generateGeminiContent = onRequest(
         return;
       }
 
-      const response = await callGeminiGenerateContent(apiKey, requestPayload);
-      const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
-        ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
-        : "";
-      res.json({
-        ok: true,
-        text,
-        usageMetadata: response.usageMetadata || null,
-        modelVersion: response.modelVersion || model,
-        responseId: response.responseId || null,
-        promptFeedback: response.promptFeedback || null,
-        context,
-        fallbackAttempt,
-      });
+      let lastUpstreamError: unknown = null;
+      for (let index = 0; index < runtimeServerModelChain.length; index += 1) {
+        const attemptModel = runtimeServerModelChain[index];
+        if (index > 0) {
+          await reserveGeminiFallbackAttempt(uid, sessionId);
+        }
+
+        const attemptPayload = normalizeGeminiServerAttemptRequest(
+          requestPayload,
+          attemptModel,
+          fallbackInstruction,
+          index > 0 || attemptModel !== model,
+        );
+        const attemptStartedAt = Date.now();
+        try {
+          const response = await callGeminiGenerateContent(apiKey, attemptPayload);
+          const durationMs = Math.max(0, Date.now() - attemptStartedAt);
+          attempts.push({
+            model: attemptModel,
+            status: "success",
+            durationMs,
+            usageMetadata: response.usageMetadata || null,
+          });
+          geminiServerModelCooldowns.delete(geminiServerCooldownKey(uid, attemptModel));
+          responseCooldownHints = mergeGeminiServerCooldownHints(
+            responseCooldownHints,
+            activeGeminiServerCooldownHints(uid, modelChain),
+          );
+          const text = Array.isArray(response?.candidates?.[0]?.content?.parts)
+            ? response.candidates[0].content.parts.map((part: any) => String(part?.text || "")).join("")
+            : "";
+          res.json({
+            ok: true,
+            text,
+            usageMetadata: response.usageMetadata || null,
+            modelVersion: response.modelVersion || attemptModel,
+            responseId: response.responseId || null,
+            promptFeedback: response.promptFeedback || null,
+            usedModel: attemptModel,
+            attempts,
+            cooldowns: responseCooldownHints,
+            context,
+            fallbackAttempt: Math.min(5, fallbackAttempt + index),
+          });
+          return;
+        } catch (upstreamError) {
+          lastUpstreamError = upstreamError;
+          const durationMs = Math.max(0, Date.now() - attemptStartedAt);
+          const attemptRecord = buildGeminiServerAttemptError(upstreamError, apiKey, attemptModel, durationMs);
+          attempts.push(attemptRecord);
+          const status = attemptRecord.statusCode || 500;
+          const serverCooldown = isGeminiServerFallbackStatus(status)
+            ? setGeminiServerModelCooldown(
+                uid,
+                attemptModel,
+                status,
+                Number(attemptRecord.retryAfterMs || 0),
+                String(attemptRecord.cooldownReason || (status === 429 ? "quota_or_rate_limit" : status === 404 ? "model_not_found_or_rollout" : "model_unavailable_or_overloaded")),
+              )
+            : null;
+          if (serverCooldown) {
+            responseCooldownHints = mergeGeminiServerCooldownHints(
+              responseCooldownHints,
+              [{
+                model: attemptModel,
+                remainingMs: Math.max(1_000, serverCooldown.until - Date.now()),
+                reason: serverCooldown.reason,
+                statusCode: serverCooldown.statusCode,
+              }],
+            );
+          }
+          const canFallback = index < runtimeServerModelChain.length - 1 && isGeminiServerFallbackStatus(status);
+          if (!canFallback) throw upstreamError;
+          console.warn("[Gemini Server Fallback] advancing model inside one Function request", {
+            context,
+            sessionId,
+            from: attemptModel,
+            to: runtimeServerModelChain[index + 1],
+            status,
+            physicalAttempt: fallbackAttempt + index,
+          });
+        }
+      }
+      if (lastUpstreamError) throw lastUpstreamError;
+      throw new Error("Gemini server fallback chain ended without a response.");
     } catch (error) {
       const requestError = error as any;
       if (requestError instanceof HttpsError) {
         const status = requestError.code === "permission-denied" ? 403 : requestError.code === "resource-exhausted" ? 429 : 400;
-        res.status(status).json({ error: requestError.message, code: requestError.code, ok: false });
+        res.status(status).json({ error: requestError.message, code: requestError.code, attempts, cooldowns: responseCooldownHints, ok: false });
         return;
       }
       const status = extractGeminiErrorStatus(error);
@@ -1934,6 +2253,8 @@ export const generateGeminiContent = onRequest(
                 ? "GEMINI_UPSTREAM_UNAVAILABLE"
                 : "GEMINI_UPSTREAM_ERROR",
         ...(upstreamReason ? { upstreamReason } : {}),
+        attempts,
+        cooldowns: mergeGeminiServerCooldownHints(responseCooldownHints, activeGeminiServerCooldownHints(uid, modelChain)),
         ok: false,
       });
     } finally {

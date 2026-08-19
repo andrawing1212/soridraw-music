@@ -52,6 +52,10 @@ async function generateContentViaFirebase(params: any): Promise<any> {
       sessionId: String(meta.sessionId || '').trim(),
       context: String(meta.context || 'Gemini 호출').trim(),
       fallbackAttempt: Math.max(1, Math.round(Number(meta.fallbackAttempt) || 1)),
+      modelChain: Array.isArray(meta.modelChain)
+        ? meta.modelChain.map((item: unknown) => String(item || '').trim()).filter(Boolean).slice(0, 5)
+        : undefined,
+      fallbackInstruction: String(meta.fallbackInstruction || '').trim().slice(0, 5000) || undefined,
     }),
   });
 
@@ -60,7 +64,10 @@ async function generateContentViaFirebase(params: any): Promise<any> {
 
   const payload = await response.json().catch(() => null);
   if (!response.ok || !payload?.ok) {
-    throw normalizeProxyError(response.status, payload);
+    const error = normalizeProxyError(response.status, payload);
+    (error as any).serverAttempts = Array.isArray(payload?.attempts) ? payload.attempts : [];
+    (error as any).serverCooldowns = Array.isArray(payload?.cooldowns) ? payload.cooldowns : [];
+    throw error;
   }
 
   return {
@@ -69,6 +76,9 @@ async function generateContentViaFirebase(params: any): Promise<any> {
     modelVersion: payload.modelVersion || undefined,
     responseId: payload.responseId || undefined,
     promptFeedback: payload.promptFeedback || undefined,
+    __soridrawServerAttempts: Array.isArray(payload.attempts) ? payload.attempts : [],
+    __soridrawServerCooldowns: Array.isArray(payload.cooldowns) ? payload.cooldowns : [],
+    __soridrawServerUsedModel: String(payload.usedModel || payload.modelVersion || '').trim() || undefined,
   };
 }
 

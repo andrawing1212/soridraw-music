@@ -691,6 +691,15 @@ class ErrorBoundary extends Component<any, any> {
     console.error("ErrorBoundary caught an error", error, errorInfo);
   }
 
+  componentDidUpdate(prevProps: any) {
+    // 843 — Reset only the boundary state after an actual error and route change.
+    // A route-key on the boundary remounted the entire App tree on every normal
+    // navigation, recreating Auth/Firestore listeners and resetting verified role state.
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null });
+    }
+  }
+
   render() {
     if ((this.state as any).hasError) {
       const error = (this.state as any).error;
@@ -699,8 +708,10 @@ class ErrorBoundary extends Component<any, any> {
       if (error?.message) {
         if (/GEMINI_KEY_NOT_FOUND|API Key가 등록되어 있지/i.test(error.message)) {
           errorMessage = "마이페이지에서 개인 Gemini API 키를 등록해주세요.";
-        } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("limit")) {
-          errorMessage = "무료 생성 한도를 초과했습니다. 나중에 다시 시도해주세요.";
+        } else if (/GEMINI_RATE_LIMITED|generate_content_.*(?:quota|limit)|gemini[^\n]*(?:quota|rate.?limit)|(?:quota|rate.?limit)[^\n]*gemini|HTTP\s*429/i.test(error.message)) {
+          errorMessage = "Gemini 생성 사용량 또는 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.";
+        } else if (/firestore|firebase/i.test(error.message) && /resource[-_ ]exhausted|quota/i.test(error.message)) {
+          errorMessage = "Firebase 데이터 요청이 일시적으로 제한되었습니다. 잠시 후 다시 시도해주세요.";
         } else {
           try {
             const parsed = JSON.parse(error.message);
@@ -3186,7 +3197,7 @@ export default function AppWrapper() {
   }
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary resetKey={location.pathname}>
       <GlobalPlayerProvider>
         <App />
       </GlobalPlayerProvider>
@@ -4550,6 +4561,11 @@ function App() {
   const isForcedLogoutProcessingRef = useRef(false);
   const lastForcedLogoutTimeRef = useRef<number>(0);
   const hasCompletedForceLogoutReentryCheckRef = useRef(false);
+  // 842 — A transient Firestore outage/quota response must not revoke a role that
+  // was already verified from the server for this exact signed-in identity.
+  // This flag is reset on every auth identity change, so a different account can
+  // never inherit the previous account's admin authority.
+  const hasVerifiedCurrentUserRoleFromServerRef = useRef(false);
   const lastFavoriteSyncSignalIdRef = useRef<string>('');
   const [result, setResult] = useState<SongResult | null>(null);
   const [history, setHistory] = useState<SongResult[]>([]);
@@ -8078,19 +8094,20 @@ const toggleCycleVariantSelection = (
   }, [isForcedLogoutModalOpen, navigate]);
 
   useEffect(() => {
-    const testConnection = async () => {
-      try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
-      } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
+    // 843 — Connection probing is diagnostics, not production data flow.
+    // Avoid a forced server read on every real app bootstrap.
+    if (import.meta.env.DEV) {
+      void getDocFromServer(doc(db, 'test', 'connection')).catch((error) => {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
           console.error("Please check your Firebase configuration. " );
         }
-      }
-    };
-    testConnection();
+      });
+    }
 
     let unsubFavs: (() => void) | null = null;
     let unsubUserDoc: (() => void) | null = null;
+    let userRoleRetryTimer: number | null = null;
+    let userRoleRetryAttempt = 0;
     let favoriteFullCacheRecoveryTimer: any = null;
 
     const getSessionStartTime = (targetUser: User | null) => {
@@ -8162,6 +8179,7 @@ const toggleCycleVariantSelection = (
       setForcedLogoutCountdown(10);
       lastForcedLogoutTimeRef.current = 0;
       hasCompletedForceLogoutReentryCheckRef.current = false;
+      hasVerifiedCurrentUserRoleFromServerRef.current = false;
       
       if (unsubFavs) {
         unsubFavs();
@@ -8171,6 +8189,11 @@ const toggleCycleVariantSelection = (
         unsubUserDoc();
         unsubUserDoc = null;
       }
+      if (userRoleRetryTimer !== null) {
+        window.clearTimeout(userRoleRetryTimer);
+        userRoleRetryTimer = null;
+      }
+      userRoleRetryAttempt = 0;
       if (favoriteFullCacheRecoveryTimer) {
         window.clearTimeout(favoriteFullCacheRecoveryTimer);
         favoriteFullCacheRecoveryTimer = null;
@@ -8240,8 +8263,23 @@ const toggleCycleVariantSelection = (
         // first server snapshot replaces the two extra getDoc(userRef) calls that
         // previously ran on every login/reload. Cached snapshots may hydrate the UI
         // immediately, but force-logout and session writes wait for the server copy.
-        unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
+        const attachUserRoleListener = () => {
+          if (auth.currentUser?.uid !== currentUser.uid) return;
+          if (unsubUserDoc) {
+            try { unsubUserDoc(); } catch {}
+            unsubUserDoc = null;
+          }
+
+          unsubUserDoc = onSnapshot(userRef, { includeMetadataChanges: true }, (docSnap) => {
           const isServerSnapshot = !docSnap.metadata.fromCache;
+          if (isServerSnapshot) {
+            hasVerifiedCurrentUserRoleFromServerRef.current = true;
+            userRoleRetryAttempt = 0;
+            if (userRoleRetryTimer !== null) {
+              window.clearTimeout(userRoleRetryTimer);
+              userRoleRetryTimer = null;
+            }
+          }
 
           if (docSnap.exists()) {
             const data = docSnap.data();
@@ -8305,11 +8343,40 @@ const toggleCycleVariantSelection = (
               void createMissingUserDocOnce();
             }
           }
-        }, (error) => {
+        }, (error: any) => {
           console.error('Failed to sync user role:', error);
-          // 765: a failed role read must fail closed. Do not leave a previous
-          // account's admin/staff state alive when the new identity cannot be
-          // verified.
+          const firestoreCode = String(error?.code || '').toLowerCase();
+          const transientReadFailure = [
+            'resource-exhausted',
+            'unavailable',
+            'deadline-exceeded',
+            'aborted',
+            'internal',
+          ].some((code) => firestoreCode.includes(code));
+
+          if (transientReadFailure) {
+            // Firestore stops delivering events to a listener after its error callback.
+            // Retry slowly so recovery does not require a reload, without hammering
+            // a project that is genuinely quota-limited.
+            const retryDelaysMs = [30_000, 60_000, 120_000, 300_000];
+            const retryDelay = retryDelaysMs[Math.min(userRoleRetryAttempt, retryDelaysMs.length - 1)];
+            userRoleRetryAttempt += 1;
+            if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
+            userRoleRetryTimer = window.setTimeout(() => {
+              userRoleRetryTimer = null;
+              attachUserRoleListener();
+            }, retryDelay);
+
+            // Preserve authority only when this same signed-in identity was already
+            // server-verified in the current auth session. First-read failures remain
+            // fail-closed and are merely retried in the background.
+            if (hasVerifiedCurrentUserRoleFromServerRef.current) {
+              console.warn(`[Firestore role] transient read failure; keeping last verified role and retrying in ${Math.round(retryDelay / 1000)}s.`);
+              return;
+            }
+          }
+
+          // 765 safety remains for first-read failures and real permission/auth errors.
           setUserRole('free');
           setStaffRole(null);
           setAdminPermissions({ ...EMPTY_ADMIN_PERMISSIONS });
@@ -8318,7 +8385,10 @@ const toggleCycleVariantSelection = (
           setIsUserRoleReady(true);
           setUserLyricClicheGuard(null);
           setIsUserLyricClicheGuardReady(true);
-        });
+          });
+        };
+
+        attachUserRoleListener();
 
         // Fetch favorites for the user.
         // Server reads are paged, but the local cache is kept as a free UI fallback so My/Shared tabs do not appear empty while older pages are not loaded yet.
@@ -8483,6 +8553,7 @@ const toggleCycleVariantSelection = (
       unsubscribe();
       if (unsubFavs) unsubFavs();
       if (unsubUserDoc) unsubUserDoc();
+      if (userRoleRetryTimer !== null) window.clearTimeout(userRoleRetryTimer);
       if (favoriteFullCacheRecoveryTimer) window.clearTimeout(favoriteFullCacheRecoveryTimer);
     };
   }, []);
@@ -10603,8 +10674,8 @@ const toggleCycleVariantSelection = (
       setMaxBPM(max);
     }
   };
-const saveRecentSong = async (newSong: any) => {
-  if (!user) return;
+const saveRecentSongsBatch = async (newSongs: any[]) => {
+  if (!user || !Array.isArray(newSongs) || newSongs.length === 0) return;
 
   const saveOperation = async () => {
     try {
@@ -10612,7 +10683,7 @@ const saveRecentSong = async (newSong: any) => {
       const snap = await getDoc(ref);
       const firestoreSongs = snap.exists() ? normalizeRecentSongList(snap.data().songs || []) : [];
       const recoverySongs = findRecoverableLocalRecentSongs(user.uid);
-      const updatedSongs = mergeRecentSongLists([newSong], firestoreSongs, recoverySongs);
+      const updatedSongs = mergeRecentSongLists(newSongs, firestoreSongs, recoverySongs);
 
       await setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true });
       recentSongsReadyToCacheRef.current = true;
@@ -10626,11 +10697,14 @@ const saveRecentSong = async (newSong: any) => {
   };
 
   // Concurrent Gemini jobs may finish at nearly the same moment. Serialize the Firestore
-  // read-merge-write sequence in completion order so one finished song cannot overwrite another.
+  // read-merge-write sequence in completion order so one finished batch cannot overwrite another.
+  // A multi-song generation is persisted with one read + one write instead of one pair per song.
   const chainedSave = recentSongSaveChainRef.current.then(saveOperation, saveOperation);
   recentSongSaveChainRef.current = chainedSave.catch(() => undefined);
   await chainedSave;
 };
+
+const saveRecentSong = async (newSong: any) => saveRecentSongsBatch([newSong]);
 
   /* 
   useEffect(() => {
@@ -11453,18 +11527,24 @@ const saveRecentSong = async (newSong: any) => {
       setResult(firstResult);
       setLatestGenerationBatchId(generationBatchId);
       setHistory(prev => [...generatedResults, ...prev].slice(0, 10));
-      for (const item of generatedResults) {
-        await saveRecentSong(item);
-      }
-
-      // Increment songGeneratedCount in users document
-      if (user) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          songGeneratedCount: increment(generatedResults.length)
-        }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
-      }
-
       setHistoryIndex(0);
+
+      // 841 — Result-ready and persistence-ready are different states.
+      // Once Gemini has returned the complete song, release the generation queue immediately.
+      // Firestore recent-song persistence and the user counter continue in the existing serialized
+      // background save chain, so a slow Firestore/network response can no longer leave the UI
+      // spinner stuck for minutes after the finished song is already visible.
+      void (async () => {
+        await saveRecentSongsBatch(generatedResults);
+        if (user) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            songGeneratedCount: increment(generatedResults.length)
+          }).catch(err => console.error("Failed to increment songGeneratedCount:", err));
+        }
+      })().catch((error) => {
+        console.error('Failed to persist completed generation in background:', error);
+      });
+
       return {
         success: true,
         generationBatchId,

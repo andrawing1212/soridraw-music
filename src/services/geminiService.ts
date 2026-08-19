@@ -184,8 +184,33 @@ function getAI(_apiKeyOverride?: string | null) {
   return aiInstance;
 }
 
-type GeminiAuditRequestMeta = { context: string; fallbackAttempt: number };
+type GeminiAuditRequestMeta = {
+  context: string;
+  fallbackAttempt: number;
+  modelChain?: string[];
+  fallbackInstruction?: string;
+};
 const geminiAuditRequestMeta = new WeakMap<object, GeminiAuditRequestMeta>();
+
+type GeminiServerAttempt = {
+  model: string;
+  status: 'success' | 'failed';
+  durationMs: number;
+  usageMetadata?: any;
+  errorMessage?: string;
+  statusCode?: number;
+  code?: string | number;
+  retryAfterMs?: number;
+  cooldownMs?: number;
+  cooldownReason?: string;
+};
+
+type GeminiServerCooldownHint = {
+  model: string;
+  remainingMs: number;
+  reason: string;
+  statusCode?: number;
+};
 
 type GeminiGenerationRequestBudget = {
   maxRequests: number;
@@ -273,12 +298,92 @@ function withGeminiAuditRequestMeta<T extends object>(
   params: T,
   context: string,
   fallbackAttempt = 1,
+  options?: { modelChain?: string[]; fallbackInstruction?: string },
 ): T {
   geminiAuditRequestMeta.set(params, {
     context: String(context || 'Gemini 호출').trim() || 'Gemini 호출',
     fallbackAttempt: Math.max(1, Math.round(Number(fallbackAttempt) || 1)),
+    modelChain: Array.isArray(options?.modelChain)
+      ? options!.modelChain!.map((model) => String(model || '').trim()).filter(Boolean).slice(0, 5)
+      : undefined,
+    fallbackInstruction: String(options?.fallbackInstruction || '').trim() || undefined,
   });
   return params;
+}
+
+function getGeminiServerAttempts(value: any): GeminiServerAttempt[] {
+  const raw = Array.isArray(value?.__soridrawServerAttempts)
+    ? value.__soridrawServerAttempts
+    : Array.isArray(value?.serverAttempts)
+      ? value.serverAttempts
+      : [];
+  return raw
+    .map((attempt: any) => ({
+      model: String(attempt?.model || '').trim(),
+      status: attempt?.status === 'success' ? 'success' as const : 'failed' as const,
+      durationMs: Math.max(0, Math.round(Number(attempt?.durationMs) || 0)),
+      usageMetadata: attempt?.usageMetadata || undefined,
+      errorMessage: String(attempt?.errorMessage || '').trim() || undefined,
+      statusCode: Number.isFinite(Number(attempt?.statusCode)) ? Number(attempt.statusCode) : undefined,
+      code: attempt?.code,
+      retryAfterMs: Number.isFinite(Number(attempt?.retryAfterMs)) ? Math.max(0, Math.round(Number(attempt.retryAfterMs))) : undefined,
+      cooldownMs: Number.isFinite(Number(attempt?.cooldownMs)) ? Math.max(0, Math.round(Number(attempt.cooldownMs))) : undefined,
+      cooldownReason: String(attempt?.cooldownReason || '').trim() || undefined,
+    }))
+    .filter((attempt: GeminiServerAttempt) => Boolean(attempt.model));
+}
+
+function getGeminiServerCooldownHints(value: any): GeminiServerCooldownHint[] {
+  const raw = Array.isArray(value?.__soridrawServerCooldowns)
+    ? value.__soridrawServerCooldowns
+    : Array.isArray(value?.serverCooldowns)
+      ? value.serverCooldowns
+      : [];
+  return raw
+    .map((hint: any) => ({
+      model: String(hint?.model || '').trim(),
+      remainingMs: Math.max(0, Math.round(Number(hint?.remainingMs) || 0)),
+      reason: String(hint?.reason || 'temporary_model_cooldown').trim() || 'temporary_model_cooldown',
+      statusCode: Number.isFinite(Number(hint?.statusCode)) ? Number(hint.statusCode) : undefined,
+    }))
+    .filter((hint: GeminiServerCooldownHint) => Boolean(hint.model) && hint.remainingMs > 0);
+}
+
+function recordGeminiServerAttempts(
+  sessionId: string,
+  context: string,
+  startedAtMs: number,
+  attempts: GeminiServerAttempt[],
+  firstFallbackAttempt: number,
+): void {
+  let cursorMs = startedAtMs;
+  attempts.forEach((attempt, index) => {
+    const physicalAttempt = firstFallbackAttempt + index;
+    if (index > 0) {
+      try {
+        consumeGeminiGenerationRequestBudget(sessionId, context, physicalAttempt);
+      } catch (budgetError) {
+        // Server-side physical guards are authoritative once the upstream calls have already
+        // happened. Never discard a successful server response because local accounting was
+        // one step behind; instead close the local budget for any later optional pass.
+        const budget = geminiGenerationRequestBudgets.get(sessionId);
+        if (budget) budget.usedRequests = budget.maxRequests;
+        console.warn('[SORIDRAW Gemini Budget] server attempt accounting reached local ceiling:', budgetError);
+      }
+    }
+    recordGeminiAuditCall({
+      sessionId,
+      context,
+      model: attempt.model,
+      status: attempt.status,
+      startedAtMs: cursorMs,
+      durationMs: attempt.durationMs,
+      response: attempt.usageMetadata ? { usageMetadata: attempt.usageMetadata } : undefined,
+      fallbackAttempt: physicalAttempt,
+      error: attempt.status === 'failed' ? attempt.errorMessage : undefined,
+    });
+    cursorMs += attempt.durationMs;
+  });
 }
 
 function getAuditedAI(
@@ -312,30 +417,54 @@ function getAuditedAI(
                   sessionId,
                   context,
                   fallbackAttempt: meta?.fallbackAttempt || 1,
+                  modelChain: meta?.modelChain,
+                  fallbackInstruction: meta?.fallbackInstruction,
                 },
               }
             : params;
           const response = await target.generateContent.call(target, forwardedParams);
-          recordGeminiAuditCall({
-            sessionId,
-            context,
-            model,
-            status: 'success',
-            startedAtMs,
-            response,
-            fallbackAttempt: meta?.fallbackAttempt || 1,
-          });
+          const serverAttempts = getGeminiServerAttempts(response);
+          if (serverAttempts.length) {
+            recordGeminiServerAttempts(
+              sessionId,
+              context,
+              startedAtMs,
+              serverAttempts,
+              meta?.fallbackAttempt || 1,
+            );
+          } else {
+            recordGeminiAuditCall({
+              sessionId,
+              context,
+              model,
+              status: 'success',
+              startedAtMs,
+              response,
+              fallbackAttempt: meta?.fallbackAttempt || 1,
+            });
+          }
           return response;
         } catch (error) {
-          recordGeminiAuditCall({
-            sessionId,
-            context,
-            model,
-            status: 'failed',
-            startedAtMs,
-            fallbackAttempt: meta?.fallbackAttempt || 1,
-            error,
-          });
+          const serverAttempts = getGeminiServerAttempts(error);
+          if (serverAttempts.length) {
+            recordGeminiServerAttempts(
+              sessionId,
+              context,
+              startedAtMs,
+              serverAttempts,
+              meta?.fallbackAttempt || 1,
+            );
+          } else {
+            recordGeminiAuditCall({
+              sessionId,
+              context,
+              model,
+              status: 'failed',
+              startedAtMs,
+              fallbackAttempt: meta?.fallbackAttempt || 1,
+              error,
+            });
+          }
           throw error;
         }
       };
@@ -491,17 +620,6 @@ function isGeminiRetryableError(error: any): boolean {
   return isExplicitUpstreamRateLimit || isExplicitUpstreamUnavailable || isExplicitModelNotFound;
 }
 
-function withFallbackSafetyInstruction(config: any, attemptIndex: number): any {
-  if (attemptIndex <= 0) return config;
-  const baseInstruction = config?.systemInstruction ? String(config.systemInstruction) : "";
-  return {
-    ...(config || {}),
-    systemInstruction: [baseInstruction, GEMINI_FALLBACK_STABILITY_INSTRUCTION]
-      .filter(Boolean)
-      .join("\n\n"),
-  };
-}
-
 function getGeminiFallbackReason(error: any): string {
   const text = describeGeminiError(error).toLowerCase();
   const status = getGeminiErrorStatus(error).toLowerCase();
@@ -566,10 +684,8 @@ async function generateContentWithModelFallback(
   context: string,
   modelChain: string[] = GEMINI_TEXT_MODEL_CHAIN,
 ): Promise<any> {
-  let lastError: any = null;
   let firstFailedModel: string | null = null;
   let firstFallbackReason: string | null = null;
-  const attemptedModels: string[] = [];
 
   const autoFallbackEnabled = readGeminiAutoModelFallback();
   const fixedModelChain = getFixedGeminiModelChain(modelChain);
@@ -599,61 +715,102 @@ async function generateContentWithModelFallback(
     console.warn(`[SORIDRAW Gemini Cooldown] ${context}: skipping cached model cooldown ${skipped.join(', ')}`);
   }
 
-  for (let i = 0; i < runtimeModelChain.length; i += 1) {
-    const model = runtimeModelChain[i];
-    attemptedModels.push(model);
-    const isFallbackModel = model !== limitedModelChain[0] || i > 0;
-    const paramsForAttempt = {
-      ...generateParams,
-      model,
-      config: withFallbackSafetyInstruction(generateParams.config, isFallbackModel ? 1 : 0),
-    };
-    try {
-      if (isFallbackModel) {
-        console.warn(`[SORIDRAW Gemini Fallback] ${context}: switching immediately to ${model}`);
+  const primaryModel = runtimeModelChain[0];
+  if (!primaryModel) {
+    throw new Error('사용 가능한 Gemini 모델이 없습니다.');
+  }
+
+  const paramsForRequest = {
+    ...generateParams,
+    model: primaryModel,
+    config: generateParams?.config ? { ...generateParams.config } : generateParams?.config,
+  };
+
+  const applyAttemptCooldowns = (attempts: GeminiServerAttempt[]) => {
+    attempts.forEach((attempt) => {
+      if (attempt.status === 'success') {
+        clearGeminiModelCooldown(attempt.model);
+        return;
       }
-      const response = await ai.models.generateContent(
-        // fallbackAttempt is the physical request number, not the model's position in the
-        // five-model priority. Cooldown-skipped models must not consume request/session budget.
-        withGeminiAuditRequestMeta(paramsForAttempt, context, i + 1),
-      );
-      clearGeminiModelCooldown(model);
-      (response as any).__soridrawGeminiModelInfo = {
-        usedModel: model,
-        fallbackUsed: isFallbackModel,
-        fallbackFrom: isFallbackModel ? firstFailedModel || limitedModelChain[0] || null : null,
-        fallbackReason: isFallbackModel ? firstFallbackReason || "generation_error" : null,
-        attemptedModels,
-      } satisfies GeminiModelUsageInfo;
-      return response;
-    } catch (error) {
-      lastError = error;
+      const marker = attempt.statusCode === 429
+        ? 'GEMINI_RATE_LIMITED'
+        : attempt.statusCode === 404
+          ? 'GEMINI_MODEL_NOT_FOUND'
+          : [500, 502, 503, 504].includes(Number(attempt.statusCode))
+            ? 'GEMINI_UPSTREAM_UNAVAILABLE'
+            : '';
+      const syntheticError = {
+        status: attempt.statusCode,
+        code: attempt.statusCode || attempt.code,
+        message: [marker, attempt.errorMessage || '', attempt.retryAfterMs ? `Please retry in ${attempt.retryAfterMs / 1000}s` : ''].filter(Boolean).join(' '),
+      };
       if (!firstFailedModel) {
-        firstFailedModel = model;
-        firstFallbackReason = getGeminiFallbackReason(error);
+        firstFailedModel = attempt.model;
+        firstFallbackReason = attempt.cooldownReason || getGeminiFallbackReason(syntheticError);
       }
-      console.warn(`[SORIDRAW Gemini Fallback] ${context}: ${model} failed`, error);
-      if (isGeminiRetryableError(error)) {
-        const cooldownMs = getGeminiModelCooldownDurationMs(error);
+      if (isGeminiRetryableError(syntheticError)) {
+        const cooldownMs = Math.max(0, Number(attempt.cooldownMs || 0)) || getGeminiModelCooldownDurationMs(syntheticError);
         if (cooldownMs > 0) {
-          setGeminiModelCooldown(model, cooldownMs, getGeminiFallbackReason(error));
+          setGeminiModelCooldown(
+            attempt.model,
+            cooldownMs,
+            attempt.cooldownReason || getGeminiFallbackReason(syntheticError),
+          );
         }
       }
-      // Do not launch another paid request for prompt/schema/content, auth, billing,
-      // app guard, network, timeout, slow-response, or quality errors. Continue only
-      // for the proxy's explicit upstream 429/transient-5xx model failure and only when enabled.
-      if (
-        isGeminiRequestSchemaError(error)
-        || !isGeminiRetryableError(error)
-        || i >= runtimeModelChain.length - 1
-      ) {
-        throw error;
-      }
-    }
-  }
-  throw lastError;
-}
+    });
+  };
 
+  const applyServerCooldownHints = (value: any) => {
+    getGeminiServerCooldownHints(value).forEach((hint) => {
+      setGeminiModelCooldown(hint.model, hint.remainingMs, hint.reason);
+      if (!firstFailedModel) {
+        firstFailedModel = hint.model;
+        firstFallbackReason = hint.reason;
+      }
+    });
+  };
+
+  try {
+    // 838: one browser -> Function request now carries the already-filtered fallback chain.
+    // The Function keeps Auth/App Check/API-key/Firestore guard work once per logical operation
+    // and advances models server-side only for explicit retryable upstream failures.
+    const response = await ai.models.generateContent(
+      withGeminiAuditRequestMeta(paramsForRequest, context, 1, {
+        modelChain: runtimeModelChain,
+        fallbackInstruction: GEMINI_FALLBACK_STABILITY_INSTRUCTION,
+      }),
+    );
+    const serverAttempts = getGeminiServerAttempts(response);
+    applyAttemptCooldowns(serverAttempts);
+    applyServerCooldownHints(response);
+
+    const usedModel = String(
+      (response as any)?.__soridrawServerUsedModel
+      || serverAttempts.find((attempt) => attempt.status === 'success')?.model
+      || primaryModel,
+    ).trim() || primaryModel;
+    const attemptedModels = serverAttempts.length
+      ? serverAttempts.map((attempt) => attempt.model)
+      : [usedModel];
+    const isFallbackModel = usedModel !== limitedModelChain[0];
+
+    (response as any).__soridrawGeminiModelInfo = {
+      usedModel,
+      fallbackUsed: isFallbackModel,
+      fallbackFrom: isFallbackModel ? firstFailedModel || limitedModelChain[0] || null : null,
+      fallbackReason: isFallbackModel ? firstFallbackReason || 'generation_error' : null,
+      attemptedModels,
+    } satisfies GeminiModelUsageInfo;
+    return response;
+  } catch (error) {
+    const serverAttempts = getGeminiServerAttempts(error);
+    applyAttemptCooldowns(serverAttempts);
+    applyServerCooldownHints(error);
+    console.warn(`[SORIDRAW Gemini Fallback] ${context}: server-side chain failed`, error);
+    throw error;
+  }
+}
 
 export interface CustomSectionAutoMetadataInput {
   labelKo: string;
@@ -32717,7 +32874,6 @@ Rewrite only the listed lyric-body lines in each card.
       },
     },
     'rewriteLyricHardBanCards',
-    [GEMINI_TEXT_MODEL_CHAIN[0]],
   );
 
   const parsed = parseGeminiJsonObject(response?.text || '{}');

@@ -171,6 +171,7 @@ export function recordGeminiAuditCall(input: {
   startedAtMs: number;
   response?: any;
   fallbackAttempt?: number;
+  durationMs?: number;
   error?: unknown;
 }): void {
   if (!input.sessionId) return;
@@ -186,7 +187,9 @@ export function recordGeminiAuditCall(input: {
     model: String(input.model || 'unknown').trim() || 'unknown',
     status: input.status,
     startedAt: new Date(input.startedAtMs).toISOString(),
-    durationMs: Math.max(0, Date.now() - input.startedAtMs),
+    durationMs: Number.isFinite(Number(input.durationMs))
+      ? Math.max(0, Math.round(Number(input.durationMs)))
+      : Math.max(0, Date.now() - input.startedAtMs),
     usage: normalizeUsageMetadata(input.response?.usageMetadata),
     fallbackAttempt: Math.max(1, Math.round(Number(input.fallbackAttempt) || 1)),
     errorMessage: normalizeError(input.error) || undefined,

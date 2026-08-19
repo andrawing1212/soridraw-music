@@ -3,7 +3,7 @@ import { Activity, Crown, Home, Key, Mic2, SlidersHorizontal, Tags, Users } from
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
+import { FULL_ADMIN_PERMISSIONS, normalizeAdminPermissions, normalizeStaffRole } from '../constants/adminPermissions';
 import type { AdminPermissionKey, AdminPermissions, StaffRole } from '../types';
 import { cn } from '../lib/utils';
 
@@ -20,20 +20,80 @@ const ADMIN_TABS: AdminTab[] = [
   { path: '/admin/gemini-audit', label: 'Gemini 호출', icon: Activity, permission: 'geminiAudit' },
 ];
 
+const readCachedAdminLayoutHint = (): { staffRole: StaffRole; permissions: AdminPermissions } => {
+  try {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return { staffRole: null, permissions: normalizeAdminPermissions(null) };
+    const raw = window.localStorage.getItem('soridraw_cached_user_role_v1');
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed?.uid === uid && parsed?.role === 'admin') {
+      // Navigation-only fallback. Route authorization is still enforced by App's
+      // live/current-user admin gate; this cannot grant access to an admin route.
+      return { staffRole: 'admin', permissions: { ...FULL_ADMIN_PERMISSIONS } };
+    }
+  } catch {
+    // Storage is optional; the live Firestore snapshot remains the normal source.
+  }
+  return { staffRole: null, permissions: normalizeAdminPermissions(null) };
+};
+
 export default function AdminPageLayout({ title, description, actions, children }: AdminPageLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [staffRole, setStaffRole] = useState<StaffRole>(null);
-  const [permissions, setPermissions] = useState<AdminPermissions>(() => normalizeAdminPermissions(null));
+  const cachedAdminHint = readCachedAdminLayoutHint();
+  const [staffRole, setStaffRole] = useState<StaffRole>(cachedAdminHint.staffRole);
+  const [permissions, setPermissions] = useState<AdminPermissions>(cachedAdminHint.permissions);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    return onSnapshot(doc(db, 'users', uid), (snapshot) => {
-      const data = snapshot.exists() ? snapshot.data() : null;
-      setStaffRole(normalizeStaffRole(data));
-      setPermissions(normalizeAdminPermissions(data));
-    });
+
+    let unsubscribe: (() => void) | null = null;
+    let retryTimer: number | null = null;
+    let retryAttempt = 0;
+    let disposed = false;
+
+    const attach = () => {
+      if (disposed || auth.currentUser?.uid !== uid) return;
+      if (unsubscribe) {
+        try { unsubscribe(); } catch {}
+        unsubscribe = null;
+      }
+
+      unsubscribe = onSnapshot(doc(db, 'users', uid), (snapshot) => {
+        retryAttempt = 0;
+        if (retryTimer !== null) {
+          window.clearTimeout(retryTimer);
+          retryTimer = null;
+        }
+        const data = snapshot.exists() ? snapshot.data() : null;
+        setStaffRole(normalizeStaffRole(data));
+        setPermissions(normalizeAdminPermissions(data));
+      }, (error: any) => {
+        // 843 — Keep the last live/cached navigation state and reattach slowly.
+        // Firestore does not continue a listener after its error callback fires.
+        console.warn('[Admin layout] user permission listener unavailable; keeping last verified/cached layout state.', error);
+        const code = String(error?.code || '').toLowerCase();
+        const transient = ['resource-exhausted', 'unavailable', 'deadline-exceeded', 'aborted', 'internal']
+          .some((candidate) => code.includes(candidate));
+        if (!transient || disposed) return;
+        const delays = [30_000, 60_000, 120_000, 300_000];
+        const delay = delays[Math.min(retryAttempt, delays.length - 1)];
+        retryAttempt += 1;
+        if (retryTimer !== null) window.clearTimeout(retryTimer);
+        retryTimer = window.setTimeout(() => {
+          retryTimer = null;
+          attach();
+        }, delay);
+      });
+    };
+
+    attach();
+    return () => {
+      disposed = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const visibleTabs = useMemo(() => ADMIN_TABS.filter((tab) => {

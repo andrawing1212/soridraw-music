@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - assistant-deploy-844
+      - main
 
 permissions:
   contents: write

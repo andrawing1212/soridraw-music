@@ -1,0 +1,42 @@
+name: Apply SORIDRAW 859 once
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - .deploy/apply-859-trigger.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-soridraw-859-once
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply 859 Japanese native collocation rules
+        run: python3 .deploy/apply-859.py
+      - name: Validate app build
+        run: |
+          npm ci
+          npm run build
+      - name: Commit 859 source change
+        run: |
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          printf 'status=success\nversion=859\napp_build=success\nfinished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .deploy/apply-859-result.txt
+          git add src/services/geminiService.ts .deploy/apply-859-result.txt
+          git diff --cached --check
+          git commit -m "feat(859): improve native Japanese lyric phrasing"
+          git push origin HEAD:preview

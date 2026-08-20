@@ -1,2 +1,0 @@
-Apply SORIDRAW 858 Japanese strict sung-line and natural lyric quality rules on preview.
-Do not touch main until validation succeeds.

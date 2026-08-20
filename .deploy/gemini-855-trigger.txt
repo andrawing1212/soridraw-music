@@ -1,0 +1,4 @@
+Deploy SORIDRAW 855 generateGeminiContent only.
+Target project: soridraw-app-866a5
+Source branch: preview
+Official Firebase Hosting: do not deploy.

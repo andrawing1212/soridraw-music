@@ -1,0 +1,82 @@
+name: Deploy Gemini 855 once
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .deploy/gemini-855-trigger.txt
+
+concurrency:
+  group: deploy-gemini-855-once
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Deploy generateGeminiContent 855
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy generateGeminiContent only
+        id: deploy
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only functions:generateGeminiContent --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/gemini-855-deploy.log
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          if [ "${{ steps.deploy.outcome }}" = "success" ]; then
+            STATUS=success
+          else
+            STATUS=failure
+          fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "function=generateGeminiContent"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "--- deploy log tail ---"
+            tail -n 100 /tmp/gemini-855-deploy.log 2>/dev/null || true
+          } > .deploy/gemini-855-deploy-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/gemini-855-deploy-result.txt
+          git commit -m "chore(855): record Gemini function deploy result" || true
+          git push origin HEAD:preview
+
+      - name: Fail workflow when deploy failed
+        if: steps.deploy.outcome != 'success'
+        run: exit 1

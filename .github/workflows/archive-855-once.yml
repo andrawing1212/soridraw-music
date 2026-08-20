@@ -1,0 +1,57 @@
+name: Archive SORIDRAW 855 once
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .deploy/archive-855-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+
+      - name: Build exact source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -rq /tmp/SORIDRAW_855_exact.zip . \
+            -x '.git/*' \
+               'node_modules/*' \
+               'functions/node_modules/*' \
+               'dist/*' \
+               'functions/lib/*' \
+               '.deploy/archive-855-trigger.txt' \
+               '.github/workflows/archive-855-once.yml'
+
+      - name: Upload exact 855 ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW-855-exact-preview
+          path: /tmp/SORIDRAW_855_exact.zip
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Record archive run
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          {
+            echo 'status=success'
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+            echo 'artifact=SORIDRAW-855-exact-preview'
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .deploy/archive-855-result.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .deploy/archive-855-result.txt
+          git commit -m 'chore(855): record exact ZIP artifact run' || true
+          git push origin HEAD:preview

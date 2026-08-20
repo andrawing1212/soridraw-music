@@ -1,4 +1,0 @@
-status=success
-version=856
-app_build=success
-finished_at=2026-08-20T01:50:06Z

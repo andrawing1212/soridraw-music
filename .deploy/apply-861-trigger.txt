@@ -1,1 +1,1 @@
-Apply SORIDRAW 861: Japanese semantic-native quality guard + Gemini 3.7 timeout 35s and busy cooldown 45s. Deploy generateGeminiContent, then promote preview to main after validation.
+Apply SORIDRAW 861 retry trigger 2: Japanese semantic-native quality guard + Gemini 3.7 timeout 35s and busy cooldown 45s. Deploy generateGeminiContent, then promote preview to main after validation.

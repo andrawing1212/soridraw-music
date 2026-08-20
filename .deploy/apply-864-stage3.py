@@ -47,8 +47,8 @@ if source.count(anchor) != 1:
 source = source.replace(anchor, replacement, 1)
 
 # 4) Strengthen Japanese title phrasing without changing validation or adding calls.
-anchor = "- title must be a natural ${targetName} title based on lyricContext.\n- Return valid JSON only: { \"title\": \"...\", \"replacements\": [{ \"lineIndex\": 0, \"text\": \"...\" }] }."
-replacement = """- title must be a natural ${targetName} title based on lyricContext. For Japanese, prefer a concise title that a native listener can understand immediately from the song's central scene or hook; do not translate another language's title mechanically.
+anchor = "- title must be a concise natural ${targetName} title based on lyricContext.\n- Return valid JSON only: { \"title\": \"...\", \"replacements\": [{ \"lineIndex\": 0, \"text\": \"...\" }] }."
+replacement = """- title must be a concise natural ${targetName} title based on lyricContext. For Japanese, prefer a concise title that a native listener can understand immediately from the song's central scene or hook; do not translate another language's title mechanically.
 - Return valid JSON only: { \"title\": \"...\", \"replacements\": [{ \"lineIndex\": 0, \"text\": \"...\" }] }."""
 if source.count(anchor) != 1:
     raise SystemExit(f'864 title prompt anchor mismatch: {source.count(anchor)}')

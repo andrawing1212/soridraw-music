@@ -1,0 +1,153 @@
+diff --git a/src/services/geminiService.ts b/src/services/geminiService.ts
+index 9eaf907..66ecea7 100644
+--- a/src/services/geminiService.ts
++++ b/src/services/geminiService.ts
+@@ -270,7 +270,8 @@ function isFinalHardBanSafetyContext(context: string): boolean {
+   const clean = String(context || '').trim();
+   return clean === 'rewriteLyricHardBanCards'
+     || clean === 'rewriteLyricHardBanLines'
+-    || clean === 'rewriteLyricHardBanLinesSecondPass';
++    || clean === 'rewriteLyricHardBanLinesSecondPass'
++    || clean === 'repairSelectedLanguageCard';
+ }
+ 
+ function consumeGeminiGenerationRequestBudget(
+@@ -32709,11 +32710,48 @@ function buildV1HookBlueprintPublicSummary(
+ 
+ const HARD_BAN_REWRITE_MAX_PASSES = 1;
+ 
++type V1SelectedLyricSlotLanguages = {
++  requested: LanguageCode[];
++  koreanSlotLanguage: LanguageCode | null;
++  englishSlotLanguage: LanguageCode | null;
++};
++
++function getV1SelectedLyricSlotLanguages(params: GenerateSongParams): V1SelectedLyricSlotLanguages {
++  const requested = Array.from(new Set(
++    ((params.lyricLanguages?.length ? params.lyricLanguages : ['ko']) as LanguageCode[]).filter(Boolean),
++  )).slice(0, 2) as LanguageCode[];
++  if (!requested.length) {
++    return { requested, koreanSlotLanguage: null, englishSlotLanguage: null };
++  }
++  if (requested.includes('ko')) {
++    return {
++      requested,
++      koreanSlotLanguage: 'ko',
++      englishSlotLanguage: requested.find((language) => language !== 'ko') || null,
++    };
++  }
++  if (requested.length >= 2) {
++    // Legacy storage has only two physical lyric slots. The first selected foreign language
++    // remains in lyrics.english (the existing secondary slot); the second selected foreign
++    // language is completed into lyrics.korean and exposed through lyricsByLanguage.
++    return {
++      requested,
++      koreanSlotLanguage: requested[1],
++      englishSlotLanguage: requested[0],
++    };
++  }
++  return {
++    requested,
++    koreanSlotLanguage: null,
++    englishSlotLanguage: requested[0],
++  };
++}
++
+ function hardBanLanguageLabelForCard(params: GenerateSongParams, card: 'korean' | 'secondary'): string {
+-  if (card === 'korean') return 'Korean lyric card in natural Hangul';
+-  const requested = Array.isArray(params.lyricLanguages) ? params.lyricLanguages : [];
+-  const secondary = requested.find((lang) => lang && lang !== 'ko') || 'en';
++  const slots = getV1SelectedLyricSlotLanguages(params);
++  const language = card === 'korean' ? slots.koreanSlotLanguage : slots.englishSlotLanguage;
+   const names: Record<string, string> = {
++    ko: 'Korean lyric card in natural Hangul',
+     en: 'English lyric card',
+     ja: 'Japanese lyric card in natural Japanese script',
+     zh: 'Chinese lyric card in natural Chinese script',
+@@ -32723,7 +32761,7 @@ function hardBanLanguageLabelForCard(params: GenerateSongParams, card: 'korean'
+     ru: 'Russian lyric card in Cyrillic',
+     th: 'Thai lyric card in Thai script',
+   };
+-  return names[String(secondary)] || `${String(secondary)} lyric card`;
++  return names[String(language || '')] || `${String(language || 'selected language')} lyric card`;
+ }
+ 
+ function cleanHardBanReplacementLine(value: unknown): string {
+@@ -33916,16 +33954,17 @@ async function applyV1LockedWholeLyricLanguageMix(
+   params: GenerateSongParams,
+ ): Promise<SongResult> {
+   if (!isV1LanguageMixEnabledForParams(params) || !song?.lyrics) return song;
+-  const requestedLanguages = Array.from(new Set((params.lyricLanguages?.length ? params.lyricLanguages : ['ko']).filter(Boolean))) as LanguageCode[];
++  const selectedSlots = getV1SelectedLyricSlotLanguages(params);
++  const requestedLanguages = selectedSlots.requested;
+   const twoLanguageSelection = requestedLanguages.length === 2;
+   const requestedRatio = normalizeEnglishMixRatio(params.englishMixRatio);
+-  const secondaryLanguage = requestedLanguages.find((language) => language !== 'ko') || 'en';
++  const secondaryLanguage = selectedSlots.englishSlotLanguage || 'en';
+   const cards: Array<{ key: 'korean' | 'english'; baseLanguage: LanguageCode; lyrics: string }> = [];
+-  if (requestedLanguages.includes('ko') && String(song.lyrics.korean || '').trim()) {
+-    cards.push({ key: 'korean', baseLanguage: 'ko', lyrics: String(song.lyrics.korean || '') });
++  if (selectedSlots.koreanSlotLanguage && String(song.lyrics.korean || '').trim()) {
++    cards.push({ key: 'korean', baseLanguage: selectedSlots.koreanSlotLanguage, lyrics: String(song.lyrics.korean || '') });
+   }
+-  if (requestedLanguages.some((language) => language !== 'ko') && String(song.lyrics.english || '').trim()) {
+-    cards.push({ key: 'english', baseLanguage: secondaryLanguage, lyrics: String(song.lyrics.english || '') });
++  if (selectedSlots.englishSlotLanguage && String(song.lyrics.english || '').trim()) {
++    cards.push({ key: 'english', baseLanguage: selectedSlots.englishSlotLanguage, lyrics: String(song.lyrics.english || '') });
+   }
+ 
+   const nextSong = {
+@@ -34285,9 +34324,10 @@ async function applyV1LockedWholeLyricLanguageMix(
+     targetLanguages: targetLanguages.length ? targetLanguages : ['en' as LanguageCode],
+     koreanLyrics: String(nextSong.lyrics.korean || ''),
+     secondaryLyrics: String(nextSong.lyrics.english || ''),
++    koreanCardLanguage: selectedSlots.koreanSlotLanguage || undefined,
+     secondaryLanguage,
+-    koreanCardEnabled: requestedLanguages.includes('ko'),
+-    secondaryCardEnabled: requestedLanguages.some((language) => language !== 'ko'),
++    koreanCardEnabled: Boolean(selectedSlots.koreanSlotLanguage),
++    secondaryCardEnabled: Boolean(selectedSlots.englishSlotLanguage),
+   });
+ 
+   (nextSong.appliedKeywords as any).sectionIntegrityAudit = {
+@@ -34591,20 +34631,19 @@ function refreshV1FinalLanguageAndSectionAudits(
+ ): SongResult {
+   if (!result?.lyrics || isGenerationEngineV2(params)) return result;
+   const appliedKeywords = { ...(result.appliedKeywords || {}) } as any;
+-  const requestedLanguages = Array.from(new Set(
+-    (params.lyricLanguages?.length ? params.lyricLanguages : ['ko']).filter(Boolean),
+-  )) as LanguageCode[];
++  const selectedSlots = getV1SelectedLyricSlotLanguages(params);
++  const requestedLanguages = selectedSlots.requested;
+   const requestedRatio = normalizeEnglishMixRatio(params.englishMixRatio);
+-  const secondaryLanguage = requestedLanguages.find((language) => language !== 'ko') || 'en';
++  const secondaryLanguage = selectedSlots.englishSlotLanguage || 'en';
+   const rewritePlan = appliedKeywords.languageMixRewritePlan as any;
+ 
+   if (rewritePlan?.active) {
+     const cards: Array<{ key: 'korean' | 'english'; baseLanguage: LanguageCode; lyrics: string }> = [];
+-    if (String(result.lyrics.korean || '').trim()) {
+-      cards.push({ key: 'korean', baseLanguage: 'ko', lyrics: String(result.lyrics.korean || '') });
++    if (selectedSlots.koreanSlotLanguage && String(result.lyrics.korean || '').trim()) {
++      cards.push({ key: 'korean', baseLanguage: selectedSlots.koreanSlotLanguage, lyrics: String(result.lyrics.korean || '') });
+     }
+-    if (String(result.lyrics.english || '').trim()) {
+-      cards.push({ key: 'english', baseLanguage: secondaryLanguage, lyrics: String(result.lyrics.english || '') });
++    if (selectedSlots.englishSlotLanguage && String(result.lyrics.english || '').trim()) {
++      cards.push({ key: 'english', baseLanguage: selectedSlots.englishSlotLanguage, lyrics: String(result.lyrics.english || '') });
+     }
+     cards.forEach((card) => {
+       const plan = rewritePlan.cards?.[card.key];
+@@ -34650,9 +34689,10 @@ function refreshV1FinalLanguageAndSectionAudits(
+       targetLanguages: targetLanguages.length ? targetLanguages : ['en' as LanguageCode],
+       koreanLyrics: String(result.lyrics.korean || ''),
+       secondaryLyrics: String(result.lyrics.english || ''),
++      koreanCardLanguage: selectedSlots.koreanSlotLanguage || undefined,
+       secondaryLanguage,
+-      koreanCardEnabled: requestedLanguages.includes('ko'),
+-      secondaryCardEnabled: requestedLanguages.some((language) => language !== 'ko'),
++      koreanCardEnabled: Boolean(selectedSlots.koreanSlotLanguage),
++      secondaryCardEnabled: Boolean(selectedSlots.englishSlotLanguage),
+     });
+   }
+ 

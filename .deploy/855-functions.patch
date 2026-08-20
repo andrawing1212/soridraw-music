@@ -1,0 +1,51 @@
+diff --git a/functions/scripts/apply-gemini-latency.cjs b/functions/scripts/apply-gemini-latency.cjs
+index 410d77a..ccb21db 100644
+--- a/functions/scripts/apply-gemini-latency.cjs
++++ b/functions/scripts/apply-gemini-latency.cjs
+@@ -146,7 +146,7 @@ replaceOnce(
+ replaceOnce(
+   '850 thinking policy request flag',
+   '    const latencyPolicy: GeminiLatencyPolicy = req.body?.latencyPolicy === "bounded-v1" ? "bounded-v1" : null;',
+-  '    const latencyPolicy: GeminiLatencyPolicy = req.body?.latencyPolicy === "bounded-v1" ? "bounded-v1" : null;\n    const thinkingPolicy = req.body?.thinkingPolicy === "initial-36-low-v1" ? "initial-36-low-v1" : null;',
++  '    const latencyPolicy: GeminiLatencyPolicy = req.body?.latencyPolicy === "bounded-v1" ? "bounded-v1" : null;\n    const thinkingPolicy = req.body?.thinkingPolicy === "initial-36-low-small-35-low-v2" ? "initial-36-low-small-35-low-v2" : req.body?.thinkingPolicy === "initial-36-low-v1" ? "initial-36-low-v1" : null;',
+ );
+ 
+ replaceOnce(
+@@ -167,9 +167,18 @@ replaceOnce(
+           || context === "generateSongCompactFallback"
+           || context.startsWith("languageMixLockedWholeRewrite")
+           || context.startsWith("generateSong v2");
+-        if (thinkingPolicy === "initial-36-low-v1"
++        const useInitial36LowThinking = (thinkingPolicy === "initial-36-low-v1" || thinkingPolicy === "initial-36-low-small-35-low-v2")
+           && attemptModel === "gemini-3.6-flash"
+-          && isInitialSongContext) {
++          && isInitialSongContext;
++        const isSmall35LowThinkingContext = context === "repairV1FinalProductionCues"
++          || context === "rewriteLyricHardBanCards"
++          || context === "rewriteLyricHardBanLines"
++          || context === "rewriteLyricHardBanLinesSecondPass"
++          || context === "repairSelectedLanguageCard";
++        const useSmall35LowThinking = thinkingPolicy === "initial-36-low-small-35-low-v2"
++          && attemptModel === "gemini-3.5-flash"
++          && isSmall35LowThinkingContext;
++        if (useInitial36LowThinking || useSmall35LowThinking) {
+           const existingConfig = attemptPayload?.config && typeof attemptPayload.config === "object"
+             ? attemptPayload.config
+             : {};
+@@ -183,7 +192,9 @@ replaceOnce(
+               thinkingLevel: "low",
+             },
+           };
+-          console.info("[Gemini 850 Thinking] initial 3.6 request uses low thinking", {
++          console.info(useSmall35LowThinking
++            ? "[Gemini 854 Thinking] small 3.5 correction request uses low thinking"
++            : "[Gemini 850 Thinking] initial 3.6 request uses low thinking", {
+             context,
+             sessionId,
+             model: attemptModel,
+@@ -275,4 +286,4 @@ replaceOnce(
+ );
+ 
+ fs.writeFileSync(securedPath, source, 'utf8');
+-console.log('Applied SORIDRAW 853 Gemini policy: Retry-After based 429 cooldown + 850 low-thinking + 849 in-flight.');
++console.log('Applied SORIDRAW 855 Gemini policy: 854 small-correction low-thinking + selected-language recovery + 853 Retry-After cooldown + 849 in-flight.');

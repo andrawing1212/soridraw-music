@@ -1,1 +1,1 @@
-Trigger SORIDRAW 861 PR workflow.
+Trigger SORIDRAW 861 PR workflow retry 2 after idempotent patch fix.

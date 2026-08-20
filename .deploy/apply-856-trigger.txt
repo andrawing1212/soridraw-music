@@ -1,3 +1,4 @@
 Apply SORIDRAW 856 Japanese selected-language dominance validation.
 Base branch: preview
 Do not deploy Firebase Hosting.
+Retry trigger: 2

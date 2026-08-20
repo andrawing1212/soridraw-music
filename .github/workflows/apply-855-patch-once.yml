@@ -1,0 +1,107 @@
+name: Apply SORIDRAW 855 patch once
+
+on:
+  push:
+    branches:
+      - preview
+    paths:
+      - .deploy/apply-855-trigger.txt
+
+concurrency:
+  group: apply-soridraw-855-once
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    name: Apply and validate 855
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+
+      - name: Apply 855 patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          patches=(
+            .deploy/855-functions.patch
+            .deploy/855-proxy.patch
+            .deploy/855-modal.patch
+            .deploy/855-app.patch
+            .deploy/855-audit.patch
+            .deploy/855-gemini-1.patch
+            .deploy/855-gemini-2.patch
+            .deploy/855-gemini-3.patch
+            .deploy/855-gemini-4.patch
+          )
+          for patch in "${patches[@]}"; do
+            echo "Checking ${patch}"
+            git apply --check "$patch"
+            git apply "$patch"
+          done
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install app dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Install Functions dependencies
+        run: npm ci --prefix functions
+
+      - name: Build Functions
+        run: npm --prefix functions run build
+
+      - name: Commit validated 855 source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p .deploy
+          {
+            echo "status=success"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "branch=preview"
+            echo "version=855"
+            echo "app_build=success"
+            echo "functions_build=success"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .deploy/apply-855-result.txt
+
+          git add \
+            functions/scripts/apply-gemini-latency.cjs \
+            src/services/geminiProxyClient.ts \
+            src/components/MusicApiGenerateModal.tsx \
+            src/App.tsx \
+            src/services/generation/v1/language/languageMixAudit.ts \
+            src/services/geminiService.ts \
+            .deploy/apply-855-result.txt
+
+          git rm -f \
+            .deploy/855-functions.patch \
+            .deploy/855-proxy.patch \
+            .deploy/855-modal.patch \
+            .deploy/855-app.patch \
+            .deploy/855-audit.patch \
+            .deploy/855-gemini-1.patch \
+            .deploy/855-gemini-2.patch \
+            .deploy/855-gemini-3.patch \
+            .deploy/855-gemini-4.patch \
+            .deploy/apply-855-trigger.txt \
+            .github/workflows/apply-855-patch-once.yml
+
+          git commit -m "feat(855): optimize small Gemini corrections and enforce selected lyric languages"
+          git push origin HEAD:preview

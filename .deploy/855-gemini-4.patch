@@ -1,0 +1,34 @@
+diff --git a/src/services/geminiService.ts b/src/services/geminiService.ts
+index 9eaf907..66ecea7 100644
+--- a/src/services/geminiService.ts
++++ b/src/services/geminiService.ts
+@@ -34895,6 +35218,13 @@ export async function generateSong(
+     if (route !== 'v2' && structurallyFinal?.lyrics) {
+       structurallyFinal = finalizeV1SongAtAbsoluteReturnBoundary(structurallyFinal, params, resolvedHookBlueprint);
+     }
++    if (structurallyFinal?.lyrics && !params.isNoLyrics) {
++      structurallyFinal = await enforceSelectedLanguageCardsBeforeHardBan(
++        structurallyFinal,
++        params,
++        getAuditedAI(params.geminiApiKey, auditSessionId),
++      );
++    }
+ 
+     let guarded: SongResult;
+     try {
+@@ -35038,6 +35368,7 @@ export async function generateSong(
+       }
+     }
+ 
++    guarded = refreshSelectedLanguageOutputMaps(guarded, params);
+     assertNoFinalLyricHardBanViolations(guarded, params);
+     delete (generated as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
+     delete (guarded as any)?.[V1_INTERNAL_RESOLVED_HOOK_BLUEPRINT_KEY];
+@@ -37090,6 +37421,7 @@ ${retryCardContract}
+       targetLanguages: requestedLanguageMixTargets,
+       koreanLyrics: String(result?.lyrics?.korean || ''),
+       secondaryLyrics: String(result?.lyrics?.english || ''),
++      koreanCardLanguage: requestedLyricLanguages.includes('ko') ? 'ko' : undefined,
+       secondaryLanguage,
+       koreanCardEnabled: requestedLyricLanguages.includes('ko'),
+       secondaryCardEnabled: requestedLyricLanguages.some((language) => language !== 'ko'),

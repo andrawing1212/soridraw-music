@@ -7,7 +7,7 @@ on:
       - .deploy/validate-handoff-865-trigger.txt
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate-and-archive:
@@ -36,3 +36,13 @@ jobs:
           path: SORIDRAW_865_stage3_japanese_native_relation_final.zip
           if-no-files-found: error
           retention-days: 7
+      - name: Write validation result to staging branch
+        run: |
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git fetch origin stage2-contract-align
+          git checkout -B stage2-contract-align origin/stage2-contract-align
+          printf 'status=success\nrun_id=%s\nsource_commit=070e26076ead6b0cf4b4a4f474e6b2a22656f388\nartifact_name=SORIDRAW_865_stage3_source\nlint=success\nbuild=success\n' "$GITHUB_RUN_ID" > .deploy/validate-handoff-865-result.txt
+          git add .deploy/validate-handoff-865-result.txt
+          git commit -m "chore(865): record validation and handoff result"
+          git push origin HEAD:stage2-contract-align

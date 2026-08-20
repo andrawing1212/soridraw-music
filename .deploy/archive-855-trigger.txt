@@ -1,1 +1,0 @@
-Create an exact source ZIP from preview SORIDRAW 855. Exclude only temporary archive workflow/trigger and dependencies/build outputs.

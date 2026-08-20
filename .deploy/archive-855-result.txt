@@ -1,5 +1,0 @@
-status=success
-run_id=32318032587
-commit=3ed5fac78601339322c48e78a4c36963026ccaae
-artifact=SORIDRAW-855-exact-preview
-finished_at=2026-08-20T00:38:03Z

@@ -13,6 +13,7 @@ export interface V1PublicLanguageMixAuditInput {
   targetLanguages: V1LanguageCode[];
   koreanLyrics?: string;
   secondaryLyrics?: string;
+  koreanCardLanguage?: V1LanguageCode;
   secondaryLanguage?: V1LanguageCode;
   koreanCardEnabled?: boolean;
   secondaryCardEnabled?: boolean;
@@ -512,9 +513,15 @@ export function buildV1PublicLanguageMixAudit(input: V1PublicLanguageMixAuditInp
   const cards: Record<string, unknown> = {};
 
   if (input.koreanCardEnabled && String(input.koreanLyrics || '').trim()) {
+    const koreanCardLanguage = input.koreanCardLanguage || 'ko';
     cards.korean = {
       card: 'korean',
-      ...buildCardAudit(String(input.koreanLyrics || ''), 'ko', targetLanguages.filter((language) => language !== 'ko'), requestedRatio),
+      ...buildCardAudit(
+        String(input.koreanLyrics || ''),
+        koreanCardLanguage,
+        targetLanguages.filter((language) => language !== koreanCardLanguage),
+        requestedRatio,
+      ),
     };
   }
 

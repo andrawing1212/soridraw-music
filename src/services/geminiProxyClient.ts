@@ -5,7 +5,7 @@ import { recordGeminiAuditModelSkips } from './geminiAuditLog';
 
 const CLOUD_FUNCTIONS_BASE_URL = 'https://us-central1-soridraw-app-866a5.cloudfunctions.net';
 const GEMINI_LATENCY_POLICY = 'bounded-v1' as const;
-const GEMINI_THINKING_POLICY = 'initial-36-low-v1' as const;
+const GEMINI_THINKING_POLICY = 'initial-36-low-small-35-low-v2' as const;
 const FAST_REPAIR_CONTEXT = 'repairV1FinalProductionCues';
 const INITIAL_SONG_MODEL_CHAIN = [
   'gemini-3.7-flash',

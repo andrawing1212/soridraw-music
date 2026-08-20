@@ -535,9 +535,12 @@ export default function MusicApiGenerateModal({
     if (!isMain) return;
     setLocalKoreanEnglishMix(Boolean(isKoreanEnglishMix));
     setLocalEnglishMixRatio(normalizeLanguageMixRatioOption(englishMixRatio));
-    setLocalLanguageMixTargets(normalizeLanguageMixTargets(lyricLanguages[0], lyricLanguages, languageMixTargetLanguages, filteredLanguages.map((item) => item.id)));
+    // Do not overwrite an in-modal language selection with the parent's previous mix target
+    // whenever lyricLanguages changes. The next effect normalizes the current local target
+    // against the newly selected lyric languages, so Japanese/Chinese/etc. cannot snap back
+    // to a stale English target while the modal is still open.
     setLocalRapMode(rapMode || (rapEnabled ? 'on' : 'off'));
-  }, [englishMixRatio, filteredLanguages, isKoreanEnglishMix, isMain, languageMixTargetLanguages, lyricLanguages, rapEnabled, rapMode]);
+  }, [englishMixRatio, isKoreanEnglishMix, isMain, rapEnabled, rapMode]);
 
   useEffect(() => {
     if (!isMain || !includeLyrics || !localKoreanEnglishMix) return;

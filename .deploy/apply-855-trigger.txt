@@ -1,3 +1,0 @@
-Apply SORIDRAW 855 on preview only.
-Includes 854 small 3.5 low-thinking experiment and selected-language/Japanese recovery.
-Do not touch main or Firebase Hosting.

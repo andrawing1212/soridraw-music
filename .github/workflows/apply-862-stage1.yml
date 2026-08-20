@@ -1,0 +1,56 @@
+name: Apply SORIDRAW 862 stage1 once
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - .deploy/apply-862-stage1-trigger.txt
+
+permissions:
+  contents: write
+
+tasks:
+
+concurrency:
+  group: apply-soridraw-862-stage1-once
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Apply targeted selected-language repair patch
+        run: python3 .deploy/apply-862-stage1.py
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Validate app build
+        run: npm run build
+      - name: Commit validated source and clean temporary apply files
+        run: |
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          printf 'status=success\nversion=862\nstage=1\napp_lint=success\napp_build=success\nfinished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .deploy/apply-862-stage1-result.txt
+          rm -f .deploy/apply-862-stage1.py .deploy/apply-862-stage1-trigger.txt .github/workflows/apply-862-stage1.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "feat(862): target selected-language repair lines only"
+          git push origin HEAD:preview
+      - name: Build exact source ZIP
+        run: git archive --format=zip --output=SORIDRAW_862_stage1_selected_language_targeted_repair.zip HEAD
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_862_stage1_source
+          path: SORIDRAW_862_stage1_selected_language_targeted_repair.zip
+          if-no-files-found: error
+          retention-days: 7

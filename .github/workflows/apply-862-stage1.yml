@@ -9,8 +9,6 @@ on:
 permissions:
   contents: write
 
-tasks:
-
 concurrency:
   group: apply-soridraw-862-stage1-once
   cancel-in-progress: false

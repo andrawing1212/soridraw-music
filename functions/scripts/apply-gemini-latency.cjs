@@ -16,7 +16,7 @@ function replaceOnce(label, before, after) {
 replaceOnce(
   '3.7 wait ceiling',
   '  "gemini-3.7-flash": 55_000,',
-  '  "gemini-3.7-flash": 25_000,',
+  '  "gemini-3.7-flash": 35_000,',
 );
 
 replaceOnce(
@@ -34,7 +34,7 @@ const getGeminiAttemptTimeoutMs = (`,
   "gemini-3.1-flash-lite": 10_000,
 };
 
-const GEMINI_37_BUSY_SKIP_MS = 10 * 60_000;
+const GEMINI_37_BUSY_SKIP_MS = 45_000;
 const GEMINI_36_BUSY_SKIP_MS = 5 * 60_000;
 const GEMINI_RETRY_AFTER_SAFETY_MS = 1_500;
 const GEMINI_RATE_LIMIT_NO_HINT_COOLDOWN_MS = 15_000;
@@ -286,4 +286,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(securedPath, source, 'utf8');
-console.log('Applied SORIDRAW 855 Gemini policy: 854 small-correction low-thinking + selected-language recovery + 853 Retry-After cooldown + 849 in-flight.');
+console.log('Applied SORIDRAW 861 Gemini policy: 854 small-correction low-thinking + selected-language recovery + 853 Retry-After cooldown + 849 in-flight.');

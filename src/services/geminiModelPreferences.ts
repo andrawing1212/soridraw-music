@@ -41,9 +41,13 @@ function sanitizeCooldownMap(value: unknown): GeminiModelCooldownMap {
     // 853 migration: old 847-852 quota cooldowns could persist for 5-10 minutes.
     // New quota policy is Retry-After based and capped at 60s, so clamp only
     // legacy quota entries. Other timeout/overload cooldowns are preserved.
+    const isLegacy37BusyCooldown = model === "gemini-3.7-flash"
+      && ["model_response_timeout", "model_unavailable_or_overloaded", "temporary_model_cooldown"].includes(reason);
     const safeUntil = reason === "quota_or_rate_limit"
       ? Math.min(until, now + 60_000)
-      : until;
+      : isLegacy37BusyCooldown
+        ? Math.min(until, now + 45_000)
+        : until;
     next[model] = {
       until: safeUntil,
       reason,
@@ -174,9 +178,13 @@ export function setGeminiModelCooldown(
   // 853 safety net: the Function now returns Retry-After based quota cooldowns.
   // Never let an older/fallback client path inflate quota_or_rate_limit back into
   // the legacy multi-minute lock; provider-guided cooldowns are capped at 60s.
+  const is37BusyCooldown = normalizedModel === "gemini-3.7-flash"
+    && ["model_response_timeout", "model_unavailable_or_overloaded", "temporary_model_cooldown"].includes(normalizedReason);
   const safeDurationMs = normalizedReason === "quota_or_rate_limit"
     ? Math.min(60_000, requestedDurationMs)
-    : requestedDurationMs;
+    : is37BusyCooldown
+      ? Math.min(45_000, requestedDurationMs)
+      : requestedDurationMs;
   const nextUntil = Date.now() + safeDurationMs;
   const existing = readGeminiModelCooldownMap(uid)[normalizedModel];
   const nextEntry: GeminiModelCooldownEntry = {

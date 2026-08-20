@@ -34932,6 +34932,21 @@ function hasDominantSelectedLanguageBody(value: unknown, language: LanguageCode)
   // This keeps normal Japanese lyrics (Kana + Kanji) valid while rejecting cases
   // where an English lyric contains only a few isolated Japanese lines.
   if (language === 'ja') {
+    // 858: reject standalone Latin sung/ad-lib lines in strict Japanese cards.
+    // Standalone square-bracket section/performance/production cues remain allowed.
+    const hasForeignLatinSungLine = String(value || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .some((line) => {
+        if (/^\[[^\]]+\]$/.test(line)) return false;
+        const latinInLine = (line.match(/[A-Za-zÀ-ÖØ-öø-ÿĀ-žẀ-ỿ]/g) || []).length;
+        const kanaInLine = (line.match(/[\u3040-\u30ff\u31f0-\u31ff]/g) || []).length;
+        const hanInLine = (line.match(/[\u3400-\u9fff]/g) || []).length;
+        return latinInLine >= 3 && (kanaInLine + hanInLine) === 0;
+      });
+    if (hasForeignLatinSungLine) return false;
+
     const hangul = (text.match(/[가-힣]/g) || []).length;
     const kana = (text.match(/[\u3040-\u30ff\u31f0-\u31ff]/g) || []).length;
     const han = (text.match(/[\u3400-\u9fff]/g) || []).length;
@@ -35690,10 +35705,11 @@ ${cardTargetScriptLines || '    - No extra mixed script required.'}`
     ? `JAPANESE FIRST-PASS LYRIC CONTRACT (MANDATORY):
 - ${japaneseInitialLyricSlot} is the selected Japanese SUNG-LYRIC card. Write its sung body in Japanese correctly on the FIRST generation pass so a recovery rewrite is normally unnecessary.
 - Every sung lyric line in that card must be natural, idiomatic Japanese. Do not write full English lyric lines or an English sentence skeleton with only a few Japanese phrases inserted.
-- English is allowed only in standalone square-bracket section/performance/production cues; those cues are not sung lyric text.
+- English is allowed only in standalone square-bracket section/performance/production cues; those cues are not sung lyric text. Never write sung English words, English lexical ad-libs, or romaji outside those square brackets. Parenthetical sung/ad-lib text must use Japanese script or be omitted.
 - Use natural modern Japanese orthography with Kana + Kanji as a native lyricist would. Do not force kana-only, kanji-only, romaji, or kanji-only wording.
-- Prefer concise, singable Japanese phrasing with natural particles and inflections. Avoid literal translationese and unnecessary English/katakana substitutions when ordinary Japanese is more natural.
-- Keep the same song meaning and section architecture, but phrase Japanese independently and naturally rather than translating another language line-by-line.
+- Prefer concise, singable Japanese phrasing with natural particles, inflections, ellipsis, and native word order. Use ordinary Japanese collocations; avoid literal translationese, semantically awkward modifier+noun pairings, and unnecessary English/katakana substitutions when ordinary Japanese is more natural.
+- Phrase by natural Japanese lyric sense-units rather than translating another language line-by-line. Favor everyday idiomatic combinations a native Japanese lyricist would plausibly sing.
+- Keep the same song meaning and section architecture, but let Japanese phrasing compress, omit, or reorder information naturally when needed for singing.
 - The Japanese sung body must be clearly Japanese-dominant enough to pass selected-language validation without repairSelectedLanguageCard.`
     : '';
 

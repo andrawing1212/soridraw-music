@@ -1,0 +1,2 @@
+Apply SORIDRAW 857 Japanese first-pass native lyric quality contract on preview only.
+Do not touch main or Firebase Hosting.

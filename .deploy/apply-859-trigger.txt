@@ -1,2 +1,0 @@
-Apply SORIDRAW 859 Japanese native lyric naturalness rules on preview only.
-Do not touch main until validation and user approval.

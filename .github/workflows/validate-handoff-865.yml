@@ -1,0 +1,38 @@
+name: Validate and handoff SORIDRAW 865
+
+on:
+  push:
+    branches: [stage2-contract-align]
+    paths:
+      - .deploy/validate-handoff-865-trigger.txt
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: TypeScript validation
+        run: npm run lint
+      - name: Production build validation
+        run: npm run build
+      - name: Build exact main source ZIP
+        run: git archive --format=zip --output=SORIDRAW_865_stage3_japanese_native_relation_final.zip HEAD
+      - name: Upload exact source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: SORIDRAW_865_stage3_source
+          path: SORIDRAW_865_stage3_japanese_native_relation_final.zip
+          if-no-files-found: error
+          retention-days: 7

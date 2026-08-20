@@ -4,15 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py",
+    "predev": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py",
     "dev": "tsx server.ts",
-    "prebuild": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py",
+    "prebuild": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py",
     "build": "vite build",
     "deploy": "npm run build && firebase deploy --only hosting",
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "prelint": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py",
+    "prelint": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

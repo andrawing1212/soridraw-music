@@ -1,0 +1,94 @@
+name: SORIDRAW 861 preview patch and Function deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-deploy:
+    if: github.head_ref == 'ops-861-trigger'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Patch 861 source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # A) Japanese semantic-native quality guard, derived from 860 test failures.
+          p = Path('src/constants/lyricClicheGuard.ts')
+          s = p.read_text()
+          if 'JAPANESE NATIVE SEMANTIC QUALITY — 861' not in s:
+              old = """  const softText = formatDynamicTermList(resolved.softBanTerms, 240) || 'none';\n\n  return `LYRIC CLICHE GUARD — ABSOLUTE HARD BAN:\n"""
+              new = """  const softText = formatDynamicTermList(resolved.softBanTerms, 240) || 'none';\n  const lyricLanguageSignals = [\n    ...(Array.isArray(params?.lyricLanguages) ? params.lyricLanguages : []),\n    params?.targetLanguage,\n    params?.language,\n  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);\n  const japaneseSelected = lyricLanguageSignals.some((value) =>\n    value === 'ja' || value === 'jp' || value.includes('japanese') || value.includes('일본어') || value.includes('日本語')\n  );\n  const japaneseQualityInstruction = japaneseSelected ? `\nJAPANESE NATIVE SEMANTIC QUALITY — 861 (Japanese lyric card/body only):\n- Write Japanese as Japanese, not as a translated Korean/English sentence skeleton. Grammar alone is not enough: every modifier→noun, noun→predicate, subject/object/location relationship must be semantically ordinary or intentionally poetic in contemporary Japanese.\n- Reject redundant same-meaning combinations inside one phrase (for example an adjective that merely repeats the noun's meaning), impossible body/location chains, and noun-noun pairings whose relationship is unclear to a Japanese listener.\n- Avoid translated abstract constructions such as an unnatural “name / line / texture of time, day, memory, or feeling” when the relation is not immediately intelligible in Japanese. Replace them with a concrete action, sensation, object, or scene that carries the same emotion.\n- A metaphor is allowed only when its image is instantly understandable in Japanese. Prefer a simpler native collocation over a clever but foreign-sounding abstraction.\n- Read each sung line as a standalone Japanese sentence fragment before finalizing it. If the line only makes sense when mentally reconstructing another language's source sentence, rewrite it.\n` : '';\n\n  return `LYRIC CLICHE GUARD — ABSOLUTE HARD BAN:\n${japaneseQualityInstruction}"""
+              if old not in s:
+                  raise SystemExit('861 Japanese quality anchor not found')
+              s = s.replace(old, new, 1)
+              p.write_text(s)
+
+          # B) 3.7 policy: 25s -> 35s timeout, 10m -> 45s busy/timeout cooldown.
+          p = Path('functions/scripts/apply-gemini-latency.cjs')
+          s = p.read_text()
+          old_timeout = "'  \\\"gemini-3.7-flash\\\": 25_000,'"
+          if old_timeout in s:
+              s = s.replace(old_timeout, "'  \\\"gemini-3.7-flash\\\": 35_000,'", 1)
+          elif "'  \"gemini-3.7-flash\": 25_000,'" in s:
+              s = s.replace("'  \"gemini-3.7-flash\": 25_000,'", "'  \"gemini-3.7-flash\": 35_000,'", 1)
+          else:
+              raise SystemExit('861 3.7 timeout anchor not found')
+          if 'const GEMINI_37_BUSY_SKIP_MS = 10 * 60_000;' not in s:
+              raise SystemExit('861 3.7 cooldown anchor not found')
+          s = s.replace('const GEMINI_37_BUSY_SKIP_MS = 10 * 60_000;', 'const GEMINI_37_BUSY_SKIP_MS = 45_000;', 1)
+          s = s.replace('Applied SORIDRAW 855 Gemini policy:', 'Applied SORIDRAW 861 Gemini policy:', 1)
+          p.write_text(s)
+          PY
+
+      - name: Set up Node 20 for app
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Validate app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set up Node 22 for Functions
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Validate Functions
+        run: |
+          npm ci --prefix functions
+          npm --prefix functions run build
+
+      - name: Commit 861 source to preview
+        run: |
+          git config user.name "andrawing1212"
+          git config user.email "andrawing1212@gmail.com"
+          git add src/constants/lyricClicheGuard.ts functions/scripts/apply-gemini-latency.cjs
+          git diff --cached --check
+          git commit -m "feat(861): Japanese semantic quality and 3.7 35s-45s policy"
+          git push origin HEAD:preview
+
+      - name: Authenticate Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy generateGeminiContent only
+        shell: bash
+        run: |
+          npx --yes firebase-tools@latest deploy --only functions:generateGeminiContent --project soridraw-app-866a5 --non-interactive

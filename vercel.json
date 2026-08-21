@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "python3 .deploy/apply-887-preview-latency-fastpath.py && npm run build",
   "outputDirectory": "dist",
   "rewrites": [
     {

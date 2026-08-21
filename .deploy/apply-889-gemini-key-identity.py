@@ -53,9 +53,21 @@ client_source = client_path.read_text(encoding='utf-8')
 if MARKER not in client_source:
     client_source = replace_once(
         client_source,
+        "const GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_google_gemini_api_key_registered';",
+        "const GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE = 'soridraw_google_gemini_api_key_registered';\nconst GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE = 'soridraw_google_gemini_api_key_meta';",
+        'client meta storage constant',
+    )
+    client_source = replace_once(
+        client_source,
         "type ApiModalType = 'google' | 'music' | null;",
         "type ApiModalType = 'google' | 'music' | null;\n\ntype GoogleKeyMeta = { alias: string; last6: string; updatedAt: string | null };",
         'client meta type',
+    )
+    client_source = replace_once(
+        client_source,
+        "function getStoredGoogleApiKeyStatus(uid?: string | null) {\n try {\n return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';\n } catch {\n return false;\n }\n}\n",
+        "function getStoredGoogleApiKeyStatus(uid?: string | null) {\n try {\n return localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, uid)) === 'true';\n } catch {\n return false;\n }\n}\n\nfunction getStoredGoogleKeyMeta(uid?: string | null): GoogleKeyMeta | null {\n try {\n const raw = localStorage.getItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, uid));\n if (!raw) return null;\n const parsed = JSON.parse(raw);\n const last6 = String(parsed?.last6 || '').slice(-6);\n if (!last6) return null;\n return { alias: String(parsed?.alias || ''), last6, updatedAt: parsed?.updatedAt || null };\n } catch {\n return null;\n }\n}\n",
+        'client meta storage helper',
     )
     client_source = replace_once(
         client_source,
@@ -78,25 +90,25 @@ if MARKER not in client_source:
     client_source = replace_once(
         client_source,
         " const [googleApiKey, setGoogleApiKey] = useState('');\n const [googleRegistered, setGoogleRegistered]",
-        " const [googleApiKey, setGoogleApiKey] = useState('');\n const [googleKeyAlias, setGoogleKeyAlias] = useState('');\n const [googleKeyMeta, setGoogleKeyMeta] = useState<GoogleKeyMeta | null>(null);\n const [googleRegistered, setGoogleRegistered]",
+        " const [googleApiKey, setGoogleApiKey] = useState('');\n const initialGoogleKeyMeta = getStoredGoogleKeyMeta(auth.currentUser?.uid);\n const [googleKeyAlias, setGoogleKeyAlias] = useState(initialGoogleKeyMeta?.alias || '');\n const [googleKeyMeta, setGoogleKeyMeta] = useState<GoogleKeyMeta | null>(initialGoogleKeyMeta);\n const [googleRegistered, setGoogleRegistered]",
         'client state',
     )
     client_source = replace_once(
         client_source,
         " setGoogleRegistered(getStoredGoogleApiKeyStatus(currentUser?.uid));\n setRemainingCredits(readStoredCredits(currentUser?.uid));",
-        " setGoogleRegistered(getStoredGoogleApiKeyStatus(currentUser?.uid));\n setGoogleKeyAlias('');\n setGoogleKeyMeta(null);\n setRemainingCredits(readStoredCredits(currentUser?.uid));",
-        'auth state reset',
+        " setGoogleRegistered(getStoredGoogleApiKeyStatus(currentUser?.uid));\n const storedGoogleKeyMeta = getStoredGoogleKeyMeta(currentUser?.uid);\n setGoogleKeyAlias(storedGoogleKeyMeta?.alias || '');\n setGoogleKeyMeta(storedGoogleKeyMeta);\n setRemainingCredits(readStoredCredits(currentUser?.uid));",
+        'auth state meta restore',
     )
     client_source = replace_once(
         client_source,
         " if (res.ok && result?.ok && result.hasGoogleGeminiApiKey) {\n setGoogleRegistered(true);\n localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');",
-        " if (res.ok && result?.ok && result.hasGoogleGeminiApiKey) {\n setGoogleRegistered(true);\n setGoogleKeyAlias(String(result.keyAlias || ''));\n setGoogleKeyMeta({ alias: String(result.keyAlias || ''), last6: String(result.keyLast6 || ''), updatedAt: result.updatedAt || null });\n localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');",
+        " if (res.ok && result?.ok && result.hasGoogleGeminiApiKey) {\n setGoogleRegistered(true);\n const storedGoogleKeyMeta = getStoredGoogleKeyMeta(user.uid);\n const nextGoogleKeyMeta = String(result.keyLast6 || '').trim()\n ? { alias: String(result.keyAlias || storedGoogleKeyMeta?.alias || ''), last6: String(result.keyLast6 || '').slice(-6), updatedAt: result.updatedAt || storedGoogleKeyMeta?.updatedAt || null }\n : storedGoogleKeyMeta;\n setGoogleKeyAlias(nextGoogleKeyMeta?.alias || '');\n setGoogleKeyMeta(nextGoogleKeyMeta);\n localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_REGISTERED_STORAGE_BASE, user.uid), 'true');",
         'status success',
     )
     client_source = replace_once(
         client_source,
         " } else if (res.ok) {\n setGoogleRegistered(false);\n localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));",
-        " } else if (res.ok) {\n setGoogleRegistered(false);\n setGoogleKeyAlias('');\n setGoogleKeyMeta(null);\n localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));",
+        " } else if (res.ok) {\n setGoogleRegistered(false);\n setGoogleKeyAlias('');\n setGoogleKeyMeta(null);\n localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid));\n localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_STORAGE_BASE, user.uid));",
         'status empty',
     )
     client_source = replace_once(
@@ -108,13 +120,13 @@ if MARKER not in client_source:
     client_source = replace_once(
         client_source,
         " setGoogleRegistered(true);\n setGoogleApiKey('');\n setActiveModal(null);",
-        " setGoogleRegistered(true);\n setGoogleApiKey('');\n setGoogleKeyMeta({ alias: googleKeyAlias.trim(), last6: googleApiKey.trim().slice(-6), updatedAt: new Date().toISOString() });\n setActiveModal(null);",
+        " setGoogleRegistered(true);\n const nextGoogleKeyMeta = { alias: googleKeyAlias.trim(), last6: googleApiKey.trim().slice(-6), updatedAt: new Date().toISOString() };\n localStorage.setItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid), JSON.stringify(nextGoogleKeyMeta));\n setGoogleKeyMeta(nextGoogleKeyMeta);\n setGoogleApiKey('');\n setActiveModal(null);",
         'save local meta',
     )
     client_source = replace_once(
         client_source,
         " setGoogleRegistered(false);\n setGoogleApiKey('');\n setActiveModal(null);\n setMessage('Google Gemini API Key가 삭제되었습니다.');",
-        " setGoogleRegistered(false);\n setGoogleApiKey('');\n setGoogleKeyAlias('');\n setGoogleKeyMeta(null);\n setActiveModal(null);\n setMessage('Google Gemini API Key가 삭제되었습니다.');",
+        " setGoogleRegistered(false);\n setGoogleApiKey('');\n setGoogleKeyAlias('');\n setGoogleKeyMeta(null);\n localStorage.removeItem(scopedStorageKey(GOOGLE_GEMINI_API_KEY_META_STORAGE_BASE, user.uid));\n setActiveModal(null);\n setMessage('Google Gemini API Key가 삭제되었습니다.');",
         'delete local meta',
     )
     client_source = replace_once(

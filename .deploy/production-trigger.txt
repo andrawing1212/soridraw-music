@@ -1,7 +1,10 @@
-SORIDRAW production deployment trigger.
+SORIDRAW production deployment record.
 
 This file is updated only after the user explicitly requests an official Firebase production deployment.
-Updating this file triggers the GitHub Actions workflow that builds the latest main branch and deploys Firebase Hosting only.
+Official Firebase Hosting deployments are executed through an approved one-time GitHub Actions workflow, which is removed immediately after a successful deployment.
 
-Last production deployment request: 2026-07-24
-Baseline: SORIDRAW 110
+Last production deployment request: 2026-08-21
+Baseline: SORIDRAW 874
+Production deploy SHA: 00ce35716dcebd240f78df54d985590660fb00de
+Production URL: https://soridraw.web.app/
+Hosting only: true

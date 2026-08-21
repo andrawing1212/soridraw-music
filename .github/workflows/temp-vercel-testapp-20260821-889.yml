@@ -1,0 +1,73 @@
+name: Approved SORIDRAW 889 Vercel Test App Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.deploy/trigger-889-vercel.txt'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  deploy-test-app:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERCEL_ORG_ID: team_VzrQlo1M8WMyAfePFuzB3zLk
+      VERCEL_PROJECT_ID: prj_tRArwR7hBD786Ox4yB2dO8qGBDPr
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Require Vercel token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN" || { echo 'VERCEL_TOKEN secret is missing'; exit 2; }
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Pull Vercel project settings
+        run: npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build for Vercel
+        run: npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy test app production target
+        run: npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Verify test app
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw-music.vercel.app/ -o testapp-index.html
+          grep -q '<div id="root"></div>' testapp-index.html
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_889_VERCEL_TESTAPP_SUCCESS sha=$(git rev-parse HEAD) url=https://soridraw-music.vercel.app/"
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_889_VERCEL_TESTAPP_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }}"

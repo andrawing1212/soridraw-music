@@ -129,3 +129,8 @@ function numberText(value: number): string {"""
     print('Applied SORIDRAW 888: admin Gemini audit internal context labels shown in Korean.')
 else:
     print('888 admin context labels already applied')
+
+# 889 stays a separate, additive patch but is chained here so existing dev/lint/build hooks apply it.
+apply_889 = Path('.deploy/apply-889-gemini-key-identity.py')
+if apply_889.exists():
+    exec(compile(apply_889.read_text(encoding='utf-8'), str(apply_889), 'exec'), {'__name__': '__main__'})

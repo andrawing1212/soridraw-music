@@ -134,3 +134,8 @@ else:
 apply_889 = Path('.deploy/apply-889-gemini-key-identity.py')
 if apply_889.exists():
     exec(compile(apply_889.read_text(encoding='utf-8'), str(apply_889), 'exec'), {'__name__': '__main__'})
+
+# 890 simplifies the visible Gemini key UI after the 889 metadata patch is applied.
+apply_890 = Path('.deploy/apply-890-gemini-key-simple-ui.py')
+if apply_890.exists():
+    exec(compile(apply_890.read_text(encoding='utf-8'), str(apply_890), 'exec'), {'__name__': '__main__'})

@@ -4,15 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "predev": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py && python3 .deploy/apply-865-stage3-final.py && python3 .deploy/apply-866-stage3-semantic-audit.py && python3 .deploy/apply-867-stage3-audit-route.py && python3 .deploy/apply-868-stage3-audit-final-body-route.py && python3 .deploy/apply-869-stage3-audit-canonical-language-map.py && python3 .deploy/apply-870-stage3-audit-priority-route.py && python3 .deploy/apply-871-stage3-final-audit-boundary.py",
+    "predev": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py && python3 .deploy/apply-865-stage3-final.py && python3 .deploy/apply-866-stage3-semantic-audit.py && python3 .deploy/apply-867-stage3-audit-route.py && python3 .deploy/apply-868-stage3-audit-final-body-route.py && python3 .deploy/apply-869-stage3-audit-canonical-language-map.py && python3 .deploy/apply-870-stage3-audit-priority-route.py && python3 .deploy/apply-871-stage3-final-audit-boundary.py && python3 .deploy/verify-872-vercel-runtime.py",
     "dev": "tsx server.ts",
-    "prebuild": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py && python3 .deploy/apply-865-stage3-final.py && python3 .deploy/apply-866-stage3-semantic-audit.py && python3 .deploy/apply-867-stage3-audit-route.py && python3 .deploy/apply-868-stage3-audit-final-body-route.py && python3 .deploy/apply-869-stage3-audit-canonical-language-map.py && python3 .deploy/apply-870-stage3-audit-priority-route.py && python3 .deploy/apply-871-stage3-final-audit-boundary.py",
+    "prebuild": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py && python3 .deploy/apply-865-stage3-final.py && python3 .deploy/apply-866-stage3-semantic-audit.py && python3 .deploy/apply-867-stage3-audit-route.py && python3 .deploy/apply-868-stage3-audit-final-body-route.py && python3 .deploy/apply-869-stage3-audit-canonical-language-map.py && python3 .deploy/apply-870-stage3-audit-priority-route.py && python3 .deploy/apply-871-stage3-final-audit-boundary.py && python3 .deploy/verify-872-vercel-runtime.py",
     "build": "vite build",
     "deploy": "npm run build && firebase deploy --only hosting",
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "prelint": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py && python3 .deploy/apply-865-stage3-final.py && python3 .deploy/apply-866-stage3-semantic-audit.py && python3 .deploy/apply-867-stage3-audit-route.py && python3 .deploy/apply-868-stage3-audit-final-body-route.py && python3 .deploy/apply-869-stage3-audit-canonical-language-map.py && python3 .deploy/apply-870-stage3-audit-priority-route.py && python3 .deploy/apply-871-stage3-final-audit-boundary.py",
+    "prelint": "python3 .deploy/apply-862-stage1.py && python3 .deploy/apply-863-stage2.py && python3 .deploy/apply-864-stage3.py && python3 .deploy/apply-865-stage3-final.py && python3 .deploy/apply-866-stage3-semantic-audit.py && python3 .deploy/apply-867-stage3-audit-route.py && python3 .deploy/apply-868-stage3-audit-final-body-route.py && python3 .deploy/apply-869-stage3-audit-canonical-language-map.py && python3 .deploy/apply-870-stage3-audit-priority-route.py && python3 .deploy/apply-871-stage3-final-audit-boundary.py && python3 .deploy/verify-872-vercel-runtime.py",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   deploy-hosting:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'APPROVED PRODUCTION DEPLOY 20260821 1238'
+    if: github.actor == 'andrawing1212' && github.event.issue.title == 'APPROVED PRODUCTION DEPLOY 20260821 1243'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 

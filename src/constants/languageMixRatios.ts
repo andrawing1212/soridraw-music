@@ -8,13 +8,13 @@ export interface LanguageMixRatioBand {
 }
 
 export const LANGUAGE_MIX_RATIO_BANDS: Record<LanguageMixRatioOption, LanguageMixRatioBand> = {
-  5: { lowerBound: 5, upperBound: 10 },
-  10: { lowerBound: 10, upperBound: 20 },
-  20: { lowerBound: 20, upperBound: 30 },
-  30: { lowerBound: 30, upperBound: 40 },
-  40: { lowerBound: 40, upperBound: 50 },
-  50: { lowerBound: 50, upperBound: 60 },
-  60: { lowerBound: 60, upperBound: 70 },
+  5: { lowerBound: 0, upperBound: 10 },
+  10: { lowerBound: 5, upperBound: 15 },
+  20: { lowerBound: 15, upperBound: 25 },
+  30: { lowerBound: 25, upperBound: 35 },
+  40: { lowerBound: 35, upperBound: 45 },
+  50: { lowerBound: 45, upperBound: 55 },
+  60: { lowerBound: 55, upperBound: 65 },
 };
 
 export function normalizeLanguageMixRatioOption(

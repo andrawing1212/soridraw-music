@@ -1,0 +1,80 @@
+name: Approved SORIDRAW 890 Build And Production Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.deploy/trigger-890-production.txt'
+
+concurrency:
+  group: approved-soridraw-890-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build-and-deploy:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Build production app
+        run: npm run build
+
+      - name: Verify 890 simple Gemini key UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SORIDRAW_890_GEMINI_KEY_SIMPLE_UI' src/components/SunoApiSettingsPanel.tsx
+          grep -q 'API 저장완료' src/components/SunoApiSettingsPanel.tsx
+          grep -q 'maskedGoogleKey' src/components/SunoApiSettingsPanel.tsx
+          grep -q 'soridraw-gemini-api-token' src/components/SunoApiSettingsPanel.tsx
+          if grep -q '키 별칭' src/components/SunoApiSettingsPanel.tsx; then exit 1; fi
+          if grep -q '현재 키 ·' src/components/SunoApiSettingsPanel.tsx; then exit 1; fi
+
+      - name: Deploy official Firebase Hosting only
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          channelId: live
+          projectId: soridraw
+
+      - name: Verify official production app
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 https://soridraw.web.app/ -o production-index.html
+          grep -q '<div id="root"></div>' production-index.html
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_890_BUILD_PRODUCTION_SUCCESS sha=$(git rev-parse HEAD) url=https://soridraw.web.app/ hosting_only=true"
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_890_BUILD_PRODUCTION_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }}"

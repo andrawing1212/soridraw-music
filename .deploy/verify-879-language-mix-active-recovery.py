@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Deployment retrigger only; runtime contract is unchanged.
 path = Path('src/services/geminiService.ts')
 source = path.read_text(encoding='utf-8')
 

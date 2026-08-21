@@ -1,3 +1,3 @@
-SORIDRAW 886 main/test-app redeploy retry
-2026-08-21T21:43+09:00
-Runtime-neutral Vercel production retrigger using the previously successful trigger path after 886 preview READY.
+SORIDRAW 889 main/test-app redeploy
+2026-08-21T23:32+09:00
+Compact Gemini API key identity UI + additive masked key metadata support.

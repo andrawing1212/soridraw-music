@@ -39,7 +39,7 @@ if MARKER not in functions_source:
     )
     functions_source = functions_source.replace(
         'admin.initializeApp({',
-        f'// {MARKER}\nadmin.initializeApp({',
+        '// ' + MARKER + '\nadmin.initializeApp({',
         1,
     )
     functions_path.write_text(functions_source, encoding='utf-8')

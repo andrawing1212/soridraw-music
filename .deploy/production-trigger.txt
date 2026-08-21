@@ -4,7 +4,7 @@ This file is updated only after the user explicitly requests an official Firebas
 Official Firebase Hosting deployments are executed through an approved one-time GitHub Actions workflow, which is removed immediately after a successful deployment.
 
 Last production deployment request: 2026-08-21
-Baseline: SORIDRAW 874
-Production deploy SHA: 00ce35716dcebd240f78df54d985590660fb00de
+Baseline: SORIDRAW 887
+Production deploy SHA: 0534645a58b43f53d38adff4abe53186e9e814e8
 Production URL: https://soridraw.web.app/
 Hosting only: true

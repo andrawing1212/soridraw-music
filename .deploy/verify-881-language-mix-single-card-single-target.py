@@ -7,15 +7,29 @@ required = [
     'SORIDRAW_877_DEDICATED_JAPANESE_AUDIT_SLOT',
     'SORIDRAW_881_LANGUAGE_MIX_SINGLE_CARD_SINGLE_TARGET',
     'const singleCardSingleTargetGuard = Boolean(args.singleCardSingleTargetGuard && args.targetLanguages.length === 1);',
-    'const compactJsonGuard = twoLanguageSelection || singleCardSingleTargetGuard;',
     'const singleCardSingleTargetMix = cards.length === 1 && targetLanguages.length === 1;',
-    'const needsTwoLanguageCandidateExpansion = (twoLanguageSelection || singleCardSingleTargetMix)',
     'singleCardSingleTargetGuard: singleCardSingleTargetMix,',
     "responseMimeType: 'application/json'",
 ]
 missing = [item for item in required if item not in service]
 if missing:
     raise SystemExit(f'881 verify missing runtime markers: {missing}')
+
+# 886: 881 must keep validating the original 3A path even after later compatible
+# guards extend the same shared transport / deficit-completion expressions.
+compact_guard_variants = [
+    'const compactJsonGuard = twoLanguageSelection || singleCardSingleTargetGuard;',
+    'const compactJsonGuard = twoLanguageSelection || singleCardSingleTargetGuard || singleCardTwoTargetGuard;',
+]
+if not any(item in service for item in compact_guard_variants):
+    raise SystemExit('881 verify missing compatible compactJsonGuard expression')
+
+expansion_gate_variants = [
+    'const needsTwoLanguageCandidateExpansion = (twoLanguageSelection || singleCardSingleTargetMix)',
+    'const needsTwoLanguageCandidateExpansion = (twoLanguageSelection || singleCardSingleTargetMix || singleCardTwoTargetMix)',
+]
+if not any(item in service for item in expansion_gate_variants):
+    raise SystemExit('881 verify missing compatible deficit-completion gate')
 
 for forbidden in [
     'SORIDRAW_879_LANGUAGE_MIX_ACTIVE_RECOVERY',
@@ -43,4 +57,4 @@ for script in ('predev', 'prebuild', 'prelint'):
     if needle not in package:
         raise SystemExit(f'881 verify package wiring missing for {script}')
 
-print('Verified SORIDRAW 881 3A isolation: one-card + one-target only; two-card, multi-target, Japanese audit and legacy retry paths preserved')
+print('Verified SORIDRAW 881 3A isolation: one-card + one-target preserved; later compatible guards allowed; two-card, Japanese audit and legacy retry paths preserved')

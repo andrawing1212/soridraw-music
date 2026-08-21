@@ -1,8 +1,10 @@
 name: Approved SORIDRAW 889 Build And Production Deploy
 
 on:
-  issues:
-    types: [opened]
+  push:
+    branches: [main]
+    paths:
+      - '.deploy/trigger-889-production.txt'
 
 concurrency:
   group: approved-soridraw-889-deploy
@@ -14,7 +16,7 @@ permissions:
 
 jobs:
   build-and-deploy:
-    if: github.actor == 'andrawing1212' && github.event.issue.title == 'APPROVED SORIDRAW 889 DEPLOY 20260821 2340'
+    if: github.actor == 'andrawing1212'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -66,12 +68,10 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
-        run: gh issue comment "$ISSUE_URL" --body "✅ SORIDRAW_889_BUILD_PRODUCTION_SUCCESS sha=$(git rev-parse HEAD) url=https://soridraw.web.app/ hosting_only=true"
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_889_BUILD_PRODUCTION_SUCCESS sha=$(git rev-parse HEAD) url=https://soridraw.web.app/ hosting_only=true"
 
       - name: Report failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE_URL: ${{ github.event.issue.html_url }}
-        run: gh issue comment "$ISSUE_URL" --body "❌ SORIDRAW_889_BUILD_PRODUCTION_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }}"
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_889_BUILD_PRODUCTION_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }}"

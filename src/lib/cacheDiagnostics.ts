@@ -8,29 +8,38 @@ export type CacheDiagnosticState = {
 };
 
 export const CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY = 'soridraw_cache_diagnostics_enabled_v1';
+export const CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY = 'soridraw_cache_diagnostics_owner_uid_v1';
 export const CACHE_DIAGNOSTICS_TOGGLE_EVENT = 'soridraw:cache-diagnostics-toggle';
 export const CACHE_DIAGNOSTICS_UPDATE_EVENT = 'soridraw:cache-diagnostics-update';
 const CACHE_DIAGNOSTICS_STATE_STORAGE_BASE = 'soridraw_cache_diagnostics_state_v1';
 
 const stateKey = (domain: CacheDiagnosticDomain) => `${CACHE_DIAGNOSTICS_STATE_STORAGE_BASE}_${domain}`;
 
-export function readCacheDiagnosticsEnabled(): boolean {
+export function readCacheDiagnosticsEnabled(uid?: string | null): boolean {
   if (typeof localStorage === 'undefined') return false;
   try {
-    return localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) === 'true';
+    if (localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) !== 'true') return false;
+    if (uid === undefined) return true;
+    if (!uid) return false;
+    return localStorage.getItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) === uid;
   } catch {
     return false;
   }
 }
 
-export function setCacheDiagnosticsEnabled(enabled: boolean): void {
+export function setCacheDiagnosticsEnabled(enabled: boolean, ownerUid?: string | null): void {
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
+      if (enabled && ownerUid) {
+        localStorage.setItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY, ownerUid);
+      } else if (!enabled) {
+        localStorage.removeItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY);
+      }
     } catch {}
   }
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(CACHE_DIAGNOSTICS_TOGGLE_EVENT, { detail: { enabled } }));
+    window.dispatchEvent(new CustomEvent(CACHE_DIAGNOSTICS_TOGGLE_EVENT, { detail: { enabled, ownerUid: ownerUid || null } }));
   }
 }
 

@@ -52,7 +52,14 @@ if apply_897.exists():
     exec(compile(apply_897.read_text(encoding='utf-8'), str(apply_897), 'exec'), {'__name__': '__main__'})
 
 # Keep Firestore listener diagnostics honest: local snapshots are CACHE 0, while
-# server snapshots use a minimum billable document-read count of one.
+# server snapshots count only documents delivered by that listener update.
 apply_897_accuracy = Path('.deploy/apply-897-cache-diagnostics-read-accuracy.py')
 if apply_897_accuracy.exists():
     exec(compile(apply_897_accuracy.read_text(encoding='utf-8'), str(apply_897_accuracy), 'exec'), {'__name__': '__main__'})
+
+# The visual switch lives in Admin App Settings, but the badge is also scoped to
+# the exact account that enabled it so an account switch on the same device cannot
+# expose diagnostics to a normal user.
+apply_897_admin_scope = Path('.deploy/apply-897-cache-diagnostics-admin-scope.py')
+if apply_897_admin_scope.exists():
+    exec(compile(apply_897_admin_scope.read_text(encoding='utf-8'), str(apply_897_admin_scope), 'exec'), {'__name__': '__main__'})

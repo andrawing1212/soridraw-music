@@ -50,3 +50,9 @@ else:
 apply_897 = Path('.deploy/apply-897-cache-diagnostics-overlay.py')
 if apply_897.exists():
     exec(compile(apply_897.read_text(encoding='utf-8'), str(apply_897), 'exec'), {'__name__': '__main__'})
+
+# Keep Firestore listener diagnostics honest: local snapshots are CACHE 0, while
+# server snapshots use a minimum billable document-read count of one.
+apply_897_accuracy = Path('.deploy/apply-897-cache-diagnostics-read-accuracy.py')
+if apply_897_accuracy.exists():
+    exec(compile(apply_897_accuracy.read_text(encoding='utf-8'), str(apply_897_accuracy), 'exec'), {'__name__': '__main__'})

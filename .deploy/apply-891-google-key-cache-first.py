@@ -62,3 +62,8 @@ else:
 apply_892 = Path('.deploy/apply-892-cache-sync-version-foundation.py')
 if apply_892.exists():
     exec(compile(apply_892.read_text(encoding='utf-8'), str(apply_892), 'exec'), {'__name__': '__main__'})
+
+# 893 hardens same-device cache restoration after closing and reopening the app.
+apply_893 = Path('.deploy/apply-893-google-key-cache-restore-hardening.py')
+if apply_893.exists():
+    exec(compile(apply_893.read_text(encoding='utf-8'), str(apply_893), 'exec'), {'__name__': '__main__'})

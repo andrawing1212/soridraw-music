@@ -2,3 +2,5 @@ Approved by user at 2026-08-23 KST.
 Target project: soridraw-app-866a5
 Scope: firestore:rules only
 Purpose: enable strict syncVersions.sectionCustom cache invalidation metadata for cross-device section-custom sync.
+Attempt: 2
+Requested: 2026-08-23T00:34+09:00

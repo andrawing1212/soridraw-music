@@ -57,3 +57,8 @@ if MARKER not in client_source:
     print('Applied SORIDRAW 891: Gemini key metadata is cache-first and status is fetched only when this device has no usable cache.')
 else:
     print('891 Gemini key cache-first flow already applied.')
+
+# 892 adds the tiny version signal that later cache stages will reuse.
+apply_892 = Path('.deploy/apply-892-cache-sync-version-foundation.py')
+if apply_892.exists():
+    exec(compile(apply_892.read_text(encoding='utf-8'), str(apply_892), 'exec'), {'__name__': '__main__'})

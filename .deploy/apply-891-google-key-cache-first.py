@@ -72,3 +72,9 @@ if apply_893.exists():
 apply_894 = Path('.deploy/apply-894-gemini-key-identity-single-cache.py')
 if apply_894.exists():
     exec(compile(apply_894.read_text(encoding='utf-8'), str(apply_894), 'exec'), {'__name__': '__main__'})
+
+# 895 makes section custom cache-first and refreshes it only when the existing
+# user-profile syncVersions signal changes across devices.
+apply_895 = Path('.deploy/apply-895-section-custom-cache-sync.py')
+if apply_895.exists():
+    exec(compile(apply_895.read_text(encoding='utf-8'), str(apply_895), 'exec'), {'__name__': '__main__'})

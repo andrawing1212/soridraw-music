@@ -41,3 +41,9 @@ if MARKER not in app:
     app_path.write_text(app, encoding='utf-8')
 
 print('Applied SORIDRAW 899: Music Note page entry reports in-memory CACHE use; live panel persistence is handled by its source component.')
+
+# 900 makes Library match the same session-level pattern: one Firestore listener
+# after the first Library entry, then pure memory/cache reuse on later page entries.
+apply_900 = Path('.deploy/apply-900-library-session-cache.py')
+if apply_900.exists():
+    exec(compile(apply_900.read_text(encoding='utf-8'), str(apply_900), 'exec'), {'__name__': '__main__'})

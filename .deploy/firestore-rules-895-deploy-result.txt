@@ -1,0 +1,24 @@
+status=failure
+run_id=32582318440
+commit=5ba10db331e6876e678e9bd9cd1fcd25b032940d
+target_project=soridraw-app-866a5
+scope=firestore:rules
+finished_at=2026-08-22T15:39:22Z
+
+--- deploy log tail ---
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+npm warn deprecated uuid@9.0.1: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated json-ptr@3.1.1: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+npm warn deprecated uuid@8.3.2: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+
+[1m[37m===[39m Deploying to 'soridraw-app-866a5'...[22m
+
+[36m[1mi [22m[39m deploying [1mfirestore[22m
+[36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
+[32m[1m✔  firestore:[22m[39m required API [1mfirestore.googleapis.com[22m is enabled
+[36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
+[36m[1mi [22m[39m [1m[36mfirestore:[39m[22m reading indexes from [1mfirestore.indexes.json[22m...
+[36m[1mi  cloud.firestore:[22m[39m checking [1mfirestore.rules[22m for compilation errors...
+
+[1m[31mError:[39m[22m Request to https://firebaserules.googleapis.com/v1/projects/soridraw-app-866a5:test had HTTP Error: 403, The caller does not have permission

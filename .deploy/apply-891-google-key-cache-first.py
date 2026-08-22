@@ -78,3 +78,9 @@ if apply_894.exists():
 apply_895 = Path('.deploy/apply-895-section-custom-cache-sync.py')
 if apply_895.exists():
     exec(compile(apply_895.read_text(encoding='utf-8'), str(apply_895), 'exec'), {'__name__': '__main__'})
+
+# 896 keeps same-device section-custom saves/cache authoritative until the
+# prepared syncVersions Firestore rule is explicitly deployed.
+apply_896 = Path('.deploy/apply-896-section-custom-sync-permission-hardening.py')
+if apply_896.exists():
+    exec(compile(apply_896.read_text(encoding='utf-8'), str(apply_896), 'exec'), {'__name__': '__main__'})

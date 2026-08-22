@@ -4,6 +4,8 @@ export type CacheDiagnosticMode = 'IDLE' | 'CACHE' | 'SYNC' | 'ERROR';
 export type CacheDiagnosticState = {
   mode: CacheDiagnosticMode;
   reads: number;
+  cacheHits: number;
+  lastReads: number;
   updatedAt: number;
 };
 
@@ -13,6 +15,7 @@ export const CACHE_DIAGNOSTICS_TOGGLE_EVENT = 'soridraw:cache-diagnostics-toggle
 export const CACHE_DIAGNOSTICS_UPDATE_EVENT = 'soridraw:cache-diagnostics-update';
 const CACHE_DIAGNOSTICS_STATE_STORAGE_BASE = 'soridraw_cache_diagnostics_state_v1';
 
+const CACHE_DIAGNOSTIC_DOMAINS: CacheDiagnosticDomain[] = ['sectionCustom', 'googleGeminiApiKey', 'recentSongs', 'musicNote', 'library'];
 const stateKey = (domain: CacheDiagnosticDomain) => `${CACHE_DIAGNOSTICS_STATE_STORAGE_BASE}_${domain}`;
 
 export function readCacheDiagnosticsEnabled(uid?: string | null): boolean {
@@ -27,15 +30,51 @@ export function readCacheDiagnosticsEnabled(uid?: string | null): boolean {
   }
 }
 
+export function readCacheDiagnosticsGloballyEnabled(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function readCacheDiagnosticsOwnerUid(): string {
+  if (typeof localStorage === 'undefined') return '';
+  try {
+    return String(localStorage.getItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) || '');
+  } catch {
+    return '';
+  }
+}
+
+export function resetCacheDiagnostics(): void {
+  if (typeof sessionStorage !== 'undefined') {
+    for (const domain of CACHE_DIAGNOSTIC_DOMAINS) {
+      try {
+        sessionStorage.removeItem(stateKey(domain));
+      } catch {}
+    }
+  }
+  if (typeof window !== 'undefined') {
+    for (const domain of CACHE_DIAGNOSTIC_DOMAINS) {
+      const state: CacheDiagnosticState = { mode: 'IDLE', reads: 0, cacheHits: 0, lastReads: 0, updatedAt: Date.now() };
+      window.dispatchEvent(new CustomEvent(CACHE_DIAGNOSTICS_UPDATE_EVENT, { detail: { domain, state } }));
+    }
+  }
+}
+
 export function setCacheDiagnosticsEnabled(enabled: boolean, ownerUid?: string | null): void {
   if (typeof localStorage !== 'undefined') {
     try {
+      const wasEnabled = localStorage.getItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) === 'true';
       localStorage.setItem(CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY, enabled ? 'true' : 'false');
       if (enabled && ownerUid) {
         localStorage.setItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY, ownerUid);
       } else if (!enabled) {
         localStorage.removeItem(CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY);
       }
+      if (enabled && !wasEnabled) resetCacheDiagnostics();
     } catch {}
   }
   if (typeof window !== 'undefined') {
@@ -44,7 +83,7 @@ export function setCacheDiagnosticsEnabled(enabled: boolean, ownerUid?: string |
 }
 
 export function readCacheDiagnostic(domain: CacheDiagnosticDomain): CacheDiagnosticState {
-  const fallback: CacheDiagnosticState = { mode: 'IDLE', reads: 0, updatedAt: 0 };
+  const fallback: CacheDiagnosticState = { mode: 'IDLE', reads: 0, cacheHits: 0, lastReads: 0, updatedAt: 0 };
   if (typeof sessionStorage === 'undefined') return fallback;
   try {
     const raw = sessionStorage.getItem(stateKey(domain));
@@ -52,10 +91,14 @@ export function readCacheDiagnostic(domain: CacheDiagnosticDomain): CacheDiagnos
     const parsed = JSON.parse(raw);
     const mode: CacheDiagnosticMode = ['IDLE', 'CACHE', 'SYNC', 'ERROR'].includes(parsed?.mode) ? parsed.mode : 'IDLE';
     const reads = Number(parsed?.reads || 0);
+    const cacheHits = Number(parsed?.cacheHits || 0);
+    const lastReads = Number(parsed?.lastReads ?? parsed?.reads ?? 0);
     const updatedAt = Number(parsed?.updatedAt || 0);
     return {
       mode,
       reads: Number.isFinite(reads) && reads >= 0 ? Math.floor(reads) : 0,
+      cacheHits: Number.isFinite(cacheHits) && cacheHits >= 0 ? Math.floor(cacheHits) : 0,
+      lastReads: Number.isFinite(lastReads) && lastReads >= 0 ? Math.floor(lastReads) : 0,
       updatedAt: Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : 0,
     };
   } catch {
@@ -68,9 +111,13 @@ export function markCacheDiagnostic(
   mode: CacheDiagnosticMode,
   reads = 0,
 ): void {
+  const previous = readCacheDiagnostic(domain);
+  const normalizedReads = Number.isFinite(reads) && reads >= 0 ? Math.floor(reads) : 0;
   const next: CacheDiagnosticState = {
     mode,
-    reads: Number.isFinite(reads) && reads >= 0 ? Math.floor(reads) : 0,
+    reads: previous.reads + (mode === 'SYNC' ? normalizedReads : 0),
+    cacheHits: previous.cacheHits + (mode === 'CACHE' ? 1 : 0),
+    lastReads: normalizedReads,
     updatedAt: Date.now(),
   };
   if (typeof sessionStorage !== 'undefined') {

@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
@@ -46,19 +46,48 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
       - name: Deploy Firestore rules only
+        id: deploy
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          npx --yes firebase-tools@latest deploy --only firestore:rules --project soridraw-app-866a5 --non-interactive
+          set -o pipefail
+          npx --yes firebase-tools@latest deploy --only firestore:rules --project soridraw-app-866a5 --non-interactive 2>&1 | tee /tmp/firestore-rules-deploy.log
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          if [ "${{ steps.deploy.outcome }}" = "success" ]; then STATUS=success; else STATUS=failure; fi
+          {
+            echo "status=${STATUS}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "scope=firestore:rules"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "--- deploy log tail ---"
+            tail -n 80 /tmp/firestore-rules-deploy.log 2>/dev/null || true
+          } > .deploy/firestore-rules-895-deploy-result.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/firestore-rules-895-deploy-result.txt
+          git commit -m "chore(895): record Firestore rules deploy result" || true
+          git push origin HEAD:preview
 
       - name: Report success
-        if: success()
+        if: steps.deploy.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_895_FIRESTORE_RULES_SUCCESS sha=$(git rev-parse HEAD) project=soridraw-app-866a5 rules_only=true"
 
       - name: Report failure
-        if: failure()
+        if: steps.deploy.outcome != 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_895_FIRESTORE_RULES_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }} project=soridraw-app-866a5"
+
+      - name: Fail workflow when deploy failed
+        if: steps.deploy.outcome != 'success'
+        run: exit 1

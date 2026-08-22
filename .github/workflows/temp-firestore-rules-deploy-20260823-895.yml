@@ -1,0 +1,64 @@
+name: Approved SORIDRAW 895 Firestore Rules Deploy
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-895-firestore-rules.txt'
+
+concurrency:
+  group: approved-soridraw-895-firestore-rules
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  deploy-rules:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify intended rules only
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "function hasValidSyncVersions()" firestore.rules
+          grep -q "'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library'" firestore.rules
+          grep -q "'generationPreferences', 'syncVersions'" firestore.rules
+          grep -q "match /user_structures/{uid}" firestore.rules
+
+      - name: Authenticate to Firebase backend project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Deploy Firestore rules only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --only firestore:rules --project soridraw-app-866a5 --non-interactive
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_895_FIRESTORE_RULES_SUCCESS sha=$(git rev-parse HEAD) project=soridraw-app-866a5 rules_only=true"
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_895_FIRESTORE_RULES_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }} project=soridraw-app-866a5"

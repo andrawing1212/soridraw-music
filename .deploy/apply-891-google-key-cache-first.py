@@ -67,3 +67,8 @@ if apply_892.exists():
 apply_893 = Path('.deploy/apply-893-google-key-cache-restore-hardening.py')
 if apply_893.exists():
     exec(compile(apply_893.read_text(encoding='utf-8'), str(apply_893), 'exec'), {'__name__': '__main__'})
+
+# 894 stores the visible last-6 identity in the same durable registered cache key.
+apply_894 = Path('.deploy/apply-894-gemini-key-identity-single-cache.py')
+if apply_894.exists():
+    exec(compile(apply_894.read_text(encoding='utf-8'), str(apply_894), 'exec'), {'__name__': '__main__'})

@@ -14,7 +14,7 @@ import {
 
 export default function CacheDiagnosticBadge({
   domain,
-  readLabel = '읽기',
+  readLabel = '서버',
   className = '',
 }: {
   domain: CacheDiagnosticDomain;
@@ -35,6 +35,7 @@ export default function CacheDiagnosticBadge({
     });
     const onToggle = () => {
       setEnabled(readCacheDiagnosticsEnabled(auth.currentUser?.uid || currentUid));
+      setState(readCacheDiagnostic(domain));
     };
     const onUpdate = (event: Event) => {
       const detail = (event as CustomEvent<{ domain?: CacheDiagnosticDomain; state?: CacheDiagnosticState }>).detail;
@@ -60,19 +61,15 @@ export default function CacheDiagnosticBadge({
 
   if (!enabled) return null;
 
-  const text = state.mode === 'IDLE'
-    ? `WAIT · ${readLabel} 0`
-    : state.mode === 'ERROR'
-      ? `ERROR · ${readLabel} ${state.reads}`
-      : `${state.mode} · ${readLabel} ${state.reads}`;
-
   return (
     <span
-      className={`inline-flex select-none items-center text-[10px] font-black tracking-[0.08em] text-[var(--text-secondary)]/55 ${className}`}
+      className={`inline-flex select-none items-center gap-1.5 text-[10px] font-black tracking-[0.04em] text-[var(--text-secondary)]/80 ${className}`}
       title="관리자 캐시 진단 · 이 표시는 서버 요청을 발생시키지 않습니다."
-      aria-label={`캐시 진단 ${text}`}
+      aria-label={`캐시 진단 ${state.mode}, ${readLabel} ${state.reads}, 캐시 ${state.cacheHits}`}
     >
-      {text}
+      <span>{state.mode === 'IDLE' ? 'WAIT' : state.mode}</span>
+      <span>· {readLabel} {state.reads}</span>
+      <span>· 캐시 {state.cacheHits}</span>
     </span>
   );
 }

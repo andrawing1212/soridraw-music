@@ -55,3 +55,9 @@ if MARKER not in admin:
     admin_path.write_text(admin, encoding='utf-8')
 
 print('Applied SORIDRAW 898: live global cache diagnostics panel + owner migration.')
+
+# 899 fixes reload persistence at the overlay source and records Music Note
+# page-entry reuse of the already-loaded in-memory favorites cache.
+apply_899 = Path('.deploy/apply-899-cache-diagnostics-persistence-musicnote.py')
+if apply_899.exists():
+    exec(compile(apply_899.read_text(encoding='utf-8'), str(apply_899), 'exec'), {'__name__': '__main__'})

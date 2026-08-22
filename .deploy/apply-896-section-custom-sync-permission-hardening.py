@@ -63,3 +63,9 @@ if apply_897_accuracy.exists():
 apply_897_admin_scope = Path('.deploy/apply-897-cache-diagnostics-admin-scope.py')
 if apply_897_admin_scope.exists():
     exec(compile(apply_897_admin_scope.read_text(encoding='utf-8'), str(apply_897_admin_scope), 'exec'), {'__name__': '__main__'})
+
+# 898 adds one always-visible admin live panel and cumulative cache/server counters
+# so page transitions can be verified without hunting for tiny local badges.
+apply_898 = Path('.deploy/apply-898-cache-diagnostics-live-panel.py')
+if apply_898.exists():
+    exec(compile(apply_898.read_text(encoding='utf-8'), str(apply_898), 'exec'), {'__name__': '__main__'})

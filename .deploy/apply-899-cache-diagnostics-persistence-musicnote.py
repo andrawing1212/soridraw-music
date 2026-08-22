@@ -47,3 +47,10 @@ print('Applied SORIDRAW 899: Music Note page entry reports in-memory CACHE use; 
 apply_900 = Path('.deploy/apply-900-library-session-cache.py')
 if apply_900.exists():
     exec(compile(apply_900.read_text(encoding='utf-8'), str(apply_900), 'exec'), {'__name__': '__main__'})
+
+# 901 switches Music Note to exact 10-item pages, cache-first app restart,
+# change-only incremental sync, and upgrades the existing top Sync button to
+# an unrestricted full 1:1 recovery path.
+apply_901 = Path('.deploy/apply-901-music-note-10-incremental-sync.py')
+if apply_901.exists():
+    exec(compile(apply_901.read_text(encoding='utf-8'), str(apply_901), 'exec'), {'__name__': '__main__'})

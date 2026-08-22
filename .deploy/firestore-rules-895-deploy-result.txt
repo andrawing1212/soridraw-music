@@ -1,9 +1,9 @@
-status=failure
+status=success
 run_id=32582318440
 commit=5ba10db331e6876e678e9bd9cd1fcd25b032940d
 target_project=soridraw-app-866a5
 scope=firestore:rules
-finished_at=2026-08-22T15:39:22Z
+finished_at=2026-08-22T15:48:47Z
 
 --- deploy log tail ---
 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
@@ -20,5 +20,10 @@ npm warn deprecated glob@10.5.0: Old versions of glob are not supported, and con
 [36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
 [36m[1mi [22m[39m [1m[36mfirestore:[39m[22m reading indexes from [1mfirestore.indexes.json[22m...
 [36m[1mi  cloud.firestore:[22m[39m checking [1mfirestore.rules[22m for compilation errors...
+[32m[1m✔  cloud.firestore:[22m[39m rules file [1mfirestore.rules[22m compiled successfully
+[36m[1mi  firestore:[22m[39m uploading rules [1mfirestore.rules[22m...
+[32m[1m✔  firestore:[22m[39m released rules [1mfirestore.rules[22m to [1mcloud.firestore[22m
 
-[1m[31mError:[39m[22m Request to https://firebaserules.googleapis.com/v1/projects/soridraw-app-866a5:test had HTTP Error: 403, The caller does not have permission
+[32m[1m✔ [22m[39m [1m[4mDeploy complete![24m[22m
+
+[1mProject Console:[22m https://console.firebase.google.com/project/soridraw-app-866a5/overview

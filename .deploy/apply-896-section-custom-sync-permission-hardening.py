@@ -44,3 +44,9 @@ if MARKER not in app_source:
     print('Applied SORIDRAW 896: section custom save stays valid if syncVersions rules are not deployed yet.')
 else:
     print('896 section custom sync permission hardening already applied.')
+
+# 897 adds local-only visible cache diagnostics. It must run after 895/896 so
+# it can instrument the final cache/version paths without changing their behavior.
+apply_897 = Path('.deploy/apply-897-cache-diagnostics-overlay.py')
+if apply_897.exists():
+    exec(compile(apply_897.read_text(encoding='utf-8'), str(apply_897), 'exec'), {'__name__': '__main__'})

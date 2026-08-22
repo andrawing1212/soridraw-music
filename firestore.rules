@@ -83,16 +83,34 @@ service cloud.firestore {
               request.resource.data.generationPreferences.autoModelFallback is bool));
       }
 
+      // Tiny per-feature cache invalidation tokens. These contain no user content
+      // and let existing profile snapshots tell each device only whether its local
+      // cache is stale. Keep the field list strict so clients cannot add arbitrary
+      // data to the user authority document.
+      function hasValidSyncVersions() {
+        return !('syncVersions' in request.resource.data) ||
+          (request.resource.data.syncVersions is map &&
+            request.resource.data.syncVersions.keys().hasOnly([
+              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library'
+            ]) &&
+            (!('googleGeminiApiKey' in request.resource.data.syncVersions) || request.resource.data.syncVersions.googleGeminiApiKey is int) &&
+            (!('sectionCustom' in request.resource.data.syncVersions) || request.resource.data.syncVersions.sectionCustom is int) &&
+            (!('recentSongs' in request.resource.data.syncVersions) || request.resource.data.syncVersions.recentSongs is int) &&
+            (!('musicNote' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNote is int) &&
+            (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int));
+      }
+
       function isValidSelfUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'email', 'displayName', 'photoURL', 'providerIds',
           'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
-          'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences',
+          'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences', 'syncVersions',
           'favoriteCount', 'songGeneratedCount',
           'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
         ]) &&
         (!('uid' in request.resource.data) || request.resource.data.uid == uid) &&
-        hasValidGenerationPreferences();
+        hasValidGenerationPreferences() &&
+        hasValidSyncVersions();
       }
 
       function changesPrivilegeFields() {
@@ -203,7 +221,7 @@ service cloud.firestore {
                (!('imageUrl' in data) || data.imageUrl is string) &&
                (!('taskId' in data) || data.taskId is string) &&
                (!('appliedKeywords' in data) || data.appliedKeywords is map) &&
-               (!('requestPayload' in data) || data.requestPayload is map);
+               (!('requestPayload' in data) || request.resource.data.appliedKeywords is map);
       }
 
       function isValidPrivateShareUpdate(data) {

@@ -230,14 +230,18 @@ const publishSectionCustomRemoteVersion = (uid: string, version: number) => {
     #    existing profile snapshot emits a tiny version event. Refresh exactly
     #    once only when the cached version differs.
     # -------------------------------------------------------------------------
-    listener_before = """  }, [user]);
+    listener_before = """    writeJsonArray(getSavedStructuresStorageKey(user?.uid), sanitized);
+    markCustomBackupDirty();
+  };
 
 
   const openCustomModal = () => {
     onModalStateChange?.(true);
     void ensureCustomBackupLoaded();
 """
-    listener_after = """  }, [user]);
+    listener_after = """    writeJsonArray(getSavedStructuresStorageKey(user?.uid), sanitized);
+    markCustomBackupDirty();
+  };
 
   useEffect(() => {
     if (!user || typeof window === 'undefined') return;

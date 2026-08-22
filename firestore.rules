@@ -221,7 +221,7 @@ service cloud.firestore {
                (!('imageUrl' in data) || data.imageUrl is string) &&
                (!('taskId' in data) || data.taskId is string) &&
                (!('appliedKeywords' in data) || data.appliedKeywords is map) &&
-               (!('requestPayload' in data) || request.resource.data.appliedKeywords is map);
+               (!('requestPayload' in data) || data.requestPayload is map);
       }
 
       function isValidPrivateShareUpdate(data) {

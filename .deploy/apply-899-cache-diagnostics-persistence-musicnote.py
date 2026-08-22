@@ -54,3 +54,10 @@ if apply_900.exists():
 apply_901 = Path('.deploy/apply-901-music-note-10-incremental-sync.py')
 if apply_901.exists():
     exec(compile(apply_901.read_text(encoding='utf-8'), str(apply_901), 'exec'), {'__name__': '__main__'})
+
+# The shared Firebase project may still be running the pre-syncVersions rules.
+# Preserve existing favorite signal writes until that backend rule is explicitly
+# promoted; the 901 client already falls back to favoriteSyncSignalUpdatedAt.
+apply_901_hardening = Path('.deploy/apply-901-music-note-sync-permission-hardening.py')
+if apply_901_hardening.exists():
+    exec(compile(apply_901_hardening.read_text(encoding='utf-8'), str(apply_901_hardening), 'exec'), {'__name__': '__main__'})

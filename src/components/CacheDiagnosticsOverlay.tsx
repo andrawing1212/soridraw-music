@@ -1,14 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { auth } from '../firebase';
 import {
   CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY,
-  CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY,
   CACHE_DIAGNOSTICS_TOGGLE_EVENT,
   CACHE_DIAGNOSTICS_UPDATE_EVENT,
   readCacheDiagnostic,
-  readCacheDiagnosticsEnabled,
   readCacheDiagnosticsGloballyEnabled,
-  readCacheDiagnosticsOwnerUid,
   resetCacheDiagnostics,
   type CacheDiagnosticDomain,
   type CacheDiagnosticState,
@@ -31,19 +27,13 @@ const readAllStates = (): Record<CacheDiagnosticDomain, CacheDiagnosticState> =>
 });
 
 export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean }) {
-  const [enabled, setEnabled] = useState(() => {
-    const uid = auth.currentUser?.uid || null;
-    const owner = readCacheDiagnosticsOwnerUid();
-    return readCacheDiagnosticsEnabled(uid) || (Boolean(uid) && !owner && readCacheDiagnosticsGloballyEnabled());
-  });
+  // Visibility is a device-local admin preference. Do not wait for Firebase auth
+  // hydration to decide whether it is enabled; isAdmin alone gates the UI.
+  const [enabled, setEnabled] = useState(() => readCacheDiagnosticsGloballyEnabled());
   const [states, setStates] = useState<Record<CacheDiagnosticDomain, CacheDiagnosticState>>(() => readAllStates());
 
   useEffect(() => {
-    const syncEnabled = () => {
-      const uid = auth.currentUser?.uid || null;
-      const owner = readCacheDiagnosticsOwnerUid();
-      setEnabled(readCacheDiagnosticsEnabled(uid) || (Boolean(uid) && !owner && readCacheDiagnosticsGloballyEnabled()));
-    };
+    const syncEnabled = () => setEnabled(readCacheDiagnosticsGloballyEnabled());
     const onToggle = () => {
       syncEnabled();
       setStates(readAllStates());
@@ -54,7 +44,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       setStates((prev) => ({ ...prev, [detail.domain as CacheDiagnosticDomain]: detail.state as CacheDiagnosticState }));
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY || event.key === CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) syncEnabled();
+      if (event.key === CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY) syncEnabled();
     };
 
     syncEnabled();

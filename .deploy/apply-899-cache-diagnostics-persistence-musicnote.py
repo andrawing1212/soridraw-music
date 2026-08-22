@@ -61,3 +61,11 @@ if apply_901.exists():
 apply_901_hardening = Path('.deploy/apply-901-music-note-sync-permission-hardening.py')
 if apply_901_hardening.exists():
     exec(compile(apply_901_hardening.read_text(encoding='utf-8'), str(apply_901_hardening), 'exec'), {'__name__': '__main__'})
+
+# 902 adds one-document latest bundles:
+# - Music Note: 20 songs in one cache document
+# - Library: 10 generation sets (=20 songs) in one cache document
+# Existing per-song/per-set originals remain authoritative and untouched.
+apply_902 = Path('.deploy/apply-902-list-bundle-cache.py')
+if apply_902.exists():
+    exec(compile(apply_902.read_text(encoding='utf-8'), str(apply_902), 'exec'), {'__name__': '__main__'})

@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
 import {
+  CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY,
+  CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY,
   CACHE_DIAGNOSTICS_TOGGLE_EVENT,
   CACHE_DIAGNOSTICS_UPDATE_EVENT,
   readCacheDiagnostic,
@@ -17,15 +21,20 @@ export default function CacheDiagnosticBadge({
   readLabel?: string;
   className?: string;
 }) {
-  const [enabled, setEnabled] = useState(() => readCacheDiagnosticsEnabled());
+  const [currentUid, setCurrentUid] = useState(() => auth.currentUser?.uid || null);
+  const [enabled, setEnabled] = useState(() => readCacheDiagnosticsEnabled(auth.currentUser?.uid || null));
   const [state, setState] = useState<CacheDiagnosticState>(() => readCacheDiagnostic(domain));
 
   useEffect(() => {
     setState(readCacheDiagnostic(domain));
 
-    const onToggle = (event: Event) => {
-      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
-      setEnabled(typeof detail?.enabled === 'boolean' ? detail.enabled : readCacheDiagnosticsEnabled());
+    const authUnsubscribe = onAuthStateChanged(auth, (user) => {
+      const uid = user?.uid || null;
+      setCurrentUid(uid);
+      setEnabled(readCacheDiagnosticsEnabled(uid));
+    });
+    const onToggle = () => {
+      setEnabled(readCacheDiagnosticsEnabled(auth.currentUser?.uid || currentUid));
     };
     const onUpdate = (event: Event) => {
       const detail = (event as CustomEvent<{ domain?: CacheDiagnosticDomain; state?: CacheDiagnosticState }>).detail;
@@ -33,8 +42,8 @@ export default function CacheDiagnosticBadge({
       setState(detail.state || readCacheDiagnostic(domain));
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'soridraw_cache_diagnostics_enabled_v1') {
-        setEnabled(readCacheDiagnosticsEnabled());
+      if (event.key === CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY || event.key === CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY) {
+        setEnabled(readCacheDiagnosticsEnabled(auth.currentUser?.uid || currentUid));
       }
     };
 
@@ -42,11 +51,12 @@ export default function CacheDiagnosticBadge({
     window.addEventListener(CACHE_DIAGNOSTICS_UPDATE_EVENT, onUpdate as EventListener);
     window.addEventListener('storage', onStorage);
     return () => {
+      authUnsubscribe();
       window.removeEventListener(CACHE_DIAGNOSTICS_TOGGLE_EVENT, onToggle as EventListener);
       window.removeEventListener(CACHE_DIAGNOSTICS_UPDATE_EVENT, onUpdate as EventListener);
       window.removeEventListener('storage', onStorage);
     };
-  }, [domain]);
+  }, [currentUid, domain]);
 
   if (!enabled) return null;
 

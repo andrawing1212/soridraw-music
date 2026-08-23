@@ -69,7 +69,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   if (!isAdmin || !enabled) return null;
 
   return (
-    <div className="fixed right-3 top-[76px] z-[9998] w-[244px] rounded-2xl bg-black/80 px-3 py-2.5 text-white/85 shadow-2xl backdrop-blur-md">
+    <div className="fixed right-3 top-[84px] z-[9998] w-[244px] rounded-2xl bg-black/80 px-3 py-2.5 text-white/85 shadow-2xl backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[11px] font-black tracking-[0.08em] text-white/90">CACHE LIVE</div>

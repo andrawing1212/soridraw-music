@@ -69,3 +69,10 @@ if apply_901_hardening.exists():
 apply_902_v2 = Path('.deploy/apply-902-list-bundle-cache-v2.py')
 if apply_902_v2.exists():
     exec(compile(apply_902_v2.read_text(encoding='utf-8'), str(apply_902_v2), 'exec'), {'__name__': '__main__'})
+
+# 903 removes the persistent bundle listeners. Each bundle is fetched once per
+# bootstrap/session, so Music Note and Library target one server read instead of
+# repeated cache/server/self-write listener callbacks.
+apply_903 = Path('.deploy/apply-903-list-bundle-one-shot.py')
+if apply_903.exists():
+    exec(compile(apply_903.read_text(encoding='utf-8'), str(apply_903), 'exec'), {'__name__': '__main__'})

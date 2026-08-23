@@ -83,3 +83,9 @@ if apply_903.exists():
 apply_904 = Path('.deploy/apply-904-music-note-lazy-bundle-entry.py')
 if apply_904.exists():
     exec(compile(apply_904.read_text(encoding='utf-8'), str(apply_904), 'exec'), {'__name__': '__main__'})
+
+# 905 aligns recent songs with the Music Note one-shot cache strategy and makes
+# CACHE LIVE distinguish Firestore reads from writes instead of mixing them.
+apply_905 = Path('.deploy/apply-905-recent-songs-cache-live-accounting.py')
+if apply_905.exists():
+    exec(compile(apply_905.read_text(encoding='utf-8'), str(apply_905), 'exec'), {'__name__': '__main__'})

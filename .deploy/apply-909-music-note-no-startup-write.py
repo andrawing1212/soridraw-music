@@ -14,11 +14,6 @@ app_path = Path('src/App.tsx')
 app = app_path.read_text(encoding='utf-8')
 
 if MARKER not in app:
-    # 903 marked the Music Note bundle as active before the page was actually
-    # entered. 906 then interpreted normal startup cache hydration as a real
-    # bundle mutation and scheduled one Firestore write. Remove that premature
-    # activation. 902 already marks the uid active when the actual bundle data
-    # is returned on /history, which is the correct boundary.
     old = '''        // 903: reserve the Music Note bundle path before the async one-shot read
         // so the older 901 incremental query cannot race and add extra reads.
         musicNoteBundleActiveUids.add(currentUser.uid);
@@ -43,41 +38,15 @@ if MARKER not in app:
 else:
     print('SORIDRAW 909 already applied.')
 
-# 910 keeps frequent recent-song text edits local first and merges them into one
-# delayed server write. It also makes Studio heart unsave trust the exact active
-# local favorite before any server duplicate lookup.
-apply_910 = Path('.deploy/apply-910-recent-text-batch-unsave-fix.py')
-if apply_910.exists():
-    exec(compile(apply_910.read_text(encoding='utf-8'), str(apply_910), 'exec'), {'__name__': '__main__'})
-
-# 911 extends the quiet window to 30 seconds and stores the exact Music Note
-# Firestore id on the recent-song snapshot so save/unsave survives text edits.
-apply_911 = Path('.deploy/apply-911-recent-heart-link-and-30s-batch.py')
-if apply_911.exists():
-    exec(compile(apply_911.read_text(encoding='utf-8'), str(apply_911), 'exec'), {'__name__': '__main__'})
-
-# 912 removes the timer entirely. Recent text edits stay local until heart is
-# pressed; heart commits the current recent-song version once and snapshots it to
-# Music Note. Any later recent edit detaches and becomes a new unsaved version.
-apply_912 = Path('.deploy/apply-912-heart-triggered-recent-save.py')
-if apply_912.exists():
-    exec(compile(apply_912.read_text(encoding='utf-8'), str(apply_912), 'exec'), {'__name__': '__main__'})
-
-# 913 removes the accidental undefined cache symbols introduced by 912. Edit
-# confirmation stays local-only and heart keeps the single recent-song flush.
-apply_913 = Path('.deploy/apply-913-recent-save-runtime-fix.py')
-if apply_913.exists():
-    exec(compile(apply_913.read_text(encoding='utf-8'), str(apply_913), 'exec'), {'__name__': '__main__'})
-
-# 915 makes a filled heart resolve the exact linked Music Note Firestore document
-# before any content-based matching. Second click therefore unsaves that exact row.
-apply_915 = Path('.deploy/apply-915-heart-explicit-unsave.py')
-if apply_915.exists():
-    exec(compile(apply_915.read_text(encoding='utf-8'), str(apply_915), 'exec'), {'__name__': '__main__'})
-
-# 917 removes the dangerous full-collection manual sync. It preserves newer local
-# heart mutations against a stale latest-20 bundle and syncs only through the
-# compact one-document change cache when a remote version signal says it is needed.
-apply_917 = Path('.deploy/apply-917-music-note-delta-sync-no-fullscan.py')
-if apply_917.exists():
-    exec(compile(apply_917.read_text(encoding='utf-8'), str(apply_917), 'exec'), {'__name__': '__main__'})
+for number, name in [
+    (910, 'apply-910-recent-text-batch-unsave-fix.py'),
+    (911, 'apply-911-recent-heart-link-and-30s-batch.py'),
+    (912, 'apply-912-heart-triggered-recent-save.py'),
+    (913, 'apply-913-recent-save-runtime-fix.py'),
+    (915, 'apply-915-heart-explicit-unsave.py'),
+    (917, 'apply-917-music-note-delta-sync-no-fullscan.py'),
+    (918, 'apply-918-favorite-document-id-fix.py'),
+]:
+    patch = Path('.deploy') / name
+    if patch.exists():
+        exec(compile(patch.read_text(encoding='utf-8'), str(patch), 'exec'), {'__name__': '__main__'})

@@ -1,5 +1,6 @@
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { markCacheDiagnosticWrite } from './cacheDiagnostics';
 
 export type ListBundleKind = 'musicNote' | 'library';
 
@@ -207,6 +208,7 @@ export const scheduleListBundleWrite = (
 
     try {
       await setDoc(getBundleRef(kind, uid), payload, { merge: false });
+      markCacheDiagnosticWrite(kind === 'musicNote' ? 'musicNote' : 'library', 1);
       lastPayloadHashes.set(key, payloadHash);
     } catch (error: any) {
       // Preview/test can safely fall back to the existing per-item query until the

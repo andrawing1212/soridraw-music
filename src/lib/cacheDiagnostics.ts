@@ -11,17 +11,37 @@ export type CacheDiagnosticState = {
   updatedAt: number;
 };
 
+export type FirestoreActualState = {
+  reads: number;
+  writes: number;
+  cacheHits: number;
+  lastReads: number;
+  lastWrites: number;
+  updatedAt: number;
+};
+
 export const CACHE_DIAGNOSTICS_ENABLED_STORAGE_KEY = 'soridraw_cache_diagnostics_enabled_v1';
 export const CACHE_DIAGNOSTICS_OWNER_UID_STORAGE_KEY = 'soridraw_cache_diagnostics_owner_uid_v1';
 export const CACHE_DIAGNOSTICS_TOGGLE_EVENT = 'soridraw:cache-diagnostics-toggle';
 export const CACHE_DIAGNOSTICS_UPDATE_EVENT = 'soridraw:cache-diagnostics-update';
+export const FIRESTORE_ACTUAL_UPDATE_EVENT = 'soridraw:firestore-actual-update';
 const CACHE_DIAGNOSTICS_STATE_STORAGE_BASE = 'soridraw_cache_diagnostics_state_v1';
+const FIRESTORE_ACTUAL_STATE_STORAGE_KEY = 'soridraw_firestore_sdk_actual_v1';
 
 const CACHE_DIAGNOSTIC_DOMAINS: CacheDiagnosticDomain[] = ['sectionCustom', 'googleGeminiApiKey', 'recentSongs', 'musicNote', 'library'];
 const stateKey = (domain: CacheDiagnosticDomain) => `${CACHE_DIAGNOSTICS_STATE_STORAGE_BASE}_${domain}`;
 
 const makeEmptyState = (updatedAt = 0): CacheDiagnosticState => ({
   mode: 'IDLE',
+  reads: 0,
+  writes: 0,
+  cacheHits: 0,
+  lastReads: 0,
+  lastWrites: 0,
+  updatedAt,
+});
+
+const makeEmptyFirestoreActualState = (updatedAt = 0): FirestoreActualState => ({
   reads: 0,
   writes: 0,
   cacheHits: 0,
@@ -60,6 +80,88 @@ export function readCacheDiagnosticsOwnerUid(): string {
   }
 }
 
+export function readFirestoreActual(): FirestoreActualState {
+  const fallback = makeEmptyFirestoreActualState();
+  if (typeof sessionStorage === 'undefined') return fallback;
+  try {
+    const raw = sessionStorage.getItem(FIRESTORE_ACTUAL_STATE_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    const normalize = (value: unknown) => {
+      const numberValue = Number(value || 0);
+      return Number.isFinite(numberValue) && numberValue >= 0 ? Math.floor(numberValue) : 0;
+    };
+    return {
+      reads: normalize(parsed?.reads),
+      writes: normalize(parsed?.writes),
+      cacheHits: normalize(parsed?.cacheHits),
+      lastReads: normalize(parsed?.lastReads),
+      lastWrites: normalize(parsed?.lastWrites),
+      updatedAt: normalize(parsed?.updatedAt),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+const writeFirestoreActual = (next: FirestoreActualState) => {
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.setItem(FIRESTORE_ACTUAL_STATE_STORAGE_KEY, JSON.stringify(next)); } catch {}
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(FIRESTORE_ACTUAL_UPDATE_EVENT, { detail: next }));
+  }
+};
+
+export function resetFirestoreActual(): void {
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.removeItem(FIRESTORE_ACTUAL_STATE_STORAGE_KEY); } catch {}
+  }
+  writeFirestoreActual(makeEmptyFirestoreActualState(Date.now()));
+}
+
+export function markFirestoreActualRead(reads = 1): void {
+  if (!readCacheDiagnosticsGloballyEnabled()) return;
+  const count = Number.isFinite(reads) && reads > 0 ? Math.floor(reads) : 0;
+  if (count <= 0) return;
+  const previous = readFirestoreActual();
+  writeFirestoreActual({
+    ...previous,
+    reads: previous.reads + count,
+    lastReads: count,
+    lastWrites: 0,
+    updatedAt: Date.now(),
+  });
+}
+
+export function markFirestoreActualWrite(writes = 1): void {
+  if (!readCacheDiagnosticsGloballyEnabled()) return;
+  const count = Number.isFinite(writes) && writes > 0 ? Math.floor(writes) : 0;
+  if (count <= 0) return;
+  const previous = readFirestoreActual();
+  writeFirestoreActual({
+    ...previous,
+    writes: previous.writes + count,
+    lastReads: 0,
+    lastWrites: count,
+    updatedAt: Date.now(),
+  });
+}
+
+export function markFirestoreActualCacheHit(hits = 1): void {
+  if (!readCacheDiagnosticsGloballyEnabled()) return;
+  const count = Number.isFinite(hits) && hits > 0 ? Math.floor(hits) : 0;
+  if (count <= 0) return;
+  const previous = readFirestoreActual();
+  writeFirestoreActual({
+    ...previous,
+    cacheHits: previous.cacheHits + count,
+    lastReads: 0,
+    lastWrites: 0,
+    updatedAt: Date.now(),
+  });
+}
+
 export function resetCacheDiagnostics(): void {
   if (typeof sessionStorage !== 'undefined') {
     for (const domain of CACHE_DIAGNOSTIC_DOMAINS) {
@@ -68,6 +170,7 @@ export function resetCacheDiagnostics(): void {
       } catch {}
     }
   }
+  resetFirestoreActual();
   if (typeof window !== 'undefined') {
     for (const domain of CACHE_DIAGNOSTIC_DOMAINS) {
       const state = makeEmptyState(Date.now());

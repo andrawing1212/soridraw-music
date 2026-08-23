@@ -1,6 +1,6 @@
 Approved by user at 2026-08-23 KST.
 Target project: soridraw-app-866a5
 Scope: firestore:rules only
-Purpose: enable strict syncVersions.sectionCustom cache invalidation metadata for cross-device section-custom sync.
-Attempt: 2
-Requested: 2026-08-23T00:34+09:00
+Purpose: enable SORIDRAW 902 user_list_caches bundle access for Music Note and Library read optimization.
+Change: additive user_list_caches/{uid}/bundles rules only; existing favorites/suno_tracks rules unchanged.
+Requested: 2026-08-23T09:08+09:00

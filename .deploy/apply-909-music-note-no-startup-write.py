@@ -74,3 +74,10 @@ if apply_913.exists():
 apply_915 = Path('.deploy/apply-915-heart-explicit-unsave.py')
 if apply_915.exists():
     exec(compile(apply_915.read_text(encoding='utf-8'), str(apply_915), 'exec'), {'__name__': '__main__'})
+
+# 917 removes the dangerous full-collection manual sync. It preserves newer local
+# heart mutations against a stale latest-20 bundle and syncs only through the
+# compact one-document change cache when a remote version signal says it is needed.
+apply_917 = Path('.deploy/apply-917-music-note-delta-sync-no-fullscan.py')
+if apply_917.exists():
+    exec(compile(apply_917.read_text(encoding='utf-8'), str(apply_917), 'exec'), {'__name__': '__main__'})

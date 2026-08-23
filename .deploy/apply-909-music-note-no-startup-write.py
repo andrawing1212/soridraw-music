@@ -62,3 +62,9 @@ if apply_911.exists():
 apply_912 = Path('.deploy/apply-912-heart-triggered-recent-save.py')
 if apply_912.exists():
     exec(compile(apply_912.read_text(encoding='utf-8'), str(apply_912), 'exec'), {'__name__': '__main__'})
+
+# 913 removes the accidental undefined cache symbols introduced by 912. Edit
+# confirmation stays local-only and heart keeps the single recent-song flush.
+apply_913 = Path('.deploy/apply-913-recent-save-runtime-fix.py')
+if apply_913.exists():
+    exec(compile(apply_913.read_text(encoding='utf-8'), str(apply_913), 'exec'), {'__name__': '__main__'})

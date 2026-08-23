@@ -68,3 +68,9 @@ if apply_912.exists():
 apply_913 = Path('.deploy/apply-913-recent-save-runtime-fix.py')
 if apply_913.exists():
     exec(compile(apply_913.read_text(encoding='utf-8'), str(apply_913), 'exec'), {'__name__': '__main__'})
+
+# 915 makes a filled heart resolve the exact linked Music Note Firestore document
+# before any content-based matching. Second click therefore unsaves that exact row.
+apply_915 = Path('.deploy/apply-915-heart-explicit-unsave.py')
+if apply_915.exists():
+    exec(compile(apply_915.read_text(encoding='utf-8'), str(apply_915), 'exec'), {'__name__': '__main__'})

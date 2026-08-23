@@ -66,6 +66,6 @@ if apply_901_hardening.exists():
 # - Music Note: 20 songs in one cache document
 # - Library: 10 generation sets (=20 songs) in one cache document
 # Existing per-song/per-set originals remain authoritative and untouched.
-apply_902 = Path('.deploy/apply-902-list-bundle-cache.py')
-if apply_902.exists():
-    exec(compile(apply_902.read_text(encoding='utf-8'), str(apply_902), 'exec'), {'__name__': '__main__'})
+apply_902_v2 = Path('.deploy/apply-902-list-bundle-cache-v2.py')
+if apply_902_v2.exists():
+    exec(compile(apply_902_v2.read_text(encoding='utf-8'), str(apply_902_v2), 'exec'), {'__name__': '__main__'})

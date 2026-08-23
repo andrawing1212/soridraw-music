@@ -1,9 +1,10 @@
 status=success
-run_id=32582318440
-commit=5ba10db331e6876e678e9bd9cd1fcd25b032940d
+run_id=32607180292
+commit=e2b7ca2b889946a14f9fd2300bbd39bc5c4c1883
 target_project=soridraw-app-866a5
 scope=firestore:rules
-finished_at=2026-08-22T15:48:47Z
+change=user_list_caches bundles only
+finished_at=2026-08-23T00:11:15Z
 
 --- deploy log tail ---
 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead

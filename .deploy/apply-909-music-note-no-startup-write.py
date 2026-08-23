@@ -55,3 +55,10 @@ if apply_910.exists():
 apply_911 = Path('.deploy/apply-911-recent-heart-link-and-30s-batch.py')
 if apply_911.exists():
     exec(compile(apply_911.read_text(encoding='utf-8'), str(apply_911), 'exec'), {'__name__': '__main__'})
+
+# 912 removes the timer entirely. Recent text edits stay local until heart is
+# pressed; heart commits the current recent-song version once and snapshots it to
+# Music Note. Any later recent edit detaches and becomes a new unsaved version.
+apply_912 = Path('.deploy/apply-912-heart-triggered-recent-save.py')
+if apply_912.exists():
+    exec(compile(apply_912.read_text(encoding='utf-8'), str(apply_912), 'exec'), {'__name__': '__main__'})

@@ -74,10 +74,3 @@ if apply_913.exists():
 apply_915 = Path('.deploy/apply-915-heart-explicit-unsave.py')
 if apply_915.exists():
     exec(compile(apply_915.read_text(encoding='utf-8'), str(apply_915), 'exec'), {'__name__': '__main__'})
-
-# 916 refreshes the latest-20 Music Note bundle only on a real heart save/unsave.
-# Startup, Home and route navigation stay write-free, but the next /history entry
-# no longer needs manual full sync to see the just-saved song.
-apply_916 = Path('.deploy/apply-916-heart-refresh-music-note-bundle.py')
-if apply_916.exists():
-    exec(compile(apply_916.read_text(encoding='utf-8'), str(apply_916), 'exec'), {'__name__': '__main__'})

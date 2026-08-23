@@ -42,3 +42,10 @@ if MARKER not in app:
     print('Applied SORIDRAW 909: Home cache hydration no longer writes Music Note bundle.')
 else:
     print('SORIDRAW 909 already applied.')
+
+# 910 keeps frequent recent-song text edits local first and merges them into one
+# delayed server write. It also makes Studio heart unsave trust the exact active
+# local favorite before any server duplicate lookup.
+apply_910 = Path('.deploy/apply-910-recent-text-batch-unsave-fix.py')
+if apply_910.exists():
+    exec(compile(apply_910.read_text(encoding='utf-8'), str(apply_910), 'exec'), {'__name__': '__main__'})

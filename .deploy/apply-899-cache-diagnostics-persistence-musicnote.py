@@ -76,3 +76,10 @@ if apply_902_v2.exists():
 apply_903 = Path('.deploy/apply-903-list-bundle-one-shot.py')
 if apply_903.exists():
     exec(compile(apply_903.read_text(encoding='utf-8'), str(apply_903), 'exec'), {'__name__': '__main__'})
+
+# 904 keeps the Music Note bundle completely dormant on Home/login startup.
+# Its single server read begins only when the Music Note route is actually entered.
+# Library and every other cache path remain unchanged.
+apply_904 = Path('.deploy/apply-904-music-note-lazy-bundle-entry.py')
+if apply_904.exists():
+    exec(compile(apply_904.read_text(encoding='utf-8'), str(apply_904), 'exec'), {'__name__': '__main__'})

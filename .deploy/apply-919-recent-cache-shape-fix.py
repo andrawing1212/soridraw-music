@@ -44,3 +44,23 @@ if MARKER not in app:
     print('Applied SORIDRAW 919: recent-song local cache calls use the required payload object shape.')
 else:
     print('SORIDRAW 919 already applied.')
+
+apply_921_library = Path('.deploy/apply-921-library-prehardening.py')
+if apply_921_library.exists():
+    exec(compile(apply_921_library.read_text(encoding='utf-8'), str(apply_921_library), 'exec'), {'__name__': '__main__'})
+
+apply_921 = Path('.deploy/apply-921-firestore-cost-hardening.py')
+if apply_921.exists():
+    exec(compile(apply_921.read_text(encoding='utf-8'), str(apply_921), 'exec'), {'__name__': '__main__'})
+
+apply_922 = Path('.deploy/apply-922-no-unbounded-bootstrap.py')
+if apply_922.exists():
+    exec(compile(apply_922.read_text(encoding='utf-8'), str(apply_922), 'exec'), {'__name__': '__main__'})
+
+apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
+if apply_923.exists():
+    exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})
+
+apply_920 = Path('.deploy/apply-920-firestore-runtime-audit.py')
+if apply_920.exists():
+    exec(compile(apply_920.read_text(encoding='utf-8'), str(apply_920), 'exec'), {'__name__': '__main__'})

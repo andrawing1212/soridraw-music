@@ -109,3 +109,9 @@ if MARKER not in client_source:
     print('Applied SORIDRAW 890: simple saved Gemini API key UI with masked last 6 chars.')
 else:
     print('890 Gemini key simple UI already applied.')
+
+# 891 makes the Gemini key metadata cache-first so reopening the app does not
+# call the status endpoint again when this device already has usable metadata.
+apply_891 = Path('.deploy/apply-891-google-key-cache-first.py')
+if apply_891.exists():
+    exec(compile(apply_891.read_text(encoding='utf-8'), str(apply_891), 'exec'), {'__name__': '__main__'})

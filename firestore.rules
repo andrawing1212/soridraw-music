@@ -83,16 +83,34 @@ service cloud.firestore {
               request.resource.data.generationPreferences.autoModelFallback is bool));
       }
 
+      // Tiny per-feature cache invalidation tokens. These contain no user content
+      // and let existing profile snapshots tell each device only whether its local
+      // cache is stale. Keep the field list strict so clients cannot add arbitrary
+      // data to the user authority document.
+      function hasValidSyncVersions() {
+        return !('syncVersions' in request.resource.data) ||
+          (request.resource.data.syncVersions is map &&
+            request.resource.data.syncVersions.keys().hasOnly([
+              'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library'
+            ]) &&
+            (!('googleGeminiApiKey' in request.resource.data.syncVersions) || request.resource.data.syncVersions.googleGeminiApiKey is int) &&
+            (!('sectionCustom' in request.resource.data.syncVersions) || request.resource.data.syncVersions.sectionCustom is int) &&
+            (!('recentSongs' in request.resource.data.syncVersions) || request.resource.data.syncVersions.recentSongs is int) &&
+            (!('musicNote' in request.resource.data.syncVersions) || request.resource.data.syncVersions.musicNote is int) &&
+            (!('library' in request.resource.data.syncVersions) || request.resource.data.syncVersions.library is int));
+      }
+
       function isValidSelfUpdate() {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'uid', 'email', 'displayName', 'photoURL', 'providerIds',
           'lastLoginAt', 'lastSeenAt', 'lastLogoutAt', 'isOnline',
-          'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences',
+          'nickname', 'updatedAt', 'lyricClicheGuard', 'generationPreferences', 'syncVersions',
           'favoriteCount', 'songGeneratedCount',
           'favoriteSyncSignal', 'favoriteSyncSignalUpdatedAt'
         ]) &&
         (!('uid' in request.resource.data) || request.resource.data.uid == uid) &&
-        hasValidGenerationPreferences();
+        hasValidGenerationPreferences() &&
+        hasValidSyncVersions();
       }
 
       function changesPrivilegeFields() {
@@ -149,6 +167,39 @@ service cloud.firestore {
     // User custom structures
     match /user_structures/{uid} {
       allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    // SORIDRAW 902 user list bundle cache
+    // Additive cache only: original favorites and suno_tracks remain authoritative.
+    // Only the owner (or an app admin) can access the two fixed cache documents.
+    match /user_list_caches/{uid}/bundles/{bundleId} {
+      function isValidListBundle() {
+        return bundleId in ['music_note_latest_20', 'library_latest_10_sets'] &&
+          request.resource.data.keys().hasOnly([
+            'schemaVersion', 'kind', 'items', 'itemCount', 'cursorCreatedAtMs',
+            'hasMore', 'deletedIds', 'updatedAtMs', 'updatedAt'
+          ]) &&
+          request.resource.data.schemaVersion == 1 &&
+          request.resource.data.items is list &&
+          request.resource.data.itemCount is int &&
+          request.resource.data.itemCount == request.resource.data.items.size() &&
+          request.resource.data.cursorCreatedAtMs is int &&
+          request.resource.data.hasMore is bool &&
+          request.resource.data.deletedIds is list &&
+          request.resource.data.deletedIds.size() <= 450 &&
+          request.resource.data.updatedAtMs is int &&
+          request.resource.data.updatedAt is timestamp &&
+          ((bundleId == 'music_note_latest_20' &&
+            request.resource.data.kind == 'musicNote' &&
+            request.resource.data.itemCount >= 0 && request.resource.data.itemCount <= 20) ||
+           (bundleId == 'library_latest_10_sets' &&
+            request.resource.data.kind == 'library' &&
+            request.resource.data.itemCount >= 0 && request.resource.data.itemCount <= 10));
+      }
+
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if (isOwner(uid) || isAdmin()) && isValidListBundle();
+      allow delete: if isOwner(uid) || isAdmin();
     }
 
     // User Suno Playlists

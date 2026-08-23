@@ -22,6 +22,7 @@ class FavoritesStore {
     list.forEach((fav) => {
       if (!this.isFavoriteHidden(fav)) {
         if (fav.id) map.set(fav.id, fav);
+        if (fav.firestoreId) map.set(String(fav.firestoreId), fav);
         const key = fav.favoriteKey || this.buildFavoriteIdentityKey(fav);
         if (key) map.set(key, fav);
       }

@@ -44,3 +44,9 @@ if MARKER not in app:
     print('Applied SORIDRAW 908: Music Note incremental query is forbidden outside /history.')
 else:
     print('SORIDRAW 908 already applied.')
+
+# 909 removes the remaining startup write path left by 903's premature bundle
+# activation. The bundle becomes active only after its real /history read returns.
+apply_909 = Path('.deploy/apply-909-music-note-no-startup-write.py')
+if apply_909.exists():
+    exec(compile(apply_909.read_text(encoding='utf-8'), str(apply_909), 'exec'), {'__name__': '__main__'})

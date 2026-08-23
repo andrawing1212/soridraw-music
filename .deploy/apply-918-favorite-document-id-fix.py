@@ -1,20 +1,28 @@
 from pathlib import Path
 
 app = Path('src/App.tsx').read_text(encoding='utf-8')
+favorites = Path('src/pages/FavoritesPage.tsx').read_text(encoding='utf-8')
 
-def dump(label: str, needle: str, before: int = 900, after: int = 2600):
-    pos = app.find(needle)
-    print(f'--- 918C DIAG {label} pos={pos} ---')
-    if pos >= 0:
-        print(app[max(0, pos-before):pos+after])
+needle = 'favoritesStore.setFavorites'
+start = 0
+count = 0
+while True:
+    pos = app.find(needle, start)
+    if pos < 0:
+        break
+    count += 1
+    print(f'--- 918D STORE SYNC #{count} pos={pos} ---')
+    print(app[max(0,pos-700):pos+1000])
+    start = pos + len(needle)
+print(f'918D total store sync calls={count}')
 
-for label, needle in [
-    ('mapFavoriteDoc', 'const mapFavoriteFirestoreDoc'),
-    ('writeFavoritesCache', 'const writeFavoritesCache'),
-    ('mergeFavoritePages', 'const mergeFavoritePages'),
-    ('updateFavoriteCatch', "} catch (error: any) {\n      const code = String(error?.code || '');"),
-    ('recoveryLookup', 'const recoverMissingFavoriteUpdateTargets'),
+for label, source, needle2 in [
+    ('trash', favorites, 'const moveSongsToFavoriteTrash'),
+    ('restore', favorites, 'const restoreSongsFromFavoriteTrash'),
+    ('docid', favorites, 'const getFavoriteDocumentId'),
 ]:
-    dump(label, needle)
+    pos=source.find(needle2)
+    print(f'--- 918D {label} pos={pos} ---')
+    if pos>=0: print(source[max(0,pos-500):pos+2200])
 
-print('SORIDRAW 918C diagnostic only: no runtime changes.')
+print('SORIDRAW 918D diagnostic only: no runtime changes.')

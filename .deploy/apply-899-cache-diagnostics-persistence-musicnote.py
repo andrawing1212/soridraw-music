@@ -102,3 +102,9 @@ if apply_906.exists():
 apply_907 = Path('.deploy/apply-907-session-read-guards.py')
 if apply_907.exists():
     exec(compile(apply_907.read_text(encoding='utf-8'), str(apply_907), 'exec'), {'__name__': '__main__'})
+
+# 908 closes the older 901 incremental-sync startup path. Remote version metadata
+# may update globally, but the favorites delta query is forbidden outside /history.
+apply_908 = Path('.deploy/apply-908-music-note-no-home-delta-read.py')
+if apply_908.exists():
+    exec(compile(apply_908.read_text(encoding='utf-8'), str(apply_908), 'exec'), {'__name__': '__main__'})

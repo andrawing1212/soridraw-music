@@ -49,3 +49,9 @@ else:
 apply_910 = Path('.deploy/apply-910-recent-text-batch-unsave-fix.py')
 if apply_910.exists():
     exec(compile(apply_910.read_text(encoding='utf-8'), str(apply_910), 'exec'), {'__name__': '__main__'})
+
+# 911 extends the quiet window to 30 seconds and stores the exact Music Note
+# Firestore id on the recent-song snapshot so save/unsave survives text edits.
+apply_911 = Path('.deploy/apply-911-recent-heart-link-and-30s-batch.py')
+if apply_911.exists():
+    exec(compile(apply_911.read_text(encoding='utf-8'), str(apply_911), 'exec'), {'__name__': '__main__'})

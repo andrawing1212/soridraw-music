@@ -37,7 +37,9 @@ if MARKER not in app:
         r'''(?P<failure>.*?)'''
         r'''      \}\n'''
         r'''    \);\n\n'''
-        r'''    return \(\) => unsubscribe\(\);''',
+        r'''    return \(\) => \{\n'''
+        r'''      unsubscribe\(\);\n'''
+        r'''    \};''',
         re.S,
     )
     match = listener_pattern.search(app)

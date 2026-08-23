@@ -169,6 +169,39 @@ service cloud.firestore {
       allow read, write: if isOwner(uid) || isAdmin();
     }
 
+    // SORIDRAW 902 user list bundle cache
+    // Additive cache only: original favorites and suno_tracks remain authoritative.
+    // Only the owner (or an app admin) can access the two fixed cache documents.
+    match /user_list_caches/{uid}/bundles/{bundleId} {
+      function isValidListBundle() {
+        return bundleId in ['music_note_latest_20', 'library_latest_10_sets'] &&
+          request.resource.data.keys().hasOnly([
+            'schemaVersion', 'kind', 'items', 'itemCount', 'cursorCreatedAtMs',
+            'hasMore', 'deletedIds', 'updatedAtMs', 'updatedAt'
+          ]) &&
+          request.resource.data.schemaVersion == 1 &&
+          request.resource.data.items is list &&
+          request.resource.data.itemCount is int &&
+          request.resource.data.itemCount == request.resource.data.items.size() &&
+          request.resource.data.cursorCreatedAtMs is int &&
+          request.resource.data.hasMore is bool &&
+          request.resource.data.deletedIds is list &&
+          request.resource.data.deletedIds.size() <= 450 &&
+          request.resource.data.updatedAtMs is int &&
+          request.resource.data.updatedAt is timestamp &&
+          ((bundleId == 'music_note_latest_20' &&
+            request.resource.data.kind == 'musicNote' &&
+            request.resource.data.itemCount >= 0 && request.resource.data.itemCount <= 20) ||
+           (bundleId == 'library_latest_10_sets' &&
+            request.resource.data.kind == 'library' &&
+            request.resource.data.itemCount >= 0 && request.resource.data.itemCount <= 10));
+      }
+
+      allow read: if isOwner(uid) || isAdmin();
+      allow create, update: if (isOwner(uid) || isAdmin()) && isValidListBundle();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
     // User Suno Playlists
     match /user_playlists/{uid}/lists/{playlistId} {
       allow read, write: if isOwner(uid) || isAdmin();

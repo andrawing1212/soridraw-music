@@ -89,3 +89,9 @@ if apply_904.exists():
 apply_905 = Path('.deploy/apply-905-recent-songs-cache-live-accounting.py')
 if apply_905.exists():
     exec(compile(apply_905.read_text(encoding='utf-8'), str(apply_905), 'exec'), {'__name__': '__main__'})
+
+# 906 prevents navigation/cache hydration from writing the one-document bundles.
+# Only actual data-source changes/reconciliation may update those cache documents.
+apply_906 = Path('.deploy/apply-906-navigation-no-bundle-writes.py')
+if apply_906.exists():
+    exec(compile(apply_906.read_text(encoding='utf-8'), str(apply_906), 'exec'), {'__name__': '__main__'})

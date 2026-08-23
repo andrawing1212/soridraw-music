@@ -94,7 +94,7 @@ if MARKER not in app:
         r'''      if \(user\) \{\n'''
         r'''        const ref = doc\(db, "user_recent_songs", user\.uid\);\n'''
         r'''        await setDoc\(ref, sanitizeForFirestore\(\{ songs: nextHistory \}\), \{ merge: true \}\);\n'''
-        r'''        markCacheDiagnostic\('recentSongs', 'SYNC', 0, 1\);\n'''
+        r'''[ \t]*markCacheDiagnostic\('recentSongs', 'SYNC', 0, 1\);\n'''
         r'''      \}\n\n'''
         r'''(      setIsRecentSongEditOpen\(false\);)'''
     )
@@ -115,10 +115,10 @@ if MARKER not in app:
         r'''      if \(user\) \{\n'''
         r'''        const ref = doc\(db, "user_recent_songs", user\.uid\);\n'''
         r'''        setDoc\(ref, sanitizeForFirestore\(\{ songs: nextHistory \}\), \{ merge: true \}\)\n'''
-        r'''          \.then\(\(\) => markCacheDiagnostic\('recentSongs', 'SYNC', 0, 1\)\)\n'''
-        r'''          \.catch\(\(error\) => \{\n'''
-        r'''          console\.error\('Failed to persist studio edit before favorite save:', error\);\n'''
-        r'''        \}\);\n'''
+        r'''[ \t]*\.then\(\(\) => markCacheDiagnostic\('recentSongs', 'SYNC', 0, 1\)\)\n'''
+        r'''[ \t]*\.catch\(\(error\) => \{\n'''
+        r'''[ \t]*console\.error\('Failed to persist studio edit before favorite save:', error\);\n'''
+        r'''[ \t]*\}\);\n'''
         r'''      \}'''
     )
     heart_match = heart_pattern.search(app)
@@ -128,8 +128,8 @@ if MARKER not in app:
             r'''      if \(user\) \{\n'''
             r'''        const ref = doc\(db, "user_recent_songs", user\.uid\);\n'''
             r'''        setDoc\(ref, sanitizeForFirestore\(\{ songs: nextHistory \}\), \{ merge: true \}\)\.catch\(\(error\) => \{\n'''
-            r'''          console\.error\('Failed to persist studio edit before favorite save:', error\);\n'''
-            r'''        \}\);\n'''
+            r'''[ \t]*console\.error\('Failed to persist studio edit before favorite save:', error\);\n'''
+            r'''[ \t]*\}\);\n'''
             r'''      \}'''
         )
         heart_match = heart_pattern.search(app)

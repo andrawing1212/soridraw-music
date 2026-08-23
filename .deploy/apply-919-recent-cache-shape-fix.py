@@ -45,6 +45,10 @@ if MARKER not in app:
 else:
     print('SORIDRAW 919 already applied.')
 
+apply_921 = Path('.deploy/apply-921-firestore-cost-hardening.py')
+if apply_921.exists():
+    exec(compile(apply_921.read_text(encoding='utf-8'), str(apply_921), 'exec'), {'__name__': '__main__'})
+
 apply_920 = Path('.deploy/apply-920-firestore-runtime-audit.py')
 if apply_920.exists():
     exec(compile(apply_920.read_text(encoding='utf-8'), str(apply_920), 'exec'), {'__name__': '__main__'})

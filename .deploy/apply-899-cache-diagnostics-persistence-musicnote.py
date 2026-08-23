@@ -95,3 +95,10 @@ if apply_905.exists():
 apply_906 = Path('.deploy/apply-906-navigation-no-bundle-writes.py')
 if apply_906.exists():
     exec(compile(apply_906.read_text(encoding='utf-8'), str(apply_906), 'exec'), {'__name__': '__main__'})
+
+# 907 fixes the two remaining navigation read regressions:
+# - Music Note entry event only fires on the actual /history route.
+# - Recent songs verify Firestore only once per uid for the active SPA session.
+apply_907 = Path('.deploy/apply-907-session-read-guards.py')
+if apply_907.exists():
+    exec(compile(apply_907.read_text(encoding='utf-8'), str(apply_907), 'exec'), {'__name__': '__main__'})

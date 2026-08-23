@@ -1,19 +1,46 @@
 from pathlib import Path
 
-app = Path('src/App.tsx').read_text(encoding='utf-8')
-needle = 'saveRecentSongsCache'
-positions = []
-start = 0
-while True:
-    pos = app.find(needle, start)
-    if pos < 0:
-        break
-    positions.append(pos)
-    start = pos + len(needle)
+MARKER = 'SORIDRAW_919_RECENT_CACHE_PAYLOAD_SHAPE_FIX'
 
-print(f'--- 919 DIAG saveRecentSongsCache occurrences={len(positions)} ---')
-for index, pos in enumerate(positions, 1):
-    print(f'--- 919 DIAG #{index} pos={pos} ---')
-    print(app[max(0, pos-900):pos+1400])
+app_path = Path('src/App.tsx')
+app = app_path.read_text(encoding='utf-8')
 
-print('SORIDRAW 919 diagnostic only: inspect recent-song cache payload shape.')
+if MARKER not in app:
+    old_local = '''    saveRecentSongsCache(uid, nextSongs);'''
+    new_local = '''    saveRecentSongsCache(uid, {
+      history: nextSongs,
+      historyIndex: activeIndex,
+      latestGenerationBatchId: (nextSongs[0]?.appliedKeywords as any)?.generationBatchId || null,
+    });'''
+    if app.count(old_local) != 1:
+        raise SystemExit(f'919 local cache save anchor mismatch: {app.count(old_local)}')
+    app = app.replace(old_local, new_local, 1)
+
+    old_heart = '''          saveRecentSongsCache(user.uid, nextCommittedHistory);'''
+    new_heart = '''          saveRecentSongsCache(user.uid, {
+            history: nextCommittedHistory,
+            historyIndex: currentIndex,
+            latestGenerationBatchId: (nextCommittedHistory[0]?.appliedKeywords as any)?.generationBatchId || null,
+          });'''
+    if app.count(old_heart) != 1:
+        raise SystemExit(f'919 heart cache save anchor mismatch: {app.count(old_heart)}')
+    app = app.replace(old_heart, new_heart, 1)
+
+    marker_anchor = 'const SORIDRAW_918_FAVORITE_MUTATION_SIGNAL_ORDER_FIX = true;\n'
+    if marker_anchor in app:
+        app = app.replace(marker_anchor, f'const {MARKER} = true;\n' + marker_anchor, 1)
+    else:
+        first_const = app.find('const ')
+        if first_const < 0:
+            raise SystemExit('919 marker insertion anchor missing')
+        app = app[:first_const] + f'const {MARKER} = true;\n' + app[first_const:]
+
+    if 'saveRecentSongsCache(uid, nextSongs);' in app:
+        raise SystemExit('919 raw local array call still present')
+    if 'saveRecentSongsCache(user.uid, nextCommittedHistory);' in app:
+        raise SystemExit('919 raw heart array call still present')
+
+    app_path.write_text(app, encoding='utf-8')
+    print('Applied SORIDRAW 919: recent-song local cache calls use the required payload object shape.')
+else:
+    print('SORIDRAW 919 already applied.')

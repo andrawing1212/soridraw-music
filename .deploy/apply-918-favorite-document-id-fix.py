@@ -59,3 +59,7 @@ if MARKER not in app:
     print('Applied SORIDRAW 918: favorite mutation signal initializes syncedFavorite before use; save/unsave/trash share the repaired path.')
 else:
     print('SORIDRAW 918 already applied.')
+
+apply_919 = Path('.deploy/apply-919-recent-cache-shape-fix.py')
+if apply_919.exists():
+    exec(compile(apply_919.read_text(encoding='utf-8'), str(apply_919), 'exec'), {'__name__': '__main__'})

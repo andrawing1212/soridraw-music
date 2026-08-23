@@ -31,6 +31,25 @@ jobs:
         with:
           node-version: 20
 
+      - name: Add only SORIDRAW 902 list-cache rule
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('firestore.rules')
+          source = path.read_text(encoding='utf-8')
+          marker = '// SORIDRAW 902 user list bundle cache'
+          if marker not in source:
+              anchor = '''    // User Suno Playlists\n'''
+              if source.count(anchor) != 1:
+                  raise SystemExit(f'list-cache rule anchor mismatch: {source.count(anchor)}')
+              block = '''    // SORIDRAW 902 user list bundle cache\n    // Additive cache only: original favorites and suno_tracks remain authoritative.\n    // Only the owner (or an app admin) can access the two fixed cache documents.\n    match /user_list_caches/{uid}/bundles/{bundleId} {\n      function isValidListBundle() {\n        return bundleId in ['music_note_latest_20', 'library_latest_10_sets'] &&\n          request.resource.data.keys().hasOnly([\n            'schemaVersion', 'kind', 'items', 'itemCount', 'cursorCreatedAtMs',\n            'hasMore', 'deletedIds', 'updatedAtMs', 'updatedAt'\n          ]) &&\n          request.resource.data.schemaVersion == 1 &&\n          request.resource.data.items is list &&\n          request.resource.data.itemCount is int &&\n          request.resource.data.itemCount == request.resource.data.items.size() &&\n          request.resource.data.cursorCreatedAtMs is int &&\n          request.resource.data.hasMore is bool &&\n          request.resource.data.deletedIds is list &&\n          request.resource.data.deletedIds.size() <= 450 &&\n          request.resource.data.updatedAtMs is int &&\n          request.resource.data.updatedAt is timestamp &&\n          ((bundleId == 'music_note_latest_20' &&\n            request.resource.data.kind == 'musicNote' &&\n            request.resource.data.itemCount >= 0 && request.resource.data.itemCount <= 20) ||\n           (bundleId == 'library_latest_10_sets' &&\n            request.resource.data.kind == 'library' &&\n            request.resource.data.itemCount >= 0 && request.resource.data.itemCount <= 10));\n      }\n\n      allow read: if isOwner(uid) || isAdmin();\n      allow create, update: if (isOwner(uid) || isAdmin()) && isValidListBundle();\n      allow delete: if isOwner(uid) || isAdmin();\n    }\n\n'''
+              source = source.replace(anchor, block + anchor, 1)
+              path.write_text(source, encoding='utf-8')
+          PY
+
       - name: Verify intended rules only
         shell: bash
         run: |
@@ -39,6 +58,9 @@ jobs:
           grep -q "'googleGeminiApiKey', 'sectionCustom', 'recentSongs', 'musicNote', 'library'" firestore.rules
           grep -q "'generationPreferences', 'syncVersions'" firestore.rules
           grep -q "match /user_structures/{uid}" firestore.rules
+          grep -q "match /user_list_caches/{uid}/bundles/{bundleId}" firestore.rules
+          grep -q "music_note_latest_20" firestore.rules
+          grep -q "library_latest_10_sets" firestore.rules
 
       - name: Authenticate to Firebase backend project
         uses: google-github-actions/auth@v2
@@ -65,6 +87,7 @@ jobs:
             echo "commit=${GITHUB_SHA}"
             echo "target_project=soridraw-app-866a5"
             echo "scope=firestore:rules"
+            echo "change=user_list_caches bundles only"
             echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo
             echo "--- deploy log tail ---"
@@ -72,21 +95,26 @@ jobs:
           } > .deploy/firestore-rules-895-deploy-result.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/firestore-rules-895-deploy-result.txt
-          git commit -m "chore(895): record Firestore rules deploy result" || true
+          if [ "${STATUS}" = "success" ]; then
+            git add firestore.rules .deploy/firestore-rules-895-deploy-result.txt
+          else
+            git checkout -- firestore.rules
+            git add .deploy/firestore-rules-895-deploy-result.txt
+          fi
+          git commit -m "chore(902): record Firestore list cache rules deploy result" || true
           git push origin HEAD:preview
 
       - name: Report success
         if: steps.deploy.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_895_FIRESTORE_RULES_SUCCESS sha=$(git rev-parse HEAD) project=soridraw-app-866a5 rules_only=true"
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "✅ SORIDRAW_902_FIRESTORE_LIST_CACHE_RULES_SUCCESS sha=$(git rev-parse HEAD) project=soridraw-app-866a5 rules_only=true"
 
       - name: Report failure
         if: steps.deploy.outcome != 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_895_FIRESTORE_RULES_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }} project=soridraw-app-866a5"
+        run: gh issue comment 63 --repo "$GITHUB_REPOSITORY" --body "❌ SORIDRAW_902_FIRESTORE_LIST_CACHE_RULES_FAILED sha=$(git rev-parse HEAD) run_id=${{ github.run_id }} project=soridraw-app-866a5"
 
       - name: Fail workflow when deploy failed
         if: steps.deploy.outcome != 'success'

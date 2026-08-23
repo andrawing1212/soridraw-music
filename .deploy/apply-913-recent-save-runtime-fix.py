@@ -14,10 +14,8 @@ app_path = Path('src/App.tsx')
 app = app_path.read_text(encoding='utf-8')
 
 if MARKER not in app:
-    # 912 accidentally referenced a local cache ref/helper that do not exist in
-    # App.tsx. Vite transpilation did not type-check that symbol, so production
-    # build succeeded but both edit-confirm and heart threw at runtime.
-    #
+    # 912 accidentally referenced a cache ref/helper from the wrong scope.
+    # Vite transpilation did not catch the browser runtime failure.
     # Keep the intended model:
     # - edit/confirm: React/history refs only, no Firestore write
     # - heart: queue current snapshot and flush user_recent_songs exactly once
@@ -41,9 +39,13 @@ if MARKER not in app:
         raise SystemExit('913 marker anchor missing')
     app = app.replace(marker_anchor, f'const {MARKER} = true;\n' + marker_anchor, 1)
 
-    # Fail the build if the two accidental 912-only runtime symbols survive.
-    if 'recentSongsCacheRef' in app or 'saveRecentSongsCache' in app:
-        raise SystemExit('913 invalid recent cache runtime symbol still present')
+    remaining_ref = app.count('recentSongsCacheRef')
+    remaining_helper = app.count('saveRecentSongsCache')
+    if remaining_ref or remaining_helper:
+        raise SystemExit(
+            f'913 remaining cache symbols: recentSongsCacheRef={remaining_ref}, '
+            f'saveRecentSongsCache={remaining_helper}'
+        )
 
     app_path.write_text(app, encoding='utf-8')
     print('Applied SORIDRAW 913: edit confirm is local-only; heart flushes recent songs once without invalid runtime cache calls.')

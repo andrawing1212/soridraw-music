@@ -1,0 +1,90 @@
+name: SORIDRAW Backend V2 Step 1-B Read-only Inventory
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-backend-v2-step1b.txt'
+
+concurrency:
+  group: soridraw-backend-v2-step1b-readonly
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Authenticate read-only inventory session
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Run Firestore counts-only inventory
+        id: inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .deploy
+          (
+            cd functions
+            npm run inventory:readonly -- --sample=0
+          ) > .deploy/backend-v2-step1b-firestore-counts.json
+
+      - name: Validate read-only safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('.deploy/backend-v2-step1b-firestore-counts.json')
+          report = json.loads(p.read_text(encoding='utf-8'))
+          safety = report.get('safety', {})
+          assert safety.get('databaseWrites') == 0, safety
+          assert safety.get('databaseDeletes') == 0, safety
+          assert safety.get('valuesPrinted') is False, safety
+          assert safety.get('sampleSizePerTopLevelCollection') == 0, safety
+          print('read-only safety contract verified')
+          PY
+
+      - name: Record inventory result on preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "status=success"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "source_commit=${GITHUB_SHA}"
+            echo "target_project=soridraw-app-866a5"
+            echo "scope=firestore aggregation counts only"
+            echo "database_writes=0"
+            echo "database_deletes=0"
+            echo "sample_values=0"
+            echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .deploy/backend-v2-step1b-run.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .deploy/backend-v2-step1b-firestore-counts.json .deploy/backend-v2-step1b-run.txt
+          git commit -m "docs: record Backend V2 Step 1-B Firestore counts" || true
+          git push origin HEAD:preview

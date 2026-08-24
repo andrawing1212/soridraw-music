@@ -117,6 +117,7 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   const [serverLoading, setServerLoading] = useState(false);
   const [serverError, setServerError] = useState('');
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const serverLoadingRef = useRef(false);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -141,7 +142,8 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
   }, []);
 
   const loadServerUsage = useCallback(async () => {
-    if (!isAdmin || !enabled || serverLoading) return;
+    if (!isAdmin || !enabled || serverLoadingRef.current) return;
+    serverLoadingRef.current = true;
     setServerLoading(true);
     setServerError('');
     try {
@@ -157,9 +159,10 @@ export default function CacheDiagnosticsOverlay({ isAdmin }: { isAdmin: boolean 
       console.warn('[CACHE LIVE] Cloud server usage unavailable:', error);
       setServerError(getCallableErrorMessage(error));
     } finally {
+      serverLoadingRef.current = false;
       setServerLoading(false);
     }
-  }, [enabled, isAdmin, serverLoading]);
+  }, [enabled, isAdmin]);
 
   useEffect(() => {
     const syncEnabled = () => setEnabled(readCacheDiagnosticsGloballyEnabled());

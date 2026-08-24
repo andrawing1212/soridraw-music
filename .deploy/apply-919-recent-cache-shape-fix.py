@@ -57,6 +57,10 @@ apply_922 = Path('.deploy/apply-922-no-unbounded-bootstrap.py')
 if apply_922.exists():
     exec(compile(apply_922.read_text(encoding='utf-8'), str(apply_922), 'exec'), {'__name__': '__main__'})
 
+apply_925 = Path('.deploy/apply-925-cache-live-large-source-trace.py')
+if apply_925.exists():
+    exec(compile(apply_925.read_text(encoding='utf-8'), str(apply_925), 'exec'), {'__name__': '__main__'})
+
 apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
 if apply_923.exists():
     exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})

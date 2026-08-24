@@ -93,6 +93,10 @@ apply_934 = Path('.deploy/apply-934-music-note-folder-shared-listener.py')
 if apply_934.exists():
     exec(compile(apply_934.read_text(encoding='utf-8'), str(apply_934), 'exec'), {'__name__': '__main__'})
 
+apply_935 = Path('.deploy/apply-935-recent-version-sync-only.py')
+if apply_935.exists():
+    exec(compile(apply_935.read_text(encoding='utf-8'), str(apply_935), 'exec'), {'__name__': '__main__'})
+
 apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
 if apply_923.exists():
     exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})

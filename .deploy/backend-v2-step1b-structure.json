@@ -9,8 +9,8 @@
     "note": "Aggregation counts and optional sample reads still consume Firestore read quota. Capture the daily usage baseline first."
   },
   "projectId": "soridraw-app-866a5",
-  "generatedAt": "2026-08-24T19:22:51.916Z",
-  "elapsedMs": 12831,
+  "generatedAt": "2026-08-24T19:25:37.681Z",
+  "elapsedMs": 16217,
   "topLevelCollections": [
     {
       "name": "admin_permission_audit",

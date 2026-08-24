@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: INVENTORY / Step 1-A in progress
+Status: INVENTORY / Step 1-A complete — awaiting approval for Step 1-B
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -59,8 +59,8 @@ Do not redesign all song fields during the first migration. The first migration 
 | V1 | V2 / disposition | Rule |
 | --- | --- | --- |
 | `users/{uid}` | keep | Keep profile/authority/sync version document. |
-| `user_recent_songs/{uid}` | `users/{uid}/songs/{songId}` | Preserve current song object shape wherever possible. |
-| `favorites/{favoriteId}` | matching song + `musicNote:true`, otherwise preserve as separate song | Never merge unless identity is reliable. |
+| `user_recent_songs/{uid}` | `users/{uid}/songs/{songId}` | Current V1 is a user document containing a `songs` array. Preserve song shape/identity/order while splitting into canonical song docs. |
+| `favorites/{favoriteId}` | matching song + `musicNote:true`, otherwise preserve as separate song | Never merge unless identity is reliable. Keep V1 fallback through verification. |
 | `user_list_caches/...music_note...` | no permanent V2 server equivalent | Temporary V1 compatibility only; replace server bundle cache with IndexedDB/local cache after validation. |
 | `user_list_caches/...library...` | no permanent V2 server equivalent | Same rule. |
 | `suno_tracks/{uid}/tracks/{id}` | optional/provider-specific compatibility data; not a V2 core dependency | Suno Library is low priority and can later be removed. Core song data must not depend on it. |
@@ -92,6 +92,7 @@ Do not merge solely because title, lyrics or prompt are similar. If uncertain, p
 8. No per-card N+1 query design for Explore. Counts/summary fields needed by cards must be returned with each public row.
 9. Suno Library must not dictate schema, APIs or Explore design.
 10. If a free-tier limit is approached, non-core/public conveniences should degrade before core private save/reload behavior.
+11. Do not assume deployed Firestore SDK persistence: production currently uses memory Firestore cache, so durable local-first storage must be explicit.
 
 ## 6. Migration method
 
@@ -108,19 +109,36 @@ V1 is never deleted first.
 9. Promote only after verification and user approval
 10. Keep V1 rollback data until a separately approved cleanup phase
 
-## 7. Work stages and progress tracker
+## 7. Step 1-A completed findings
+
+The repository/call-site inventory is complete enough to proceed to live structural verification. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
+
+Key findings:
+- `user_recent_songs/{uid}` stores a growing `songs` array in one document; mutations can rewrite the full array. It is a primary per-song V2 migration target.
+- `user_list_caches` is a server duplicate cache with Music Note/Library bundles up to about 850 KB. It stays only for compatibility until local V2 is proven.
+- `favorites` contains multiple legacy identity/fallback mechanisms, so migration deduplication is high-risk and must preserve uncertain duplicates.
+- Personal playlist data belongs in Firestore V2, but some operations scan the target item collection. Public likes/share lookups are N+1 patterns and remain future D1 work.
+- Suno Library/provider tracking has its own listeners/polling and must remain isolated as `OPTIONAL_SUNO`.
+- Shared generation configuration (`section_tags`, `vocalTones`, small `app_settings`) is active and protected during DB V2.
+- Some Rules-only/legacy datasets (`music_note_shares`, `section_tags_live`, `section_tags_draft`) require Step 1-B live-count verification instead of guessing whether they are obsolete.
+- Functions mix Auth admin, API key/security guards, provider operations and diagnostics. Functions removal remains a separate later phase after private DB V2 is stable.
+- RTDB presence is already structurally separate and remains `KEEP_RTDB`.
+
+No finding requires a stop or a design reversal at this stage.
+
+## 8. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete)
 - [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes. Completed by merging PR #68 into preview after the master-plan document was created.
-- [x] 0-2 Capture live usage baseline available from the admin diagnostics panel. 2026-08-25 around 03:34 KST: Cloud today reads 636 / writes 0 / deletes 0; last 10 minutes reads 20 / writes 0 / deletes 0; billable last 10 minutes reads 0 / realtime 0 / writes 0; Cloud sample shown through about 03:29 with up to ~4 minutes lag. Browser SDK at capture: reads 2 / writes 0, with `app_settings:getDoc` 1 and `users:onSnapshot` 1. The current panel does not expose a separate RTDB bandwidth/connection counter; that metric gap is explicitly tracked under Step 1-B and does not block code-only Step 1-A.
+- [x] 0-2 Capture live usage baseline available from the admin diagnostics panel. 2026-08-25 around 03:34 KST: Cloud today reads 636 / writes 0 / deletes 0; last 10 minutes reads 20 / writes 0 / deletes 0; billable last 10 minutes reads 0 / realtime 0 / writes 0; Cloud sample shown through about 03:29 with up to ~4 minutes lag. Browser SDK at capture: reads 2 / writes 0, with `app_settings:getDoc` 1 and `users:onSnapshot` 1. The current panel does not expose a separate RTDB bandwidth/connection counter; that metric gap is tracked under Step 1-B.
 - [x] 0-3 Build read-only inventory specification/tooling; no write/delete code path. Added `functions/scripts/inventory-readonly.cjs` and `npm run inventory:readonly`. Default is counts-only; samples are opt-in and value-redacted.
-- [x] 0-4 Freeze inventory output format and classification labels. See `docs/SORIDRAW_BACKEND_V2_INVENTORY_SPEC.md`.
+- [x] 0-4 Freeze inventory output format and classification labels. See `docs/SORIDRAW_BACKEND_V2_INVENTORY_SPEC.md`. `KEEP_RTDB` was formally added during 1-A to encode the already-approved presence architecture.
 
-### Step 1 — Read-only full inventory
-- [~] 1-A Repository/call-site inventory: every Firestore/RTDB collection, read path, write path, trigger and cache dependency. Started after Step 0 completion. Findings are recorded in `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
-- [ ] 1-B Production database structural inventory: collection/document counts and safe field samples where accessible; also capture RTDB usage/bandwidth baseline if available without paid tooling.
-- [ ] 1-C Classify every dataset as `KEEP_FIRESTORE`, `MOVE_LOCAL`, `FUTURE_D1`, `OPTIONAL_SUNO`, `COMPAT_ONLY`, or `REVIEW`.
-- [ ] 1-D Produce V1 field -> V2 field mapping and migration risk report.
+### Step 1 — Read-only full inventory (1/4 complete)
+- [x] 1-A Repository/call-site inventory: Firestore/RTDB paths, core reads/writes/listeners/transactions, Functions responsibilities, local caches and composite indexes. Completed. See `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
+- [ ] 1-B Production database structural inventory: aggregation document counts and safe redacted field-name samples where accessible; also capture RTDB usage/bandwidth baseline if available without paid tooling.
+- [ ] 1-C Classify every live dataset as `KEEP_FIRESTORE`, `KEEP_RTDB`, `MOVE_LOCAL`, `FUTURE_D1`, `OPTIONAL_SUNO`, `COMPAT_ONLY`, or `REVIEW` after 1-B evidence.
+- [ ] 1-D Produce final V1 field -> V2 field mapping and migration risk report.
 
 ### Step 2 — V2 implementation on preview
 - [ ] Introduce repository/data-access layer so UI components do not hard-code database paths
@@ -159,7 +177,7 @@ V1 is never deleted first.
 - [ ] Suno Library remains optional and isolated; can be removed independently
 - [ ] Firebase production deployment only on explicit user request
 
-## 8. Progress reporting format
+## 9. Progress reporting format
 
 Every backend-V2 update should show:
 - Current stage
@@ -173,6 +191,11 @@ Every backend-V2 update should show:
 - Test/build result if any
 - Firebase production status
 
-## 9. Cross-chat continuity rule
+At every stage boundary:
+- If there is no issue and no direct user check is needed, explicitly request approval for the next operation.
+- If direct user validation is needed, stop and state exactly what must be checked before approval.
+- If a risk/problem is found, stop progression and report the cause/options before any data change.
+
+## 10. Cross-chat continuity rule
 
 This document is the authoritative project handoff for the Backend V2 / zero-cost architecture work. In a new chat, read this file first and then inspect the latest `preview` branch before continuing. Do not rely on memory alone. If this document and code disagree, report the discrepancy before changing data or deploying anything.

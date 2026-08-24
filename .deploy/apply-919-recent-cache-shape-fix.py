@@ -77,6 +77,10 @@ apply_929 = Path('.deploy/apply-929-single-user-profile-source.py')
 if apply_929.exists():
     exec(compile(apply_929.read_text(encoding='utf-8'), str(apply_929), 'exec'), {'__name__': '__main__'})
 
+apply_930 = Path('.deploy/apply-930-route-user-read-cache.py')
+if apply_930.exists():
+    exec(compile(apply_930.read_text(encoding='utf-8'), str(apply_930), 'exec'), {'__name__': '__main__'})
+
 apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
 if apply_923.exists():
     exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})

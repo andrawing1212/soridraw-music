@@ -1,8 +1,9 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: PREPARE / Step 0
+Status: PREPARE / Step 0 — 3 of 4 preparation items complete
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
+Current preview baseline after Step 0 preparation: `2fef90ee0f7de33cb917e120e79f5b0527720bc8`
 Production Firebase deploy: prohibited unless explicitly requested
 
 ## 0. Non-negotiable goals
@@ -109,11 +110,11 @@ V1 is never deleted first.
 
 ## 7. Work stages and progress tracker
 
-### Step 0 — Preparation
-- [ ] 0-1 Align `preview` safely to the current integrated `main` tree (fast-forward only; no Firebase data change)
-- [ ] 0-2 Capture current Firestore/RTDB usage baseline available to us
-- [ ] 0-3 Build/read-only inventory specification/tooling; no write/delete code path
-- [ ] 0-4 Freeze inventory output format and classification labels
+### Step 0 — Preparation (3/4 complete)
+- [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes. Completed by merging PR #68 into preview after the master-plan document was created.
+- [ ] 0-2 Capture current Firestore/RTDB live usage baseline. The existing admin `getFirestoreServerUsage` Cloud Monitoring path has been verified in source; live values still require an authenticated admin app session or equivalent Firebase-console access.
+- [x] 0-3 Build read-only inventory specification/tooling; no write/delete code path. Added `functions/scripts/inventory-readonly.cjs` and `npm run inventory:readonly`. Default is counts-only; samples are opt-in and value-redacted.
+- [x] 0-4 Freeze inventory output format and classification labels. See `docs/SORIDRAW_BACKEND_V2_INVENTORY_SPEC.md`.
 
 ### Step 1 — Read-only full inventory
 - [ ] 1-A Repository/call-site inventory: every Firestore/RTDB collection, read path, write path, trigger and cache dependency

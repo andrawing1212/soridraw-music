@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 MARKER = 'SORIDRAW_937_MUSIC_NOTE_REFRESH_VERSION_GATE'
 
@@ -9,24 +8,35 @@ app = app_path.read_text(encoding='utf-8')
 if MARKER not in app:
     # 902/903 kept a one-shot user_list_caches Music Note bundle read alive on
     # every app restart, even when the durable favorites cache was already current.
-    # 901 already has the correct cross-device mechanism: users/{uid}.syncVersions.musicNote
-    # -> MUSIC_NOTE_SYNC_VERSION_EVENT -> changed favorites query only when newer.
-    # Therefore the bundle is only a bootstrap/migration fallback now.
-    pattern = re.compile(
-        r'''        let musicNoteBundleMissingHandled = false;\n'''
-        r'''        // 903: reserve the Music Note bundle path before the async one-shot read\n'''
-        r'''        // so the older 901 incremental query cannot race and add extra reads\.\n'''
-        r'''        musicNoteBundleActiveUids\.add\(currentUser\.uid\);\n'''
-        r'''        unsubMusicNoteBundle = subscribeListBundle\('musicNote', currentUser\.uid, \{.*?\n        \}\);\n''',
-        re.S,
+    # 901 already owns the correct cross-device route:
+    # users/{uid}.syncVersions.musicNote -> changed favorites only when newer.
+    # Guard only the automatic bundle bootstrap. Manual Sync remains explicit.
+    subscription_start = app.find(
+        "        unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {"
     )
-    match = pattern.search(app)
-    if not match:
-        raise SystemExit('937 Music Note bundle bootstrap block missing')
+    if subscription_start < 0:
+        raise SystemExit('937 Music Note bundle subscription start missing')
 
-    original = match.group(0)
+    active_start = app.rfind(
+        '        musicNoteBundleActiveUids.add(currentUser.uid);',
+        0,
+        subscription_start,
+    )
+    if active_start < 0:
+        raise SystemExit('937 Music Note bundle active guard missing')
+
+    on_error = app.find('          onError:', subscription_start)
+    if on_error < 0:
+        raise SystemExit('937 Music Note bundle onError missing')
+    close_start = app.find('\n        });', on_error)
+    if close_start < 0:
+        raise SystemExit('937 Music Note bundle subscription close missing')
+    block_end = close_start + len('\n        });')
+
+    original = app[active_start:block_end]
     indented = ''.join(('  ' + line if line.strip() else line) for line in original.splitlines(True))
-    replacement = '''        const musicNoteLocalVersionAtBootstrap = readMusicNoteSyncVersion(
+
+    gate = '''        const musicNoteLocalVersionAtBootstrap = readMusicNoteSyncVersion(
           MUSIC_NOTE_LOCAL_SYNC_VERSION_STORAGE_BASE,
           currentUser.uid,
         );
@@ -39,28 +49,24 @@ if MARKER not in app:
           || musicNoteRemoteVersionAtBootstrap > musicNoteLocalVersionAtBootstrap;
 
         if (shouldVerifyMusicNoteBundle) {
-''' + indented + '''        } else {
-          // Cached Music Note is already verified. Keep the 901 incremental path
-          // available so a later users sync-version event can fetch only changed
-          // favorites instead of forcing the whole bundle on every refresh.
+''' + indented + '''
+        } else {
+          // Cache is already current. Do not reserve the bundle path here;
+          // leaving it inactive is intentional because 901 must remain free to
+          // react to a later cross-device musicNote version event.
           musicNoteBundleActiveUids.delete(currentUser.uid);
           markCacheDiagnostic('musicNote', 'CACHE', 0);
           setIsFavoritesLoading(false);
-        }
-'''
-    app = app[:match.start()] + replacement + app[match.end():]
+        }'''
 
-    marker_anchor = 'const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;\n'
-    if marker_anchor in app:
-        app = app.replace(marker_anchor, f'const {MARKER} = true;\n' + marker_anchor, 1)
-    else:
-        # 936 marker lives in Library/helper rather than App. Anchor to the latest
-        # App marker that must exist in this chain.
-        marker_anchor = 'const SORIDRAW_935_RECENT_VERSION_SYNC_ONLY = true;\n'
-        if marker_anchor not in app:
-            raise SystemExit('937 App marker anchor missing')
-        app = app.replace(marker_anchor, f'const {MARKER} = true;\n' + marker_anchor, 1)
+    app = app[:active_start] + gate + app[block_end:]
 
+    marker_anchor = 'const SORIDRAW_935_RECENT_VERSION_SYNC_ONLY = true;\n'
+    if marker_anchor not in app:
+        marker_anchor = 'const SORIDRAW_932_REFRESH_ROOT_WRITE_AND_SECTION_ROUTE_GATE = true;\n'
+    if marker_anchor not in app:
+        raise SystemExit('937 App marker anchor missing')
+    app = app.replace(marker_anchor, f'const {MARKER} = true;\n' + marker_anchor, 1)
     app_path.write_text(app, encoding='utf-8')
 
 final_app = app_path.read_text(encoding='utf-8')
@@ -72,8 +78,8 @@ if 'musicNoteBundleActiveUids.delete(currentUser.uid);' not in final_app:
     raise SystemExit('937 safety failed: incremental path release missing')
 if 'MUSIC_NOTE_SYNC_VERSION_EVENT' not in final_app:
     raise SystemExit('937 safety failed: 901 cross-device sync signal missing')
-if "getDocs(q)" not in final_app:
-    raise SystemExit('937 safety failed: changed-favorites incremental reader missing')
+if 'syncMusicNoteIncrementalFromRemoteVersion' not in final_app:
+    raise SystemExit('937 safety failed: 901 incremental sync function missing')
 if "nextParams.set('view'" in final_app:
     raise SystemExit('937 safety failed: broken 933 route state reintroduced')
 

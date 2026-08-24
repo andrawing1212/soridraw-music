@@ -1,9 +1,9 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: PREPARE / Step 0 — 3 of 4 preparation items complete
+Status: INVENTORY / Step 1-A in progress
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
-Current preview baseline after Step 0 preparation: `2fef90ee0f7de33cb917e120e79f5b0527720bc8`
+Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
 Production Firebase deploy: prohibited unless explicitly requested
 
 ## 0. Non-negotiable goals
@@ -110,17 +110,17 @@ V1 is never deleted first.
 
 ## 7. Work stages and progress tracker
 
-### Step 0 — Preparation (3/4 complete)
+### Step 0 — Preparation (4/4 complete)
 - [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes. Completed by merging PR #68 into preview after the master-plan document was created.
-- [ ] 0-2 Capture current Firestore/RTDB live usage baseline. The existing admin `getFirestoreServerUsage` Cloud Monitoring path has been verified in source; live values still require an authenticated admin app session or equivalent Firebase-console access.
+- [x] 0-2 Capture live usage baseline available from the admin diagnostics panel. 2026-08-25 around 03:34 KST: Cloud today reads 636 / writes 0 / deletes 0; last 10 minutes reads 20 / writes 0 / deletes 0; billable last 10 minutes reads 0 / realtime 0 / writes 0; Cloud sample shown through about 03:29 with up to ~4 minutes lag. Browser SDK at capture: reads 2 / writes 0, with `app_settings:getDoc` 1 and `users:onSnapshot` 1. The current panel does not expose a separate RTDB bandwidth/connection counter; that metric gap is explicitly tracked under Step 1-B and does not block code-only Step 1-A.
 - [x] 0-3 Build read-only inventory specification/tooling; no write/delete code path. Added `functions/scripts/inventory-readonly.cjs` and `npm run inventory:readonly`. Default is counts-only; samples are opt-in and value-redacted.
 - [x] 0-4 Freeze inventory output format and classification labels. See `docs/SORIDRAW_BACKEND_V2_INVENTORY_SPEC.md`.
 
 ### Step 1 — Read-only full inventory
-- [ ] 1-A Repository/call-site inventory: every Firestore/RTDB collection, read path, write path, trigger and cache dependency
-- [ ] 1-B Production database structural inventory: collection/document counts and safe field samples where accessible
-- [ ] 1-C Classify every dataset as `KEEP_FIRESTORE`, `MOVE_LOCAL`, `FUTURE_D1`, `OPTIONAL_SUNO`, `COMPAT_ONLY`, or `REVIEW`
-- [ ] 1-D Produce V1 field -> V2 field mapping and migration risk report
+- [~] 1-A Repository/call-site inventory: every Firestore/RTDB collection, read path, write path, trigger and cache dependency. Started after Step 0 completion. Findings are recorded in `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
+- [ ] 1-B Production database structural inventory: collection/document counts and safe field samples where accessible; also capture RTDB usage/bandwidth baseline if available without paid tooling.
+- [ ] 1-C Classify every dataset as `KEEP_FIRESTORE`, `MOVE_LOCAL`, `FUTURE_D1`, `OPTIONAL_SUNO`, `COMPAT_ONLY`, or `REVIEW`.
+- [ ] 1-D Produce V1 field -> V2 field mapping and migration risk report.
 
 ### Step 2 — V2 implementation on preview
 - [ ] Introduce repository/data-access layer so UI components do not hard-code database paths

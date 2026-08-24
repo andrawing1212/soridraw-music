@@ -57,6 +57,54 @@ apply_922 = Path('.deploy/apply-922-no-unbounded-bootstrap.py')
 if apply_922.exists():
     exec(compile(apply_922.read_text(encoding='utf-8'), str(apply_922), 'exec'), {'__name__': '__main__'})
 
+apply_925 = Path('.deploy/apply-925-cache-live-large-source-trace.py')
+if apply_925.exists():
+    exec(compile(apply_925.read_text(encoding='utf-8'), str(apply_925), 'exec'), {'__name__': '__main__'})
+
+apply_926 = Path('.deploy/apply-926-session-profile-structure-cache.py')
+if apply_926.exists():
+    exec(compile(apply_926.read_text(encoding='utf-8'), str(apply_926), 'exec'), {'__name__': '__main__'})
+
+apply_927 = Path('.deploy/apply-927-monotonic-section-version-and-op-trace.py')
+if apply_927.exists():
+    exec(compile(apply_927.read_text(encoding='utf-8'), str(apply_927), 'exec'), {'__name__': '__main__'})
+
+apply_928 = Path('.deploy/apply-928-cache-live-opaque.py')
+if apply_928.exists():
+    exec(compile(apply_928.read_text(encoding='utf-8'), str(apply_928), 'exec'), {'__name__': '__main__'})
+
+apply_929 = Path('.deploy/apply-929-single-user-profile-source.py')
+if apply_929.exists():
+    exec(compile(apply_929.read_text(encoding='utf-8'), str(apply_929), 'exec'), {'__name__': '__main__'})
+
+apply_930 = Path('.deploy/apply-930-route-user-read-cache.py')
+if apply_930.exists():
+    exec(compile(apply_930.read_text(encoding='utf-8'), str(apply_930), 'exec'), {'__name__': '__main__'})
+
+apply_931 = Path('.deploy/apply-931-refresh-session-write-gate.py')
+if apply_931.exists():
+    exec(compile(apply_931.read_text(encoding='utf-8'), str(apply_931), 'exec'), {'__name__': '__main__'})
+
+apply_932 = Path('.deploy/apply-932-refresh-root-write-and-section-route-gate.py')
+if apply_932.exists():
+    exec(compile(apply_932.read_text(encoding='utf-8'), str(apply_932), 'exec'), {'__name__': '__main__'})
+
+apply_934 = Path('.deploy/apply-934-music-note-folder-shared-listener.py')
+if apply_934.exists():
+    exec(compile(apply_934.read_text(encoding='utf-8'), str(apply_934), 'exec'), {'__name__': '__main__'})
+
+apply_935 = Path('.deploy/apply-935-recent-version-sync-only.py')
+if apply_935.exists():
+    exec(compile(apply_935.read_text(encoding='utf-8'), str(apply_935), 'exec'), {'__name__': '__main__'})
+
+apply_936 = Path('.deploy/apply-936-library-version-sync-only.py')
+if apply_936.exists():
+    exec(compile(apply_936.read_text(encoding='utf-8'), str(apply_936), 'exec'), {'__name__': '__main__'})
+
+apply_937 = Path('.deploy/apply-937-music-note-refresh-version-gate.py')
+if apply_937.exists():
+    exec(compile(apply_937.read_text(encoding='utf-8'), str(apply_937), 'exec'), {'__name__': '__main__'})
+
 apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
 if apply_923.exists():
     exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})

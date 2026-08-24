@@ -1,6 +1,0 @@
-SORIDRAW 924 Firestore Cloud Monitoring function deploy trigger
-created_at=2026-08-24
-branch=preview
-target_project=soridraw-app-866a5
-function=getFirestoreServerUsage
-scope=isolated_additive_function_only

@@ -14,18 +14,22 @@
  *
  * Usage:
  *   cd functions
- *   node scripts/inventory-readonly.cjs
- *   node scripts/inventory-readonly.cjs --sample=1
+ *   node scripts/inventory-readonly.cjs --project=soridraw-app-866a5
+ *   node scripts/inventory-readonly.cjs --project=soridraw-app-866a5 --sample=1
  *
  * Authentication:
- *   Uses Firebase Admin / Application Default Credentials from the local operator environment.
+ *   Uses Firebase Admin / Application Default Credentials from the operator environment.
+ *   The target project must be explicit in automated runs so credential-file project metadata
+ *   cannot silently redirect the inventory to a different Firebase project.
  */
 
 const admin = require('firebase-admin');
 
 const args = process.argv.slice(2);
 const sampleArg = args.find((value) => value.startsWith('--sample='));
+const projectArg = args.find((value) => value.startsWith('--project='));
 const sampleSize = Math.max(0, Math.min(3, Number(sampleArg?.split('=')[1] || 0) || 0));
+const explicitProjectId = String(projectArg?.slice('--project='.length) || '').trim() || null;
 
 const SECRET_OR_SERVER_ONLY = new Set([
   'user_api_keys',
@@ -82,14 +86,19 @@ const sampleCollection = async (collectionRef, topLevelName) => {
 
 const main = async () => {
   if (admin.apps.length === 0) {
-    admin.initializeApp();
+    admin.initializeApp(explicitProjectId ? { projectId: explicitProjectId } : undefined);
   }
 
   const db = admin.firestore();
   const projectId = admin.app().options.projectId
+    || explicitProjectId
     || process.env.GCLOUD_PROJECT
     || process.env.GOOGLE_CLOUD_PROJECT
     || null;
+
+  if (explicitProjectId && projectId !== explicitProjectId) {
+    throw new Error(`Target project mismatch: expected ${explicitProjectId}, resolved ${projectId}`);
+  }
 
   const startedAt = Date.now();
   const topLevelRefs = await db.listCollections();

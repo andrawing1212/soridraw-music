@@ -34,16 +34,22 @@ jobs:
           node-version: 22
 
       - name: Authenticate read-only inventory session
+        id: auth
+        continue-on-error: true
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
 
       - name: Install Functions dependencies
+        id: install
+        continue-on-error: true
         working-directory: functions
         run: npm ci
 
       - name: Run Firestore counts-only inventory
         id: inventory
+        if: steps.auth.outcome == 'success' && steps.install.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -51,9 +57,12 @@ jobs:
           (
             cd functions
             node scripts/inventory-readonly.cjs --sample=0
-          ) > .deploy/backend-v2-step1b-firestore-counts.json
+          ) > .deploy/backend-v2-step1b-firestore-counts.json 2> /tmp/backend-v2-step1b-inventory.err
 
       - name: Validate read-only safety contract
+        id: validate
+        if: steps.inventory.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -71,12 +80,25 @@ jobs:
           print('read-only safety contract verified')
           PY
 
-      - name: Record inventory result on preview
+      - name: Record inventory outcome on preview
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p .deploy
+          AUTH_OUTCOME='${{ steps.auth.outcome }}'
+          INSTALL_OUTCOME='${{ steps.install.outcome }}'
+          INVENTORY_OUTCOME='${{ steps.inventory.outcome }}'
+          VALIDATE_OUTCOME='${{ steps.validate.outcome }}'
+
+          if [ "$AUTH_OUTCOME" = success ] && [ "$INSTALL_OUTCOME" = success ] && [ "$INVENTORY_OUTCOME" = success ] && [ "$VALIDATE_OUTCOME" = success ]; then
+            STATUS=success
+          else
+            STATUS=failure
+          fi
+
           {
-            echo "status=success"
+            echo "status=${STATUS}"
             echo "run_id=${GITHUB_RUN_ID}"
             echo "source_commit=${GITHUB_SHA}"
             echo "target_project=soridraw-app-866a5"
@@ -84,12 +106,40 @@ jobs:
             echo "database_writes=0"
             echo "database_deletes=0"
             echo "sample_values=0"
+            echo "auth_outcome=${AUTH_OUTCOME}"
+            echo "install_outcome=${INSTALL_OUTCOME}"
+            echo "inventory_outcome=${INVENTORY_OUTCOME}"
+            echo "validate_outcome=${VALIDATE_OUTCOME}"
             echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > .deploy/backend-v2-step1b-run.txt
 
+          if [ "$INVENTORY_OUTCOME" != success ] && [ -f /tmp/backend-v2-step1b-inventory.err ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          import re
+          src = Path('/tmp/backend-v2-step1b-inventory.err').read_text(encoding='utf-8', errors='replace')
+          # Keep only a short, non-secret error classification. Do not persist credentials or raw payloads.
+          lines = [line.strip() for line in src.splitlines() if line.strip()]
+          text = ' | '.join(lines[:3])[:800]
+          text = re.sub(r'(?i)(private_key|credentials_json|client_email|token)\s*[:=]\s*[^ |]+', r'\1=[REDACTED]', text)
+          Path('.deploy/backend-v2-step1b-error.txt').write_text(text + '\n', encoding='utf-8')
+          PY
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/backend-v2-step1b-firestore-counts.json .deploy/backend-v2-step1b-run.txt
-          git commit -m "docs: record Backend V2 Step 1-B Firestore counts" || true
+          git add .deploy/backend-v2-step1b-run.txt
+          if [ -f .deploy/backend-v2-step1b-firestore-counts.json ]; then git add .deploy/backend-v2-step1b-firestore-counts.json; fi
+          if [ -f .deploy/backend-v2-step1b-error.txt ]; then git add .deploy/backend-v2-step1b-error.txt; fi
+          git commit -m "docs: record Backend V2 Step 1-B inventory outcome" || true
           git pull --rebase origin preview
           git push origin HEAD:preview
+
+      - name: Fail workflow if inventory did not complete
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.auth.outcome }}' = success
+          test '${{ steps.install.outcome }}' = success
+          test '${{ steps.inventory.outcome }}' = success
+          test '${{ steps.validate.outcome }}' = success

@@ -43,7 +43,7 @@ jobs:
         working-directory: functions
         run: npm ci
 
-      - name: Run Firestore counts-only inventory
+      - name: Run Firestore structural inventory
         id: inventory
         if: steps.auth.outcome == 'success' && steps.install.outcome == 'success'
         continue-on-error: true
@@ -56,8 +56,8 @@ jobs:
           mkdir -p .deploy
           (
             cd functions
-            node scripts/inventory-readonly.cjs --project=soridraw-app-866a5 --sample=0
-          ) > .deploy/backend-v2-step1b-firestore-counts.json 2> /tmp/backend-v2-step1b-inventory.err
+            node scripts/inventory-readonly.cjs --project=soridraw-app-866a5 --sample=1
+          ) > .deploy/backend-v2-step1b-structure.json 2> /tmp/backend-v2-step1b-inventory.err
 
       - name: Validate read-only safety contract
         id: validate
@@ -69,14 +69,15 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          p = Path('.deploy/backend-v2-step1b-firestore-counts.json')
+          p = Path('.deploy/backend-v2-step1b-structure.json')
           report = json.loads(p.read_text(encoding='utf-8'))
           safety = report.get('safety', {})
           assert report.get('projectId') == 'soridraw-app-866a5', report.get('projectId')
           assert safety.get('databaseWrites') == 0, safety
           assert safety.get('databaseDeletes') == 0, safety
           assert safety.get('valuesPrinted') is False, safety
-          assert safety.get('sampleSizePerTopLevelCollection') == 0, safety
+          assert safety.get('documentIdsPrinted') is False, safety
+          assert safety.get('sampleSizePerCollection') == 1, safety
           print('read-only safety contract verified')
           PY
 
@@ -102,10 +103,11 @@ jobs:
             echo "run_id=${GITHUB_RUN_ID}"
             echo "source_commit=${GITHUB_SHA}"
             echo "target_project=soridraw-app-866a5"
-            echo "scope=firestore aggregation counts only"
+            echo "scope=firestore aggregation counts plus one redacted field-name sample per non-sensitive collection/group"
             echo "database_writes=0"
             echo "database_deletes=0"
             echo "sample_values=0"
+            echo "sample_document_ids=0"
             echo "auth_outcome=${AUTH_OUTCOME}"
             echo "install_outcome=${INSTALL_OUTCOME}"
             echo "inventory_outcome=${INVENTORY_OUTCOME}"
@@ -128,9 +130,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .deploy/backend-v2-step1b-run.txt
-          if [ -f .deploy/backend-v2-step1b-firestore-counts.json ]; then git add .deploy/backend-v2-step1b-firestore-counts.json; fi
+          if [ -f .deploy/backend-v2-step1b-structure.json ]; then git add .deploy/backend-v2-step1b-structure.json; fi
           if [ -f .deploy/backend-v2-step1b-error.txt ]; then git add .deploy/backend-v2-step1b-error.txt; fi
-          git commit -m "docs: record Backend V2 Step 1-B inventory outcome" || true
+          git commit -m "docs: record Backend V2 Step 1-B structural inventory" || true
           git pull --rebase origin preview
           git push origin HEAD:preview
 

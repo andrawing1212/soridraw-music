@@ -121,10 +121,12 @@ if MARKER not in app:
 
 # Build-time safety checks.
 final_app = app_path.read_text(encoding='utf-8')
-if "if (cachedProfile) {\n      try {\n        await updateDoc(userRef, sessionData);" in final_app:
-    raise SystemExit('931 safety failed: unconditional cached-profile refresh write remains')
+if "const cachedProfile = readUserProfileCache(authUser.uid);\n    if (cachedProfile) {" in final_app:
+    raise SystemExit('931 safety failed: old unconditional cached-profile refresh branch remains')
 if "if (userSnap.exists()) {\n      await updateDoc(userRef, sessionData);" in final_app:
     raise SystemExit('931 safety failed: unconditional existing-user refresh write remains')
+if 'if (cachedProfile && !shouldPublishLoginSession) return;' not in final_app:
+    raise SystemExit('931 safety failed: same-session refresh zero-write gate missing')
 if 'const shouldPublishLoginSession = authSignInAt > 0' not in final_app:
     raise SystemExit('931 safety failed: true-login gate missing')
 if "unsubUserDoc = onSnapshot(userRef" not in final_app:

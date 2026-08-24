@@ -1,6 +1,7 @@
 name: SORIDRAW Backend V2 Step 1-B Read-only Inventory
 
 on:
+  workflow_dispatch:
   push:
     branches: [preview]
     paths:

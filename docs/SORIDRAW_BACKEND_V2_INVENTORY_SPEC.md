@@ -15,6 +15,7 @@ Purpose: Define the exact output format for Step 1 inventory before any V2 migra
 Every current dataset/call-site must end with exactly one primary classification:
 
 - `KEEP_FIRESTORE`: private cross-device source-of-truth data that should remain in Firestore V2.
+- `KEEP_RTDB`: real-time presence/session data that should remain in Realtime Database.
 - `MOVE_LOCAL`: server-side cache/duplicate data that should ultimately become IndexedDB/local cache.
 - `FUTURE_D1`: public/social/search data that should move to the future Explore D1 domain.
 - `OPTIONAL_SUNO`: Suno Library/provider-specific data that must remain isolated from core architecture and may later be removed.
@@ -109,7 +110,7 @@ Suno Library is not a core dependency. `suno_tracks` and provider-specific playl
 
 Step 1 is complete only when:
 
-- every current database collection/path is inventoried,
+- every current Firestore/Realtime Database collection/path is inventoried,
 - every known frontend/Functions read/write call-site is mapped,
 - every dataset has one classification label,
 - core generation/save/reload dependencies are fully identified,

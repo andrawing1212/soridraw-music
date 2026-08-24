@@ -4,5 +4,5 @@ scope=Backend V2 Step 1-B read-only production structural inventory
 firestore_writes=0
 firestore_deletes=0
 firebase_deploy=0
-attempt=4
-fix=persist-diagnostics
+attempt=5
+fix=explicit-target-project

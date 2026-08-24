@@ -8,7 +8,7 @@
  * - This script never calls set/create/update/delete/batch/transaction writes.
  * - Default mode performs metadata discovery + aggregation counts only.
  * - Document sampling is OFF by default and must be explicitly enabled with --sample=N.
- * - Sample output never prints document values; it prints only field names and approximate byte size.
+ * - Sample output never prints document values or document IDs; it prints only field names and approximate byte size.
  * - Secret/server-only collections are never sampled.
  * - Run only after the current daily Firestore usage baseline is checked.
  *
@@ -54,7 +54,7 @@ const approximateBytes = (data) => {
     const normalized = JSON.stringify(data, (_key, value) => {
       if (value && typeof value.toDate === 'function') return value.toDate().toISOString();
       if (value && typeof value.path === 'string' && value.constructor?.name === 'DocumentReference') {
-        return `[DocumentReference:${value.path}]`;
+        return '[DocumentReference]';
       }
       if (Buffer.isBuffer(value)) return `[Buffer:${value.length}]`;
       return value;
@@ -70,18 +70,26 @@ const countQuery = async (query) => {
   return Number(snapshot.data()?.count || 0);
 };
 
+const toSafeSample = (doc) => {
+  const data = doc.data() || {};
+  return {
+    fieldNames: toSafeFieldList(data),
+    approximateBytes: approximateBytes(data),
+    valuesRedacted: true,
+    documentIdRedacted: true,
+  };
+};
+
 const sampleCollection = async (collectionRef, topLevelName) => {
   if (sampleSize <= 0 || SECRET_OR_SERVER_ONLY.has(topLevelName)) return [];
   const snapshot = await collectionRef.limit(sampleSize).get();
-  return snapshot.docs.map((doc) => {
-    const data = doc.data() || {};
-    return {
-      id: doc.id,
-      fieldNames: toSafeFieldList(data),
-      approximateBytes: approximateBytes(data),
-      valuesRedacted: true,
-    };
-  });
+  return snapshot.docs.map(toSafeSample);
+};
+
+const sampleCollectionGroup = async (query) => {
+  if (sampleSize <= 0) return [];
+  const snapshot = await query.limit(sampleSize).get();
+  return snapshot.docs.map(toSafeSample);
 };
 
 const main = async () => {
@@ -118,12 +126,15 @@ const main = async () => {
   const collectionGroups = [];
   for (const groupName of KNOWN_COLLECTION_GROUPS) {
     try {
-      const count = await countQuery(db.collectionGroup(groupName));
-      collectionGroups.push({ name: groupName, documentCount: count });
+      const groupQuery = db.collectionGroup(groupName);
+      const count = await countQuery(groupQuery);
+      const samples = await sampleCollectionGroup(groupQuery);
+      collectionGroups.push({ name: groupName, documentCount: count, samples });
     } catch (error) {
       collectionGroups.push({
         name: groupName,
         documentCount: null,
+        samples: [],
         error: String(error?.message || error),
       });
     }
@@ -135,7 +146,8 @@ const main = async () => {
       databaseWrites: 0,
       databaseDeletes: 0,
       valuesPrinted: false,
-      sampleSizePerTopLevelCollection: sampleSize,
+      documentIdsPrinted: false,
+      sampleSizePerCollection: sampleSize,
       note: 'Aggregation counts and optional sample reads still consume Firestore read quota. Capture the daily usage baseline first.',
     },
     projectId,

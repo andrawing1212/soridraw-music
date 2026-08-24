@@ -111,7 +111,7 @@ if MARKER not in library:
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (!cancelled) {
-          const data = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
+          const data: any | null = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
           if (data) writeUserProfileCache(user.uid, data);
           setIsLibraryAdminUser(Boolean(data && data.role === 'admin'));
         }""",

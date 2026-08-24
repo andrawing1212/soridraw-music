@@ -37,7 +37,6 @@ if MARKER not in app:
         'root profile snapshot cache publish',
     )
 
-    # A module/session-level verified version survives component remounts.
     app = replace_once(
         app,
         "const SECTION_CUSTOM_REMOTE_VERSION_STORAGE_BASE = 'soridraw_section_custom_remote_version_v1';",
@@ -45,8 +44,6 @@ if MARKER not in app:
         'section custom session version map',
     )
 
-    # 897 adds a diagnostic call inside this block. Keep it, but also remember the
-    # verified version so another mount in the same SPA session cannot reread.
     app = replace_once(
         app,
         """    if (cacheVersionMatches) {
@@ -104,7 +101,6 @@ if MARKER not in app:
         'section custom fetched-state session verification',
     )
 
-    # A successful local save is authoritative on this device; do not reread it.
     app = replace_once(
         app,
         """      writeSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid, nextSectionCustomVersion);
@@ -117,8 +113,6 @@ if MARKER not in app:
         'section custom save session verification',
     )
 
-    # A genuinely different remote version invalidates only this tiny session key;
-    # the existing loader then fetches user_structures exactly once.
     app = replace_once(
         app,
         """      const localVersion = readSectionCustomVersion(SECTION_CUSTOM_LOCAL_VERSION_STORAGE_BASE, user.uid);
@@ -143,17 +137,16 @@ if MARKER not in app:
 
 
 # -----------------------------------------------------------------------------
-# MyPage.tsx — remove its duplicate users/{uid} onSnapshot. The root App listener
-# already exists for auth/role/force-logout. MyPage now consumes the local shared
-# profile snapshot and receives zero-Firestore in-tab update events.
+# MyPage.tsx — remove its duplicate users/{uid} onSnapshot. 921 has already
+# rewritten Firebase imports to ../lib/firestoreMeasured at this stage.
 # -----------------------------------------------------------------------------
 my_path = Path('src/pages/MyPage.tsx')
 my = my_path.read_text(encoding='utf-8')
 if MARKER not in my:
     my = replace_once(
         my,
-        "import { doc, onSnapshot, updateDoc } from 'firebase/firestore';",
-        "import { doc, updateDoc } from 'firebase/firestore';",
+        "import { doc, onSnapshot, updateDoc } from '../lib/firestoreMeasured';",
+        "import { doc, updateDoc } from '../lib/firestoreMeasured';",
         'MyPage remove duplicate onSnapshot import',
     )
     my = replace_once(
@@ -225,9 +218,6 @@ if MARKER not in my:
     )
     my_path.write_text(my, encoding='utf-8')
 
-
-# Build-time safety: ordinary MyPage must never regain its own Firestore user
-# listener. The root App listener remains the single ordinary-user authority.
 final_my = my_path.read_text(encoding='utf-8')
 if "onSnapshot(doc(db, 'users', user.uid)" in final_my:
     raise SystemExit('926 safety failed: MyPage duplicate users listener still exists')

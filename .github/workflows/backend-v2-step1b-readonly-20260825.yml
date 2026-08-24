@@ -15,7 +15,6 @@ permissions:
 
 jobs:
   inventory:
-    if: github.actor == 'andrawing1212'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

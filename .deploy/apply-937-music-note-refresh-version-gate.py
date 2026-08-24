@@ -8,22 +8,14 @@ app = app_path.read_text(encoding='utf-8')
 if MARKER not in app:
     # 902/903 kept a one-shot user_list_caches Music Note bundle read alive on
     # every app restart, even when the durable favorites cache was already current.
-    # 901 already owns the correct cross-device route:
-    # users/{uid}.syncVersions.musicNote -> changed favorites only when newer.
-    # Guard only the automatic bundle bootstrap. Manual Sync remains explicit.
+    # 909 already removed premature bundle activation, and 901 owns the correct
+    # cross-device route: users/{uid}.syncVersions.musicNote -> changed favorites
+    # only when newer. Guard only the automatic bundle bootstrap; Manual Sync stays explicit.
     subscription_start = app.find(
         "        unsubMusicNoteBundle = subscribeListBundle('musicNote', currentUser.uid, {"
     )
     if subscription_start < 0:
         raise SystemExit('937 Music Note bundle subscription start missing')
-
-    active_start = app.rfind(
-        '        musicNoteBundleActiveUids.add(currentUser.uid);',
-        0,
-        subscription_start,
-    )
-    if active_start < 0:
-        raise SystemExit('937 Music Note bundle active guard missing')
 
     on_error = app.find('          onError:', subscription_start)
     if on_error < 0:
@@ -33,7 +25,7 @@ if MARKER not in app:
         raise SystemExit('937 Music Note bundle subscription close missing')
     block_end = close_start + len('\n        });')
 
-    original = app[active_start:block_end]
+    original = app[subscription_start:block_end]
     indented = ''.join(('  ' + line if line.strip() else line) for line in original.splitlines(True))
 
     gate = '''        const musicNoteLocalVersionAtBootstrap = readMusicNoteSyncVersion(
@@ -51,15 +43,14 @@ if MARKER not in app:
         if (shouldVerifyMusicNoteBundle) {
 ''' + indented + '''
         } else {
-          // Cache is already current. Do not reserve the bundle path here;
-          // leaving it inactive is intentional because 901 must remain free to
-          // react to a later cross-device musicNote version event.
+          // Cache is already current. Keep 901 delta sync available so a later
+          // cross-device version event fetches only changed favorites.
           musicNoteBundleActiveUids.delete(currentUser.uid);
           markCacheDiagnostic('musicNote', 'CACHE', 0);
           setIsFavoritesLoading(false);
         }'''
 
-    app = app[:active_start] + gate + app[block_end:]
+    app = app[:subscription_start] + gate + app[block_end:]
 
     marker_anchor = 'const SORIDRAW_935_RECENT_VERSION_SYNC_ONLY = true;\n'
     if marker_anchor not in app:

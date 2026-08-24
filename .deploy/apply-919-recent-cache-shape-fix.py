@@ -85,6 +85,10 @@ apply_931 = Path('.deploy/apply-931-refresh-session-write-gate.py')
 if apply_931.exists():
     exec(compile(apply_931.read_text(encoding='utf-8'), str(apply_931), 'exec'), {'__name__': '__main__'})
 
+apply_932 = Path('.deploy/apply-932-refresh-root-write-and-section-route-gate.py')
+if apply_932.exists():
+    exec(compile(apply_932.read_text(encoding='utf-8'), str(apply_932), 'exec'), {'__name__': '__main__'})
+
 apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
 if apply_923.exists():
     exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})

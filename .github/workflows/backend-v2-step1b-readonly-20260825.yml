@@ -18,9 +18,6 @@ jobs:
   inventory:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
-      GCLOUD_PROJECT: soridraw-app-866a5
 
     steps:
       - name: Checkout preview
@@ -51,12 +48,15 @@ jobs:
         if: steps.auth.outcome == 'success' && steps.install.outcome == 'success'
         continue-on-error: true
         shell: bash
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
         run: |
           set -euo pipefail
           mkdir -p .deploy
           (
             cd functions
-            node scripts/inventory-readonly.cjs --sample=0
+            node scripts/inventory-readonly.cjs --project=soridraw-app-866a5 --sample=0
           ) > .deploy/backend-v2-step1b-firestore-counts.json 2> /tmp/backend-v2-step1b-inventory.err
 
       - name: Validate read-only safety contract
@@ -118,7 +118,6 @@ jobs:
           from pathlib import Path
           import re
           src = Path('/tmp/backend-v2-step1b-inventory.err').read_text(encoding='utf-8', errors='replace')
-          # Keep only a short, non-secret error classification. Do not persist credentials or raw payloads.
           lines = [line.strip() for line in src.splitlines() if line.strip()]
           text = ' | '.join(lines[:3])[:800]
           text = re.sub(r'(?i)(private_key|credentials_json|client_email|token)\s*[:=]\s*[^ |]+', r'\1=[REDACTED]', text)

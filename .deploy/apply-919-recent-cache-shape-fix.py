@@ -69,6 +69,10 @@ apply_927 = Path('.deploy/apply-927-monotonic-section-version-and-op-trace.py')
 if apply_927.exists():
     exec(compile(apply_927.read_text(encoding='utf-8'), str(apply_927), 'exec'), {'__name__': '__main__'})
 
+apply_928 = Path('.deploy/apply-928-cache-live-opaque.py')
+if apply_928.exists():
+    exec(compile(apply_928.read_text(encoding='utf-8'), str(apply_928), 'exec'), {'__name__': '__main__'})
+
 apply_923 = Path('.deploy/apply-923-final-firestore-guard.py')
 if apply_923.exists():
     exec(compile(apply_923.read_text(encoding='utf-8'), str(apply_923), 'exec'), {'__name__': '__main__'})

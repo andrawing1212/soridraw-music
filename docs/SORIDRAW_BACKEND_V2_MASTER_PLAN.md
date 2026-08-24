@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: INVENTORY / Step 1-A complete — awaiting approval for Step 1-B
+Status: INVENTORY / Step 1-B complete — awaiting approval for Step 1-C
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -109,34 +109,48 @@ V1 is never deleted first.
 9. Promote only after verification and user approval
 10. Keep V1 rollback data until a separately approved cleanup phase
 
-## 7. Step 1-A completed findings
+## 7. Step 1-A / 1-B completed findings
 
-The repository/call-site inventory is complete enough to proceed to live structural verification. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
+Step 1-A repository/call-site inventory is complete. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
 
-Key findings:
+Step 1-A key findings:
 - `user_recent_songs/{uid}` stores a growing `songs` array in one document; mutations can rewrite the full array. It is a primary per-song V2 migration target.
 - `user_list_caches` is a server duplicate cache with Music Note/Library bundles up to about 850 KB. It stays only for compatibility until local V2 is proven.
 - `favorites` contains multiple legacy identity/fallback mechanisms, so migration deduplication is high-risk and must preserve uncertain duplicates.
 - Personal playlist data belongs in Firestore V2, but some operations scan the target item collection. Public likes/share lookups are N+1 patterns and remain future D1 work.
 - Suno Library/provider tracking has its own listeners/polling and must remain isolated as `OPTIONAL_SUNO`.
 - Shared generation configuration (`section_tags`, `vocalTones`, small `app_settings`) is active and protected during DB V2.
-- Some Rules-only/legacy datasets (`music_note_shares`, `section_tags_live`, `section_tags_draft`) require Step 1-B live-count verification instead of guessing whether they are obsolete.
 - Functions mix Auth admin, API key/security guards, provider operations and diagnostics. Functions removal remains a separate later phase after private DB V2 is stable.
 - RTDB presence is already structurally separate and remains `KEEP_RTDB`.
 
-No finding requires a stop or a design reversal at this stage.
+Step 1-B production structural inventory is complete. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1B_LIVE_INVENTORY.md`.
+
+Step 1-B key findings:
+- Successful live inventory was pinned and verified against Firebase project `soridraw-app-866a5`; future migration/backup tools must keep explicit target-project validation because the Actions credential metadata resolves a different default project name.
+- `favorites`: 737 documents. A redacted sample is about 10 KB and contains substantial song payload, confirming it is a major migration source rather than a tiny bookmark table.
+- `user_recent_songs`: 10 documents. A redacted structural sample is about 174 KB and contains the single `songs` array, confirming the large-array design that V2 must replace.
+- Nested provider/library `tracks`: 72 documents and remains optional/provider-specific, not V2 core.
+- Personal playlists are live as nested data: `lists` 42 and `items` 49 even though the top-level `user_playlists` parent collection has zero parent documents.
+- `user_list_caches` likewise has zero parent documents but 4 nested `bundles`, confirming server duplicate caches are live compatibility data.
+- `suno_shares`: 74 documents and its shape includes public fields together with owner/provider/API debug payload; future Explore must use a small sanitized D1 public projection rather than copying these documents wholesale.
+- `user_plans`: 2 live documents but no strong Step 1-A call-site was found; it is a required `REVIEW` item in Step 1-C rather than something to remove or migrate blindly.
+- Rules/legacy names `music_note_shares`, `section_tags_live`, `section_tags_draft` were absent from the live top-level enumeration at inventory time. This is evidence for later classification only, not permission to delete rules/data.
+- Firestore structural inventory used zero application writes/deletes and printed no document values or document IDs.
+- Exact RTDB bandwidth/connection/storage metrics remain a non-blocking monitoring gap: the read-only Cloud Monitoring attempt returned HTTP 403 for the Actions service account, and no IAM permission was changed. Presence remains `KEEP_RTDB`; a separate capacity check can be approved later if exact RTDB usage becomes necessary.
+
+No Step 1-B finding requires a data-risk stop or architecture reversal. Step 1-C can proceed as classification-only work.
 
 ## 8. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete)
 - [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes. Completed by merging PR #68 into preview after the master-plan document was created.
-- [x] 0-2 Capture live usage baseline available from the admin diagnostics panel. 2026-08-25 around 03:34 KST: Cloud today reads 636 / writes 0 / deletes 0; last 10 minutes reads 20 / writes 0 / deletes 0; billable last 10 minutes reads 0 / realtime 0 / writes 0; Cloud sample shown through about 03:29 with up to ~4 minutes lag. Browser SDK at capture: reads 2 / writes 0, with `app_settings:getDoc` 1 and `users:onSnapshot` 1. The current panel does not expose a separate RTDB bandwidth/connection counter; that metric gap is tracked under Step 1-B.
+- [x] 0-2 Capture live usage baseline available from the admin diagnostics panel. 2026-08-25 around 03:34 KST: Cloud today reads 636 / writes 0 / deletes 0; last 10 minutes reads 20 / writes 0 / deletes 0; billable last 10 minutes reads 0 / realtime 0 / writes 0; Cloud sample shown through about 03:29 with up to ~4 minutes lag. Browser SDK at capture: reads 2 / writes 0, with `app_settings:getDoc` 1 and `users:onSnapshot` 1. The current panel does not expose a separate RTDB bandwidth/connection counter; Step 1-B confirmed that the Actions service account also lacks Cloud Monitoring permission for those RTDB metrics. This is non-blocking and no IAM change was made.
 - [x] 0-3 Build read-only inventory specification/tooling; no write/delete code path. Added `functions/scripts/inventory-readonly.cjs` and `npm run inventory:readonly`. Default is counts-only; samples are opt-in and value-redacted.
 - [x] 0-4 Freeze inventory output format and classification labels. See `docs/SORIDRAW_BACKEND_V2_INVENTORY_SPEC.md`. `KEEP_RTDB` was formally added during 1-A to encode the already-approved presence architecture.
 
-### Step 1 — Read-only full inventory (1/4 complete)
+### Step 1 — Read-only full inventory (2/4 complete)
 - [x] 1-A Repository/call-site inventory: Firestore/RTDB paths, core reads/writes/listeners/transactions, Functions responsibilities, local caches and composite indexes. Completed. See `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
-- [ ] 1-B Production database structural inventory: aggregation document counts and safe redacted field-name samples where accessible; also capture RTDB usage/bandwidth baseline if available without paid tooling.
+- [x] 1-B Production database structural inventory: aggregation document counts plus one safe redacted field-name sample per non-sensitive live collection/group. Completed against `soridraw-app-866a5`; zero application writes/deletes. RTDB Cloud Monitoring exact usage remains a non-blocking permission gap. See `docs/SORIDRAW_BACKEND_V2_STEP1B_LIVE_INVENTORY.md`.
 - [ ] 1-C Classify every live dataset as `KEEP_FIRESTORE`, `KEEP_RTDB`, `MOVE_LOCAL`, `FUTURE_D1`, `OPTIONAL_SUNO`, `COMPAT_ONLY`, or `REVIEW` after 1-B evidence.
 - [ ] 1-D Produce final V1 field -> V2 field mapping and migration risk report.
 

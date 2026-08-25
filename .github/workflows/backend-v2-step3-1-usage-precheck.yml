@@ -242,5 +242,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain)"
+          git diff --exit-code
+          git diff --cached --exit-code
+          unexpected="$(git status --porcelain | grep -vE '^\?\? gha-creds-[A-Za-z0-9_-]+\.json$' || true)"
+          test -z "$unexpected"
           echo 'Step 3-1 usage precheck is monitoring-only; no Firestore document read/write/delete or deploy command executed.'

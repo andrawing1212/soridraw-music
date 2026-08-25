@@ -196,8 +196,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f "${GOOGLE_GHA_CREDS_PATH:-}"
-          test -z "$(git status --porcelain)"
+          rm -f "${GOOGLE_GHA_CREDS_PATH:-}" gha-creds-*.json
+          rm -rf dist
+          status="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$status" ]; then
+            echo "$status"
+            echo 'Unexpected repository side effect remains after removing known ephemeral auth/build output.'
+            exit 1
+          fi
           test ! -e ./soridraw-step34-summary.json
           rm -rf /tmp/soridraw-step34-backup /tmp/soridraw-step34-summary.json /tmp/step34-tsc.log
           echo 'Step 3-4 design validation PASS: source tree unchanged, no Firestore operation, no backup artifact uploaded.'

@@ -1,0 +1,395 @@
+name: SORIDRAW Backend V2 Step 3-3 Storage Backup
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-3-storage-backup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_PROJECT: soridraw-app-866a5
+      TARGET_BUCKET: soridraw-app-866a5.firebasestorage.app
+      EXECUTION_READ_CAP: '2000'
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Authenticate Google/Firebase session
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Install repository dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Validate Firebase Storage destination before any Firestore backup read
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { initializeApp, applicationDefault, deleteApp } = require('firebase-admin/app');
+          const { getStorage } = require('firebase-admin/storage');
+
+          const projectId = process.env.TARGET_PROJECT;
+          const bucketName = process.env.TARGET_BUCKET;
+          const app = initializeApp({
+            credential: applicationDefault(),
+            projectId,
+            storageBucket: bucketName,
+          }, `soridraw-storage-gate-${Date.now()}`);
+
+          (async () => {
+            const bucket = getStorage(app).bucket(bucketName);
+            const [exists] = await bucket.exists();
+            if (!exists) throw new Error(`Storage bucket not found: ${bucketName}`);
+
+            const markerName = `backend-v2-backups/_checks/${process.env.GITHUB_RUN_ID}-${Date.now()}.txt`;
+            const marker = bucket.file(markerName);
+            const payload = Buffer.from('SORIDRAW_BACKEND_V2_STORAGE_GATE\n', 'utf8');
+            await marker.save(payload, {
+              resumable: false,
+              validation: 'md5',
+              metadata: {
+                contentType: 'text/plain; charset=utf-8',
+                cacheControl: 'private, no-store, max-age=0',
+              },
+            });
+            const [downloaded] = await marker.download();
+            if (!downloaded.equals(payload)) throw new Error('Storage write/read integrity gate failed');
+            await marker.delete();
+            console.log(`Storage destination gate PASS: gs://${bucketName}`);
+            console.log('Temporary Storage gate object was written, read back, and deleted. No Firestore document was read.');
+          })().finally(async () => {
+            await deleteApp(app);
+          }).catch((error) => {
+            console.error(error instanceof Error ? error.message : error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Fresh Firestore usage precheck and conservative execution cap
+        id: quota
+        env:
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+          GOOGLE_CLOUD_QUOTA_PROJECT: soridraw-app-866a5
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { applicationDefault } = require('firebase-admin/app');
+
+          const TARGET = process.env.TARGET_PROJECT;
+          const FREE_READS = 50_000;
+          const READ_RESERVE = 10_000;
+          const ABSOLUTE_CAP = 10_000;
+          const EARLIER_PEAK = 636;
+          const EXECUTION_CAP = Number(process.env.EXECUTION_READ_CAP || 0);
+          if (!Number.isInteger(EXECUTION_CAP) || EXECUTION_CAP <= 0 || EXECUTION_CAP > ABSOLUTE_CAP) {
+            throw new Error('Invalid conservative execution read cap');
+          }
+
+          const now = new Date();
+          const kstDate = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+          }).format(now);
+          const start = new Date(`${kstDate}T00:00:00+09:00`).toISOString();
+          const end = now.toISOString();
+          const metricTypes = [
+            'firestore.googleapis.com/document/read_ops_count',
+            'firestore.googleapis.com/document/read_count',
+          ];
+
+          const numeric = (point) => {
+            const raw = point?.value?.int64Value ?? point?.value?.doubleValue ?? 0;
+            const value = Number(raw);
+            return Number.isFinite(value) && value > 0 ? value : 0;
+          };
+
+          const queryMetric = async (token, metricType) => {
+            const params = new URLSearchParams({
+              filter: `metric.type = "${metricType}"`,
+              'interval.startTime': start,
+              'interval.endTime': end,
+              view: 'FULL',
+              pageSize: '1000',
+            });
+            let total = 0;
+            let points = 0;
+            let pageToken = '';
+            let pages = 0;
+            do {
+              if (pageToken) params.set('pageToken', pageToken); else params.delete('pageToken');
+              const url = `https://monitoring.googleapis.com/v3/projects/${encodeURIComponent(TARGET)}/timeSeries?${params}`;
+              const response = await fetch(url, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'X-Goog-User-Project': TARGET,
+                  Accept: 'application/json',
+                },
+              });
+              const text = await response.text();
+              if (!response.ok) {
+                const error = new Error(`Cloud Monitoring API ${response.status}: ${text.slice(0, 400)}`);
+                error.statusCode = response.status;
+                throw error;
+              }
+              const body = text ? JSON.parse(text) : {};
+              for (const series of Array.isArray(body.timeSeries) ? body.timeSeries : []) {
+                for (const point of Array.isArray(series.points) ? series.points : []) {
+                  total += numeric(point);
+                  points += 1;
+                }
+              }
+              pageToken = String(body.nextPageToken || '');
+              pages += 1;
+              if (pages > 5) throw new Error('Monitoring pagination exceeded safety limit');
+            } while (pageToken);
+            return { total: Math.round(total), points, metricType };
+          };
+
+          (async () => {
+            const tokenResult = await applicationDefault().getAccessToken();
+            const token = String(tokenResult?.access_token || '');
+            if (!token) throw new Error('Google Cloud access token unavailable');
+
+            let result = null;
+            for (const metricType of metricTypes) {
+              try {
+                const candidate = await queryMetric(token, metricType);
+                if (!result) result = candidate;
+                if (candidate.points > 0) { result = candidate; break; }
+              } catch (error) {
+                if (error?.statusCode === 400 || error?.statusCode === 404) continue;
+                throw error;
+              }
+            }
+            if (!result) throw new Error('No Firestore read metric available');
+
+            const todayReads = result.total;
+            const available = FREE_READS - Math.max(todayReads, EARLIER_PEAK) - READ_RESERVE;
+            const safeCap = Math.min(ABSOLUTE_CAP, Math.max(0, available));
+            if (safeCap < EXECUTION_CAP) {
+              throw new Error(`Quota gate blocked backup: safeCap=${safeCap}, requested=${EXECUTION_CAP}`);
+            }
+
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `read_cap=${EXECUTION_CAP}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `today_reads=${todayReads}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `safe_cap=${safeCap}\n`);
+            console.log(`Fresh quota gate PASS: todayReads=${todayReads}, safeCap=${safeCap}, executionCap=${EXECUTION_CAP}`);
+          })().catch((error) => {
+            console.error(error instanceof Error ? error.message : error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Execute approved V1 read-only backup to ephemeral runner storage
+        id: backup
+        env:
+          SORIDRAW_BACKUP_EXECUTION_APPROVED: YES
+          GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
+          GCLOUD_PROJECT: soridraw-app-866a5
+          GOOGLE_CLOUD_QUOTA_PROJECT: soridraw-app-866a5
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent='/tmp/soridraw-v2-backup-output'
+          rm -rf "$parent"
+          mkdir -p "$parent"
+          npx tsx backup_scripts/backend_v2_secure_backup.ts \
+            --execute \
+            --project=soridraw-app-866a5 \
+            --ack-project=soridraw-app-866a5 \
+            --output-dir="$parent" \
+            --read-cap='${{ steps.quota.outputs.read_cap }}' \
+            --page-size=200
+          mapfile -t dirs < <(find "$parent" -mindepth 1 -maxdepth 1 -type d -name 'backend-v2-backup-*' -print)
+          test "${#dirs[@]}" -eq 1
+          echo "dir=${dirs[0]}" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "${dirs[0]}")" >> "$GITHUB_OUTPUT"
+
+      - name: Verify local backup checksum, counts, paths, and duplicate safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsx backup_scripts/backend_v2_verify_backup.ts --dir='${{ steps.backup.outputs.dir }}'
+
+      - name: Upload verified backup directly to Firebase Storage and verify server object hashes
+        id: upload
+        env:
+          BACKUP_DIR: ${{ steps.backup.outputs.dir }}
+          BACKUP_NAME: ${{ steps.backup.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const crypto = require('node:crypto');
+          const { initializeApp, applicationDefault, deleteApp } = require('firebase-admin/app');
+          const { getStorage } = require('firebase-admin/storage');
+
+          const projectId = process.env.TARGET_PROJECT;
+          const bucketName = process.env.TARGET_BUCKET;
+          const backupDir = process.env.BACKUP_DIR;
+          const backupName = process.env.BACKUP_NAME;
+          const expectedFiles = [
+            'user_structures.ndjson',
+            'user_recent_songs.ndjson',
+            'favorites.ndjson',
+            'playlist_lists.ndjson',
+            'playlist_items.ndjson',
+            'manifest.json',
+          ];
+          const actual = fs.readdirSync(backupDir).sort();
+          const expectedSorted = [...expectedFiles].sort();
+          if (JSON.stringify(actual) !== JSON.stringify(expectedSorted)) {
+            throw new Error(`Unexpected backup file set: ${actual.join(',')}`);
+          }
+
+          const app = initializeApp({
+            credential: applicationDefault(),
+            projectId,
+            storageBucket: bucketName,
+          }, `soridraw-storage-upload-${Date.now()}`);
+
+          const hash = (algo, buffer, encoding) => crypto.createHash(algo).update(buffer).digest(encoding);
+
+          (async () => {
+            const bucket = getStorage(app).bucket(bucketName);
+            const prefix = `backend-v2-backups/step3-3/${backupName}`;
+            let totalBytes = 0;
+
+            for (const fileName of expectedFiles) {
+              const localPath = path.join(backupDir, fileName);
+              const bytes = fs.readFileSync(localPath);
+              const sha256 = hash('sha256', bytes, 'hex');
+              const md5 = hash('md5', bytes, 'base64');
+              const object = bucket.file(`${prefix}/${fileName}`);
+              await object.save(bytes, {
+                resumable: false,
+                validation: 'md5',
+                metadata: {
+                  contentType: fileName.endsWith('.json') ? 'application/json' : 'application/x-ndjson',
+                  cacheControl: 'private, no-store, max-age=0',
+                  contentDisposition: `attachment; filename="${fileName}"`,
+                  metadata: {
+                    soridrawBackupStep: '3-3',
+                    soridrawSha256: sha256,
+                  },
+                },
+              });
+
+              const [metadata] = await object.getMetadata();
+              if (Number(metadata.size) !== bytes.length) throw new Error(`Storage size mismatch: ${fileName}`);
+              if (metadata.md5Hash !== md5) throw new Error(`Storage MD5 mismatch: ${fileName}`);
+              if (metadata.metadata?.soridrawSha256 !== sha256) throw new Error(`Storage SHA-256 metadata mismatch: ${fileName}`);
+              totalBytes += bytes.length;
+            }
+
+            const output = process.env.GITHUB_OUTPUT;
+            fs.appendFileSync(output, `prefix=${prefix}\n`);
+            fs.appendFileSync(output, `total_bytes=${totalBytes}\n`);
+            console.log(`Firebase Storage upload PASS: gs://${bucketName}/${prefix}`);
+            console.log(`Uploaded files=${expectedFiles.length}, totalBytes=${totalBytes}. No backup payload was written to GitHub artifacts or repository.`);
+          })().finally(async () => {
+            await deleteApp(app);
+          }).catch((error) => {
+            console.error(error instanceof Error ? error.message : error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Re-download exact Storage objects and run full SHA-256/path/count verification again
+        env:
+          STORAGE_PREFIX: ${{ steps.upload.outputs.prefix }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          verify_dir='/tmp/soridraw-v2-storage-redownload'
+          rm -rf "$verify_dir"
+          mkdir -p "$verify_dir"
+          node <<'NODE'
+          const path = require('node:path');
+          const { initializeApp, applicationDefault, deleteApp } = require('firebase-admin/app');
+          const { getStorage } = require('firebase-admin/storage');
+          const projectId = process.env.TARGET_PROJECT;
+          const bucketName = process.env.TARGET_BUCKET;
+          const prefix = process.env.STORAGE_PREFIX;
+          const verifyDir = '/tmp/soridraw-v2-storage-redownload';
+          const files = [
+            'user_structures.ndjson',
+            'user_recent_songs.ndjson',
+            'favorites.ndjson',
+            'playlist_lists.ndjson',
+            'playlist_items.ndjson',
+            'manifest.json',
+          ];
+          const app = initializeApp({ credential: applicationDefault(), projectId, storageBucket: bucketName }, `soridraw-storage-redownload-${Date.now()}`);
+          (async () => {
+            const bucket = getStorage(app).bucket(bucketName);
+            for (const fileName of files) {
+              await bucket.file(`${prefix}/${fileName}`).download({ destination: path.join(verifyDir, fileName) });
+            }
+            console.log(`Storage re-download complete: files=${files.length}`);
+          })().finally(async () => {
+            await deleteApp(app);
+          }).catch((error) => {
+            console.error(error instanceof Error ? error.message : error);
+            process.exitCode = 1;
+          });
+          NODE
+          npx tsx backup_scripts/backend_v2_verify_backup.ts --dir="$verify_dir"
+
+      - name: Confirm source tree unchanged and no private backup artifact was created
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          git diff --cached --exit-code
+          unexpected="$(git status --porcelain | grep -vE '^\?\? gha-creds-[A-Za-z0-9_-]+\.json$' || true)"
+          test -z "$unexpected"
+          test ! -d backend-v2-private-backups
+          echo 'Source tree clean. GitHub artifact upload was not used.'
+
+      - name: Remove ephemeral local backup copies
+        if: always()
+        shell: bash
+        run: |
+          rm -rf /tmp/soridraw-v2-backup-output /tmp/soridraw-v2-storage-redownload
+
+      - name: Step 3-3 summary
+        if: success()
+        shell: bash
+        run: |
+          echo 'STEP3_3_STORAGE_BACKUP=PASS'
+          echo 'FIRESTORE_WRITES=0'
+          echo 'FIRESTORE_DELETES=0'
+          echo 'V2_BACKFILL_WRITES=0'
+          echo 'V1_DELETES=0'
+          echo 'RULES_DEPLOY=0'
+          echo 'FUNCTIONS_DEPLOY=0'
+          echo 'HOSTING_DEPLOY=0'
+          echo 'STORAGE_BUCKET=${{ env.TARGET_BUCKET }}'
+          echo 'STORAGE_PREFIX=${{ steps.upload.outputs.prefix }}'
+          echo 'STORAGE_BYTES=${{ steps.upload.outputs.total_bytes }}'
+          echo 'FIRESTORE_TODAY_READS_BEFORE_BACKUP=${{ steps.quota.outputs.today_reads }}'
+          echo 'MIGRATION_SAFE_CAP=${{ steps.quota.outputs.safe_cap }}'
+          echo 'BACKUP_EXECUTION_READ_CAP=${{ steps.quota.outputs.read_cap }}'

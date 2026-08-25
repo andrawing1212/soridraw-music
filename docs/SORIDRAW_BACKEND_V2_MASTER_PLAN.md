@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A4a complete — provider-neutral stable song ID, deterministic mutation/version contract and separate bounded IndexedDB mirror outbox are implemented and validated with runtime OFF and zero Firebase IO; Step 2-A4b V1 recent/Music Note mutation-boundary centralization is next, while Step 4 remains blocked before separately approved shadow/catch-up writes
+Status: IMPLEMENTATION / Step 2-A4b complete — all audited current Recent and Music Note V1 content mutations now pass through one behavior-compatible V1 boundary with mirror/outbox/stable-ID runtime still OFF and no added Firebase IO; mandatory Maintenance Gate A is next before any separately approved 2-A4c shadow write, and Step 4 remains blocked
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -185,6 +185,9 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 2-A3 report: `docs/SORIDRAW_BACKEND_V2_STEP2A3_LOW_RISK_READ_ACTIVATION.md`.
 2-A4 live mutation/sync risk review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`.
 2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
+2-A4b V1 mutation-boundary result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
+Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.
+2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
 
 ### 2-A1 complete — inert repository contract
 - Rechecked current Firebase/Gemini generation paths before implementation.
@@ -252,6 +255,18 @@ Risk decision:
 - An initial repository-wide TypeScript check exposed two pre-existing errors in unchanged `App.tsx` and `geminiService.ts`; no unrelated app code was modified to make this migration step pass.
 - No App mutation call-site wiring, Firebase IO, Rules/Functions/Hosting deploy, main promotion or production change occurred.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
+
+### 2-A4b complete — current V1 Recent/Music Note mutation boundaries centralized; mirror OFF
+- Source-only audits `32887635933` and `32887735487` enumerated the current mutation topology before runtime edits and performed zero Firebase IO.
+- Added `src/data/v1MutationBoundary.ts` and contract: the boundary is metadata-only, imports no Firebase/V2/outbox/network code, executes the existing V1 mutation once, preserves its Promise/error/concurrency behavior and keeps `BACKEND_V2_V1_MUTATION_MIRROR_ENABLED = false`.
+- Current App Recent writes are covered 8/8: clear/reset, delete-item, normal batch save, regenerate persistence, added-lyrics-language persistence, edit persistence and pre-Music-Note edit persistence; no stable ID injection or outbox activation occurs.
+- Audited Music Note content mutations across `App.tsx`, `FavoritesPage.tsx` and `SunoLibraryPage.tsx` are routed through the boundary, including save/restore/unsave/permanent delete/update/recovery, bulk delete/lock/unlock, folder mutations/shared-note save and favorite-color metadata sync. Supporting `users/{uid}` sync/count writes retain existing semantics and are not promoted into canonical content mutations.
+- Apply/validation run `32888639358` SUCCESS: protected Firebase/backend files unchanged, static omission gate passed, boundary and Step 2-A4a identity contracts passed, scoped TypeScript passed and production Vite build passed.
+- Independent post-verification run `32888861551` SUCCESS: `recentV1WritePaths=8`, `recentWrapped=8`, `recentBoundaryCalls=8`, App/FavoritesPage/SunoLibraryPage boundary calls `19/4/1`, mirror OFF, Firebase reads/writes/deletes `0/0/0`; contracts and production build passed again.
+- Tooling-only failures before success are documented in the result report and had no runtime/Firebase effect.
+- No Rules/indexes/Functions/Hosting deploy, main promotion, Firebase migration/backfill, API-key change or Suno Library migration occurred.
+- 2-A4c remains blocked until Maintenance Gate A clears M-001/M-002/M-003/M-008 and then receives separate exact write approval.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
 
 ### 2-B complete — additive V2 schema/rules source
 - Added canonical V2 private path/schema constants in `src/data/v2Schema.ts`; no Firebase imports or runtime IO.
@@ -355,7 +370,7 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A4a inert identity/outbox complete; 2-A4b/c/d still gated) 🔄
+### Step 2 — V2 code implementation on preview (2-A4b V1 mutation-boundary centralization complete; Maintenance Gate A + 2-A4c/d still gated) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
@@ -363,7 +378,7 @@ Risk decision:
   - [~] 2-A4 Critical generation/recent-save/Music Note live connection — risk review + inert identity/outbox complete; runtime activation remains blocked.
     - [x] 2-A4-R Read-only live identity/mutation/cost risk review complete; stable provider-neutral ID, V1-first mirror ordering and durable retry are required.
     - [x] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests complete; runtime OFF, no Firebase IO/App wiring.
-    - [ ] 2-A4b Centralize all current V1 recent/Music Note mutation boundaries while V2 mirror remains OFF; prove V1 parity/cost unchanged.
+    - [x] 2-A4b Centralize all audited current V1 Recent/Music Note content mutation boundaries while V2 mirror remains OFF; 8/8 Recent paths + audited Music Note categories independently verified, no added Firebase IO.
     - [ ] 2-A4c Preview shadow mirror only after separate exact write approval + deployed-Rules verification + fresh quota gate.
     - [ ] 2-A4d Bounded current live-gap catch-up/verification only after separate exact write approval; no positional recent overwrite.
 - [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.
@@ -384,7 +399,7 @@ Risk decision:
 - [x] 3-5 Per-user automatic verification complete: 10/10 migrated users passed; settings 3, playlist headers 42, playlist items 49, recent songs 68 and standalone Music Note/favorites 738 all matched expected V2 paths/counts/payload metadata with 0 error categories and 0 writes/deletes. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_5_PER_USER_VERIFICATION_RESULT.md`.
 - [x] 3-6 V1 retention / rollback safety confirmed: backed-up V1 records remain retained, the current V1 source remains live, the Step 3-3 backup is hash-valid/recoverable, and all V2/backfill/V1-delete runtime gates remain off. Read-only follow-up found normal post-backfill drift (3 new favorites and one rotated 10-item recent bundle), so Step 4 is blocked until Step 2-A4 live mutation/sync review. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_6_V1_ROLLBACK_SAFETY_RESULT.md`.
 
-### Step 4 — Preview validation (0/12; blocked pending Step 2-A4b + separately approved 2-A4c/d write stages) ⏳
+### Step 4 — Preview validation (0/12; blocked pending mandatory Maintenance Gate A + separately approved 2-A4c/d write stages) ⏳
 - [ ] Song generation
 - [ ] Save / reload
 - [ ] Refresh

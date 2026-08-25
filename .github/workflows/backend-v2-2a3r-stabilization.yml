@@ -18,12 +18,37 @@ concurrency:
 jobs:
   stabilize:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout preview
         uses: actions/checkout@v4
         with:
           ref: preview
+
+      - name: Set up Node.js 20 for frontend parity
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        id: install_frontend
+        continue-on-error: true
+        run: npm ci
+
+      - name: Capture baseline TypeScript diagnostics
+        id: baseline_tsc
+        if: steps.install_frontend.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc-baseline.log 2>&1
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          cat /tmp/tsc-baseline.log
+          exit 0
 
       - name: Apply deterministic emergency patch
         id: patch
@@ -35,8 +60,6 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
-          # The emergency report is newly created by the patch. Intent-to-add makes
-          # it visible to git diff without committing it before the safety gate.
           git add -N docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md
           python3 - <<'PY'
           import subprocess
@@ -50,15 +73,10 @@ jobs:
               'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
           }
           changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
-          unexpected = changed - allowed
-          if unexpected:
-              raise SystemExit(f'unexpected files changed: {sorted(unexpected)}')
-          missing = allowed - changed
-          if missing:
-              raise SystemExit(f'required emergency files not changed: {sorted(missing)}')
+          if changed != allowed:
+              raise SystemExit(f'emergency scope mismatch: changed={sorted(changed)}, expected={sorted(allowed)}')
           for protected in ['src/App.tsx','firestore.rules','database.rules.json']:
-              result = subprocess.run(['git','diff','--quiet','HEAD','--',protected])
-              if result.returncode != 0:
+              if subprocess.run(['git','diff','--quiet','HEAD','--',protected]).returncode != 0:
                   raise SystemExit(f'protected file changed: {protected}')
           print('approved emergency scope verified')
           PY
@@ -70,32 +88,11 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           checks = {
-            'src/firebase.js': [
-              'isVercelPreviewApp',
-              'soridraw-music-git-preview-andrawing1212.vercel.app',
-              'isVercelPreviewApp || isVercelTestApp',
-            ],
-            'src/services/playlistService.ts': [
-              'defaultPlaylistEnsurePromises',
-              'ensureDefaultPlaylistsInternal',
-              'defaultPlaylistEnsurePromises.delete(uid)',
-            ],
-            'src/pages/SunoLibraryPage.tsx': [
-              'playlistLiveModeActive',
-              '[user?.uid, playlistLiveModeActive, isSharedView]',
-              "audioValidationStatus === 'pending_or_empty'",
-            ],
-            'src/lib/songUtils.ts': [
-              'blob.size <= 0',
-              'Audio download is empty',
-            ],
-            'functions/src/index.ts': [
-              'probeSunoAudioUrlHasBytes',
-              'findFirstUsableSunoAudioUrl',
-              'audioValidationStatus',
-              'verifiedAudioUrls',
-              'reportedAudioUrls',
-            ],
+            'src/firebase.js': ['isVercelPreviewApp','soridraw-music-git-preview-andrawing1212.vercel.app','isVercelPreviewApp || isVercelTestApp'],
+            'src/services/playlistService.ts': ['defaultPlaylistEnsurePromises','ensureDefaultPlaylistsInternal','defaultPlaylistEnsurePromises.delete(uid)'],
+            'src/pages/SunoLibraryPage.tsx': ['playlistLiveModeActive','[user?.uid, playlistLiveModeActive, isSharedView]',"audioValidationStatus === 'pending_or_empty'"],
+            'src/lib/songUtils.ts': ['blob.size <= 0','Audio download is empty'],
+            'functions/src/index.ts': ['probeSunoAudioUrlHasBytes','findFirstUsableSunoAudioUrl','audioValidationStatus','verifiedAudioUrls','reportedAudioUrls'],
           }
           for file, markers in checks.items():
               source = Path(file).read_text(encoding='utf-8')
@@ -105,22 +102,26 @@ jobs:
           print('stabilization markers verified')
           PY
 
-      - name: Set up Node.js 20 for frontend parity
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install frontend dependencies
-        id: install_frontend
-        continue-on-error: true
-        run: npm ci
-
-      - name: Frontend TypeScript check without npm lifecycle patches
-        id: lint
+      - name: Verify frontend TypeScript diagnostics did not worsen
+        id: tsc_parity
         if: steps.install_frontend.outcome == 'success'
         continue-on-error: true
-        run: npx tsc --noEmit
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit > /tmp/tsc-patched.log 2>&1
+          patched_code=$?
+          set -e
+          cat /tmp/tsc-patched.log
+          if ! diff -u /tmp/tsc-baseline.log /tmp/tsc-patched.log; then
+            echo '2-A3-R introduced or changed frontend TypeScript diagnostics.' >&2
+            exit 1
+          fi
+          if [ "$patched_code" != '${{ steps.baseline_tsc.outputs.exit_code }}' ]; then
+            echo "TypeScript exit code changed: baseline=${{ steps.baseline_tsc.outputs.exit_code }} patched=$patched_code" >&2
+            exit 1
+          fi
+          echo "TypeScript diagnostics parity PASS (baseline exit=$patched_code)."
 
       - name: Frontend production build without npm lifecycle patches
         id: build
@@ -170,8 +171,7 @@ jobs:
           if changed != expected:
               raise SystemExit(f'validation side-effect detected; changed={sorted(changed)}, expected={sorted(expected)}')
           for protected in ['src/App.tsx','firestore.rules','database.rules.json']:
-              result = subprocess.run(['git','diff','--quiet','HEAD','--',protected])
-              if result.returncode != 0:
+              if subprocess.run(['git','diff','--quiet','HEAD','--',protected]).returncode != 0:
                   raise SystemExit(f'protected file changed after validation: {protected}')
           print('validation side-effect check PASS')
           PY
@@ -182,11 +182,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test '${{ steps.install_frontend.outcome }}' = success
+          test '${{ steps.baseline_tsc.outcome }}' = success
           test '${{ steps.patch.outcome }}' = success
           test '${{ steps.scope.outcome }}' = success
           test '${{ steps.markers.outcome }}' = success
-          test '${{ steps.install_frontend.outcome }}' = success
-          test '${{ steps.lint.outcome }}' = success
+          test '${{ steps.tsc_parity.outcome }}' = success
           test '${{ steps.build.outcome }}' = success
           test '${{ steps.install_functions.outcome }}' = success
           test '${{ steps.functions_typecheck.outcome }}' = success

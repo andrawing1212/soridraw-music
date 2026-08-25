@@ -20,6 +20,14 @@ export const V2_SONG_MIGRATION_PROVENANCE_FIELDS = Object.freeze([
   'legacyFavoriteKey',
 ] as const);
 
+// Step 2-A4a live fields are additive/optional so the already-verified historical
+// V2 backfill remains valid. New live songs may carry the provider-neutral ID and
+// deterministic mutation tie-breaker only after a later separately approved runtime step.
+export const V2_SONG_LIVE_IDENTITY_FIELDS = Object.freeze([
+  'soridrawSongId',
+  'v2MutationId',
+] as const);
+
 export const V2_PRIVATE_SCHEMA_PATHS = Object.freeze({
   song: 'users/{uid}/songs/{songId}',
   playlist: 'users/{uid}/playlists/{playlistId}',
@@ -32,6 +40,10 @@ export type V2SongMetadata = {
   musicNote: boolean;
   recentVisible: boolean;
   v2UpdatedAtMs: number;
+  // New live objects only. Historical backfill objects are intentionally allowed
+  // to omit these fields until a separately approved compatibility/catch-up step.
+  soridrawSongId?: string;
+  v2MutationId?: string;
   legacyRecentIndex?: number;
   legacyFavoriteId?: string;
   legacyFavoriteKey?: string;

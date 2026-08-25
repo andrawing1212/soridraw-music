@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-5 per-user automatic verification complete — 10/10 migrated users passed and all 900 migrated V2 documents were accounted for with full payload/metadata parity and zero verification writes; Step 3-6 V1 retention / rollback safety confirmation is next and starts read-only
+Status: IMPLEMENTATION / Step 3 complete — V1 rollback source and Step 3-3 backup verified, but live V1 activity after backfill produced 3 new favorites and one rotated 10-item recent bundle while V2 runtime remains v1-only; Step 4 is blocked pending Step 2-A4 live mutation/sync risk review
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -98,6 +98,9 @@ Migration document IDs must be deterministic for reruns, but an ID/hash-generati
 10. Deployed Firestore currently uses memory cache, so durable local-first storage must be explicit.
 11. Every future backup/migration tool must explicitly target and validate `soridraw-app-866a5`; do not trust credential default project metadata.
 12. A new adapter/helper must not introduce an unbounded startup query where V1 currently uses bounded/paginated reads.
+13. Suno Library remains isolated provider-specific private data in Firebase for now; preserve a clean boundary so it can be migrated independently later without touching canonical core songs.
+14. Explore/public-social traffic remains planned for Cloudflare Worker + D1 so public read growth does not consume the private Firestore budget.
+15. Every server/domain (Firebase, future Cloudflare/D1, and any future Library migration) must have explicit free-tier headroom monitoring, bounded bulk-operation gates, and cross-server connectivity/fallback verification before activation.
 
 ## 6. Final migration method
 
@@ -339,7 +342,7 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (5/6 complete; Step 3-5 per-user automatic verification complete) 🔄
+### Step 3 — Backup, backfill and verification (6/6 complete; Step 3-6 rollback safety confirmed, live delta recorded) ✅
 - [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
 - [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000.
 - [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
@@ -351,9 +354,9 @@ Risk decision:
   - [x] 3-4e Recent-song limited backfill complete: 68 recent array items created as canonical V2 songs using deterministic recent-source addressing in three bounded transactions; complete source payload + additive metadata parity verified, V1 unchanged, and favorites/Music Note were not accessed or merged. Independent read-only verification passed.
   - [x] 3-4f Music Note/favorites complete: 738 standalone favorite-origin V2 songs created with deterministic `v1f_` IDs in eight bounded transactions (100×7 + 38); trusted recent-song merges 0, recent-origin updates 0, full payload/metadata parity verified, V1 favorites/recent sources unchanged. Independent read-only verification passed. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_FAVORITES_RESULT.md`.
 - [x] 3-5 Per-user automatic verification complete: 10/10 migrated users passed; settings 3, playlist headers 42, playlist items 49, recent songs 68 and standalone Music Note/favorites 738 all matched expected V2 paths/counts/payload metadata with 0 error categories and 0 writes/deletes. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_5_PER_USER_VERIFICATION_RESULT.md`.
-- [ ] 3-6 V1 retention / rollback safety confirmation; no V1 deletion.
+- [x] 3-6 V1 retention / rollback safety confirmed: backed-up V1 records remain retained, the current V1 source remains live, the Step 3-3 backup is hash-valid/recoverable, and all V2/backfill/V1-delete runtime gates remain off. Read-only follow-up found normal post-backfill drift (3 new favorites and one rotated 10-item recent bundle), so Step 4 is blocked until Step 2-A4 live mutation/sync review. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_6_V1_ROLLBACK_SAFETY_RESULT.md`.
 
-### Step 4 — Preview validation (0/12) ⏳
+### Step 4 — Preview validation (0/12; blocked pending Step 2-A4 live mutation/sync review) ⏳
 - [ ] Song generation
 - [ ] Save / reload
 - [ ] Refresh

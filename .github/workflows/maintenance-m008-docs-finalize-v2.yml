@@ -1,0 +1,38 @@
+name: SORIDRAW M008 Docs Finalize V2
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m008-docs-finalize-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Apply documented M008 result
+        run: python3 .deploy/finalize-m008-docs.py
+      - name: Verify and commit documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/SORIDRAW_MAINTENANCE_M008_FIRESTORE_RULES_ALIGNMENT_RESULT.md
+          grep -Fq 'M-008 Firestore canonical-song Rules alignment and M-009 Vercel Preview prebuild blocker are both closed' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -Fq 'M-009 CLOSED / M-008 CLOSED / 2-A4c IS THE NEXT SEPARATELY APPROVED WRITE GATE' docs/SORIDRAW_MAINTENANCE_BACKLOG.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/maintenance-m008-docs-finalize.yml
+          git rm .github/workflows/maintenance-m008-docs-finalize-v2.yml
+          git rm .deploy/finalize-m008-docs.py
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md docs/SORIDRAW_MAINTENANCE_BACKLOG.md docs/SORIDRAW_MAINTENANCE_M008_FIRESTORE_RULES_ALIGNMENT_RESULT.md
+          git diff --cached --check
+          git commit -m 'docs: close M-008 Rules alignment'
+          git push origin HEAD:preview

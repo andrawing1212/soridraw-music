@@ -5,6 +5,8 @@ on:
     branches: [preview]
     paths:
       - '.github/workflows/backend-v2-step2-a4b-apply.yml'
+      - '.deploy/apply-backend-v2-step2-a4b-boundary.py'
+      - '.deploy/verify-backend-v2-step2-a4b-boundary.py'
 
 permissions:
   contents: write

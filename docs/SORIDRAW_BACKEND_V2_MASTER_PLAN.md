@@ -1,9 +1,9 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A4 read-only live mutation/sync risk review complete — current live data has no universal stable song ID, positional recent IDs are unsafe, current recent V1 writes are spread across multiple call-sites, and no durable mirror outbox exists; Step 4 remains blocked pending separately approved inert 2-A4a/b implementation and later write-approved shadow/catch-up stages
+Status: IMPLEMENTATION / Step 2-A4a complete — provider-neutral stable song ID, deterministic mutation/version contract and separate bounded IndexedDB mirror outbox are implemented and validated with runtime OFF and zero Firebase IO; Step 2-A4b V1 recent/Music Note mutation-boundary centralization is next, while Step 4 remains blocked before separately approved shadow/catch-up writes
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
-Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
+Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
 Production Firebase deploy: prohibited unless explicitly requested
 
 ## 0. Non-negotiable goals
@@ -184,6 +184,7 @@ No Step 1 finding requires an architecture reversal. The unresolved `user_plans`
 Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTATION.md`.
 2-A3 report: `docs/SORIDRAW_BACKEND_V2_STEP2A3_LOW_RISK_READ_ACTIVATION.md`.
 2-A4 live mutation/sync risk review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`.
+2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
 
 ### 2-A1 complete — inert repository contract
 - Rechecked current Firebase/Gemini generation paths before implementation.
@@ -240,6 +241,17 @@ Risk decision:
 - Safe activation order is V1-authoritative write first, then changed-object V2 mirror best-effort, with bounded durable retry and stale-version protection; V2 failure must never roll back a successful V1 user save.
 - Step 4 stays blocked. Next safe stage is 2-A4a inert stable-ID + mirror/outbox contract with runtime OFF; later call-site centralization, shadow writes and live-gap catch-up each remain separate gates.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`.
+
+### 2-A4a complete — stable identity + durable mirror outbox contract (runtime OFF)
+- Added provider-neutral immutable `sd_` UUID identity contract for future new live songs; IDs are generated only when a later approved caller invokes the helper, never at module import.
+- Positional historical `v1r_` IDs are explicitly rejected for live mutation targeting; exact historical `v1f_` IDs remain allowed only as verified legacy-favorite targets.
+- Added a pure metadata-only mutation envelope with deterministic mutation IDs plus monotonic conflict handling by source update time and mutation-ID tie-breaker.
+- Added a separate IndexedDB mirror outbox DB so normal expendable cache clearing cannot erase pending reconciliation; runtime is OFF, no timer/listener/retry executor exists, per-user queue cap is 200, retry cap is 6, exponential delay starts at 5s and caps at 300s.
+- Extended the V2 schema source additively with optional `soridrawSongId` and `v2MutationId`; historical verified V2 documents remain valid because the new live fields are not required.
+- Validation run `32883874620` completed SUCCESS: stable-ID contract, outbox contract, existing Step 2-C cache regression, scoped TypeScript check and production Vite build all passed. Existing Step 2-A safety run `32883617434` also completed SUCCESS.
+- An initial repository-wide TypeScript check exposed two pre-existing errors in unchanged `App.tsx` and `geminiService.ts`; no unrelated app code was modified to make this migration step pass.
+- No App mutation call-site wiring, Firebase IO, Rules/Functions/Hosting deploy, main promotion or production change occurred.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
 
 ### 2-B complete — additive V2 schema/rules source
 - Added canonical V2 private path/schema constants in `src/data/v2Schema.ts`; no Firebase imports or runtime IO.
@@ -343,14 +355,14 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A4 risk review complete; implementation/activation still gated) 🔄
+### Step 2 — V2 code implementation on preview (2-A4a inert identity/outbox complete; 2-A4b/c/d still gated) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
   - [x] 2-A3 Lowest-risk playlist-list V1 read activation implemented; adapter isolation/parity/build checks green. Preview latest-track environment blocker deferred.
-  - [~] 2-A4 Critical generation/recent-save/Music Note live connection — risk review complete; runtime activation remains blocked.
+  - [~] 2-A4 Critical generation/recent-save/Music Note live connection — risk review + inert identity/outbox complete; runtime activation remains blocked.
     - [x] 2-A4-R Read-only live identity/mutation/cost risk review complete; stable provider-neutral ID, V1-first mirror ordering and durable retry are required.
-    - [ ] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests; runtime OFF, no Firebase writes.
+    - [x] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests complete; runtime OFF, no Firebase IO/App wiring.
     - [ ] 2-A4b Centralize all current V1 recent/Music Note mutation boundaries while V2 mirror remains OFF; prove V1 parity/cost unchanged.
     - [ ] 2-A4c Preview shadow mirror only after separate exact write approval + deployed-Rules verification + fresh quota gate.
     - [ ] 2-A4d Bounded current live-gap catch-up/verification only after separate exact write approval; no positional recent overwrite.
@@ -372,7 +384,7 @@ Risk decision:
 - [x] 3-5 Per-user automatic verification complete: 10/10 migrated users passed; settings 3, playlist headers 42, playlist items 49, recent songs 68 and standalone Music Note/favorites 738 all matched expected V2 paths/counts/payload metadata with 0 error categories and 0 writes/deletes. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_5_PER_USER_VERIFICATION_RESULT.md`.
 - [x] 3-6 V1 retention / rollback safety confirmed: backed-up V1 records remain retained, the current V1 source remains live, the Step 3-3 backup is hash-valid/recoverable, and all V2/backfill/V1-delete runtime gates remain off. Read-only follow-up found normal post-backfill drift (3 new favorites and one rotated 10-item recent bundle), so Step 4 is blocked until Step 2-A4 live mutation/sync review. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_6_V1_ROLLBACK_SAFETY_RESULT.md`.
 
-### Step 4 — Preview validation (0/12; blocked pending Step 2-A4a/b implementation + separately approved 2-A4c/d write stages) ⏳
+### Step 4 — Preview validation (0/12; blocked pending Step 2-A4b + separately approved 2-A4c/d write stages) ⏳
 - [ ] Song generation
 - [ ] Save / reload
 - [ ] Refresh

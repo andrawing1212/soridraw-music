@@ -22,6 +22,12 @@ const result = await runV1MutationBoundary(recentContext, async () => {
 assert.equal(successCalls, 1, 'V1 mutation must execute exactly once');
 assert.deepEqual(result, { exact: 'v1-result', nested: { keep: true } }, 'V1 return value must pass through unchanged');
 
+const directPromiseResult = await runV1MutationBoundary(
+  { domain: 'recent', operation: 'edit', uid: 'user-1', affectedCount: 1 },
+  Promise.resolve('direct-v1-promise'),
+);
+assert.equal(directPromiseResult, 'direct-v1-promise', 'an existing V1 promise must pass through unchanged');
+
 const originalError = new Error('original-v1-error');
 let errorCalls = 0;
 await assert.rejects(
@@ -36,6 +42,16 @@ await assert.rejects(
   'the exact V1 error object must propagate unchanged',
 );
 assert.equal(errorCalls, 1, 'failing V1 mutation must not be retried by the boundary');
+
+const directError = new Error('direct-v1-promise-error');
+await assert.rejects(
+  runV1MutationBoundary(
+    { domain: 'musicNote', operation: 'save', uid: 'user-1' },
+    Promise.reject(directError),
+  ),
+  (error: unknown) => error === directError,
+  'an existing rejected V1 promise must propagate the exact error object',
+);
 
 let concurrentCalls = 0;
 await Promise.all([

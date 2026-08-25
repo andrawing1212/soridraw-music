@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-4f read-only match/risk review complete — live 738 favorites exactly match the verified backup, 0 trusted recent-song matches, 738 standalone deterministic destinations currently absent; Step 3-4f writes blocked pending explicit approval for the exact 738-create scope
+Status: IMPLEMENTATION / Step 3-4 limited backfill complete and independently verified — settings 3 + playlist headers 42 + playlist items 49 + recent songs 68 + standalone Music Note/favorites 738 migrated with V1 unchanged; Step 3-5 per-user automatic verification is next and starts read-only
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -339,17 +339,17 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4f read-only review complete, write approval pending) 🔄
+### Step 3 — Backup, backfill and verification (4/6 complete; Step 3-4 limited backfill complete and independently verified) 🔄
 - [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
 - [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000.
 - [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
-- [~] 3-4 Rate-limited backfill within free-tier budget.
+- [x] 3-4 Rate-limited backfill within free-tier budget.
   - [x] 3-4a Safety design + exact verified-backup offline analysis complete; projected snapshot writes 900, all 738 favorites preserve standalone because no trusted recent-song identity overlap was found.
   - [x] 3-4b Settings canary complete: 3 `user_structures` documents created at `users/{uid}/settings/sections`; all V1 sources remained unchanged and destination payload parity verified.
   - [x] 3-4c Playlist-header limited backfill complete: 42 headers created at `users/{uid}/playlists/{playlistId}` in two bounded 21-document transactions; IDs/payload parity verified and V1 remained unchanged.
   - [x] 3-4d Playlist-item limited backfill complete: 49 items created under their preserved playlist IDs after all 42 parent V2 playlist headers were re-verified; full payload/source/color/order parity verified and V1 remained unchanged. Execution-origin audit resolved the later 98-item collection-group observation and added a stricter pre-approval workflow guard.
   - [x] 3-4e Recent-song limited backfill complete: 68 recent array items created as canonical V2 songs using deterministic recent-source addressing in three bounded transactions; complete source payload + additive metadata parity verified, V1 unchanged, and favorites/Music Note were not accessed or merged. Independent read-only verification passed.
-  - [~] 3-4f Music Note/favorites: read-only live review SUCCESS — 738/738 sources unchanged from backup, all UIDs valid, 0 trusted matches to the 68 recent-origin V2 songs, 0 pre-existing standalone destinations/conflicts; exact 738 standalone create-only writes remain blocked pending explicit approval. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_READONLY_MATCH_RISK_REVIEW.md`.
+  - [x] 3-4f Music Note/favorites complete: 738 standalone favorite-origin V2 songs created with deterministic `v1f_` IDs in eight bounded transactions (100×7 + 38); trusted recent-song merges 0, recent-origin updates 0, full payload/metadata parity verified, V1 favorites/recent sources unchanged. Independent read-only verification passed. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_FAVORITES_RESULT.md`.
 - [ ] 3-5 Per-user automatic verification.
 - [ ] 3-6 V1 retention / rollback safety confirmation; no V1 deletion.
 

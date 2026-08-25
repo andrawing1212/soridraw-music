@@ -1,0 +1,46 @@
+name: SORIDRAW Backend V2 Step 3-4f Result Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-4f-result-finalize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Finalize master plan and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          text = p.read_text()
+          pairs = [
+              ('Status: IMPLEMENTATION / Step 3-4f read-only match/risk review complete — live 738 favorites exactly match the verified backup, 0 trusted recent-song matches, 738 standalone deterministic destinations currently absent; Step 3-4f writes blocked pending explicit approval for the exact 738-create scope', 'Status: IMPLEMENTATION / Step 3-4 limited backfill complete and independently verified — settings 3 + playlist headers 42 + playlist items 49 + recent songs 68 + standalone Music Note/favorites 738 migrated with V1 unchanged; Step 3-5 per-user automatic verification is next and starts read-only'),
+              ('### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4f read-only review complete, write approval pending) 🔄', '### Step 3 — Backup, backfill and verification (4/6 complete; Step 3-4 limited backfill complete and independently verified) 🔄'),
+              ('- [~] 3-4 Rate-limited backfill within free-tier budget.', '- [x] 3-4 Rate-limited backfill within free-tier budget.'),
+              ('  - [~] 3-4f Music Note/favorites: read-only live review SUCCESS — 738/738 sources unchanged from backup, all UIDs valid, 0 trusted matches to the 68 recent-origin V2 songs, 0 pre-existing standalone destinations/conflicts; exact 738 standalone create-only writes remain blocked pending explicit approval. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_READONLY_MATCH_RISK_REVIEW.md`.', '  - [x] 3-4f Music Note/favorites complete: 738 standalone favorite-origin V2 songs created with deterministic `v1f_` IDs in eight bounded transactions (100×7 + 38); trusted recent-song merges 0, recent-origin updates 0, full payload/metadata parity verified, V1 favorites/recent sources unchanged. Independent read-only verification passed. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_FAVORITES_RESULT.md`.'),
+          ]
+          for old, new in pairs:
+              if old not in text:
+                  raise SystemExit('expected master-plan text not found')
+              text = text.replace(old, new, 1)
+          p.write_text(text)
+          PY
+          rm -f .github/workflows/backend-v2-step3-4f-result-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md .github/workflows/backend-v2-step3-4f-result-finalize.yml
+          git commit -m 'docs: finalize verified Step 3-4f completion'
+          git push origin HEAD:preview

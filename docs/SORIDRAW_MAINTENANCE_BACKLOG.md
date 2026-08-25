@@ -1,6 +1,6 @@
 # SORIDRAW Maintenance Backlog & Timing Gates
 
-Status: ACTIVE / GATE A REPO-SIDE SAFETY CLEARED / M-008 RULES + M-009 VERCEL PREBUILD BLOCK 2-A4c
+Status: ACTIVE / M-009 CLOSED / M-008 FIRESTORE RULES IS THE ONLY CURRENT 2-A4c BLOCKER
 Last updated: 2026-08-26 KST
 Working branch: `preview`
 Scope: project-wide maintenance, deferred defects, security/infrastructure warnings, cost observability and pre-gate cleanup
@@ -62,9 +62,9 @@ Gate A result:
 - M-002 — **Gate-A high-risk requirement CLEARED**: npm audit moved from 34 findings (2 critical / 10 high) to 14 findings (0 critical / 0 high / 13 moderate / 1 low) using non-force remediation with `package.json` unchanged. Residual low/moderate debt remains open for the Step-5 pre-gate.
 - M-003 — **CLOSED for migration tooling**: current Node24-compatible Action majors were verified while project commands remain on Node 20.20.2.
 - M-008 — **CRITICAL BLOCKER CONFIRMED**: read-only inspection proved the currently deployed Firestore Rules do not contain the V2 `users/{uid}/songs/{songId}` rule that exists in repository source.
-- M-009 — **HIGH BLOCKER CONFIRMED**: Vercel Preview `npm run build` currently stops in the historical prebuild patch chain with `normal update updatedAtMs anchor mismatch: 0`; the same failure existed before the Gate A dependency lockfile change.
+- M-009 — **CLOSED**: historical prebuild patch compatibility was repaired without removing the chain; clean-checkout `npm run build`, full TypeScript, generated V1 mutation-boundary audit and Vercel Preview READY all passed.
 
-Therefore **2-A4c remains blocked**. M-009 Preview build health and M-008 Rules alignment must both be cleared before any 2-A4c write-capable workflow is created or armed.
+Therefore **2-A4c remains blocked by M-008 only**. No 2-A4c write-capable workflow may be created or armed until the separately approved Rules-only alignment is deployed and verified.
 
 Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 
@@ -80,7 +80,7 @@ Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 | M-006 | `user_plans` authority/provenance unresolved | HIGH / NO-TOUCH / REVIEW | Core V2 work can proceed because the collection is isolated, but moving/merging/deleting it without identifying authority could corrupt plan/account state. | Must be resolved **before any `user_plans` migration, merge, cleanup or V1 deletion** and before final production cleanup phase. | OPEN / NO-TOUCH |
 | M-007 | Exact RTDB Cloud Monitoring metric visibility remains a permission/observability gap | MEDIUM / PRE-GATE | RTDB Presence is intentionally small, but exact free-tier/cost monitoring is weaker than Firestore monitoring. | **Before Step 5/main promotion or meaningful user-scale testing**, perform read-only permission/metric review. Any IAM permission change requires separate approval. | OPEN |
 | M-008 | Deployed Firestore Rules do not yet contain the repository V2 canonical-song rule | CRITICAL / BLOCKER FOR 2-A4c | Read-only Rules API inspection succeeded. Deployed ruleset `8d0a2de9-fa29-4988-801e-cc45d3f0af1b` retains V1 recent/favorites rules but lacks `users/{uid}/songs/{songId}` + `hasValidV2SongMetadata`. Repo/deployed normalized Rules hashes differ. | **Mandatory before 2-A4c shadow writes.** Revalidate source, then deploy Rules only under separate exact approval; verify deployed hash/features afterward. | **OPEN / CRITICAL BLOCKER** |
-| M-009 | Vercel Preview `npm run build` fails in historical prebuild source-patch chain | HIGH / BLOCKER FOR 2-A4c | Vercel deployments for commits `c695776...` and `e505ce7...` both failed with `normal update updatedAtMs anchor mismatch: 0`. GitHub `npx vite build` passes because it bypasses npm lifecycle `prebuild`; therefore final Preview HEAD is not yet proven deployable through the real Vercel path. | **Before 2-A4c Preview activation.** Audit the exact stale patch owner, make only the minimum source/build-pipeline correction, require full `npm run build`, contracts and exact Vercel READY verification. No Firebase change in this fix. | **OPEN / HIGH BLOCKER** |
+| M-009 | Vercel Preview historical prebuild patch chain compatibility | HIGH / BLOCKER FOR 2-A4c | **Resolved.** Six conflicting historical patchers were made current-source compatible without removing the prebuild chain. Clean validator `32899355162` passed exact `npm run build`, full TypeScript, generated mutation-boundary/gate checks and script compilation; Vercel deployment for `649bd15...` reached READY. Firebase data/Rules/Functions/Hosting changes: 0. | Was mandatory before 2-A4c. Keep the repaired build-path validation in future release gates; do not reintroduce stale anchor assumptions. | **CLOSED — M-009 repair verified** |
 | M-010 | Vercel project build runtime must migrate from repository-forced Node `20.x` to Node `24.x` | HIGH / PRE-GATE | Vercel warns that `package.json` Node 20 overrides the project Node24 setting and that deployments created on/after 2026-10-01 will fail. This is separate from the immediate M-009 prebuild-anchor failure. | **Before Step 5/main promotion and always before 2026-10-01.** Test Node24 install, TypeScript, contracts, real `npm run build`, Vercel READY and Functions tooling separation before changing the project runtime contract. | **OPEN / STEP-5 PRE-GATE / DEADLINE 2026-10-01** |
 
 ## 5. Evidence references
@@ -149,7 +149,7 @@ No Rules deployment was performed because Gate A approval explicitly prohibited 
 
 ### M-009
 
-Post-Gate-A Vercel inspection found two Preview deployments failing before Vite with the same historical prebuild patch error: `normal update updatedAtMs anchor mismatch: 0`. This failure predates the Gate A dependency lockfile change. Full detail: `docs/SORIDRAW_MAINTENANCE_M009_VERCEL_PREBUILD_BLOCKER.md`.
+M-009 repair is complete. Permanent compatibility commit `741a794ce9df7ccf724ff21e040c4a732b0c1968`; final clean-checkout validator `32899355162` SUCCESS; Vercel deployment `dpl_HxskSRFFpEoUGaRYhcJWAHzH4DM8` for `649bd15...` READY. Full detail: `docs/SORIDRAW_MAINTENANCE_M009_VERCEL_PREBUILD_BLOCKER.md`.
 
 ### M-010
 
@@ -164,12 +164,12 @@ Current migration order is now:
    - M-001 closed,
    - M-002 critical/high cleared; residual low/moderate retained for Step-5 review,
    - M-003 closed for upcoming migration tooling.
-3. **M-009 PREVIEW BUILD PIPELINE REPAIR REQUIRED NOW**
-   - audit the current `prebuild` patch chain,
-   - correct only the stale/required patch ownership,
-   - require the real `npm run build` path and exact Vercel Preview READY verification,
-   - no Firebase data/Rules/Functions/Hosting change in this repair.
-4. **M-008 RULES ALIGNMENT AFTER M-009**
+3. **M-009 PREVIEW BUILD PIPELINE REPAIR COMPLETE**
+   - historical prebuild compatibility repaired without removing required feature patches,
+   - exact clean `npm run build` + full TypeScript + generated mutation-boundary audit passed,
+   - Vercel Preview READY verified,
+   - temporary M-009 workflows removed; Firebase data/Rules/Functions/Hosting change 0.
+4. **M-008 RULES ALIGNMENT REQUIRED NOW**
    - repository V2 Rules source revalidation,
    - Rules-only deployment only after separate exact approval,
    - deployed post-check must prove the V2 canonical-song rule is present while V1 compatibility rules remain.

@@ -1,6 +1,6 @@
 # SORIDRAW Maintenance M-009 — Vercel Preview Prebuild Blocker
 
-Status: OPEN / HIGH / BLOCKER BEFORE 2-A4c PREVIEW ACTIVATION
+Status: CLOSED / REPAIRED / VERIFIED READY BEFORE 2-A4c
 Date: 2026-08-26 KST
 Working branch: `preview`
 
@@ -82,3 +82,37 @@ Because this work changes a build-time source-mutation path, it should be handle
 Recommended exact approval scope:
 
 `M-009 Vercel Preview prebuild 실패 원인 정밀점검 및 최소수정 진행 승인 (npm run build 실경로 검증 / Firebase 데이터·Rules·Functions·Hosting 변경 없음)`
+
+## 6. Completion — 2026-08-26
+
+M-009 is closed. The failure was caused by historical build-time source patchers assuming older source anchors after the runtime had evolved. The repair kept the prebuild chain and its existing functionality, but made only the conflicting historical patchers compatible with the current committed runtime/mutation-boundary structure.
+
+Permanent compatibility changes were made to:
+
+- `.deploy/apply-874-build-safety.py`
+- `.deploy/apply-901-music-note-10-incremental-sync.py`
+- `.deploy/apply-905-recent-songs-cache-live-accounting.py`
+- `.deploy/apply-910-recent-text-batch-unsave-fix.py`
+- `.deploy/apply-912-heart-triggered-recent-save.py`
+- `.deploy/apply-913-recent-save-runtime-fix.py`
+
+Permanent repair commit: `741a794ce9df7ccf724ff21e040c4a732b0c1968`.
+
+Final clean-checkout validator run `32899355162` completed **SUCCESS** and proved:
+
+- the exact Vercel path `npm run build` passes from a clean `preview` checkout,
+- full `npx tsc --noEmit` passes after generated runtime patches,
+- generated recent-song `persistRecentSongsDocument()` calls remain inside `runV1MutationBoundary`,
+- 912/913 deferred `edit` / `pre-favorite-edit` semantics are validated as local pending state committed through the heart/flush boundary rather than falsely required as direct Firestore operation labels,
+- required Music Note mutation categories remain present,
+- V2 mirror remains OFF, runtime remains `v1-only`, V2 write gate OFF, V1 delete gate OFF, shadow/local-cache runtime gates OFF,
+- all six repaired Python deploy scripts compile,
+- Firebase data reads/writes/deletes caused by the validator were 0/0/0, and Rules/Functions/Hosting deploys were 0.
+
+The first final validator attempt had already passed `npm run build` and full TypeScript but failed an overly literal safety assertion that expected `edit` and `pre-favorite-edit` to appear as direct Firestore operation labels. That validator was corrected to reflect the actual 912/913 design; the application/runtime was not weakened to satisfy the test.
+
+Vercel deployment `dpl_HxskSRFFpEoUGaRYhcJWAHzH4DM8` for commit `649bd15b49456c979dc8b8b5211206d004bf0455` reached **READY** on the `preview` branch alias. This proves the repaired real Vercel build path is healthy. Subsequent M-009 workflow-cleanup/documentation commits are repository-only and must still be checked at the final branch HEAD before completion is reported.
+
+Temporary M-009 apply/diagnostic/clean-build workflows were removed after successful validation.
+
+M-009 no longer blocks Backend V2. **M-008 deployed Firestore Rules alignment is now the only current blocker before 2-A4c can be prepared, and it still requires its own separate explicit Rules-only approval.**

@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Maintenance Gate A repo-side safety complete — full TypeScript is clean, dependency critical/high findings are 0/0, and Node24-compatible migration Action majors are verified; two blockers now remain before 2-A4c: M-009 Vercel Preview `npm run build` fails in the historical prebuild patch chain, and M-008 deployed Firestore Rules still lack the V2 canonical-song rule; Step 4 remains blocked
+Status: IMPLEMENTATION / M-009 Vercel Preview prebuild blocker closed — exact clean `npm run build`, full TypeScript, generated V1 mutation-boundary safety checks and Vercel Preview READY are verified; M-008 deployed Firestore Rules alignment is now the only current blocker before separately approved 2-A4c shadow writes; Step 4 remains blocked
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -269,6 +269,15 @@ Risk decision:
 - 2-A4c remains blocked until Maintenance Gate A clears M-001/M-002/M-003/M-008 and then receives separate exact write approval.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
 
+### Maintenance M-009 complete — real Vercel prebuild path repaired and verified
+- Historical build-time patchers 874/901/905/910/912/913 were made compatible with the current committed mutation-boundary/runtime source; the required prebuild feature chain was not removed or globally bypassed.
+- Permanent compatibility commit: `741a794ce9df7ccf724ff21e040c4a732b0c1968`.
+- Final clean-checkout validator run `32899355162` SUCCESS: exact `npm run build`, full `tsc --noEmit`, generated Recent/Music Note V1 mutation-boundary checks, Backend V2 OFF gates and repaired-script syntax all passed.
+- The earlier final-validator failure was a false-negative assertion that treated 912/913 deferred local `edit` / `pre-favorite-edit` state as if it must be a direct Firestore operation label. The validator was corrected; runtime behavior was not weakened.
+- Vercel deployment `dpl_HxskSRFFpEoUGaRYhcJWAHzH4DM8` for commit `649bd15b49456c979dc8b8b5211206d004bf0455` reached READY on the Preview branch alias.
+- Temporary M-009 workflows were removed after validation. Firebase data IO and Rules/Functions/Hosting deploys caused by M-009 were all 0.
+- M-009 is closed. M-008 Rules alignment remains the only current blocker before 2-A4c preparation. Full detail: `docs/SORIDRAW_MAINTENANCE_M009_VERCEL_PREBUILD_BLOCKER.md`.
+
 ### 2-B complete — additive V2 schema/rules source
 - Added canonical V2 private path/schema constants in `src/data/v2Schema.ts`; no Firebase imports or runtime IO.
 - Added owner/admin Rules for `users/{uid}/songs`, V2 playlists/items and the exact `settings/sections` destination.
@@ -371,7 +380,7 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A4b + Gate A repo-side safety complete; M-009 Preview build + M-008 Rules alignment + 2-A4c/d still gated) 🔄
+### Step 2 — V2 code implementation on preview (2-A4b + Gate A repo-side safety + M-009 Preview build repair complete; M-008 Rules alignment + 2-A4c/d still gated) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
@@ -381,7 +390,7 @@ Risk decision:
     - [x] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests complete; runtime OFF, no Firebase IO/App wiring.
     - [x] 2-A4b Centralize all audited current V1 Recent/Music Note content mutation boundaries while V2 mirror remains OFF; 8/8 Recent paths + audited Music Note categories independently verified, no added Firebase IO.
     - [~] Maintenance Gate A: M-001 TypeScript CLOSED; M-002 critical/high dependency findings cleared to 0/0 with residual low/moderate debt retained for Step 5; M-003 Actions runtime CLOSED; M-008 deployed Rules missing V2 canonical-song rule remains CRITICAL blocker before 2-A4c.
-    - [ ] M-009 Vercel Preview build blocker: real `npm run build` fails at `normal update updatedAtMs anchor mismatch: 0`; must be repaired and exact Preview READY verified before M-008 deployment/2-A4c activation.
+    - [x] M-009 Vercel Preview build blocker CLOSED: repaired historical prebuild compatibility; clean exact `npm run build`, full TypeScript, generated boundary/gate validation and Vercel Preview READY verified; Firebase changes 0.
     - [ ] 2-A4c Preview shadow mirror only after separate exact write approval + deployed-Rules verification + fresh quota gate.
     - [ ] 2-A4d Bounded current live-gap catch-up/verification only after separate exact write approval; no positional recent overwrite.
 - [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.

@@ -66,10 +66,8 @@ export type V1FavoriteDocument<Payload extends Record<string, unknown> = Record<
 export type V1PlaylistDocument<Payload extends Record<string, unknown> = Record<string, unknown>> =
   V1CollectionDocument<Payload>;
 
-const numericOrder = (value: unknown): number => {
-  const order = Number(value);
-  return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
-};
+/** Match the existing `a.order - b.order` behavior, including NaN/stable-sort cases. */
+const compareLegacyOrder = (a: unknown, b: unknown): number => Number(a) - Number(b);
 
 const assertV1Only = (): void => {
   if (BACKEND_V2_RUNTIME_MODE !== 'v1-only') {
@@ -94,6 +92,14 @@ export const createV1UserDataAdapter = (port: V1ReadPort) => {
   assertV1Only();
 
   return Object.freeze({
+    /** Preserves the current user root authority/sync-version document as an opaque payload. */
+    async loadUserDocument<Payload extends Record<string, unknown> = Record<string, unknown>>(
+      uid: string,
+    ): Promise<V1DocumentSnapshot<Payload>> {
+      assertV1Only();
+      return port.getDocument<Payload>(v1UserDataPaths.user(uid));
+    },
+
     /** Preserves the current whole-document `songs[]` source shape. */
     async loadRecentSongs<SongPayload extends Record<string, unknown> = Record<string, unknown>>(
       uid: string,
@@ -107,7 +113,9 @@ export const createV1UserDataAdapter = (port: V1ReadPort) => {
     },
 
     /**
-     * Returns raw favorite documents plus their Firestore document IDs.
+     * Compatibility/recovery query for raw favorite documents by uid.
+     * Do not wire this unbounded method into routine startup; existing bounded/paginated
+     * Music Note reads remain authoritative until a separately reviewed activation step.
      * No content-hash identity, hidden-state interpretation, dedupe, or schema rewrite is done here.
      */
     async loadFavoriteDocuments<Payload extends Record<string, unknown> = Record<string, unknown>>(
@@ -128,7 +136,7 @@ export const createV1UserDataAdapter = (port: V1ReadPort) => {
       return port.getDocument<Payload>(v1UserDataPaths.structures(uid));
     },
 
-    /** Mirrors playlist type query + ascending `order` presentation semantics. */
+    /** Mirrors playlist type query + current `a.order - b.order` presentation semantics. */
     async loadPlaylistsByType<Payload extends Record<string, unknown> = Record<string, unknown>>(
       uid: string,
       type: 'normal' | 'shared',
@@ -138,7 +146,7 @@ export const createV1UserDataAdapter = (port: V1ReadPort) => {
         v1UserDataPaths.playlistsCollection(uid),
         [{ field: 'type', op: '==', value: type }],
       );
-      return [...docs].sort((a, b) => numericOrder(a.data.order) - numericOrder(b.data.order));
+      return [...docs].sort((a, b) => compareLegacyOrder(a.data.order, b.data.order));
     },
 
     /** Reads playlist items without changing IDs/source/order/color payload fields. */

@@ -52,7 +52,6 @@ jobs:
 
           backup = Path('backup_scripts/backend_v2_secure_backup.ts').read_text(encoding='utf-8')
           verifier = Path('backup_scripts/backend_v2_verify_backup.ts').read_text(encoding='utf-8')
-          workflow = Path('.github/workflows/backend-v2-step3-1-backup-prep.yml').read_text(encoding='utf-8')
           report = Path('docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md').read_text(encoding='utf-8')
 
           required_backup = [
@@ -101,9 +100,6 @@ jobs:
               if marker not in report:
                   raise SystemExit(f'missing Step 3-1 report safety marker: {marker}')
 
-          if 'firebase deploy' in workflow or 'gcloud firestore' in workflow:
-              raise SystemExit('Step 3-1 validation workflow must not deploy or run Firestore operations')
-
           print('Step 3-1 static read-only/zero-data safety gate PASS')
           PY
 
@@ -148,8 +144,8 @@ jobs:
           git diff --check
           test -z "$(git diff --name-only)"
           test ! -e private_backups
-          find . -maxdepth 2 -type d -name 'backend-v2-backup-*' -print -quit | grep -q . && {
+          if find . -maxdepth 2 -type d -name 'backend-v2-backup-*' -print -quit | grep -q .; then
             echo 'Private backup output appeared inside repository.' >&2
             exit 1
-          } || true
+          fi
           echo 'Step 3-1 final self-review PASS; Firebase reads/writes/deletes/deploy operations = 0'

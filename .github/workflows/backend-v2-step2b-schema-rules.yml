@@ -146,6 +146,12 @@ jobs:
         with:
           node-version: 22
 
+      - name: Set up Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Compile Rules in local demo emulator only
         run: |
           set -euo pipefail

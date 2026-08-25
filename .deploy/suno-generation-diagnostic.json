@@ -1,0 +1,42 @@
+{
+  "tool": "diagnose-recent-suno-tracks-readonly",
+  "projectId": "soridraw-app-866a5",
+  "generatedAt": "2026-08-25T04:21:29.061Z",
+  "lookbackMinutes": 90,
+  "safety": {
+    "databaseWrites": 0,
+    "databaseDeletes": 0,
+    "documentIdsPrinted": false,
+    "userIdsPrinted": false,
+    "contentValuesPrinted": false,
+    "apiKeysPrinted": false
+  },
+  "scan": {
+    "collectionGroupDocumentsRead": 73,
+    "sunoTrackDocumentsScanned": 73,
+    "recentSunoTrackRecords": 1,
+    "statusCounts": {
+      "completed": 1
+    }
+  },
+  "recent": [
+    {
+      "createdAt": "2026-08-25T04:13:01.936Z",
+      "updatedAt": "2026-08-25T04:13:43.827Z",
+      "status": "completed",
+      "taskIdPresent": true,
+      "taskIdUnknown": false,
+      "providerTaskIdPresent": true,
+      "apiResponseCode": 200,
+      "apiResponsePresent": true,
+      "apiStatusResponsePresent": true,
+      "requestPayloadPresent": true,
+      "hasAudio": true,
+      "sunoDataItems": 2,
+      "audioUrlsItems": 2,
+      "failureMarkerPresent": false,
+      "provider": "sunoapi.org"
+    }
+  ],
+  "elapsedMs": 2453
+}

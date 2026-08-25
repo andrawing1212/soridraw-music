@@ -8,7 +8,7 @@
  * - Firestore reads only.
  * - Never writes/deletes Firestore or RTDB data.
  * - Never prints document IDs, UIDs, titles, lyrics, prompts, API keys, request payloads, or full audio URLs.
- * - External audio URLs are held in memory only. Output is limited to host + HTTP metadata + sampled byte count.
+ * - External audio URLs are held in memory only. Output is limited to redacted field name + host + HTTP metadata + sampled byte count.
  * - GET probes request only bytes 0-1023 and cancel after the first received chunk.
  */
 
@@ -43,34 +43,70 @@ const timestampToMs = (value) => {
 
 const hasString = (value) => typeof value === 'string' && value.trim().length > 0;
 
-const collectAudioUrls = (data) => {
-  const values = [];
-  const add = (value) => {
-    if (hasString(value)) values.push(value.trim());
+const AUDIO_URL_KEYS = new Set([
+  'audioUrl', 'audio_url', 'streamAudioUrl', 'stream_audio_url',
+  'sourceAudioUrl', 'source_audio_url', 'sourceStreamAudioUrl', 'source_stream_audio_url',
+  'musicUrl', 'music_url', 'downloadUrl', 'download_url', 'playUrl', 'play_url',
+  'mediaUrl', 'media_url', 'mp3Url', 'mp3_url', 'url',
+]);
+
+const collectAudioCandidates = (data) => {
+  const candidates = [];
+  const seenPairs = new Set();
+  const add = (key, value, source) => {
+    if (!hasString(value)) return;
+    const url = value.trim();
+    if (!/^https?:\/\//i.test(url)) return;
+    const pairKey = `${key}\n${url}`;
+    if (seenPairs.has(pairKey)) return;
+    seenPairs.add(pairKey);
+    candidates.push({ key, url, source });
   };
-  add(data.audioUrl);
-  add(data.streamAudioUrl);
-  add(data.audio_url);
-  if (Array.isArray(data.audioUrls)) data.audioUrls.forEach(add);
-  if (Array.isArray(data.sunoData)) {
-    for (const item of data.sunoData) {
-      add(item?.audio_url);
-      add(item?.audioUrl);
-      add(item?.streamAudioUrl);
+
+  add('audioUrl', data.audioUrl, 'stored-root');
+  add('streamAudioUrl', data.streamAudioUrl, 'stored-root');
+  add('audio_url', data.audio_url, 'stored-root');
+  if (Array.isArray(data.audioUrls)) data.audioUrls.forEach((value) => add('audioUrls[]', value, 'stored-root'));
+
+  const walk = (value, source, depth = 0) => {
+    if (!value || depth > 8) return;
+    if (Array.isArray(value)) {
+      value.forEach((entry) => walk(entry, source, depth + 1));
+      return;
     }
-  }
-  return Array.from(new Set(values));
+    if (typeof value !== 'object') return;
+    for (const [key, child] of Object.entries(value)) {
+      if (AUDIO_URL_KEYS.has(key) && hasString(child)) add(key, child, source);
+      if (child && typeof child === 'object') walk(child, source, depth + 1);
+    }
+  };
+
+  walk(data.sunoData, 'stored-sunoData');
+  walk(data.apiStatusResponse, 'apiStatusResponse');
+  walk(data.apiResponse, 'apiResponse');
+  return candidates;
 };
 
 const getHeader = (headers, name) => {
   try { return headers.get(name) || null; } catch { return null; }
 };
 
-const probeOne = async (rawUrl) => {
+const classifyContentType = (contentType) => {
+  const normalized = String(contentType || '').toLowerCase();
+  if (normalized.startsWith('audio/')) return 'audio';
+  if (normalized.includes('octet-stream')) return 'binary';
+  if (!normalized) return 'unknown';
+  return 'non_audio';
+};
+
+const probeOne = async (candidate) => {
+  const rawUrl = candidate.url;
   let sourceHost = 'invalid';
   try { sourceHost = new URL(rawUrl).host || 'invalid'; } catch {}
 
   const result = {
+    candidateKey: candidate.key,
+    candidateSource: candidate.source,
     sourceHost,
     headStatus: null,
     headContentLength: null,
@@ -138,8 +174,11 @@ const probeOne = async (rawUrl) => {
       result.sampledBytes = Math.min(body.byteLength || 0, 1024);
     }
 
-    if ((response.status === 200 || response.status === 206) && result.sampledBytes > 0) {
-      result.classification = 'healthy_bytes_received';
+    const contentClass = classifyContentType(result.rangeContentType);
+    if ((response.status === 200 || response.status === 206) && result.sampledBytes > 0 && (contentClass === 'audio' || contentClass === 'binary' || contentClass === 'unknown')) {
+      result.classification = 'healthy_audio_bytes';
+    } else if ((response.status === 200 || response.status === 206) && result.sampledBytes > 0) {
+      result.classification = 'non_audio_bytes';
     } else if ((response.status === 200 || response.status === 206) && result.sampledBytes === 0) {
       result.classification = 'success_but_empty_body';
     } else if (response.status >= 400) {
@@ -174,23 +213,51 @@ const probeOne = async (rawUrl) => {
     const activityAtMs = Math.max(createdAtMs, updatedAtMs);
     if (!activityAtMs || activityAtMs < cutoff) continue;
     if (String(data.status || '').trim().toLowerCase() !== 'completed') continue;
-    const audioUrls = collectAudioUrls(data);
-    if (audioUrls.length === 0) continue;
+    const candidates = collectAudioCandidates(data);
+    if (candidates.length === 0) continue;
     if (!newest || activityAtMs > newest.activityAtMs) {
-      newest = { data, createdAtMs, updatedAtMs, activityAtMs, audioUrls };
+      newest = { data, createdAtMs, updatedAtMs, activityAtMs, candidates };
+    }
+  }
+
+  const uniqueCandidates = [];
+  const seenUrls = new Map();
+  if (newest) {
+    for (const candidate of newest.candidates) {
+      const existing = seenUrls.get(candidate.url);
+      if (existing) {
+        existing.keys.add(candidate.key);
+        existing.sources.add(candidate.source);
+        continue;
+      }
+      const grouped = {
+        ...candidate,
+        keys: new Set([candidate.key]),
+        sources: new Set([candidate.source]),
+      };
+      seenUrls.set(candidate.url, grouped);
+      uniqueCandidates.push(grouped);
     }
   }
 
   const probes = [];
-  if (newest) {
-    for (const url of newest.audioUrls.slice(0, 4)) {
-      probes.push(await probeOne(url));
-    }
+  for (const candidate of uniqueCandidates.slice(0, 12)) {
+    const probe = await probeOne(candidate);
+    probe.candidateKeys = Array.from(candidate.keys).sort();
+    probe.candidateSources = Array.from(candidate.sources).sort();
+    delete probe.candidateKey;
+    delete probe.candidateSource;
+    probes.push(probe);
   }
 
   const classificationCounts = {};
-  for (const probe of probes) {
-    classificationCounts[probe.classification] = (classificationCounts[probe.classification] || 0) + 1;
+  for (const probe of probes) classificationCounts[probe.classification] = (classificationCounts[probe.classification] || 0) + 1;
+
+  const discoveredFieldCounts = {};
+  if (newest) {
+    for (const candidate of newest.candidates) {
+      discoveredFieldCounts[candidate.key] = (discoveredFieldCounts[candidate.key] || 0) + 1;
+    }
   }
 
   const report = {
@@ -219,11 +286,14 @@ const probeOne = async (rawUrl) => {
       updatedAt: newest.updatedAtMs ? new Date(newest.updatedAtMs).toISOString() : null,
       status: String(newest.data.status || '').trim().toLowerCase(),
       provider: hasString(newest.data.provider) ? String(newest.data.provider) : null,
-      audioCandidateCount: newest.audioUrls.length,
+      candidateOccurrences: newest.candidates.length,
+      uniqueEndpointCount: uniqueCandidates.length,
+      discoveredFieldCounts,
     } : null,
     probeSummary: {
       endpointCount: probes.length,
       classificationCounts,
+      healthyEndpointPresent: probes.some((probe) => probe.classification === 'healthy_audio_bytes'),
     },
     probes,
     elapsedMs: Date.now() - startedAt,

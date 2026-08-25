@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A in progress — 2-A1 + 2-A2 complete, awaiting approval for 2-A3
+Status: IMPLEMENTATION / Step 2-A in progress — 2-A1 + 2-A2 complete, 2-A3 implemented and awaiting authenticated Preview validation
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -176,7 +176,8 @@ No Step 1 finding requires an architecture reversal. The unresolved `user_plans`
 
 ## 8. Step 2-A generation-safety implementation status
 
-Detailed report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTATION.md`.
+Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTATION.md`.
+2-A3 report: `docs/SORIDRAW_BACKEND_V2_STEP2A3_LOW_RISK_READ_ACTIVATION.md`.
 
 ### 2-A1 complete — inert repository contract
 - Rechecked current Firebase/Gemini generation paths before implementation.
@@ -186,20 +187,34 @@ Detailed report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTATION.md`.
 
 ### 2-A2 complete — read-only V1 compatibility adapter
 - Added `src/data/v1UserDataAdapter.ts` with dependency-injected read capabilities only.
-- Adapter has no set/update/delete/batch/transaction port and is not imported by running app code.
+- Adapter has no set/update/delete/batch/transaction port.
 - Added parity contract tests for V1 paths, opaque legacy payload preservation, user root, recent-song array, favorites uid query, section settings, playlists, playlist items and list bundles.
 - Existing favorites hash fallback is not used for migration identity or adapter dedupe.
 - Unbounded favorites compatibility query is explicitly prohibited from routine startup wiring.
 - Self-review found and corrected a playlist-order parity mismatch in the first adapter draft.
 - Omission review added `users/{uid}` root to the adapter contract because it remains authority/sync-version state.
-- Vercel Preview build for commit `d8676519a812b8ccf426a9a92d73af69f82f5a8d` completed READY.
+- Vercel Preview build for the adapter work completed READY.
 - Independent TypeScript/contract execution result: PASS.
-- Dedicated GitHub Actions safety workflow was strengthened, but a connector-authored preview push has not produced a retrievable workflow result in the current tool session; this is an observability/trigger limitation, not used as pass evidence.
+
+### 2-A3 implemented — lowest-risk playlist-list V1 read activation; user validation pending
+- Added `src/services/v1UserDataReadAdapter.ts` as the only approved Firebase runtime bridge for the pure V1 adapter.
+- Runtime bridge supports Firestore read operations only and has no mutation capability or V2 path access.
+- Routed only `getPlaylistsByType(uid, type)` in `src/services/playlistService.ts` through the adapter.
+- Existing direct V1 query is retained as immediate fallback.
+- Adapter and fallback preserve `user_playlists/{uid}/lists`, `type == normal/shared`, current document payload/IDs and `a.order - b.order` sorting.
+- Normal successful flow remains one Firestore query; no live dual-read cost was introduced.
+- Favorites, recent songs, section settings, playlist items and all playlist mutations remain outside runtime adapter activation.
+- `App.tsx`, Gemini generation, recent-song save and Music Note mutation call-sites remain untouched.
+- GitHub Actions run `32807165455` completed SUCCESS: install, Step 2-A isolation contract, V1 adapter parity, TypeScript check, production build, result recording and final safety gate all passed.
+- The workflow no longer self-commits/pushes result files. This removes the previous false-red bookkeeping failure caused by prelint/prebuild working-tree changes before `git pull --rebase`.
+- Latest Vercel Preview deployment for the 2-A3 safety state completed READY. Existing bundle/import and Node 20 deprecation warnings remain separate non-blocking infrastructure items.
+- Automated validation is complete; authenticated Preview playlist behavior still requires user confirmation before 2-A3 is marked complete.
 
 Risk decision:
-- 2-A2 has zero active generation/runtime-storage effect and is safe to keep.
-- Live adapter activation remains a separate gate.
+- 2-A3 changes only one bounded/filtered V1 read boundary and retains direct V1 fallback.
+- No V2 data operation, schema change or new normal-path read multiplication exists.
 - Critical generation/recent-save/Music Note mutation call-sites remain untouched.
+- Do not start 2-A4 until 2-A3 Preview behavior is confirmed and a separate explicit approval is given.
 
 ## 9. Work stages and progress tracker
 
@@ -218,8 +233,8 @@ Risk decision:
 ### Step 2 — V2 code implementation on preview (2-A in progress) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
-  - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks; no runtime wiring.
-  - [ ] 2-A3 Lowest-risk V1 read activation on Preview only, with direct V1 fallback and old-vs-adapter parity/cost check.
+  - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
+  - [~] 2-A3 Lowest-risk playlist-list V1 read activation implemented and automated checks green; authenticated Preview validation pending.
   - [ ] 2-A4 Critical generation/recent-save/Music Note mutation activation gate only after separate risk review and explicit approval.
 - [ ] 2-B Additive V2 schema/rules/index definitions in source; do not remove V1 and do not deploy production Rules without explicit approval.
 - [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.

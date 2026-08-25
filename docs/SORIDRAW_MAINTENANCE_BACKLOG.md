@@ -81,6 +81,7 @@ Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 | M-007 | Exact RTDB Cloud Monitoring metric visibility remains a permission/observability gap | MEDIUM / PRE-GATE | RTDB Presence is intentionally small, but exact free-tier/cost monitoring is weaker than Firestore monitoring. | **Before Step 5/main promotion or meaningful user-scale testing**, perform read-only permission/metric review. Any IAM permission change requires separate approval. | OPEN |
 | M-008 | Deployed Firestore Rules do not yet contain the repository V2 canonical-song rule | CRITICAL / BLOCKER FOR 2-A4c | Read-only Rules API inspection succeeded. Deployed ruleset `8d0a2de9-fa29-4988-801e-cc45d3f0af1b` retains V1 recent/favorites rules but lacks `users/{uid}/songs/{songId}` + `hasValidV2SongMetadata`. Repo/deployed normalized Rules hashes differ. | **Mandatory before 2-A4c shadow writes.** Revalidate source, then deploy Rules only under separate exact approval; verify deployed hash/features afterward. | **OPEN / CRITICAL BLOCKER** |
 | M-009 | Vercel Preview `npm run build` fails in historical prebuild source-patch chain | HIGH / BLOCKER FOR 2-A4c | Vercel deployments for commits `c695776...` and `e505ce7...` both failed with `normal update updatedAtMs anchor mismatch: 0`. GitHub `npx vite build` passes because it bypasses npm lifecycle `prebuild`; therefore final Preview HEAD is not yet proven deployable through the real Vercel path. | **Before 2-A4c Preview activation.** Audit the exact stale patch owner, make only the minimum source/build-pipeline correction, require full `npm run build`, contracts and exact Vercel READY verification. No Firebase change in this fix. | **OPEN / HIGH BLOCKER** |
+| M-010 | Vercel project build runtime must migrate from repository-forced Node `20.x` to Node `24.x` | HIGH / PRE-GATE | Vercel warns that `package.json` Node 20 overrides the project Node24 setting and that deployments created on/after 2026-10-01 will fail. This is separate from the immediate M-009 prebuild-anchor failure. | **Before Step 5/main promotion and always before 2026-10-01.** Test Node24 install, TypeScript, contracts, real `npm run build`, Vercel READY and Functions tooling separation before changing the project runtime contract. | **OPEN / STEP-5 PRE-GATE / DEADLINE 2026-10-01** |
 
 ## 5. Evidence references
 
@@ -150,6 +151,10 @@ No Rules deployment was performed because Gate A approval explicitly prohibited 
 
 Post-Gate-A Vercel inspection found two Preview deployments failing before Vite with the same historical prebuild patch error: `normal update updatedAtMs anchor mismatch: 0`. This failure predates the Gate A dependency lockfile change. Full detail: `docs/SORIDRAW_MAINTENANCE_M009_VERCEL_PREBUILD_BLOCKER.md`.
 
+### M-010
+
+Post-Gate-A Vercel inspection also reported that repository `package.json` forces Node `20.x`, overriding the Vercel Project Setting `24.x`, and warned that deployments created on/after **2026-10-01** will fail unless the project runtime is migrated. Full detail: `docs/SORIDRAW_MAINTENANCE_M010_VERCEL_NODE24_MIGRATION.md`.
+
 ## 6. Planned maintenance order from current point
 
 Current migration order is now:
@@ -177,6 +182,7 @@ Current migration order is now:
 9. **Maintenance Gate C before Step 5/main promotion**
    - M-002 review/clear remaining low/moderate dependency debt or explicitly justify bounded deferral,
    - M-007 verify RTDB/free-tier observability,
+   - M-010 complete tested app-build runtime migration to Node24 before main promotion / 2026-10-01,
    - M-004 perform bundle optimization if Step 4 performance requires it.
 10. **Step 5 main/test-app promotion** only after all applicable pre-gates pass.
 11. `user_plans` M-006 remains NO-TOUCH until its own authority investigation; it cannot be silently included in V1 cleanup.

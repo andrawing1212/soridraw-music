@@ -1,0 +1,144 @@
+name: SORIDRAW Backend V2 Step 3-4e Readonly Verify
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-4e-readonly-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_PROJECT: soridraw-app-866a5
+      TARGET_BUCKET: soridraw-app-866a5.firebasestorage.app
+      BACKUP_PREFIX: backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z
+      EXPECTED_MANIFEST_SHA256: 57cf21a6c2935c8fa658d5e925cf8424b8e54269b314f9e711feded870f49ebb
+      EXPECTED_BUNDLE_COUNT: '10'
+      EXPECTED_RECENT_ITEM_COUNT: '68'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - run: npm ci --ignore-scripts
+
+      - name: Read-only verify V1 source and 68 V2 destinations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOOGLE_CLOUD_PROJECT="$TARGET_PROJECT"
+          export GCLOUD_PROJECT="$TARGET_PROJECT"
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const { initializeApp, applicationDefault, deleteApp } = require('firebase-admin/app');
+          const { getFirestore } = require('firebase-admin/firestore');
+          const { getStorage } = require('firebase-admin/storage');
+
+          const projectId = process.env.TARGET_PROJECT;
+          const bucketName = process.env.TARGET_BUCKET;
+          const backupPrefix = process.env.BACKUP_PREFIX;
+          const expectedManifestHash = process.env.EXPECTED_MANIFEST_SHA256;
+          const expectedBundles = Number(process.env.EXPECTED_BUNDLE_COUNT || 0);
+          const expectedItems = Number(process.env.EXPECTED_RECENT_ITEM_COUNT || 0);
+          if (projectId !== 'soridraw-app-866a5' || bucketName !== 'soridraw-app-866a5.firebasestorage.app') throw new Error('VERIFY_TARGET_MISMATCH');
+          if (expectedBundles !== 10 || expectedItems !== 68) throw new Error('VERIFY_SCOPE_MISMATCH');
+
+          const canonicalize = (value) => {
+            if (value === null || value === undefined || ['string', 'boolean'].includes(typeof value)) return value;
+            if (typeof value === 'number') {
+              if (Number.isNaN(value)) return { __type: 'number', value: 'NaN' };
+              if (value === Infinity) return { __type: 'number', value: 'Infinity' };
+              if (value === -Infinity) return { __type: 'number', value: '-Infinity' };
+              if (Object.is(value, -0)) return { __type: 'number', value: '-0' };
+              return value;
+            }
+            if (Buffer.isBuffer(value) || value instanceof Uint8Array) return { __type: 'bytes', base64: Buffer.from(value).toString('base64') };
+            if (Array.isArray(value)) return value.map(canonicalize);
+            if (value instanceof Date) return { __type: 'date', iso: value.toISOString() };
+            if (typeof value?.seconds === 'number' && typeof value?.nanoseconds === 'number') return { __type: 'timestamp', seconds: value.seconds, nanoseconds: value.nanoseconds };
+            if (typeof value?.latitude === 'number' && typeof value?.longitude === 'number') return { __type: 'geopoint', latitude: value.latitude, longitude: value.longitude };
+            if (typeof value?.path === 'string' && value?.firestore) return { __type: 'reference', path: value.path };
+            if (typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+            throw new Error('UNSUPPORTED_VERIFY_VALUE_TYPE');
+          };
+          const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
+          const stableHash = (value) => crypto.createHash('sha256').update(value).digest('hex');
+          const deterministicRecentSongId = (uid, path, index) => `v1r_${stableHash(`${uid}\n${path}\n${index}`).slice(0, 32)}`;
+          const recentPattern = /^user_recent_songs\/([^/]+)$/;
+          const reservedKeys = ['schemaVersion', 'musicNote', 'recentVisible', 'v2UpdatedAtMs', 'legacyRecentIndex'];
+          const stripV2 = (data) => {
+            const clone = { ...data };
+            for (const key of reservedKeys) delete clone[key];
+            return clone;
+          };
+
+          const app = initializeApp({ credential: applicationDefault(), projectId, storageBucket: bucketName }, `step34e-verify-${Date.now()}`);
+          (async () => {
+            const db = getFirestore(app);
+            const bucket = getStorage(app).bucket(bucketName);
+            const [manifestBytes] = await bucket.file(`${backupPrefix}/manifest.json`).download();
+            if (crypto.createHash('sha256').update(manifestBytes).digest('hex') !== expectedManifestHash) throw new Error('VERIFY_MANIFEST_HASH_MISMATCH');
+            const manifest = JSON.parse(manifestBytes.toString('utf8'));
+            const recentDataset = (manifest.datasets || []).find((entry) => entry?.id === 'user_recent_songs');
+            if (!recentDataset || recentDataset.documentCount !== expectedBundles || recentDataset.fileName !== 'user_recent_songs.ndjson') throw new Error('VERIFY_BACKUP_DATASET_MISMATCH');
+            const [backupBytes] = await bucket.file(`${backupPrefix}/${recentDataset.fileName}`).download();
+            if (crypto.createHash('sha256').update(backupBytes).digest('hex') !== recentDataset.sha256) throw new Error('VERIFY_BACKUP_FILE_HASH_MISMATCH');
+            const backupRecords = backupBytes.toString('utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+            const backupByPath = new Map(backupRecords.map((record) => [String(record.path), record.data]));
+            if (backupByPath.size !== expectedBundles) throw new Error('VERIFY_BACKUP_PATH_COUNT_MISMATCH');
+
+            const liveSnap = await db.collection('user_recent_songs').get();
+            if (liveSnap.size !== expectedBundles) throw new Error(`VERIFY_LIVE_BUNDLE_COUNT:${liveSnap.size}`);
+            const targets = [];
+            for (const doc of liveSnap.docs.sort((a, b) => a.ref.path.localeCompare(b.ref.path))) {
+              const match = recentPattern.exec(doc.ref.path);
+              if (!match) throw new Error('VERIFY_UNEXPECTED_V1_PATH');
+              const backupData = backupByPath.get(doc.ref.path);
+              if (!backupData || digest(doc.data()) !== digest(backupData)) throw new Error(`VERIFY_V1_BACKUP_DRIFT:${doc.ref.path}`);
+              const songs = Array.isArray(doc.data().songs) ? doc.data().songs : [];
+              for (let index = 0; index < songs.length; index += 1) {
+                const payload = songs[index];
+                const songId = deterministicRecentSongId(match[1], doc.ref.path, index);
+                targets.push({
+                  ref: db.doc(`users/${match[1]}/songs/${songId}`),
+                  sourcePayload: payload,
+                  index,
+                  updateMs: doc.updateTime.toMillis(),
+                });
+              }
+            }
+            if (targets.length !== expectedItems) throw new Error(`VERIFY_SOURCE_ITEM_COUNT:${targets.length}`);
+            const destinationSnaps = await db.getAll(...targets.map((target) => target.ref));
+            for (let i = 0; i < destinationSnaps.length; i += 1) {
+              const snap = destinationSnaps[i];
+              const target = targets[i];
+              if (!snap.exists) throw new Error(`VERIFY_DESTINATION_MISSING:${target.ref.path}`);
+              const data = snap.data();
+              if (digest(stripV2(data)) !== digest(target.sourcePayload)) throw new Error(`VERIFY_PAYLOAD_PARITY:${target.ref.path}`);
+              if (data.schemaVersion !== 2 || data.musicNote !== false || data.recentVisible !== true || data.legacyRecentIndex !== target.index || data.v2UpdatedAtMs !== target.updateMs) throw new Error(`VERIFY_METADATA:${target.ref.path}`);
+            }
+            console.log('RECENT_READONLY_VERIFY=' + JSON.stringify({ sourceBundles: liveSnap.size, sourceItems: targets.length, v2Destinations: destinationSnaps.length, missing: 0, conflicts: 0, payloadParity: true, metadataParity: true, v1Writes: 0, v1Deletes: 0, v2Writes: 0, v2Deletes: 0, favoritesAccessed: 0 }));
+          })().catch((error) => {
+            console.error('RECENT_READONLY_VERIFY_ERROR=' + String(error?.message || error));
+            process.exitCode = 1;
+          }).finally(async () => {
+            await deleteApp(app);
+          });
+          NODE

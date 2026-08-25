@@ -1,0 +1,100 @@
+name: SORIDRAW Backend V2 Step 3-4 Finalize Docs
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-4-finalize-docs.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 2
+
+      - name: Apply Step 3-4 master status
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          text = path.read_text(encoding='utf-8')
+
+          old_status = 'Status: IMPLEMENTATION / Step 3-3 Firebase Storage rollback backup complete and verified — awaiting approval for Step 3-4 backfill safety design'
+          new_status = 'Status: IMPLEMENTATION / Step 3-4a limited backfill safety design complete — actual production backfill writes NOT started; awaiting separate Step 3-4b canary approval'
+          if old_status not in text:
+              raise SystemExit('Expected old master status not found')
+          text = text.replace(old_status, new_status, 1)
+
+          old_tracker = '''### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4 next) 🔄
+- [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
+- [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000.
+- [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
+- [ ] 3-4 Rate-limited backfill within free-tier budget; separate safety design/review and explicit approval required before writes.
+- [ ] 3-5 Per-user automatic verification.
+- [ ] 3-6 V1 retention / rollback safety confirmation; no V1 deletion.'''
+          new_tracker = '''### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4 safety design complete, writes not started) 🔄
+- [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
+- [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000.
+- [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
+- [~] 3-4 Rate-limited backfill within free-tier budget.
+  - [x] 3-4a Safety design + exact verified-backup offline analysis complete; projected snapshot writes 900, all 738 favorites preserve standalone because no trusted recent-song identity overlap was found.
+  - [ ] 3-4b Actual limited production backfill; separate explicit approval required. Recommended first canary: settings only, maximum 3 writes, then verify before continuing.
+- [ ] 3-5 Per-user automatic verification.
+- [ ] 3-6 V1 retention / rollback safety confirmation; no V1 deletion.'''
+          if old_tracker not in text:
+              raise SystemExit('Expected Step 3 tracker not found')
+          text = text.replace(old_tracker, new_tracker, 1)
+
+          marker = '## 9. Work stages and progress tracker'
+          summary = '''### 3-4a limited backfill safety design complete — actual Firestore writes not started
+- Final safety workflow run `32838466895` completed SUCCESS using the exact verified Step 3-3 backup.
+- Snapshot analysis: 3 settings documents, 42 playlist headers, 49 playlist items, 68 recent-song items and 738 favorites; projected V2 writes total 900.
+- Conservative identity analysis authorized 0 favorite-to-recent merges. Favorite `songId` exists on 6 records and `favoriteKey` on 195, but the 68 recent items expose none of those trusted identity fields; provider/track/audio identity overlap also remained unavailable.
+- Therefore all 738 favorites remain standalone-preserved songs with `musicNote:true`; no title/lyrics/prompt/hash similarity merge is allowed.
+- Design caps: recommended normal batch 100, generic canary upper cap 25, hard per-run design ceiling 1,000, always further limited by the fresh Step 1-D free-tier formula.
+- The first recommended actual canary is narrower than the generic cap: migrate only the 3 settings documents, verify immediately, then proceed in fixed order to playlists, recent songs and favorites.
+- The future executor must use fresh live-source/delta checks before writes; the Step 3-3 backup is a rollback checkpoint, not permission to blindly migrate a stale snapshot.
+- Firestore reads/writes/deletes caused by the offline planner: 0 / 0 / 0. No Rules, Functions or Hosting deploy occurred.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4_BACKFILL_SAFETY_DESIGN.md`.
+
+'''
+          if marker not in text:
+              raise SystemExit('Work-stage marker not found')
+          if '### 3-4a limited backfill safety design complete' not in text:
+              text = text.replace(marker, summary + marker, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate docs-only change
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only)" = 'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md'
+          grep -Fq 'Step 3-4a limited backfill safety design complete' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -Fq 'projected snapshot writes 900' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -Fq 'maximum 3 writes' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -Fq 'actual production backfill writes NOT started' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+
+      - name: Commit master status and remove one-time finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/backend-v2-step3-4-finalize-docs.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          test "$(git diff --cached --name-only | sort | tr '\n' ' ')" = '.github/workflows/backend-v2-step3-4-finalize-docs.yml docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md '
+          git commit -m 'docs: mark Backend V2 Step 3-4 safety design complete'
+          git push origin HEAD:preview

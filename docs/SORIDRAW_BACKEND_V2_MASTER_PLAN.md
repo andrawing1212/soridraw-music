@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A in progress — 2-A1 safe scaffold complete, awaiting approval for 2-A2
+Status: IMPLEMENTATION / Step 2-A in progress — 2-A1 + 2-A2 complete, awaiting approval for 2-A3
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -19,6 +19,7 @@ Production Firebase deploy: prohibited unless explicitly requested
 9. Suno Library is optional/low-priority and must never become a structural dependency of core storage or Explore. It may be removed later without impacting song creation, saved songs, Music Note or Explore.
 10. Never delete or overwrite existing user data during investigation or migration. V1 must remain as a fallback until V2 is fully verified and explicitly approved for cleanup.
 11. Current V1 music-generation behavior is a hard compatibility requirement. Any Step 2 change that touches generation/save call-sites must stop for explicit risk review before activation.
+12. Every implementation substep must be followed by self-review, omission check and independent result verification; the initial implementation must not be assumed correct.
 
 ## 1. Target architecture
 
@@ -94,6 +95,7 @@ Migration document IDs must be deterministic for reruns, but an ID/hash-generati
 9. If a free-tier limit approaches, migration/non-core features pause before core user save/reload is endangered.
 10. Deployed Firestore currently uses memory cache, so durable local-first storage must be explicit.
 11. Every future backup/migration tool must explicitly target and validate `soridraw-app-866a5`; do not trust credential default project metadata.
+12. A new adapter/helper must not introduce an unbounded startup query where V1 currently uses bounded/paginated reads.
 
 ## 6. Final migration method
 
@@ -172,55 +174,64 @@ Finalized:
 
 No Step 1 finding requires an architecture reversal. The unresolved `user_plans` documents are isolated as no-touch and do not block core V2 work.
 
-## 8. Step 2-A generation-safety preflight
+## 8. Step 2-A generation-safety implementation status
 
 Detailed report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTATION.md`.
 
-Completed 2-A1 findings/actions:
-- Compared the validated `main` runtime baseline with pre-Step-2 `preview`; Step 0/1 had not modified active frontend runtime source, Firebase runtime config, Firestore Rules, or production Functions source.
-- Rechecked current Firebase and Gemini generation paths before implementation.
-- Added `src/data/userDataRepository.ts` as an inert, side-effect-free path/repository contract.
-- The new module imports no Firebase SDK/runtime code and is not wired into `App.tsx` or generation code.
-- Runtime mode is `v1-only`; V2 reads, writes, shadow writes, migrate-on-read and V1 deletion are all disabled.
-- Added a dedicated Step 2-A safety workflow for future `src/data/**` changes.
-- Vercel Preview build for the safe scaffold completed READY and the Preview alias returned HTTP 200.
-- Firestore/RTDB application writes/deletes: 0. Rules/Functions/Firebase Hosting deployments: 0.
+### 2-A1 complete — inert repository contract
+- Rechecked current Firebase/Gemini generation paths before implementation.
+- Added `src/data/userDataRepository.ts` with no Firebase runtime dependency.
+- Runtime remains `v1-only`; V2 read/write/shadow-write/migrate-on-read/delete gates are false.
+- No active call-site wiring, DB access, Rules/Functions deploy, or Firebase Hosting deploy.
+
+### 2-A2 complete — read-only V1 compatibility adapter
+- Added `src/data/v1UserDataAdapter.ts` with dependency-injected read capabilities only.
+- Adapter has no set/update/delete/batch/transaction port and is not imported by running app code.
+- Added parity contract tests for V1 paths, opaque legacy payload preservation, user root, recent-song array, favorites uid query, section settings, playlists, playlist items and list bundles.
+- Existing favorites hash fallback is not used for migration identity or adapter dedupe.
+- Unbounded favorites compatibility query is explicitly prohibited from routine startup wiring.
+- Self-review found and corrected a playlist-order parity mismatch in the first adapter draft.
+- Omission review added `users/{uid}` root to the adapter contract because it remains authority/sync-version state.
+- Vercel Preview build for commit `d8676519a812b8ccf426a9a92d73af69f82f5a8d` completed READY.
+- Independent TypeScript/contract execution result: PASS.
+- Dedicated GitHub Actions safety workflow was strengthened, but a connector-authored preview push has not produced a retrievable workflow result in the current tool session; this is an observability/trigger limitation, not used as pass evidence.
 
 Risk decision:
-- The inert scaffold has no active generation/runtime storage effect and is safe.
-- Rewiring live `App.tsx` generation/recent-save/favorites mutation call-sites is CRITICAL/HIGH risk and must not be bundled into the same unreviewed change. It remains deferred behind later 2-A micro-gates.
+- 2-A2 has zero active generation/runtime-storage effect and is safe to keep.
+- Live adapter activation remains a separate gate.
+- Critical generation/recent-save/Music Note mutation call-sites remain untouched.
 
 ## 9. Work stages and progress tracker
 
-### Step 0 — Preparation (4/4 complete)
+### Step 0 — Preparation (4/4 complete) ✅
 - [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes.
 - [x] 0-2 Capture live Firestore usage baseline from admin diagnostics.
 - [x] 0-3 Build read-only inventory tooling with no write/delete path.
 - [x] 0-4 Freeze inventory output/classification format.
 
-### Step 1 — Read-only inventory and final design (4/4 complete)
+### Step 1 — Read-only inventory and final design (4/4 complete) ✅
 - [x] 1-A Repository/call-site inventory.
 - [x] 1-B Live Firestore structural inventory against `soridraw-app-866a5`.
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A in progress)
+### Step 2 — V2 code implementation on preview (2-A in progress) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
-  - [ ] 2-A2 Implement V1 repository adapter/parity checks while leaving current App.tsx generation/save path active.
-  - [ ] 2-A3 Route only lowest-risk V1 reads through the adapter and verify Preview behavior.
-  - [ ] 2-A4 Critical generation/recent-save/Music Note mutation call-site activation only after a separate risk review and explicit approval.
+  - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks; no runtime wiring.
+  - [ ] 2-A3 Lowest-risk V1 read activation on Preview only, with direct V1 fallback and old-vs-adapter parity/cost check.
+  - [ ] 2-A4 Critical generation/recent-save/Music Note mutation activation gate only after separate risk review and explicit approval.
 - [ ] 2-B Additive V2 schema/rules/index definitions in source; do not remove V1 and do not deploy production Rules without explicit approval.
 - [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.
 - [ ] 2-D Shadow-write/validator/dry-run migration scaffolding; dual-write stays disabled by default until separately approved.
 
-### Step 3 — Backup, backfill and verification
+### Step 3 — Backup, backfill and verification (0/4) ⏳
 - [ ] Secure local read-only backup strategy/run
 - [ ] Rate-limited backfill within free-tier budget
 - [ ] Per-user automatic verification
 - [ ] No V1 deletion
 
-### Step 4 — Preview validation
+### Step 4 — Preview validation (0/12) ⏳
 - [ ] Song generation
 - [ ] Save / reload
 - [ ] Refresh
@@ -234,31 +245,34 @@ Risk decision:
 - [ ] Offline -> reconnect
 - [ ] Forced V2 failure -> V1 fallback
 
-### Step 5 — Test app promotion
+### Step 5 — Test app promotion (0/4) ⏳
 - [ ] User approval
 - [ ] preview -> main
 - [ ] Vercel test validation
 - [ ] Firebase production unchanged
 
-### Step 6 — Later architecture work
+### Step 6 — Later architecture work (0/4) ⏳
 - [ ] Firebase Functions removal/migration to Cloudflare Worker only after DB V2 is stable
 - [ ] Explore: D1 public songs/search/likes/comments/reuse permissions
 - [ ] Suno Library remains optional and isolated; can be removed independently
 - [ ] Firebase production deployment only on explicit user request
 
-## 10. Progress reporting format
+## 10. Mandatory progress / self-review reporting
 
 Every Backend V2 update must show:
-- current stage
-- completed items / total items
-- current operation
-- next operation
-- data-risk status
-- free-tier-risk status
-- working branch
-- commit/push result
-- build/test result when applicable
-- Firebase production status
+- entire stage/substage progress tree,
+- current operation,
+- next operation,
+- data-risk status,
+- free-tier-risk status,
+- working branch,
+- changed files,
+- commit/push result,
+- build/test result when applicable,
+- Firebase production status,
+- self-review result,
+- omission check,
+- newly discovered risks/limitations.
 
 At every stage boundary:
 - no issue/direct check needed → request explicit approval for next operation,

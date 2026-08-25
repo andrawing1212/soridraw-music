@@ -1,0 +1,54 @@
+name: SORIDRAW Backend V2 Gate A Docs Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-gate-a-docs-finalize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Update Master Plan exact status lines
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          s=p.read_text(encoding='utf-8')
+          def repl(old,new,label):
+              global s
+              c=s.count(old)
+              if c != 1:
+                  raise SystemExit(f'{label}: expected 1 exact match, got {c}')
+              s=s.replace(old,new,1)
+          repl('Status: IMPLEMENTATION / Step 2-A4b complete — all audited current Recent and Music Note V1 content mutations now pass through one behavior-compatible V1 boundary with mirror/outbox/stable-ID runtime still OFF and no added Firebase IO; mandatory Maintenance Gate A is next before any separately approved 2-A4c shadow write, and Step 4 remains blocked','Status: IMPLEMENTATION / Maintenance Gate A repo-side safety complete — full TypeScript is clean, dependency critical/high findings are 0/0, and Node24-compatible migration Action majors are verified; read-only inspection confirmed deployed Firestore Rules still lack the V2 canonical-song rule, so M-008 is the critical blocker and 2-A4c/Step 4 remain blocked pending separately approved Rules-only alignment','top status')
+          repl('Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.','Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.\nMaintenance Gate A result: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.','result reference')
+          repl('### Step 2 — V2 code implementation on preview (2-A4b V1 mutation-boundary centralization complete; Maintenance Gate A + 2-A4c/d still gated) 🔄','### Step 2 — V2 code implementation on preview (2-A4b + Gate A repo-side safety complete; M-008 Rules alignment + 2-A4c/d still gated) 🔄','step2 heading')
+          repl('    - [x] 2-A4b Centralize all audited current V1 Recent/Music Note content mutation boundaries while V2 mirror remains OFF; 8/8 Recent paths + audited Music Note categories independently verified, no added Firebase IO.','    - [x] 2-A4b Centralize all audited current V1 Recent/Music Note content mutation boundaries while V2 mirror remains OFF; 8/8 Recent paths + audited Music Note categories independently verified, no added Firebase IO.\n    - [~] Maintenance Gate A: M-001 TypeScript CLOSED; M-002 critical/high dependency findings cleared to 0/0 with residual low/moderate debt retained for Step 5; M-003 Actions runtime CLOSED; M-008 deployed Rules missing V2 canonical-song rule remains CRITICAL blocker before 2-A4c.','gate tracker')
+          repl('### Step 4 — Preview validation (0/12; blocked pending mandatory Maintenance Gate A + separately approved 2-A4c/d write stages) ⏳','### Step 4 — Preview validation (0/12; blocked pending M-008 Rules alignment + separately approved 2-A4c/d write stages) ⏳','step4 heading')
+          p.write_text(s,encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit Master update and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m 'docs: record Gate A blocker state in master plan'
+          git push origin HEAD:preview
+          git pull --rebase origin preview
+          git rm .github/workflows/backend-v2-gate-a-docs-finalize.yml
+          git commit -m 'chore: remove Gate A docs finalizer'
+          git push origin HEAD:preview

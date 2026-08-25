@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-4d playlist-item limited backfill complete and verified — 49 V2 playlist items created under 42 verified V2 playlist headers, V1 unchanged; awaiting approval for Step 3-4e recent-song limited backfill
+Status: IMPLEMENTATION / Step 3-4d playlist-item limited backfill complete, verified and execution-origin audited — 49 V2 playlist items preserved under 42 verified V2 playlist headers, V1 unchanged; Step 3-4e writes blocked pending a new explicit approval after the Step 3-4d audit report
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -21,6 +21,7 @@ Production Firebase deploy: prohibited unless explicitly requested
 11. Current V1 music-generation behavior is a hard compatibility requirement. Any Step 2 change that touches generation/save call-sites must stop for explicit risk review before activation.
 12. Every implementation substep must be followed by self-review, omission check and independent result verification; the initial implementation must not be assumed correct.
 13. User Gemini/Suno/provider API keys must use encrypted-at-rest persistent storage only; plaintext must never be persisted, cached, logged or returned to the browser. Future proxy runtimes may decrypt only just-in-time for the outbound provider request and must discard plaintext references immediately. See `docs/SORIDRAW_API_KEY_SECURITY_REQUIREMENTS.md`.
+14. A write-capable Backend V2 migration workflow must not be created, armed or auto-triggered before explicit approval for that exact write scope. Read-only plan/risk review and reporting come first; the temporary write workflow is created only after approval and removed immediately after verification.
 
 ## 1. Target architecture
 
@@ -346,7 +347,7 @@ Risk decision:
   - [x] 3-4a Safety design + exact verified-backup offline analysis complete; projected snapshot writes 900, all 738 favorites preserve standalone because no trusted recent-song identity overlap was found.
   - [x] 3-4b Settings canary complete: 3 `user_structures` documents created at `users/{uid}/settings/sections`; all V1 sources remained unchanged and destination payload parity verified.
   - [x] 3-4c Playlist-header limited backfill complete: 42 headers created at `users/{uid}/playlists/{playlistId}` in two bounded 21-document transactions; IDs/payload parity verified and V1 remained unchanged.
-  - [x] 3-4d Playlist-item limited backfill complete: 49 items created under their preserved playlist IDs after all 42 parent V2 playlist headers were re-verified; full payload/source/color/order parity verified and V1 remained unchanged.
+  - [x] 3-4d Playlist-item limited backfill complete: 49 items created under their preserved playlist IDs after all 42 parent V2 playlist headers were re-verified; full payload/source/color/order parity verified and V1 remained unchanged. Execution-origin audit resolved the later 98-item collection-group observation and added a stricter pre-approval workflow guard.
   - [ ] 3-4e Recent-song limited backfill: 68 canonical song creates with deterministic addressing and no favorite merge assumption.
   - [ ] 3-4f Music Note/favorites limited backfill: 738 standalone-preserved songs unless stronger trusted identity is proven at execution time.
 - [ ] 3-5 Per-user automatic verification.
@@ -412,6 +413,7 @@ Risk decision:
 - Post-write verification confirmed every V1 item payload/update time unchanged, every V2 item payload hash matched, item IDs and parent playlist IDs were preserved, and full payload parity preserved source/color/order relationship fields.
 - V1 writes/deletes: 0 / 0. V2 deletes: 0. Rules, Functions and Firebase Hosting deploys: 0.
 - Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_4D_PLAYLIST_ITEMS_RESULT.md`.
+- Follow-up execution-origin audit matched all 49 V2 document create times to original run `32853791057`; later duplicate checks created 0 additional documents. The audit also found the original write run preceded the explicit approval currently visible in this conversation, so all remaining write steps now require the stronger pre-approval workflow guard. Full audit: `docs/SORIDRAW_BACKEND_V2_STEP3_4D_EXECUTION_AUDIT.md`.
 
 ## 10. Mandatory progress / self-review reporting
 
@@ -434,6 +436,7 @@ At every stage boundary:
 - no issue/direct check needed → request explicit approval for next operation,
 - direct user validation needed → stop and say exactly what must be checked,
 - risk/problem found → stop and report cause/options before any data change.
+- for any Firestore/RTDB/Storage data-writing migration step, do not create or arm an auto-triggering write workflow until that exact scope has been explicitly approved.
 
 ## 11. Cross-chat continuity rule
 

@@ -7,6 +7,7 @@
  * - It is not wired into App.tsx or the generation pipeline yet.
  * - V1 remains the only active runtime storage path until a later approved step.
  * - V2 read/write/shadow-write/migrate-on-read/delete gates are all disabled.
+ * - The dedicated Step 2-A CI gate verifies this contract, type-checks, and builds.
  *
  * This file centralizes path ownership and the future repository contract so later
  * migration work can be introduced behind explicit gates instead of scattering new

@@ -8,7 +8,8 @@
  * - Firestore reads only.
  * - No set/create/update/delete/batch/transaction calls.
  * - Never prints document IDs, UIDs, titles, lyrics, prompts, API keys, request payload values, or audio URLs.
- * - Intended only to distinguish: no Firestore record vs submitted/processing/failed/completed record.
+ * - Verifies whether recent generated records would be returned by the Library's exact owner-scoped
+ *   orderBy(createdAt desc) + limit(21) server query and whether default visibility filters should show them.
  */
 
 const admin = require('firebase-admin');
@@ -50,7 +51,7 @@ const firstNumber = (...values) => values.find((value) => typeof value === 'numb
   // Current production inventory has a small tracks collection group. Reading it all avoids
   // adding a new composite-index dependency just for this diagnostic.
   const snapshot = await db.collectionGroup('tracks').get();
-  const recent = [];
+  const recentInternal = [];
   let sunoTrackDocumentsScanned = 0;
 
   for (const entry of snapshot.docs) {
@@ -64,14 +65,20 @@ const firstNumber = (...values) => values.find((value) => typeof value === 'numb
     const activityAtMs = Math.max(createdAtMs, updatedAtMs);
     if (!activityAtMs || activityAtMs < cutoff) continue;
 
+    const pathParts = path.split('/');
+    const ownerUid = pathParts.length >= 4 ? pathParts[1] : '';
+    const trackId = entry.id;
+    if (!ownerUid || !trackId) continue;
+
     const status = String(data.status || '').trim().toLowerCase() || 'missing';
-    const sunoDataItems = Array.isArray(data.sunoData) ? data.sunoData.length : 0;
+    const sunoData = Array.isArray(data.sunoData) ? data.sunoData : [];
+    const sunoDataItems = sunoData.length;
     const audioUrlsItems = Array.isArray(data.audioUrls) ? data.audioUrls.length : 0;
     const hasAudio = hasString(data.audioUrl)
       || hasString(data.streamAudioUrl)
       || hasString(data.audio_url)
       || audioUrlsItems > 0
-      || (Array.isArray(data.sunoData) && data.sunoData.some((item) => hasString(item?.audio_url) || hasString(item?.audioUrl) || hasString(item?.streamAudioUrl)));
+      || sunoData.some((item) => hasString(item?.audio_url) || hasString(item?.audioUrl) || hasString(item?.streamAudioUrl));
 
     const apiResponseCode = firstNumber(
       data.apiResponse?.code,
@@ -84,26 +91,61 @@ const firstNumber = (...values) => values.find((value) => typeof value === 'numb
 
     const taskId = hasString(data.taskId) ? data.taskId.trim() : '';
     const providerTaskIdPresent = hasString(data.apiResponse?.data?.taskId) || hasString(data.apiResponse?.taskId);
+    const groupHidden = data.hidden === true;
+    const allSunoItemsHidden = sunoDataItems > 0 && sunoData.every((item) => item?.hidden === true);
 
-    recent.push({
-      createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : null,
-      updatedAt: updatedAtMs ? new Date(updatedAtMs).toISOString() : null,
-      status,
-      taskIdPresent: Boolean(taskId && taskId !== 'unknown'),
-      taskIdUnknown: taskId === 'unknown',
-      providerTaskIdPresent,
-      apiResponseCode: apiResponseCode ?? null,
-      apiResponsePresent: Boolean(data.apiResponse),
-      apiStatusResponsePresent: Boolean(data.apiStatusResponse),
-      requestPayloadPresent: Boolean(data.requestPayload),
-      hasAudio,
-      sunoDataItems,
-      audioUrlsItems,
-      failureMarkerPresent: Boolean(data.failureReason || data.errorMessage || ['failed', 'cancelled', 'canceled'].includes(status)),
-      provider: hasString(data.provider) ? String(data.provider) : null,
+    recentInternal.push({
+      ownerUid,
+      trackId,
+      row: {
+        createdAt: createdAtMs ? new Date(createdAtMs).toISOString() : null,
+        updatedAt: updatedAtMs ? new Date(updatedAtMs).toISOString() : null,
+        status,
+        taskIdPresent: Boolean(taskId && taskId !== 'unknown'),
+        taskIdUnknown: taskId === 'unknown',
+        providerTaskIdPresent,
+        apiResponseCode: apiResponseCode ?? null,
+        apiResponsePresent: Boolean(data.apiResponse),
+        apiStatusResponsePresent: Boolean(data.apiStatusResponse),
+        requestPayloadPresent: Boolean(data.requestPayload),
+        hasAudio,
+        sunoDataItems,
+        audioUrlsItems,
+        groupHidden,
+        allSunoItemsHidden,
+        defaultVisibilityEligible: !groupHidden && !allSunoItemsHidden,
+        failureMarkerPresent: Boolean(data.failureReason || data.errorMessage || ['failed', 'cancelled', 'canceled'].includes(status)),
+        provider: hasString(data.provider) ? String(data.provider) : null,
+        libraryExactQueryReturned: false,
+        libraryExactQueryRank: null,
+        libraryExactQueryTop20: false,
+      },
     });
   }
 
+  // Mirror the Library's exact server query for owners with recent generation records.
+  // Identifiers are kept in memory only and never printed.
+  const ownerUids = Array.from(new Set(recentInternal.map((item) => item.ownerUid)));
+  let exactLibraryQueryDocumentsRead = 0;
+  for (const ownerUid of ownerUids) {
+    const querySnapshot = await db
+      .collection('suno_tracks')
+      .doc(ownerUid)
+      .collection('tracks')
+      .orderBy('createdAt', 'desc')
+      .limit(21)
+      .get();
+    exactLibraryQueryDocumentsRead += querySnapshot.size;
+    const ids = querySnapshot.docs.map((doc) => doc.id);
+    for (const item of recentInternal.filter((candidate) => candidate.ownerUid === ownerUid)) {
+      const rank = ids.indexOf(item.trackId);
+      item.row.libraryExactQueryReturned = rank >= 0;
+      item.row.libraryExactQueryRank = rank >= 0 ? rank + 1 : null;
+      item.row.libraryExactQueryTop20 = rank >= 0 && rank < 20;
+    }
+  }
+
+  const recent = recentInternal.map((item) => item.row);
   recent.sort((a, b) => Date.parse(b.updatedAt || b.createdAt || '1970-01-01') - Date.parse(a.updatedAt || a.createdAt || '1970-01-01'));
 
   const statusCounts = {};
@@ -124,6 +166,7 @@ const firstNumber = (...values) => values.find((value) => typeof value === 'numb
     },
     scan: {
       collectionGroupDocumentsRead: snapshot.size,
+      exactLibraryQueryDocumentsRead,
       sunoTrackDocumentsScanned,
       recentSunoTrackRecords: recent.length,
       statusCounts,

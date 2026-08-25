@@ -6,6 +6,7 @@ on:
     branches: [preview]
     paths:
       - '.deploy/apply-backend-v2-2a3r-emergency.py'
+      - '.deploy/trigger-backend-v2-2a3r-stabilization.txt'
 
 permissions:
   contents: write

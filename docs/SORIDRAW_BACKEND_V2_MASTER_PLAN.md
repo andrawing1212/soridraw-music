@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-4c playlist-header limited backfill complete and verified — 42 V2 playlist headers created, V1 unchanged; awaiting approval for Step 3-4d playlist-item limited backfill
+Status: IMPLEMENTATION / Step 3-4d playlist-item limited backfill complete and verified — 49 V2 playlist items created under 42 verified V2 playlist headers, V1 unchanged; awaiting approval for Step 3-4e recent-song limited backfill
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -338,7 +338,7 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4c complete, limited writes verified) 🔄
+### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4d complete, limited writes verified) 🔄
 - [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
 - [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000.
 - [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
@@ -346,7 +346,7 @@ Risk decision:
   - [x] 3-4a Safety design + exact verified-backup offline analysis complete; projected snapshot writes 900, all 738 favorites preserve standalone because no trusted recent-song identity overlap was found.
   - [x] 3-4b Settings canary complete: 3 `user_structures` documents created at `users/{uid}/settings/sections`; all V1 sources remained unchanged and destination payload parity verified.
   - [x] 3-4c Playlist-header limited backfill complete: 42 headers created at `users/{uid}/playlists/{playlistId}` in two bounded 21-document transactions; IDs/payload parity verified and V1 remained unchanged.
-  - [ ] 3-4d Playlist-item limited backfill: 49 items after re-verifying all parent V2 playlist headers.
+  - [x] 3-4d Playlist-item limited backfill complete: 49 items created under their preserved playlist IDs after all 42 parent V2 playlist headers were re-verified; full payload/source/color/order parity verified and V1 remained unchanged.
   - [ ] 3-4e Recent-song limited backfill: 68 canonical song creates with deterministic addressing and no favorite merge assumption.
   - [ ] 3-4f Music Note/favorites limited backfill: 738 standalone-preserved songs unless stronger trusted identity is proven at execution time.
 - [ ] 3-5 Per-user automatic verification.
@@ -400,6 +400,18 @@ Risk decision:
 - Post-write verification confirmed every V1 source payload/update time unchanged, every V2 payload hash matched, and every playlist ID was preserved.
 - V1 writes/deletes: 0 / 0. V2 deletes: 0. Rules, Functions and Firebase Hosting deploys: 0.
 - Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_4C_PLAYLIST_HEADERS_RESULT.md`.
+
+### Step 3-4d execution complete — playlist items verified
+- GitHub Actions run `32853791057` completed SUCCESS.
+- Fresh preflight observed 3,312 same-day reads, 115 writes and 0 deletes; migration caps remained 10,000 reads / 5,000 writes.
+- Step 3-3 manifest plus playlist-header and playlist-item dataset checksums were re-verified before writes.
+- All 42 current V1 playlist headers and their 42 V2 parent destinations were re-verified for exact payload parity before item creation.
+- Backup and live approved item path sets both contained exactly 49 documents with no path delta.
+- Created exactly 49 V2 playlist items at `users/{uid}/playlists/{playlistId}/items/{itemId}` in two bounded transactions (25 + 24).
+- Existing destinations would have been no-op only if identical; any parent/source/destination conflict or source change would have stopped execution.
+- Post-write verification confirmed every V1 item payload/update time unchanged, every V2 item payload hash matched, item IDs and parent playlist IDs were preserved, and full payload parity preserved source/color/order relationship fields.
+- V1 writes/deletes: 0 / 0. V2 deletes: 0. Rules, Functions and Firebase Hosting deploys: 0.
+- Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_4D_PLAYLIST_ITEMS_RESULT.md`.
 
 ## 10. Mandatory progress / self-review reporting
 

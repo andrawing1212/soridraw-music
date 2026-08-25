@@ -23,43 +23,45 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
 
-      - name: Prepare disposable strict compatibility and 901 anchor diagnostics
+      - name: Prepare disposable 874 and 901 compatibility
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          # 874: strict semantic-idempotence for the two Gate-A-corrected states.
-          p=Path('.deploy/apply-874-build-safety.py')
-          s=p.read_text(encoding='utf-8')
-          old="""if GEMINI_MARKER not in gemini:\n    anchor = \"    appliedKeywords: { ...(result.appliedKeywords || {}) },\"\n    replacement = \"    appliedKeywords: { ...result.appliedKeywords }, // SORIDRAW_874_BUILD_SAFETY_GEMINI\"\n    if gemini.count(anchor) != 1:\n        raise SystemExit(f'874 gemini AppliedKeywords anchor mismatch: {gemini.count(anchor)}')\n    gemini = gemini.replace(anchor, replacement, 1)\n    gemini_path.write_text(gemini, encoding='utf-8')\n"""
-          new="""if GEMINI_MARKER not in gemini:\n    anchor = \"    appliedKeywords: { ...(result.appliedKeywords || {}) },\"\n    corrected = \"    appliedKeywords: { ...result.appliedKeywords },\"\n    replacement = \"    appliedKeywords: { ...result.appliedKeywords }, // SORIDRAW_874_BUILD_SAFETY_GEMINI\"\n    if gemini.count(anchor) == 1:\n        gemini = gemini.replace(anchor, replacement, 1)\n        gemini_path.write_text(gemini, encoding='utf-8')\n    elif gemini.count(corrected) == 1:\n        print('SORIDRAW 874 Gemini fix already present; no-op')\n    else:\n        raise SystemExit(f'874 gemini semantic state mismatch: old={gemini.count(anchor)} corrected={gemini.count(corrected)}')\n"""
-          if s.count(old)!=1: raise SystemExit('M009 874 Gemini simulation anchor mismatch')
-          s=s.replace(old,new,1)
-          start=s.index('if APP_MARKER not in app:')
-          end=s.index("\n\nprint('Applied SORIDRAW 874:",start)
-          block="""if APP_MARKER not in app:\n    import re\n    old_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-hybrid'\\s*\\?\\s*'pure-pane-hybrid'\\s*:\\s*mode === 'pure-pane-live'\")\n    corrected_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-live'\")\n    old_matches = list(old_pattern.finditer(app))\n    corrected_matches = list(corrected_pattern.finditer(app))\n    if len(old_matches) == 1:\n        anchor = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-hybrid'\\n                                ? 'pure-pane-hybrid'\\n                                : mode === 'pure-pane-live'\"\"\"\n        replacement = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-live' // SORIDRAW_874_BUILD_SAFETY_APP\"\"\"\n        if app.count(anchor) != 1:\n            raise SystemExit(f'874 App exact old anchor mismatch despite semantic match: {app.count(anchor)}')\n        app = app.replace(anchor, replacement, 1)\n        app_path.write_text(app, encoding='utf-8')\n    elif len(corrected_matches) == 1:\n        print('SORIDRAW 874 App fix already present; no-op')\n    else:\n        raise SystemExit(f'874 App semantic state mismatch: old={len(old_matches)} corrected={len(corrected_matches)}')\n"""
-          p.write_text(s[:start]+block+s[end:],encoding='utf-8')
+          # 874: accept either the legacy pre-fix shape or the already-correct Gate-A shape.
+          p = Path('.deploy/apply-874-build-safety.py')
+          s = p.read_text(encoding='utf-8')
+          old = """if GEMINI_MARKER not in gemini:\n    anchor = \"    appliedKeywords: { ...(result.appliedKeywords || {}) },\"\n    replacement = \"    appliedKeywords: { ...result.appliedKeywords }, // SORIDRAW_874_BUILD_SAFETY_GEMINI\"\n    if gemini.count(anchor) != 1:\n        raise SystemExit(f'874 gemini AppliedKeywords anchor mismatch: {gemini.count(anchor)}')\n    gemini = gemini.replace(anchor, replacement, 1)\n    gemini_path.write_text(gemini, encoding='utf-8')\n"""
+          new = """if GEMINI_MARKER not in gemini:\n    anchor = \"    appliedKeywords: { ...(result.appliedKeywords || {}) },\"\n    corrected = \"    appliedKeywords: { ...result.appliedKeywords },\"\n    replacement = \"    appliedKeywords: { ...result.appliedKeywords }, // SORIDRAW_874_BUILD_SAFETY_GEMINI\"\n    if gemini.count(anchor) == 1:\n        gemini = gemini.replace(anchor, replacement, 1)\n        gemini_path.write_text(gemini, encoding='utf-8')\n    elif gemini.count(corrected) == 1:\n        print('SORIDRAW 874 Gemini fix already present; no-op')\n    else:\n        raise SystemExit(f'874 gemini semantic state mismatch: old={gemini.count(anchor)} corrected={gemini.count(corrected)}')\n"""
+          if s.count(old) != 1:
+              raise SystemExit('M009 874 Gemini simulation anchor mismatch')
+          s = s.replace(old, new, 1)
+          start = s.index('if APP_MARKER not in app:')
+          end = s.index("\n\nprint('Applied SORIDRAW 874:", start)
+          app_block = """if APP_MARKER not in app:\n    import re\n    old_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-hybrid'\\s*\\?\\s*'pure-pane-hybrid'\\s*:\\s*mode === 'pure-pane-live'\")\n    corrected_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-live'\")\n    old_matches = list(old_pattern.finditer(app))\n    corrected_matches = list(corrected_pattern.finditer(app))\n    if len(old_matches) == 1:\n        anchor = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-hybrid'\\n                                ? 'pure-pane-hybrid'\\n                                : mode === 'pure-pane-live'\"\"\"\n        replacement = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-live' // SORIDRAW_874_BUILD_SAFETY_APP\"\"\"\n        if app.count(anchor) != 1:\n            raise SystemExit(f'874 App exact old anchor mismatch despite semantic match: {app.count(anchor)}')\n        app = app.replace(anchor, replacement, 1)\n        app_path.write_text(app, encoding='utf-8')\n    elif len(corrected_matches) == 1:\n        print('SORIDRAW 874 App fix already present; no-op')\n    else:\n        raise SystemExit(f'874 App semantic state mismatch: old={len(old_matches)} corrected={len(corrected_matches)}')\n"""
+          p.write_text(s[:start] + app_block + s[end:], encoding='utf-8')
 
-          # 901 normal update: preserve the newer 2-A4b V1 mutation boundary while adding 901's updatedAtMs.
-          p=Path('.deploy/apply-901-music-note-10-incremental-sync.py')
-          s=p.read_text(encoding='utf-8')
-          label_pos=s.index("'normal update updatedAtMs'")
-          call_start=s.rfind('    app = replace_once(',0,label_pos)
-          call_end=s.index('\n    )',label_pos)+len('\n    )')
-          compat='''    old_normal_update = "    try {\\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);\\n      const favoriteUpdatedAtMs = Date.now();"\n    normal_update = "    try {\\n      const favoriteUpdatedAtMs = Date.now();\\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);"\n    boundary_normal_update = "    try {\\n      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));\\n      const favoriteUpdatedAtMs = Date.now();"\n    boundary_normal_update_with_version = "    try {\\n      const favoriteUpdatedAtMs = Date.now();\\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\\n      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));"\n    old_count = app.count(old_normal_update)\n    boundary_count = app.count(boundary_normal_update)\n    corrected_count = app.count(boundary_normal_update_with_version)\n    if old_count == 1 and boundary_count == 0 and corrected_count == 0:\n        app = app.replace(old_normal_update, normal_update, 1)\n    elif old_count == 0 and boundary_count == 1 and corrected_count == 0:\n        app = app.replace(boundary_normal_update, boundary_normal_update_with_version, 1)\n        print('SORIDRAW 901 normal update adapted to V1 mutation boundary')\n    elif old_count == 0 and boundary_count == 0 and corrected_count == 1:\n        print('SORIDRAW 901 normal update updatedAtMs already present; no-op')\n    else:\n        raise SystemExit(f'normal update updatedAtMs semantic mismatch: old={old_count} boundary={boundary_count} corrected={corrected_count}')'''
-          s=s[:call_start]+compat+s[call_end:]
+          # 901: preserve the newer V1 mutation boundary while adding 901 version metadata/signals.
+          p = Path('.deploy/apply-901-music-note-10-incremental-sync.py')
+          s = p.read_text(encoding='utf-8')
 
-          # Print exact modern context only when one of the remaining 901 old anchors no longer matches.
-          old_fn="""def replace_once(source: str, before: str, after: str, label: str) -> str:\n    count = source.count(before)\n    if count != 1:\n        raise SystemExit(f'{label} anchor mismatch: {count}')\n    return source.replace(before, after, 1)\n"""
-          new_fn="""def replace_once(source: str, before: str, after: str, label: str) -> str:\n    count = source.count(before)\n    if count != 1:\n        if label in {'clear all delete signal','permanent delete signal','bulk checkbox delete signal','color save signal'}:\n            tokens = {\n                'clear all delete signal': ['unlockedDocs.length','batch.commit()','runV1MutationBoundary'],\n                'permanent delete signal': ['deleteOperations.push','favorite.id','runV1MutationBoundary'],\n                'bulk checkbox delete signal': ['selectedFavorites','batch.commit()','runV1MutationBoundary'],\n                'color save signal': ['Firestore 색상 업데이트 성공','batch.commit()','runV1MutationBoundary'],\n            }[label]\n            print('M009_901_MISMATCH_LABEL=' + label + ' OLD_COUNT=' + str(count))\n            for token in tokens:\n                print('M009_901_TOKEN=' + token + ' COUNT=' + str(source.count(token)))\n                start_at=0\n                shown=0\n                while shown < 10:\n                    idx=source.find(token,start_at)\n                    if idx < 0: break\n                    print('M009_901_CONTEXT_BEGIN label=' + label + ' token=' + token + ' index=' + str(idx))\n                    print(source[max(0,idx-1600):min(len(source),idx+3600)])\n                    print('M009_901_CONTEXT_END')\n                    start_at=idx+len(token)\n                    shown+=1\n        raise SystemExit(f'{label} anchor mismatch: {count}')\n    return source.replace(before, after, 1)\n"""
-          if s.count(old_fn)!=1: raise SystemExit('M009 901 replace_once diagnostic anchor mismatch')
-          p.write_text(s.replace(old_fn,new_fn,1),encoding='utf-8')
-          print('M009_REMAINING_901_DIAGNOSTIC_READY=true')
+          label_pos = s.index("'normal update updatedAtMs'")
+          call_start = s.rfind('    app = replace_once(', 0, label_pos)
+          call_end = s.index('\n    )', label_pos) + len('\n    )')
+          normal_compat = '''    old_normal_update = "    try {\\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);\\n      const favoriteUpdatedAtMs = Date.now();"\n    normal_update = "    try {\\n      const favoriteUpdatedAtMs = Date.now();\\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\\n      await updateDoc(doc(db, 'favorites', id), sanitizedUpdates);"\n    boundary_normal_update = "    try {\\n      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));\\n      const favoriteUpdatedAtMs = Date.now();"\n    boundary_normal_update_with_version = "    try {\\n      const favoriteUpdatedAtMs = Date.now();\\n      sanitizedUpdates = sanitizeForFirestore({ ...sanitizedUpdates, updatedAtMs: favoriteUpdatedAtMs });\\n      await runV1MutationBoundary({ domain: 'musicNote', operation: 'update', uid: user?.uid || currentFavorite?.uid || '', documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), sanitizedUpdates));"\n    old_count = app.count(old_normal_update)\n    boundary_count = app.count(boundary_normal_update)\n    corrected_count = app.count(boundary_normal_update_with_version)\n    if old_count == 1 and boundary_count == 0 and corrected_count == 0:\n        app = app.replace(old_normal_update, normal_update, 1)\n    elif old_count == 0 and boundary_count == 1 and corrected_count == 0:\n        app = app.replace(boundary_normal_update, boundary_normal_update_with_version, 1)\n        print('SORIDRAW 901 normal update adapted to V1 mutation boundary')\n    elif old_count == 0 and boundary_count == 0 and corrected_count == 1:\n        print('SORIDRAW 901 normal update updatedAtMs already present; no-op')\n    else:\n        raise SystemExit(f'normal update updatedAtMs semantic mismatch: old={old_count} boundary={boundary_count} corrected={corrected_count}')'''
+          s = s[:call_start] + normal_compat + s[call_end:]
+
+          clear_start = s.index('    clear_old = ')
+          clear_end = s.index("\n\n    app = app.replace(", clear_start)
+          clear_compat = '''    clear_old = "      await batch.commit();\\n      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);"\n    clear_boundary_old = "      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-delete', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());\\n      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);"\n    clear_new_body = """      const deletedAt = Date.now();\n      const deletedFavorites = unlockedDocs.map(mapFavoriteFirestoreDoc);\n      rememberFavoriteDeletedTombstones(user.uid, deletedFavorites.map((favorite) => favorite.id).filter(Boolean));\n      const deleteSignal = buildFavoriteSyncSignal('delete', deletedFavorites[0] || {}, deletedFavorites, deletedAt);\n      applyFavoriteSyncSignal(user.uid, deleteSignal);\n      await updateDoc(doc(db, 'users', user.uid), {\n        favoriteSyncSignal: deleteSignal,\n        favoriteSyncSignalUpdatedAt: deletedAt,\n        'syncVersions.musicNote': deletedAt,\n      });\n      showToast(`${unlockedDocs.length}개의 곡이 삭제되었습니다.`);"""\n    clear_new = "      await batch.commit();\\n" + clear_new_body\n    clear_boundary_new = "      await runV1MutationBoundary({ domain: 'musicNote', operation: 'bulk-delete', uid: user.uid, documentIds: unlockedDocs.map((docSnap) => docSnap.id), affectedCount: unlockedDocs.length }, batch.commit());\\n" + clear_new_body\n    legacy_count = app.count(clear_old)\n    boundary_count = app.count(clear_boundary_old)\n    if legacy_count == 1 and boundary_count == 0:\n        app = app.replace(clear_old, clear_new, 1)\n    elif legacy_count == 0 and boundary_count == 1:\n        app = app.replace(clear_boundary_old, clear_boundary_new, 1)\n        print('SORIDRAW 901 clear-all adapted to V1 mutation boundary')\n    else:\n        raise SystemExit(f'clear all delete signal semantic mismatch: legacy={legacy_count} boundary={boundary_count}')'''
+          s = s[:clear_start] + clear_compat + s[clear_end:]
+          p.write_text(s, encoding='utf-8')
+          print('M009_BOUNDARY_SIMULATION_READY=true')
           PY
 
-      - name: Execute real prebuild and capture next stale 901 mutation anchor
+      - name: Execute complete real prebuild path and capture the next blocker
         shell: bash
         run: |
           set +e
@@ -67,12 +69,13 @@ jobs:
           code=$?
           set -e
           echo "M009_PREBUILD_EXIT=${code}"
-          grep -A120 -B12 'M009_901_MISMATCH_LABEL' /tmp/m009.log || true
           echo 'M009_LOG_TAIL_BEGIN'
-          tail -n 420 /tmp/m009.log
+          tail -n 520 /tmp/m009.log
           echo 'M009_LOG_TAIL_END'
+          echo 'M009_DIFF_BEGIN'
           git diff --stat
           git diff --name-only
+          echo 'M009_DIFF_END'
           exit 0
 
       - name: Prove no Firebase change

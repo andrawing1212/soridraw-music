@@ -28,6 +28,11 @@ const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<Pla
   return Boolean(keyA && keyB && keyA === keyB);
 };
 
+// 2-A3-R: default-playlist existence is a session bootstrap, not a tab-switch query.
+// Keep one successful promise per uid so My List <-> Shared List navigation cannot
+// re-scan the same V1 list collection over and over. Failures are removed so retry stays possible.
+const defaultPlaylistEnsurePromises = new Map<string, Promise<void>>();
+
 const getPlaylistsByTypeDirectV1 = async (uid: string, type: "normal" | "shared"): Promise<Playlist[]> => {
   const listsRef = collection(db, 'user_playlists', uid, 'lists');
   const q = query(listsRef, where('type', '==', type));
@@ -59,9 +64,7 @@ export const getPlaylistsByType = async (uid: string, type: "normal" | "shared")
  * Normal: "1", "2", "3"
  * Shared: "1", "2", "3"
  */
-export const ensureDefaultPlaylists = async (uid: string) => {
-  if (!uid) return;
-
+const ensureDefaultPlaylistsInternal = async (uid: string) => {
   const listsRef = collection(db, 'user_playlists', uid, 'lists');
   const listsSnap = await getDocs(listsRef);
 
@@ -121,12 +124,23 @@ export const ensureDefaultPlaylists = async (uid: string) => {
   }
 
   if (hasBatchOperations) {
-    try {
-      await batch.commit();
-    } catch (error) {
-      console.error("[Playlist] Failed to ensure default playlists:", error);
-    }
+    await batch.commit();
   }
+};
+
+export const ensureDefaultPlaylists = async (uid: string) => {
+  if (!uid) return;
+
+  const existing = defaultPlaylistEnsurePromises.get(uid);
+  if (existing) return existing;
+
+  const task = ensureDefaultPlaylistsInternal(uid).catch((error) => {
+    defaultPlaylistEnsurePromises.delete(uid);
+    console.error("[Playlist] Failed to ensure default playlists:", error);
+    throw error;
+  });
+  defaultPlaylistEnsurePromises.set(uid, task);
+  return task;
 };
 
 export const createPlaylist = async (uid: string, type: 'normal' | 'shared', title: string, order: number) => {

@@ -1235,8 +1235,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
+  const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
+
   useEffect(() => {
-    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || isSharedView) {
+    if (!user || !playlistLiveModeActive || isSharedView) {
       if (!user) {
         setPlaylists([]);
       }
@@ -1266,7 +1268,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return () => {
       if (unsub) unsub();
     };
-  }, [user, libraryViewMode, isSharedView]);
+  }, [user?.uid, playlistLiveModeActive, isSharedView]);
 
   useEffect(() => {
     playlistsRef.current = playlists;
@@ -2020,6 +2022,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getAudioUrl = (item: any, group: any) => {
+    if (group?.audioValidationStatus === 'pending_or_empty' || group?.audioValidationStatus === 'missing') return '';
     return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || item?.stream_audio_url || item?.sourceAudioUrl || item?.source_audio_url || item?.sourceStreamAudioUrl || item?.source_stream_audio_url || group?.audioUrl || group?.streamAudioUrl || group?.audio_url || group?.stream_audio_url || '';
   };
 

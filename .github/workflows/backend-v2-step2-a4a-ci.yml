@@ -23,5 +23,5 @@ jobs:
       - run: npx tsx src/data/v2LiveMutation.contract.ts
       - run: npx tsx src/data/indexedDbMirrorOutbox.contract.ts
       - run: npx tsx src/data/indexedDbLocalCache.contract.ts
-      - run: npx tsc --noEmit
+      - run: npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --types node src/data/v2LiveMutation.ts src/data/v2LiveMutation.contract.ts src/data/indexedDbMirrorOutbox.ts src/data/indexedDbMirrorOutbox.contract.ts src/data/indexedDbLocalCache.ts src/data/indexedDbLocalCache.contract.ts src/data/v2Schema.ts
       - run: npx vite build

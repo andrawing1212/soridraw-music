@@ -34,6 +34,9 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
+          # The emergency report is newly created by the patch. Intent-to-add makes
+          # it visible to git diff without committing it before the safety gate.
+          git add -N docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md
           python3 - <<'PY'
           import subprocess
           allowed = {

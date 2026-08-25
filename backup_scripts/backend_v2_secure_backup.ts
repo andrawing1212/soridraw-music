@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -23,9 +23,12 @@ export const STEP1B_LAST_INVENTORY = Object.freeze({
   playlistItems: 49,
 });
 
-export const STEP1B_ESTIMATED_BACKUP_DOC_READS = Object.values(STEP1B_LAST_INVENTORY)
-  .filter((value): value is number => typeof value === 'number')
-  .reduce((sum, value) => sum + value, 0);
+export const STEP1B_ESTIMATED_BACKUP_DOC_READS =
+  STEP1B_LAST_INVENTORY.favorites
+  + STEP1B_LAST_INVENTORY.userRecentSongs
+  + STEP1B_LAST_INVENTORY.userStructures
+  + STEP1B_LAST_INVENTORY.playlistHeaders
+  + STEP1B_LAST_INVENTORY.playlistItems;
 
 export type BackupDatasetId =
   | 'user_structures'

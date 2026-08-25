@@ -1,6 +1,6 @@
 # SORIDRAW Maintenance Backlog & Timing Gates
 
-Status: ACTIVE / GATE A REPO-SIDE SAFETY CLEARED / M-008 RULES ALIGNMENT BLOCKS 2-A4c
+Status: ACTIVE / GATE A REPO-SIDE SAFETY CLEARED / M-008 RULES + M-009 VERCEL PREBUILD BLOCK 2-A4c
 Last updated: 2026-08-26 KST
 Working branch: `preview`
 Scope: project-wide maintenance, deferred defects, security/infrastructure warnings, cost observability and pre-gate cleanup
@@ -62,8 +62,9 @@ Gate A result:
 - M-002 — **Gate-A high-risk requirement CLEARED**: npm audit moved from 34 findings (2 critical / 10 high) to 14 findings (0 critical / 0 high / 13 moderate / 1 low) using non-force remediation with `package.json` unchanged. Residual low/moderate debt remains open for the Step-5 pre-gate.
 - M-003 — **CLOSED for migration tooling**: current Node24-compatible Action majors were verified while project commands remain on Node 20.20.2.
 - M-008 — **CRITICAL BLOCKER CONFIRMED**: read-only inspection proved the currently deployed Firestore Rules do not contain the V2 `users/{uid}/songs/{songId}` rule that exists in repository source.
+- M-009 — **HIGH BLOCKER CONFIRMED**: Vercel Preview `npm run build` currently stops in the historical prebuild patch chain with `normal update updatedAtMs anchor mismatch: 0`; the same failure existed before the Gate A dependency lockfile change.
 
-Therefore **2-A4c remains blocked**. No 2-A4c write-capable workflow may be created or armed until a separately approved Rules-only alignment/deployment clears M-008.
+Therefore **2-A4c remains blocked**. M-009 Preview build health and M-008 Rules alignment must both be cleared before any 2-A4c write-capable workflow is created or armed.
 
 Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 
@@ -79,6 +80,7 @@ Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 | M-006 | `user_plans` authority/provenance unresolved | HIGH / NO-TOUCH / REVIEW | Core V2 work can proceed because the collection is isolated, but moving/merging/deleting it without identifying authority could corrupt plan/account state. | Must be resolved **before any `user_plans` migration, merge, cleanup or V1 deletion** and before final production cleanup phase. | OPEN / NO-TOUCH |
 | M-007 | Exact RTDB Cloud Monitoring metric visibility remains a permission/observability gap | MEDIUM / PRE-GATE | RTDB Presence is intentionally small, but exact free-tier/cost monitoring is weaker than Firestore monitoring. | **Before Step 5/main promotion or meaningful user-scale testing**, perform read-only permission/metric review. Any IAM permission change requires separate approval. | OPEN |
 | M-008 | Deployed Firestore Rules do not yet contain the repository V2 canonical-song rule | CRITICAL / BLOCKER FOR 2-A4c | Read-only Rules API inspection succeeded. Deployed ruleset `8d0a2de9-fa29-4988-801e-cc45d3f0af1b` retains V1 recent/favorites rules but lacks `users/{uid}/songs/{songId}` + `hasValidV2SongMetadata`. Repo/deployed normalized Rules hashes differ. | **Mandatory before 2-A4c shadow writes.** Revalidate source, then deploy Rules only under separate exact approval; verify deployed hash/features afterward. | **OPEN / CRITICAL BLOCKER** |
+| M-009 | Vercel Preview `npm run build` fails in historical prebuild source-patch chain | HIGH / BLOCKER FOR 2-A4c | Vercel deployments for commits `c695776...` and `e505ce7...` both failed with `normal update updatedAtMs anchor mismatch: 0`. GitHub `npx vite build` passes because it bypasses npm lifecycle `prebuild`; therefore final Preview HEAD is not yet proven deployable through the real Vercel path. | **Before 2-A4c Preview activation.** Audit the exact stale patch owner, make only the minimum source/build-pipeline correction, require full `npm run build`, contracts and exact Vercel READY verification. No Firebase change in this fix. | **OPEN / HIGH BLOCKER** |
 
 ## 5. Evidence references
 
@@ -144,6 +146,10 @@ Gate A read-only Rules inspection found:
 
 No Rules deployment was performed because Gate A approval explicitly prohibited it.
 
+### M-009
+
+Post-Gate-A Vercel inspection found two Preview deployments failing before Vite with the same historical prebuild patch error: `normal update updatedAtMs anchor mismatch: 0`. This failure predates the Gate A dependency lockfile change. Full detail: `docs/SORIDRAW_MAINTENANCE_M009_VERCEL_PREBUILD_BLOCKER.md`.
+
 ## 6. Planned maintenance order from current point
 
 Current migration order is now:
@@ -153,22 +159,27 @@ Current migration order is now:
    - M-001 closed,
    - M-002 critical/high cleared; residual low/moderate retained for Step-5 review,
    - M-003 closed for upcoming migration tooling.
-3. **M-008 RULES ALIGNMENT REQUIRED NOW**
+3. **M-009 PREVIEW BUILD PIPELINE REPAIR REQUIRED NOW**
+   - audit the current `prebuild` patch chain,
+   - correct only the stale/required patch ownership,
+   - require the real `npm run build` path and exact Vercel Preview READY verification,
+   - no Firebase data/Rules/Functions/Hosting change in this repair.
+4. **M-008 RULES ALIGNMENT AFTER M-009**
    - repository V2 Rules source revalidation,
    - Rules-only deployment only after separate exact approval,
    - deployed post-check must prove the V2 canonical-song rule is present while V1 compatibility rules remain.
-4. **2-A4c** — only after M-008 is cleared and then separately approved for its exact V2 shadow-write scope; V1-first/V2-shadow with fresh quota gate.
-5. **2-A4d** — only after separate exact write approval: bounded current live-gap catch-up and verification.
-6. **Maintenance Gate B before/during Step 4**
+5. **2-A4c** — only after both M-009 and M-008 are cleared and then separately approved for its exact V2 shadow-write scope; V1-first/V2-shadow with fresh quota gate.
+6. **2-A4d** — only after separate exact write approval: bounded current live-gap catch-up and verification.
+7. **Maintenance Gate B before/during Step 4**
    - M-005 resolve/retest Preview latest-track visibility environment blocker,
    - M-004 recheck bundle/performance impact during real-use validation.
-7. **Step 4 Preview validation** — 12/12 functional/fallback checks.
-8. **Maintenance Gate C before Step 5/main promotion**
+8. **Step 4 Preview validation** — 12/12 functional/fallback checks.
+9. **Maintenance Gate C before Step 5/main promotion**
    - M-002 review/clear remaining low/moderate dependency debt or explicitly justify bounded deferral,
    - M-007 verify RTDB/free-tier observability,
    - M-004 perform bundle optimization if Step 4 performance requires it.
-9. **Step 5 main/test-app promotion** only after all applicable pre-gates pass.
-10. `user_plans` M-006 remains NO-TOUCH until its own authority investigation; it cannot be silently included in V1 cleanup.
+10. **Step 5 main/test-app promotion** only after all applicable pre-gates pass.
+11. `user_plans` M-006 remains NO-TOUCH until its own authority investigation; it cannot be silently included in V1 cleanup.
 
 ## 7. Cost-management maintenance rule
 

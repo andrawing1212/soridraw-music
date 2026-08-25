@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Maintenance Gate A repo-side safety complete — full TypeScript is clean, dependency critical/high findings are 0/0, and Node24-compatible migration Action majors are verified; read-only inspection confirmed deployed Firestore Rules still lack the V2 canonical-song rule, so M-008 is the critical blocker and 2-A4c/Step 4 remain blocked pending separately approved Rules-only alignment
+Status: IMPLEMENTATION / Maintenance Gate A repo-side safety complete — full TypeScript is clean, dependency critical/high findings are 0/0, and Node24-compatible migration Action majors are verified; two blockers now remain before 2-A4c: M-009 Vercel Preview `npm run build` fails in the historical prebuild patch chain, and M-008 deployed Firestore Rules still lack the V2 canonical-song rule; Step 4 remains blocked
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -371,7 +371,7 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A4b + Gate A repo-side safety complete; M-008 Rules alignment + 2-A4c/d still gated) 🔄
+### Step 2 — V2 code implementation on preview (2-A4b + Gate A repo-side safety complete; M-009 Preview build + M-008 Rules alignment + 2-A4c/d still gated) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
@@ -381,6 +381,7 @@ Risk decision:
     - [x] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests complete; runtime OFF, no Firebase IO/App wiring.
     - [x] 2-A4b Centralize all audited current V1 Recent/Music Note content mutation boundaries while V2 mirror remains OFF; 8/8 Recent paths + audited Music Note categories independently verified, no added Firebase IO.
     - [~] Maintenance Gate A: M-001 TypeScript CLOSED; M-002 critical/high dependency findings cleared to 0/0 with residual low/moderate debt retained for Step 5; M-003 Actions runtime CLOSED; M-008 deployed Rules missing V2 canonical-song rule remains CRITICAL blocker before 2-A4c.
+    - [ ] M-009 Vercel Preview build blocker: real `npm run build` fails at `normal update updatedAtMs anchor mismatch: 0`; must be repaired and exact Preview READY verified before M-008 deployment/2-A4c activation.
     - [ ] 2-A4c Preview shadow mirror only after separate exact write approval + deployed-Rules verification + fresh quota gate.
     - [ ] 2-A4d Bounded current live-gap catch-up/verification only after separate exact write approval; no positional recent overwrite.
 - [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.
@@ -401,7 +402,7 @@ Risk decision:
 - [x] 3-5 Per-user automatic verification complete: 10/10 migrated users passed; settings 3, playlist headers 42, playlist items 49, recent songs 68 and standalone Music Note/favorites 738 all matched expected V2 paths/counts/payload metadata with 0 error categories and 0 writes/deletes. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_5_PER_USER_VERIFICATION_RESULT.md`.
 - [x] 3-6 V1 retention / rollback safety confirmed: backed-up V1 records remain retained, the current V1 source remains live, the Step 3-3 backup is hash-valid/recoverable, and all V2/backfill/V1-delete runtime gates remain off. Read-only follow-up found normal post-backfill drift (3 new favorites and one rotated 10-item recent bundle), so Step 4 is blocked until Step 2-A4 live mutation/sync review. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_6_V1_ROLLBACK_SAFETY_RESULT.md`.
 
-### Step 4 — Preview validation (0/12; blocked pending M-008 Rules alignment + separately approved 2-A4c/d write stages) ⏳
+### Step 4 — Preview validation (0/12; blocked pending M-009 Preview build repair + M-008 Rules alignment + separately approved 2-A4c/d write stages) ⏳
 - [ ] Song generation
 - [ ] Save / reload
 - [ ] Refresh

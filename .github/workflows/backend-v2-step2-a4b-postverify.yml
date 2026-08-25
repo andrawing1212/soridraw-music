@@ -36,20 +36,26 @@ jobs:
           if any(x in boundary for x in ['firebase/', 'indexedDbMirrorOutbox', 'v2LiveMutation', 'fetch(', 'axios']):
               raise SystemExit('common boundary has forbidden runtime IO/mirror dependency')
 
-          # Independently inspect all user_recent_songs write expressions.
-          recent_blocks = []
+          # Independent check: every current Recent write expression that writes songs must be boundary-wrapped.
           lines = app.splitlines()
+          recent_blocks = []
           for i, line in enumerate(lines):
               if 'setDoc(ref,' not in line:
                   continue
-              nearby = '\n'.join(lines[max(0, i-5):min(len(lines), i+6)])
-              if 'user_recent_songs' not in nearby:
+              if 'songs:' not in line and 'sanitizeForFirestore({ songs:' not in line:
                   continue
-              recent_blocks.append({'line': i+1, 'wrapped': 'runV1MutationBoundary(' in line, 'text': line.strip()[:180]})
+              recent_blocks.append({'line': i + 1, 'wrapped': 'runV1MutationBoundary(' in line, 'text': line.strip()[:180]})
+          recent_boundary_calls = [
+              {'line': i + 1, 'text': line.strip()[:180]}
+              for i, line in enumerate(lines)
+              if "domain: 'recent'" in line and 'runV1MutationBoundary(' in line
+          ]
           if len(recent_blocks) != 8 or not all(x['wrapped'] for x in recent_blocks):
-              raise SystemExit('recent boundary coverage mismatch: ' + json.dumps(recent_blocks, ensure_ascii=False))
+              raise SystemExit('recent write coverage mismatch: ' + json.dumps(recent_blocks, ensure_ascii=False))
+          if len(recent_boundary_calls) != 8:
+              raise SystemExit('recent boundary call count mismatch: ' + json.dumps(recent_boundary_calls, ensure_ascii=False))
 
-          # Inspect direct favorites content writes and batch commits in known mutation owners.
+          # Inspect direct favorites content writes in known mutation owners.
           known = {'App': app, 'FavoritesPage': fav, 'SunoLibraryPage': lib}
           bypass = []
           for name, text in known.items():
@@ -78,6 +84,7 @@ jobs:
           print('STEP2A4B_POSTVERIFY=' + json.dumps({
             'recentV1WritePaths': len(recent_blocks),
             'recentWrapped': sum(1 for x in recent_blocks if x['wrapped']),
+            'recentBoundaryCalls': len(recent_boundary_calls),
             'appBoundaryCalls': app.count('runV1MutationBoundary('),
             'favoritesPageBoundaryCalls': fav.count('runV1MutationBoundary('),
             'sunoLibraryPageBoundaryCalls': lib.count('runV1MutationBoundary('),

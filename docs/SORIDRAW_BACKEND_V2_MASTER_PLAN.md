@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: INVENTORY / Step 1 complete (4/4) — awaiting approval for Step 2-A
+Status: IMPLEMENTATION / Step 2-A in progress — 2-A1 safe scaffold complete, awaiting approval for 2-A2
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -18,6 +18,7 @@ Production Firebase deploy: prohibited unless explicitly requested
 8. Future Explore/social public data must be separated from private Firestore data and is planned for Cloudflare Worker + D1.
 9. Suno Library is optional/low-priority and must never become a structural dependency of core storage or Explore. It may be removed later without impacting song creation, saved songs, Music Note or Explore.
 10. Never delete or overwrite existing user data during investigation or migration. V1 must remain as a fallback until V2 is fully verified and explicitly approved for cleanup.
+11. Current V1 music-generation behavior is a hard compatibility requirement. Any Step 2 change that touches generation/save call-sites must stop for explicit risk review before activation.
 
 ## 1. Target architecture
 
@@ -171,7 +172,25 @@ Finalized:
 
 No Step 1 finding requires an architecture reversal. The unresolved `user_plans` documents are isolated as no-touch and do not block core V2 work.
 
-## 8. Work stages and progress tracker
+## 8. Step 2-A generation-safety preflight
+
+Detailed report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTATION.md`.
+
+Completed 2-A1 findings/actions:
+- Compared the validated `main` runtime baseline with pre-Step-2 `preview`; Step 0/1 had not modified active frontend runtime source, Firebase runtime config, Firestore Rules, or production Functions source.
+- Rechecked current Firebase and Gemini generation paths before implementation.
+- Added `src/data/userDataRepository.ts` as an inert, side-effect-free path/repository contract.
+- The new module imports no Firebase SDK/runtime code and is not wired into `App.tsx` or generation code.
+- Runtime mode is `v1-only`; V2 reads, writes, shadow writes, migrate-on-read and V1 deletion are all disabled.
+- Added a dedicated Step 2-A safety workflow for future `src/data/**` changes.
+- Vercel Preview build for the safe scaffold completed READY and the Preview alias returned HTTP 200.
+- Firestore/RTDB application writes/deletes: 0. Rules/Functions/Firebase Hosting deployments: 0.
+
+Risk decision:
+- The inert scaffold has no active generation/runtime storage effect and is safe.
+- Rewiring live `App.tsx` generation/recent-save/favorites mutation call-sites is CRITICAL/HIGH risk and must not be bundled into the same unreviewed change. It remains deferred behind later 2-A micro-gates.
+
+## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete)
 - [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes.
@@ -185,8 +204,12 @@ No Step 1 finding requires an architecture reversal. The unresolved `user_plans`
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (0/4)
-- [ ] 2-A Repository/data-access layer: centralize V1 access first, preserving current behavior; code/build/tests only and no historical data migration.
+### Step 2 — V2 code implementation on preview (2-A in progress)
+- [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
+  - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
+  - [ ] 2-A2 Implement V1 repository adapter/parity checks while leaving current App.tsx generation/save path active.
+  - [ ] 2-A3 Route only lowest-risk V1 reads through the adapter and verify Preview behavior.
+  - [ ] 2-A4 Critical generation/recent-save/Music Note mutation call-site activation only after a separate risk review and explicit approval.
 - [ ] 2-B Additive V2 schema/rules/index definitions in source; do not remove V1 and do not deploy production Rules without explicit approval.
 - [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.
 - [ ] 2-D Shadow-write/validator/dry-run migration scaffolding; dual-write stays disabled by default until separately approved.
@@ -223,7 +246,7 @@ No Step 1 finding requires an architecture reversal. The unresolved `user_plans`
 - [ ] Suno Library remains optional and isolated; can be removed independently
 - [ ] Firebase production deployment only on explicit user request
 
-## 9. Progress reporting format
+## 10. Progress reporting format
 
 Every Backend V2 update must show:
 - current stage
@@ -242,13 +265,13 @@ At every stage boundary:
 - direct user validation needed → stop and say exactly what must be checked,
 - risk/problem found → stop and report cause/options before any data change.
 
-## 10. Cross-chat continuity rule
+## 11. Cross-chat continuity rule
 
 This file is the authoritative project handoff for Backend V2 / zero-cost architecture work.
 
 In a new chat:
 1. read this file first,
-2. read the latest relevant Step document, especially Step 1-D before implementation,
+2. read the latest relevant Step document, especially Step 1-D and Step 2-A before implementation,
 3. inspect latest `preview` branch,
 4. if docs and code disagree, report the discrepancy before changing data or deploying.
 

@@ -33,7 +33,8 @@ s = replace_n(s, heart_pending, heart_pending_op, 1, '912 heart pending')
 p.write_text(s, encoding='utf-8')
 
 
-# 913 matches 912's operation-aware pending records in both old/new literals.
+# 913 stores replacement templates with literal \n escapes, so preserve those
+# characters while adapting both the before/after heart templates.
 p = Path('.deploy/apply-913-recent-save-runtime-fix.py')
 s = p.read_text(encoding='utf-8')
 s = replace_n(
@@ -43,13 +44,9 @@ s = replace_n(
     2,
     '913 edit pending literals',
 )
-s = replace_n(
-    s,
-    '''          recentSongTextWritePendingRef.current = {\n            uid: user.uid,\n            songs: nextCommittedHistory,\n          };''',
-    '''          recentSongTextWritePendingRef.current = {\n            uid: user.uid,\n            songs: nextCommittedHistory,\n            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };''',
-    2,
-    '913 heart pending literals',
-)
+heart_tail = r"            songs: nextCommittedHistory,\n          };"
+heart_tail_op = r"            songs: nextCommittedHistory,\n            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };"
+s = replace_n(s, heart_tail, heart_tail_op, 2, '913 heart pending literals')
 p.write_text(s, encoding='utf-8')
 
 print('M009_LATE_COMPAT_READY=912,913')

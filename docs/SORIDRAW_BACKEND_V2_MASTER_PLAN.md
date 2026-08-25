@@ -1,7 +1,7 @@
 # SORIDRAW Backend V2 · Master Plan
 
 Status: IMPLEMENTATION / Step 3-4e recent-song limited backfill complete and independently verified — 68 canonical recent-origin V2 songs created with deterministic IDs, complete V1 payload preserved and V1 unchanged; Step 3-4f favorites/Music Note writes blocked pending a new read-only match/risk review and explicit approval
-Last updated: 2026-08-25 (KST)
+Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
 Production Firebase deploy: prohibited unless explicitly requested

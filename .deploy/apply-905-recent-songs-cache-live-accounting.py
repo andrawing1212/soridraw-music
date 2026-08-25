@@ -13,9 +13,35 @@ def replace_once(source: str, before: str, after: str, label: str) -> str:
 
 def replace_all(source: str, before: str, after: str, label: str) -> str:
     count = source.count(before)
-    if count < 1:
-        raise SystemExit(f'{label} anchor mismatch: {count}')
-    return source.replace(before, after)
+    if count >= 1:
+        return source.replace(before, after)
+
+    diag = "markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);"
+    boundary_pairs = {
+        'recent songs clear write accounting': [
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: userRef.current.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));\n          " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'clear', uid: user.uid, affectedCount: 0 }, setDoc(ref, { songs: [] }, { merge: true }));\n          " + diag),
+        ],
+        'recent songs delete write accounting': [("await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'delete-item', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: newHistory }), { merge: true }));\n        " + diag)],
+        'recent songs generation write accounting': [("await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: newSongs.length }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'save-batch', uid: user.uid, affectedCount: newSongs.length }, setDoc(ref, sanitizeForFirestore({ songs: updatedSongs }), { merge: true }));\n      " + diag)],
+        'recent songs edit write accounting': [
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      " + diag),
+            ("await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));", "await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      " + diag),
+        ],
+        'recent songs async language write accounting': [("runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {", "runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }))\n            .then(() => " + diag.replace(';','') + ")\n            .catch((error) => {")],
+        'recent songs async studio edit write accounting': [("runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {", "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }))\n          .then(() => " + diag.replace(';','') + ")\n          .catch((error) => {")],
+    }
+    pairs = boundary_pairs.get(label, [])
+    matched = 0
+    for old, new in pairs:
+        n = source.count(old)
+        if n:
+            source = source.replace(old, new)
+            matched += n
+    if matched < 1:
+        raise SystemExit(f'{label} anchor mismatch: raw={count} boundary={matched}')
+    print(f'SORIDRAW 905 {label} adapted to V1 mutation boundary: {matched}')
+    return source
 
 
 app_path = Path('src/App.tsx')

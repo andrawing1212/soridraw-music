@@ -22,9 +22,9 @@ if MARKER not in app:
     # Any edit after a heart save detaches that recent-song version from the
     # Music Note snapshot so it becomes a new, unsaved working version.
     # ---------------------------------------------------------------------
-    queue_old = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[]) => {
+    queue_old = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit') => {
     if (!uid || !Array.isArray(songs)) return;
-    recentSongTextWritePendingRef.current = { uid, songs };
+    recentSongTextWritePendingRef.current = { uid, songs, operation };
     if (recentSongTextWriteTimerRef.current !== null) {
       window.clearTimeout(recentSongTextWriteTimerRef.current);
     }
@@ -41,7 +41,7 @@ if MARKER not in app:
     return () => window.removeEventListener('pagehide', handlePageHide);
   }, [flushRecentSongTextWrite]);
 '''
-    queue_new = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[]) => {
+    queue_new = '''  const queueRecentSongTextWrite = useCallback((uid: string, songs: any[], operation: 'regenerate' | 'edit' | 'pre-favorite-edit') => {
     if (!uid || !Array.isArray(songs)) return;
 
     const activeIndex = historyIndexRef.current;
@@ -63,7 +63,7 @@ if MARKER not in app:
     // Local persistence only. No timer and no pagehide Firestore flush.
     recentSongsCacheRef.current = nextSongs;
     saveRecentSongsCache(uid, nextSongs);
-    recentSongTextWritePendingRef.current = { uid, songs: nextSongs };
+    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };
   }, []);
 '''
     app = replace_once(app, queue_old, queue_new, '912 remove timer and keep recent edits local')
@@ -206,6 +206,7 @@ if MARKER not in app:
           recentSongTextWritePendingRef.current = {
             uid: user.uid,
             songs: nextCommittedHistory,
+            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',
           };
           await flushRecentSongTextWrite();
         }

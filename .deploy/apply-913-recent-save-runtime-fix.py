@@ -25,15 +25,15 @@ if MARKER not in app:
     # - Music Note favorite remains handled by toggleFavorite independently
     app = replace_once(
         app,
-        '''    // Local persistence only. No timer and no pagehide Firestore flush.\n    recentSongsCacheRef.current = nextSongs;\n    saveRecentSongsCache(uid, nextSongs);\n    recentSongTextWritePendingRef.current = { uid, songs: nextSongs };''',
-        '''    // Local persistence only. No timer and no pagehide Firestore flush.\n    saveRecentSongsCache(uid, nextSongs);\n    recentSongTextWritePendingRef.current = { uid, songs: nextSongs };''',
+        '''    // Local persistence only. No timer and no pagehide Firestore flush.\n    recentSongsCacheRef.current = nextSongs;\n    saveRecentSongsCache(uid, nextSongs);\n    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',
+        '''    // Local persistence only. No timer and no pagehide Firestore flush.\n    saveRecentSongsCache(uid, nextSongs);\n    recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',
         '913 remove invalid recent cache ref from edit path',
     )
 
     app = replace_once(
         app,
-        '''          // Heart is the only Firestore commit boundary for text edits.\n          // Store the recent-song bundle once with the exact post-toggle link state.\n          recentSongsCacheRef.current = nextCommittedHistory;\n          saveRecentSongsCache(user.uid, nextCommittedHistory);\n          recentSongTextWritePendingRef.current = {\n            uid: user.uid,\n            songs: nextCommittedHistory,\n          };\n          await flushRecentSongTextWrite();''',
-        '''          // Heart is the only Firestore commit boundary for text edits.\n          // Persist the local snapshot, then write user_recent_songs exactly once.\n          saveRecentSongsCache(user.uid, nextCommittedHistory);\n          recentSongTextWritePendingRef.current = {\n            uid: user.uid,\n            songs: nextCommittedHistory,\n          };\n          await flushRecentSongTextWrite();''',
+        '''          // Heart is the only Firestore commit boundary for text edits.\n          // Store the recent-song bundle once with the exact post-toggle link state.\n          recentSongsCacheRef.current = nextCommittedHistory;\n          saveRecentSongsCache(user.uid, nextCommittedHistory);\n          recentSongTextWritePendingRef.current = {\n            uid: user.uid,\n            songs: nextCommittedHistory,\n            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };\n          await flushRecentSongTextWrite();''',
+        '''          // Heart is the only Firestore commit boundary for text edits.\n          // Persist the local snapshot, then write user_recent_songs exactly once.\n          saveRecentSongsCache(user.uid, nextCommittedHistory);\n          recentSongTextWritePendingRef.current = {\n            uid: user.uid,\n            songs: nextCommittedHistory,\n            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };\n          await flushRecentSongTextWrite();''',
         '913 remove invalid recent cache ref from heart path',
     )
 

@@ -53,16 +53,7 @@ jobs:
           unexpected = changed - allowed
           if unexpected:
               raise SystemExit(f'unexpected files changed: {sorted(unexpected)}')
-          required = {
-              'src/firebase.js',
-              'src/services/playlistService.ts',
-              'src/pages/SunoLibraryPage.tsx',
-              'src/lib/songUtils.ts',
-              'functions/src/index.ts',
-              'docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md',
-              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
-          }
-          missing = required - changed
+          missing = allowed - changed
           if missing:
               raise SystemExit(f'required emergency files not changed: {sorted(missing)}')
           for protected in ['src/App.tsx','firestore.rules','database.rules.json']:
@@ -125,17 +116,17 @@ jobs:
         continue-on-error: true
         run: npm ci
 
-      - name: Frontend type/lint check
+      - name: Frontend TypeScript check without npm lifecycle patches
         id: lint
         if: steps.install_frontend.outcome == 'success'
         continue-on-error: true
-        run: npm run lint
+        run: npx tsc --noEmit
 
-      - name: Frontend production build
+      - name: Frontend production build without npm lifecycle patches
         id: build
         if: steps.install_frontend.outcome == 'success'
         continue-on-error: true
-        run: npm run build
+        run: npx vite build
 
       - name: Set up Node.js 22 for Functions source check
         uses: actions/setup-node@v4
@@ -157,6 +148,34 @@ jobs:
         working-directory: functions
         run: npx tsc --noEmit
 
+      - name: Verify validation introduced no source side-effects
+        id: post_scope
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              'src/firebase.js',
+              'src/services/playlistService.ts',
+              'src/pages/SunoLibraryPage.tsx',
+              'src/lib/songUtils.ts',
+              'functions/src/index.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git','diff','--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'validation side-effect detected; changed={sorted(changed)}, expected={sorted(expected)}')
+          for protected in ['src/App.tsx','firestore.rules','database.rules.json']:
+              result = subprocess.run(['git','diff','--quiet','HEAD','--',protected])
+              if result.returncode != 0:
+                  raise SystemExit(f'protected file changed after validation: {protected}')
+          print('validation side-effect check PASS')
+          PY
+
       - name: Final safety gate
         id: final
         if: always()
@@ -171,6 +190,7 @@ jobs:
           test '${{ steps.build.outcome }}' = success
           test '${{ steps.install_functions.outcome }}' = success
           test '${{ steps.functions_typecheck.outcome }}' = success
+          test '${{ steps.post_scope.outcome }}' = success
           echo '2-A3-R safety gate PASS; no Firebase deploy executed.'
 
       - name: Commit validated stabilization to preview

@@ -1,6 +1,7 @@
 import { db } from '../firebase';
 import { collection, doc, writeBatch, serverTimestamp, getDocs, setDoc, updateDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { Playlist, PlaylistItem } from '../types';
+import { v1UserDataReadAdapter } from './v1UserDataReadAdapter';
 
 const normalizeKeyPart = (value: any) => {
   if (value === undefined || value === null) return '';
@@ -27,8 +28,7 @@ const isSamePlaylistSourceItem = (a: Partial<PlaylistItem> | any, b: Partial<Pla
   return Boolean(keyA && keyB && keyA === keyB);
 };
 
-export const getPlaylistsByType = async (uid: string, type: "normal" | "shared"): Promise<Playlist[]> => {
-  if (!uid) return [];
+const getPlaylistsByTypeDirectV1 = async (uid: string, type: "normal" | "shared"): Promise<Playlist[]> => {
   const listsRef = collection(db, 'user_playlists', uid, 'lists');
   const q = query(listsRef, where('type', '==', type));
   const snap = await getDocs(q);
@@ -37,6 +37,21 @@ export const getPlaylistsByType = async (uid: string, type: "normal" | "shared")
     lists.push({ id: doc.id, ...doc.data() } as Playlist);
   });
   return lists.sort((a, b) => a.order - b.order);
+};
+
+export const getPlaylistsByType = async (uid: string, type: "normal" | "shared"): Promise<Playlist[]> => {
+  if (!uid) return [];
+
+  // Backend V2 Step 2-A3: lowest-risk read-only activation.
+  // One adapter query replaces the old one direct query, so normal successful reads do not double Firestore cost.
+  // The direct V1 helper remains an immediate fallback if the adapter boundary itself rejects/fails.
+  try {
+    const docs = await v1UserDataReadAdapter.loadPlaylistsByType(uid, type);
+    return docs.map((entry) => ({ id: entry.id, ...entry.data } as Playlist));
+  } catch (error) {
+    console.warn('[Backend V2 Step 2-A3] playlist read adapter unavailable; using direct V1 fallback.', error);
+    return getPlaylistsByTypeDirectV1(uid, type);
+  }
 };
 
 /**

@@ -1,0 +1,69 @@
+name: SORIDRAW Backend V2 Step 3-4f Review Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-4f-review-finalize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Patch Master Plan and self-cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          text = p.read_text()
+          old_status = "Status: IMPLEMENTATION / Step 3-4e recent-song limited backfill complete and independently verified — 68 canonical recent-origin V2 songs created with deterministic IDs, complete V1 payload preserved and V1 unchanged; Step 3-4f favorites/Music Note writes blocked pending a new read-only match/risk review and explicit approval"
+          new_status = "Status: IMPLEMENTATION / Step 3-4f read-only match/risk review complete — live 738 favorites exactly match the verified backup, 0 trusted recent-song matches, 738 standalone deterministic destinations currently absent; Step 3-4f writes blocked pending explicit approval for the exact 738-create scope"
+          if old_status not in text:
+              raise SystemExit('expected status line not found')
+          text = text.replace(old_status, new_status, 1)
+          old_header = "### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4e complete, limited writes verified) 🔄"
+          new_header = "### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4f read-only review complete, write approval pending) 🔄"
+          if old_header not in text:
+              raise SystemExit('expected Step 3 header not found')
+          text = text.replace(old_header, new_header, 1)
+          old_line = "  - [ ] 3-4f Music Note/favorites limited backfill: 738 standalone-preserved songs unless stronger trusted identity is proven at execution time."
+          new_line = "  - [~] 3-4f Music Note/favorites: read-only live review SUCCESS — 738/738 sources unchanged from backup, all UIDs valid, 0 trusted matches to the 68 recent-origin V2 songs, 0 pre-existing standalone destinations/conflicts; exact 738 standalone create-only writes remain blocked pending explicit approval."
+          if old_line not in text:
+              raise SystemExit('expected 3-4f line not found')
+          text = text.replace(old_line, new_line, 1)
+          marker = "\n### Step 4 — Preview validation (0/12) ⏳"
+          addition = """
+
+### Step 3-4f read-only match/risk review complete — actual writes NOT authorized
+- Explicitly approved read-only run `32866993530` completed SUCCESS against `soridraw-app-866a5`.
+- Current favorites remain exactly 738 documents, all 738 have UID ownership, and all 738 payloads/path sets are unchanged from the verified Step 3-3 backup.
+- The 68 Step 3-4e deterministic recent-origin V2 songs were re-verified: 0 missing, 0 payload/metadata mismatch, 0 source drift.
+- Trusted identity evidence remains insufficient for any merge: approved strong matches 0, ambiguous matches 0, favorite-to-recent target collisions 0.
+- All 738 favorites therefore remain standalone-preserved V2 song candidates with `musicNote:true`; title/lyrics/prompt/hash similarity is not merge authority.
+- All 738 deterministic `v1f_` standalone destination paths were read-checked and are currently absent; pre-existing destination conflicts 0, missing-UID blockers 0.
+- Current exact projected write scope after a separate approval is 738 creates, recommended in bounded 100-document batches (100×7 + 38), create-only/conflict-stop, with fresh source/quota/destination checks before execution.
+- This review performed Firestore writes/deletes 0/0, Storage writes 0, Rules/Functions/Hosting deploy 0, and no main promotion.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_READONLY_MATCH_RISK_REVIEW.md`.
+"""
+          if marker not in text:
+              raise SystemExit('Step 4 marker not found')
+          text = text.replace(marker, addition + marker, 1)
+          p.write_text(text)
+          PY
+          rm -f .github/workflows/backend-v2-step3-4f-review-finalize.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md .github/workflows/backend-v2-step3-4f-review-finalize.yml
+          git commit -m 'docs: finalize Step 3-4f read-only review status'
+          git push origin HEAD:preview

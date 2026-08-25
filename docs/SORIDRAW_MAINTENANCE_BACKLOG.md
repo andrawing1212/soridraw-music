@@ -1,6 +1,6 @@
 # SORIDRAW Maintenance Backlog & Timing Gates
 
-Status: ACTIVE / M-009 CLOSED / M-008 FIRESTORE RULES IS THE ONLY CURRENT 2-A4c BLOCKER
+Status: ACTIVE / M-009 CLOSED / M-008 CLOSED / 2-A4c IS THE NEXT SEPARATELY APPROVED WRITE GATE
 Last updated: 2026-08-26 KST
 Working branch: `preview`
 Scope: project-wide maintenance, deferred defects, security/infrastructure warnings, cost observability and pre-gate cleanup
@@ -61,10 +61,10 @@ Gate A result:
 - M-001 — **CLOSED**: the two full-project TypeScript errors were fixed and full `tsc --noEmit` passes.
 - M-002 — **Gate-A high-risk requirement CLEARED**: npm audit moved from 34 findings (2 critical / 10 high) to 14 findings (0 critical / 0 high / 13 moderate / 1 low) using non-force remediation with `package.json` unchanged. Residual low/moderate debt remains open for the Step-5 pre-gate.
 - M-003 — **CLOSED for migration tooling**: current Node24-compatible Action majors were verified while project commands remain on Node 20.20.2.
-- M-008 — **CRITICAL BLOCKER CONFIRMED**: read-only inspection proved the currently deployed Firestore Rules do not contain the V2 `users/{uid}/songs/{songId}` rule that exists in repository source.
+- M-008 — **CLOSED**: Rules-only run `32900840608` deployed the canonical `users/{uid}/songs/{songId}` rule block with exact post-deploy hash verification while preserving existing V1 Rules and leaving V2 playlists/settings deployment state unchanged.
 - M-009 — **CLOSED**: historical prebuild patch compatibility was repaired without removing the chain; clean-checkout `npm run build`, full TypeScript, generated V1 mutation-boundary audit and Vercel Preview READY all passed.
 
-Therefore **2-A4c remains blocked by M-008 only**. No 2-A4c write-capable workflow may be created or armed until the separately approved Rules-only alignment is deployed and verified.
+Therefore the pre-2-A4c M-008/M-009 blockers are cleared. **2-A4c itself is still not approved or armed** and requires its own exact write approval plus a fresh free-tier quota gate before any shadow write begins.
 
 Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 
@@ -79,7 +79,7 @@ Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 | M-005 | Deferred Preview latest-track visibility / App Check / zero-byte provider audio-endpoint blocker from 2-A3-R | HIGH / PRE-GATE | A newly completed provider track could exist in backend yet fail to appear on Preview; same track could appear on main/test. Exact Preview environment cause remains unresolved/deferred. | **Before Step 4 Song generation/save/visibility validation can be declared passed.** Re-run Preview environment diagnostics; no IAM/App Check/Functions change without relevant approval. | OPEN |
 | M-006 | `user_plans` authority/provenance unresolved | HIGH / NO-TOUCH / REVIEW | Core V2 work can proceed because the collection is isolated, but moving/merging/deleting it without identifying authority could corrupt plan/account state. | Must be resolved **before any `user_plans` migration, merge, cleanup or V1 deletion** and before final production cleanup phase. | OPEN / NO-TOUCH |
 | M-007 | Exact RTDB Cloud Monitoring metric visibility remains a permission/observability gap | MEDIUM / PRE-GATE | RTDB Presence is intentionally small, but exact free-tier/cost monitoring is weaker than Firestore monitoring. | **Before Step 5/main promotion or meaningful user-scale testing**, perform read-only permission/metric review. Any IAM permission change requires separate approval. | OPEN |
-| M-008 | Deployed Firestore Rules do not yet contain the repository V2 canonical-song rule | CRITICAL / BLOCKER FOR 2-A4c | Read-only Rules API inspection succeeded. Deployed ruleset `8d0a2de9-fa29-4988-801e-cc45d3f0af1b` retains V1 recent/favorites rules but lacks `users/{uid}/songs/{songId}` + `hasValidV2SongMetadata`. Repo/deployed normalized Rules hashes differ. | **Mandatory before 2-A4c shadow writes.** Revalidate source, then deploy Rules only under separate exact approval; verify deployed hash/features afterward. | **OPEN / CRITICAL BLOCKER** |
+| M-008 | Firestore V2 canonical-song Rules alignment | CRITICAL / BLOCKER FOR 2-A4c | **Resolved.** Approved Rules-only run `32900840608` inserted only the canonical-song helper/match block into the previously deployed Rules source. Before ruleset `8d0a2de9...` hash `c3a0...`; after ruleset `91a8efcc...` exact target/after hash `4d9076ee...`. V1 protected rules remained present; V2 playlists/settings remained undeployed because they were outside this approval. | Was mandatory before 2-A4c shadow writes. Keep exact deployed-rule verification as a precondition for any 2-A4c write activation. | **CLOSED — canonical-song Rules verified** |
 | M-009 | Vercel Preview historical prebuild patch chain compatibility | HIGH / BLOCKER FOR 2-A4c | **Resolved.** Six conflicting historical patchers were made current-source compatible without removing the prebuild chain. Clean validator `32899355162` passed exact `npm run build`, full TypeScript, generated mutation-boundary/gate checks and script compilation; Vercel deployment for `649bd15...` reached READY. Firebase data/Rules/Functions/Hosting changes: 0. | Was mandatory before 2-A4c. Keep the repaired build-path validation in future release gates; do not reintroduce stale anchor assumptions. | **CLOSED — M-009 repair verified** |
 | M-010 | Vercel project build runtime must migrate from repository-forced Node `20.x` to Node `24.x` | HIGH / PRE-GATE | Vercel warns that `package.json` Node 20 overrides the project Node24 setting and that deployments created on/after 2026-10-01 will fail. This is separate from the immediate M-009 prebuild-anchor failure. | **Before Step 5/main promotion and always before 2026-10-01.** Test Node24 install, TypeScript, contracts, real `npm run build`, Vercel READY and Functions tooling separation before changing the project runtime contract. | **OPEN / STEP-5 PRE-GATE / DEADLINE 2026-10-01** |
 
@@ -135,17 +135,20 @@ Source:
 
 ### M-008
 
-Gate A read-only Rules inspection found:
+M-008 is complete. Approved Rules-only run `32900840608` succeeded after one tooling-only authentication failure (`32900708185`) that made **zero** Firebase changes. The retry deliberately avoided enabling the IAM Service Account Credentials API and instead minted a direct OAuth token from the already-authorized service-account key.
 
-- deployed ruleset: `projects/soridraw-app-866a5/rulesets/8d0a2de9-fa29-4988-801e-cc45d3f0af1b`
-- deployed normalized SHA-256: `c3a0bac5f024265454f7e4510f89d204ad2765de93eb2852e6a99bc4ec8ce916`
-- repository normalized SHA-256: `ea7e8acd3eaa5b0d6bdba30dbaf7e513efd9a04209c5f34ce3fcdb4c1917e6d4`
-- exact match: false
-- deployed V1 recent rule: present
-- deployed V1 favorites rule: present
-- deployed V2 canonical song rule: absent
+- before ruleset: `projects/soridraw-app-866a5/rulesets/8d0a2de9-fa29-4988-801e-cc45d3f0af1b`
+- before SHA-256: `c3a0bac5f024265454f7e4510f89d204ad2765de93eb2852e6a99bc4ec8ce916`
+- after ruleset: `projects/soridraw-app-866a5/rulesets/91a8efcc-c846-482c-bcb5-aa6ba5d70064`
+- target/after SHA-256: `4d9076eef20a71ad680b55ecc9acbe82e4aa08aa8138789c317476e66455e6dc`
+- canonical song rule after deploy: present
+- protected V1 rules: preserved
+- V2 playlists deployment state: unchanged / absent
+- V2 settings deployment state: unchanged / absent
+- Firestore document reads/writes/deletes: `0 / 0 / 0`
+- Functions/Hosting/index deployment: `0 / 0 / 0`
 
-No Rules deployment was performed because Gate A approval explicitly prohibited it.
+Full result: `docs/SORIDRAW_MAINTENANCE_M008_FIRESTORE_RULES_ALIGNMENT_RESULT.md`.
 
 ### M-009
 
@@ -169,11 +172,12 @@ Current migration order is now:
    - exact clean `npm run build` + full TypeScript + generated mutation-boundary audit passed,
    - Vercel Preview READY verified,
    - temporary M-009 workflows removed; Firebase data/Rules/Functions/Hosting change 0.
-4. **M-008 RULES ALIGNMENT REQUIRED NOW**
-   - repository V2 Rules source revalidation,
-   - Rules-only deployment only after separate exact approval,
-   - deployed post-check must prove the V2 canonical-song rule is present while V1 compatibility rules remain.
-5. **2-A4c** — only after both M-009 and M-008 are cleared and then separately approved for its exact V2 shadow-write scope; V1-first/V2-shadow with fresh quota gate.
+4. **M-008 RULES ALIGNMENT COMPLETE**
+   - canonical-song Rules-only deployment verified,
+   - V1 Rules preserved,
+   - V2 playlists/settings remained outside scope and unchanged,
+   - temporary write workflows removed after verification.
+5. **2-A4c NEXT GATED STEP** — M-009/M-008 are cleared, but 2-A4c still requires separate exact V2 shadow-write approval; V1-first/V2-shadow ordering, fresh quota gate, durable outbox and bounded retry are mandatory.
 6. **2-A4d** — only after separate exact write approval: bounded current live-gap catch-up and verification.
 7. **Maintenance Gate B before/during Step 4**
    - M-005 resolve/retest Preview latest-track visibility environment blocker,

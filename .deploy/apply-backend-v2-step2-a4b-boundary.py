@@ -74,8 +74,8 @@ app = replace_in_region(
 )
 app = replace_once(
     app,
-    "setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }).catch((error) => {\n              console.error('Failed to persist added lyric language:', error);\n            });",
-    "runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {\n              console.error('Failed to persist added lyric language:', error);\n            });",
+    "setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true }).catch((error) => {",
+    "runV1MutationBoundary({ domain: 'recent', operation: 'add-lyrics-language', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: next }), { merge: true })).catch((error) => {",
     'recent add lyrics language',
 )
 app = replace_in_region(
@@ -88,8 +88,8 @@ app = replace_in_region(
 )
 app = replace_once(
     app,
-    "setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {\n          console.error('Failed to persist studio edit before favorite save:', error);\n        });",
-    "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {\n          console.error('Failed to persist studio edit before favorite save:', error);\n        });",
+    "setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }).catch((error) => {",
+    "runV1MutationBoundary({ domain: 'recent', operation: 'pre-favorite-edit', uid: user.uid, affectedCount: 1 }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true })).catch((error) => {",
     'recent pre-favorite edit',
 )
 

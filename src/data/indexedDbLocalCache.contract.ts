@@ -1,10 +1,16 @@
 import assert from 'node:assert/strict';
-import { IDBKeyRange as FakeIDBKeyRange, indexedDB as fakeIndexedDB } from 'fake-indexeddb';
 import {
   BACKEND_V2_LOCAL_CACHE_RUNTIME_ENABLED,
   BackendV2IndexedDbCache,
   evaluateLocalCacheVersion,
 } from './indexedDbLocalCache';
+
+// CI installs fake-indexeddb ephemerally. Keep the module name indirect so the normal
+// app/Vercel TypeScript pass does not require this test-only package as an app dependency.
+const FAKE_INDEXED_DB_MODULE = 'fake-indexeddb';
+const fakeIndexedDbModule = await import(FAKE_INDEXED_DB_MODULE) as any;
+const FakeIDBKeyRange = fakeIndexedDbModule.IDBKeyRange;
+const fakeIndexedDB = fakeIndexedDbModule.indexedDB;
 
 const makeCache = (name: string) => new BackendV2IndexedDbCache({
   factory: fakeIndexedDB as unknown as IDBFactory,

@@ -44,13 +44,17 @@ export interface V1MutationBoundaryContext {
   affectedCount?: number;
 }
 
-export type V1MutationWrite<T> = () => Promise<T>;
+export type V1MutationWrite<T> = Promise<T> | (() => Promise<T>);
 
 /**
- * Runs the existing V1 mutation exactly once and returns/throws exactly as that mutation does.
+ * Passes one existing V1 mutation through the common boundary and returns/throws exactly as it does.
+ *
+ * Accepting the already-created Promise is intentional in Step 2-A4b: it lets us wrap existing
+ * Firestore expressions with the smallest possible behavioral change. A future approved mirror
+ * can still run only after this Promise resolves successfully.
  *
  * Step 2-A4b invariants:
- * - V1 is authoritative.
+ * - V1 is authoritative,
  * - no V2 mirror is executed,
  * - no outbox is opened,
  * - no extra Firebase read/write is introduced,
@@ -62,5 +66,6 @@ export async function runV1MutationBoundary<T>(
   _context: Readonly<V1MutationBoundaryContext>,
   writeV1: V1MutationWrite<T>,
 ): Promise<T> {
-  return await writeV1();
+  const pending = typeof writeV1 === 'function' ? writeV1() : writeV1;
+  return await pending;
 }

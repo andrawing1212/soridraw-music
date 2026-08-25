@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-4b settings canary complete and verified — 3 V2 settings documents created, V1 unchanged; awaiting approval for Step 3-4c playlist-header limited backfill
+Status: IMPLEMENTATION / Step 3-4c playlist-header limited backfill complete and verified — 42 V2 playlist headers created, V1 unchanged; awaiting approval for Step 3-4d playlist-item limited backfill
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -20,6 +20,7 @@ Production Firebase deploy: prohibited unless explicitly requested
 10. Never delete or overwrite existing user data during investigation or migration. V1 must remain as a fallback until V2 is fully verified and explicitly approved for cleanup.
 11. Current V1 music-generation behavior is a hard compatibility requirement. Any Step 2 change that touches generation/save call-sites must stop for explicit risk review before activation.
 12. Every implementation substep must be followed by self-review, omission check and independent result verification; the initial implementation must not be assumed correct.
+13. User Gemini/Suno/provider API keys must use encrypted-at-rest persistent storage only; plaintext must never be persisted, cached, logged or returned to the browser. Future proxy runtimes may decrypt only just-in-time for the outbound provider request and must discard plaintext references immediately. See `docs/SORIDRAW_API_KEY_SECURITY_REQUIREMENTS.md`.
 
 ## 1. Target architecture
 
@@ -337,15 +338,15 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4 safety design complete, writes not started) 🔄
+### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4c complete, limited writes verified) 🔄
 - [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
 - [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000.
 - [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
 - [~] 3-4 Rate-limited backfill within free-tier budget.
   - [x] 3-4a Safety design + exact verified-backup offline analysis complete; projected snapshot writes 900, all 738 favorites preserve standalone because no trusted recent-song identity overlap was found.
   - [x] 3-4b Settings canary complete: 3 `user_structures` documents created at `users/{uid}/settings/sections`; all V1 sources remained unchanged and destination payload parity verified.
-  - [ ] 3-4c Playlist-header limited backfill: 42 headers, bounded create-only batches, conflict-stop and immediate parity verification.
-  - [ ] 3-4d Playlist-item limited backfill: 49 items after header verification.
+  - [x] 3-4c Playlist-header limited backfill complete: 42 headers created at `users/{uid}/playlists/{playlistId}` in two bounded 21-document transactions; IDs/payload parity verified and V1 remained unchanged.
+  - [ ] 3-4d Playlist-item limited backfill: 49 items after re-verifying all parent V2 playlist headers.
   - [ ] 3-4e Recent-song limited backfill: 68 canonical song creates with deterministic addressing and no favorite merge assumption.
   - [ ] 3-4f Music Note/favorites limited backfill: 738 standalone-preserved songs unless stronger trusted identity is proven at execution time.
 - [ ] 3-5 Per-user automatic verification.
@@ -388,6 +389,17 @@ Risk decision:
 - No private backup payload was written to the repository or GitHub Actions artifacts.
 - Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_3_STORAGE_BACKUP_RESULT.md`.
 - Historical blocker record remains at `docs/SORIDRAW_BACKEND_V2_STEP3_3_BACKUP_EXECUTION_BLOCKER.md`.
+
+### Step 3-4c execution complete — playlist headers verified
+- GitHub Actions run `32852176048` completed SUCCESS.
+- Fresh preflight observed 3,060 same-day reads, 73 writes and 0 deletes; migration caps remained 10,000 reads / 5,000 writes.
+- Step 3-3 manifest and playlist-header dataset checksum were re-verified before writes.
+- Backup and live approved `lists` path sets both contained exactly 42 documents with no path delta.
+- Created exactly 42 V2 playlist headers at `users/{uid}/playlists/{playlistId}` in two bounded 21-document transactions.
+- Existing destinations would have been no-op only if identical; any conflict/source change would have stopped execution.
+- Post-write verification confirmed every V1 source payload/update time unchanged, every V2 payload hash matched, and every playlist ID was preserved.
+- V1 writes/deletes: 0 / 0. V2 deletes: 0. Rules, Functions and Firebase Hosting deploys: 0.
+- Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_4C_PLAYLIST_HEADERS_RESULT.md`.
 
 ## 10. Mandatory progress / self-review reporting
 

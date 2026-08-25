@@ -65,10 +65,16 @@ jobs:
           token = creds.token
           if not token:
               raise SystemExit('2-A4c OAuth token unavailable')
-          headers = {'Authorization': f'Bearer {token}'}
+          headers = {
+              'Authorization': f'Bearer {token}',
+              'X-Goog-User-Project': project,
+              'Accept': 'application/json',
+          }
 
           now = dt.datetime.now(dt.timezone.utc)
-          start = now - dt.timedelta(hours=24)
+          kst = dt.timezone(dt.timedelta(hours=9))
+          kst_now = now.astimezone(kst)
+          day_start = kst_now.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
           recent = now - dt.timedelta(minutes=15)
 
           def query_metric(candidates):
@@ -76,7 +82,7 @@ jobs:
               for metric in candidates:
                   params = {
                       'filter': f'metric.type = "{metric}"',
-                      'interval.startTime': start.isoformat().replace('+00:00','Z'),
+                      'interval.startTime': day_start.isoformat().replace('+00:00','Z'),
                       'interval.endTime': now.isoformat().replace('+00:00','Z'),
                       'view': 'FULL',
                       'pageSize': '1000',
@@ -86,6 +92,8 @@ jobs:
                   if r.status_code in (400,404):
                       last = (metric, 0, 0, 0)
                       continue
+                  if r.status_code == 403:
+                      raise SystemExit('2-A4c quota gate blocked: monitoring permission/quota-project access denied')
                   r.raise_for_status()
                   data = r.json()
                   total = recent_total = points = 0
@@ -113,17 +121,17 @@ jobs:
           writes = query_metric(['firestore.googleapis.com/document/write_ops_count','firestore.googleapis.com/document/write_count'])
           deletes = query_metric(['firestore.googleapis.com/document/delete_ops_count','firestore.googleapis.com/document/delete_count'])
           info = {
-              'windowHours': 24,
-              'reads': {'metric': reads[0], 'total': reads[1], 'recent15m': reads[2], 'points': reads[3]},
-              'writes': {'metric': writes[0], 'total': writes[1], 'recent15m': writes[2], 'points': writes[3]},
-              'deletes': {'metric': deletes[0], 'total': deletes[1], 'recent15m': deletes[2], 'points': deletes[3]},
-              'policy': {'readsMax': 30000, 'writesMax': 10000, 'deletesMax': 5000},
+              'kstDate': kst_now.date().isoformat(),
+              'reads': {'metric': reads[0], 'today': reads[1], 'recent15m': reads[2], 'points': reads[3]},
+              'writes': {'metric': writes[0], 'today': writes[1], 'recent15m': writes[2], 'points': writes[3]},
+              'deletes': {'metric': deletes[0], 'today': deletes[1], 'recent15m': deletes[2], 'points': deletes[3]},
+              'policy': {'freeReads':50000,'readReserve':10000,'readsMax':40000,'writesMax':10000,'deletesMax':5000},
           }
           print('A4C_FRESH_QUOTA=' + json.dumps(info, ensure_ascii=False))
           if reads[3] == 0 or writes[3] == 0:
               raise SystemExit('2-A4c quota gate blocked: monitoring read/write metric visibility incomplete')
-          if reads[1] >= 30000 or writes[1] >= 10000 or deletes[1] >= 5000:
-              raise SystemExit('2-A4c quota gate blocked: conservative 24h headroom insufficient')
+          if reads[1] >= 40000 or writes[1] >= 10000 or deletes[1] >= 5000:
+              raise SystemExit('2-A4c quota gate blocked: conservative same-day headroom insufficient')
 
           api = 'https://firebaserules.googleapis.com/v1'
           release = requests.get(f'{api}/projects/{project}/releases/cloud.firestore', headers=headers, timeout=20)
@@ -155,6 +163,7 @@ jobs:
           PY
 
       - name: Inspect exact current V1 mutation boundary call-sites
+        if: always()
         shell: bash
         run: |
           set -euo pipefail

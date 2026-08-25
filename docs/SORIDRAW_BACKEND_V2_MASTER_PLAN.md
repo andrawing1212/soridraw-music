@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A3-R emergency stabilization staged on preview — authenticated Preview revalidation pending
+Status: IMPLEMENTATION / Step 2-A3-R Preview latest-track blocker deferred — safe next step 2-B awaiting approval
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -196,7 +196,7 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 - Vercel Preview build for the adapter work completed READY.
 - Independent TypeScript/contract execution result: PASS.
 
-### 2-A3 implemented — lowest-risk playlist-list V1 read activation; user validation pending
+### 2-A3 implemented — lowest-risk playlist-list V1 read activation; code/parity validation complete
 - Added `src/services/v1UserDataReadAdapter.ts` as the only approved Firebase runtime bridge for the pure V1 adapter.
 - Runtime bridge supports Firestore read operations only and has no mutation capability or V2 path access.
 - Routed only `getPlaylistsByType(uid, type)` in `src/services/playlistService.ts` through the adapter.
@@ -208,19 +208,19 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 - GitHub Actions run `32807165455` completed SUCCESS: install, Step 2-A isolation contract, V1 adapter parity, TypeScript check, production build, result recording and final safety gate all passed.
 - The workflow no longer self-commits/pushes result files. This removes the previous false-red bookkeeping failure caused by prelint/prebuild working-tree changes before `git pull --rebase`.
 - Latest Vercel Preview deployment for the 2-A3 safety state completed READY. Existing bundle/import and Node 20 deprecation warnings remain separate non-blocking infrastructure items.
-- Automated validation is complete; authenticated Preview playlist behavior still requires user confirmation before 2-A3 is marked complete.
+- Automated validation is complete. Preview latest-track visibility failure was isolated as a separate environment/App Check configuration blocker, not as evidence of an adapter behavior mismatch.
 
 Risk decision:
 - 2-A3 changes only one bounded/filtered V1 read boundary and retains direct V1 fallback.
 - No V2 data operation, schema change or new normal-path read multiplication exists.
 - Critical generation/recent-save/Music Note mutation call-sites remain untouched.
-- Do not start 2-A4 until 2-A3 Preview behavior is confirmed and a separate explicit approval is given.
+- 2-A4 remains blocked while Preview latest-data verification is unavailable. Safe code-only Step 2-B/2-C work may proceed separately after explicit approval.
 
-### 2-A3-R emergency stabilization staged — user revalidation pending
+### 2-A3-R emergency stabilization — Preview latest-track blocker deferred
 - Triggered by authenticated Preview validation: provider track completed in backend but did not appear on Preview; the same track appeared on the main/test app.
 - Read-only diagnostics confirmed the generated record and two audio results existed, while candidate audio endpoints returned zero bytes.
-- Preview App Check code path was missing. Existing Actions credentials cannot inspect reCAPTCHA Enterprise allowed domains (`recaptchaenterprise.keys.get` denied); no IAM change was made.
-- Preview-only frontend App Check activation, playlist bootstrap/listener read dedupe and zero-byte download guard are staged.
+- Preview-only App Check activation was tested but did not restore the newest track. Existing Actions credentials cannot inspect reCAPTCHA Enterprise allowed domains (`recaptchaenterprise.keys.get` denied); no IAM change was made.
+- The ineffective Preview-only App Check activation was reverted. Playlist bootstrap/listener read dedupe and zero-byte download guard remain staged.
 - Music API byte-validation hardening is staged in Functions source but is NOT deployed because Functions are shared backend infrastructure and require separate explicit deployment approval.
 - No V1 data, Rules, Functions deployment, main branch or Firebase Hosting has been modified by 2-A3-R.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md`.
@@ -239,11 +239,11 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A in progress) 🔄
+### Step 2 — V2 code implementation on preview (2-A3 blocker deferred; safe next 2-B) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
-  - [~] 2-A3 Lowest-risk playlist-list V1 read activation implemented and automated checks green; authenticated Preview validation pending.
+  - [x] 2-A3 Lowest-risk playlist-list V1 read activation implemented; adapter isolation/parity/build checks green. Preview latest-track environment blocker deferred.
   - [ ] 2-A4 Critical generation/recent-save/Music Note mutation activation gate only after separate risk review and explicit approval.
 - [ ] 2-B Additive V2 schema/rules/index definitions in source; do not remove V1 and do not deploy production Rules without explicit approval.
 - [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.

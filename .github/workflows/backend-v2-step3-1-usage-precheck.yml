@@ -41,6 +41,7 @@ jobs:
         env:
           GOOGLE_CLOUD_PROJECT: soridraw-app-866a5
           GCLOUD_PROJECT: soridraw-app-866a5
+          GOOGLE_CLOUD_QUOTA_PROJECT: soridraw-app-866a5
         shell: bash
         run: |
           set -euo pipefail
@@ -112,6 +113,7 @@ jobs:
               const response = await fetch(url, {
                 headers: {
                   Authorization: `Bearer ${accessToken}`,
+                  'X-Goog-User-Project': TARGET_PROJECT,
                   Accept: 'application/json',
                 },
               });
@@ -180,6 +182,7 @@ jobs:
             const report = {
               status: safeForEstimatedBackup ? 'SAFE_TO_PREPARE_BACKUP' : 'PAUSE_FOR_QUOTA',
               targetProject: TARGET_PROJECT,
+              quotaProject: TARGET_PROJECT,
               kstDate,
               fetchedAt: now.toISOString(),
               sampledThrough: sampledThroughMs ? new Date(sampledThroughMs).toISOString() : null,

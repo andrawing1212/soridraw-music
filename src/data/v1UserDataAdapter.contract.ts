@@ -15,6 +15,7 @@ type Call =
 
 const calls: Call[] = [];
 
+const userPayload = { role: 'user', syncVersions: { recentSongs: 7 }, unknownUserField: 'preserve' };
 const recentSongA = { id: 'song-a', title: 'A', unknownLegacyField: { keep: true } };
 const recentSongB = { id: 'song-b', title: 'B', lyricRevisions: [{ version: 1 }] };
 const sectionPayload = { customSections: ['verse', 'chorus'], unknownSectionField: 'preserve' };
@@ -25,6 +26,9 @@ const port: V1ReadPort = {
   ): Promise<V1DocumentSnapshot<Payload>> {
     calls.push({ kind: 'get', path });
     const joined = path.join('/');
+    if (joined === 'users/user-1') {
+      return { id: 'user-1', exists: true, data: userPayload as unknown as Payload };
+    }
     if (joined === 'user_recent_songs/user-1') {
       return {
         id: 'user-1',
@@ -83,6 +87,7 @@ assert.deepEqual(BACKEND_V2_SAFETY_GATES, {
   deleteV1: false,
 });
 
+assert.deepEqual(v1UserDataPaths.user('user-1'), ['users', 'user-1']);
 assert.deepEqual(v1UserDataPaths.recentSongs('user-1'), ['user_recent_songs', 'user-1']);
 assert.deepEqual(v1UserDataPaths.structures('user-1'), ['user_structures', 'user-1']);
 assert.deepEqual(v1UserDataPaths.playlistsCollection('user-1'), ['user_playlists', 'user-1', 'lists']);
@@ -96,6 +101,10 @@ assert.throws(() => v1UserDataPaths.recentSongs(''), /invalid uid/);
 assert.throws(() => v1UserDataPaths.playlist('user-1', 'bad/id'), /invalid playlistId/);
 
 const adapter = createV1UserDataAdapter(port);
+
+const user = await adapter.loadUserDocument('user-1');
+assert.equal(user.data, userPayload, 'user root payload must stay opaque/pass-through');
+assert.deepEqual(calls.at(-1), { kind: 'get', path: ['users', 'user-1'] });
 
 const recent = await adapter.loadRecentSongs<typeof recentSongA | typeof recentSongB>('user-1');
 assert.equal(recent.length, 2);

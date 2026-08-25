@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-D complete in source — awaiting approval for Step 3-1 backup preparation
+Status: IMPLEMENTATION / Step 3-1 backup preparation complete — awaiting approval for actual read-only backup preflight/execution
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -260,6 +260,19 @@ Risk decision:
 - 2-A4 remains blocked; Step 2-D does not authorize generation/recent-save/Music Note mutation rewiring or any V2 write.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2D_SHADOW_VALIDATION_DRYRUN.md`.
 
+
+### 3-1 backup preparation complete — actual production backup NOT executed
+- Added `backup_scripts/backend_v2_secure_backup.ts` as a gated read-only local backup tool; default mode is plan-only and makes no Firebase connection.
+- Added `backup_scripts/backend_v2_verify_backup.ts` for offline SHA-256/count/path verification before any backfill.
+- Exact Firebase target is pinned to `soridraw-app-866a5`; execution also requires matching `--project` + `--ack-project` and explicit approval environment flag.
+- Backup output is rejected inside any Git repository and private-output ignore patterns are added as defense in depth.
+- Initial backup scope is only `user_structures`, playlist `lists/items`, `user_recent_songs`, and `favorites`; `user_plans`, caches, provider/public/social/server-security/RTDB data remain excluded/no-touch.
+- Step 1-B planning estimate is 841 document reads (`3 + 42 + 49 + 10 + 737`). The real execution cap is intentionally not fixed until a fresh live-usage baseline is captured; hard ceiling remains 10,000 migration reads/day under the Step 1-D formula.
+- Existing `backup_scripts/copy_collections.ts` is write-capable and explicitly prohibited from Backend V2 backup use.
+- Step 3-1 preparation CI passed typecheck, offline contract, plan-mode zero-network contract, production build, protected-file hashes, and omission checks.
+- Firestore reads/writes/deletes caused by Step 3-1 preparation: 0 / 0 / 0. No Rules/index/Functions/Hosting deploy and no backup payload was produced.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md`.
+
 ## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete) ✅
@@ -284,8 +297,10 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (0/4) ⏳
-- [ ] Secure local read-only backup strategy/run
+### Step 3 — Backup, backfill and verification (0/4 complete; backup preparation ready) 🔄
+- [~] Secure local read-only backup strategy/run
+  - [x] 3-1 preparation: target pin, read-only tool, offline verifier, scope/budget gates
+  - [ ] 3-1 actual backup: fresh quota baseline -> secure local read -> checksum/count verification
 - [ ] Rate-limited backfill within free-tier budget
 - [ ] Per-user automatic verification
 - [ ] No V1 deletion

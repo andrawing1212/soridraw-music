@@ -22,39 +22,16 @@ jobs:
           node-version: '20.20.2'
           cache: npm
 
-      - name: Capture source semantics
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "M009_HEAD=$(git rev-parse HEAD)"
-          node -e "const p=require('./package.json'); console.log('M009_PREBUILD='+p.scripts?.prebuild); console.log('M009_BUILD='+p.scripts?.build)"
-          python3 - <<'PY'
-          from pathlib import Path
-          import re,json
-          app=Path('src/App.tsx').read_text(encoding='utf-8')
-          gem=Path('src/services/geminiService.ts').read_text(encoding='utf-8')
-          old=re.compile(r":\s*mode === 'pure-pane'\s*\?\s*'pure-pane'\s*:\s*mode === 'pure-pane-hybrid'\s*\?\s*'pure-pane-hybrid'\s*:\s*mode === 'pure-pane-live'")
-          fixed=re.compile(r":\s*mode === 'pure-pane'\s*\?\s*'pure-pane'\s*:\s*mode === 'pure-pane-live'")
-          print('M009_BASELINE_SEMANTICS='+json.dumps({
-            'gatea_gemini_fix': 'appliedKeywords: { ...result.appliedKeywords }' in gem,
-            '874_app_old_regex_count': len(old.findall(app)),
-            '874_app_fixed_regex_count': len(fixed.findall(app)),
-            'marker874_gemini': 'SORIDRAW_874_BUILD_SAFETY_GEMINI' in gem,
-            'marker874_app': 'SORIDRAW_874_BUILD_SAFETY_APP' in app,
-            'marker901': 'SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC' in app,
-            'v1_mutation_boundary': 'runV1MutationBoundary' in app,
-          },sort_keys=True))
-          PY
-
       - name: Install exact dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
 
-      - name: Simulate semantic-idempotent 874 compatibility
+      - name: Prepare disposable 874 semantic compatibility and 901 context probe
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+
           p=Path('.deploy/apply-874-build-safety.py')
           s=p.read_text(encoding='utf-8')
           old="""if GEMINI_MARKER not in gemini:\n    anchor = \"    appliedKeywords: { ...(result.appliedKeywords || {}) },\"\n    replacement = \"    appliedKeywords: { ...result.appliedKeywords }, // SORIDRAW_874_BUILD_SAFETY_GEMINI\"\n    if gemini.count(anchor) != 1:\n        raise SystemExit(f'874 gemini AppliedKeywords anchor mismatch: {gemini.count(anchor)}')\n    gemini = gemini.replace(anchor, replacement, 1)\n    gemini_path.write_text(gemini, encoding='utf-8')\n"""
@@ -63,13 +40,20 @@ jobs:
           s=s.replace(old,new,1)
           start=s.index('if APP_MARKER not in app:')
           end=s.index("\n\nprint('Applied SORIDRAW 874:",start)
-          new_block="""if APP_MARKER not in app:\n    import re\n    old_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-hybrid'\\s*\\?\\s*'pure-pane-hybrid'\\s*:\\s*mode === 'pure-pane-live'\")\n    corrected_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-live'\")\n    old_matches = list(old_pattern.finditer(app))\n    corrected_matches = list(corrected_pattern.finditer(app))\n    if len(old_matches) == 1:\n        # Preserve the historical exact patch when the old source shape is truly present.\n        anchor = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-hybrid'\\n                                ? 'pure-pane-hybrid'\\n                                : mode === 'pure-pane-live'\"\"\"\n        replacement = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-live' // SORIDRAW_874_BUILD_SAFETY_APP\"\"\"\n        if app.count(anchor) != 1:\n            raise SystemExit(f'874 App exact old anchor mismatch despite semantic old match: {app.count(anchor)}')\n        app = app.replace(anchor, replacement, 1)\n        app_path.write_text(app, encoding='utf-8')\n    elif len(corrected_matches) == 1:\n        print('SORIDRAW 874 App fix already present; no-op')\n    else:\n        raise SystemExit(f'874 App semantic state mismatch: old={len(old_matches)} corrected={len(corrected_matches)}')\n"""
+          new_block="""if APP_MARKER not in app:\n    import re\n    old_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-hybrid'\\s*\\?\\s*'pure-pane-hybrid'\\s*:\\s*mode === 'pure-pane-live'\")\n    corrected_pattern = re.compile(r\":\\s*mode === 'pure-pane'\\s*\\?\\s*'pure-pane'\\s*:\\s*mode === 'pure-pane-live'\")\n    old_matches = list(old_pattern.finditer(app))\n    corrected_matches = list(corrected_pattern.finditer(app))\n    if len(old_matches) == 1:\n        anchor = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-hybrid'\\n                                ? 'pure-pane-hybrid'\\n                                : mode === 'pure-pane-live'\"\"\"\n        replacement = \"\"\"                            : mode === 'pure-pane'\\n                              ? 'pure-pane'\\n                              : mode === 'pure-pane-live' // SORIDRAW_874_BUILD_SAFETY_APP\"\"\"\n        if app.count(anchor) != 1:\n            raise SystemExit(f'874 App exact old anchor mismatch despite semantic old match: {app.count(anchor)}')\n        app = app.replace(anchor, replacement, 1)\n        app_path.write_text(app, encoding='utf-8')\n    elif len(corrected_matches) == 1:\n        print('SORIDRAW 874 App fix already present; no-op')\n    else:\n        raise SystemExit(f'874 App semantic state mismatch: old={len(old_matches)} corrected={len(corrected_matches)}')\n"""
           s=s[:start]+new_block+s[end:]
           p.write_text(s,encoding='utf-8')
-          print('M009_874_SIMULATION_PATCHED=true')
+
+          p=Path('.deploy/apply-901-music-note-10-incremental-sync.py')
+          s=p.read_text(encoding='utf-8')
+          needle='replace_once(app, old_normal_update, normal_update, "normal update updatedAtMs")'
+          probe='''print("M009_901_NORMAL_UPDATE_OLD_COUNT=" + str(app.count(old_normal_update)))\nfor token in ["sanitizedUpdates", "doc(db, 'favorites', id)", "runV1MutationBoundary"]:\n    print("M009_901_TOKEN=" + token + " COUNT=" + str(app.count(token)))\n    start_at = 0\n    shown = 0\n    while shown < 8:\n        idx = app.find(token, start_at)\n        if idx < 0:\n            break\n        print("M009_901_CONTEXT_BEGIN token=" + token + " index=" + str(idx))\n        print(app[max(0, idx-1200):min(len(app), idx+2600)])\n        print("M009_901_CONTEXT_END")\n        start_at = idx + len(token)\n        shown += 1\nreplace_once(app, old_normal_update, normal_update, "normal update updatedAtMs")'''
+          if s.count(needle)!=1: raise SystemExit('M009 901 normal-update call anchor mismatch')
+          p.write_text(s.replace(needle,probe,1),encoding='utf-8')
+          print('M009_DIAGNOSTIC_PROBES_READY=true')
           PY
 
-      - name: Execute real prebuild path in disposable workspace
+      - name: Execute real prebuild path and capture exact post-900 901 target context
         shell: bash
         run: |
           set +e
@@ -77,32 +61,16 @@ jobs:
           code=$?
           set -e
           echo "M009_PREBUILD_EXIT=${code}"
+          echo 'M009_PREBUILD_LOG_PROBE_BEGIN'
+          grep -A80 -B8 'M009_901_' /tmp/m009-prebuild.log || true
+          echo 'M009_PREBUILD_LOG_PROBE_END'
           echo 'M009_PREBUILD_LOG_TAIL_BEGIN'
-          tail -n 260 /tmp/m009-prebuild.log
+          tail -n 300 /tmp/m009-prebuild.log
           echo 'M009_PREBUILD_LOG_TAIL_END'
           echo 'M009_TRACKED_DIFF_BEGIN'
-          git status --short
           git diff --stat
           git diff --name-only
           echo 'M009_TRACKED_DIFF_END'
-          python3 - <<'PY'
-          from pathlib import Path
-          import json
-          app=Path('src/App.tsx').read_text(encoding='utf-8')
-          fb=Path('src/firebase.js').read_text(encoding='utf-8')
-          gem=Path('src/services/geminiService.ts').read_text(encoding='utf-8')
-          print('M009_AFTER_SEMANTICS='+json.dumps({
-            'marker901': 'SORIDRAW_901_MUSIC_NOTE_10_INCREMENTAL_SYNC' in app,
-            'page_size_10': 'MUSIC_NOTE_PAGE_SIZE = 10' in app,
-            'fresh_page': 'fetchFreshMusicNotePage' in app,
-            'load_more': 'loadMoreMusicNoteFavorites' in app,
-            'firebase_query_page': 'getDocumentsByQueryPage' in fb,
-            'v1_mutation_boundary': 'runV1MutationBoundary' in app,
-            'gemini_874_marker': 'SORIDRAW_874_BUILD_SAFETY_GEMINI' in gem,
-            'app_874_marker': 'SORIDRAW_874_BUILD_SAFETY_APP' in app,
-          },sort_keys=True))
-          PY
-          # Diagnostic succeeds regardless of the expected next historical blocker; logs determine the next minimal compatibility fix.
           exit 0
 
       - name: Prove disposable diagnostic made no Firebase change

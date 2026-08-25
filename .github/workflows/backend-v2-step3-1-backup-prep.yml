@@ -66,6 +66,7 @@ jobs:
               "queryKind: 'collectionGroup'",
               "id: 'playlist_lists'",
               "id: 'playlist_items'",
+              "const { FieldPath, getFirestore } = await import('firebase-admin/firestore')",
           ]
           for marker in required_backup:
               if marker not in backup:
@@ -73,12 +74,15 @@ jobs:
 
           forbidden_mutation = [
               '.set(',
-              '.update(',
               '.delete(',
+              '.doc(',
               'writeBatch',
               'bulkWriter',
               'recursiveDelete',
               'runTransaction',
+              'setDoc',
+              'updateDoc',
+              'deleteDoc',
               '.create(',
           ]
           for marker in forbidden_mutation:

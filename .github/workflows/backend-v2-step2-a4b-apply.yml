@@ -1,0 +1,71 @@
+name: SORIDRAW Backend V2 Step 2-A4b Apply
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step2-a4b-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Capture protected Firebase backend baselines
+        run: sha256sum firestore.rules firestore.indexes.json database.rules.json src/firebase.js functions/src/index.ts > /tmp/step2a4b-protected.sha256
+
+      - name: Apply deterministic 2-A4b patch
+        run: python3 .deploy/apply-backend-v2-step2-a4b-boundary.py
+
+      - name: Verify scope and omission
+        run: |
+          git diff --check
+          sha256sum --check /tmp/step2a4b-protected.sha256
+          python3 .deploy/verify-backend-v2-step2-a4b-boundary.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies without lifecycle mutation scripts
+        run: npm ci --ignore-scripts
+
+      - name: Boundary contract
+        run: npx tsx src/data/v1MutationBoundary.contract.ts
+
+      - name: Stable identity regression contract
+        run: npx tsx src/data/v2LiveMutation.contract.ts
+
+      - name: Typecheck boundary modules
+        run: npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --types node src/data/v1MutationBoundary.ts src/data/v1MutationBoundary.contract.ts
+
+      - name: Production build without prebuild patch scripts
+        run: npx vite build
+
+      - name: Commit validated runtime routing
+        run: |
+          set -euo pipefail
+          sha256sum --check /tmp/step2a4b-protected.sha256
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/pages/FavoritesPage.tsx src/pages/SunoLibraryPage.tsx
+          git commit -m 'refactor: centralize V1 recent and Music Note mutation boundaries'
+          git push origin HEAD:preview
+
+      - name: Remove temporary Step 2-A4b tools
+        run: |
+          set -euo pipefail
+          git pull --rebase origin preview
+          git rm .github/workflows/backend-v2-step2-a4b-source-audit.yml .github/workflows/backend-v2-step2-a4b-mutation-audit.yml .github/workflows/backend-v2-step2-a4b-apply.yml .deploy/apply-backend-v2-step2-a4b-boundary.py .deploy/verify-backend-v2-step2-a4b-boundary.py
+          git commit -m 'chore: remove Step 2-A4b temporary tools'
+          git push origin HEAD:preview

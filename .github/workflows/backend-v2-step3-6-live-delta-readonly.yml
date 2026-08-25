@@ -1,0 +1,72 @@
+name: SORIDRAW Backend V2 Step 3-6 Live Delta Readonly Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-6-live-delta-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_PROJECT: soridraw-app-866a5
+      TARGET_BUCKET: soridraw-app-866a5.firebasestorage.app
+      BACKUP_PREFIX: backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z
+      EXPECTED_MANIFEST_SHA256: 57cf21a6c2935c8fa658d5e925cf8424b8e54269b314f9e711feded870f49ebb
+      APPROVED_SCOPE: Step 3-6 V1 retention rollback safety read-only approved 2026-08-26 KST
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}'
+          create_credentials_file: true
+          export_environment_variables: true
+      - run: npm ci --ignore-scripts
+      - name: Read-only delta audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GOOGLE_CLOUD_PROJECT="$TARGET_PROJECT"
+          export GCLOUD_PROJECT="$TARGET_PROJECT"
+          export GOOGLE_CLOUD_QUOTA_PROJECT="$TARGET_PROJECT"
+          node <<'NODE'
+          const crypto=require('node:crypto');
+          const {initializeApp,applicationDefault,deleteApp}=require('firebase-admin/app');
+          const {getFirestore}=require('firebase-admin/firestore');
+          const {getStorage}=require('firebase-admin/storage');
+          const projectId=String(process.env.TARGET_PROJECT||''); const bucketName=String(process.env.TARGET_BUCKET||''); const prefix=String(process.env.BACKUP_PREFIX||''); const expectedManifest=String(process.env.EXPECTED_MANIFEST_SHA256||'');
+          if(projectId!=='soridraw-app-866a5'||bucketName!=='soridraw-app-866a5.firebasestorage.app') throw new Error('TARGET_PIN_MISMATCH');
+          const hash=(v)=>crypto.createHash('sha256').update(v).digest('hex');
+          const canon=(v)=>{if(v===null||v===undefined||['string','boolean'].includes(typeof v))return v;if(typeof v==='number')return Number.isFinite(v)?v:String(v);if(Buffer.isBuffer(v)||v instanceof Uint8Array)return{t:'b',v:Buffer.from(v).toString('base64')};if(Array.isArray(v))return v.map(canon);if(v instanceof Date)return{t:'d',v:v.toISOString()};if(typeof v?.seconds==='number'&&typeof v?.nanoseconds==='number')return{t:'ts',s:v.seconds,n:v.nanoseconds};if(typeof v?.path==='string'&&v?.firestore)return{t:'r',p:v.path};if(typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,canon(v[k])]));return String(v)};
+          const digest=(v)=>hash(JSON.stringify(canon(v)));
+          const recentId=(uid,path,index)=>`v1r_${hash(`${uid}\n${path}\n${index}`).slice(0,32)}`;
+          const favoriteId=(path)=>`v1f_${hash(path).slice(0,32)}`;
+          const app=initializeApp({credential:applicationDefault(),projectId,storageBucket:bucketName},`step36delta-${Date.now()}`);
+          (async()=>{
+            const db=getFirestore(app), bucket=getStorage(app).bucket(bucketName);
+            const [manifestBytes]=await bucket.file(`${prefix}/manifest.json`).download(); if(hash(manifestBytes)!==expectedManifest) throw new Error('MANIFEST_HASH_MISMATCH'); const manifest=JSON.parse(manifestBytes.toString('utf8'));
+            const getBackup=async(id)=>{const ds=(manifest.datasets||[]).find(x=>x?.id===id); if(!ds)throw new Error(`DATASET_MISSING:${id}`); const [bytes]=await bucket.file(`${prefix}/${ds.fileName}`).download(); if(hash(bytes)!==ds.sha256)throw new Error(`DATASET_HASH:${id}`); return bytes.toString('utf8').split('\n').filter(Boolean).map(JSON.parse)};
+            const [backupFavs,backupRecent]=await Promise.all([getBackup('favorites'),getBackup('user_recent_songs')]);
+            const [favSnap,recentSnap]=await Promise.all([db.collection('favorites').get(),db.collection('user_recent_songs').get()]);
+            const backupFavMap=new Map(backupFavs.map(r=>[String(r.path),r.data])); const liveFavMap=new Map(favSnap.docs.map(d=>[d.ref.path,d]));
+            const addedFavPaths=[...liveFavMap.keys()].filter(p=>!backupFavMap.has(p)).sort(); const missingFavPaths=[...backupFavMap.keys()].filter(p=>!liveFavMap.has(p)).sort(); const changedFavPaths=[...liveFavMap.keys()].filter(p=>backupFavMap.has(p)&&digest(liveFavMap.get(p).data())!==digest(backupFavMap.get(p))).sort();
+            let addedFavV2Present=0,addedFavV2Missing=0,addedFavV2Mismatch=0; const addedFavAnonymous=[];
+            for(let i=0;i<addedFavPaths.length;i++){const p=addedFavPaths[i],d=liveFavMap.get(p),uid=String(d.data()?.uid||'').trim(); if(!uid)throw new Error('NEW_FAVORITE_UID_MISSING'); const target=await db.doc(`users/${uid}/songs/${favoriteId(p)}`).get(); if(!target.exists)addedFavV2Missing++; else {addedFavV2Present++; const t={...target.data()}; for(const k of ['schemaVersion','musicNote','recentVisible','v2UpdatedAtMs','legacyFavoriteId','legacyFavoriteKey'])delete t[k]; if(digest(t)!==digest(d.data()))addedFavV2Mismatch++;} addedFavAnonymous.push({item:`new-favorite-${String(i+1).padStart(2,'0')}`,v2Exists:target.exists});}
+            const backupRecentMap=new Map(backupRecent.map(r=>[String(r.path),r.data])); const changedBundles=[]; let totalLiveRecent=0,totalBackupRecent=0,totalRecentV2Missing=0,totalRecentV2Mismatch=0;
+            for(const d of recentSnap.docs){const p=d.ref.path,uid=d.id,liveSongs=Array.isArray(d.data()?.songs)?d.data().songs:[],backData=backupRecentMap.get(p),backSongs=Array.isArray(backData?.songs)?backData.songs:[]; totalLiveRecent+=liveSongs.length; totalBackupRecent+=backSongs.length; const backDigests=backSongs.map(digest),liveDigests=liveSongs.map(digest); const backCounts=new Map(); for(const x of backDigests)backCounts.set(x,(backCounts.get(x)||0)+1); let common=0; for(const x of liveDigests){const n=backCounts.get(x)||0;if(n>0){common++;backCounts.set(x,n-1)}} const added=liveSongs.length-common,removed=backSongs.length-common; let indexMismatch=0,v2Missing=0,v2Mismatch=0; for(let i=0;i<liveSongs.length;i++){if(backDigests[i]!==liveDigests[i])indexMismatch++; const target=await db.doc(`users/${uid}/songs/${recentId(uid,p,i)}`).get(); if(!target.exists){v2Missing++;continue;} const t={...target.data()}; for(const k of ['schemaVersion','musicNote','recentVisible','v2UpdatedAtMs','legacyRecentIndex'])delete t[k]; if(digest(t)!==digest(liveSongs[i]))v2Mismatch++;} totalRecentV2Missing+=v2Missing; totalRecentV2Mismatch+=v2Mismatch; if(!backData||digest(backData)!==digest(d.data()))changedBundles.push({bundle:`recent-bundle-${String(changedBundles.length+1).padStart(2,'0')}`,backupCount:backSongs.length,liveCount:liveSongs.length,commonExactItems:common,addedItems:added,removedItems:removed,indexMismatch,v2Missing,v2Mismatch});}
+            console.log('STEP36_DELTA_FAVORITES='+JSON.stringify({backupCount:backupFavMap.size,liveCount:liveFavMap.size,added:addedFavPaths.length,missing:missingFavPaths.length,changed:changedFavPaths.length,newDestinationsPresent:addedFavV2Present,newDestinationsMissing:addedFavV2Missing,newDestinationPayloadMismatch:addedFavV2Mismatch,items:addedFavAnonymous}));
+            console.log('STEP36_DELTA_RECENT='+JSON.stringify({backupItems:totalBackupRecent,liveItems:totalLiveRecent,changedBundleCount:changedBundles.length,changedBundles,totalV2Missing:totalRecentV2Missing,totalV2Mismatch:totalRecentV2Mismatch}));
+            console.log('STEP36_DELTA_RESULT='+JSON.stringify({v1BackupDeletionsDetected:missingFavPaths.length,liveV1StillAvailable:true,newFavoritesSinceBackup:addedFavPaths.length,changedRecentBundlesSinceBackup:changedBundles.length,v2CurrentForNewFavorites:addedFavV2Missing===0&&addedFavV2Mismatch===0,v2CurrentForRecent:totalRecentV2Missing===0&&totalRecentV2Mismatch===0,v1Writes:0,v1Deletes:0,v2Writes:0,v2Deletes:0,storageWrites:0}));
+          })().catch(e=>{console.error('STEP36_DELTA_ERROR='+String(e?.message||e));process.exitCode=1}).finally(async()=>{await deleteApp(app)});
+          NODE

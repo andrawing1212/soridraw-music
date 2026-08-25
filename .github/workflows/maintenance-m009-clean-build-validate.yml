@@ -68,9 +68,26 @@ jobs:
           assert len(persist_calls) >= 4, persist_calls
           assert all(item['wrapped'] for item in persist_calls), persist_calls
 
-          required_recent_ops = ['delete-item', 'save-batch', 'regenerate', 'edit', 'pre-favorite-edit', 'add-lyrics-language']
-          missing_recent_ops = [op for op in required_recent_ops if f"operation: '{op}'" not in app]
-          assert not missing_recent_ops, missing_recent_ops
+          # 912/913 intentionally changed edit/pre-favorite-edit from immediate
+          # Firestore operations into local pending states. They are committed only
+          # at the heart boundary through flushRecentSongTextWrite(), whose actual
+          # persistRecentSongsDocument() calls are verified above to remain wrapped.
+          assert 'SORIDRAW_912_HEART_TRIGGERED_RECENT_SAVE' in app
+          assert 'SORIDRAW_913_RECENT_SAVE_RUNTIME_FIX' in app
+          assert re.search(
+              r"queueRecentSongTextWrite\s*=\s*useCallback\(\(uid: string, songs: any\[\], operation: 'regenerate' \| 'edit' \| 'pre-favorite-edit'\)",
+              app,
+          )
+          assert "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };" in app
+          assert "operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit'" in app
+          assert 'await flushRecentSongTextWrite();' in app
+
+          required_recent_persisted_ops = ['delete-item', 'save-batch', 'regenerate', 'add-lyrics-language']
+          missing_recent_persisted_ops = [
+              op for op in required_recent_persisted_ops
+              if f"operation: '{op}'" not in app
+          ]
+          assert not missing_recent_persisted_ops, missing_recent_persisted_ops
 
           required_music_ops = ['save', 'restore', 'unsave', 'permanent-delete', 'update', 'bulk-delete', 'bulk-lock', 'bulk-unlock']
           missing_music_ops = [op for op in required_music_ops if f"operation: '{op}'" not in app]
@@ -79,7 +96,8 @@ jobs:
           print('M009_BOUNDARY_AUDIT=' + json.dumps({
               'persistRecentCalls': len(persist_calls),
               'persistRecentWrapped': sum(1 for x in persist_calls if x['wrapped']),
-              'recentRequiredOpsMissing': missing_recent_ops,
+              'recentPersistedOpsMissing': missing_recent_persisted_ops,
+              'deferredLocalEditOpsVerified': ['edit', 'pre-favorite-edit'],
               'musicNoteRequiredOpsMissing': missing_music_ops,
               'mirrorEnabled': False,
               'runtimeMode': 'v1-only',

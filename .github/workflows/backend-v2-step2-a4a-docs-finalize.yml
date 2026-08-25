@@ -1,0 +1,55 @@
+name: SORIDRAW Backend V2 Step 2-A4a Docs Finalize
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step2-a4a-docs-finalize.yml'
+permissions:
+  contents: write
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Update Master Plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          s = p.read_text(encoding='utf-8')
+          replacements = [
+            ("Status: IMPLEMENTATION / Step 2-A4 read-only live mutation/sync risk review complete — current live data has no universal stable song ID, positional recent IDs are unsafe, current recent V1 writes are spread across multiple call-sites, and no durable mirror outbox exists; Step 4 remains blocked pending separately approved inert 2-A4a/b implementation and later write-approved shadow/catch-up stages", "Status: IMPLEMENTATION / Step 2-A4a complete — provider-neutral stable song ID, deterministic mutation/version contract and separate bounded IndexedDB mirror outbox are implemented and validated with runtime OFF and zero Firebase IO; Step 2-A4b V1 recent/Music Note mutation-boundary centralization is next, while Step 4 remains blocked before separately approved shadow/catch-up writes"),
+            ("Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`", "Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`"),
+            ("2-A4 live mutation/sync risk review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`.", "2-A4 live mutation/sync risk review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`.\n2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`."),
+            ("### 2-B complete — additive V2 schema/rules source", "### 2-A4a complete — stable identity + durable mirror outbox contract (runtime OFF)\n- Added provider-neutral immutable `sd_` UUID identity contract for future new live songs; IDs are generated only when a later approved caller invokes the helper, never at module import.\n- Positional historical `v1r_` IDs are explicitly rejected for live mutation targeting; exact historical `v1f_` IDs remain allowed only as verified legacy-favorite targets.\n- Added a pure metadata-only mutation envelope with deterministic mutation IDs plus monotonic conflict handling by source update time and mutation-ID tie-breaker.\n- Added a separate IndexedDB mirror outbox DB so normal expendable cache clearing cannot erase pending reconciliation; runtime is OFF, no timer/listener/retry executor exists, per-user queue cap is 200, retry cap is 6, exponential delay starts at 5s and caps at 300s.\n- Extended the V2 schema source additively with optional `soridrawSongId` and `v2MutationId`; historical verified V2 documents remain valid because the new live fields are not required.\n- Validation run `32883874620` completed SUCCESS: stable-ID contract, outbox contract, existing Step 2-C cache regression, scoped TypeScript check and production Vite build all passed. Existing Step 2-A safety run `32883617434` also completed SUCCESS.\n- An initial repository-wide TypeScript check exposed two pre-existing errors in unchanged `App.tsx` and `geminiService.ts`; no unrelated app code was modified to make this migration step pass.\n- No App mutation call-site wiring, Firebase IO, Rules/Functions/Hosting deploy, main promotion or production change occurred.\n- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.\n\n### 2-B complete — additive V2 schema/rules source"),
+            ("### Step 2 — V2 code implementation on preview (2-A4 risk review complete; implementation/activation still gated) 🔄", "### Step 2 — V2 code implementation on preview (2-A4a inert identity/outbox complete; 2-A4b/c/d still gated) 🔄"),
+            ("  - [~] 2-A4 Critical generation/recent-save/Music Note live connection — risk review complete; runtime activation remains blocked.", "  - [~] 2-A4 Critical generation/recent-save/Music Note live connection — risk review + inert identity/outbox complete; runtime activation remains blocked."),
+            ("    - [ ] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests; runtime OFF, no Firebase writes.", "    - [x] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests complete; runtime OFF, no Firebase IO/App wiring."),
+            ("### Step 4 — Preview validation (0/12; blocked pending Step 2-A4a/b implementation + separately approved 2-A4c/d write stages) ⏳", "### Step 4 — Preview validation (0/12; blocked pending Step 2-A4b + separately approved 2-A4c/d write stages) ⏳")
+          ]
+          for old, new in replacements:
+              if old not in s:
+                  raise SystemExit('Master Plan replacement anchor missing: ' + old[:100])
+              s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git diff --cached --check
+          git commit -m 'docs: mark Step 2-A4a inert contracts complete'
+          git push origin HEAD:preview
+      - name: Remove temporary finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin preview
+          git rm .github/workflows/backend-v2-step2-a4a-docs-finalize.yml
+          git commit -m 'chore: remove Step 2-A4a docs finalizer'
+          git push origin HEAD:preview

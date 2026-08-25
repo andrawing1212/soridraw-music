@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-C complete in source — awaiting approval for 2-D
+Status: IMPLEMENTATION / Step 2-D complete in source — awaiting approval for Step 3-1 backup preparation
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -248,6 +248,18 @@ Risk decision:
 - CI exercises actual IndexedDB behavior with an ephemeral test-only `fake-indexeddb` install; it is not added to app dependencies.
 - No Firestore/RTDB operation, Rules/index deploy, Functions deploy, Firebase Hosting deploy, V1 delete, or main-branch change occurs in Step 2-C.
 
+### 2-D complete — shadow-write / validator / dry-run scaffold
+- Added `src/data/v2ShadowValidation.ts` with no Firebase/network dependency and no mutation executor.
+- All V2 write, shadow-write, migrate-on-read, backfill and V1-delete gates remain false.
+- Dry-run song plans preserve complete unknown V1 payload fields and add only the finalized V2 metadata/provenance fields.
+- Existing targets are considered the same record only with explicit canonical ID, trusted provider/track identity, or trusted legacy key plus corroborated stable identity.
+- Title/lyrics/prompt/content similarity or hash alone never authorizes a merge.
+- Duplicate target IDs in one dry-run batch become `conflict-preserve-both`; no silent collapse is allowed.
+- Dry-run outputs are non-executable, report `writePerformed: false`, and batch write operations remain zero.
+- No runtime file outside `src/data` imports/activates the Step 2-D scaffold.
+- 2-A4 remains blocked; Step 2-D does not authorize generation/recent-save/Music Note mutation rewiring or any V2 write.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2D_SHADOW_VALIDATION_DRYRUN.md`.
+
 ## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete) ✅
@@ -262,7 +274,7 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A3 blocker deferred; 2-C complete, safe next 2-D) 🔄
+### Step 2 — V2 code implementation on preview (2-D source complete; 2-A4 high-risk activation still blocked) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
@@ -270,7 +282,7 @@ Risk decision:
   - [ ] 2-A4 Critical generation/recent-save/Music Note mutation activation gate only after separate risk review and explicit approval.
 - [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
-- [ ] 2-D Shadow-write/validator/dry-run migration scaffolding; dual-write stays disabled by default until separately approved.
+- [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
 ### Step 3 — Backup, backfill and verification (0/4) ⏳
 - [ ] Secure local read-only backup strategy/run

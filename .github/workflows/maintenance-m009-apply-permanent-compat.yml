@@ -1,0 +1,76 @@
+name: SORIDRAW Maintenance M-009 Apply Permanent Compatibility
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m009-apply-permanent-compat.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+      - name: Apply already-proven semantic compatibility only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .deploy/m009_diagnostic_compat.py
+          python3 .deploy/m009_fix_generated_874.py
+          python3 .deploy/m009_diagnostic_compat_late.py
+          python3 -m py_compile \
+            .deploy/apply-874-build-safety.py \
+            .deploy/apply-901-music-note-10-incremental-sync.py \
+            .deploy/apply-905-recent-songs-cache-live-accounting.py \
+            .deploy/apply-910-recent-text-batch-unsave-fix.py \
+            .deploy/apply-912-heart-triggered-recent-save.py \
+            .deploy/apply-913-recent-save-runtime-fix.py
+          git diff --check -- \
+            .deploy/apply-874-build-safety.py \
+            .deploy/apply-901-music-note-10-incremental-sync.py \
+            .deploy/apply-905-recent-songs-cache-live-accounting.py \
+            .deploy/apply-910-recent-text-batch-unsave-fix.py \
+            .deploy/apply-912-heart-triggered-recent-save.py \
+            .deploy/apply-913-recent-save-runtime-fix.py
+          echo 'M009_PERMANENT_TARGETS_BEGIN'
+          git diff --stat -- \
+            .deploy/apply-874-build-safety.py \
+            .deploy/apply-901-music-note-10-incremental-sync.py \
+            .deploy/apply-905-recent-songs-cache-live-accounting.py \
+            .deploy/apply-910-recent-text-batch-unsave-fix.py \
+            .deploy/apply-912-heart-triggered-recent-save.py \
+            .deploy/apply-913-recent-save-runtime-fix.py
+          echo 'M009_PERMANENT_TARGETS_END'
+      - name: Commit only the six proven deploy-script changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .deploy/apply-874-build-safety.py \
+            .deploy/apply-901-music-note-10-incremental-sync.py \
+            .deploy/apply-905-recent-songs-cache-live-accounting.py \
+            .deploy/apply-910-recent-text-batch-unsave-fix.py \
+            .deploy/apply-912-heart-triggered-recent-save.py \
+            .deploy/apply-913-recent-save-runtime-fix.py
+          test -n "$(git diff --cached --name-only)"
+          unexpected="$(git diff --cached --name-only | grep -Ev '^\.deploy/apply-(874-build-safety|901-music-note-10-incremental-sync|905-recent-songs-cache-live-accounting|910-recent-text-batch-unsave-fix|912-heart-triggered-recent-save|913-recent-save-runtime-fix)\.py$' || true)"
+          test -z "$unexpected"
+          git commit -m 'fix: make legacy prebuild patches compatible with current mutation boundaries'
+          git push origin HEAD:preview
+      - name: Confirm scope contains no Firebase operation
+        run: |
+          echo 'M009_FIREBASE_DATA_READS=0'
+          echo 'M009_FIREBASE_DATA_WRITES=0'
+          echo 'M009_FIREBASE_DATA_DELETES=0'
+          echo 'M009_RULES_DEPLOYS=0'
+          echo 'M009_FUNCTIONS_DEPLOYS=0'
+          echo 'M009_HOSTING_DEPLOYS=0'

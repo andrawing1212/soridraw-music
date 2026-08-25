@@ -1,0 +1,70 @@
+name: SORIDRAW Backend V2 2-A3-R Revert Contaminated Commit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-backend-v2-2a3r-revert.txt'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-backend-v2-2a3r-revert
+  cancel-in-progress: false
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout preview history
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 20
+
+      - name: Verify rollback target
+        run: |
+          set -euo pipefail
+          TARGET=762fa24c3ef679e4e443ae6f5d6567381f2ccff7
+          git cat-file -e "$TARGET^{commit}"
+          git merge-base --is-ancestor "$TARGET" HEAD
+          echo "rollback target verified: $TARGET"
+
+      - name: Revert contaminated stabilization commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git revert --no-edit 762fa24c3ef679e4e443ae6f5d6567381f2ccff7
+          git diff HEAD^ HEAD --check
+
+      - name: Verify protected baseline restored
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          target='762fa24c3ef679e4e443ae6f5d6567381f2ccff7^'
+          files=[
+            'functions/src/index.ts',
+            'src/firebase.js',
+            'src/lib/songUtils.ts',
+            'src/pages/SunoLibraryPage.tsx',
+            'src/services/playlistService.ts',
+            'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          ]
+          for path in files:
+              baseline=subprocess.check_output(['git','show',f'{target}:{path}'])
+              current=subprocess.check_output(['git','show',f'HEAD:{path}'])
+              if baseline != current:
+                  raise SystemExit(f'rollback mismatch: {path}')
+          report_exists = subprocess.run(['git','cat-file','-e','HEAD:docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md']).returncode == 0
+          if report_exists:
+              raise SystemExit('emergency report should be absent after rollback')
+          print('contaminated stabilization payload fully rolled back')
+          PY
+
+      - name: Push rollback to preview
+        run: git push origin HEAD:preview

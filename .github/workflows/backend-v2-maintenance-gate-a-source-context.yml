@@ -1,0 +1,28 @@
+name: SORIDRAW Gate A Source Context
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-maintenance-gate-a-source-context.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  context:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+      - name: Print exact TypeScript error context only
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== APP 4428-4465 ==='
+          nl -ba src/App.tsx | sed -n '4428,4465p'
+          echo '=== GEMINI 35100-35155 ==='
+          nl -ba src/services/geminiService.ts | sed -n '35100,35155p'
+          echo '=== APPLIEDKEYWORDS TYPE LOCATIONS ==='
+          grep -Rns "interface AppliedKeywords\|type AppliedKeywords" src | head -20 || true

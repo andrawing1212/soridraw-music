@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-4a limited backfill safety design complete — actual production backfill writes NOT started; awaiting separate Step 3-4b canary approval
+Status: IMPLEMENTATION / Step 3-4b settings canary complete and verified — 3 V2 settings documents created, V1 unchanged; awaiting approval for Step 3-4c playlist-header limited backfill
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -303,6 +303,16 @@ Risk decision:
 - Firestore reads/writes/deletes caused by the offline planner: 0 / 0 / 0. No Rules, Functions or Hosting deploy occurred.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4_BACKFILL_SAFETY_DESIGN.md`.
 
+### 3-4b settings canary complete — first production V2 backfill checkpoint verified
+- GitHub Actions run `32843253340` completed SUCCESS after temporary migration IAM was granted.
+- Fresh preflight: 3,027 same-day reads, 70 writes, 0 deletes; migration caps remained 10,000 reads / 5,000 writes, with a canary write cap of 3.
+- Step 3-3 rollback manifest was present and matched SHA-256 `57cf21a6c2935c8fa658d5e925cf8424b8e54269b314f9e711feded870f49ebb` before writes.
+- Live `user_structures` source count remained exactly 3.
+- Created exactly 3 V2 documents at `users/{uid}/settings/sections` using create-only semantics; conflicts would have stopped execution.
+- Post-write verification confirmed every V1 source payload and update time unchanged, and every V2 destination payload hash exactly matched its source.
+- V1 writes/deletes: 0 / 0. V2 deletes: 0. Rules, Functions, Hosting deploys: 0.
+- Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_4B_SETTINGS_CANARY_RESULT.md`.
+
 ## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete) ✅
@@ -333,7 +343,11 @@ Risk decision:
 - [x] 3-3 Actual backup + checksum integrity verification: 842 V1 documents backed up to private Firebase Storage, uploaded/re-downloaded and verified with matching SHA-256; no Firestore writes/deletes or V2 backfill writes.
 - [~] 3-4 Rate-limited backfill within free-tier budget.
   - [x] 3-4a Safety design + exact verified-backup offline analysis complete; projected snapshot writes 900, all 738 favorites preserve standalone because no trusted recent-song identity overlap was found.
-  - [ ] 3-4b Actual limited production backfill; separate explicit approval required. Recommended first canary: settings only, maximum 3 writes, then verify before continuing.
+  - [x] 3-4b Settings canary complete: 3 `user_structures` documents created at `users/{uid}/settings/sections`; all V1 sources remained unchanged and destination payload parity verified.
+  - [ ] 3-4c Playlist-header limited backfill: 42 headers, bounded create-only batches, conflict-stop and immediate parity verification.
+  - [ ] 3-4d Playlist-item limited backfill: 49 items after header verification.
+  - [ ] 3-4e Recent-song limited backfill: 68 canonical song creates with deterministic addressing and no favorite merge assumption.
+  - [ ] 3-4f Music Note/favorites limited backfill: 738 standalone-preserved songs unless stronger trusted identity is proven at execution time.
 - [ ] 3-5 Per-user automatic verification.
 - [ ] 3-6 V1 retention / rollback safety confirmation; no V1 deletion.
 

@@ -1,0 +1,419 @@
+name: SORIDRAW Backend V2 Step 3-4d Playlist Items
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-4d-playlist-items.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playlist-items:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TARGET_PROJECT: soridraw-app-866a5
+      TARGET_BUCKET: soridraw-app-866a5.firebasestorage.app
+      BACKUP_PREFIX: backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z
+      BACKUP_MANIFEST: backend-v2-backups/step3-3/backend-v2-backup-2026-08-25T09-20-03-568Z/manifest.json
+      EXPECTED_MANIFEST_SHA256: 57cf21a6c2935c8fa658d5e925cf8424b8e54269b314f9e711feded870f49ebb
+      EXPECTED_PARENT_COUNT: '42'
+      EXPECTED_SOURCE_COUNT: '49'
+      MAX_WRITES: '49'
+      BATCH_SIZE: '25'
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Authenticate exact Firebase project session
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Pin exact project and quota project
+        shell: bash
+        run: |
+          echo "GCLOUD_PROJECT=${TARGET_PROJECT}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_PROJECT=${TARGET_PROJECT}" >> "$GITHUB_ENV"
+          echo "GOOGLE_CLOUD_QUOTA_PROJECT=${TARGET_PROJECT}" >> "$GITHUB_ENV"
+
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Preflight IAM, free-tier headroom and rollback checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const admin = require('firebase-admin');
+          const { initializeApp, applicationDefault, deleteApp } = require('firebase-admin/app');
+          const { getStorage } = require('firebase-admin/storage');
+
+          const projectId = process.env.TARGET_PROJECT;
+          const bucketName = process.env.TARGET_BUCKET;
+          const manifestPath = process.env.BACKUP_MANIFEST;
+          const expectedManifestHash = process.env.EXPECTED_MANIFEST_SHA256;
+          const maxWrites = Number(process.env.MAX_WRITES || 0);
+          const batchSize = Number(process.env.BATCH_SIZE || 0);
+          if (projectId !== 'soridraw-app-866a5') throw new Error('PROJECT_PIN_MISMATCH');
+          if (bucketName !== 'soridraw-app-866a5.firebasestorage.app') throw new Error('BUCKET_PIN_MISMATCH');
+          if (maxWrites !== 49 || batchSize !== 25 || batchSize > 25) throw new Error('PLAYLIST_ITEM_CAP_MISMATCH');
+
+          const metricValue = (point) => {
+            const raw = point?.value?.int64Value ?? point?.value?.doubleValue ?? 0;
+            const value = Number(raw);
+            return Number.isFinite(value) && value > 0 ? value : 0;
+          };
+          const now = new Date();
+          const kstDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+          const dayStartMs = Date.parse(`${kstDate}T00:00:00+09:00`);
+          const recentStartMs = now.getTime() - 10 * 60_000;
+
+          const queryMetric = async (accessToken, metricType) => {
+            const params = new URLSearchParams({
+              filter: `metric.type = "${metricType}"`,
+              'interval.startTime': new Date(dayStartMs).toISOString(),
+              'interval.endTime': now.toISOString(),
+              view: 'FULL',
+              pageSize: '1000',
+            });
+            let pageToken = '';
+            let today = 0;
+            let recent = 0;
+            let pointCount = 0;
+            let pages = 0;
+            do {
+              if (pageToken) params.set('pageToken', pageToken); else params.delete('pageToken');
+              const response = await fetch(`https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?${params}`, {
+                headers: { Authorization: `Bearer ${accessToken}`, 'X-Goog-User-Project': projectId, Accept: 'application/json' },
+              });
+              const text = await response.text();
+              if (!response.ok) {
+                const error = new Error(`MONITORING_${response.status}`);
+                error.statusCode = response.status;
+                throw error;
+              }
+              const payload = text ? JSON.parse(text) : {};
+              for (const series of payload.timeSeries || []) {
+                for (const point of series.points || []) {
+                  const value = metricValue(point);
+                  const end = Date.parse(String(point?.interval?.endTime || ''));
+                  today += value;
+                  pointCount += 1;
+                  if (Number.isFinite(end) && end >= recentStartMs) recent += value;
+                }
+              }
+              pageToken = String(payload.nextPageToken || '');
+              if (++pages > 5) throw new Error('MONITORING_PAGINATION_LIMIT');
+            } while (pageToken);
+            return { today: Math.round(today), recent: Math.round(recent), pointCount };
+          };
+
+          const queryFamily = async (accessToken, candidates) => {
+            for (const metricType of candidates) {
+              try {
+                const result = await queryMetric(accessToken, metricType);
+                if (result.pointCount > 0) return result;
+              } catch (error) {
+                if (error?.statusCode === 400 || error?.statusCode === 404) continue;
+                throw error;
+              }
+            }
+            return { today: 0, recent: 0, pointCount: 0 };
+          };
+
+          (async () => {
+            const credential = admin.credential.applicationDefault();
+            const token = await credential.getAccessToken();
+            const accessToken = String(token?.access_token || '');
+            if (!accessToken) throw new Error('ACCESS_TOKEN_UNAVAILABLE');
+
+            const requested = ['datastore.entities.get', 'datastore.entities.list', 'datastore.entities.create'];
+            const iamResponse = await fetch(`https://cloudresourcemanager.googleapis.com/v1/projects/${projectId}:testIamPermissions`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'X-Goog-User-Project': projectId, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ permissions: requested }),
+            });
+            const iamText = await iamResponse.text();
+            if (!iamResponse.ok) throw new Error(`IAM_TEST_${iamResponse.status}`);
+            const granted = new Set((JSON.parse(iamText || '{}').permissions || []).map(String));
+            const missing = requested.filter((permission) => !granted.has(permission));
+            console.log('PLAYLIST_ITEM_IAM=' + JSON.stringify({ get: granted.has(requested[0]), list: granted.has(requested[1]), create: granted.has(requested[2]) }));
+            if (missing.length) throw new Error('PLAYLIST_ITEM_IAM_MISSING:' + missing.join(','));
+
+            const [reads, writes, deletes] = await Promise.all([
+              queryFamily(accessToken, ['firestore.googleapis.com/document/read_ops_count', 'firestore.googleapis.com/document/read_count']),
+              queryFamily(accessToken, ['firestore.googleapis.com/document/write_ops_count', 'firestore.googleapis.com/document/write_count']),
+              queryFamily(accessToken, ['firestore.googleapis.com/document/delete_ops_count', 'firestore.googleapis.com/document/delete_count']),
+            ]);
+            const safeReadCap = Math.min(10_000, Math.max(0, 50_000 - reads.today - 10_000));
+            const safeWriteCap = Math.min(5_000, Math.max(0, 20_000 - writes.today - 4_000));
+            const estimatedReads = 700;
+            console.log('PLAYLIST_ITEM_QUOTA=' + JSON.stringify({ todayReads: reads.today, todayWrites: writes.today, todayDeletes: deletes.today, recent10mReads: reads.recent, recent10mWrites: writes.recent, safeReadCap, safeWriteCap, estimatedReads, maxWrites }));
+            if (safeReadCap < estimatedReads || safeWriteCap < maxWrites) throw new Error('PLAYLIST_ITEM_QUOTA_PAUSE');
+
+            const app = initializeApp({ credential: applicationDefault(), projectId, storageBucket: bucketName }, `step34d-preflight-${Date.now()}`);
+            try {
+              const [bytes] = await getStorage(app).bucket(bucketName).file(manifestPath).download();
+              const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+              if (hash !== expectedManifestHash) throw new Error('ROLLBACK_MANIFEST_HASH_MISMATCH');
+              const manifest = JSON.parse(bytes.toString('utf8'));
+              if (manifest?.complete !== true || manifest?.targetProjectId !== projectId) throw new Error('ROLLBACK_MANIFEST_INVALID');
+              const parentDataset = (manifest.datasets || []).find((entry) => entry?.id === 'playlist_lists');
+              const itemDataset = (manifest.datasets || []).find((entry) => entry?.id === 'playlist_items');
+              if (!parentDataset || parentDataset.documentCount !== 42) throw new Error('ROLLBACK_PARENT_DATASET_INVALID');
+              if (!itemDataset || itemDataset.documentCount !== 49 || itemDataset.fileName !== 'playlist_items.ndjson') throw new Error('ROLLBACK_ITEM_DATASET_INVALID');
+              console.log('PLAYLIST_ITEM_ROLLBACK=' + JSON.stringify({ available: true, manifestHashMatch: true, backupParents: parentDataset.documentCount, backupItems: itemDataset.documentCount }));
+            } finally {
+              await deleteApp(app);
+            }
+          })().catch((error) => {
+            console.error('PLAYLIST_ITEM_PREFLIGHT_ERROR=' + String(error?.message || error));
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Execute 49-item limited backfill and verify parents plus payload parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const { initializeApp, applicationDefault, deleteApp } = require('firebase-admin/app');
+          const { getFirestore } = require('firebase-admin/firestore');
+          const { getStorage } = require('firebase-admin/storage');
+
+          const projectId = process.env.TARGET_PROJECT;
+          const bucketName = process.env.TARGET_BUCKET;
+          const backupPrefix = process.env.BACKUP_PREFIX;
+          const expectedManifestHash = process.env.EXPECTED_MANIFEST_SHA256;
+          const expectedParentCount = Number(process.env.EXPECTED_PARENT_COUNT || 0);
+          const expectedSourceCount = Number(process.env.EXPECTED_SOURCE_COUNT || 0);
+          const maxWrites = Number(process.env.MAX_WRITES || 0);
+          const batchSize = Number(process.env.BATCH_SIZE || 0);
+          if (projectId !== 'soridraw-app-866a5' || bucketName !== 'soridraw-app-866a5.firebasestorage.app') throw new Error('EXECUTION_TARGET_MISMATCH');
+          if (expectedParentCount !== 42 || expectedSourceCount !== 49 || maxWrites !== 49 || batchSize !== 25 || batchSize > 25) throw new Error('EXECUTION_CAP_MISMATCH');
+
+          const canonicalize = (value) => {
+            if (value === null || value === undefined || ['string', 'boolean'].includes(typeof value)) return value;
+            if (typeof value === 'number') {
+              if (Number.isNaN(value)) return { __type: 'number', value: 'NaN' };
+              if (value === Infinity) return { __type: 'number', value: 'Infinity' };
+              if (value === -Infinity) return { __type: 'number', value: '-Infinity' };
+              if (Object.is(value, -0)) return { __type: 'number', value: '-0' };
+              return value;
+            }
+            if (Buffer.isBuffer(value) || value instanceof Uint8Array) return { __type: 'bytes', base64: Buffer.from(value).toString('base64') };
+            if (Array.isArray(value)) return value.map(canonicalize);
+            if (value instanceof Date) return { __type: 'date', iso: value.toISOString() };
+            if (typeof value?.seconds === 'number' && typeof value?.nanoseconds === 'number') return { __type: 'timestamp', seconds: value.seconds, nanoseconds: value.nanoseconds };
+            if (typeof value?.latitude === 'number' && typeof value?.longitude === 'number') return { __type: 'geopoint', latitude: value.latitude, longitude: value.longitude };
+            if (typeof value?.path === 'string' && value?.firestore) return { __type: 'reference', path: value.path };
+            if (typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+            throw new Error('UNSUPPORTED_PLAYLIST_ITEM_VALUE_TYPE');
+          };
+          const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
+          const parentPathPattern = /^user_playlists\/([^/]+)\/lists\/([^/]+)$/;
+          const itemPathPattern = /^user_playlists\/([^/]+)\/lists\/([^/]+)\/items\/([^/]+)$/;
+
+          const app = initializeApp({ credential: applicationDefault(), projectId, storageBucket: bucketName }, `step34d-items-${Date.now()}`);
+          (async () => {
+            const db = getFirestore(app);
+            const bucket = getStorage(app).bucket(bucketName);
+
+            const [manifestBytes] = await bucket.file(`${backupPrefix}/manifest.json`).download();
+            const manifestHash = crypto.createHash('sha256').update(manifestBytes).digest('hex');
+            if (manifestHash !== expectedManifestHash) throw new Error('EXECUTION_MANIFEST_HASH_MISMATCH');
+            const manifest = JSON.parse(manifestBytes.toString('utf8'));
+            const parentDataset = (manifest.datasets || []).find((entry) => entry?.id === 'playlist_lists');
+            const itemDataset = (manifest.datasets || []).find((entry) => entry?.id === 'playlist_items');
+            if (!parentDataset || parentDataset.documentCount !== expectedParentCount || parentDataset.fileName !== 'playlist_lists.ndjson') throw new Error('PARENT_BACKUP_DATASET_MISMATCH');
+            if (!itemDataset || itemDataset.documentCount !== expectedSourceCount || itemDataset.fileName !== 'playlist_items.ndjson') throw new Error('ITEM_BACKUP_DATASET_MISMATCH');
+
+            const [parentBytes, itemBytes] = await Promise.all([
+              bucket.file(`${backupPrefix}/${parentDataset.fileName}`).download().then(([bytes]) => bytes),
+              bucket.file(`${backupPrefix}/${itemDataset.fileName}`).download().then(([bytes]) => bytes),
+            ]);
+            if (crypto.createHash('sha256').update(parentBytes).digest('hex') !== parentDataset.sha256) throw new Error('PARENT_BACKUP_HASH_MISMATCH');
+            if (crypto.createHash('sha256').update(itemBytes).digest('hex') !== itemDataset.sha256) throw new Error('ITEM_BACKUP_HASH_MISMATCH');
+
+            const backupParentRecords = parentBytes.toString('utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+            const backupItemRecords = itemBytes.toString('utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));
+            if (backupParentRecords.length !== expectedParentCount) throw new Error('BACKUP_PARENT_COUNT_CHANGED');
+            if (backupItemRecords.length !== expectedSourceCount) throw new Error('BACKUP_ITEM_COUNT_CHANGED');
+            const backupParentPaths = backupParentRecords.map((record) => String(record?.path || '')).sort();
+            const backupItemPaths = backupItemRecords.map((record) => String(record?.path || '')).sort();
+            if (new Set(backupParentPaths).size !== expectedParentCount) throw new Error('BACKUP_DUPLICATE_PARENT_PATH');
+            if (new Set(backupItemPaths).size !== expectedSourceCount) throw new Error('BACKUP_DUPLICATE_ITEM_PATH');
+            for (const path of backupParentPaths) if (!parentPathPattern.test(path)) throw new Error('BACKUP_UNEXPECTED_PARENT_PATH');
+            for (const path of backupItemPaths) if (!itemPathPattern.test(path)) throw new Error('BACKUP_UNEXPECTED_ITEM_PATH');
+
+            const [liveParentSnapshot, liveItemSnapshot] = await Promise.all([
+              db.collectionGroup('lists').get(),
+              db.collectionGroup('items').get(),
+            ]);
+            if (liveParentSnapshot.size !== expectedParentCount) throw new Error(`LIVE_PARENT_COUNT_CHANGED:${liveParentSnapshot.size}`);
+            if (liveItemSnapshot.size !== expectedSourceCount) throw new Error(`LIVE_ITEM_COUNT_CHANGED:${liveItemSnapshot.size}`);
+
+            const liveParents = new Map();
+            for (const doc of liveParentSnapshot.docs) {
+              if (!parentPathPattern.test(doc.ref.path)) throw new Error('LIVE_UNEXPECTED_PARENT_PATH:' + doc.ref.path);
+              liveParents.set(doc.ref.path, doc);
+            }
+            const liveItems = new Map();
+            for (const doc of liveItemSnapshot.docs) {
+              if (!itemPathPattern.test(doc.ref.path)) throw new Error('LIVE_UNEXPECTED_ITEM_PATH:' + doc.ref.path);
+              liveItems.set(doc.ref.path, doc);
+            }
+            const liveParentPaths = [...liveParents.keys()].sort();
+            const liveItemPaths = [...liveItems.keys()].sort();
+            if (JSON.stringify(liveParentPaths) !== JSON.stringify(backupParentPaths)) throw new Error('LIVE_PARENT_PATH_DELTA_DETECTED');
+            if (JSON.stringify(liveItemPaths) !== JSON.stringify(backupItemPaths)) throw new Error('LIVE_ITEM_PATH_DELTA_DETECTED');
+
+            const parentPlans = liveParentPaths.map((sourcePath) => {
+              const match = sourcePath.match(parentPathPattern);
+              if (!match) throw new Error('PARENT_PARSE_FAILED');
+              const sourceDoc = liveParents.get(sourcePath);
+              return { sourcePath, sourceDoc, sourceHash: digest(sourceDoc.data()), sourceUpdateTime: sourceDoc.updateTime?.toMillis?.() ?? null, uid: match[1], playlistId: match[2], destRef: db.doc(`users/${match[1]}/playlists/${match[2]}`) };
+            });
+            const parentDests = await db.getAll(...parentPlans.map((p) => p.destRef));
+            const verifiedParentKeys = new Set();
+            for (let i = 0; i < parentPlans.length; i += 1) {
+              const plan = parentPlans[i];
+              const dest = parentDests[i];
+              if (!dest.exists) throw new Error('V2_PARENT_MISSING:' + plan.destRef.path);
+              if (digest(dest.data()) !== plan.sourceHash) throw new Error('V2_PARENT_PAYLOAD_MISMATCH:' + plan.destRef.path);
+              verifiedParentKeys.add(`${plan.uid}/${plan.playlistId}`);
+            }
+
+            const plans = liveItemPaths.map((sourcePath) => {
+              const match = sourcePath.match(itemPathPattern);
+              if (!match) throw new Error('ITEM_PARSE_FAILED');
+              const uid = match[1];
+              const playlistId = match[2];
+              const itemId = match[3];
+              if (!verifiedParentKeys.has(`${uid}/${playlistId}`)) throw new Error('ITEM_PARENT_NOT_VERIFIED');
+              const sourceDoc = liveItems.get(sourcePath);
+              return {
+                sourcePath,
+                sourceRef: sourceDoc.ref,
+                sourceData: sourceDoc.data(),
+                sourceHash: digest(sourceDoc.data()),
+                sourceUpdateTime: sourceDoc.updateTime?.toMillis?.() ?? null,
+                uid,
+                playlistId,
+                itemId,
+                destRef: db.doc(`users/${uid}/playlists/${playlistId}/items/${itemId}`),
+              };
+            });
+
+            const preDestinations = await db.getAll(...plans.map((plan) => plan.destRef));
+            let existingIdentical = 0;
+            for (let i = 0; i < plans.length; i += 1) {
+              const dest = preDestinations[i];
+              if (dest.exists) {
+                if (digest(dest.data()) !== plans[i].sourceHash) throw new Error('ITEM_DESTINATION_CONFLICT:' + plans[i].destRef.path);
+                existingIdentical += 1;
+              }
+            }
+            const plannedCreates = plans.length - existingIdentical;
+            if (plannedCreates > maxWrites) throw new Error('ITEM_WRITE_CAP_EXCEEDED');
+
+            for (let start = 0; start < plans.length; start += batchSize) {
+              const chunk = plans.slice(start, start + batchSize);
+              await db.runTransaction(async (tx) => {
+                const sourceSnaps = await tx.getAll(...chunk.map((p) => p.sourceRef));
+                const destSnaps = await tx.getAll(...chunk.map((p) => p.destRef));
+                for (let i = 0; i < chunk.length; i += 1) {
+                  const plan = chunk[i];
+                  const source = sourceSnaps[i];
+                  const dest = destSnaps[i];
+                  if (!source.exists) throw new Error('TRANSACTION_ITEM_SOURCE_MISSING:' + plan.sourcePath);
+                  if (digest(source.data()) !== plan.sourceHash || (source.updateTime?.toMillis?.() ?? null) !== plan.sourceUpdateTime) throw new Error('TRANSACTION_ITEM_SOURCE_CHANGED:' + plan.sourcePath);
+                  if (dest.exists) {
+                    if (digest(dest.data()) !== plan.sourceHash) throw new Error('TRANSACTION_ITEM_DEST_CONFLICT:' + plan.destRef.path);
+                  } else {
+                    tx.create(plan.destRef, plan.sourceData);
+                  }
+                }
+              });
+            }
+
+            const [sourceAfter, destAfter, parentSourceAfter, parentDestAfter] = await Promise.all([
+              db.getAll(...plans.map((p) => p.sourceRef)),
+              db.getAll(...plans.map((p) => p.destRef)),
+              db.getAll(...parentPlans.map((p) => p.sourceDoc.ref)),
+              db.getAll(...parentPlans.map((p) => p.destRef)),
+            ]);
+            for (let i = 0; i < parentPlans.length; i += 1) {
+              const plan = parentPlans[i];
+              const source = parentSourceAfter[i];
+              const dest = parentDestAfter[i];
+              if (!source.exists || !dest.exists) throw new Error('POSTVERIFY_PARENT_MISSING');
+              if (digest(source.data()) !== plan.sourceHash || (source.updateTime?.toMillis?.() ?? null) !== plan.sourceUpdateTime) throw new Error('POSTVERIFY_V1_PARENT_CHANGED');
+              if (digest(dest.data()) !== plan.sourceHash) throw new Error('POSTVERIFY_V2_PARENT_CHANGED');
+            }
+            for (let i = 0; i < plans.length; i += 1) {
+              const plan = plans[i];
+              const source = sourceAfter[i];
+              const dest = destAfter[i];
+              if (!source.exists || !dest.exists) throw new Error('POSTVERIFY_ITEM_MISSING');
+              if (digest(source.data()) !== plan.sourceHash) throw new Error('POSTVERIFY_V1_ITEM_PAYLOAD_CHANGED:' + plan.sourcePath);
+              if ((source.updateTime?.toMillis?.() ?? null) !== plan.sourceUpdateTime) throw new Error('POSTVERIFY_V1_ITEM_UPDATE_TIME_CHANGED:' + plan.sourcePath);
+              if (digest(dest.data()) !== plan.sourceHash) throw new Error('POSTVERIFY_V2_ITEM_PAYLOAD_MISMATCH:' + plan.destRef.path);
+              if (plan.itemId !== plan.destRef.id) throw new Error('ITEM_ID_NOT_PRESERVED');
+              if (plan.playlistId !== plan.destRef.parent.parent.id) throw new Error('ITEM_PARENT_ID_NOT_PRESERVED');
+            }
+
+            console.log('SORIDRAW_STEP3_4D_PLAYLIST_ITEMS=' + JSON.stringify({
+              parentHeadersVerified: parentPlans.length,
+              sourceDocuments: plans.length,
+              created: plannedCreates,
+              noOpExistingIdentical: existingIdentical,
+              conflicts: 0,
+              maxWriteCap: maxWrites,
+              transactionBatchSize: batchSize,
+              transactionBatches: Math.ceil(plans.length / batchSize),
+              destination: 'users/{uid}/playlists/{playlistId}/items/{itemId}',
+              idsPreserved: true,
+              parentRelationshipsVerified: true,
+              payloadParityVerified: true,
+              v1Writes: 0,
+              v1Deletes: 0,
+              v2Deletes: 0,
+              noTouchCollectionsAccessed: 0,
+            }));
+          })().finally(async () => {
+            await deleteApp(app);
+          }).catch((error) => {
+            console.error('SORIDRAW_STEP3_4D_PLAYLIST_ITEMS_ERROR=' + String(error?.message || error));
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Final repository side-effect check
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f "${GOOGLE_GHA_CREDS_PATH:-}" gha-creds-*.json
+          status="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$status" ]; then
+            echo "$status"
+            exit 1
+          fi
+          echo 'Step 3-4d playlist-item repository check PASS.'

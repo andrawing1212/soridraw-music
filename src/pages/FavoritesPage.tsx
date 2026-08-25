@@ -1,3 +1,4 @@
+import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import React, { useState, useEffect, useLayoutEffect, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -1712,7 +1713,7 @@ export default function FavoritesPage({
       chunk.forEach((id) => {
         batch.update(doc(db, 'favorites', id), updates);
       });
-      await batch.commit();
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-update', uid: user?.uid || '', documentIds: chunk, affectedCount: chunk.length }, batch.commit());
     }
   };
 
@@ -4505,7 +4506,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
     });
 
     try {
-      await addDoc(collection(db, 'favorites'), payload);
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'shared-note-save', uid: user?.uid || '', affectedCount: 1 }, addDoc(collection(db, 'favorites'), payload));
       setMusicNoteViewMode('sharedNote');
       setSelectedSharedNoteFolderId('default');
       setActiveFavoriteMenuId(null);
@@ -4913,7 +4914,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const titleUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderTitle: trimmedTitle, sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderTitle: trimmedTitle, noteFolderUpdatedAt: Date.now() };
-      await Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates)));
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-rename', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), titleUpdates))));
       setMusicNoteFolderRenameArgs(null);
       showFavoriteToast('폴더 이름이 변경되었습니다.');
     } catch (error) {
@@ -4958,7 +4959,7 @@ ${normalizeFavoritePromptForDisplay(song.prompt || '')}
       const fallbackUpdates = mode === 'sharedNote'
         ? { sharedNoteFolderId: 'default', sharedNoteFolderTitle: '기본', sharedNoteFolderUpdatedAt: Date.now() }
         : { noteFolderId: 'default', noteFolderTitle: '기본', noteFolderUpdatedAt: Date.now() };
-      await Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates)));
+      await runV1MutationBoundary({ domain: 'musicNote', operation: 'folder-delete', uid: user?.uid || '', documentIds: affectedSongs.map((song) => song.id), affectedCount: affectedSongs.length }, Promise.all(affectedSongs.map((song) => updateDoc(doc(db, 'favorites', song.id), fallbackUpdates))));
       setMusicNoteFolderDeleteArgs(null);
       showFavoriteToast('폴더를 삭제했습니다. 곡은 기본 폴더로 이동했습니다.');
     } catch (error) {

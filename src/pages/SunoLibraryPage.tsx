@@ -1,3 +1,4 @@
+import { runV1MutationBoundary } from '../data/v1MutationBoundary';
 import React, { useState, useEffect, useLayoutEffect, useMemo, useRef, useDeferredValue } from 'react';
 import { useMediaQuery } from '../lib/mediaQueryStore';
 import { attachSoridrawResponsiveContract } from '../lib/contentResponsive';
@@ -1780,10 +1781,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     try {
       for (const [id, color] of favoriteEntries) {
         if (!id) continue;
-        await updateDoc(doc(db, 'favorites', id), {
+        await runV1MutationBoundary({ domain: 'musicNote', operation: 'color-sync', uid: user.uid, documentIds: [id], affectedCount: 1 }, updateDoc(doc(db, 'favorites', id), {
           favoriteColorTag: color === 'gray' ? null : color,
           updatedAt: serverTimestamp()
-        });
+        }));
       }
 
       for (const [key, color] of workspaceEntries) {

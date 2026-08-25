@@ -24,7 +24,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
 
-      - name: Prepare disposable semantic compatibility v3
+      - name: Prepare disposable semantic compatibility v4
         shell: bash
         run: |
           python3 .deploy/m009_diagnostic_compat.py

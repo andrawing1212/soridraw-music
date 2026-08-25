@@ -24,12 +24,13 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
 
-      - name: Prepare disposable semantic compatibility v2
+      - name: Prepare disposable semantic compatibility v3
         shell: bash
         run: |
           python3 .deploy/m009_diagnostic_compat.py
           python3 .deploy/m009_fix_generated_874.py
-          python3 -m py_compile .deploy/apply-874-build-safety.py .deploy/apply-901-music-note-10-incremental-sync.py .deploy/apply-905-recent-songs-cache-live-accounting.py .deploy/apply-910-recent-text-batch-unsave-fix.py
+          python3 .deploy/m009_diagnostic_compat_late.py
+          python3 -m py_compile .deploy/apply-874-build-safety.py .deploy/apply-901-music-note-10-incremental-sync.py .deploy/apply-905-recent-songs-cache-live-accounting.py .deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-912-heart-triggered-recent-save.py .deploy/apply-913-recent-save-runtime-fix.py
 
       - name: Execute complete real prebuild and capture next blocker
         shell: bash
@@ -40,7 +41,7 @@ jobs:
           set -e
           echo "M009_PREBUILD_EXIT=${code}"
           echo 'M009_LOG_TAIL_BEGIN'
-          tail -n 900 /tmp/m009.log
+          tail -n 1000 /tmp/m009.log
           echo 'M009_LOG_TAIL_END'
           echo 'M009_DIFF_BEGIN'
           git diff --stat

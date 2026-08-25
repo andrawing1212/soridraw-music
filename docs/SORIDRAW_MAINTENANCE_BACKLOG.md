@@ -1,6 +1,6 @@
 # SORIDRAW Maintenance Backlog & Timing Gates
 
-Status: ACTIVE / MAINTENANCE GATE A DUE BEFORE 2-A4c
+Status: ACTIVE / GATE A REPO-SIDE SAFETY CLEARED / M-008 RULES ALIGNMENT BLOCKS 2-A4c
 Last updated: 2026-08-26 KST
 Working branch: `preview`
 Scope: project-wide maintenance, deferred defects, security/infrastructure warnings, cost observability and pre-gate cleanup
@@ -54,53 +54,68 @@ Maintenance fixes must not be silently bundled into unrelated Backend V2 migrati
 
 ### Current checkpoint
 
-Step **2-A4b is complete**. Before any 2-A4c shadow-write workflow is created or armed, **Maintenance Gate A is now mandatory**.
+Step **2-A4b is complete** and the approved Maintenance Gate A repo-side safety work has been executed.
 
-Gate A currently consists of:
+Gate A result:
 
-- M-001 — clean the two existing project-wide TypeScript errors,
-- M-002 — dependency/security triage first; only separately reviewed safe fixes, never blind force-upgrade,
-- M-003 — stabilize/verify GitHub Actions runtime compatibility,
-- M-008 — verify actual deployed Firestore Rules behavior read-only; any Rules deployment remains a separate explicit approval.
+- M-001 — **CLOSED**: the two full-project TypeScript errors were fixed and full `tsc --noEmit` passes.
+- M-002 — **Gate-A high-risk requirement CLEARED**: npm audit moved from 34 findings (2 critical / 10 high) to 14 findings (0 critical / 0 high / 13 moderate / 1 low) using non-force remediation with `package.json` unchanged. Residual low/moderate debt remains open for the Step-5 pre-gate.
+- M-003 — **CLOSED for migration tooling**: current Node24-compatible Action majors were verified while project commands remain on Node 20.20.2.
+- M-008 — **CRITICAL BLOCKER CONFIRMED**: read-only inspection proved the currently deployed Firestore Rules do not contain the V2 `users/{uid}/songs/{songId}` rule that exists in repository source.
 
-Step 2-A4b completion evidence: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
+Therefore **2-A4c remains blocked**. No 2-A4c write-capable workflow may be created or armed until a separately approved Rules-only alignment/deployment clears M-008.
+
+Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 
 ## 4. Current backlog
 
 | ID | Issue | Severity / class | Current impact | Mandatory timing | Status |
 | --- | --- | --- | --- | --- | --- |
-| M-001 | Existing project-wide TypeScript errors: `src/App.tsx` around line 4449 and `src/services/geminiService.ts` around line 35129 | HIGH / PRE-GATE | Vite build succeeds, but full `tsc --noEmit` is not clean. This reduces confidence when mutation call-sites are changed. | **After 2-A4b centralization and before 2-A4c shadow writes.** Re-run full project TypeScript check after fixes. | OPEN / GATE A DUE |
-| M-002 | `npm ci --ignore-scripts` reports **34 vulnerabilities**: 3 low, 19 moderate, 10 high, 2 critical | HIGH / PRE-GATE | Exact exploitability/runtime reachability has not yet been classified. Blind `npm audit fix --force` could break the app. | **Read-only dependency/security triage after 2-A4b and before 2-A4c.** Any critical/high issue affecting browser Auth, Firebase, server/API or build/runtime path must be fixed before write activation; remaining safe deferred upgrades must be cleared before Step 5/main promotion. | OPEN / GATE A DUE |
-| M-003 | GitHub Actions warns Node 20-targeting actions are being forced to Node 24 while project commands run Node 20.20.2 | HIGH / PRE-GATE | Current runs succeed, but future runner/action behavior can change and write-capable migration workflows require deterministic CI. | **Before creating/arming 2-A4c write-capable workflow.** Review supported action versions/runtime and verify project Node contract without changing app behavior. | OPEN / GATE A DUE |
-| M-004 | Production Vite bundle large-chunk warning; main bundle around 2.5 MB minified in Step 2-A4a validation | MEDIUM / WATCH | Build passes. Potential load/performance cost, but not a Backend V2 data-integrity blocker. | Recheck during **Step 4 performance/real-use validation**; plan code-splitting before Step 5 if performance target is missed or bundle grows materially. Otherwise handle in the first post-migration performance-maintenance window. | OPEN |
-| M-005 | Deferred Preview latest-track visibility / App Check / zero-byte provider audio-endpoint blocker from 2-A3-R | HIGH / PRE-GATE | A newly completed provider track could exist in backend yet fail to appear on Preview; same track could appear on main/test. Exact Preview environment cause remains unresolved/deferred. | **Before Step 4 Song generation/save/visibility validation can be declared passed.** Re-run Preview environment diagnostics; no IAM/App Check/Functions change without the relevant approval. | OPEN |
+| M-001 | Full-project TypeScript errors in `src/App.tsx` and `src/services/geminiService.ts` | HIGH / PRE-GATE | Both reproduced, fixed with behavior-preserving edits, and full `npx tsc --noEmit` now passes. | Was required after 2-A4b and before 2-A4c. | **CLOSED** — run `32890832114` |
+| M-002 | Dependency security findings | HIGH / PRE-GATE | Baseline 34 findings (3 low, 19 moderate, 10 high, 2 critical) was reduced without `--force` to 14 (1 low, 13 moderate, **0 high, 0 critical**). `package.json` stayed unchanged; only lockfile resolution changed. Residual Jimp/file parsing, esbuild and Google Cloud/Firebase Admin dependency-chain findings remain. | Critical/high findings had to be cleared before 2-A4c. Remaining safe low/moderate debt must be reviewed/cleared or explicitly reclassified before Step 5/main promotion. | **OPEN / GATE A HIGH-RISK CLEARED / STEP-5 PRE-GATE** |
+| M-003 | GitHub Actions Node 20-targeting action-runtime warning | HIGH / PRE-GATE | Gate A verified `actions/checkout@v7`, `actions/setup-node@v7`, `google-github-actions/auth@v3`; project command runtime stayed Node 20.20.2 and the prior forced Node24 warning did not recur. Historical workflows are not mass-rewritten, but any workflow reused for migration must first use current action majors. | Must be stable before any 2-A4c write-capable workflow. | **CLOSED FOR UPCOMING MIGRATION TOOLING** |
+| M-004 | Production Vite bundle large-chunk warning; main bundle around 2.5 MB minified | MEDIUM / WATCH | Gate A production build still passes and warning remains. Potential load/performance cost, not a current data-integrity blocker. | Recheck during **Step 4 performance/real-use validation**; optimize before Step 5 if performance target is missed or bundle grows materially. | OPEN |
+| M-005 | Deferred Preview latest-track visibility / App Check / zero-byte provider audio-endpoint blocker from 2-A3-R | HIGH / PRE-GATE | A newly completed provider track could exist in backend yet fail to appear on Preview; same track could appear on main/test. Exact Preview environment cause remains unresolved/deferred. | **Before Step 4 Song generation/save/visibility validation can be declared passed.** Re-run Preview environment diagnostics; no IAM/App Check/Functions change without relevant approval. | OPEN |
 | M-006 | `user_plans` authority/provenance unresolved | HIGH / NO-TOUCH / REVIEW | Core V2 work can proceed because the collection is isolated, but moving/merging/deleting it without identifying authority could corrupt plan/account state. | Must be resolved **before any `user_plans` migration, merge, cleanup or V1 deletion** and before final production cleanup phase. | OPEN / NO-TOUCH |
 | M-007 | Exact RTDB Cloud Monitoring metric visibility remains a permission/observability gap | MEDIUM / PRE-GATE | RTDB Presence is intentionally small, but exact free-tier/cost monitoring is weaker than Firestore monitoring. | **Before Step 5/main promotion or meaningful user-scale testing**, perform read-only permission/metric review. Any IAM permission change requires separate approval. | OPEN |
-| M-008 | Actual deployed Firestore Rules acceptance for future browser-side V2 song writes is not yet proven | CRITICAL / BLOCKER FOR 2-A4c | Rules source exists and local validation passed, but source code is not proof of the currently deployed Rules behavior. | **Mandatory before 2-A4c shadow writes.** Inspect deployed state/read-only first; any Rules deployment requires separate explicit approval. | OPEN / GATE A DUE |
+| M-008 | Deployed Firestore Rules do not yet contain the repository V2 canonical-song rule | CRITICAL / BLOCKER FOR 2-A4c | Read-only Rules API inspection succeeded. Deployed ruleset `8d0a2de9-fa29-4988-801e-cc45d3f0af1b` retains V1 recent/favorites rules but lacks `users/{uid}/songs/{songId}` + `hasValidV2SongMetadata`. Repo/deployed normalized Rules hashes differ. | **Mandatory before 2-A4c shadow writes.** Revalidate source, then deploy Rules only under separate exact approval; verify deployed hash/features afterward. | **OPEN / CRITICAL BLOCKER** |
 
 ## 5. Evidence references
 
-### M-001 / M-002 / M-003 / M-004
+### Gate A result
+
+- `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`
+- primary read-only audit: `32890085799` — SUCCESS
+- dependency candidate simulation: `32890666963` — SUCCESS
+- validated safe apply: `32890832114` — SUCCESS
+
+Gate A safe apply proved:
+
+- full TypeScript check PASS,
+- V1 mutation-boundary regression PASS,
+- 2-A4a live-mutation/stable-ID regression PASS,
+- production Vite build PASS,
+- `package.json` unchanged,
+- npm critical/high = 0/0,
+- `firestore.rules`, indexes, RTDB rules, Firebase init and Functions source unchanged,
+- Firestore document writes/deletes and Rules/Functions/Hosting deploys all 0.
+
+### M-001 / M-002 / M-003 / M-004 historical baseline
+
 Step 2-A4a result:
 
 - `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`
 - successful validation run: `32883874620`
 - initial full-project TypeScript run: `32883687440`
 
-Step 2-A4b repeated the dependency and Actions warnings while its scoped contract/build validation passed:
+Step 2-A4b result:
 
 - `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`
 - successful apply/validation run: `32888639358`
 - successful independent post-verification run: `32888861551`
 
-Observed across these checks:
-
-- full-project TypeScript errors exist in App/Gemini files,
-- baseline npm audit remains 34 vulnerabilities,
-- Actions emits Node 20 deprecation/forced Node 24 warnings,
-- production Vite build passes with a large-chunk warning.
-
 ### M-005
+
 Deferred environment issue documented in the 2-A3-R emergency stabilization section of:
 
 - `docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md`
@@ -108,42 +123,52 @@ Deferred environment issue documented in the 2-A3-R emergency stabilization sect
 The issue must not be confused with a V2 data migration failure.
 
 ### M-006 / M-007
+
 Source:
 
 - Backend V2 Step 1 live inventory/classification and Master Plan.
 - `user_plans` remains explicitly `NO-TOUCH / REVIEW`.
-- RTDB exact monitoring permissions remain a non-blocking observability gap.
+- RTDB exact monitoring permissions remain a non-blocking observability gap until its assigned pre-gate.
 
 ### M-008
-Source:
 
-- `docs/SORIDRAW_BACKEND_V2_STEP2_A4_LIVE_MUTATION_SYNC_RISK_REVIEW.md`
-- `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`
+Gate A read-only Rules inspection found:
 
-The V2 Rules **source** is prepared, but no production Rules deploy or real browser V2 write was performed in 2-A4a/2-A4b.
+- deployed ruleset: `projects/soridraw-app-866a5/rulesets/8d0a2de9-fa29-4988-801e-cc45d3f0af1b`
+- deployed normalized SHA-256: `c3a0bac5f024265454f7e4510f89d204ad2765de93eb2852e6a99bc4ec8ce916`
+- repository normalized SHA-256: `ea7e8acd3eaa5b0d6bdba30dbaf7e513efd9a04209c5f34ce3fcdb4c1917e6d4`
+- exact match: false
+- deployed V1 recent rule: present
+- deployed V1 favorites rule: present
+- deployed V2 canonical song rule: absent
+
+No Rules deployment was performed because Gate A approval explicitly prohibited it.
 
 ## 6. Planned maintenance order from current point
 
 Current migration order is now:
 
-1. **2-A4b COMPLETE** — Recent/Music Note V1 mutation boundaries centralized, mirror OFF; apply run `32888639358` and independent run `32888861551` passed.
-2. **Maintenance Gate A NOW DUE before 2-A4c**
-   - M-001 clean the two existing full-project TypeScript errors,
-   - M-002 perform dependency vulnerability triage and fix only write-activation-relevant critical/high findings under a separately reviewed safe scope,
-   - M-003 stabilize/verify GitHub Actions runtime compatibility,
-   - M-008 verify actual deployed Firestore Rules behavior and decide separately whether Rules deployment is required.
-3. **2-A4c** — only after Gate A clears and exact write approval: Preview V1-first/V2-shadow writes with fresh quota gate.
-4. **2-A4d** — only after exact write approval: bounded current live-gap catch-up and verification.
-5. **Maintenance Gate B before/during Step 4**
+1. **2-A4b COMPLETE** — Recent/Music Note V1 mutation boundaries centralized, mirror OFF.
+2. **Maintenance Gate A repo-side safety COMPLETE**
+   - M-001 closed,
+   - M-002 critical/high cleared; residual low/moderate retained for Step-5 review,
+   - M-003 closed for upcoming migration tooling.
+3. **M-008 RULES ALIGNMENT REQUIRED NOW**
+   - repository V2 Rules source revalidation,
+   - Rules-only deployment only after separate exact approval,
+   - deployed post-check must prove the V2 canonical-song rule is present while V1 compatibility rules remain.
+4. **2-A4c** — only after M-008 is cleared and then separately approved for its exact V2 shadow-write scope; V1-first/V2-shadow with fresh quota gate.
+5. **2-A4d** — only after separate exact write approval: bounded current live-gap catch-up and verification.
+6. **Maintenance Gate B before/during Step 4**
    - M-005 resolve/retest Preview latest-track visibility environment blocker,
    - M-004 recheck bundle/performance impact during real-use validation.
-6. **Step 4 Preview validation** — 12/12 functional/fallback checks.
-7. **Maintenance Gate C before Step 5/main promotion**
-   - M-002 clear any remaining security upgrades that are mandatory for test-app promotion,
+7. **Step 4 Preview validation** — 12/12 functional/fallback checks.
+8. **Maintenance Gate C before Step 5/main promotion**
+   - M-002 review/clear remaining low/moderate dependency debt or explicitly justify bounded deferral,
    - M-007 verify RTDB/free-tier observability,
    - M-004 perform bundle optimization if Step 4 performance requires it.
-8. **Step 5 main/test-app promotion** only after all applicable pre-gates pass.
-9. `user_plans` M-006 remains NO-TOUCH until its own authority investigation; it cannot be silently included in V1 cleanup.
+9. **Step 5 main/test-app promotion** only after all applicable pre-gates pass.
+10. `user_plans` M-006 remains NO-TOUCH until its own authority investigation; it cannot be silently included in V1 cleanup.
 
 ## 7. Cost-management maintenance rule
 

@@ -1,0 +1,86 @@
+name: SORIDRAW Backend V2 Step 2-A4b Source Audit
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step2-a4b-source-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+      - name: Enumerate current V1 recent and Music Note mutation paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json, re
+
+          source_exts = {'.ts', '.tsx', '.js', '.jsx'}
+          mutation_tokens = ('setDoc(', 'updateDoc(', 'deleteDoc(', 'addDoc(', 'writeBatch(', 'runTransaction(', '.set(', '.update(', '.delete(')
+          domains = ('user_recent_songs', "'favorites'", '"favorites"', 'favoriteSyncSignal', 'favoriteFirestoreId')
+          findings = []
+
+          for path in Path('src').rglob('*'):
+              if path.suffix not in source_exts:
+                  continue
+              text = path.read_text(encoding='utf-8', errors='ignore')
+              lines = text.splitlines()
+              for i, line in enumerate(lines):
+                  if not any(term in line for term in domains):
+                      continue
+                  start = max(0, i - 14)
+                  end = min(len(lines), i + 15)
+                  ctx = lines[start:end]
+                  # Keep domain references that are close to a mutation or define mutation services/helpers.
+                  nearby = '\n'.join(ctx)
+                  if not any(tok in nearby for tok in mutation_tokens) and not re.search(r'\b(?:async\s+)?(?:function|const)\s+\w*(?:Recent|Favorite|MusicNote)\w*', nearby, re.I):
+                      continue
+                  findings.append({
+                      'file': str(path),
+                      'line': i + 1,
+                      'anchor': line.strip()[:240],
+                      'context': [f'{j+1}:{lines[j].strip()}' for j in range(start, end) if lines[j].strip()],
+                  })
+
+          # Deduplicate overlapping anchors, but keep enough detail for exact patch design.
+          dedup = []
+          seen = set()
+          for item in findings:
+              key = (item['file'], item['line'])
+              if key in seen:
+                  continue
+              seen.add(key)
+              dedup.append(item)
+
+          # Also list imports of Firestore mutations and named helpers in App/FavoritesPage.
+          named = []
+          for target in ['src/App.tsx', 'src/pages/FavoritesPage.tsx']:
+              p = Path(target)
+              if not p.exists():
+                  continue
+              lines = p.read_text(encoding='utf-8', errors='ignore').splitlines()
+              for i, line in enumerate(lines):
+                  if re.search(r'\b(?:const|function)\s+\w*(?:Recent|Favorite|MusicNote)\w*', line, re.I):
+                      named.append(f'{target}:{i+1}:{line.strip()}')
+
+          print('STEP2A4B_FINDINGS=' + json.dumps(dedup, ensure_ascii=False))
+          print('STEP2A4B_NAMED=' + json.dumps(named[:200], ensure_ascii=False))
+          print('STEP2A4B_SUMMARY=' + json.dumps({
+              'findingCount': len(dedup),
+              'files': sorted(set(x['file'] for x in dedup)),
+              'firestoreReads': 0,
+              'firestoreWrites': 0,
+              'firestoreDeletes': 0,
+              'networkDataReads': 0,
+          }, ensure_ascii=False))
+          PY

@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-1 backup preparation complete — awaiting approval for actual read-only backup preflight/execution
+Status: IMPLEMENTATION / Step 3-1 live backup preflight complete — awaiting explicit approval for actual secure local read-only backup execution
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -273,6 +273,17 @@ Risk decision:
 - Firestore reads/writes/deletes caused by Step 3-1 preparation: 0 / 0 / 0. No Rules/index/Functions/Hosting deploy and no backup payload was produced.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md`.
 
+### 3-1 live backup preflight complete — actual backup still NOT executed
+- Cloud Monitoring-only preflight final run `32826494494` completed SUCCESS.
+- Target and quota project were explicitly pinned to `soridraw-app-866a5`.
+- Current sampled same-day document operations: 1,887 reads / 68 writes / 0 deletes; recent 10m: 0 / 0 / 0.
+- Step 1-D formula gives 38,113 reads of policy headroom before the conservative absolute cap, so the allowed migration read cap remains 10,000.
+- Step 1-B one-pass backup estimate remains 841 reads, therefore `safeForEstimatedBackup=true`.
+- Monitoring preflight itself caused 0 Firestore document reads/writes/deletes and produced no backup payload.
+- Monitoring lag was about 3m15s; actual backup must still re-confirm a fresh usage baseline immediately before execution.
+- Actual backup remains blocked pending explicit approval and must write only to a secure non-Git local/operator path.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREFLIGHT.md`.
+
 ## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete) ✅
@@ -297,10 +308,11 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (0/4 complete; backup preparation ready) 🔄
+### Step 3 — Backup, backfill and verification (0/4 complete; live backup preflight passed) 🔄
 - [~] Secure local read-only backup strategy/run
   - [x] 3-1 preparation: target pin, read-only tool, offline verifier, scope/budget gates
-  - [ ] 3-1 actual backup: fresh quota baseline -> secure local read -> checksum/count verification
+  - [x] 3-1 live quota preflight: current usage/headroom verified; safe cap 10,000, estimated backup 841
+  - [ ] 3-1 actual backup: fresh-baseline confirmation -> secure local read -> checksum/count verification
 - [ ] Rate-limited backfill within free-tier budget
 - [ ] Per-user automatic verification
 - [ ] No V1 deletion

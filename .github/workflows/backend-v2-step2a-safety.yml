@@ -6,6 +6,8 @@ on:
     branches: [preview]
     paths:
       - 'src/data/**'
+      - 'src/services/v1UserDataReadAdapter.ts'
+      - 'src/services/playlistService.ts'
       - '.github/workflows/backend-v2-step2a-safety.yml'
 
 permissions:
@@ -46,6 +48,11 @@ jobs:
 
           const repositorySource = fs.readFileSync('src/data/userDataRepository.ts', 'utf8');
           const adapterSource = fs.readFileSync('src/data/v1UserDataAdapter.ts', 'utf8');
+          const runtimeBridgePath = 'src/services/v1UserDataReadAdapter.ts';
+          const runtimeBridgeSource = fs.readFileSync(runtimeBridgePath, 'utf8');
+          const playlistPath = 'src/services/playlistService.ts';
+          const playlistSource = fs.readFileSync(playlistPath, 'utf8');
+
           const required = [
             "BACKEND_V2_RUNTIME_MODE = 'v1-only'",
             'readFromV2: false',
@@ -63,7 +70,7 @@ jobs:
             ['v1UserDataAdapter.ts', adapterSource],
           ]) {
             if (/from\s+['\"]firebase\//.test(source) || /from\s+['\"]\.\.\/firebase/.test(source)) {
-              throw new Error(`${name} must not import Firebase runtime code in Step 2-A`);
+              throw new Error(`${name} must remain Firebase-independent in Step 2-A`);
             }
           }
 
@@ -76,8 +83,28 @@ jobs:
           ];
           for (const marker of forbiddenMutationPortMarkers) {
             if (adapterSource.includes(marker)) {
-              throw new Error(`Step 2-A2 read adapter exposes mutation marker: ${marker}`);
+              throw new Error(`Step 2-A read adapter exposes mutation marker: ${marker}`);
             }
+          }
+
+          const runtimeMutationMarkers = [
+            'setDoc(',
+            'updateDoc(',
+            'deleteDoc(',
+            'addDoc(',
+            'writeBatch(',
+            'runTransaction(',
+          ];
+          for (const marker of runtimeMutationMarkers) {
+            if (runtimeBridgeSource.includes(marker)) {
+              throw new Error(`Step 2-A3 runtime bridge gained mutation capability: ${marker}`);
+            }
+          }
+          if (!runtimeBridgeSource.includes('createV1UserDataAdapter')) {
+            throw new Error('Step 2-A3 runtime bridge must use the approved V1 adapter');
+          }
+          if (runtimeBridgeSource.includes('v2UserDataPaths')) {
+            throw new Error('Step 2-A3 runtime bridge must not access V2 paths');
           }
 
           const sourceFiles = [];
@@ -88,19 +115,55 @@ jobs:
                 if (full.replaceAll('\\', '/') === 'src/data') continue;
                 walk(full);
               } else if (/\.(?:ts|tsx|js|jsx)$/.test(entry.name)) {
-                sourceFiles.push(full);
+                sourceFiles.push(full.replaceAll('\\', '/'));
               }
             }
           };
           walk('src');
 
-          const forbiddenImport = /from\s+['\"][^'\"]*(?:data\/userDataRepository|data\/v1UserDataAdapter)['\"]/;
-          const wiredFiles = sourceFiles.filter((file) => forbiddenImport.test(fs.readFileSync(file, 'utf8')));
-          if (wiredFiles.length) {
-            throw new Error(`Step 2-A adapter was wired into runtime before approval: ${wiredFiles.join(', ')}`);
+          const forbiddenDataImport = /from\s+['\"][^'\"]*(?:data\/userDataRepository|data\/v1UserDataAdapter)['\"]/;
+          const allowedDataImporters = new Set([runtimeBridgePath]);
+          const unexpectedDataImporters = sourceFiles.filter((file) => (
+            forbiddenDataImport.test(fs.readFileSync(file, 'utf8')) && !allowedDataImporters.has(file)
+          ));
+          if (unexpectedDataImporters.length) {
+            throw new Error(`Step 2-A data adapter escaped the approved runtime bridge: ${unexpectedDataImporters.join(', ')}`);
           }
 
-          console.log('Backend V2 Step 2-A isolation/safety contract verified');
+          const runtimeBridgeImport = /from\s+['\"][^'\"]*v1UserDataReadAdapter['\"]/;
+          const allowedBridgeConsumers = new Set([playlistPath]);
+          const bridgeConsumers = sourceFiles.filter((file) => runtimeBridgeImport.test(fs.readFileSync(file, 'utf8')));
+          const unexpectedBridgeConsumers = bridgeConsumers.filter((file) => !allowedBridgeConsumers.has(file));
+          if (unexpectedBridgeConsumers.length) {
+            throw new Error(`Step 2-A3 runtime bridge wired outside approved playlist read: ${unexpectedBridgeConsumers.join(', ')}`);
+          }
+          if (!bridgeConsumers.includes(playlistPath)) {
+            throw new Error('Step 2-A3 playlist read is not wired through the approved runtime bridge');
+          }
+
+          const playlistRequiredMarkers = [
+            'loadPlaylistsByType(uid, type)',
+            'getPlaylistsByTypeDirectV1',
+            'playlist read adapter unavailable; using direct V1 fallback',
+          ];
+          for (const marker of playlistRequiredMarkers) {
+            if (!playlistSource.includes(marker)) throw new Error(`Missing Step 2-A3 playlist safety marker: ${marker}`);
+          }
+
+          const forbiddenPlaylistAdapterMethods = [
+            'loadRecentSongs(',
+            'loadFavoriteDocuments(',
+            'loadSectionsDocument(',
+            'loadPlaylistItems(',
+            'loadListBundle(',
+          ];
+          for (const marker of forbiddenPlaylistAdapterMethods) {
+            if (playlistSource.includes(marker)) {
+              throw new Error(`Step 2-A3 expanded beyond approved playlist-list read: ${marker}`);
+            }
+          }
+
+          console.log('Backend V2 Step 2-A3 isolation/safety contract verified');
           NODE
 
       - name: Run V1 adapter parity contract
@@ -147,8 +210,10 @@ jobs:
             echo "v2_shadow_writes=false"
             echo "migrate_on_read=false"
             echo "delete_v1=false"
-            echo "adapter_runtime_wired=false"
+            echo "adapter_runtime_wired=playlist-list-read-only"
             echo "adapter_mutation_port=false"
+            echo "direct_v1_fallback=true"
+            echo "normal_playlist_read_query_count=1"
             echo "install=${INSTALL}"
             echo "contract=${CONTRACT}"
             echo "adapter_parity=${ADAPTER}"

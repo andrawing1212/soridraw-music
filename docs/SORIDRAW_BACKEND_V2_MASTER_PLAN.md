@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A3-R emergency stabilization staged on preview — authenticated Preview revalidation pending
+Status: IMPLEMENTATION / Step 2-A in progress — 2-A1 + 2-A2 complete, 2-A3 implemented and awaiting authenticated Preview validation
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -215,15 +215,6 @@ Risk decision:
 - No V2 data operation, schema change or new normal-path read multiplication exists.
 - Critical generation/recent-save/Music Note mutation call-sites remain untouched.
 - Do not start 2-A4 until 2-A3 Preview behavior is confirmed and a separate explicit approval is given.
-
-### 2-A3-R emergency stabilization staged — user revalidation pending
-- Triggered by authenticated Preview validation: provider track completed in backend but did not appear on Preview; the same track appeared on the main/test app.
-- Read-only diagnostics confirmed the generated record and two audio results existed, while candidate audio endpoints returned zero bytes.
-- Preview App Check code path was missing. Existing Actions credentials cannot inspect reCAPTCHA Enterprise allowed domains (`recaptchaenterprise.keys.get` denied); no IAM change was made.
-- Preview-only frontend App Check activation, playlist bootstrap/listener read dedupe and zero-byte download guard are staged.
-- Music API byte-validation hardening is staged in Functions source but is NOT deployed because Functions are shared backend infrastructure and require separate explicit deployment approval.
-- No V1 data, Rules, Functions deployment, main branch or Firebase Hosting has been modified by 2-A3-R.
-- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md`.
 
 ## 9. Work stages and progress tracker
 

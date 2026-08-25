@@ -2,8 +2,6 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 
-// SORIDRAW_892_CACHE_SYNC_VERSION_FOUNDATION
-// SORIDRAW_889_GEMINI_KEY_IDENTITY
 admin.initializeApp({
   databaseURL: "https://soridraw-app-866a5-default-rtdb.firebaseio.com",
 });
@@ -1975,8 +1973,6 @@ export const saveGoogleGeminiApiKey = onRequest(
     if (!(await verifyAppCheckForRequest(req, res, "saveGoogleGeminiApiKey"))) return;
 
     const normalizedApiKey = normalizeGeminiApiKey(req.body?.apiKey);
-    const googleGeminiKeyAlias = String(req.body?.alias || '').trim().slice(0, 30);
-    const googleGeminiKeySyncVersion = Date.now();
     if (!normalizedApiKey) {
       res.status(400).json({ error: "Google Gemini API Key is required", ok: false });
       return;
@@ -1996,24 +1992,12 @@ export const saveGoogleGeminiApiKey = onRequest(
       googleGeminiApiKey: normalizedApiKey,
       hasGoogleGeminiApiKey: true,
       googleGeminiProvider: "Google AI Studio",
-      googleGeminiKeyAlias: googleGeminiKeyAlias || admin.firestore.FieldValue.delete(),
-      googleGeminiKeyLast6: normalizedApiKey.slice(-6),
-      googleGeminiKeySyncVersion,
       googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    await db.collection("users").doc(uid).set({
-      syncVersions: { googleGeminiApiKey: googleGeminiKeySyncVersion },
-    }, { merge: true });
-
-    res.json({
-      ok: true,
-      hasGoogleGeminiApiKey: true,
-      keyLast6: normalizedApiKey.slice(-6),
-      syncVersion: googleGeminiKeySyncVersion,
-    });
+    res.json({ ok: true, hasGoogleGeminiApiKey: true });
   }
 );
 
@@ -2032,24 +2016,16 @@ export const deleteGoogleGeminiApiKey = onRequest(
     if (!(await verifyAppCheckForRequest(req, res, "deleteGoogleGeminiApiKey"))) return;
 
     const db = admin.firestore();
-    const googleGeminiKeySyncVersion = Date.now();
 
     await db.collection("user_api_keys").doc(uid).set({
       googleGeminiApiKey: admin.firestore.FieldValue.delete(),
       hasGoogleGeminiApiKey: false,
       googleGeminiProvider: admin.firestore.FieldValue.delete(),
-      googleGeminiKeyAlias: admin.firestore.FieldValue.delete(),
-      googleGeminiKeyLast6: admin.firestore.FieldValue.delete(),
-      googleGeminiKeySyncVersion,
       googleGeminiUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    await db.collection("users").doc(uid).set({
-      syncVersions: { googleGeminiApiKey: googleGeminiKeySyncVersion },
-    }, { merge: true });
-
-    res.json({ ok: true, hasGoogleGeminiApiKey: false, syncVersion: googleGeminiKeySyncVersion });
+    res.json({ ok: true, hasGoogleGeminiApiKey: false });
   }
 );
 
@@ -2080,9 +2056,6 @@ export const getGoogleGeminiApiKeyStatus = onRequest(
       ok: true,
       hasGoogleGeminiApiKey: Boolean(docData.hasGoogleGeminiApiKey && docData.googleGeminiApiKey),
       provider: docData.googleGeminiProvider || null,
-      keyAlias: String(docData.googleGeminiKeyAlias || '').trim() || null,
-      keyLast6: String(docData.googleGeminiKeyLast6 || docData.googleGeminiApiKey || '').slice(-6) || null,
-      syncVersion: Number(docData.googleGeminiKeySyncVersion || 0) || null,
       updatedAt: timestampToIso(docData.googleGeminiUpdatedAt),
     });
   }
@@ -2870,69 +2843,6 @@ export const createSunoTrack = onRequest(
   }
 );
 
-const getSunoAudioCandidateUrls = (item: any): string[] => Array.from(new Set(
-  [
-    item?.audioUrl,
-    item?.streamAudioUrl,
-    item?.audio_url,
-    item?.stream_audio_url,
-    item?.sourceAudioUrl,
-    item?.source_audio_url,
-    item?.sourceStreamAudioUrl,
-    item?.source_stream_audio_url,
-  ]
-    .map((value) => pickFirstString(value))
-    .filter(Boolean)
-));
-
-const probeSunoAudioUrlHasBytes = async (url: string): Promise<boolean> => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "https:") return false;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: { Range: "bytes=0-0" },
-    });
-    if (!response.ok) return false;
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      const buffer = await response.arrayBuffer();
-      return buffer.byteLength > 0;
-    }
-
-    const first = await reader.read();
-    try { await reader.cancel(); } catch {}
-    return Boolean(first.value && first.value.byteLength > 0);
-  } catch (error: any) {
-    console.warn("[Music API] audio validation probe failed", {
-      host: parsed.hostname,
-      message: error?.message || String(error),
-    });
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-};
-
-const findFirstUsableSunoAudioUrl = async (item: any): Promise<string> => {
-  const candidates = getSunoAudioCandidateUrls(item);
-  for (const candidate of candidates) {
-    if (await probeSunoAudioUrlHasBytes(candidate)) return candidate;
-  }
-  return "";
-};
-
 export const getSunoTrackStatus = onRequest(
   { region: "us-central1" },
   async (req, res) => {
@@ -3090,20 +3000,16 @@ export const getSunoTrackStatus = onRequest(
       const rawSunoData = Array.isArray(sunoDataRaw) ? sunoDataRaw : [sunoDataRaw];
       const sunoData = rawSunoData.filter(Boolean).map(normalizeSunoDataItem);
 
-      const reportedAudioUrls = Array.from(new Set(sunoData.flatMap((item: any) => getSunoAudioCandidateUrls(item))));
-      const verifiedAudioUrls: string[] = [];
-      for (const item of sunoData) {
-        const verified = await findFirstUsableSunoAudioUrl(item);
-        if (verified) verifiedAudioUrls.push(verified);
-      }
-      const allReportedAudioVerified = sunoData.length > 0 && verifiedAudioUrls.length === sunoData.length;
+      const audioUrls: string[] = sunoData
+        .map((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url))
+        .filter(Boolean);
 
       // If it's just a missing taskId error from API, do not mark as failed.
       if (!isMissingTaskIdError) {
-        const hasAnyAudio = verifiedAudioUrls.length > 0;
-        const hasAllAudio = allReportedAudioVerified;
+        const hasAnyAudio = audioUrls.length > 0;
+        const hasAllAudio = sunoData.length > 0 && sunoData.every((item: any) => !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
         const anyItemFailed = sunoData.some((item: any) => isFailedStatus(item?.status));
-        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status));
+        const allItemsCompleted = sunoData.length > 0 && sunoData.every((item: any) => isCompleteStatus(item?.status) || !!pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url));
         const apiReportedComplete = isCompleteStatus(data?.status) || isCompleteStatus(responseData?.status) || isCompleteStatus(responseObj?.status);
 
         for (const item of sunoData) {
@@ -3115,11 +3021,11 @@ export const getSunoTrackStatus = onRequest(
           status = hasAnyAudio ? "processing" : "failed";
         } else if (hasAllAudio && (apiReportedComplete || allItemsCompleted || hasAnyAudio)) {
           status = "completed";
-        } else if (reportedAudioUrls.length > 0 || hasAnyAudio) {
-          // A URL string alone is not completion. Empty/temporarily unavailable media keeps polling.
+        } else if (hasAnyAudio) {
+          // One result may be ready before the second one. Keep polling instead of freezing as completed.
           status = "processing";
         } else if (apiReportedComplete) {
-          // API can report SUCCESS before usable audio bytes become available. Keep polling.
+          // API can report SUCCESS before audio URLs become available. Keep polling.
           status = "processing";
         } else {
           status = String(data?.status || responseData?.status || status || "processing").toLowerCase();
@@ -3128,16 +3034,10 @@ export const getSunoTrackStatus = onRequest(
          console.warn("External API reported missing taskId. Not changing track status to failed.", data);
       }
 
-      const audioValidationStatus = allReportedAudioVerified
-        ? "verified"
-        : (reportedAudioUrls.length > 0 ? "pending_or_empty" : "missing");
-
       const updates: any = {
         apiStatusResponse: data,
         sunoData: sunoData,
-        audioUrls: verifiedAudioUrls,
-        reportedAudioUrls: reportedAudioUrls,
-        audioValidationStatus,
+        audioUrls: audioUrls,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       };
       
@@ -3150,7 +3050,17 @@ export const getSunoTrackStatus = onRequest(
 
       const first = Array.isArray(sunoData) ? sunoData.find((item: any) => pickFirstString(item?.audioUrl, item?.streamAudioUrl, item?.audio_url, item?.stream_audio_url)) || sunoData[0] : null;
 
-      finalAudioUrl = verifiedAudioUrls[0] || "";
+      finalAudioUrl =
+        pickFirstString(
+          first?.audioUrl,
+          first?.streamAudioUrl,
+          first?.audio_url,
+          first?.stream_audio_url,
+          first?.sourceAudioUrl,
+          first?.sourceStreamAudioUrl,
+          responseObj?.audioUrl,
+          responseObj?.audio_url
+        );
 
       finalImageUrl =
         pickFirstString(
@@ -3195,9 +3105,7 @@ export const getSunoTrackStatus = onRequest(
         audioUrl: finalAudioUrl,
         streamAudioUrl: finalAudioUrl,
         imageUrl: finalImageUrl,
-        audioUrls: verifiedAudioUrls,
-        reportedAudioUrls: reportedAudioUrls,
-        audioValidationStatus,
+        audioUrls: audioUrls,
         sunoData: sunoData,
         apiStatusResponse: data
       });

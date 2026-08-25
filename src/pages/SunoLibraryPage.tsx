@@ -12,27 +12,13 @@ import {
   Twitter, Facebook, Mail, Link, Copy, Send, MessageCircle, Edit2, Heart, FolderOutput, Globe2, Plus, Check, CheckSquare, Square, ListChecks, Palette, Lock
 } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from '../lib/firestoreMeasured';
+import { collection, query, onSnapshot, collectionGroup, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp, orderBy, limit, startAfter } from 'firebase/firestore';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { useGlobalPlayerControls } from '../contexts/GlobalPlayerContext';
 import { downloadAudioWithTitle } from '../lib/songUtils';
 import { ensureDefaultPlaylists, getPlaylistsByType, createPlaylist, renamePlaylist, deletePlaylist, addPlaylistItem, deletePlaylistItem, movePlaylistItem, updatePlaylistItemColor, swapPlaylistItemOrder, getTrackGlobalId, fetchTrackLikes, toggleTrackLike, fetchSharedTracksStatus } from '../services/playlistService';
 import { Playlist, PlaylistItem } from '../types';
-import { USER_PROFILE_CACHE_EVENT, readUserProfileCache, writeUserProfileCache } from '../lib/userProfileCache';
 import SunoTrackDetailModal from '../components/SunoTrackDetailModal';
-import CacheDiagnosticBadge from '../components/CacheDiagnosticBadge';
-import { markCacheDiagnostic } from '../lib/cacheDiagnostics';
-import { scheduleListBundleWrite, subscribeListBundle, readLibraryBundleLocalSyncVersion, writeLibraryBundleLocalSyncVersion } from '../lib/listBundleCache';
-
-const SORIDRAW_923_FINAL_FIRESTORE_GUARD = true;
-const SORIDRAW_936_LIBRARY_VERSION_SYNC_ONLY = true;
-const SORIDRAW_930_ROUTE_USER_READ_CACHE = true;
-const SORIDRAW_902_LIST_BUNDLE_CACHE = true;
-const SORIDRAW_922_NO_UNBOUNDED_BOOTSTRAP_READS = true;
-const SORIDRAW_921_FIRESTORE_COST_HARDENING = true;
-const SORIDRAW_900_LIBRARY_SESSION_CACHE = true;
-const SORIDRAW_897_CACHE_DIAGNOSTICS_READ_ACCURACY = true;
-const SORIDRAW_897_CACHE_DIAGNOSTICS_OVERLAY = true;
 
 const fallbackNormalPlaylists: Playlist[] = [
   { id: "fallback-normal-0", title: "기본", type: "normal", order: 1, isDefault: true, isFallback: true } as any,
@@ -48,377 +34,13 @@ const fallbackSharedPlaylists: Playlist[] = [
 ];
 
 const CACHE_EXPIRY_MS = 6 * 60 * 60 * 1000; // 6 hours
-const WORKSPACE_PAGE_SIZE = 10;
-const WORKSPACE_SERVER_PAGE_SIZE = 10;
-const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE;
+const WORKSPACE_PAGE_SIZE = 20;
+const WORKSPACE_SERVER_PAGE_SIZE = 20;
+const WORKSPACE_SERVER_FETCH_SIZE = WORKSPACE_SERVER_PAGE_SIZE + 1;
 const SHARED_PLAYED_STORAGE_KEY = 'soridraw.suno.sharedPlaylistPlayed.v1';
 const SUNO_REMAINING_CREDITS_KEY = 'soridraw_suno_remaining_credits';
 const SUNO_REMAINING_CREDITS_UPDATED_AT_KEY = 'soridraw_suno_remaining_credits_updated_at';
 const scopedCreditStorageKey = (base: string, uid?: string | null) => `${base}_${uid || 'guest'}`;
-
-
-// 900: Keep the workspace Firestore listener alive once per authenticated app
-// session instead of recreating it on every Library page mount. Page re-entry
-// reuses this in-memory snapshot; the single listener still receives true remote
-// changes while the app remains open. The listener is stopped on account change.
-type LibraryWorkspaceSessionView = {
-  tracks: any[];
-  lastDoc: any | null;
-  hasMore: boolean;
-  paginationFallback: boolean;
-  ready: boolean;
-};
-
-type LibraryWorkspaceSession = LibraryWorkspaceSessionView & {
-  uid: string;
-  started: boolean;
-  unsubscribe: (() => void) | null;
-  unsubscribeFallback: (() => void) | null;
-  unsubscribeVersionSignal: (() => void) | null;
-  subscribers: Set<(state: LibraryWorkspaceSessionView) => void>;
-};
-
-let libraryWorkspaceSession: LibraryWorkspaceSession | null = null;
-let libraryWorkspaceAuthGuardStarted = false;
-
-const readLibraryWorkspaceTrackCache = (uid: string): any[] => {
-  try {
-    const raw = localStorage.getItem(`soridraw_suno_tracks_cache_${uid}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn('Failed to read shared library workspace cache:', error);
-    return [];
-  }
-};
-
-const saveLibraryWorkspaceTrackCache = (uid: string, list: any[]) => {
-  try {
-    localStorage.setItem(`soridraw_suno_tracks_cache_${uid}`, JSON.stringify(Array.isArray(list) ? list : []));
-  } catch (error) {
-    console.warn('Failed to save shared library workspace cache:', error);
-  }
-};
-
-const getLibraryWorkspaceTrackCreatedAtMs = (track: any): number => {
-  const value = track?.createdAt;
-  if (!value) return 0;
-  if (typeof value?.toMillis === 'function') return value.toMillis();
-  if (typeof value?.seconds === 'number') return value.seconds * 1000;
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const mergeLibraryWorkspaceSessionTracks = (incoming: any[], previous: any[] = []): any[] => {
-  const map = new Map<string, any>();
-  (Array.isArray(previous) ? previous : []).forEach((track: any) => {
-    const id = String(track?.id || '').trim();
-    if (id) map.set(id, track);
-  });
-  (Array.isArray(incoming) ? incoming : []).forEach((track: any) => {
-    const id = String(track?.id || '').trim();
-    if (id) map.set(id, { ...(map.get(id) || {}), ...track });
-  });
-  return Array.from(map.values()).sort(
-    (a: any, b: any) => getLibraryWorkspaceTrackCreatedAtMs(b) - getLibraryWorkspaceTrackCreatedAtMs(a)
-  );
-};
-
-const mergeLibraryLatestBundleWithCache = (
-  incoming: any[],
-  previous: any[],
-  cursorCreatedAtMs: number,
-  hasMore: boolean,
-): any[] => {
-  const incomingIds = new Set((incoming || []).map((track: any) => String(track?.id || '')).filter(Boolean));
-  const retained = (previous || []).filter((track: any) => {
-    const id = String(track?.id || '');
-    if (!id || incomingIds.has(id)) return false;
-    if (!hasMore) return false;
-    const createdAtMs = getLibraryWorkspaceTrackCreatedAtMs(track);
-    return cursorCreatedAtMs <= 0 || createdAtMs < cursorCreatedAtMs;
-  });
-  return mergeLibraryWorkspaceSessionTracks(incoming, retained);
-};
-
-const snapshotLibraryWorkspaceSession = (session: LibraryWorkspaceSession): LibraryWorkspaceSessionView => ({
-  tracks: session.tracks,
-  lastDoc: session.lastDoc,
-  hasMore: session.hasMore,
-  paginationFallback: session.paginationFallback,
-  ready: session.ready,
-});
-
-const emitLibraryWorkspaceSession = (session: LibraryWorkspaceSession) => {
-  const snapshot = snapshotLibraryWorkspaceSession(session);
-  session.subscribers.forEach((listener) => {
-    try {
-      listener(snapshot);
-    } catch (error) {
-      console.warn('Library workspace subscriber failed:', error);
-    }
-  });
-};
-
-const stopLibraryWorkspaceSession = () => {
-  const session = libraryWorkspaceSession;
-  if (!session) return;
-  try { session.unsubscribe?.(); } catch {}
-  try { session.unsubscribeFallback?.(); } catch {}
-  try { session.unsubscribeVersionSignal?.(); } catch {}
-  session.unsubscribe = null;
-  session.unsubscribeFallback = null;
-  session.unsubscribeVersionSignal = null;
-  session.subscribers.clear();
-  libraryWorkspaceSession = null;
-};
-
-const ensureLibraryWorkspaceAuthGuard = () => {
-  if (libraryWorkspaceAuthGuardStarted) return;
-  libraryWorkspaceAuthGuardStarted = true;
-  auth.onAuthStateChanged((currentUser) => {
-    if (!libraryWorkspaceSession) return;
-    if (!currentUser || currentUser.uid !== libraryWorkspaceSession.uid) {
-      stopLibraryWorkspaceSession();
-    }
-  });
-};
-
-const startLibraryWorkspaceSession = (uid: string): LibraryWorkspaceSession => {
-  ensureLibraryWorkspaceAuthGuard();
-  if (libraryWorkspaceSession?.uid === uid && libraryWorkspaceSession.started) {
-    return libraryWorkspaceSession;
-  }
-  if (libraryWorkspaceSession && libraryWorkspaceSession.uid !== uid) {
-    stopLibraryWorkspaceSession();
-  }
-
-  const cachedTracks = readLibraryWorkspaceTrackCache(uid);
-  const session: LibraryWorkspaceSession = {
-    uid,
-    tracks: cachedTracks,
-    lastDoc: null,
-    hasMore: false,
-    paginationFallback: false,
-    ready: cachedTracks.length > 0,
-    started: true,
-    unsubscribe: null,
-    unsubscribeFallback: null,
-    unsubscribeVersionSignal: null,
-    subscribers: new Set(),
-  };
-  libraryWorkspaceSession = session;
-
-  const tracksRef = collection(db, 'suno_tracks', uid, 'tracks');
-  const pageQuery = query(
-    tracksRef,
-    orderBy('createdAt', 'desc'),
-    limit(WORKSPACE_SERVER_FETCH_SIZE)
-  );
-
-  const startLegacyFullFallback = () => {
-    if (session.unsubscribeFallback) return;
-    session.paginationFallback = true;
-    session.hasMore = false;
-    session.unsubscribeFallback = () => {};
-    const boundedFallbackQuery = query(tracksRef, limit(WORKSPACE_SERVER_FETCH_SIZE));
-    void getDocs(boundedFallbackQuery)
-      .then((snapshot) => {
-        const list = snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-        session.tracks = mergeLibraryWorkspaceSessionTracks(list, session.tracks);
-        session.lastDoc = snapshot.docs[snapshot.docs.length - 1] || null;
-        session.hasMore = false;
-        session.ready = true;
-        saveLibraryWorkspaceTrackCache(uid, session.tracks);
-        markCacheDiagnostic('library', 'SYNC', Math.max(1, snapshot.docs.length));
-        emitLibraryWorkspaceSession(session);
-      })
-      .catch((error) => {
-        console.error('Bounded library fallback failed; keeping local cache.', error);
-        session.ready = true;
-        emitLibraryWorkspaceSession(session);
-      });
-    emitLibraryWorkspaceSession(session);
-  };
-
-  const startPagedSourceFallback = () => {
-    try { session.unsubscribe?.(); } catch {}
-    session.unsubscribe = null;
-    session.paginationFallback = false;
-    session.unsubscribe = onSnapshot(pageQuery, (snapshot) => {
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
-      session.hasMore = hasMore;
-      session.paginationFallback = false;
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        visibleDocs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        hasMore,
-      );
-      session.ready = true;
-      saveLibraryWorkspaceTrackCache(uid, session.tracks);
-      scheduleListBundleWrite('library', uid, session.tracks, { limit: 10, hasMore });
-      markCacheDiagnostic(
-        'library',
-        snapshot.metadata.fromCache ? 'CACHE' : 'SYNC',
-        snapshot.metadata.fromCache ? 0 : Math.max(1, snapshot.docChanges().length)
-      );
-      emitLibraryWorkspaceSession(session);
-    }, (error) => {
-      console.error('Error fetching paged tracks:', error);
-      session.ready = true;
-      emitLibraryWorkspaceSession(session);
-      startLegacyFullFallback();
-    });
-  };
-
-  let bundleBootstrapStarted = false;
-  const bootstrapBundleFromSourceOnce = async () => {
-    if (bundleBootstrapStarted) return;
-    bundleBootstrapStarted = true;
-    try {
-      const snapshot = await getDocs(pageQuery);
-      const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
-      const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
-      const list = visibleDocs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
-      session.lastDoc = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
-      session.hasMore = hasMore;
-      session.paginationFallback = false;
-      session.tracks = mergeLibraryLatestBundleWithCache(
-        list,
-        session.tracks,
-        visibleDocs.length > 0 ? getLibraryWorkspaceTrackCreatedAtMs(list[list.length - 1]) : 0,
-        hasMore,
-      );
-      session.ready = true;
-      saveLibraryWorkspaceTrackCache(uid, session.tracks);
-      scheduleListBundleWrite('library', uid, session.tracks, { limit: 10, hasMore });
-      markCacheDiagnostic('library', 'SYNC', snapshot.docs.length);
-      emitLibraryWorkspaceSession(session);
-    } catch (error) {
-      console.warn('Library bundle bootstrap unavailable; using legacy safe listener.', error);
-      startPagedSourceFallback();
-    }
-  };
-
-  let libraryBundleReadInFlight = false;
-
-  const readRemoteLibraryVersion = () => Number(
-    (readUserProfileCache(uid) as any)?.syncVersions?.library || 0
-  );
-
-  const startLibraryBundleVerification = () => {
-    if (libraryBundleReadInFlight) return;
-    libraryBundleReadInFlight = true;
-    try { session.unsubscribe?.(); } catch {}
-    session.unsubscribe = null;
-    session.unsubscribe = subscribeListBundle('library', uid, {
-      onData: (bundle, meta) => {
-        libraryBundleReadInFlight = false;
-        const remoteVersion = Number((readUserProfileCache(uid) as any)?.syncVersions?.library || 0);
-        const verifiedVersion = Math.max(
-          remoteVersion,
-          readLibraryBundleLocalSyncVersion(uid),
-          Number(bundle.updatedAtMs || 0),
-          1,
-        );
-        writeLibraryBundleLocalSyncVersion(uid, verifiedVersion);
-        const list = Array.isArray(bundle.items) ? bundle.items : [];
-        session.tracks = mergeLibraryLatestBundleWithCache(
-          list,
-          session.tracks,
-          bundle.cursorCreatedAtMs,
-          bundle.hasMore,
-        );
-        session.lastDoc = bundle.cursorCreatedAtMs > 0 ? new Date(bundle.cursorCreatedAtMs) : null;
-        session.hasMore = bundle.hasMore;
-        session.paginationFallback = false;
-        session.ready = true;
-        saveLibraryWorkspaceTrackCache(uid, session.tracks);
-        markCacheDiagnostic('library', meta.fromCache ? 'CACHE' : 'SYNC', meta.fromCache ? 0 : 1);
-        emitLibraryWorkspaceSession(session);
-      },
-      onMissing: (meta) => {
-        libraryBundleReadInFlight = false;
-        if (meta.fromCache) return;
-        void bootstrapBundleFromSourceOnce();
-      },
-      onError: (error) => {
-        libraryBundleReadInFlight = false;
-        console.warn('Library bundle unavailable; using legacy safe listener.', error);
-        startPagedSourceFallback();
-      },
-    });
-  };
-
-  const shouldVerifyLibraryBundle = () => {
-    const localVersion = readLibraryBundleLocalSyncVersion(uid);
-    const remoteVersion = readRemoteLibraryVersion();
-    // localVersion === 0 is a one-time 936 migration check for existing caches.
-    return cachedTracks.length === 0 || localVersion <= 0 || remoteVersion > localVersion;
-  };
-
-  const handleLibraryProfileVersion = (event: Event) => {
-    const detail = (event as CustomEvent<{ uid?: string }>).detail;
-    if (!detail || detail.uid !== uid) return;
-    if (readRemoteLibraryVersion() > readLibraryBundleLocalSyncVersion(uid)) {
-      startLibraryBundleVerification();
-    }
-  };
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener(USER_PROFILE_CACHE_EVENT, handleLibraryProfileVersion as EventListener);
-    session.unsubscribeVersionSignal = () => {
-      window.removeEventListener(USER_PROFILE_CACHE_EVENT, handleLibraryProfileVersion as EventListener);
-    };
-  }
-
-  if (shouldVerifyLibraryBundle()) {
-    startLibraryBundleVerification();
-  } else {
-    session.ready = true;
-    markCacheDiagnostic('library', 'CACHE', 0);
-    emitLibraryWorkspaceSession(session);
-  }
-
-
-  return session;
-};
-
-const subscribeLibraryWorkspaceSession = (
-  uid: string,
-  listener: (state: LibraryWorkspaceSessionView) => void,
-): (() => void) => {
-  const session = startLibraryWorkspaceSession(uid);
-  session.subscribers.add(listener);
-  listener(snapshotLibraryWorkspaceSession(session));
-  return () => {
-    session.subscribers.delete(listener);
-  };
-};
-
-const replaceLibraryWorkspaceSessionTracks = (uid: string, tracks: any[]) => {
-  if (!libraryWorkspaceSession || libraryWorkspaceSession.uid !== uid) return;
-  libraryWorkspaceSession.tracks = Array.isArray(tracks) ? tracks : [];
-};
-
-const mergeLibraryWorkspaceSessionPage = (
-  uid: string,
-  incoming: any[],
-  lastDoc: any | null,
-  hasMore: boolean,
-) => {
-  if (!libraryWorkspaceSession || libraryWorkspaceSession.uid !== uid) return;
-  libraryWorkspaceSession.tracks = mergeLibraryWorkspaceSessionTracks(incoming, libraryWorkspaceSession.tracks);
-  libraryWorkspaceSession.lastDoc = lastDoc;
-  libraryWorkspaceSession.hasMore = hasMore;
-  libraryWorkspaceSession.ready = true;
-};
 
 const readStoredSunoCredits = (uid?: string | null): { credits: number | null; updatedAt: number | null } => {
   try {
@@ -768,18 +390,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         if (!cancelled) setIsLibraryAdminUser(false);
         return;
       }
-      const cachedProfile = readUserProfileCache(user.uid);
-      if (cachedProfile) {
-        if (!cancelled) setIsLibraryAdminUser(cachedProfile.role === 'admin');
-        return;
-      }
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
-        if (!cancelled) {
-          const data: any | null = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
-          if (data) writeUserProfileCache(user.uid, data);
-          setIsLibraryAdminUser(Boolean(data && data.role === 'admin'));
-        }
+        if (!cancelled) setIsLibraryAdminUser(snap.exists() && snap.data()?.role === 'admin');
       } catch (error) {
         console.warn('library admin role check failed', error);
         if (!cancelled) setIsLibraryAdminUser(false);
@@ -829,9 +442,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   useEffect(() => {
     libraryUserRef.current = user;
   }, [user]);
-
-  // 906: route hydration/remount is cache-only. Do not mirror the visible
-  // tracks state back to Firestore merely because the Library page mounted.
 
   useEffect(() => {
     writeLocalColorMap('soridraw.library.workspaceColorTags', workspaceLocalColorMap);
@@ -1385,10 +995,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         (track: any) => !removedIds.has(String(track?.id || '').trim())
       );
       const uid = user?.uid || appUser?.uid || auth.currentUser?.uid;
-      if (uid) {
-        saveWorkspaceTrackCache(uid, next);
-        replaceLibraryWorkspaceSessionTracks(uid, next);
-      }
+      if (uid) saveWorkspaceTrackCache(uid, next);
       return next;
     });
   };
@@ -1442,8 +1049,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
           
           const q = query(
             collectionGroup(db, 'tracks'),
-            where('isPublic', '==', true),
-        limit(50)
+            where('isPublic', '==', true)
           );
           const querySnapshot = await getDocs(q);
           console.log("public tracks count", querySnapshot.size);
@@ -1483,15 +1089,9 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       return () => unsubAuth();
     }
 
-    let unsubscribeWorkspaceView: (() => void) | null = null;
     const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
       const resolvedUser = currentUser || appUser || auth.currentUser;
       setUser(resolvedUser);
-
-      if (unsubscribeWorkspaceView) {
-        unsubscribeWorkspaceView();
-        unsubscribeWorkspaceView = null;
-      }
 
       if (!resolvedUser) {
         setLoading(false);
@@ -1499,46 +1099,90 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         return;
       }
 
+      const cacheKey = `soridraw_suno_tracks_cache_${resolvedUser.uid}`;
       workspaceLastTrackDocRef.current = null;
       workspacePaginationFallbackRef.current = false;
       setHasMoreWorkspaceServerTracks(false);
       setIsLoadingMoreWorkspaceTracks(false);
 
-      const alreadyRunning = Boolean(
-        libraryWorkspaceSession?.uid === resolvedUser.uid && libraryWorkspaceSession.started
-      );
-      const session = startLibraryWorkspaceSession(resolvedUser.uid);
+      let cachedTracks: any[] = [];
+      try {
+        const cachedJson = localStorage.getItem(cacheKey);
+        if (cachedJson) {
+          cachedTracks = JSON.parse(cachedJson);
+        }
+      } catch (e) {
+        console.error('Failed to parse cached suno_tracks:', e);
+      }
 
-      if (Array.isArray(session.tracks) && session.tracks.length > 0) {
-        // A page re-entry never creates another Firestore listener. It simply
-        // consumes the live session snapshot already held in memory.
-        markCacheDiagnostic('library', 'CACHE', 0);
-        setTracks(session.tracks);
+      if (Array.isArray(cachedTracks) && cachedTracks.length > 0) {
+        setTracks(cachedTracks);
         setLoading(false);
       } else {
         setTracks([]);
-        setLoading(!session.ready);
+        setLoading(true);
       }
 
-      const applySession = (next: LibraryWorkspaceSessionView) => {
-        setTracks(next.tracks);
-        setLoading(!next.ready);
-        workspaceLastTrackDocRef.current = next.lastDoc;
-        workspacePaginationFallbackRef.current = next.paginationFallback;
-        setHasMoreWorkspaceServerTracks(next.hasMore);
+      const tracksRef = collection(db, 'suno_tracks', resolvedUser.uid, 'tracks');
+      const pageQuery = query(
+        tracksRef,
+        orderBy('createdAt', 'desc'),
+        limit(WORKSPACE_SERVER_FETCH_SIZE)
+      );
+
+      const startFullWorkspaceFallback = () => {
+        workspacePaginationFallbackRef.current = true;
+        setHasMoreWorkspaceServerTracks(false);
+        const fallbackQuery = query(tracksRef);
+        return onSnapshot(fallbackQuery, (snapshot) => {
+          const list = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          const sorted = mergeWorkspaceTracks(list, []);
+          setTracks(sorted);
+          setLoading(false);
+          saveWorkspaceTrackCache(resolvedUser.uid, sorted);
+        }, (error) => {
+          console.error('Error fetching tracks fallback:', error);
+          setLoading(false);
+        });
       };
 
-      unsubscribeWorkspaceView = subscribeLibraryWorkspaceSession(resolvedUser.uid, applySession);
-      if (alreadyRunning) {
-        // Explicitly record the no-server-read re-entry in the admin diagnostic.
-        markCacheDiagnostic('library', 'CACHE', 0);
-      }
+      let unsubscribeFallback: (() => void) | undefined;
+      const unsubscribeSnapshot = onSnapshot(pageQuery, (snapshot) => {
+        const docs = snapshot.docs;
+        const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
+        const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
+        workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : null;
+        setHasMoreWorkspaceServerTracks(hasMore);
+
+        const list = visibleDocs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        setTracks((prev) => {
+          const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
+          saveWorkspaceTrackCache(resolvedUser.uid, merged);
+          return merged;
+        });
+        setLoading(false);
+      }, (error: any) => {
+        console.error('Error fetching paged tracks:', error);
+        setLoading(false);
+        if (!unsubscribeFallback) {
+          unsubscribeFallback = startFullWorkspaceFallback();
+        }
+      });
+
+      return () => {
+        unsubscribeSnapshot();
+        if (unsubscribeFallback) unsubscribeFallback();
+      };
     });
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeWorkspaceView) unsubscribeWorkspaceView();
-    };
+    return () => unsubscribeAuth();
   }, [appUser?.uid]);
 
 
@@ -1566,7 +1210,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       );
       const snapshot = await getDocs(nextQuery);
       const docs = snapshot.docs;
-      const hasMore = docs.length >= WORKSPACE_SERVER_PAGE_SIZE;
+      const hasMore = docs.length > WORKSPACE_SERVER_PAGE_SIZE;
       const visibleDocs = docs.slice(0, WORKSPACE_SERVER_PAGE_SIZE);
       workspaceLastTrackDocRef.current = visibleDocs.length > 0 ? visibleDocs[visibleDocs.length - 1] : workspaceLastTrackDocRef.current;
       setHasMoreWorkspaceServerTracks(hasMore);
@@ -1576,7 +1220,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
         ...doc.data()
       }));
 
-      mergeLibraryWorkspaceSessionPage(user.uid, list, workspaceLastTrackDocRef.current, hasMore);
       setTracks((prev) => {
         const merged = mergeWorkspaceTracks(list, Array.isArray(prev) ? prev : []);
         saveWorkspaceTrackCache(user.uid, merged);
@@ -1592,10 +1235,8 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     }
   };
 
-  const playlistLiveModeActive = libraryViewMode === 'playlist' || libraryViewMode === 'sharedPlaylist';
-
   useEffect(() => {
-    if (!user || !playlistLiveModeActive || isSharedView) {
+    if (!user || (libraryViewMode !== 'playlist' && libraryViewMode !== 'sharedPlaylist') || isSharedView) {
       if (!user) {
         setPlaylists([]);
       }
@@ -1625,7 +1266,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     return () => {
       if (unsub) unsub();
     };
-  }, [user?.uid, playlistLiveModeActive, isSharedView]);
+  }, [user, libraryViewMode, isSharedView]);
 
   useEffect(() => {
     playlistsRef.current = playlists;
@@ -1801,17 +1442,10 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
       await Promise.all(
         uniqueOwnerUids.map(async (uid) => {
           try {
-            const cachedProfile = readUserProfileCache(uid);
-            if (cachedProfile) {
-              const displayName = cachedProfile.nickname || cachedProfile.displayName || (cachedProfile as any).name || cachedProfile.email || uid;
-              if (displayName) nextMap[uid] = String(displayName);
-              return;
-            }
             const userSnap = await getDoc(doc(db, 'users', uid));
             if (!userSnap.exists()) return;
             const data: any = userSnap.data();
-            const cached = writeUserProfileCache(uid, { ...data, uid });
-            const displayName = cached.nickname || cached.displayName || (cached as any).name || cached.email || uid;
+            const displayName = data.nickname || data.displayName || data.name || data.email || uid;
             if (displayName) nextMap[uid] = String(displayName);
           } catch (error) {
             console.warn('Failed to fetch playlist creator name:', error);
@@ -2386,7 +2020,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
   };
 
   const getAudioUrl = (item: any, group: any) => {
-    if (group?.audioValidationStatus === 'pending_or_empty' || group?.audioValidationStatus === 'missing') return '';
     return item?.audioUrl || item?.streamAudioUrl || item?.audio_url || item?.stream_audio_url || item?.sourceAudioUrl || item?.source_audio_url || item?.sourceStreamAudioUrl || item?.source_stream_audio_url || group?.audioUrl || group?.streamAudioUrl || group?.audio_url || group?.stream_audio_url || '';
   };
 
@@ -5133,7 +4766,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setBulkMenuState(null);
 
     try {
-      const { deleteDoc } = await import('../lib/firestoreMeasured');
+      const { deleteDoc } = await import('firebase/firestore');
       const workspaceGroups = new Map<string, { group: any; indices: Set<number> }>();
       for (const selection of selectedTrackList) {
         if (selection.context !== 'workspace') continue;
@@ -5258,7 +4891,7 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const { doc, updateDoc, serverTimestamp, deleteDoc } = await import('../lib/firestoreMeasured');
+      const { doc, updateDoc, serverTimestamp, deleteDoc } = await import('firebase/firestore');
       const trackRef = doc(db, 'suno_tracks', user.uid, 'tracks', deleteTarget.groupId);
 
       const items = extractSunoData(deleteTarget.group);
@@ -6135,7 +5768,6 @@ export default function SunoLibraryPage({ appUser = null }: { appUser?: any } = 
               {isSharedView ? 'SORIDRAW에서 누군가 만든 멋진 곡입니다.' : 'Music API로 생성한 곡을 듣고, 관리하고, 공유할수 있습니다.'}
             </div>
           </div>
-          {!isSharedView && <CacheDiagnosticBadge domain="library" className="mt-1.5" />}
         </div>
       </div>
       <div className={`flex shrink-0 gap-2 items-center self-center${studioWorkspaceHeroHost ? ' soridraw-studio-result-masthead-actions' : ''}`}> 

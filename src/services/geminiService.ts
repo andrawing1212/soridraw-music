@@ -35126,7 +35126,7 @@ async function enforceSelectedLanguageCardsBeforeHardBan(
   const next: SongResult = {
     ...result,
     lyrics: { ...result.lyrics },
-    appliedKeywords: { ...(result.appliedKeywords || {}) },
+    appliedKeywords: { ...result.appliedKeywords },
   };
   const intentionalLanguageMix = isV1LanguageMixEnabledForParams(params);
   const selectedBodyMatches = (lyrics: string, target: LanguageCode) =>

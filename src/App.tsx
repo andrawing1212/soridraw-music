@@ -4447,8 +4447,6 @@ function App() {
                             ? 'local-responsive'
                             : mode === 'pure-pane'
                               ? 'pure-pane'
-                              : mode === 'pure-pane-hybrid'
-                                ? 'pure-pane-hybrid'
                                 : mode === 'pure-pane-live'
                                 ? 'pure-pane-live'
                                 : mode === 'splitter-only'

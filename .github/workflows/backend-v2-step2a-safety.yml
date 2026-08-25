@@ -11,7 +11,7 @@ on:
       - '.github/workflows/backend-v2-step2a-safety.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   v1-compatibility:
@@ -223,12 +223,13 @@ jobs:
             echo "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > .deploy/backend-v2-step2a-safety.txt
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .deploy/backend-v2-step2a-safety.txt
-          git commit -m "ci: record Backend V2 Step 2-A safety result" || true
-          git pull --rebase origin preview
-          git push origin HEAD:preview
+          cat .deploy/backend-v2-step2a-safety.txt
+          {
+            echo '## Backend V2 Step 2-A safety outcome'
+            echo '```text'
+            cat .deploy/backend-v2-step2a-safety.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if any safety gate failed
         if: always()

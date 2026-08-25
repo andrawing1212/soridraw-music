@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: INVENTORY / Step 1-C complete — awaiting approval for Step 1-D
+Status: INVENTORY / Step 1 complete (4/4) — awaiting approval for Step 2-A
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -39,140 +39,161 @@ Production Firebase deploy: prohibited unless explicitly requested
 
 ## 2. Core V2 data model
 
-Primary source-of-truth object: `users/{uid}/songs/{songId}`
+Primary source-of-truth object: `users/{uid}/songs/{songId}`.
 
-The core model must be provider-neutral. Suno is only one audio provider.
+The core model is provider-neutral. Suno is one optional provider, not the storage architecture.
 
-Recommended conceptual fields:
-- existing song fields preserved as-is where possible
-- `schemaVersion: 2`
-- `musicNote: boolean`
-- `archived: boolean` if needed
-- source/provider metadata, e.g. `audio.provider`, `providerTrackId`, `audioUrl`, `imageUrl`
-- optional future publication reference only, e.g. `publish.isPublic`, `publish.publicId`, `publish.allowReuse`
-- migration provenance fields only when needed (`legacyRecentId`, `legacyFavoriteId`, etc.)
+First-pass V2 rule:
+- preserve existing song payload fields unchanged wherever possible,
+- add only V2 state/provenance metadata,
+- do not redesign every field while paths/source-of-truth are being migrated.
 
-Do not redesign all song fields during the first migration. The first migration is primarily a storage-path/source-of-truth cleanup so current frontend behavior remains compatible.
+Recommended additive metadata is finalized in `docs/SORIDRAW_BACKEND_V2_STEP1D_FINAL_MAPPING_RISK.md`.
 
-## 3. V1 -> V2 mapping direction
+## 3. Final V1 -> V2 direction
 
 | V1 | V2 / disposition | Rule |
 | --- | --- | --- |
-| `users/{uid}` | keep | Keep profile/authority/sync version document. |
-| `user_recent_songs/{uid}` | `users/{uid}/songs/{songId}` | Current V1 is a user document containing a `songs` array. Preserve song shape/identity/order while splitting into canonical song docs. |
-| `favorites/{favoriteId}` | matching song + `musicNote:true`, otherwise preserve as separate song | Never merge unless identity is reliable. Keep V1 fallback through verification. |
-| `user_list_caches/...music_note...` | no permanent V2 server equivalent | Temporary V1 compatibility only; replace server bundle cache with IndexedDB/local cache after validation. |
-| `user_list_caches/...library...` | no permanent V2 server equivalent | Same rule. |
-| `suno_tracks/{uid}/tracks/{id}` | optional/provider-specific compatibility data; not a V2 core dependency | Suno Library is low priority and can later be removed. Core song data must not depend on it. |
-| `user_playlists/{uid}/lists/{id}` | `users/{uid}/playlists/{id}` | Preserve playlist IDs/items/order/color/link fields. |
-| `user_structures/{uid}` | `users/{uid}/settings/sections` or equivalent compact user setting | Preserve complete existing configuration. |
-| `syncVersions` | `users/{uid}.syncVersions` | Keep low-read incremental sync concept. |
-| `presence/{uid}` RTDB | keep | No migration. |
-| API keys / request guards | keep during DB V2 phase | Move only in later Functions-removal phase. |
-| public `suno_shares`, likes/counts | keep for compatibility during DB V2 | Future Explore migration target, not private V2 core. |
+| `users/{uid}` | keep | Keep profile/account authority/preferences/counters/sync version document. |
+| `user_recent_songs/{uid}.songs[]` | `users/{uid}/songs/{songId}` | Preserve each item payload and order/provenance; no V1 delete. |
+| `favorites/{favoriteId}` | strong matching song + `musicNote:true`, otherwise separate preserved song | Never merge from title/prompt/lyrics hash alone. |
+| `user_list_caches/.../bundles/*` | no permanent V2 server cache | V1 compatibility only, later replaced by IndexedDB/local after validation. |
+| `suno_tracks/{uid}/tracks/{id}` | optional/provider-specific compatibility data | Suno Library remains isolated and removable later. |
+| `user_playlists/{uid}/lists/{id}` | `users/{uid}/playlists/{id}` | Preserve IDs/payload/order. |
+| playlist `items/{itemId}` | `users/{uid}/playlists/{id}/items/{itemId}` | Preserve IDs/source links/color/order. |
+| `user_structures/{uid}` | `users/{uid}/settings/sections` | Preserve complete current shape in first pass. |
+| current `syncVersions` | keep on `users/{uid}` | Preserve existing keys during compatibility phase. |
+| RTDB `presence/{uid}` | keep | No migration. |
+| API keys / request guards / admin audit | keep | Later Functions/Worker phase only. |
+| current public shares/likes | keep now; future D1 | Explore migration is later and separate. |
+| `user_plans` | NO-TOUCH / REVIEW | Provenance/authority unresolved; do not merge/delete/migrate. |
 
 ## 4. Identity / duplicate safety rules
 
 Automatic merge priority:
-1. explicit same canonical ID
-2. same trusted source/provider track identity
-3. trusted legacy key plus exact corroborating content
+1. explicit identical canonical/source identifier,
+2. identical trusted provider/track identity,
+3. trusted legacy key plus exact corroborating stable identity/content,
+4. otherwise NO MERGE.
 
-Do not merge solely because title, lyrics or prompt are similar. If uncertain, preserve both records. User data preservation has higher priority than storage savings.
+Title, lyrics, prompt, or a content hash alone can never trigger destructive merging. If uncertain, preserve both records.
+
+Migration document IDs must be deterministic for reruns, but an ID/hash-generation function must not itself be treated as proof that two songs are the same.
 
 ## 5. Free-operation design rules
 
-1. One canonical song object; do not copy full song content into several server collections just to power different screens.
-2. Recent Songs, Music Note and similar UI are views/state over source data, not duplicated source databases.
-3. App startup should prefer IndexedDB/local cache and use a tiny server version/invalidator check.
-4. When versions match, target zero song-document reads on routine revisit.
-5. When versions differ, fetch only changed/new data where technically safe.
-6. Full verification/sync remains explicit recovery behavior, not automatic routine behavior.
+1. One canonical private song object; do not duplicate full song content across server collections just to power views.
+2. Recent Songs and Music Note become views/state over canonical songs after V2 validation.
+3. App startup should prefer IndexedDB/local cache and tiny sync/version checks.
+4. When versions match, target zero song-document reads on normal revisit.
+5. When versions differ, fetch only changed/new data where safe.
+6. Manual full verification/sync remains explicit recovery behavior, not routine startup behavior.
 7. Public Explore traffic must not consume the private Firestore read budget; future public data belongs in D1.
-8. No per-card N+1 query design for Explore. Counts/summary fields needed by cards must be returned with each public row.
-9. Suno Library must not dictate schema, APIs or Explore design.
-10. If a free-tier limit is approached, non-core/public conveniences should degrade before core private save/reload behavior.
-11. Do not assume deployed Firestore SDK persistence: production currently uses memory Firestore cache, so durable local-first storage must be explicit.
+8. Suno Library must not dictate schema, APIs, song identity or Explore design.
+9. If a free-tier limit approaches, migration/non-core features pause before core user save/reload is endangered.
+10. Deployed Firestore currently uses memory cache, so durable local-first storage must be explicit.
+11. Every future backup/migration tool must explicitly target and validate `soridraw-app-866a5`; do not trust credential default project metadata.
 
-## 6. Migration method
+## 6. Final migration method
 
 V1 is never deleted first.
 
-1. Inventory only
-2. Produce schema/field/call-site map
-3. Add V2 rules/paths without removing V1
-4. Optional shadow write from new activity to V1 + V2, with V1 remaining authoritative initially
-5. Backfill old data in rate-limited batches
-6. Validate per-user counts, IDs, important content and relationships
-7. Preview uses V2-first with V1 fallback
-8. Test generation/save/reload/login/new-device/Music Note/library/playlists/manual sync/offline-reconnect
-9. Promote only after verification and user approval
-10. Keep V1 rollback data until a separately approved cleanup phase
+1. Code-only repository/data-access abstraction on preview
+2. Add V2 paths/rules additively without removing V1
+3. Add IndexedDB/local-first cache and feature flags
+4. Optional preview-only shadow write with V1 remaining authoritative
+5. Capture usage baseline and secure local read-only backup
+6. Rate-limited historical backfill
+7. Per-user automatic validation
+8. Preview V2-first only for validated data, with V1 fallback
+9. Test generation/save/reload/login/new-device/Music Note/playlists/section custom/manual sync/offline-reconnect
+10. Promote only after explicit approval
+11. Keep V1 rollback data until a separately approved cleanup/stability phase
 
-## 7. Step 1-A / 1-B / 1-C completed findings
+The detailed fixed backfill order, validation gates, migration budgets and no-touch list are in `docs/SORIDRAW_BACKEND_V2_STEP1D_FINAL_MAPPING_RISK.md`.
 
-Step 1-A repository/call-site inventory is complete. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
+## 7. Completed Step 1 findings
 
-Step 1-A key findings:
-- `user_recent_songs/{uid}` stores a growing `songs` array in one document; mutations can rewrite the full array. It is a primary per-song V2 migration target.
-- `user_list_caches` is a server duplicate cache with Music Note/Library bundles up to about 850 KB. It stays only for compatibility until local V2 is proven.
-- `favorites` contains multiple legacy identity/fallback mechanisms, so migration deduplication is high-risk and must preserve uncertain duplicates.
-- Personal playlist data belongs in Firestore V2, but some operations scan the target item collection. Public likes/share lookups are N+1 patterns and remain future D1 work.
-- Suno Library/provider tracking has its own listeners/polling and must remain isolated as `OPTIONAL_SUNO`.
-- Shared generation configuration (`section_tags`, `vocalTones`, small `app_settings`) is active and protected during DB V2.
-- Functions mix Auth admin, API key/security guards, provider operations and diagnostics. Functions removal remains a separate later phase after private DB V2 is stable.
-- RTDB presence is already structurally separate and remains `KEEP_RTDB`.
+### Step 1-A — repository/call-site inventory
+Complete. See `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
 
-Step 1-B production structural inventory is complete. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1B_LIVE_INVENTORY.md`.
+Key findings:
+- `user_recent_songs/{uid}` is a growing whole-array document.
+- `user_list_caches` is server duplicate cache data, not final source-of-truth.
+- `favorites` contains multiple legacy identity/fallback mechanisms and requires conservative migration.
+- personal playlists stay private Firestore; public social reads do not scale into Explore.
+- Suno Library/provider polling remains optional/isolated.
+- shared generation configuration remains protected.
+- Functions responsibilities stay separate from DB V2.
+- RTDB Presence remains separate.
 
-Step 1-B key findings:
-- Successful live inventory was pinned and verified against Firebase project `soridraw-app-866a5`; future migration/backup tools must keep explicit target-project validation because the Actions credential metadata resolves a different default project name.
-- `favorites`: 737 documents. A redacted sample is about 10 KB and contains substantial song payload, confirming it is a major migration source rather than a tiny bookmark table.
-- `user_recent_songs`: 10 documents. A redacted structural sample is about 174 KB and contains the single `songs` array, confirming the large-array design that V2 must replace.
-- Nested provider/library `tracks`: 72 documents and remains optional/provider-specific, not V2 core.
-- Personal playlists are live as nested data: `lists` 42 and `items` 49 even though the top-level `user_playlists` parent collection has zero parent documents.
-- `user_list_caches` likewise has zero parent documents but 4 nested `bundles`, confirming server duplicate caches are live compatibility data.
-- `suno_shares`: 74 documents and its shape includes public fields together with owner/provider/API debug payload; future Explore must use a small sanitized D1 public projection rather than copying these documents wholesale.
-- `user_plans`: 2 live documents but no strong Step 1-A call-site was found.
-- Exact RTDB bandwidth/connection/storage metrics remain a non-blocking monitoring gap; no IAM permission was changed.
+### Step 1-B — live structural inventory
+Complete. See `docs/SORIDRAW_BACKEND_V2_STEP1B_LIVE_INVENTORY.md`.
 
-Step 1-C dataset classification is complete. Full details are in `docs/SORIDRAW_BACKEND_V2_STEP1C_DATASET_CLASSIFICATION.md`.
+Confirmed production structure included:
+- `favorites`: 737 docs
+- `user_recent_songs`: 10 docs; redacted sample about 174 KB
+- provider/library `tracks`: 72 nested docs
+- playlists: 42 list docs / 49 item docs
+- server list-cache bundles: 4
+- `suno_shares`: 74 docs
+- `user_plans`: 2 docs and unresolved authority
 
-Step 1-C fixed ownership decisions:
-- private user source data and shared generation configuration → `KEEP_FIRESTORE`
-- RTDB presence → `KEEP_RTDB`
-- durable browser/UI cache → `MOVE_LOCAL`
+Live inventory was pinned to `soridraw-app-866a5`. Exact RTDB Cloud Monitoring metrics remain a non-blocking permission gap; no IAM permission was changed.
+
+### Step 1-C — dataset classification
+Complete. See `docs/SORIDRAW_BACKEND_V2_STEP1C_DATASET_CLASSIFICATION.md`.
+
+Final ownership:
+- private user source data/shared generation config → `KEEP_FIRESTORE`
+- Presence → `KEEP_RTDB`
+- durable UI cache → `MOVE_LOCAL`
 - public shares/likes → `FUTURE_D1`
-- Suno/provider library records → `OPTIONAL_SUNO`
-- `favorites`, `user_recent_songs`, and server list bundles → `COMPAT_ONLY` until V2 validation
-- `user_plans` remains the only confirmed live `REVIEW` dataset because current code does not establish whether it is authoritative, historical, or externally managed; it is explicitly no-touch during migration planning until provenance is resolved
-- Rules-only/currently empty `music_note_shares`, `section_tags_live`, and `section_tags_draft` are compatibility cleanup candidates only; absence of live docs is not deletion approval
+- provider/Suno Library → `OPTIONAL_SUNO`
+- V1 recent/favorites/server bundle sources → `COMPAT_ONLY` until validation
+- `user_plans` → `REVIEW` + NO-TOUCH
 
-No Step 1-C finding requires a data-risk stop or architecture reversal. Step 1-D can proceed as mapping/risk-report work only.
+### Step 1-D — final mapping/risk report
+Complete. See `docs/SORIDRAW_BACKEND_V2_STEP1D_FINAL_MAPPING_RISK.md`.
+
+Finalized:
+- exact V1 path -> V2 ownership/destination direction
+- canonical song first-pass contract and additive metadata
+- strong-match/no-merge identity rules
+- complete-payload-preservation rule, including unknown legacy fields
+- playlists/settings mapping
+- fixed implementation/backfill order
+- per-user content/count/relationship validation gates
+- strict free-tier migration budget formula with 20% reserve and conservative daily caps
+- explicit CRITICAL/HIGH risk controls
+- rollback/no-touch list
+- Step 2 broken into 2-A through 2-D so data writes are not mixed with code scaffolding
+
+No Step 1 finding requires an architecture reversal. The unresolved `user_plans` documents are isolated as no-touch and do not block core V2 work.
 
 ## 8. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete)
-- [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes. Completed by merging PR #68 into preview after the master-plan document was created.
-- [x] 0-2 Capture live usage baseline available from the admin diagnostics panel. 2026-08-25 around 03:34 KST: Cloud today reads 636 / writes 0 / deletes 0; last 10 minutes reads 20 / writes 0 / deletes 0; billable last 10 minutes reads 0 / realtime 0 / writes 0; Cloud sample shown through about 03:29 with up to ~4 minutes lag. Browser SDK at capture: reads 2 / writes 0, with `app_settings:getDoc` 1 and `users:onSnapshot` 1. The current panel does not expose a separate RTDB bandwidth/connection counter; Step 1-B confirmed that the Actions service account also lacks Cloud Monitoring permission for those RTDB metrics. This is non-blocking and no IAM change was made.
-- [x] 0-3 Build read-only inventory specification/tooling; no write/delete code path. Added `functions/scripts/inventory-readonly.cjs` and `npm run inventory:readonly`. Default is counts-only; samples are opt-in and value-redacted.
-- [x] 0-4 Freeze inventory output format and classification labels. See `docs/SORIDRAW_BACKEND_V2_INVENTORY_SPEC.md`. `KEEP_RTDB` was formally added during 1-A to encode the already-approved presence architecture.
+- [x] 0-1 Align `preview` safely to the current integrated `main` tree without force-reset or Firebase data changes.
+- [x] 0-2 Capture live Firestore usage baseline from admin diagnostics.
+- [x] 0-3 Build read-only inventory tooling with no write/delete path.
+- [x] 0-4 Freeze inventory output/classification format.
 
-### Step 1 — Read-only full inventory (3/4 complete)
-- [x] 1-A Repository/call-site inventory: Firestore/RTDB paths, core reads/writes/listeners/transactions, Functions responsibilities, local caches and composite indexes. Completed. See `docs/SORIDRAW_BACKEND_V2_STEP1A_CALLSITE_INVENTORY.md`.
-- [x] 1-B Production database structural inventory: aggregation document counts plus one safe redacted field-name sample per non-sensitive live collection/group. Completed against `soridraw-app-866a5`; zero application writes/deletes. RTDB Cloud Monitoring exact usage remains a non-blocking permission gap. See `docs/SORIDRAW_BACKEND_V2_STEP1B_LIVE_INVENTORY.md`.
-- [x] 1-C Classified every confirmed live dataset as `KEEP_FIRESTORE`, `KEEP_RTDB`, `MOVE_LOCAL`, `FUTURE_D1`, `OPTIONAL_SUNO`, `COMPAT_ONLY`, or `REVIEW`. Completed with `user_plans` intentionally no-touch under `REVIEW`. See `docs/SORIDRAW_BACKEND_V2_STEP1C_DATASET_CLASSIFICATION.md`.
-- [ ] 1-D Produce final V1 field/path -> V2 field/path mapping, identity rules, migration order, validation gates, free-tier budget rules and migration risk report.
+### Step 1 — Read-only inventory and final design (4/4 complete)
+- [x] 1-A Repository/call-site inventory.
+- [x] 1-B Live Firestore structural inventory against `soridraw-app-866a5`.
+- [x] 1-C Dataset classification.
+- [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 implementation on preview
-- [ ] Introduce repository/data-access layer so UI components do not hard-code database paths
-- [ ] Add V2 private paths/rules additively
-- [ ] Preserve V1 behavior and fallback
-- [ ] Add migration feature flags / schema version handling
+### Step 2 — V2 code implementation on preview (0/4)
+- [ ] 2-A Repository/data-access layer: centralize V1 access first, preserving current behavior; code/build/tests only and no historical data migration.
+- [ ] 2-B Additive V2 schema/rules/index definitions in source; do not remove V1 and do not deploy production Rules without explicit approval.
+- [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.
+- [ ] 2-D Shadow-write/validator/dry-run migration scaffolding; dual-write stays disabled by default until separately approved.
 
-### Step 3 — Backfill + verification
-- [ ] Read-only backup/export strategy finalized without paid managed export dependency
-- [ ] Rate-limited backfill
+### Step 3 — Backup, backfill and verification
+- [ ] Secure local read-only backup strategy/run
+- [ ] Rate-limited backfill within free-tier budget
 - [ ] Per-user automatic verification
 - [ ] No V1 deletion
 
@@ -188,6 +209,7 @@ No Step 1-C finding requires a data-risk stop or architecture reversal. Step 1-D
 - [ ] Section custom
 - [ ] Manual full sync
 - [ ] Offline -> reconnect
+- [ ] Forced V2 failure -> V1 fallback
 
 ### Step 5 — Test app promotion
 - [ ] User approval
@@ -203,23 +225,31 @@ No Step 1-C finding requires a data-risk stop or architecture reversal. Step 1-D
 
 ## 9. Progress reporting format
 
-Every backend-V2 update should show:
-- Current stage
-- Completed items / total items
-- Current operation
-- Next operation
-- Data-risk status
-- Free-tier-risk status
-- Working branch
-- Commit / push result if any
-- Test/build result if any
+Every Backend V2 update must show:
+- current stage
+- completed items / total items
+- current operation
+- next operation
+- data-risk status
+- free-tier-risk status
+- working branch
+- commit/push result
+- build/test result when applicable
 - Firebase production status
 
 At every stage boundary:
-- If there is no issue and no direct user check is needed, explicitly request approval for the next operation.
-- If direct user validation is needed, stop and state exactly what must be checked before approval.
-- If a risk/problem is found, stop progression and report the cause/options before any data change.
+- no issue/direct check needed → request explicit approval for next operation,
+- direct user validation needed → stop and say exactly what must be checked,
+- risk/problem found → stop and report cause/options before any data change.
 
 ## 10. Cross-chat continuity rule
 
-This document is the authoritative project handoff for the Backend V2 / zero-cost architecture work. In a new chat, read this file first and then inspect the latest `preview` branch before continuing. Do not rely on memory alone. If this document and code disagree, report the discrepancy before changing data or deploying anything.
+This file is the authoritative project handoff for Backend V2 / zero-cost architecture work.
+
+In a new chat:
+1. read this file first,
+2. read the latest relevant Step document, especially Step 1-D before implementation,
+3. inspect latest `preview` branch,
+4. if docs and code disagree, report the discrepancy before changing data or deploying.
+
+Do not rely on conversation memory alone.

@@ -1,0 +1,190 @@
+name: SORIDRAW Backend V2 Step 2-C Local Cache
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.deploy/trigger-backend-v2-step2c.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-backend-v2-step2c
+  cancel-in-progress: false
+
+jobs:
+  validate-and-stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Capture protected baselines
+        run: |
+          set -euo pipefail
+          sha256sum \
+            firestore.rules \
+            firestore.indexes.json \
+            database.rules.json \
+            src/App.tsx \
+            src/firebase.js \
+            functions/src/index.ts \
+            src/lib/listBundleCache.ts \
+            src/lib/firestoreReadCache.ts \
+            src/services/playlistService.ts \
+            > /tmp/step2c-protected.sha256
+
+      - name: Apply deterministic Step 2-C patch
+        run: python3 .deploy/apply-backend-v2-step2c.py
+
+      - name: Verify approved scope and inert runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -N \
+            src/data/indexedDbLocalCache.ts \
+            src/data/indexedDbLocalCache.contract.ts \
+            docs/SORIDRAW_BACKEND_V2_STEP2C_INDEXEDDB_LOCAL_FIRST.md
+          git diff --check
+          sha256sum --check /tmp/step2c-protected.sha256
+
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+
+          expected = {
+              'src/data/indexedDbLocalCache.ts',
+              'src/data/indexedDbLocalCache.contract.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2C_INDEXEDDB_LOCAL_FIRST.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'2-C scope mismatch: changed={sorted(changed)} expected={sorted(expected)}')
+
+          cache = pathlib.Path('src/data/indexedDbLocalCache.ts').read_text(encoding='utf-8')
+          forbidden = [
+              "from 'firebase",
+              'from "firebase',
+              '../firebase',
+              'fetch(',
+              'axios',
+              'XMLHttpRequest',
+              'user_list_caches',
+              'subscribeListBundle',
+              'scheduleListBundleWrite',
+          ]
+          for marker in forbidden:
+              if marker in cache:
+                  raise SystemExit(f'forbidden server/runtime dependency in IndexedDB scaffold: {marker}')
+
+          required = [
+              'BACKEND_V2_LOCAL_CACHE_RUNTIME_ENABLED = false',
+              "'song' | 'playlist' | 'playlistItem' | 'sectionSettings'",
+              "'recentSongs' | 'musicNote'",
+              "status: 'unavailable'",
+              "status: 'miss'",
+              "'incomplete'",
+              'duplicate entity id in one snapshot',
+              'fallbackRequired: status !== \'fresh\'',
+          ]
+          for marker in required:
+              if marker not in cache:
+                  raise SystemExit(f'missing Step 2-C safety marker: {marker}')
+
+          # No active runtime file outside src/data may import/activate this scaffold in Step 2-C.
+          for path in pathlib.Path('src').rglob('*'):
+              if path.suffix not in {'.ts', '.tsx', '.js', '.jsx'}:
+                  continue
+              if pathlib.Path('src/data') in path.parents:
+                  continue
+              text = path.read_text(encoding='utf-8', errors='ignore')
+              if 'indexedDbLocalCache' in text:
+                  raise SystemExit(f'2-C runtime activation detected outside src/data: {path}')
+
+          print('Step 2-C scope/inert-runtime safety check PASS')
+          PY
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies without lifecycle mutations
+        run: npm ci --ignore-scripts
+
+      - name: Install ephemeral IndexedDB test implementation
+        run: npm install --no-save --package-lock=false --ignore-scripts fake-indexeddb@6
+
+      - name: Typecheck Step 2-C modules
+        run: |
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --types node \
+            src/data/indexedDbLocalCache.ts src/data/indexedDbLocalCache.contract.ts
+
+      - name: Execute IndexedDB contract
+        run: npx tsx src/data/indexedDbLocalCache.contract.ts
+
+      - name: Production build without lifecycle patch scripts
+        run: npx vite build
+
+      - name: Final self-review and omission gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          sha256sum --check /tmp/step2c-protected.sha256
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+
+          expected = {
+              'src/data/indexedDbLocalCache.ts',
+              'src/data/indexedDbLocalCache.contract.ts',
+              'docs/SORIDRAW_BACKEND_V2_STEP2C_INDEXEDDB_LOCAL_FIRST.md',
+              'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md',
+          }
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          if changed != expected:
+              raise SystemExit(f'validation side-effect detected: {sorted(changed)}')
+
+          package_diff = subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--', 'package.json', 'package-lock.json']).returncode
+          if package_diff != 0:
+              raise SystemExit('ephemeral fake-indexeddb test modified app dependency files')
+
+          master = pathlib.Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md').read_text(encoding='utf-8')
+          report = pathlib.Path('docs/SORIDRAW_BACKEND_V2_STEP2C_INDEXEDDB_LOCAL_FIRST.md').read_text(encoding='utf-8')
+          for marker in [
+              'Step 2-C complete in source — awaiting approval for 2-D',
+              '[x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source',
+          ]:
+              if marker not in master:
+                  raise SystemExit(f'master progress omission: {marker}')
+          for marker in [
+              'V1/server fallback required',
+              'Firestore reads: 0',
+              'Runtime NOT ACTIVATED',
+          ]:
+              if marker.lower() not in report.lower():
+                  raise SystemExit(f'2-C report omission: {marker}')
+
+          print('Step 2-C final self-review PASS; Firebase data/deploy operations = 0')
+          PY
+
+      - name: Commit validated Step 2-C source to preview
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/data/indexedDbLocalCache.ts \
+            src/data/indexedDbLocalCache.contract.ts \
+            docs/SORIDRAW_BACKEND_V2_STEP2C_INDEXEDDB_LOCAL_FIRST.md \
+            docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m "feat: add Backend V2 Step 2-C IndexedDB local cache scaffold"
+          git push origin HEAD:preview

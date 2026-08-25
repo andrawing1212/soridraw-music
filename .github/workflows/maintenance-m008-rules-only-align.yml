@@ -1,0 +1,315 @@
+name: SORIDRAW Maintenance M-008 Rules-Only Alignment
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m008-rules-only-align.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soridraw-maintenance-m008-rules-only
+  cancel-in-progress: false
+
+jobs:
+  align-firestore-rules:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FIREBASE_PROJECT_ID: soridraw-app-866a5
+
+    steps:
+      - name: Checkout exact preview
+        uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Set up Node.js 20.20.2
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20.20.2'
+          cache: npm
+
+      - name: Verify repository canonical-song Rules source and protected V1 markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          rules = Path('firestore.rules').read_text(encoding='utf-8')
+          required_v2 = [
+              'SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES',
+              'function hasValidV2SongMetadata(data)',
+              'function ownerCreatesWithoutMigrationProvenance()',
+              'function ownerPreservesMigrationProvenance()',
+              'match /songs/{songId}',
+              'data.schemaVersion == 2',
+              'data.musicNote is bool',
+              'data.recentVisible is bool',
+              'data.v2UpdatedAtMs is int',
+          ]
+          required_v1 = [
+              'match /favorites/{favoriteId}',
+              'match /user_recent_songs/{uid}',
+              'match /user_structures/{uid}',
+              'match /user_list_caches/{uid}/bundles/{bundleId}',
+              'match /user_playlists/{uid}/lists/{playlistId}',
+              'match /suno_tracks/{uid}/tracks/{trackId}',
+              'match /user_api_keys/{uid}',
+          ]
+          for marker in required_v2 + required_v1:
+              if marker not in rules:
+                  raise SystemExit(f'M-008 missing repository Rules marker: {marker}')
+          print('M008_REPO_RULES_SOURCE_GUARD=PASS')
+          PY
+
+      - name: Authenticate to Firebase Rules API
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          create_credentials_file: true
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+
+      - name: Read deployed Rules and build exact canonical-song-only target
+        id: preflight
+        shell: bash
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          test -n "$ACCESS_TOKEN"
+          PROJECT="$FIREBASE_PROJECT_ID"
+          API="https://firebaserules.googleapis.com/v1"
+
+          curl -fsS \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$API/projects/$PROJECT/releases/cloud.firestore" \
+            > /tmp/m008-before-release.json
+
+          RULESET_NAME="$(python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/m008-before-release.json', encoding='utf-8'))
+          value = data.get('rulesetName')
+          if not value:
+              raise SystemExit('M-008 deployed release has no rulesetName')
+          print(value)
+          PY
+          )"
+
+          curl -fsS \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$API/$RULESET_NAME" \
+            > /tmp/m008-before-ruleset.json
+
+          mkdir -p .deploy/m008
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os
+
+          project = os.environ['FIREBASE_PROJECT_ID']
+          repo = Path('firestore.rules').read_text(encoding='utf-8').replace('\r\n','\n')
+          payload = json.load(open('/tmp/m008-before-ruleset.json', encoding='utf-8'))
+          files = payload.get('source', {}).get('files', [])
+          if len(files) != 1 or 'content' not in files[0]:
+              raise SystemExit(f'M-008 unexpected deployed Rules file structure: {len(files)} files')
+          before = files[0]['content'].replace('\r\n','\n')
+
+          start_marker = '      // SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES'
+          end_marker = '      // V2 private playlists.'
+          user_close_anchor = '    }\n\n    // Vocal tone configuration'
+
+          if repo.count(start_marker) != 1 or repo.count(end_marker) != 1:
+              raise SystemExit('M-008 repository canonical block markers are not unique')
+          canonical_block = repo[repo.index(start_marker):repo.index(end_marker)]
+          if 'match /songs/{songId}' not in canonical_block:
+              raise SystemExit('M-008 extracted canonical block has no songs match')
+          if 'match /playlists/{playlistId}' in canonical_block or "settingsId == 'sections'" in canonical_block:
+              raise SystemExit('M-008 canonical-only extraction accidentally includes other V2 scopes')
+
+          before_has_song = 'match /songs/{songId}' in before
+          before_has_playlists = 'match /playlists/{playlistId}' in before
+          before_has_settings = "settingsId == 'sections'" in before
+
+          if before_has_song:
+              # If another actor already aligned it, do not create a needless new ruleset.
+              target = before
+              deploy_needed = False
+          else:
+              if before.count(user_close_anchor) != 1:
+                  raise SystemExit(f'M-008 deployed user close anchor mismatch: {before.count(user_close_anchor)}')
+              target = before.replace(user_close_anchor, canonical_block + user_close_anchor, 1)
+              deploy_needed = True
+
+          # Scope proof: V1/current deployed Rules are preserved byte-for-byte around one insertion.
+          if deploy_needed:
+              recovered = target.replace(canonical_block, '', 1)
+              if recovered != before:
+                  raise SystemExit('M-008 scope proof failed: target changes more than canonical-song insertion')
+
+          if ('match /playlists/{playlistId}' in target) != before_has_playlists:
+              raise SystemExit('M-008 scope violation: V2 playlists deployment state changed')
+          if ("settingsId == 'sections'" in target) != before_has_settings:
+              raise SystemExit('M-008 scope violation: V2 settings deployment state changed')
+
+          for marker in [
+              'match /favorites/{favoriteId}',
+              'match /user_recent_songs/{uid}',
+              'match /user_structures/{uid}',
+              'match /user_list_caches/{uid}/bundles/{bundleId}',
+              'match /user_playlists/{uid}/lists/{playlistId}',
+              'match /suno_tracks/{uid}/tracks/{trackId}',
+              'match /user_api_keys/{uid}',
+          ]:
+              if marker not in before or marker not in target:
+                  raise SystemExit(f'M-008 protected V1 marker missing before/target: {marker}')
+
+          Path('.deploy/m008/firestore.rules').write_text(target, encoding='utf-8')
+          Path('.deploy/m008/firebase.json').write_text(json.dumps({
+              'firestore': {'rules': '.deploy/m008/firestore.rules'}
+          }, indent=2), encoding='utf-8')
+
+          def sha(s: str) -> str:
+              return hashlib.sha256(s.encode('utf-8')).hexdigest()
+
+          info = {
+              'project': project,
+              'beforeRuleset': payload.get('name'),
+              'beforeSha256': sha(before),
+              'targetSha256': sha(target),
+              'deployNeeded': deploy_needed,
+              'beforeHasCanonicalSong': before_has_song,
+              'beforeHasV2Playlists': before_has_playlists,
+              'beforeHasV2Settings': before_has_settings,
+          }
+          print('M008_PREFLIGHT=' + json.dumps(info, ensure_ascii=False))
+          Path('/tmp/m008-preflight.json').write_text(json.dumps(info), encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write(f"deploy_needed={'true' if deploy_needed else 'false'}\n")
+              out.write(f"before_sha={info['beforeSha256']}\n")
+              out.write(f"target_sha={info['targetSha256']}\n")
+          PY
+
+      - name: Deploy canonical-song Rules only
+        if: steps.preflight.outputs.deploy_needed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy \
+            --only firestore:rules \
+            --project "$FIREBASE_PROJECT_ID" \
+            --config .deploy/m008/firebase.json \
+            --non-interactive
+          echo 'M008_RULES_DEPLOY=PASS'
+
+      - name: Verify deployed Rules exact hash, V1 preservation and narrow V2 scope
+        shell: bash
+        env:
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          PROJECT="$FIREBASE_PROJECT_ID"
+          API="https://firebaserules.googleapis.com/v1"
+
+          curl -fsS \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$API/projects/$PROJECT/releases/cloud.firestore" \
+            > /tmp/m008-after-release.json
+
+          AFTER_RULESET_NAME="$(python3 - <<'PY'
+          import json
+          data = json.load(open('/tmp/m008-after-release.json', encoding='utf-8'))
+          value = data.get('rulesetName')
+          if not value:
+              raise SystemExit('M-008 post-deploy release has no rulesetName')
+          print(value)
+          PY
+          )"
+
+          curl -fsS \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "$API/$AFTER_RULESET_NAME" \
+            > /tmp/m008-after-ruleset.json
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json
+
+          before_payload = json.load(open('/tmp/m008-before-ruleset.json', encoding='utf-8'))
+          after_payload = json.load(open('/tmp/m008-after-ruleset.json', encoding='utf-8'))
+          preflight = json.load(open('/tmp/m008-preflight.json', encoding='utf-8'))
+
+          before = before_payload['source']['files'][0]['content'].replace('\r\n','\n')
+          after = after_payload['source']['files'][0]['content'].replace('\r\n','\n')
+          target = Path('.deploy/m008/firestore.rules').read_text(encoding='utf-8').replace('\r\n','\n')
+
+          def sha(s: str) -> str:
+              return hashlib.sha256(s.encode('utf-8')).hexdigest()
+
+          if sha(after) != sha(target):
+              raise SystemExit(f"M-008 post-deploy hash mismatch: after={sha(after)} target={sha(target)}")
+
+          required_canonical = [
+              'function hasValidV2SongMetadata(data)',
+              'function ownerCreatesWithoutMigrationProvenance()',
+              'function ownerPreservesMigrationProvenance()',
+              'match /songs/{songId}',
+              'data.schemaVersion == 2',
+              'data.musicNote is bool',
+              'data.recentVisible is bool',
+              'data.v2UpdatedAtMs is int',
+          ]
+          for marker in required_canonical:
+              if marker not in after:
+                  raise SystemExit(f'M-008 canonical marker absent after deploy: {marker}')
+
+          for marker in [
+              'match /favorites/{favoriteId}',
+              'match /user_recent_songs/{uid}',
+              'match /user_structures/{uid}',
+              'match /user_list_caches/{uid}/bundles/{bundleId}',
+              'match /user_playlists/{uid}/lists/{playlistId}',
+              'match /suno_tracks/{uid}/tracks/{trackId}',
+              'match /user_api_keys/{uid}',
+          ]:
+              if marker not in after:
+                  raise SystemExit(f'M-008 protected V1 marker absent after deploy: {marker}')
+
+          if ('match /playlists/{playlistId}' in after) != preflight['beforeHasV2Playlists']:
+              raise SystemExit('M-008 scope violation after deploy: V2 playlists state changed')
+          if ("settingsId == 'sections'" in after) != preflight['beforeHasV2Settings']:
+              raise SystemExit('M-008 scope violation after deploy: V2 settings state changed')
+
+          result = {
+              'beforeRuleset': before_payload.get('name'),
+              'afterRuleset': after_payload.get('name'),
+              'beforeSha256': sha(before),
+              'targetSha256': sha(target),
+              'afterSha256': sha(after),
+              'canonicalSongPresentAfter': True,
+              'v1ProtectedMarkersPreserved': True,
+              'v2PlaylistsStateUnchanged': True,
+              'v2SettingsStateUnchanged': True,
+              'deployNeeded': preflight['deployNeeded'],
+          }
+          print('M008_POST_VERIFY=' + json.dumps(result, ensure_ascii=False))
+          PY
+
+      - name: Prove approved Firebase scope only
+        if: always()
+        shell: bash
+        run: |
+          echo 'M008_FIRESTORE_DATA_READS=0'
+          echo 'M008_FIRESTORE_DATA_WRITES=0'
+          echo 'M008_FIRESTORE_DATA_DELETES=0'
+          echo 'M008_RTDB_DATA_CHANGES=0'
+          echo 'M008_FUNCTIONS_DEPLOYS=0'
+          echo 'M008_HOSTING_DEPLOYS=0'
+          echo 'M008_FIRESTORE_INDEX_DEPLOYS=0'
+          echo 'M008_APPROVED_SCOPE=firestore_rules_canonical_song_only'

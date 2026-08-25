@@ -1,0 +1,173 @@
+name: SORIDRAW Backend V2 Step 2-D Shadow Validation
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - 'src/data/v2ShadowValidation.ts'
+      - 'src/data/v2ShadowValidation.contract.ts'
+      - 'docs/SORIDRAW_BACKEND_V2_STEP2D_SHADOW_VALIDATION_DRYRUN.md'
+      - '.deploy/apply-backend-v2-step2d-master.py'
+      - '.github/workflows/backend-v2-step2d-shadow-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-stage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Capture protected baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            firestore.rules \
+            firestore.indexes.json \
+            database.rules.json \
+            src/App.tsx \
+            src/firebase.js \
+            functions/src/index.ts \
+            src/lib/listBundleCache.ts \
+            src/lib/firestoreReadCache.ts \
+            src/services/playlistService.ts \
+            src/data/userDataRepository.ts \
+            src/data/v2Schema.ts \
+            src/data/indexedDbLocalCache.ts \
+            > /tmp/step2d-protected.sha256
+
+      - name: Apply idempotent Step 2-D master update
+        run: python3 .deploy/apply-backend-v2-step2d-master.py
+
+      - name: Verify approved scope and inert runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          sha256sum --check /tmp/step2d-protected.sha256
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          if changed != {'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md'}:
+              raise SystemExit(f'2-D working-tree scope mismatch: {sorted(changed)}')
+
+          source = pathlib.Path('src/data/v2ShadowValidation.ts').read_text(encoding='utf-8')
+          forbidden = [
+              "from 'firebase",
+              'from "firebase',
+              '../firebase',
+              'fetch(',
+              'axios',
+              'XMLHttpRequest',
+              'setDoc(',
+              'updateDoc(',
+              'deleteDoc(',
+              'writeBatch(',
+              'runTransaction(',
+          ]
+          for marker in forbidden:
+              if marker in source:
+                  raise SystemExit(f'forbidden runtime/mutation dependency in 2-D scaffold: {marker}')
+
+          required = [
+              'BACKEND_V2_SHADOW_WRITE_RUNTIME_ENABLED = false',
+              'BACKEND_V2_BACKFILL_RUNTIME_ENABLED = false',
+              'BACKEND_V2_V1_DELETE_RUNTIME_ENABLED = false',
+              "action: 'conflict-preserve-both'",
+              'writePerformed: false',
+              'writeOperations: 0',
+              "rule: 'no-trusted-match'",
+          ]
+          for marker in required:
+              if marker not in source:
+                  raise SystemExit(f'missing Step 2-D safety marker: {marker}')
+
+          for path in pathlib.Path('src').rglob('*'):
+              if path.suffix not in {'.ts', '.tsx', '.js', '.jsx'}:
+                  continue
+              if pathlib.Path('src/data') in path.parents:
+                  continue
+              text = path.read_text(encoding='utf-8', errors='ignore')
+              if 'v2ShadowValidation' in text:
+                  raise SystemExit(f'2-D runtime activation detected outside src/data: {path}')
+
+          print('Step 2-D scope/inert-runtime safety check PASS')
+          PY
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install app dependencies without lifecycle mutations
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck Step 2-D modules
+        run: >-
+          npx tsc --noEmit --skipLibCheck --target ES2022 --module ESNext
+          --moduleResolution Bundler --lib ES2022,DOM --types node
+          src/data/v2ShadowValidation.ts src/data/v2ShadowValidation.contract.ts
+
+      - name: Execute Step 2-D contract
+        run: npx tsx src/data/v2ShadowValidation.contract.ts
+
+      - name: Production build without lifecycle patch scripts
+        run: npx vite build
+
+      - name: Final self-review and omission gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          sha256sum --check /tmp/step2d-protected.sha256
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines())
+          if changed != {'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md'}:
+              raise SystemExit(f'validation side-effect detected: {sorted(changed)}')
+
+          master = pathlib.Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md').read_text(encoding='utf-8')
+          report = pathlib.Path('docs/SORIDRAW_BACKEND_V2_STEP2D_SHADOW_VALIDATION_DRYRUN.md').read_text(encoding='utf-8')
+          for marker in [
+              'Step 2-D complete in source — awaiting approval for Step 3-1 backup preparation',
+              '[x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source',
+              '2-A4 remains blocked',
+          ]:
+              if marker not in master:
+                  raise SystemExit(f'master progress omission: {marker}')
+          for marker in [
+              'SHADOW WRITE NOT ACTIVATED',
+              'writeOperations: 0',
+              'Firestore reads/writes/deletes from Step 2-D: 0',
+              'conflict-preserve-both',
+          ]:
+              if marker.lower() not in report.lower():
+                  raise SystemExit(f'2-D report omission: {marker}')
+
+          print('Step 2-D final self-review PASS; Firebase data/deploy operations = 0')
+          PY
+
+      - name: Commit validated Step 2-D master status to preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md; then
+            echo 'Master plan already up to date.'
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m "docs: mark Backend V2 Step 2-D source complete"
+          git push origin HEAD:preview

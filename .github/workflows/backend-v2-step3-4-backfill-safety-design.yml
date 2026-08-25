@@ -148,10 +148,55 @@ jobs:
           console.log(JSON.stringify(summary, null, 2));
           NODE
 
+      - name: Omission review identity diagnostics without values
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const dir = '/tmp/soridraw-step34-backup';
+          const load = (name) => fs.readFileSync(`${dir}/${name}`, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+          const bundles = load('user_recent_songs.ndjson');
+          const favorites = load('favorites.ndjson').map((record) => ({ uid: typeof record.data?.uid === 'string' ? record.data.uid : '', data: record.data || {} }));
+          const recents = [];
+          for (const record of bundles) {
+            const match = /^user_recent_songs\/([^/]+)$/.exec(record.path || '');
+            const uid = match?.[1] || '';
+            const songs = Array.isArray(record.data?.songs) ? record.data.songs : [];
+            for (const data of songs) recents.push({ uid, data: data || {} });
+          }
+          const fields = ['id', 'songId', 'sourceId', 'favoriteKey', 'provider', 'audioProvider', 'sourceProvider', 'trackId', 'sourceTrackId', 'providerTrackId', 'sunoId', 'taskId', 'sourceSubTrackId', 'audioUrl', 'audio_url', 'sourceAudioUrl'];
+          const scalar = (value) => (typeof value === 'string' || typeof value === 'number') && String(value).trim() ? String(value).trim() : '';
+          const presence = (rows, field) => rows.filter((row) => scalar(row.data?.[field])).length;
+          const uniqueOverlap = (field) => {
+            let unique = 0;
+            let ambiguous = 0;
+            for (const favorite of favorites) {
+              const value = scalar(favorite.data?.[field]);
+              if (!favorite.uid || !value) continue;
+              const matches = recents.filter((recent) => recent.uid === favorite.uid && scalar(recent.data?.[field]) === value);
+              if (matches.length === 1) unique += 1;
+              else if (matches.length > 1) ambiguous += 1;
+            }
+            return { unique, ambiguous };
+          };
+          const diagnostics = {};
+          for (const field of fields) {
+            diagnostics[field] = {
+              favoritePresence: presence(favorites, field),
+              recentPresence: presence(recents, field),
+              ...uniqueOverlap(field),
+            };
+          }
+          console.log('--- DIAGNOSTIC-ONLY IDENTITY FIELD COVERAGE; NOT MERGE AUTHORIZATION ---');
+          console.log(JSON.stringify(diagnostics, null, 2));
+          NODE
+
       - name: Confirm no repository or private-artifact side effects
         shell: bash
         run: |
           set -euo pipefail
+          rm -f "${GOOGLE_GHA_CREDS_PATH:-}"
           test -z "$(git status --porcelain)"
           test ! -e ./soridraw-step34-summary.json
           rm -rf /tmp/soridraw-step34-backup /tmp/soridraw-step34-summary.json /tmp/step34-tsc.log

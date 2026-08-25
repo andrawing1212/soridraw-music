@@ -1,0 +1,119 @@
+name: SORIDRAW Backend V2 Step 2-A4c Apply Rerun
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step2a4c-apply-rerun.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: soridraw-backend-v2-step2a4c-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20.20.2'
+          cache: npm
+
+      - name: Apply approved deterministic patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .deploy/apply-backend-v2-step2a4c.py /tmp/apply-backend-v2-step2a4c.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('/tmp/apply-backend-v2-step2a4c.py')
+          text=path.read_text(encoding='utf-8')
+          old="helper_anchor = \"const RAP_APP_CHECK_RECAPTCHA_SITE_KEY = import.meta.env.VITE_RAP_APP_CHECK_RECAPTCHA_SITE_KEY?.trim() || '';\""
+          new="helper_anchor = \"import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';\""
+          if old not in text: raise SystemExit('helper anchor fixer missing old anchor')
+          text=text.replace(old,new,1)
+          old_call="replace_once(helper_anchor, helper + helper_anchor, 'helper insertion')"
+          new_call="replace_once(helper_anchor, helper_anchor + '\\n\\n' + helper, 'helper insertion')"
+          if old_call not in text: raise SystemExit('helper insertion fixer missing call')
+          path.write_text(text.replace(old_call,new_call,1),encoding='utf-8')
+          PY
+          python3 /tmp/apply-backend-v2-step2a4c.py
+
+      - name: Validate source scope and contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path('src/App.tsx').read_text(encoding='utf-8')
+          mirror=Path('src/data/v2PreviewShadowMirror.ts').read_text(encoding='utf-8')
+          boundary=Path('src/data/v1MutationBoundary.ts').read_text(encoding='utf-8')
+          outbox=Path('src/data/indexedDbMirrorOutbox.ts').read_text(encoding='utf-8')
+          for marker in ["import './data/v2PreviewShadowMirror'",'ensureLiveSoridrawSongId','soridrawSongId: favoriteSoridrawSongId',"operation: 'save-batch'", "operation: 'regenerate'", "operation: 'add-lyrics-language'", "operation: 'edit'", "operation: 'pre-favorite-edit'"]:
+              assert marker in app, marker
+          for marker in ["BACKEND_V2_PREVIEW_SHADOW_HOST = 'soridraw-music-git-preview-andrawing1212.vercel.app'",'BACKEND_V2_PREVIEW_SHADOW_MAX_TARGETS_PER_MUTATION = 10',"targetKind: 'soridraw'",'processPendingOutbox','runTransaction','legacyRecentIndex']:
+              assert marker in mirror, marker
+          assert 'deleteDoc(' not in mirror
+          assert "startsWith('bulk-')" in mirror
+          assert 'registerV1MutationPostSuccessHook' in boundary
+          assert 'sourceDocumentId?: string' in outbox
+          print('A4C_STATIC_SAFETY=PASS')
+          PY
+          git diff --check
+          npm ci --ignore-scripts
+          npx tsc --noEmit
+
+      - name: V1-first boundary contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > ./a4c-boundary-test.ts <<'TS'
+          import { registerV1MutationPostSuccessHook, runV1MutationBoundary } from './src/data/v1MutationBoundary.ts';
+          let seen = 0;
+          registerV1MutationPostSuccessHook(async () => { seen += 1; });
+          const value = await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: 'u' }, Promise.resolve(7));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          if (value !== 7 || seen !== 1) throw new Error('post-success hook failed');
+          seen = 0;
+          try { await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: 'u' }, Promise.reject(new Error('v1'))); } catch {}
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          if (seen !== 0) throw new Error('mirror ran after V1 failure');
+          console.log('A4C_BOUNDARY_CONTRACT=PASS');
+          TS
+          npx tsx ./a4c-boundary-test.ts
+          rm ./a4c-boundary-test.ts
+
+      - name: Exact production build path
+        run: npm run build
+
+      - name: Final scope gate and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          changed=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          expected={'src/App.tsx','src/data/v1MutationBoundary.ts','src/data/indexedDbMirrorOutbox.ts','src/data/v2PreviewShadowMirror.ts'}
+          if changed != expected: raise SystemExit(f'2-A4c scope mismatch after build: {sorted(changed)}')
+          mirror=Path('src/data/v2PreviewShadowMirror.ts').read_text(encoding='utf-8')
+          if 'deleteDoc(' in mirror or 'firebase-functions' in mirror: raise SystemExit('2-A4c forbidden mutation/dependency found')
+          for path in ['firestore.rules','firestore.indexes.json','database.rules.json','functions/src/index.ts','firebase.json']:
+              if subprocess.run(['git','diff','--quiet','HEAD','--',path]).returncode != 0: raise SystemExit(f'protected file changed: {path}')
+          print('A4C_FINAL_SCOPE=PASS')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/data/v1MutationBoundary.ts src/data/indexedDbMirrorOutbox.ts src/data/v2PreviewShadowMirror.ts
+          git commit -m "feat: activate Preview V1-first V2 shadow mirror"
+          git push origin HEAD:preview

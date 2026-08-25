@@ -8,12 +8,13 @@ on:
       - 'backup_scripts/backend_v2_verify_backup.ts'
       - 'backup_scripts/backend_v2_backup.contract.ts'
       - 'docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md'
+      - '.deploy/apply-backend-v2-step3-1-master.py'
       - '.gitignore'
       - '.github/workflows/backend-v2-step3-1-backup-prep.yml'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -53,6 +54,7 @@ jobs:
           backup = Path('backup_scripts/backend_v2_secure_backup.ts').read_text(encoding='utf-8')
           verifier = Path('backup_scripts/backend_v2_verify_backup.ts').read_text(encoding='utf-8')
           report = Path('docs/SORIDRAW_BACKEND_V2_STEP3_1_BACKUP_PREPARATION.md').read_text(encoding='utf-8')
+          patch = Path('.deploy/apply-backend-v2-step3-1-master.py').read_text(encoding='utf-8')
 
           required_backup = [
               "TARGET_PROJECT_ID = 'soridraw-app-866a5'",
@@ -104,6 +106,11 @@ jobs:
               if marker not in report:
                   raise SystemExit(f'missing Step 3-1 report safety marker: {marker}')
 
+          if "MASTER = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')" not in patch:
+              raise SystemExit('Step 3-1 master patch target is not exact')
+          if 'Firestore' in patch and 'reads/writes/deletes caused by Step 3-1 preparation: 0 / 0 / 0' not in patch:
+              raise SystemExit('Step 3-1 master patch safety statement missing')
+
           print('Step 3-1 static read-only/zero-data safety gate PASS')
           PY
 
@@ -153,3 +160,29 @@ jobs:
             exit 1
           fi
           echo 'Step 3-1 final self-review PASS; Firebase reads/writes/deletes/deploy operations = 0'
+
+      - name: Apply validated Step 3-1 master status
+        run: python3 .deploy/apply-backend-v2-step3-1-master.py
+
+      - name: Verify master update scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = 'docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md'
+          grep -F 'Step 3-1 backup preparation complete — awaiting approval for actual read-only backup preflight/execution' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -F '3-1 preparation: target pin, read-only tool, offline verifier, scope/budget gates' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -F '3-1 actual backup: fresh quota baseline -> secure local read -> checksum/count verification' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+
+      - name: Commit validated Step 3-1 master status
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin preview
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/preview)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git commit -m 'docs: mark Backend V2 Step 3-1 preparation complete'
+          git push origin HEAD:preview

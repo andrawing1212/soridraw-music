@@ -29,7 +29,26 @@ jobs:
           cache: npm
 
       - name: Apply approved deterministic patch
-        run: python3 .deploy/apply-backend-v2-step2a4c.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .deploy/apply-backend-v2-step2a4c.py /tmp/apply-backend-v2-step2a4c.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path=Path('/tmp/apply-backend-v2-step2a4c.py')
+          text=path.read_text(encoding='utf-8')
+          old="helper_anchor = \"const RAP_APP_CHECK_RECAPTCHA_SITE_KEY = import.meta.env.VITE_RAP_APP_CHECK_RECAPTCHA_SITE_KEY?.trim() || '';\""
+          new="helper_anchor = \"import { createSoridrawSongId, isSoridrawSongId } from './data/v2LiveMutation';\""
+          if old not in text:
+              raise SystemExit('temporary helper anchor fixer did not find old anchor')
+          text=text.replace(old,new,1)
+          old_call="replace_once(helper_anchor, helper + helper_anchor, 'helper insertion')"
+          new_call="replace_once(helper_anchor, helper_anchor + '\\n\\n' + helper, 'helper insertion')"
+          if old_call not in text:
+              raise SystemExit('temporary helper insertion fixer did not find call')
+          path.write_text(text.replace(old_call,new_call,1),encoding='utf-8')
+          PY
+          python3 /tmp/apply-backend-v2-step2a4c.py
 
       - name: Static safety contract
         shell: bash
@@ -44,7 +63,7 @@ jobs:
           required_app=["import './data/v2PreviewShadowMirror'",'ensureLiveSoridrawSongId','soridrawSongId: favoriteSoridrawSongId',"operation: 'save-batch'", "operation: 'regenerate'", "operation: 'add-lyrics-language'", "operation: 'edit'", "operation: 'pre-favorite-edit'"]
           for marker in required_app:
               assert marker in app, marker
-          required_mirror=["BACKEND_V2_PREVIEW_SHADOW_HOST = 'soridraw-music-git-preview-andrawing1212.vercel.app'",'BACKEND_V2_PREVIEW_SHADOW_MAX_TARGETS_PER_MUTATION = 10',"targetKind: 'soridraw'","operation === 'recent-hide'","operation === 'music-note-unsave'",'processPendingOutbox','runTransaction','legacyRecentIndex']
+          required_mirror=["BACKEND_V2_PREVIEW_SHADOW_HOST = 'soridraw-music-git-preview-andrawing1212.vercel.app'",'BACKEND_V2_PREVIEW_SHADOW_MAX_TARGETS_PER_MUTATION = 10',"targetKind: 'soridraw'","record.operation === 'recent-hide'","record.operation === 'music-note-unsave'",'processPendingOutbox','runTransaction','legacyRecentIndex']
           for marker in required_mirror:
               assert marker in mirror, marker
           assert 'deleteDoc(' not in mirror
@@ -66,7 +85,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/a4c-boundary-test.ts <<'TS'
+          cat > ./a4c-boundary-test.ts <<'TS'
           import { registerV1MutationPostSuccessHook, runV1MutationBoundary } from './src/data/v1MutationBoundary.ts';
           let seen = 0;
           registerV1MutationPostSuccessHook(async () => { seen += 1; });
@@ -74,14 +93,11 @@ jobs:
           await new Promise((resolve) => setTimeout(resolve, 0));
           if (value !== 7 || seen !== 1) throw new Error('post-success hook failed');
           seen = 0;
-          try {
-            await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: 'u' }, Promise.reject(new Error('v1')));
-          } catch {}
+          try { await runV1MutationBoundary({ domain: 'recent', operation: 'edit', uid: 'u' }, Promise.reject(new Error('v1'))); } catch {}
           await new Promise((resolve) => setTimeout(resolve, 0));
           if (seen !== 0) throw new Error('mirror ran after V1 failure');
           console.log('A4C_BOUNDARY_CONTRACT=PASS');
           TS
-          cp /tmp/a4c-boundary-test.ts ./a4c-boundary-test.ts
           npx tsx ./a4c-boundary-test.ts
           rm ./a4c-boundary-test.ts
 

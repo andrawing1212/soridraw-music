@@ -135,6 +135,60 @@ service cloud.firestore {
       allow list: if hasAdminPermission('userManagement');
       allow create: if isOwner(uid) && isValidSelfCreate();
       allow update: if isMaster() || validUserManagerUpdate() || (isOwner(uid) && isValidSelfUpdate());
+
+      // SORIDRAW_BACKEND_V2_STEP2B_ADDITIVE_RULES
+      // Additive V2 private-data rules only. Existing V1 rules remain unchanged.
+      // Historical migration provenance is server/Admin-SDK controlled; normal
+      // owner writes may preserve it but cannot create or alter it.
+      function hasValidV2SongMetadata(data) {
+        return data.schemaVersion == 2 &&
+          data.musicNote is bool &&
+          data.recentVisible is bool &&
+          data.v2UpdatedAtMs is int &&
+          data.v2UpdatedAtMs >= 0 &&
+          (!("legacyRecentIndex" in data) || data.legacyRecentIndex is int) &&
+          (!("legacyFavoriteId" in data) || data.legacyFavoriteId is string) &&
+          (!("legacyFavoriteKey" in data) || data.legacyFavoriteKey is string);
+      }
+
+      function ownerCreatesWithoutMigrationProvenance() {
+        return !request.resource.data.keys().hasAny([
+          'legacyRecentIndex', 'legacyFavoriteId', 'legacyFavoriteKey'
+        ]);
+      }
+
+      function ownerPreservesMigrationProvenance() {
+        return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'legacyRecentIndex', 'legacyFavoriteId', 'legacyFavoriteKey'
+        ]);
+      }
+
+      // Canonical private songs. Unknown legacy creative/provider payload fields
+      // remain allowed so first-pass migration can preserve complete source data.
+      match /songs/{songId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow create: if
+          (isOwner(uid) && hasValidV2SongMetadata(request.resource.data) && ownerCreatesWithoutMigrationProvenance()) ||
+          (isAdmin() && hasValidV2SongMetadata(request.resource.data));
+        allow update: if
+          (isOwner(uid) && hasValidV2SongMetadata(request.resource.data) && ownerPreservesMigrationProvenance()) ||
+          (isAdmin() && hasValidV2SongMetadata(request.resource.data));
+        allow delete: if isOwner(uid) || isAdmin();
+      }
+
+      // V2 private playlists. Preserve current IDs/payload/order/source links.
+      match /playlists/{playlistId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+
+        match /items/{itemId} {
+          allow read, write: if isOwner(uid) || isAdmin();
+        }
+      }
+
+      // First-pass settings destination is deliberately limited to one document.
+      match /settings/{settingsId} {
+        allow read, write: if settingsId == 'sections' && (isOwner(uid) || isAdmin());
+      }
     }
 
     // Vocal tone configuration

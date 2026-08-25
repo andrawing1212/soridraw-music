@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A3-R Preview latest-track blocker deferred — safe next step 2-B awaiting approval
+Status: IMPLEMENTATION / Step 2-B complete in source — awaiting approval for 2-C
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -225,6 +225,16 @@ Risk decision:
 - No V1 data, Rules, Functions deployment, main branch or Firebase Hosting has been modified by 2-A3-R.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2A3R_EMERGENCY_STABILIZATION.md`.
 
+### 2-B complete — additive V2 schema/rules source
+- Added canonical V2 private path/schema constants in `src/data/v2Schema.ts`; no Firebase imports or runtime IO.
+- Added owner/admin Rules for `users/{uid}/songs`, V2 playlists/items and the exact `settings/sections` destination.
+- V2 song Rules require the finalized additive metadata shape while preserving unknown legacy creative/provider payload fields.
+- Normal owner writes cannot create/change historical migration provenance fields; Admin SDK migration remains server-controlled.
+- Existing V1 Rules remain unchanged and authoritative runtime paths remain V1-only.
+- `firestore.indexes.json` remains unchanged because no V2 runtime query has yet been activated/audited.
+- Rules are validated only against the local Firestore emulator/demo project in CI; no production Rules/index deploy occurs in Step 2-B.
+- Preview latest-track display blocker remains deferred and does not authorize any production/App Check change.
+
 ## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete) ✅
@@ -245,7 +255,7 @@ Risk decision:
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
   - [x] 2-A3 Lowest-risk playlist-list V1 read activation implemented; adapter isolation/parity/build checks green. Preview latest-track environment blocker deferred.
   - [ ] 2-A4 Critical generation/recent-save/Music Note mutation activation gate only after separate risk review and explicit approval.
-- [ ] 2-B Additive V2 schema/rules/index definitions in source; do not remove V1 and do not deploy production Rules without explicit approval.
+- [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.
 - [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.
 - [ ] 2-D Shadow-write/validator/dry-run migration scaffolding; dual-write stays disabled by default until separately approved.
 

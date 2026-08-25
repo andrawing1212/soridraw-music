@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-B complete in source — awaiting approval for 2-C
+Status: IMPLEMENTATION / Step 2-C complete in source — awaiting approval for 2-D
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -235,6 +235,19 @@ Risk decision:
 - Rules are validated only against the local Firestore emulator/demo project in CI; no production Rules/index deploy occurs in Step 2-B.
 - Preview latest-track display blocker remains deferred and does not authorize any production/App Check change.
 
+
+### 2-C complete — IndexedDB/local-first scaffold
+- Added `src/data/indexedDbLocalCache.ts` with native IndexedDB only; no Firebase/network dependency and no automatic runtime IO.
+- Local songs are canonical entities; Recent Songs and Music Note are ordered ID-only views over the same song payload.
+- Playlists/items/settings can be cached as opaque payloads while preserving unknown fields and IDs.
+- Known matching version token is required for a `fresh` decision. Missing/mismatched authority forces V1/server fallback.
+- IndexedDB unavailable, cache miss, or incomplete song view also forces V1/server fallback.
+- Existing `user_list_caches` server bundles and current `syncVersions` remain untouched as compatibility/recovery paths.
+- No new `songs` sync-version key is forced and Suno/provider Library content is not made a canonical dependency.
+- Runtime activation flag remains false and no file outside `src/data` imports the new cache module in Step 2-C.
+- CI exercises actual IndexedDB behavior with an ephemeral test-only `fake-indexeddb` install; it is not added to app dependencies.
+- No Firestore/RTDB operation, Rules/index deploy, Functions deploy, Firebase Hosting deploy, V1 delete, or main-branch change occurs in Step 2-C.
+
 ## 9. Work stages and progress tracker
 
 ### Step 0 — Preparation (4/4 complete) ✅
@@ -249,14 +262,14 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A3 blocker deferred; safe next 2-B) 🔄
+### Step 2 — V2 code implementation on preview (2-A3 blocker deferred; 2-C complete, safe next 2-D) 🔄
 - [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
   - [x] 2-A3 Lowest-risk playlist-list V1 read activation implemented; adapter isolation/parity/build checks green. Preview latest-track environment blocker deferred.
   - [ ] 2-A4 Critical generation/recent-save/Music Note mutation activation gate only after separate risk review and explicit approval.
 - [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.
-- [ ] 2-C IndexedDB/local-first V2 cache scaffolding; V1 server bundle remains fallback.
+- [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [ ] 2-D Shadow-write/validator/dry-run migration scaffolding; dual-write stays disabled by default until separately approved.
 
 ### Step 3 — Backup, backfill and verification (0/4) ⏳

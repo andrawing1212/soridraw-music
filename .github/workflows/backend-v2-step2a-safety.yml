@@ -42,7 +42,10 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const source = fs.readFileSync('src/data/userDataRepository.ts', 'utf8');
+          import path from 'node:path';
+
+          const repositorySource = fs.readFileSync('src/data/userDataRepository.ts', 'utf8');
+          const adapterSource = fs.readFileSync('src/data/v1UserDataAdapter.ts', 'utf8');
           const required = [
             "BACKEND_V2_RUNTIME_MODE = 'v1-only'",
             'readFromV2: false',
@@ -52,23 +55,69 @@ jobs:
             'deleteV1: false',
           ];
           for (const marker of required) {
-            if (!source.includes(marker)) throw new Error(`Missing safety marker: ${marker}`);
+            if (!repositorySource.includes(marker)) throw new Error(`Missing safety marker: ${marker}`);
           }
-          if (/from\s+['\"]firebase\//.test(source) || /from\s+['\"]\.\.\/firebase/.test(source)) {
-            throw new Error('Step 2-A scaffold must not import Firebase runtime code');
+
+          for (const [name, source] of [
+            ['userDataRepository.ts', repositorySource],
+            ['v1UserDataAdapter.ts', adapterSource],
+          ]) {
+            if (/from\s+['\"]firebase\//.test(source) || /from\s+['\"]\.\.\/firebase/.test(source)) {
+              throw new Error(`${name} must not import Firebase runtime code in Step 2-A`);
+            }
           }
-          console.log('Backend V2 Step 2-A safety contract verified');
+
+          const forbiddenMutationPortMarkers = [
+            'setDocument(',
+            'updateDocument(',
+            'deleteDocument(',
+            'writeBatch(',
+            'runTransaction(',
+          ];
+          for (const marker of forbiddenMutationPortMarkers) {
+            if (adapterSource.includes(marker)) {
+              throw new Error(`Step 2-A2 read adapter exposes mutation marker: ${marker}`);
+            }
+          }
+
+          const sourceFiles = [];
+          const walk = (directory) => {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const full = path.join(directory, entry.name);
+              if (entry.isDirectory()) {
+                if (full.replaceAll('\\', '/') === 'src/data') continue;
+                walk(full);
+              } else if (/\.(?:ts|tsx|js|jsx)$/.test(entry.name)) {
+                sourceFiles.push(full);
+              }
+            }
+          };
+          walk('src');
+
+          const forbiddenImport = /from\s+['\"][^'\"]*(?:data\/userDataRepository|data\/v1UserDataAdapter)['\"]/;
+          const wiredFiles = sourceFiles.filter((file) => forbiddenImport.test(fs.readFileSync(file, 'utf8')));
+          if (wiredFiles.length) {
+            throw new Error(`Step 2-A adapter was wired into runtime before approval: ${wiredFiles.join(', ')}`);
+          }
+
+          console.log('Backend V2 Step 2-A isolation/safety contract verified');
           NODE
+
+      - name: Run V1 adapter parity contract
+        id: adapter
+        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success'
+        continue-on-error: true
+        run: npx tsx src/data/v1UserDataAdapter.contract.ts
 
       - name: Type check
         id: typecheck
-        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success'
+        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success' && steps.adapter.outcome == 'success'
         continue-on-error: true
         run: npm run lint
 
       - name: Production build
         id: build
-        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success'
+        if: steps.install.outcome == 'success' && steps.contract.outcome == 'success' && steps.adapter.outcome == 'success'
         continue-on-error: true
         run: npm run build
 
@@ -80,9 +129,10 @@ jobs:
           mkdir -p .deploy
           INSTALL='${{ steps.install.outcome }}'
           CONTRACT='${{ steps.contract.outcome }}'
+          ADAPTER='${{ steps.adapter.outcome }}'
           TYPECHECK='${{ steps.typecheck.outcome }}'
           BUILD='${{ steps.build.outcome }}'
-          if [ "$INSTALL" = success ] && [ "$CONTRACT" = success ] && [ "$TYPECHECK" = success ] && [ "$BUILD" = success ]; then
+          if [ "$INSTALL" = success ] && [ "$CONTRACT" = success ] && [ "$ADAPTER" = success ] && [ "$TYPECHECK" = success ] && [ "$BUILD" = success ]; then
             STATUS=success
           else
             STATUS=failure
@@ -97,8 +147,11 @@ jobs:
             echo "v2_shadow_writes=false"
             echo "migrate_on_read=false"
             echo "delete_v1=false"
+            echo "adapter_runtime_wired=false"
+            echo "adapter_mutation_port=false"
             echo "install=${INSTALL}"
             echo "contract=${CONTRACT}"
+            echo "adapter_parity=${ADAPTER}"
             echo "typecheck=${TYPECHECK}"
             echo "build=${BUILD}"
             echo "firebase_deploy=0"
@@ -118,5 +171,6 @@ jobs:
         run: |
           test '${{ steps.install.outcome }}' = success
           test '${{ steps.contract.outcome }}' = success
+          test '${{ steps.adapter.outcome }}' = success
           test '${{ steps.typecheck.outcome }}' = success
           test '${{ steps.build.outcome }}' = success

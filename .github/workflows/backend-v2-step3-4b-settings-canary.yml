@@ -267,3 +267,5 @@ jobs:
             exit 1
           fi
           echo 'Step 3-4b settings canary repository check PASS.'
+
+# Retry marker: IAM create permission granted by user on 2026-08-25 KST.

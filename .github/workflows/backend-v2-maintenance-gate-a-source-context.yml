@@ -20,9 +20,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== APP 4428-4465 ==='
-          nl -ba src/App.tsx | sed -n '4428,4465p'
+          echo '=== APP 4380-4465 ==='
+          nl -ba src/App.tsx | sed -n '4380,4465p'
+          echo '=== MODE TYPE/VALUES NEARBY ==='
+          grep -n "pure-pane-hybrid\|tablet-touch-pure\|v2DragPerf" src/App.tsx | head -80 || true
           echo '=== GEMINI 35100-35155 ==='
           nl -ba src/services/geminiService.ts | sed -n '35100,35155p'
-          echo '=== APPLIEDKEYWORDS TYPE LOCATIONS ==='
-          grep -Rns "interface AppliedKeywords\|type AppliedKeywords" src | head -20 || true
+          echo '=== TYPES 300-410 ==='
+          nl -ba src/types.ts | sed -n '300,410p'
+          echo '=== SONGRESULT APPLIEDKEYWORDS REFERENCES ==='
+          grep -n "appliedKeywords" src/types.ts | head -40 || true

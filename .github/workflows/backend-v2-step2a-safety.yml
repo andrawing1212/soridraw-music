@@ -1,0 +1,62 @@
+name: SORIDRAW Backend V2 Step 2-A Safety
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - 'src/data/**'
+      - '.github/workflows/backend-v2-step2a-safety.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  v1-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v4
+        with:
+          ref: preview
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Step 2-A safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('src/data/userDataRepository.ts', 'utf8');
+          const required = [
+            "BACKEND_V2_RUNTIME_MODE = 'v1-only'",
+            'readFromV2: false',
+            'writeToV2: false',
+            'shadowWriteToV2: false',
+            'migrateOnRead: false',
+            'deleteV1: false',
+          ];
+          for (const marker of required) {
+            if (!source.includes(marker)) throw new Error(`Missing safety marker: ${marker}`);
+          }
+          if (/from\s+['\"]firebase\//.test(source) || /from\s+['\"]\.\.\/firebase/.test(source)) {
+            throw new Error('Step 2-A scaffold must not import Firebase runtime code');
+          }
+          console.log('Backend V2 Step 2-A safety contract verified');
+          NODE
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build

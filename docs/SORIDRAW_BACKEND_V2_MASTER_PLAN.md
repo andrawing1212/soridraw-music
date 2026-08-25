@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 3-1 live backup preflight complete — awaiting explicit approval for actual secure local read-only backup execution
+Status: IMPLEMENTATION / Step 3-3 actual backup approved but blocked on compliant durable destination — no backup executed
 Last updated: 2026-08-25 (KST)
 Primary working branch: preview
 Integrated main baseline: `c2d7c48dd642d1a5f7b5b21fcaa9fa16a569f785`
@@ -308,14 +308,13 @@ Risk decision:
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
 
-### Step 3 — Backup, backfill and verification (0/4 complete; live backup preflight passed) 🔄
-- [~] Secure local read-only backup strategy/run
-  - [x] 3-1 preparation: target pin, read-only tool, offline verifier, scope/budget gates
-  - [x] 3-1 live quota preflight: current usage/headroom verified; safe cap 10,000, estimated backup 841
-  - [ ] 3-1 actual backup: fresh-baseline confirmation -> secure local read -> checksum/count verification
-- [ ] Rate-limited backfill within free-tier budget
-- [ ] Per-user automatic verification
-- [ ] No V1 deletion
+### Step 3 — Backup, backfill and verification (2/6 complete; Step 3-3 blocked on safe durable destination) 🔄
+- [x] 3-1 Backup tool / safety structure preparation: target pin, read-only tool, offline verifier, scope/budget gates.
+- [x] 3-2 Live usage / quota preflight: current usage/headroom verified; safe cap 10,000, estimated backup 841.
+- [~] 3-3 Actual backup + checksum integrity verification: explicitly approved, but durable backup execution is blocked until a compliant non-Git destination can receive the payload directly.
+- [ ] 3-4 Rate-limited backfill within free-tier budget.
+- [ ] 3-5 Per-user automatic verification.
+- [ ] 3-6 V1 retention / rollback safety confirmation; no V1 deletion.
 
 ### Step 4 — Preview validation (0/12) ⏳
 - [ ] Song generation
@@ -342,6 +341,13 @@ Risk decision:
 - [ ] Explore: D1 public songs/search/likes/comments/reuse permissions
 - [ ] Suno Library remains optional and isolated; can be removed independently
 - [ ] Firebase production deployment only on explicit user request
+
+### Step 3-3 execution blocker — no backup executed
+- Step 3 numbering is normalized to 3-1 through 3-6 and must not reuse the same number.
+- Actual backup was approved, but the available Firebase Admin credential is currently usable only inside GitHub Actions while project policy forbids storing user-content backups in GitHub/repository/workflow artifacts.
+- Execution therefore stopped before any Firestore backup document read. No backup payload, V2 write, V1 delete, Rules/Functions deploy, or Hosting deploy occurred.
+- Step 3-4 remains blocked until a durable verified backup exists outside GitHub.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_3_BACKUP_EXECUTION_BLOCKER.md`.
 
 ## 10. Mandatory progress / self-review reporting
 

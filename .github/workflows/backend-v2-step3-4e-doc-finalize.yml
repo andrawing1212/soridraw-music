@@ -1,0 +1,84 @@
+name: SORIDRAW Backend V2 Step 3-4e Doc Finalize
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step3-4e-doc-finalize.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Patch master plan for verified Step 3-4e
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+          text = p.read_text()
+
+          old_status = 'Status: IMPLEMENTATION / Step 3-4d playlist-item limited backfill complete, verified and execution-origin audited — 49 V2 playlist items preserved under 42 verified V2 playlist headers, V1 unchanged; Step 3-4e writes blocked pending a new explicit approval after the Step 3-4d audit report'
+          new_status = 'Status: IMPLEMENTATION / Step 3-4e recent-song limited backfill complete and independently verified — 68 canonical recent-origin V2 songs created with deterministic IDs, complete V1 payload preserved and V1 unchanged; Step 3-4f favorites/Music Note writes blocked pending a new read-only match/risk review and explicit approval'
+          if old_status not in text:
+              raise SystemExit('MASTER_STATUS_PATTERN_MISSING')
+          text = text.replace(old_status, new_status, 1)
+
+          old_stage = '### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4d complete, limited writes verified) 🔄'
+          new_stage = '### Step 3 — Backup, backfill and verification (3/6 complete; Step 3-4e complete, limited writes verified) 🔄'
+          if old_stage not in text:
+              raise SystemExit('MASTER_STEP3_STAGE_PATTERN_MISSING')
+          text = text.replace(old_stage, new_stage, 1)
+
+          old_item = '  - [ ] 3-4e Recent-song limited backfill: 68 canonical song creates with deterministic addressing and no favorite merge assumption.'
+          new_item = '  - [x] 3-4e Recent-song limited backfill complete: 68 recent array items created as canonical V2 songs using deterministic recent-source addressing in three bounded transactions; complete source payload + additive metadata parity verified, V1 unchanged, and favorites/Music Note were not accessed or merged. Independent read-only verification passed after execution.'
+          if old_item not in text:
+              raise SystemExit('MASTER_STEP34E_TRACKER_PATTERN_MISSING')
+          text = text.replace(old_item, new_item, 1)
+
+          anchor = '## 10. Mandatory progress / self-review reporting'
+          detail = '''### Step 3-4e execution complete — recent songs independently verified
+- Explicit Step 3-4e approval was received before the write-capable workflow was created, satisfying the strengthened approval guard added after the Step 3-4d audit.
+- Write execution run `32865448589` passed IAM, quota, rollback-manifest and exact live-source gates, then created exactly 68 V2 recent-origin song documents in three bounded transactions (25 + 25 + 18).
+- Source was the exact 10 `user_recent_songs/{uid}` bundles from the verified Step 3-3 backup; current live path sets and complete bundle payload hashes matched the backup before writes.
+- Deterministic destinations use the finalized recent-source namespace; complete original item payloads were preserved and only additive V2 metadata was added (`schemaVersion:2`, `recentVisible:true`, `musicNote:false`, `legacyRecentIndex`, deterministic `v2UpdatedAtMs`).
+- V1 writes/deletes: 0 / 0. V2 deletes: 0. Favorites/Music Note accessed/merged: 0. Rules, Functions and Firebase Hosting deploys: 0.
+- The write run's Firestore execution and post-write parity step succeeded, but the workflow ended red only because its final `git status` gate ran before the auth action removed its temporary `gha-creds-*.json` file. This bookkeeping-only failure occurred after successful data verification.
+- Independent read-only run `32865659720` then completed SUCCESS and re-verified all 10 V1 source bundles and all 68 V2 destinations: missing 0, conflicts 0, full source payload parity true, metadata parity true, and zero writes/deletes.
+- Both temporary Step 3-4e write and read-only verification workflows were removed after verification.
+- Full result: `docs/SORIDRAW_BACKEND_V2_STEP3_4E_RECENT_SONGS_RESULT.md`.
+- Step 3-4f remains blocked: perform a fresh read-only favorite-to-recent identity/match risk review first, report exact counts, then request a new explicit approval before creating any write workflow.
+
+'''
+          if '### Step 3-4e execution complete — recent songs independently verified' not in text:
+              if anchor not in text:
+                  raise SystemExit('MASTER_REPORTING_ANCHOR_MISSING')
+              text = text.replace(anchor, detail + anchor, 1)
+
+          p.write_text(text)
+          PY
+
+      - name: Commit master plan and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          test "$changed" = "docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md"
+          grep -q 'Step 3-4e recent-song limited backfill complete and independently verified' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          grep -q '32865659720' docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md
+          git rm .github/workflows/backend-v2-step3-4e-doc-finalize.yml
+          git commit -m 'docs: finalize Step 3-4e recent-song backfill status'
+          git push origin HEAD:preview

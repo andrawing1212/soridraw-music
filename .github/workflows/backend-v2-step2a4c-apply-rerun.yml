@@ -74,6 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           git reset --hard HEAD
+          rm -rf dist
           cp /tmp/a4c-intended/src/App.tsx src/App.tsx
           cp /tmp/a4c-intended/src/data/v1MutationBoundary.ts src/data/v1MutationBoundary.ts
           cp /tmp/a4c-intended/src/data/indexedDbMirrorOutbox.ts src/data/indexedDbMirrorOutbox.ts
@@ -94,5 +95,3 @@ jobs:
           git add src/App.tsx src/data/v1MutationBoundary.ts src/data/indexedDbMirrorOutbox.ts src/data/v2PreviewShadowMirror.ts .deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-912-heart-triggered-recent-save.py .deploy/apply-913-recent-save-runtime-fix.py
           git commit -m "feat: activate Preview V1-first V2 shadow mirror"
           git push origin HEAD:preview
-
-# rerun after escape-safe 913 compatibility correction

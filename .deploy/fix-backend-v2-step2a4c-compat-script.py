@@ -12,7 +12,8 @@ pattern = re.compile(
     re.S,
 )
 replacement = '''    old_heart = "operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',"\n    new_heart = old_heart + "\\n            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),"\n    if text913.count(old_heart) != 2:\n        raise SystemExit(f'913 heart anchor count mismatch: {text913.count(old_heart)}')\n    text913 = text913.replace(old_heart, new_heart)'''
-text2, count = pattern.subn(replacement, text, count=1)
+# Use a callable replacement so re.sub does not reinterpret backslash escapes.
+text2, count = pattern.subn(lambda _match: replacement, text, count=1)
 if count != 1:
     raise SystemExit(f'913 compat self-fix anchor mismatch: {count}')
 path.write_text(text2, encoding='utf-8')

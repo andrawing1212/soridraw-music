@@ -185,3 +185,5 @@ jobs:
           echo 'A4C_PREFLIGHT_RULES_DEPLOYS=0'
           echo 'A4C_PREFLIGHT_FUNCTIONS_DEPLOYS=0'
           echo 'A4C_PREFLIGHT_HOSTING_DEPLOYS=0'
+
+# 2026-08-26 final activation fresh-quota rerun

@@ -56,6 +56,7 @@ jobs:
           cp src/data/v2PreviewShadowMirror.ts /tmp/a4c-intended/src/data/v2PreviewShadowMirror.ts
           cp .deploy/apply-910-recent-text-batch-unsave-fix.py /tmp/a4c-intended/.deploy/apply-910-recent-text-batch-unsave-fix.py
           cp .deploy/apply-912-heart-triggered-recent-save.py /tmp/a4c-intended/.deploy/apply-912-heart-triggered-recent-save.py
+          cp .deploy/apply-913-recent-save-runtime-fix.py /tmp/a4c-intended/.deploy/apply-913-recent-save-runtime-fix.py
 
       - name: Exact production build path
         shell: bash
@@ -76,6 +77,7 @@ jobs:
           cp /tmp/a4c-intended/src/data/v2PreviewShadowMirror.ts src/data/v2PreviewShadowMirror.ts
           cp /tmp/a4c-intended/.deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-910-recent-text-batch-unsave-fix.py
           cp /tmp/a4c-intended/.deploy/apply-912-heart-triggered-recent-save.py .deploy/apply-912-heart-triggered-recent-save.py
+          cp /tmp/a4c-intended/.deploy/apply-913-recent-save-runtime-fix.py .deploy/apply-913-recent-save-runtime-fix.py
           git diff --check
           npx tsc --noEmit
           python3 .deploy/verify-backend-v2-step2a4c.py final
@@ -86,6 +88,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/App.tsx src/data/v1MutationBoundary.ts src/data/indexedDbMirrorOutbox.ts src/data/v2PreviewShadowMirror.ts .deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-912-heart-triggered-recent-save.py
+          git add src/App.tsx src/data/v1MutationBoundary.ts src/data/indexedDbMirrorOutbox.ts src/data/v2PreviewShadowMirror.ts .deploy/apply-910-recent-text-batch-unsave-fix.py .deploy/apply-912-heart-triggered-recent-save.py .deploy/apply-913-recent-save-runtime-fix.py
           git commit -m "feat: activate Preview V1-first V2 shadow mirror"
           git push origin HEAD:preview

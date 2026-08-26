@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A4d read-only live-gap review complete — current bounded catch-up snapshot is 36 Music Note targets (3 exact legacy V2 creates + 33 exact musicNote:false state repairs); all 68 positional legacy Recent items remain excluded; actual 2-A4d writes remain blocked pending separate exact write approval + fresh quota/re-drift gate; Step 4 remains blocked pending 2-A4d write verification
+Status: IMPLEMENTATION / Step 2-A4d bounded Music Note catch-up complete and independently verified — exact 36-write scope executed (3 legacy V2 creates + 33 musicNote:false repairs), all 742 current Music Note records now align with V2, all 68 positional legacy Recent items remain untouched; Step 2-A4 is complete through 2-A4d and Step 4 Preview validation is ready to start
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -188,6 +188,7 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 2-A4b V1 mutation-boundary result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4B_V1_MUTATION_BOUNDARY_RESULT.md`.
 2-A4c Preview shadow-mirror result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4C_PREVIEW_SHADOW_MIRROR_RESULT.md`.
 2-A4d read-only live-gap review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_READONLY_GAP_REVIEW_RESULT.md`.
+2-A4d bounded catch-up result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_BOUNDED_CATCHUP_RESULT.md`.
 Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.
 Maintenance Gate A result: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.
@@ -293,6 +294,15 @@ Risk decision:
 - Primary review run `32955038757` / job `98134741488` and refinement run `32955211826` / job `98135282049` both completed SUCCESS with zero Firestore writes/deletes and zero Rules/Functions/Hosting deploys. Temporary read-only workflows were removed afterward.
 - The count 36 is a planning snapshot, not a standing write authorization. The future write stage must recompute fresh quota and candidate identity immediately before execution and stop without writes if the count/identity/operation differs.
 - Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_READONLY_GAP_REVIEW_RESULT.md`.
+
+### 2-A4d bounded catch-up complete — exact 36 writes independently verified
+- Explicitly approved execution run `32957152461` / job `98141238901` completed SUCCESS after a fresh same-day quota gate at 5,944 reads / 842 writes / 0 deletes.
+- The pre-write reclassification exactly reproduced the approved snapshot: 742 V1 Music Note/favorites, 1 aligned stable record, 705 aligned legacy records, 3 exact missing legacy V2 targets, 33 exact legacy `musicNote:true` state mismatches, payload mismatches 0, Recent 10 bundles / 68 items with stable Recent 0.
+- Candidate identity set fingerprint: `201f465067f27e86bf349905985cedd7b03e3cda425514ab4940a5c4c879827c`; all 36 sources/targets were rechecked inside one Firestore transaction before any write committed.
+- Executed exactly 36 V2 writes: 3 deterministic `v1f_` legacy creates plus 33 `musicNote:false` state repairs. V1 writes/deletes, V2 deletes and Recent writes were all 0.
+- Independent read-only run `32957316878` / job `98141749352` then confirmed 742/742 Music Note parity, missing/state/payload/formula mismatches all 0, orphan legacy-favorite V2 docs 0, V2 canonical songs 810, and all 68 positional legacy Recent items still untouched.
+- Rules / Functions / Hosting deployments were 0. The temporary write and post-verification workflows were removed after success.
+- Full detail: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_BOUNDED_CATCHUP_RESULT.md`.
 
 ### Maintenance M-009 complete — real Vercel prebuild path repaired and verified
 - Historical build-time patchers 874/901/905/910/912/913 were made compatible with the current committed mutation-boundary/runtime source; the required prebuild feature chain was not removed or globally bypassed.
@@ -405,20 +415,20 @@ Risk decision:
 - [x] 1-C Dataset classification.
 - [x] 1-D Final V1 -> V2 mapping, identity rules, migration order, validation gates, free-tier budget and risk/no-touch report.
 
-### Step 2 — V2 code implementation on preview (2-A4b + Gate A repo-side safety + M-009 Preview build repair + M-008 canonical-song Rules alignment complete; 2-A4c/d still gated) 🔄
-- [~] 2-A Repository/data-access layer — V1 behavior remains active throughout.
+### Step 2 — V2 code implementation on preview (2-A4 complete through bounded catch-up; Step 4 Preview validation ready) ✅
+- [x] 2-A Repository/data-access layer — V1 behavior remains active throughout.
   - [x] 2-A1 Generation-safety preflight + inert V1/V2 path/repository contract; no runtime wiring.
   - [x] 2-A2 Read-only V1 compatibility adapter + parity/self-review checks.
   - [x] 2-A3 Lowest-risk playlist-list V1 read activation implemented; adapter isolation/parity/build checks green. Preview latest-track environment blocker deferred.
-  - [~] 2-A4 Critical generation/recent-save/Music Note live connection — risk review + inert identity/outbox complete; runtime activation remains blocked.
+  - [x] 2-A4 Critical generation/recent-save/Music Note live connection — Preview shadow mirror and bounded live-gap catch-up complete; V1 remains authoritative with fallback.
     - [x] 2-A4-R Read-only live identity/mutation/cost risk review complete; stable provider-neutral ID, V1-first mirror ordering and durable retry are required.
     - [x] 2-A4a Inert `soridrawSongId` + mirror/outbox contract and tests complete; runtime OFF, no Firebase IO/App wiring.
     - [x] 2-A4b Centralize all audited current V1 Recent/Music Note content mutation boundaries while V2 mirror remains OFF; 8/8 Recent paths + audited Music Note categories independently verified, no added Firebase IO.
     - [x] Maintenance Gate A current 2-A4c blockers cleared: M-001 TypeScript CLOSED; M-002 critical/high dependency findings cleared to 0/0 with residual low/moderate debt retained for Step 5; M-003 Actions runtime CLOSED; M-009 Preview build CLOSED; M-008 canonical-song Rules alignment CLOSED and post-verified.
     - [x] M-009 Vercel Preview build blocker CLOSED: repaired historical prebuild compatibility; clean exact `npm run build`, full TypeScript, generated boundary/gate validation and Vercel Preview READY verified; Firebase changes 0.
     - [x] M-008 Firestore canonical-song Rules alignment CLOSED: deployed only the `users/{uid}/songs/{songId}` helper/match block onto the previously deployed V1 Rules; V1 was preserved around the insertion, V2 playlists/settings deployment state stayed unchanged, and exact target/after SHA-256 `4d9076eef20a71ad680b55ecc9acbe82e4aa08aa8138789c317476e66455e6dc` matched; run `32900840608` SUCCESS.
-    - [ ] 2-A4c Preview shadow mirror only after separate exact write approval + fresh quota gate; V1-first/V2-shadow ordering and bounded outbox retry remain mandatory.
-    - [ ] 2-A4d Bounded current live-gap catch-up/verification only after separate exact write approval; no positional recent overwrite.
+    - [x] 2-A4c Preview V1-first → V2 shadow mirror activated and live-verified under exact approval; bounded outbox retry remains active only on the Preview host.
+    - [x] 2-A4d Bounded current Music Note live-gap catch-up complete: exact 36 V2 writes (3 creates + 33 musicNote:false repairs), independent read-only parity 742/742 PASS, positional legacy Recent writes 0.
 - [x] 2-B Additive V2 schema/rules/index definitions in source; V1 retained, no production Rules/index deploy.
 - [x] 2-C IndexedDB/local-first V2 cache scaffolding complete in source; V1 server bundle remains fallback and runtime activation is still off.
 - [x] 2-D Shadow-write/validator/dry-run migration scaffolding complete in source; all write/backfill/delete gates remain disabled.
@@ -435,9 +445,9 @@ Risk decision:
   - [x] 3-4e Recent-song limited backfill complete: 68 recent array items created as canonical V2 songs using deterministic recent-source addressing in three bounded transactions; complete source payload + additive metadata parity verified, V1 unchanged, and favorites/Music Note were not accessed or merged. Independent read-only verification passed.
   - [x] 3-4f Music Note/favorites complete: 738 standalone favorite-origin V2 songs created with deterministic `v1f_` IDs in eight bounded transactions (100×7 + 38); trusted recent-song merges 0, recent-origin updates 0, full payload/metadata parity verified, V1 favorites/recent sources unchanged. Independent read-only verification passed. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_4F_FAVORITES_RESULT.md`.
 - [x] 3-5 Per-user automatic verification complete: 10/10 migrated users passed; settings 3, playlist headers 42, playlist items 49, recent songs 68 and standalone Music Note/favorites 738 all matched expected V2 paths/counts/payload metadata with 0 error categories and 0 writes/deletes. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_5_PER_USER_VERIFICATION_RESULT.md`.
-- [x] 3-6 V1 retention / rollback safety confirmed: backed-up V1 records remain retained, the current V1 source remains live, the Step 3-3 backup is hash-valid/recoverable, and all V2/backfill/V1-delete runtime gates remain off. Read-only follow-up found normal post-backfill drift (3 new favorites and one rotated 10-item recent bundle), so Step 4 is blocked until Step 2-A4 live mutation/sync review. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_6_V1_ROLLBACK_SAFETY_RESULT.md`.
+- [x] 3-6 V1 retention / rollback safety confirmed: backed-up V1 records remain retained, the current V1 source remains live, the Step 3-3 backup is hash-valid/recoverable, and all V2/backfill/V1-delete runtime gates remain off. The normal post-backfill drift found here became the input to Step 2-A4; 2-A4 has since completed through the verified 2-A4d bounded catch-up. Full detail: `docs/SORIDRAW_BACKEND_V2_STEP3_6_V1_ROLLBACK_SAFETY_RESULT.md`.
 
-### Step 4 — Preview validation (0/12; blocked pending separately approved 2-A4c/d write stages) ⏳
+### Step 4 — Preview validation (0/12; ready to start after verified 2-A4d completion) ⏳
 - [ ] Song generation
 - [ ] Save / reload
 - [ ] Refresh

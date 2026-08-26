@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 4 Preview validation IN PROGRESS — mobile core user-flow passed and read-only postcheck verified 743/743 Music Note parity, 1/1 stable Recent -> V2 recentVisible:true, and no folder/section drift; Suno Library credit-dependent new-generation/visibility remains UNVERIFIED and M-005 stays open before Step 4 can fully close
+Status: IMPLEMENTATION / Step 4 Preview validation IN PROGRESS — mobile core flow and V1/V2 parity passed; M-005 read-only rediagnosis found the current Suno Library source/bundle/version visibility pipeline healthy, while completed-but-zero-byte provider audio remains reproduced and the staged byte-validation Functions hardening is not deployed; shared Functions fix requires separate approval before Step 4 can fully close
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -190,6 +190,7 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 2-A4d read-only live-gap review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_READONLY_GAP_REVIEW_RESULT.md`.
 2-A4d bounded catch-up result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_BOUNDED_CATCHUP_RESULT.md`.
 Step 4 mobile postcheck result: `docs/SORIDRAW_BACKEND_V2_STEP4_MOBILE_POSTCHECK_RESULT.md`.
+M-005 Suno Library read-only rediagnosis: `docs/SORIDRAW_MAINTENANCE_M005_SUNO_LIBRARY_READONLY_REDIAGNOSIS.md`.
 Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.
 Maintenance Gate A result: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.

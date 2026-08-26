@@ -1,6 +1,6 @@
 # SORIDRAW Maintenance Backlog & Timing Gates
 
-Status: ACTIVE / M-009 CLOSED / M-008 CLOSED / 2-A4c IS THE NEXT SEPARATELY APPROVED WRITE GATE
+Status: ACTIVE / STEP 2-A4 COMPLETE / STEP 4 IN PROGRESS / M-005 ZERO-BYTE PROVIDER AUDIO IS THE CURRENT PRE-GATE BLOCKER
 Last updated: 2026-08-26 KST
 Working branch: `preview`
 Scope: project-wide maintenance, deferred defects, security/infrastructure warnings, cost observability and pre-gate cleanup
@@ -54,19 +54,25 @@ Maintenance fixes must not be silently bundled into unrelated Backend V2 migrati
 
 ### Current checkpoint
 
-Step **2-A4b is complete** and the approved Maintenance Gate A repo-side safety work has been executed.
+Step **2-A4 is complete through 2-A4d**, including Preview V1-first shadow mirroring, exact bounded Music Note catch-up, and independent parity verification. Step **4 Preview validation is in progress**.
 
-Gate A result:
+Current Step 4 evidence:
 
-- M-001 — **CLOSED**: the two full-project TypeScript errors were fixed and full `tsc --noEmit` passes.
-- M-002 — **Gate-A high-risk requirement CLEARED**: npm audit moved from 34 findings (2 critical / 10 high) to 14 findings (0 critical / 0 high / 13 moderate / 1 low) using non-force remediation with `package.json` unchanged. Residual low/moderate debt remains open for the Step-5 pre-gate.
-- M-003 — **CLOSED for migration tooling**: current Node24-compatible Action majors were verified while project commands remain on Node 20.20.2.
-- M-008 — **CLOSED**: Rules-only run `32900840608` deployed the canonical `users/{uid}/songs/{songId}` rule block with exact post-deploy hash verification while preserving existing V1 Rules and leaving V2 playlists/settings deployment state unchanged.
-- M-009 — **CLOSED**: historical prebuild patch compatibility was repaired without removing the chain; clean-checkout `npm run build`, full TypeScript, generated V1 mutation-boundary audit and Vercel Preview READY all passed.
+- mobile core user-flow: **PASS**
+- post-test Music Note parity: **743 / 743**
+- stable Recent -> V2 `recentVisible:true`: **1 / 1**
+- folder/section-custom drift: **0**
+- M-005 current Suno Library source -> latest bundle -> `syncVersions.library` freshness: **PASS / current visibility pipeline healthy**
+- Auth authorized domains: Preview/main/production all present
+- App Check Firestore/Auth enforcement: `UNENFORCED`, therefore missing Preview client App Check initialization is not the current M-005 cause
+- M-005 provider media: **OPEN** — newest completed track still has HTTP-success audio candidates with zero readable bytes
+- deployed `getSunoTrackStatus`: last updated `2026-07-23T21:38:19.188517273Z`, predating the staged 2-A3-R byte-validation Functions hardening
 
-Therefore the pre-2-A4c M-008/M-009 blockers are cleared. **2-A4c itself is still not approved or armed** and requires its own exact write approval plus a fresh free-tier quota gate before any shadow write begins.
+Therefore the current Step 4 pre-gate blocker is narrowed to **M-005 provider completed-but-zero-byte audio handling**. The historical Preview newest-track server/cache omission is not reproduced by current data: the newest active-user source track is present in the 10-item Library bundle and its bundle/version token is exactly aligned.
 
-Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
+No Functions deployment is approved yet. Any shared Functions change requires a separate exact approval and post-deploy verification.
+
+M-005 evidence: `docs/SORIDRAW_MAINTENANCE_M005_SUNO_LIBRARY_READONLY_REDIAGNOSIS.md`.
 
 ## 4. Current backlog
 
@@ -76,7 +82,7 @@ Gate A result evidence: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 | M-002 | Dependency security findings | HIGH / PRE-GATE | Baseline 34 findings (3 low, 19 moderate, 10 high, 2 critical) was reduced without `--force` to 14 (1 low, 13 moderate, **0 high, 0 critical**). `package.json` stayed unchanged; only lockfile resolution changed. Residual Jimp/file parsing, esbuild and Google Cloud/Firebase Admin dependency-chain findings remain. | Critical/high findings had to be cleared before 2-A4c. Remaining safe low/moderate debt must be reviewed/cleared or explicitly reclassified before Step 5/main promotion. | **OPEN / GATE A HIGH-RISK CLEARED / STEP-5 PRE-GATE** |
 | M-003 | GitHub Actions Node 20-targeting action-runtime warning | HIGH / PRE-GATE | Gate A verified `actions/checkout@v7`, `actions/setup-node@v7`, `google-github-actions/auth@v3`; project command runtime stayed Node 20.20.2 and the prior forced Node24 warning did not recur. Historical workflows are not mass-rewritten, but any workflow reused for migration must first use current action majors. | Must be stable before any 2-A4c write-capable workflow. | **CLOSED FOR UPCOMING MIGRATION TOOLING** |
 | M-004 | Production Vite bundle large-chunk warning; main bundle around 2.5 MB minified | MEDIUM / WATCH | Gate A production build still passes and warning remains. Potential load/performance cost, not a current data-integrity blocker. | Recheck during **Step 4 performance/real-use validation**; optimize before Step 5 if performance target is missed or bundle grows materially. | OPEN |
-| M-005 | Deferred Preview latest-track visibility / App Check / zero-byte provider audio-endpoint blocker from 2-A3-R | HIGH / PRE-GATE | A newly completed provider track could exist in backend yet fail to appear on Preview; same track could appear on main/test. Exact Preview environment cause remains unresolved/deferred. | **Before Step 4 Song generation/save/visibility validation can be declared passed.** Re-run Preview environment diagnostics; no IAM/App Check/Functions change without relevant approval. | OPEN |
+| M-005 | Suno Library historical Preview latest-track visibility + provider zero-byte audio blocker from 2-A3-R | HIGH / PRE-GATE | 2026-08-26 read-only re-diagnosis: current `suno_tracks` newest source is present in the latest 10-item Library bundle, bundle/version token matches exactly, Auth domains are valid, and Firestore/Auth App Check is UNENFORCED; historical server/cache visibility omission is not reproduced. **Remaining reproduced defect:** newest completed track has audio-looking provider URLs returning HTTP 200 with 0 bytes. Deployed `getSunoTrackStatus` is still the 2026-07-23 revision and predates staged byte-validation hardening. | **Before Step 4 Suno Library generation/playback/visibility can be fully declared passed.** Separate approval required for narrowly scoped shared Functions audio-validation deployment and verification. | **OPEN / VISIBILITY PIPELINE HEALTHY / ZERO-BYTE AUDIO BLOCKER REMAINS** |
 | M-006 | `user_plans` authority/provenance unresolved | HIGH / NO-TOUCH / REVIEW | Core V2 work can proceed because the collection is isolated, but moving/merging/deleting it without identifying authority could corrupt plan/account state. | Must be resolved **before any `user_plans` migration, merge, cleanup or V1 deletion** and before final production cleanup phase. | OPEN / NO-TOUCH |
 | M-007 | Exact RTDB Cloud Monitoring metric visibility remains a permission/observability gap | MEDIUM / PRE-GATE | RTDB Presence is intentionally small, but exact free-tier/cost monitoring is weaker than Firestore monitoring. | **Before Step 5/main promotion or meaningful user-scale testing**, perform read-only permission/metric review. Any IAM permission change requires separate approval. | OPEN |
 | M-008 | Firestore V2 canonical-song Rules alignment | CRITICAL / BLOCKER FOR 2-A4c | **Resolved.** Approved Rules-only run `32900840608` inserted only the canonical-song helper/match block into the previously deployed Rules source. Before ruleset `8d0a2de9...` hash `c3a0...`; after ruleset `91a8efcc...` exact target/after hash `4d9076ee...`. V1 protected rules remained present; V2 playlists/settings remained undeployed because they were outside this approval. | Was mandatory before 2-A4c shadow writes. Keep exact deployed-rule verification as a precondition for any 2-A4c write activation. | **CLOSED — canonical-song Rules verified** |

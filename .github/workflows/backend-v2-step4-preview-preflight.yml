@@ -1,0 +1,239 @@
+name: SORIDRAW Backend V2 Step 4 Preview Validation Preflight
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step4-preview-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FIREBASE_PROJECT_ID: soridraw-app-866a5
+      PREVIEW_URL: https://soridraw-music-git-preview-andrawing1212.vercel.app/
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20.20.2'
+          cache: npm
+
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Fresh Firestore quota gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check -q google-auth requests
+          python3 - <<'PY'
+          import datetime as dt
+          import json, os, urllib.parse, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+
+          project=os.environ['FIREBASE_PROJECT_ID']
+          creds=service_account.Credentials.from_service_account_file(
+              os.environ['GOOGLE_APPLICATION_CREDENTIALS'],
+              scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          headers={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project,'Accept':'application/json'}
+          now=dt.datetime.now(dt.timezone.utc)
+          kst=dt.timezone(dt.timedelta(hours=9))
+          start=now.astimezone(kst).replace(hour=0,minute=0,second=0,microsecond=0).astimezone(dt.timezone.utc)
+
+          def metric(candidates):
+              last=(candidates[0],0,0)
+              for name in candidates:
+                  params={'filter':f'metric.type = "{name}"','interval.startTime':start.isoformat().replace('+00:00','Z'),'interval.endTime':now.isoformat().replace('+00:00','Z'),'view':'FULL','pageSize':'1000'}
+                  r=requests.get(f'https://monitoring.googleapis.com/v3/projects/{project}/timeSeries?{urllib.parse.urlencode(params)}',headers=headers,timeout=20)
+                  if r.status_code in (400,404):
+                      continue
+                  r.raise_for_status()
+                  total=points=0
+                  for series in r.json().get('timeSeries',[]):
+                      for p in series.get('points',[]):
+                          raw=p.get('value',{}).get('int64Value',p.get('value',{}).get('doubleValue',0))
+                          try: total += max(0,float(raw))
+                          except Exception: pass
+                          points += 1
+                  last=(name,round(total),points)
+                  if points: return last
+              return last
+
+          reads=metric(['firestore.googleapis.com/document/read_ops_count','firestore.googleapis.com/document/read_count'])
+          writes=metric(['firestore.googleapis.com/document/write_ops_count','firestore.googleapis.com/document/write_count'])
+          deletes=metric(['firestore.googleapis.com/document/delete_ops_count','firestore.googleapis.com/document/delete_count'])
+          safe_read=min(10000,max(0,50000-reads[1]-10000))
+          safe_write=min(5000,max(0,20000-writes[1]-5000))
+          result={'kstDate':now.astimezone(kst).date().isoformat(),'reads':reads[1],'writes':writes[1],'deletes':deletes[1],'safeReadCap':safe_read,'safeWriteCap':safe_write,'requiredPreflightReads':2500}
+          print('STEP4_FRESH_QUOTA='+json.dumps(result,ensure_ascii=False))
+          if reads[2] == 0 or writes[2] == 0 or safe_read < 2500:
+              raise SystemExit('STEP4_QUOTA_GATE_BLOCKED')
+          print('STEP4_FRESH_QUOTA_GATE=PASS')
+          PY
+
+      - name: Install dependencies without project scripts
+        run: npm ci --ignore-scripts
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Forced V2 failure must not break V1 success contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/step4-v1-fallback-test.ts <<'TS'
+          import { registerV1MutationPostSuccessHook, runV1MutationBoundary } from './src/data/v1MutationBoundary.ts';
+
+          let v1Calls = 0;
+          registerV1MutationPostSuccessHook(async () => {
+            throw new Error('STEP4_FORCED_V2_FAILURE');
+          });
+          const value = await runV1MutationBoundary(
+            { domain:'recent', operation:'save-batch', uid:'step4-contract-user' },
+            async () => { v1Calls += 1; return 'V1_OK'; },
+          );
+          await new Promise(resolve => setTimeout(resolve, 10));
+          if (value !== 'V1_OK' || v1Calls !== 1) throw new Error('V1_FALLBACK_CONTRACT_FAILED');
+
+          let hookCalls = 0;
+          registerV1MutationPostSuccessHook(async () => { hookCalls += 1; });
+          let rejected = false;
+          try {
+            await runV1MutationBoundary(
+              { domain:'musicNote', operation:'save', uid:'step4-contract-user' },
+              async () => { throw new Error('V1_EXPECTED_FAILURE'); },
+            );
+          } catch {
+            rejected = true;
+          }
+          if (!rejected || hookCalls !== 0) throw new Error('POST_SUCCESS_HOOK_RAN_AFTER_V1_FAILURE');
+          registerV1MutationPostSuccessHook(null);
+          console.log('STEP4_FORCED_V2_FAILURE_V1_FALLBACK_CONTRACT=PASS');
+          TS
+          cp /tmp/step4-v1-fallback-test.ts ./step4-v1-fallback-test.ts
+          npx tsx ./step4-v1-fallback-test.ts
+          rm ./step4-v1-fallback-test.ts
+
+      - name: Preview host and production build-path check
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -L -sS -o /tmp/step4-preview.html -w '%{http_code}' "$PREVIEW_URL")"
+          test "$code" = "200"
+          grep -q '<div id="root"' /tmp/step4-preview.html
+          echo "STEP4_PREVIEW_HTTP=$code"
+          npm run build
+          npx tsc --noEmit
+          echo 'STEP4_BUILD_AND_TYPESCRIPT=PASS'
+
+      - name: Read-only live V1/V2 baseline and parity
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import crypto from 'node:crypto';
+          import { applicationDefault, initializeApp } from 'firebase-admin/app';
+          import { getFirestore } from 'firebase-admin/firestore';
+
+          const projectId=process.env.FIREBASE_PROJECT_ID;
+          if (projectId !== 'soridraw-app-866a5') throw new Error('PROJECT_PIN_MISMATCH');
+          initializeApp({ credential:applicationDefault(), projectId });
+          const db=getFirestore();
+          const stable=/^sd_[0-9a-f]{32}$/;
+          const activeFavorite=d=>Boolean(d && d.saved !== false && d.favoriteRemoved !== true);
+          const legacyId=path=>`v1f_${crypto.createHash('sha256').update(path).digest('hex').slice(0,32)}`;
+          const forbidden=/^(googleGeminiApiKey|geminiApiKey|apiKey|accessToken|idToken|refreshToken|authorization|password|secret)$/i;
+          const hasForbidden=(value)=>{
+            if (Array.isArray(value)) return value.some(hasForbidden);
+            if (!value || typeof value !== 'object') return false;
+            return Object.entries(value).some(([k,v])=>forbidden.test(k) || hasForbidden(v));
+          };
+
+          const [favSnap,recentSnap,v2Snap,v1Lists,v1Items,v1Sections]=await Promise.all([
+            db.collection('favorites').get(),
+            db.collection('user_recent_songs').get(),
+            db.collectionGroup('songs').get(),
+            db.collectionGroup('lists').get(),
+            db.collectionGroup('items').get(),
+            db.collection('user_structures').get(),
+          ]);
+          const v2Docs=v2Snap.docs.filter(d=>/^users\/[^/]+\/songs\/[^/]+$/.test(d.ref.path));
+          const v2ByPath=new Map(v2Docs.map(d=>[d.ref.path,d]));
+          const v2ByLegacy=new Map();
+          for (const d of v2Docs) {
+            const data=d.data()||{};
+            const uid=String(data.uid||d.ref.parent.parent?.id||'').trim();
+            const lf=String(data.legacyFavoriteId||'').trim();
+            if (lf) v2ByLegacy.set(`${uid}|${lf}`,d);
+            if (hasForbidden(data)) throw new Error(`FORBIDDEN_SECRET_FIELD_IN_V2:${d.ref.path}`);
+          }
+
+          let favAligned=0,favMissing=0,favStateMismatch=0,favFormulaMismatch=0,stableFavorites=0;
+          for (const source of favSnap.docs) {
+            const src=source.data()||{};
+            const uid=String(src.uid||'').trim();
+            if (!uid) throw new Error(`FAVORITE_MISSING_UID:${source.id}`);
+            const sid=String(src.soridrawSongId||'').trim();
+            let target;
+            if (stable.test(sid)) {
+              stableFavorites++;
+              target=v2ByPath.get(`users/${uid}/songs/${sid}`);
+            } else {
+              target=v2ByLegacy.get(`${uid}|${source.id}`);
+              if (target && target.id !== legacyId(source.ref.path)) favFormulaMismatch++;
+            }
+            if (!target) { favMissing++; continue; }
+            if (target.data().musicNote !== activeFavorite(src)) { favStateMismatch++; continue; }
+            favAligned++;
+          }
+
+          let recentItems=0,recentStable=0,recentStableAligned=0,recentStableMismatch=0;
+          for (const bundle of recentSnap.docs) {
+            const songs=Array.isArray(bundle.data()?.songs)?bundle.data().songs:[];
+            recentItems += songs.length;
+            for (const song of songs) {
+              const sid=String(song?.soridrawSongId||'').trim();
+              if (!stable.test(sid)) continue;
+              recentStable++;
+              const target=v2ByPath.get(`users/${bundle.id}/songs/${sid}`);
+              if (target?.data()?.recentVisible === true) recentStableAligned++;
+              else recentStableMismatch++;
+            }
+          }
+
+          const v1ListDocs=v1Lists.docs.filter(d=>/^user_playlists\/[^/]+\/lists\/[^/]+$/.test(d.ref.path));
+          const v1ItemDocs=v1Items.docs.filter(d=>/^user_playlists\/[^/]+\/lists\/[^/]+\/items\/[^/]+$/.test(d.ref.path));
+          const result={
+            favorites:{total:favSnap.size,stable:stableFavorites,aligned:favAligned,missing:favMissing,stateMismatch:favStateMismatch,formulaMismatch:favFormulaMismatch},
+            recent:{bundles:recentSnap.size,items:recentItems,stableItems:recentStable,stableAligned:recentStableAligned,stableMismatch:recentStableMismatch},
+            v2:{total:v2Docs.length},
+            folders:{v1Headers:v1ListDocs.length,v1Items:v1ItemDocs.length},
+            sections:{v1Users:v1Sections.size},
+            firestoreWrites:0,firestoreDeletes:0,rulesDeploys:0,functionsDeploys:0,hostingDeploys:0,
+          };
+          console.log('STEP4_READONLY_BASELINE='+JSON.stringify(result));
+          if (favMissing || favStateMismatch || favFormulaMismatch || recentStableMismatch) throw new Error('STEP4_BASELINE_PARITY_ANOMALY');
+          console.log('STEP4_READONLY_BASELINE_PARITY=PASS');
+          NODE
+
+      - name: Prove preflight is read-only
+        run: |
+          echo 'STEP4_PREFLIGHT_FIRESTORE_WRITES=0'
+          echo 'STEP4_PREFLIGHT_FIRESTORE_DELETES=0'
+          echo 'STEP4_PREFLIGHT_RULES_DEPLOYS=0'
+          echo 'STEP4_PREFLIGHT_FUNCTIONS_DEPLOYS=0'
+          echo 'STEP4_PREFLIGHT_HOSTING_DEPLOYS=0'

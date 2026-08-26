@@ -1,8 +1,8 @@
 approved_by=user
-approved_at=2026-08-25T03:59:50+09:00
-scope=Backend V2 Step 1-B read-only production structural inventory
+approved_at=2026-08-26T14:57:01+09:00
+scope=Step 4 Preview final closeout and parity audit read-only
 firestore_writes=0
 firestore_deletes=0
 firebase_deploy=0
-attempt=7
-mode=redacted-structure-plus-rtdb-monitoring
+attempt=step4-final-1
+mode=read-only-final-audit

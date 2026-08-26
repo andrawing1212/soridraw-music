@@ -1,6 +1,6 @@
 # SORIDRAW Backend V2 · Master Plan
 
-Status: IMPLEMENTATION / Step 2-A4d bounded Music Note catch-up complete and independently verified — exact 36-write scope executed (3 legacy V2 creates + 33 musicNote:false repairs), all 742 current Music Note records now align with V2, all 68 positional legacy Recent items remain untouched; Step 2-A4 is complete through 2-A4d and Step 4 Preview validation is ready to start
+Status: IMPLEMENTATION / Step 4 Preview validation IN PROGRESS — mobile core user-flow passed and read-only postcheck verified 743/743 Music Note parity, 1/1 stable Recent -> V2 recentVisible:true, and no folder/section drift; Suno Library credit-dependent new-generation/visibility remains UNVERIFIED and M-005 stays open before Step 4 can fully close
 Last updated: 2026-08-26 (KST)
 Primary working branch: preview
 Integrated main baseline: `240f193431b4f3f9cba56519fcff8769c95005a0`
@@ -189,6 +189,7 @@ Preflight/adapter report: `docs/SORIDRAW_BACKEND_V2_STEP2A_PREFLIGHT_IMPLEMENTAT
 2-A4c Preview shadow-mirror result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4C_PREVIEW_SHADOW_MIRROR_RESULT.md`.
 2-A4d read-only live-gap review: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_READONLY_GAP_REVIEW_RESULT.md`.
 2-A4d bounded catch-up result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4D_BOUNDED_CATCHUP_RESULT.md`.
+Step 4 mobile postcheck result: `docs/SORIDRAW_BACKEND_V2_STEP4_MOBILE_POSTCHECK_RESULT.md`.
 Maintenance ledger: `docs/SORIDRAW_MAINTENANCE_BACKLOG.md`.
 Maintenance Gate A result: `docs/SORIDRAW_BACKEND_V2_MAINTENANCE_GATE_A_RESULT.md`.
 2-A4a inert identity/outbox result: `docs/SORIDRAW_BACKEND_V2_STEP2_A4A_INERT_ID_OUTBOX_RESULT.md`.

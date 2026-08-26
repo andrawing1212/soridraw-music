@@ -1,0 +1,69 @@
+from pathlib import Path
+import re
+
+master = Path('docs/SORIDRAW_BACKEND_V2_MASTER_PLAN.md')
+text = master.read_text(encoding='utf-8')
+new_status = "Status: IMPLEMENTATION / Step 4 Preview validation IN PROGRESS — mobile core flow and V1/V2 parity passed; M-005 read-only rediagnosis found the current Suno Library source/bundle/version visibility pipeline healthy, while completed-but-zero-byte provider audio remains reproduced and the staged byte-validation Functions hardening is not deployed; shared Functions fix requires separate approval before Step 4 can fully close"
+text, n = re.subn(r'^Status:.*$', new_status, text, count=1, flags=re.MULTILINE)
+if n != 1:
+    raise SystemExit(f'Master status replace mismatch: {n}')
+report_line = "M-005 Suno Library read-only rediagnosis: `docs/SORIDRAW_MAINTENANCE_M005_SUNO_LIBRARY_READONLY_REDIAGNOSIS.md`."
+if report_line not in text:
+    anchor = "Step 4 mobile postcheck result: `docs/SORIDRAW_BACKEND_V2_STEP4_MOBILE_POSTCHECK_RESULT.md`."
+    if anchor not in text:
+        raise SystemExit('Master Step 4 report anchor missing')
+    text = text.replace(anchor, anchor + '\n' + report_line, 1)
+master.write_text(text, encoding='utf-8')
+
+backlog = Path('docs/SORIDRAW_MAINTENANCE_BACKLOG.md')
+b = backlog.read_text(encoding='utf-8')
+b, n = re.subn(
+    r'^Status:.*$',
+    'Status: ACTIVE / STEP 2-A4 COMPLETE / STEP 4 IN PROGRESS / M-005 ZERO-BYTE PROVIDER AUDIO IS THE CURRENT PRE-GATE BLOCKER',
+    b,
+    count=1,
+    flags=re.MULTILINE,
+)
+if n != 1:
+    raise SystemExit(f'Backlog status replace mismatch: {n}')
+
+start = b.find('### Current checkpoint')
+end = b.find('\n## 4. Current backlog', start)
+if start < 0 or end < 0:
+    raise SystemExit('Backlog current checkpoint bounds missing')
+checkpoint = '''### Current checkpoint
+
+Step **2-A4 is complete through 2-A4d**, including Preview V1-first shadow mirroring, exact bounded Music Note catch-up, and independent parity verification. Step **4 Preview validation is in progress**.
+
+Current Step 4 evidence:
+
+- mobile core user-flow: **PASS**
+- post-test Music Note parity: **743 / 743**
+- stable Recent -> V2 `recentVisible:true`: **1 / 1**
+- folder/section-custom drift: **0**
+- M-005 current Suno Library source -> latest bundle -> `syncVersions.library` freshness: **PASS / current visibility pipeline healthy**
+- Auth authorized domains: Preview/main/production all present
+- App Check Firestore/Auth enforcement: `UNENFORCED`, therefore missing Preview client App Check initialization is not the current M-005 cause
+- M-005 provider media: **OPEN** — newest completed track still has HTTP-success audio candidates with zero readable bytes
+- deployed `getSunoTrackStatus`: last updated `2026-07-23T21:38:19.188517273Z`, predating the staged 2-A3-R byte-validation Functions hardening
+
+Therefore the current Step 4 pre-gate blocker is narrowed to **M-005 provider completed-but-zero-byte audio handling**. The historical Preview newest-track server/cache omission is not reproduced by current data: the newest active-user source track is present in the 10-item Library bundle and its bundle/version token is exactly aligned.
+
+No Functions deployment is approved yet. Any shared Functions change requires a separate exact approval and post-deploy verification.
+
+M-005 evidence: `docs/SORIDRAW_MAINTENANCE_M005_SUNO_LIBRARY_READONLY_REDIAGNOSIS.md`.
+'''
+b = b[:start] + checkpoint + b[end:]
+
+lines = b.splitlines()
+replaced = False
+for i, line in enumerate(lines):
+    if line.startswith('| M-005 |'):
+        lines[i] = "| M-005 | Suno Library historical Preview latest-track visibility + provider zero-byte audio blocker from 2-A3-R | HIGH / PRE-GATE | 2026-08-26 read-only re-diagnosis: current `suno_tracks` newest source is present in the latest 10-item Library bundle, bundle/version token matches exactly, Auth domains are valid, and Firestore/Auth App Check is UNENFORCED; historical server/cache visibility omission is not reproduced. **Remaining reproduced defect:** newest completed track has audio-looking provider URLs returning HTTP 200 with 0 bytes. Deployed `getSunoTrackStatus` is still the 2026-07-23 revision and predates staged byte-validation hardening. | **Before Step 4 Suno Library generation/playback/visibility can be fully declared passed.** Separate approval required for narrowly scoped shared Functions audio-validation deployment and verification. | **OPEN / VISIBILITY PIPELINE HEALTHY / ZERO-BYTE AUDIO BLOCKER REMAINS** |"
+        replaced = True
+        break
+if not replaced:
+    raise SystemExit('M-005 backlog row missing')
+backlog.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+print('M005_DOC_FINALIZE=PASS')

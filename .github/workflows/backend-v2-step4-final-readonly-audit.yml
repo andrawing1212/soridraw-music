@@ -305,7 +305,6 @@ jobs:
           else
             echo 'STEP4_M004_LARGE_CHUNK_WARNING=NO'
           fi
-          # Current historical baseline is roughly 2.5 MB minified. Treat >2.75 MiB as material growth for this checkpoint.
           if [ "$main_bytes" -gt 2883584 ]; then
             echo 'STEP4_M004_MATERIAL_GROWTH=YES'
           else
@@ -321,3 +320,5 @@ jobs:
           echo 'STEP4_FINAL_FUNCTIONS_DEPLOYS=0'
           echo 'STEP4_FINAL_HOSTING_DEPLOYS=0'
           echo 'STEP4_FINAL_MAIN_CHANGES=0'
+
+# trigger after workflow registration

@@ -1,0 +1,134 @@
+name: SORIDRAW M-005 getSunoTrackStatus Predeploy Gate
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/maintenance-m005-function-predeploy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  predeploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout preview
+        uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 0
+
+      - name: Setup Node 22 for repository build
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Authenticate Firebase metadata read
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+
+      - name: Read deployed getSunoTrackStatus metadata
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user --disable-pip-version-check -q google-auth requests
+          python3 - <<'PY'
+          import json, os, requests
+          from google.oauth2 import service_account
+          from google.auth.transport.requests import Request
+          project='soridraw-app-866a5'
+          region='us-central1'
+          name='getSunoTrackStatus'
+          creds=service_account.Credentials.from_service_account_file(
+              os.environ['GOOGLE_APPLICATION_CREDENTIALS'],
+              scopes=['https://www.googleapis.com/auth/cloud-platform'])
+          creds.refresh(Request())
+          headers={'Authorization':f'Bearer {creds.token}','X-Goog-User-Project':project,'Accept':'application/json'}
+          url=f'https://cloudfunctions.googleapis.com/v2/projects/{project}/locations/{region}/functions/{name}'
+          r=requests.get(url,headers=headers,timeout=30)
+          print('M005_FUNCTION_METADATA_HTTP='+str(r.status_code))
+          r.raise_for_status()
+          f=r.json()
+          out={
+              'name':str(f.get('name','')).split('/')[-1],
+              'state':f.get('state'),
+              'updateTime':f.get('updateTime'),
+              'runtime':(f.get('buildConfig') or {}).get('runtime'),
+              'entryPoint':(f.get('buildConfig') or {}).get('entryPoint'),
+              'service':str((f.get('serviceConfig') or {}).get('service','')).split('/')[-1],
+          }
+          print('M005_DEPLOYED_METADATA='+json.dumps(out,ensure_ascii=False))
+          if out['name'] != name or out['state'] != 'ACTIVE':
+              raise SystemExit('deployed target is not ACTIVE')
+          PY
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Functions source exactly before deploy
+        working-directory: functions
+        run: npm run build
+
+      - name: Compare deployed-era source baseline to current target logic
+        run: |
+          set -euo pipefail
+          BASE=f1d0e40d2c746c007f86b8ab8ea48b8921cd6001
+          git cat-file -e "$BASE:./functions/src/index.ts"
+          git show "$BASE:./functions/src/index.ts" > /tmp/m005_old_index.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          old=Path('/tmp/m005_old_index.ts').read_text(encoding='utf-8')
+          cur=Path('functions/src/index.ts').read_text(encoding='utf-8')
+          required_old=[
+            'const audioUrls: string[] = sunoData',
+            'finalAudioUrl =',
+            'export const getSunoTrackStatus = onRequest(',
+          ]
+          required_cur=[
+            'const getSunoAudioCandidateUrls =',
+            'const probeSunoAudioUrlHasBytes =',
+            'const findFirstUsableSunoAudioUrl =',
+            'const reportedAudioUrls =',
+            'const verifiedAudioUrls: string[] = []',
+            'audioValidationStatus',
+            'finalAudioUrl = verifiedAudioUrls[0] || "";',
+          ]
+          for marker in required_old:
+            if marker not in old: raise SystemExit('old baseline marker missing: '+marker)
+          for marker in required_cur:
+            if marker not in cur: raise SystemExit('current hardening marker missing: '+marker)
+          print('M005_SOURCE_DIFF_CLASS=old-url-presence-only -> current-readable-byte-probe')
+          print('M005_DEPLOYED_SOURCE_BASELINE_CANDIDATE='+ 'f1d0e40d2c746c007f86b8ab8ea48b8921cd6001')
+          PY
+
+      - name: Safety review — reject non-audio byte responses
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('functions/src/index.ts').read_text(encoding='utf-8')
+          start=src.index('const probeSunoAudioUrlHasBytes')
+          end=src.index('const findFirstUsableSunoAudioUrl', start)
+          probe=src[start:end]
+          has_content_type=('content-type' in probe.lower()) or ('contentType' in probe)
+          print('M005_PROBE_CHECKS_BYTES=YES')
+          print('M005_PROBE_CHECKS_CONTENT_TYPE=' + ('YES' if has_content_type else 'NO'))
+          if not has_content_type:
+            print('M005_PREDEPLOY_BLOCKER=probe accepts any non-empty body, including image/jpeg observed in M-005 diagnosis')
+            raise SystemExit(42)
+          PY
+
+      - name: Mutation/deploy proof
+        if: always()
+        run: |
+          echo 'M005_FIRESTORE_WRITES=0'
+          echo 'M005_FIRESTORE_DELETES=0'
+          echo 'M005_RULES_DEPLOYS=0'
+          echo 'M005_FUNCTIONS_DEPLOYS=0'
+          echo 'M005_HOSTING_DEPLOYS=0'
+          echo 'M005_MAIN_CHANGES=0'

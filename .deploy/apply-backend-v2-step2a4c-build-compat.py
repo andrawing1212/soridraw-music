@@ -8,19 +8,13 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
     return source.replace(old, new, 1)
 
 
-# -----------------------------------------------------------------------------
-# 910: preserve stable mirror targets when immediate recent text writes are
-# converted into the delayed/local working-copy queue.
-# -----------------------------------------------------------------------------
+# 910: preserve stable mirror targets through the delayed/local working-copy queue.
 path = Path('.deploy/apply-910-recent-text-batch-unsave-fix.py')
 text = path.read_text(encoding='utf-8')
 compat_marker = '# Step 2-A4c compatibility: preserve mirror targets through the 910 delayed queue.'
 if compat_marker not in text:
     marker = 'if MARKER not in app:\n'
     compat = r'''# Step 2-A4c compatibility: preserve mirror targets through the 910 delayed queue.
-# 910 intentionally replaces these three immediate V1 writes with one delayed write;
-# normalize their 2-A4c boundary shapes first, then re-attach the exact stable target
-# to the delayed V1-first boundary below.
 mirror_boundary_compat_pairs = [
     (
         "await runV1MutationBoundary({ domain: 'recent', operation: 'regenerate', uid: user.uid, affectedCount: 1, mirrorTargets: buildRecentMirrorTargets([nextSong], 'upsert') }, setDoc(ref, sanitizeForFirestore({ songs: nextHistory }), { merge: true }));\n      markCacheDiagnostic('recentSongs', 'SYNC', 0, 1);",
@@ -84,11 +78,7 @@ for boundary_shape, legacy_shape in mirror_boundary_compat_pairs:
 print('A4C_BUILD_COMPAT_910=PASS')
 
 
-# -----------------------------------------------------------------------------
-# 912: text edits stay local until heart. Preserve the queued stable target, and
-# on the heart commit explicitly mirror the exact committed recent song only after
-# its V1 recent bundle write succeeds.
-# -----------------------------------------------------------------------------
+# 912: text edits stay local until heart; the heart commit carries the exact target.
 path912 = Path('.deploy/apply-912-heart-triggered-recent-save.py')
 text912 = path912.read_text(encoding='utf-8')
 compat912 = '# Step 2-A4c compatibility: keep stable mirror targets through heart-triggered commit.'
@@ -131,11 +121,8 @@ if compat912 not in text912:
 print('A4C_BUILD_COMPAT_912=PASS')
 
 
-# -----------------------------------------------------------------------------
-# 913: removes a bad temporary cache ref introduced by 912. Its anchors must
-# include the new mirrorTargets fields so it removes only the bad ref and preserves
-# the V1-first shadow target carried through the heart commit.
-# -----------------------------------------------------------------------------
+# 913: remove only the invalid cache ref while preserving mirrorTargets in both
+# old/new replacement anchors.
 path913 = Path('.deploy/apply-913-recent-save-runtime-fix.py')
 text913 = path913.read_text(encoding='utf-8')
 compat913 = '# Step 2-A4c compatibility: preserve mirrorTargets while removing invalid cache ref.'
@@ -145,26 +132,14 @@ if compat913 not in text913:
         "MARKER = 'SORIDRAW_913_RECENT_SAVE_RUNTIME_FIX'\n\n# Step 2-A4c compatibility: preserve mirrorTargets while removing invalid cache ref.\n",
         1,
     )
-    pairs913 = [
-        (
-            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',",
-            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };''',",
-            '913 edit old anchor mirror target',
-        ),
-        (
-            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',",
-            "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };''',",
-            '913 edit new anchor mirror target',
-        ),
-    ]
-    # Same token occurs twice (before/after blocks). Replace both deliberately.
-    old_token = "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };''',"
-    if text913.count(old_token) != 2:
-        raise SystemExit(f'913 edit anchor count mismatch: {text913.count(old_token)}')
-    text913 = text913.replace(old_token, "recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };''',")
+    old_edit = 'recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation };'
+    new_edit = 'recentSongTextWritePendingRef.current = { uid, songs: nextSongs, operation, mirrorTargets };'
+    if text913.count(old_edit) != 2:
+        raise SystemExit(f'913 edit anchor count mismatch: {text913.count(old_edit)}')
+    text913 = text913.replace(old_edit, new_edit)
 
-    old_heart = "            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };\n          await flushRecentSongTextWrite();'''"
-    new_heart = "            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),\n          };\n          await flushRecentSongTextWrite();'''"
+    old_heart = "            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n          };"
+    new_heart = "            operation: recentSongTextWritePendingRef.current?.operation || 'pre-favorite-edit',\n            mirrorTargets: buildRecentMirrorTargets([nextCommittedSong], 'upsert'),\n          };"
     if text913.count(old_heart) != 2:
         raise SystemExit(f'913 heart anchor count mismatch: {text913.count(old_heart)}')
     text913 = text913.replace(old_heart, new_heart)

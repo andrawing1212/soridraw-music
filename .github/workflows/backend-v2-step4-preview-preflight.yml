@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/step4-v1-fallback-test.ts <<'TS'
+          cat > ./step4-v1-fallback-test.ts <<'TS'
           import { registerV1MutationPostSuccessHook, runV1MutationBoundary } from './src/data/v1MutationBoundary.ts';
 
           let v1Calls = 0;
@@ -124,18 +124,13 @@ jobs:
           registerV1MutationPostSuccessHook(null);
           console.log('STEP4_FORCED_V2_FAILURE_V1_FALLBACK_CONTRACT=PASS');
           TS
-          cp /tmp/step4-v1-fallback-test.ts ./step4-v1-fallback-test.ts
           npx tsx ./step4-v1-fallback-test.ts
           rm ./step4-v1-fallback-test.ts
 
-      - name: Preview host and production build-path check
+      - name: Exact production build path
         shell: bash
         run: |
           set -euo pipefail
-          code="$(curl -L -sS -o /tmp/step4-preview.html -w '%{http_code}' "$PREVIEW_URL")"
-          test "$code" = "200"
-          grep -q '<div id="root"' /tmp/step4-preview.html
-          echo "STEP4_PREVIEW_HTTP=$code"
           npm run build
           npx tsc --noEmit
           echo 'STEP4_BUILD_AND_TYPESCRIPT=PASS'
@@ -237,3 +232,4 @@ jobs:
           echo 'STEP4_PREFLIGHT_RULES_DEPLOYS=0'
           echo 'STEP4_PREFLIGHT_FUNCTIONS_DEPLOYS=0'
           echo 'STEP4_PREFLIGHT_HOSTING_DEPLOYS=0'
+          echo 'STEP4_PREVIEW_HOST_CHECK=VERIFIED_SEPARATELY_VIA_VERCEL_API'

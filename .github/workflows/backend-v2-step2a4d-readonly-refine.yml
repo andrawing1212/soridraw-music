@@ -1,0 +1,78 @@
+name: SORIDRAW Backend V2 Step 2-A4d Read-only Gap Refine
+
+on:
+  push:
+    branches: [preview]
+    paths:
+      - '.github/workflows/backend-v2-step2a4d-readonly-refine.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  refine:
+    if: github.actor == 'andrawing1212'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      FIREBASE_PROJECT_ID: soridraw-app-866a5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: preview
+          fetch-depth: 1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20.20.2'
+          cache: npm
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SORIDRAW }}
+          create_credentials_file: true
+      - run: npm ci --ignore-scripts
+      - name: Refine exact 36-target classification read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { applicationDefault, initializeApp } from 'firebase-admin/app';
+          import { getFirestore } from 'firebase-admin/firestore';
+          initializeApp({credential:applicationDefault(),projectId:process.env.FIREBASE_PROJECT_ID});
+          const db=getFirestore();
+          const stable=/^sd_[0-9a-f]{32}$/;
+          const [favSnap,v2Snap]=await Promise.all([db.collection('favorites').get(),db.collectionGroup('songs').get()]);
+          const v2=v2Snap.docs.filter(d=>/^users\/[^/]+\/songs\/[^/]+$/.test(d.ref.path));
+          const legacyMap=new Map(); const stableMap=new Map();
+          for (const d of v2) {
+            const data=d.data()||{}; const uid=String(data.uid||d.ref.parent.parent?.id||'').trim();
+            const legacy=String(data.legacyFavoriteId||'').trim();
+            if (legacy) legacyMap.set(`${uid}|${legacy}`,data);
+            if (stable.test(d.id)) stableMap.set(`${uid}|${d.id}`,data);
+          }
+          const stats={legacyMissing:0,legacyMissingActive:0,legacyMissingInactive:0,legacyStateMismatch:0,mismatchV1ActiveV2False:0,mismatchV1InactiveV2True:0,mismatchSavedFalse:0,mismatchFavoriteRemovedTrue:0,stableStateMismatch:0};
+          for (const doc of favSnap.docs) {
+            const src=doc.data()||{}; const uid=String(src.uid||'').trim(); if (!uid) continue;
+            const active=src.saved !== false && src.favoriteRemoved !== true;
+            const sid=String(src.soridrawSongId||'').trim();
+            if (stable.test(sid)) {
+              const target=stableMap.get(`${uid}|${sid}`); if (target && target.musicNote !== active) stats.stableStateMismatch++;
+              continue;
+            }
+            const target=legacyMap.get(`${uid}|${doc.id}`);
+            if (!target) {stats.legacyMissing++; if (active) stats.legacyMissingActive++; else stats.legacyMissingInactive++; continue;}
+            if (target.musicNote !== active) {
+              stats.legacyStateMismatch++;
+              if (active && target.musicNote === false) stats.mismatchV1ActiveV2False++;
+              if (!active && target.musicNote === true) stats.mismatchV1InactiveV2True++;
+              if (src.saved === false) stats.mismatchSavedFalse++;
+              if (src.favoriteRemoved === true) stats.mismatchFavoriteRemovedTrue++;
+            }
+          }
+          const plan={creates:stats.legacyMissing,updatesToMusicNoteFalse:stats.mismatchV1InactiveV2True,updatesToMusicNoteTrue:stats.mismatchV1ActiveV2False,stableUpdates:stats.stableStateMismatch,total:stats.legacyMissing+stats.legacyStateMismatch+stats.stableStateMismatch};
+          console.log('A4D_REFINED_CLASSIFICATION='+JSON.stringify(stats));
+          console.log('A4D_REFINED_WRITE_PLAN='+JSON.stringify(plan));
+          if (plan.total !== 36) throw new Error(`expected prior 36-target plan, got ${plan.total}`);
+          console.log('A4D_REFINED_READONLY=PASS');
+          console.log('A4D_REFINED_FIRESTORE_WRITES=0');
+          console.log('A4D_REFINED_FIRESTORE_DELETES=0');
+          NODE

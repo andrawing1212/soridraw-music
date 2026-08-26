@@ -2878,6 +2878,16 @@ const probeSunoAudioUrlHasBytes = async (url: string): Promise<boolean> => {
     });
     if (!response.ok) return false;
 
+    const contentType = String(response.headers.get("content-type") || "").trim().toLowerCase();
+    if (!contentType.startsWith("audio/")) {
+      console.warn("[Music API] audio validation rejected non-audio response", {
+        host: parsed.hostname,
+        contentType: contentType || "missing",
+      });
+      try { await response.body?.cancel(); } catch {}
+      return false;
+    }
+
     const reader = response.body?.getReader();
     if (!reader) {
       const buffer = await response.arrayBuffer();
